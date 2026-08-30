@@ -1,7 +1,7 @@
 # History Search Incremental Indexing Plan
 
-> **Status:** Design finalized (see "Decisions" and "Implementation sequencing" below);
-> implementation in progress via queued orchestration steps. Follow-up to
+> **Status:** Core steps 1-3 implemented; only step 4 (`TimelineRecorder.readEvents`
+> streaming) remains. Follow-up to
 > [`../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md`](../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md)
 > (Phases 1A/1B/2, all shipped). This plan addresses the deeper inefficiency that plan's
 > Phase 2 worker isolation only _contained_ rather than removed — see "Why Phase 2 alone
@@ -186,10 +186,11 @@ triggers.
    shard per run, changed search-time loading to concatenate all shards, and bumped the
    schema version. No deviation from the plan; rebuilds are still full rescans after this
    step, just writing/reading a different layout.
-3. **Incremental rebuild** — wire step 1's diff into the rebuild path: changed/new runs get
-   their shard regenerated, removed runs get their shard deleted and manifest entry dropped,
-   unchanged runs are untouched (no read, no re-parse, no rewrite), with the 50%-ratio
-   fallback to a full rebuild. This is the step that actually delivers the plan's goal.
+3. **Done — incremental rebuild** — wired step 1's diff into the rebuild path: changed/new
+   runs get their shard regenerated, removed runs get their shard deleted and manifest entry
+   dropped, unchanged runs are untouched (no read, no re-parse, no rewrite), with the
+   `INCREMENTAL_REBUILD_MAX_CHANGED_RATIO = 0.5` fallback to a full rebuild. No deviation
+   from the plan; this is the step that delivers the plan's core goal.
 4. **`TimelineRecorder.readEvents` streaming** — stop materializing a run's full
    `events.jsonl` before truncation; independent cleanup, lands last.
 

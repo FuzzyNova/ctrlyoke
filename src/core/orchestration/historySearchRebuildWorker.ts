@@ -21,6 +21,10 @@ import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
+import {
+  renameWithTransientRetry,
+  writeFileAtomic,
+} from "../../utils/AtomicFileUtils";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
@@ -52,6 +56,7 @@ const REBUILD_LOCK_TIMEOUT_MS = 60_000;
 const PROGRESS_LOG_INTERVAL = 200;
 const PROGRESS_EMIT_INTERVAL_MS = 150;
 const FRESHNESS_CHECK_CONCURRENCY = 16;
+export const INCREMENTAL_REBUILD_MAX_CHANGED_RATIO = 0.5;
 const timelineRecorder = new TimelineRecorder();
 const lineageRepository = new WorkflowLineageRepository();
 const candidateExtractor = new HistoryCandidateExtractor({
@@ -247,13 +252,14 @@ export async function checkHistorySearchIndexFreshness(
   workspaceFolderPath: string,
   manifest: HistorySearchIndexManifest
 ): Promise<HistorySearchFreshnessResult> {
-  if (
-    manifest.schemaVersion !== INDEX_SCHEMA_VERSION ||
-    manifest.workspaceRootHash !== hashPath(workspaceFolderPath)
-  ) {
+  const compatibilityReason = getIndexCompatibilityReason(
+    workspaceFolderPath,
+    manifest
+  );
+  if (compatibilityReason) {
     return {
       fresh: false,
-      reason: "schema/workspace hash mismatch",
+      reason: compatibilityReason,
     };
   }
 
@@ -261,6 +267,23 @@ export async function checkHistorySearchIndexFreshness(
     workspaceFolderPath,
     manifest
   );
+  return getFreshnessFromDiff(manifest, diff);
+}
+
+function getIndexCompatibilityReason(
+  workspaceFolderPath: string,
+  manifest: HistorySearchIndexManifest
+): string | undefined {
+  return manifest.schemaVersion !== INDEX_SCHEMA_VERSION ||
+    manifest.workspaceRootHash !== hashPath(workspaceFolderPath)
+    ? "schema/workspace hash mismatch"
+    : undefined;
+}
+
+function getFreshnessFromDiff(
+  manifest: HistorySearchIndexManifest,
+  diff: HistorySearchIndexDiff
+): HistorySearchFreshnessResult {
   const currentRunCount =
     diff.newRuns.length +
     diff.changedRuns.length +
@@ -303,11 +326,13 @@ export async function runHistorySearchRebuild(
         data.runHistoryLocation
       );
       let onDiskManifest: HistorySearchIndexManifest | undefined;
+      let fullRebuildFallbackReason = "no on-disk manifest";
       try {
         const manifest = JSON.parse(
           await fs.promises.readFile(manifestPath, "utf8")
         ) as HistorySearchIndexManifest;
         if (manifest.schemaVersion !== INDEX_SCHEMA_VERSION) {
+          fullRebuildFallbackReason = "schema version mismatch";
           Log.info(
             `[HistorySearchIndexService] on-disk index schema mismatch (found ${manifest.schemaVersion}, expected ${INDEX_SCHEMA_VERSION}); will rebuild`
           );
@@ -317,6 +342,7 @@ export async function runHistorySearchRebuild(
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         if (code !== "ENOENT") {
+          fullRebuildFallbackReason = "manifest load failure";
           Log.warn(
             `[HistorySearchIndexService] Failed to load search index: ${getErrorMessage(error)}`
           );
@@ -327,11 +353,22 @@ export async function runHistorySearchRebuild(
         }
       }
 
+      let diff: HistorySearchIndexDiff | undefined;
       if (onDiskManifest) {
-        const freshness = await checkHistorySearchIndexFreshness(
+        fullRebuildFallbackReason = "schema/workspace hash mismatch";
+        const compatibilityReason = getIndexCompatibilityReason(
           data.workspaceFolderPath,
           onDiskManifest
         );
+        const freshness = compatibilityReason
+          ? { fresh: false, reason: compatibilityReason }
+          : getFreshnessFromDiff(
+              onDiskManifest,
+              (diff = await computeHistorySearchIndexDiff(
+                data.workspaceFolderPath,
+                onDiskManifest
+              ))
+            );
         if (freshness.fresh) {
           skipped = true;
           Log.info(
@@ -340,10 +377,51 @@ export async function runHistorySearchRebuild(
           return;
         }
         freshnessReason = freshness.reason;
+        fullRebuildFallbackReason =
+          freshness.reason ?? fullRebuildFallbackReason;
         Log.debug(
           `[HistorySearchIndexService] freshness check stale: ${freshness.reason}`
         );
       }
+
+      if (onDiskManifest && diff) {
+        const currentRunCount =
+          diff.newRuns.length +
+          diff.changedRuns.length +
+          diff.unchangedManifestPaths.length;
+        const changedRunCount =
+          diff.newRuns.length +
+          diff.changedRuns.length +
+          diff.removedManifestPaths.length;
+        const changedRatio =
+          currentRunCount === 0
+            ? changedRunCount === 0
+              ? 0
+              : Infinity
+            : changedRunCount / currentRunCount;
+
+        if (changedRatio <= INCREMENTAL_REBUILD_MAX_CHANGED_RATIO) {
+          Log.info(
+            `[HistorySearchIndexService] rebuild path: incremental newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length}`
+          );
+          await runIncrementalHistorySearchRebuild(
+            data,
+            indexDir,
+            manifestPath,
+            onDiskManifest,
+            diff,
+            builtAt,
+            onProgress
+          );
+          return;
+        }
+
+        fullRebuildFallbackReason = `changed ratio ${changedRatio} exceeds ${INCREMENTAL_REBUILD_MAX_CHANGED_RATIO}`;
+      }
+
+      Log.info(
+        `[HistorySearchIndexService] rebuild path: full-rebuild-fallback reason=${fullRebuildFallbackReason}`
+      );
 
       const rebuildDir = path.join(indexDir, `rebuild-${builtAt}`);
       await fs.promises.mkdir(rebuildDir, { recursive: true });
@@ -395,19 +473,8 @@ export async function runHistorySearchRebuild(
         );
         documentCount += documents.length;
 
-        const manifestStats = await fs.promises.stat(source.manifestPath);
-        const eventsStats = await statOptional(source.eventsPath);
-        indexedRuns[path.resolve(source.manifestPath)] = {
-          manifestPath: source.manifestPath,
-          eventsPath: source.eventsPath,
-          workflowId: manifest.workflowId,
-          runId: manifest.runId,
-          startedAt: manifest.startedAt,
-          eventCount: manifest.eventCount,
-          lastUpdatedAt: manifest.lastUpdatedAt,
-          sourceManifestMtimeMs: manifestStats.mtimeMs,
-          sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
-        };
+        indexedRuns[path.resolve(source.manifestPath)] =
+          await buildIndexedRunEntry(source, manifest);
 
         processedRuns += 1;
         if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
@@ -453,6 +520,95 @@ export async function runHistorySearchRebuild(
   );
 
   return { type: "success", skipped, freshnessReason };
+}
+
+async function runIncrementalHistorySearchRebuild(
+  data: HistorySearchRebuildWorkerData,
+  indexDir: string,
+  manifestPath: string,
+  onDiskManifest: HistorySearchIndexManifest,
+  diff: HistorySearchIndexDiff,
+  builtAt: number,
+  onProgress?: HistorySearchRebuildProgressCallback
+): Promise<void> {
+  const touchedRuns = diff.newRuns.length + diff.changedRuns.length;
+  const indexedRuns = { ...onDiskManifest.indexedRuns };
+  const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
+  const rebuildStart = Date.now();
+  let processedRuns = 0;
+  let documentCount = 0;
+
+  onProgress?.(0, touchedRuns);
+
+  for (const source of [...diff.newRuns, ...diff.changedRuns]) {
+    const runManifest = await readManifestSafe(source.manifestPath);
+    const manifestKey = path.resolve(source.manifestPath);
+    if (!runManifest) {
+      await fs.promises.rm(
+        getDocumentsShardPath(indexDir, source.manifestPath),
+        {
+          force: true,
+        }
+      );
+      delete indexedRuns[manifestKey];
+      processedRuns += 1;
+      continue;
+    }
+
+    const events = await readEventsSafe(source.manifestPath);
+    let metadata = metadataCache.get(source.workflowKey);
+    if (!metadata) {
+      metadata = await readWorkflowMetadata(
+        data.workspaceFolderPath,
+        source.workflowKey
+      );
+      metadataCache.set(source.workflowKey, metadata);
+    }
+
+    const documents = buildRunDocuments(
+      runManifest,
+      events,
+      metadata,
+      source.workflowKey,
+      source.runRef
+    );
+    await writeDocumentsShardAtomically(
+      getDocumentsShardPath(indexDir, source.manifestPath),
+      documents
+    );
+    documentCount += documents.length;
+    indexedRuns[manifestKey] = await buildIndexedRunEntry(source, runManifest);
+    processedRuns += 1;
+
+    if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
+      Log.debug(
+        `[HistorySearchIndexService] incremental rebuild progress: ${processedRuns}/${touchedRuns} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - rebuildStart}`
+      );
+    }
+    onProgress?.(processedRuns, touchedRuns);
+  }
+
+  for (const removedManifestPath of diff.removedManifestPaths) {
+    await fs.promises.rm(getDocumentsShardPath(indexDir, removedManifestPath), {
+      force: true,
+    });
+    delete indexedRuns[removedManifestPath];
+  }
+
+  const indexManifest: HistorySearchIndexManifest = {
+    schemaVersion: INDEX_SCHEMA_VERSION,
+    builtAt,
+    workspaceRootHash: hashPath(data.workspaceFolderPath),
+    historyRootMtimeMs: (
+      await statOptional(WorkflowPaths.runsRoot(data.workspaceFolderPath))
+    )?.mtimeMs,
+    indexedRuns,
+  };
+  await writeFileAtomic(manifestPath, JSON.stringify(indexManifest, null, 2));
+  onProgress?.(processedRuns, touchedRuns);
+  Log.info(
+    `[HistorySearchIndexService] incremental rebuild complete: newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length} processedRuns=${processedRuns}/${touchedRuns} documents=${documentCount} totalMs=${Date.now() - rebuildStart}`
+  );
 }
 
 export async function listRunSources(
@@ -620,6 +776,41 @@ async function writeDocumentsShard(
     stream.end();
     await once(stream, "finish");
   }
+}
+
+async function writeDocumentsShardAtomically(
+  shardPath: string,
+  documents: HistorySearchDocument[]
+): Promise<void> {
+  const tempPath = `${shardPath}.tmp-${process.pid}-${Date.now()}-${crypto.randomUUID()}`;
+  try {
+    await writeDocumentsShard(tempPath, documents);
+    await renameWithTransientRetry(tempPath, shardPath);
+  } catch (error) {
+    await fs.promises.rm(tempPath, { force: true });
+    throw error;
+  }
+}
+
+async function buildIndexedRunEntry(
+  source: WorkflowRunSource,
+  manifest: WorkflowRunManifest
+): Promise<HistorySearchIndexManifest["indexedRuns"][string]> {
+  const [manifestStats, eventsStats] = await Promise.all([
+    fs.promises.stat(source.manifestPath),
+    statOptional(source.eventsPath),
+  ]);
+  return {
+    manifestPath: source.manifestPath,
+    eventsPath: source.eventsPath,
+    workflowId: manifest.workflowId,
+    runId: manifest.runId,
+    startedAt: manifest.startedAt,
+    eventCount: manifest.eventCount,
+    lastUpdatedAt: manifest.lastUpdatedAt,
+    sourceManifestMtimeMs: manifestStats.mtimeMs,
+    sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
+  };
 }
 
 async function readManifestSafe(

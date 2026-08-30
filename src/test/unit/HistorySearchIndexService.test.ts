@@ -13,6 +13,7 @@ import {
   type HistorySearchIndexManifest,
   INDEX_SCHEMA_VERSION,
   listRunSources,
+  runHistorySearchRebuild,
 } from "../../core/orchestration/historySearchRebuildWorker";
 import {
   CLI_EVENT_TYPES,
@@ -358,6 +359,260 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(diff.newRuns.length, 0);
     assert.strictEqual(diff.changedRuns.length, 0);
     assert.strictEqual(diff.removedManifestPaths.length, 0);
+  });
+
+  test("incrementally indexes a new run without rewriting untouched shards", async () => {
+    await createRun("incremental-new-first-2026-06-09T23-05-00", 1, 13000, [
+      createStatusDraft(13100, "incremental-untouched-first-term"),
+    ]);
+    await createRun("incremental-new-second-2026-06-09T23-06-00", 1, 14000, [
+      createStatusDraft(14100, "incremental-untouched-second-term"),
+    ]);
+    await createRun("incremental-new-third-2026-06-09T23-07-00", 1, 15000, [
+      createStatusDraft(15100, "incremental-untouched-third-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    await index.search(
+      { query: "incremental-untouched-first-term", limit: 10 },
+      workspaceRoot
+    );
+    const indexDir = path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    );
+    const initialSources = await listRunSources(workspaceRoot);
+    const initialShardStats = new Map(
+      await Promise.all(
+        initialSources.map(
+          async (source) =>
+            [
+              source.manifestPath,
+              (
+                await fs.stat(
+                  getDocumentsShardPath(indexDir, source.manifestPath)
+                )
+              ).mtimeMs,
+            ] as const
+        )
+      )
+    );
+
+    await createRun("incremental-new-added-2026-06-09T23-08-00", 1, 16000, [
+      createStatusDraft(16100, "incremental-new-term"),
+    ]);
+    const onDiskManifest = JSON.parse(
+      await fs.readFile(path.join(indexDir, "manifest.json"), "utf8")
+    ) as HistorySearchIndexManifest;
+    const pendingDiff = await computeHistorySearchIndexDiff(
+      workspaceRoot,
+      onDiskManifest
+    );
+    assert.strictEqual(pendingDiff.newRuns.length, 1);
+    assert.strictEqual(pendingDiff.changedRuns.length, 0);
+    assert.strictEqual(pendingDiff.removedManifestPaths.length, 0);
+    assert.strictEqual(pendingDiff.unchangedManifestPaths.length, 3);
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+
+    const currentSources = await listRunSources(workspaceRoot);
+    assert.strictEqual(currentSources.length, 4);
+    for (const source of initialSources) {
+      assert.strictEqual(
+        (await fs.stat(getDocumentsShardPath(indexDir, source.manifestPath)))
+          .mtimeMs,
+        initialShardStats.get(source.manifestPath)
+      );
+    }
+    assert.ok(
+      await fs.stat(
+        getDocumentsShardPath(
+          indexDir,
+          currentSources.find((source) =>
+            source.manifestPath.includes("incremental-new-added")
+          )!.manifestPath
+        )
+      )
+    );
+
+    const response = await index.search(
+      { query: "incremental-new-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(response.totalCount, 1);
+  });
+
+  test("incrementally removes a missing run shard and manifest entry", async () => {
+    await createRun("incremental-remove-kept-2026-06-09T23-09-00", 1, 17000, [
+      createStatusDraft(17100, "incremental-kept-term"),
+    ]);
+    await createRun("incremental-remove-target-2026-06-09T23-10-00", 1, 18000, [
+      createStatusDraft(18100, "incremental-removed-term"),
+    ]);
+    await createRun("incremental-remove-other-2026-06-09T23-11-00", 1, 19000, [
+      createStatusDraft(19100, "incremental-other-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    await index.search(
+      { query: "incremental-removed-term", limit: 10 },
+      workspaceRoot
+    );
+    const removedSource = (await listRunSources(workspaceRoot)).find((source) =>
+      source.manifestPath.includes("incremental-remove-target")
+    );
+    assert.ok(removedSource);
+    const indexDir = path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    );
+    const removedShardPath = getDocumentsShardPath(
+      indexDir,
+      removedSource.manifestPath
+    );
+    await fs.rm(path.dirname(removedSource.manifestPath), {
+      recursive: true,
+      force: true,
+    });
+
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+
+    await assert.rejects(fs.stat(removedShardPath), /ENOENT/);
+    const manifest = JSON.parse(
+      await fs.readFile(path.join(indexDir, "manifest.json"), "utf8")
+    ) as HistorySearchIndexManifest;
+    assert.ok(!manifest.indexedRuns[path.resolve(removedSource.manifestPath)]);
+    const removedResponse = await index.search(
+      { query: "incremental-removed-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(removedResponse.totalCount, 0);
+    const keptResponse = await index.search(
+      { query: "incremental-kept-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(keptResponse.totalCount, 1);
+  });
+
+  test("falls back to a full rebuild when more than half the runs change", async () => {
+    await createRun("incremental-ratio-first-2026-06-09T23-12-00", 1, 20000, [
+      createStatusDraft(20100, "incremental-ratio-first-term"),
+    ]);
+    await createRun("incremental-ratio-second-2026-06-09T23-13-00", 1, 21000, [
+      createStatusDraft(21100, "incremental-ratio-second-term"),
+    ]);
+    await createRun("incremental-ratio-third-2026-06-09T23-14-00", 1, 22000, [
+      createStatusDraft(22100, "incremental-ratio-third-term"),
+    ]);
+
+    await new HistorySearchIndexService().search(
+      { query: "incremental-ratio-first-term", limit: 10 },
+      workspaceRoot
+    );
+    const sources = await listRunSources(workspaceRoot);
+    const changedSources = sources.filter((source) =>
+      /incremental-ratio-(first|second)/.test(source.manifestPath)
+    );
+    for (const source of changedSources) {
+      await recorder.appendEvents(source.manifestPath, [
+        createStatusDraft(23000, "incremental-ratio-changed-term"),
+      ]);
+    }
+
+    const messages: string[] = [];
+    const originalInfo = Log.info;
+    Log.info = (message: string) => {
+      messages.push(message);
+    };
+    try {
+      await runHistorySearchRebuild({
+        workspaceFolderPath: workspaceRoot,
+        runHistoryLocation: getFrozenRunHistoryLocation(),
+        retainDocuments: false,
+      });
+    } finally {
+      Log.info = originalInfo;
+    }
+
+    assert.ok(
+      messages.some((message) =>
+        message.includes("rebuild path: full-rebuild-fallback")
+      ),
+      messages.join("\n")
+    );
+  });
+
+  test("returns correct results after a mixed incremental rebuild", async () => {
+    await createRun(
+      "incremental-mixed-untouched-1-2026-06-09T23-15-00",
+      1,
+      24000,
+      [createStatusDraft(24100, "incremental-mixed-untouched-term")]
+    );
+    await createRun(
+      "incremental-mixed-untouched-2-2026-06-09T23-16-00",
+      1,
+      25000,
+      [createStatusDraft(25100, "incremental-mixed-second-untouched-term")]
+    );
+    await createRun(
+      "incremental-mixed-untouched-3-2026-06-09T23-17-00",
+      1,
+      26000,
+      [createStatusDraft(26100, "incremental-mixed-third-untouched-term")]
+    );
+    await createRun(
+      "incremental-mixed-untouched-4-2026-06-09T23-18-00",
+      1,
+      27000,
+      [createStatusDraft(27100, "incremental-mixed-fourth-untouched-term")]
+    );
+    await createRun("incremental-mixed-changed-2026-06-09T23-19-00", 1, 28000, [
+      createStatusDraft(28100, "incremental-mixed-before-term"),
+    ]);
+    await createRun("incremental-mixed-removed-2026-06-09T23-20-00", 1, 29000, [
+      createStatusDraft(29100, "incremental-mixed-removed-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    await index.search(
+      { query: "incremental-mixed-before-term", limit: 10 },
+      workspaceRoot
+    );
+    const sources = await listRunSources(workspaceRoot);
+    const changedSource = sources.find((source) =>
+      source.manifestPath.includes("incremental-mixed-changed")
+    );
+    const removedSource = sources.find((source) =>
+      source.manifestPath.includes("incremental-mixed-removed")
+    );
+    assert.ok(changedSource);
+    assert.ok(removedSource);
+    await recorder.appendEvents(changedSource.manifestPath, [
+      createStatusDraft(29200, "incremental-mixed-after-term"),
+    ]);
+    await fs.rm(path.dirname(removedSource.manifestPath), {
+      recursive: true,
+      force: true,
+    });
+    await createRun("incremental-mixed-new-2026-06-09T23-21-00", 1, 30000, [
+      createStatusDraft(30100, "incremental-mixed-new-term"),
+    ]);
+
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+
+    for (const query of [
+      "incremental-mixed-after-term",
+      "incremental-mixed-new-term",
+      "incremental-mixed-untouched-term",
+    ]) {
+      const response = await index.search({ query, limit: 10 }, workspaceRoot);
+      assert.strictEqual(response.totalCount, 1, query);
+    }
+    const removedResponse = await index.search(
+      { query: "incremental-mixed-removed-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(removedResponse.totalCount, 0);
   });
 
   test("skips a redundant rebuild after waiting for a sibling and loads retained documents", async () => {
