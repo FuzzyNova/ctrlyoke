@@ -102,6 +102,26 @@ Add a step type that is a peer to `prompt` and `script` — not a variant of `sc
 a pure pause-and-wait-for-a-webview-message operation) and because it needs to work
 identically whether or not the host can provide a PTY.
 
+### Input surface scope (v1): buttons + optional freeform only
+
+The step asks one question and collects one answer via:
+
+- **Options, rendered as buttons** (`options[]`) — the primary affordance, covering
+  yes/no gates and small labeled-choice gates ("Approve / Request changes / Abort").
+  Whether a given number of options renders as buttons vs. a dropdown is a display
+  decision for the UI layer (e.g. switch to a `CustomSelect` past some option count) —
+  it is not a separate schema field or step capability.
+- **An optional freeform text box** (`allowFreeform`) — the escape hatch for a typed
+  note/answer, mirroring `AskUserQuestion`'s custom-reply affordance.
+
+Explicitly **out of scope for v1**: a general-purpose multi-field form (several typed
+inputs — text, number, checkbox, per-question dropdowns — collected in one step, closer
+to a web form than a review gate). Nothing in the codebase's existing patterns
+(`AskUserQuestionOutput`, `ScriptConditionEditor`) models multiple structured fields per
+prompt, and there's no evidence of demand for structured data collection as opposed to a
+checkpoint/gate. Revisit only if a concrete use case surfaces that buttons + freeform
+can't satisfy.
+
 ### Schema (`schemas/workflow-schema.yaml`)
 
 ```yaml
