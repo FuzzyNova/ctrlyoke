@@ -12,6 +12,8 @@ import {
   HARNESS_IDS,
   EXECUTION_MODES,
   PROMPT_PROPERTIES,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 
@@ -760,6 +762,35 @@ suite("PropertyResolver Tests", () => {
   });
 
   suite("resolveMcpServers", () => {
+    test("preserves the existing resolved shape and skills in auto mode", () => {
+      const resolved = PropertyResolver.resolve(
+        { prompt: "test", mcpServers: ["ctrlyoke"] },
+        { steps: [] }
+      );
+
+      assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
+      assert.strictEqual(resolved.skills, undefined);
+      assert.strictEqual(resolved.mcpAvailability, undefined);
+    });
+
+    test("injects the MCP tools skill in disabled mode", () => {
+      configService.setCliOverlay({
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+      });
+
+      const resolved = PropertyResolver.resolve(
+        { prompt: "test", mcpServers: ["ctrlyoke"] },
+        { steps: [] }
+      );
+
+      assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
+      assert.deepStrictEqual(resolved.skills, [MCP_SKILL_NAMES.TOOLS]);
+      assert.strictEqual(
+        resolved.mcpAvailability,
+        MCP_AVAILABILITY_MODES.DISABLED
+      );
+    });
+
     test("should use prompt-level mcpServers when specified", () => {
       const prompt: PromptStep = {
         prompt: "test",

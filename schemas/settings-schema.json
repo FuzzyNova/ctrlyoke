@@ -913,6 +913,11 @@
         }
       }
     },
+    "mcpAvailability": {
+      "type": "string",
+      "enum": ["auto", "disabled"],
+      "description": "Whether ctrlyoke's MCP server is attached natively or replaced with the built-in MCP tools skill."
+    },
     "enableDiagnosticLogs": {
       "type": "boolean",
       "description": "Enable verbose diagnostic logging for troubleshooting."

@@ -12,6 +12,8 @@ import {
   type ContextResolutionFailureMode,
   type HookEvent,
   type ExecutionMode,
+  type McpAvailability,
+  MCP_AVAILABILITY_MODES,
   RUN_HISTORY_LOCATIONS,
   STATUS_LINE_TRACKING_PROVIDERS,
   type StatusLineTrackingProvider,
@@ -260,6 +262,7 @@ export interface CtrlYokeGlobalSettings {
   };
 
   // Advanced
+  mcpAvailability: McpAvailability;
   enableDiagnosticLogs: boolean;
 }
 
@@ -545,5 +548,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
       "Session state is persisted to localStorage to survive page reloads\n\n" +
       "Only return or submit the commit message, no extra text. Here is the git diff to generate the commit message for:\n",
   },
+  mcpAvailability: MCP_AVAILABILITY_MODES.AUTO,
   enableDiagnosticLogs: false,
 };

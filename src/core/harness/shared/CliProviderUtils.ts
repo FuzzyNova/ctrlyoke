@@ -23,6 +23,7 @@ import {
 import type { McpSecretConfigOptions } from "./CliMcpConfigGenerator";
 import { transformMcpSecretMap } from "./CliMcpConfigGenerator";
 import {
+  MCP_AVAILABILITY_MODES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
 } from "../../../types/DashboardConstants";
@@ -444,8 +445,10 @@ export class CliProviderUtils {
         server.id === MCP_SERVER_IDS.CTRLYOKE
     );
     const hasCtrlYokeServer =
-      (mcpServers != null && mcpServers.includes(MCP_SERVER_IDS.CTRLYOKE)) ||
-      !!ctrlyokeServerObj;
+      workflowContext.resolvedProperties?.mcpAvailability !==
+        MCP_AVAILABILITY_MODES.DISABLED &&
+      ((mcpServers != null && mcpServers.includes(MCP_SERVER_IDS.CTRLYOKE)) ||
+        !!ctrlyokeServerObj);
     const userServers = (mcpServers ?? []).filter(
       (server): server is McpServerConfig =>
         typeof server === "object" &&

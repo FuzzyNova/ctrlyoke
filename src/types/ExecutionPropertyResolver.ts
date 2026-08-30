@@ -1,9 +1,12 @@
 import {
   EXECUTION_MODES,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
   type ExecutionMode,
   type HarnessId,
+  type McpAvailability,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -29,6 +32,7 @@ export interface ExecutionPropertyDefaults {
   modelsByHarness: Partial<Record<HarnessId, string>>;
   additionalArgsByHarness: Partial<Record<HarnessId, string>>;
   executionMode: ExecutionMode;
+  mcpAvailability?: McpAvailability;
   agent?: string | null;
   skills?: string[] | null;
   secrets?: string[] | null;
@@ -259,6 +263,11 @@ export function resolveExecutionProperties(
     workflow.mcpServers,
     defaults.mcpServers ?? []
   );
+  const mcpAvailabilityDisabled =
+    defaults.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED;
+  const resolvedSkills = mcpAvailabilityDisabled
+    ? [...(skills.value ?? []), MCP_SKILL_NAMES.TOOLS]
+    : skills.value;
   const hooks = resolveHooks(prompt, workflow, defaults);
   const sessionId = resolveSessionId(prompt, workflow, defaults);
   const endCondition = resolveNullable(
@@ -303,7 +312,7 @@ export function resolveExecutionProperties(
     model: model.value,
     executionMode: resolvedExecutionMode,
     agent: agent.value,
-    skills: skills.value,
+    skills: resolvedSkills,
     secrets: secrets.value,
     resumeSession: resumeSession.value,
     mcpServers: mcpServers.value,
@@ -316,6 +325,9 @@ export function resolveExecutionProperties(
     toolPermissions: toolPermissions.value,
     errorBehavior: errorBehavior.value,
   };
+  if (mcpAvailabilityDisabled) {
+    properties.mcpAvailability = defaults.mcpAvailability;
+  }
 
   return {
     properties,

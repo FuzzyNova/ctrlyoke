@@ -1149,6 +1149,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
   SECRET_INTERPOLATION_IGNORED: "prompt.secret.interpolation-ignored",
   VARIABLE_SUBSTITUTION_IGNORED: "prompt.variable.substitution-ignored",
+  MCP_AVAILABILITY_DISABLED: "prompt.mcp.disabled",
 } as const;
 
 export type PromptDiagnosticCode =
@@ -1514,6 +1515,14 @@ export type ContextResolutionFailureMode =
 
 export type ExecutionMode =
   (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
+
+export const MCP_AVAILABILITY_MODES = {
+  AUTO: "auto",
+  DISABLED: "disabled",
+} as const;
+
+export type McpAvailability =
+  (typeof MCP_AVAILABILITY_MODES)[keyof typeof MCP_AVAILABILITY_MODES];
 
 export const EXECUTION_MODE_OPTIONS = [
   { value: EXECUTION_MODES.INTERACTIVE, label: "Interactive" },

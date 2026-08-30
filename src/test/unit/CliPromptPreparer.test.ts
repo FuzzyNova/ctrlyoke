@@ -7,12 +7,17 @@ import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import type { PromptSections } from "../../core/HarnessIntegration";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
+import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import { encode } from "gpt-tokenizer";
 import {
   ESTIMATED_CHARS_PER_TOKEN,
+  EXECUTION_MODES,
   MAX_CONTENT_SIZE,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
   MAX_PREVIEW_BODY_BYTES,
+  HARNESS_IDS,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
   PROMPT_DIAGNOSTIC_CODES,
@@ -35,6 +40,43 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("diagnoses the disabled MCP-to-skill replacement", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () => createSections(),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" | "),
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "Use the queue tools" },
+      undefined,
+      {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        skills: [MCP_SKILL_NAMES.TOOLS],
+        model: "model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: false,
+        mcpServers: [],
+        hooks: null,
+        toolPermissions: null,
+      } satisfies ResolvedProperties,
+      undefined
+    );
+
+    assert.strictEqual(
+      plan.diagnostics[0]?.code,
+      PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED
+    );
+  });
+
   test("should not take the direct-reference fast path when excerpt content exists", async () => {
     // The fast path emits only the prompt text and its direct file references,
     // so excerpt content would be silently dropped from what reaches the

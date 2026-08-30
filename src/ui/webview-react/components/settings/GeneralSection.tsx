@@ -9,6 +9,7 @@ import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 import { RunHistorySection } from "./RunHistorySection";
+import { MCP_AVAILABILITY_MODES } from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -296,6 +297,31 @@ export function GeneralSection({
             onCommit={(v) => onUpdate("runs.maxRuns", v)}
             parse={(v) => parseInt(v, 10) || -1}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          />
+        </SettingInputRow>
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          MCP integration
+        </h3>
+        <SettingInputRow
+          label="MCP availability"
+          description="Use ctrlyoke's native MCP server, or replace it with the built-in MCP tools skill when MCP configuration is unavailable."
+          id="settings-mcp-availability"
+          path="mcpAvailability"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="settings-mcp-availability"
+            value={settings.settings.mcpAvailability}
+            onChange={(v) => onUpdate("mcpAvailability", v)}
+            options={[
+              { value: MCP_AVAILABILITY_MODES.AUTO, label: "Auto" },
+              {
+                value: MCP_AVAILABILITY_MODES.DISABLED,
+                label: "Disabled (use skill)",
+              },
+            ]}
           />
         </SettingInputRow>
       </div>

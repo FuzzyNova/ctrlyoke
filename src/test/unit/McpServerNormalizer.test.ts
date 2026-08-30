@@ -3,9 +3,11 @@ import { suite, test } from "mocha";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
+  MCP_AVAILABILITY_MODES,
   PROMPT_DIAGNOSTIC_CODES,
 } from "../../types/DashboardConstants";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import type { McpAvailability } from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
@@ -28,7 +30,8 @@ const MANAGED_SERVERS: ManagedMcpServer[] = [
 ];
 
 function createProperties(
-  mcpServers: (string | McpServerConfig)[] | null
+  mcpServers: (string | McpServerConfig)[] | null,
+  mcpAvailability?: McpAvailability
 ): ResolvedProperties {
   return {
     harness: HARNESS_IDS.CLAUDE_CLI,
@@ -38,10 +41,42 @@ function createProperties(
     mcpServers,
     hooks: null,
     toolPermissions: null,
+    ...(mcpAvailability ? { mcpAvailability } : {}),
   };
 }
 
 suite("McpServerNormalizer", () => {
+  test("suppresses only the ctrlyoke server when MCP is disabled", async () => {
+    let plannedServerPath: string | undefined = "not-called";
+    let plannedServers: McpServerConfig[] | undefined;
+    await CliProviderUtils.planMcpConfigBlock(
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        resolvedProperties: createProperties(
+          ["ctrlyoke", PLAYWRIGHT_SERVER],
+          MCP_AVAILABILITY_MODES.DISABLED
+        ),
+      },
+      "/workspace",
+      "/extension",
+      async (
+        serverPath,
+        _workspaceRoot,
+        _workingFilePath,
+        _env,
+        userServers
+      ) => {
+        plannedServerPath = serverPath;
+        plannedServers = userServers;
+        return { cliArgs: [], mutations: [], diagnostics: [] };
+      }
+    );
+
+    assert.strictEqual(plannedServerPath, undefined);
+    assert.deepStrictEqual(plannedServers, [PLAYWRIGHT_SERVER]);
+  });
+
   test("resolves bare registry IDs into configs used by MCP planning", async () => {
     const normalized = await McpServerNormalizer.apply(
       createProperties(["playwright"]),

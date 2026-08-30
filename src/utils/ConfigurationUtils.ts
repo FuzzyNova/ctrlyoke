@@ -23,6 +23,7 @@ import {
   type HarnessId,
   type ContextResolutionFailureMode,
   type PermissionMode,
+  type McpAvailability,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { externalRootsTrustStore } from "../config/ExternalRootsTrustStore";
@@ -57,6 +58,7 @@ export const CONFIG_KEYS = {
   SERVER: "server",
   NOTIFICATIONS: "notifications",
   ENABLE_DIAGNOSTIC_LOGS: "enableDiagnosticLogs",
+  MCP_AVAILABILITY: "mcpAvailability",
   COMMIT: "commit",
 
   // Dot-notation paths (used with configService.set())
@@ -1122,6 +1124,11 @@ export const ConfigurationUtils = {
    */
   getDefaultMcpServers(): (string | McpServerConfig)[] {
     return configService.get(CONFIG_KEYS.DEFAULTS).mcpServers;
+  },
+
+  /** Get the MCP attachment mode for execution. */
+  getMcpAvailability(): McpAvailability {
+    return configService.get(CONFIG_KEYS.MCP_AVAILABILITY);
   },
 
   /**

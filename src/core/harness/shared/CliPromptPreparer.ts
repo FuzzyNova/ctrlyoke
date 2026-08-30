@@ -13,6 +13,8 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
   PRIOR_CONTEXT_KEYWORDS,
@@ -138,6 +140,17 @@ export class CliPromptPreparer {
     );
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
+    const mcpAvailabilityDiagnostics =
+      resolvedProperties?.mcpAvailability ===
+      MCP_AVAILABILITY_MODES.DISABLED
+        ? [
+            this.createDiagnostic(
+              PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED,
+              harnessId,
+              `MCP is disabled, so the ${MCP_SKILL_NAMES.TOOLS} skill was attached instead of the ctrlyoke MCP server.`
+            ),
+          ]
+        : [];
     const promptForPreparation =
       originalPromptText === prompt.prompt.trim()
         ? prompt
@@ -164,7 +177,7 @@ export class CliPromptPreparer {
       );
       return this.createInlinePlan(
         originalPromptText,
-        conditionOutputDiagnostics
+        [...conditionOutputDiagnostics, ...mcpAvailabilityDiagnostics]
       );
     }
 
@@ -273,6 +286,7 @@ export class CliPromptPreparer {
     );
     const promptDiagnostics = [
       ...conditionOutputDiagnostics,
+      ...mcpAvailabilityDiagnostics,
       ...inlineSkillDiagnostics,
       ...unknownSecretNames.map((name) =>
         this.createDiagnostic(
