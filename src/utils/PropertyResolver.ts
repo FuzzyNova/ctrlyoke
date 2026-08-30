@@ -48,6 +48,7 @@ export class PropertyResolver {
       modelsByHarness,
       additionalArgsByHarness,
       executionMode: ConfigurationUtils.getCliExecutionMode() as ExecutionMode,
+      mcpAvailability: ConfigurationUtils.getMcpAvailability(),
       agent: ConfigurationUtils.getDefaultAgent(),
       skills: ConfigurationUtils.getDefaultSkills(),
       secrets: ConfigurationUtils.getDefaultSecrets(),

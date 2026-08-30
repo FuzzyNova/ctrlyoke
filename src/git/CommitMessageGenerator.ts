@@ -15,12 +15,18 @@ import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineage
 import { Log } from "../utils/Log";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
+import { MCP_COMMIT_MESSAGE_TOOL_NAME } from "../utils/McpToolDefinitions";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
+  MCP_AVAILABILITY_MODES,
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
-import type { HarnessId } from "../types/DashboardConstants";
+import {
+  MCP_SKILL_NAMES,
+  type HarnessId,
+  type McpAvailability,
+} from "../types/DashboardConstants";
 import {
   isScriptStep,
   type McpServerConfig,
@@ -35,7 +41,7 @@ const execFileAsync = promisify(execFile);
 // The harness handles actual context-window limits natively — this is just a safeguard
 // against truly pathological diffs (e.g. generated files, minified bundles).
 const MAX_DIFF_BYTES = 750 * 1024;
-const COMMIT_MESSAGE_MCP_TOOL = "ctrlyoke_submit_commit_message";
+const COMMIT_MESSAGE_MCP_TOOL = MCP_COMMIT_MESSAGE_TOOL_NAME;
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
 
@@ -113,7 +119,8 @@ export interface CommitMessageWorkflowHost {
 export function buildCommitWorkflowOverrides(
   harness: HarnessId,
   model: string | undefined,
-  mcpServerConfig: McpServerConfig | undefined
+  mcpServerConfig: McpServerConfig | undefined,
+  mcpAvailability: McpAvailability = MCP_AVAILABILITY_MODES.AUTO
 ): Partial<PromptFile> {
   return {
     harness,
@@ -129,7 +136,10 @@ export function buildCommitWorkflowOverrides(
     worktree: false,
     mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
     agent: null,
-    skills: null,
+    skills:
+      mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED
+        ? [MCP_SKILL_NAMES.COMMIT_MESSAGE]
+        : null,
     additionalArgs: null,
     hooks: null,
     toolPermissions: {
@@ -280,6 +290,7 @@ export class CommitMessageGenerator {
       "out",
       "mcp-server.js"
     );
+    const mcpAvailability = ConfigurationUtils.getMcpAvailability();
     const tempDir = path.join(
       cwd,
       PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -291,11 +302,13 @@ export class CommitMessageGenerator {
     );
 
     let useMcpCapture = false;
-    try {
-      await fs.access(mcpServerPath);
-      useMcpCapture = true;
-    } catch {
-      // MCP server not found (e.g. dev environment without a build) — fall back to text extraction
+    if (mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED) {
+      try {
+        await fs.access(mcpServerPath);
+        useMcpCapture = true;
+      } catch {
+        // MCP server not found (e.g. dev environment without a build) — fall back to text extraction
+      }
     }
 
     if (useMcpCapture) {
@@ -384,7 +397,8 @@ export class CommitMessageGenerator {
       const workflowOverrides = buildCommitWorkflowOverrides(
         harness,
         model,
-        mcpServerConfig
+        mcpServerConfig,
+        mcpAvailability
       );
       await instance.loadPromptStringAsRun(
         fullPrompt,

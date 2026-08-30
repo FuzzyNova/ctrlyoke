@@ -543,7 +543,11 @@ export abstract class HarnessIntegration {
     }
 
     const skillContent = resolvedSkills?.length
-      ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
+      ? await this.expandSkillBlock(
+          resolvedSkills,
+          workspaceRoot,
+          this.getExecutionCheckoutRoot()
+        )
       : null;
 
     const agentContent = resolvedAgent
@@ -655,10 +659,16 @@ export abstract class HarnessIntegration {
    */
   protected async expandSkillBlock(
     resolvedSkills: string[],
-    workspaceRoot: string | undefined
+    workspaceRoot: string | undefined,
+    executionCheckoutRoot: string | undefined
   ): Promise<string | null> {
     return this.expandBlockContent(
-      () => SkillExpander.expandSkills(resolvedSkills, workspaceRoot),
+      () =>
+        SkillExpander.expandSkills(
+          resolvedSkills,
+          workspaceRoot,
+          executionCheckoutRoot
+        ),
       `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`,
       `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
     );
@@ -829,6 +839,11 @@ export abstract class HarnessIntegration {
 
   /** Canonical source checkout used for read-only runtime artifact fallback. */
   protected getExecutionSourceCheckoutRoot(): string | undefined {
+    return undefined;
+  }
+
+  /** Canonical checkout root visible to the harness during execution. */
+  protected getExecutionCheckoutRoot(): string | undefined {
     return undefined;
   }
 

@@ -1,6 +1,11 @@
+import * as fs from "fs";
+import * as path from "path";
 import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
+import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { TtlCache } from "./TtlCache";
+import { DISCOVERY_SOURCES } from "../types/DashboardConstants";
+import { McpToolSkillGenerator } from "./McpToolSkillGenerator";
 
 /**
  * SkillExpander
@@ -9,7 +14,8 @@ import { TtlCache } from "./TtlCache";
  *
  * Progressive disclosure design:
  * - Only the name, path, and description are included in the prompt (~10-20 tokens per skill)
- * - The full SKILL.md body is NOT included — the harness reads it when it decides to use the skill
+ * - For trusted skills, the full SKILL.md body is NOT included — the harness reads it when it decides to use the skill
+ * - Unreadable skills are embedded; the built-in MCP skill adds its live tool reference to its static prose
  * - This keeps prompts concise while still making skills discoverable
  *
  * Output format (per skill, joined inside <skillInstructions>):
@@ -28,11 +34,13 @@ export class SkillExpander {
    *
    * @param skillNames Array of skill names to expand
    * @param workspaceRoot Optional workspace root for resolving workspace skills
+   * @param executionCheckoutRoot Optional checkout root visible to the harness
    * @returns Formatted <skillInstructions> block, or null if no skills resolved
    */
   static async expandSkills(
     skillNames: string[],
-    workspaceRoot?: string
+    workspaceRoot?: string,
+    executionCheckoutRoot = workspaceRoot
   ): Promise<string | null> {
     if (skillNames.length === 0) {
       return null;
@@ -60,7 +68,15 @@ export class SkillExpander {
         continue;
       }
 
-      resolvedBlocks.push(this.buildSkillBlock(skill));
+      const block = await this.buildSkillBlock(skill, [
+        workspaceRoot,
+        executionCheckoutRoot,
+      ]);
+      if (!block) {
+        continue;
+      }
+
+      resolvedBlocks.push(block);
       Log.debug(`🎯 Skill "${skillName}" resolved from ${skill.path}`);
     }
 
@@ -79,7 +95,39 @@ export class SkillExpander {
    * Build a concise prompt block for a single skill.
    * Omits description line if the skill has no description.
    */
-  private static buildSkillBlock(skill: SkillInfo): string {
+  private static async buildSkillBlock(
+    skill: SkillInfo,
+    trustedRoots: Array<string | undefined>
+  ): Promise<string | null> {
+    const resolvedSkillPath = path.resolve(skill.path);
+    const resolvedTrustedRoots = trustedRoots
+      .filter((root): root is string => root !== undefined)
+      .map((root) => path.resolve(root));
+
+    if (!isPathWithinAnyDirectory(resolvedSkillPath, resolvedTrustedRoots)) {
+      try {
+        if (skill.source === DISCOVERY_SOURCES.BUILT_IN) {
+          const staticContent = await fs.promises.readFile(
+            resolvedSkillPath,
+            "utf-8"
+          );
+          return (
+            McpToolSkillGenerator.generateBuiltInSkillContent(
+              skill.name,
+              staticContent
+            ) ?? staticContent
+          );
+        }
+
+        return await fs.promises.readFile(resolvedSkillPath, "utf-8");
+      } catch (error) {
+        Log.warn(
+          `⚠️ Failed to read out-of-trust-root skill file "${skill.path}": ${error}`
+        );
+        return null;
+      }
+    }
+
     const lines = [`## Skill: ${skill.name}`, `Path: ${skill.path}`];
     if (skill.description) {
       lines.push(`Description: ${skill.description}`);

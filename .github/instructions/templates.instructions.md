@@ -36,6 +36,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 
 <agentsAndScripts>
 - Built-in `.agent.md` files are the single source of their own identity and description: `AgentDiscovery` scans the bundled directory and reads `name`/`description` from frontmatter. The Agent & Skills Manager can copy them verbatim into `.ctrlyoke/agents/` for customization or into harness directories for native subagent use; frontmatter and body style are never normalized during copying.
+- Built-in skills follow the same immutable-fallback discovery pattern, but `ctrlyoke-mcp-tools` is special: `SkillExpander` appends its MCP tool reference from the live `MCP_TOOL_DEFINITIONS` at prompt-expansion time. Keep only its static usage prose in `SKILL.md`; do not hand-maintain the generated per-tool section.
 - `check_condition.*` files are starter examples for `endCondition.script`. Keep them portable, simple, and aligned with the runtime contract: compare output deterministically and return `"true"` on success.
 </agentsAndScripts>
 

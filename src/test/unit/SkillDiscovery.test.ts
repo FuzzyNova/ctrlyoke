@@ -5,7 +5,12 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import { AgentExpander } from "../../utils/AgentExpander";
-import { HARNESS_IDS, type HarnessId } from "../../types/DashboardConstants";
+import {
+  DISCOVERY_SOURCES,
+  HARNESS_IDS,
+  MCP_SKILL_NAMES,
+  type HarnessId,
+} from "../../types/DashboardConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { SkillExpander } from "../../utils/SkillExpander";
 
@@ -52,8 +57,103 @@ suite("Execution-root asset discovery", () => {
       assert.strictEqual(agent, "agent body");
       assert.ok(skills?.includes(path.join(executionRoot, ".ctrlyoke")));
       assert.ok(skills?.includes("execution skill"));
+      assert.ok(!skills?.includes("skill body"));
     } finally {
       fs.rmSync(executionRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("embeds an out-of-trust-root user skill verbatim", async () => {
+    const tempHome = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-skill-home-")
+    );
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-skill-workspace-")
+    );
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const skillContent =
+      "---\nname: external-skill\ndescription: External skill\n---\n# External skill body\n";
+
+    try {
+      process.env.HOME = tempHome;
+      process.env.USERPROFILE = tempHome;
+      const skillPath = path.join(
+        tempHome,
+        ".agents",
+        "skills",
+        "external-skill",
+        "SKILL.md"
+      );
+      fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+      fs.writeFileSync(skillPath, skillContent);
+
+      const skills = await SkillExpander.expandSkills(
+        ["external-skill"],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes(skillContent));
+      assert.ok(!skills?.includes(`Path: ${skillPath}`));
+
+      const trustedSkills = await SkillExpander.expandSkills(
+        ["external-skill"],
+        workspaceRoot,
+        tempHome
+      );
+      assert.ok(trustedSkills?.includes(`Path: ${skillPath}`));
+      assert.ok(!trustedSkills?.includes(skillContent));
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE;
+      } else {
+        process.env.USERPROFILE = originalUserProfile;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("embeds the built-in MCP skill with live queue-tool references", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-skill-")
+    );
+    try {
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.TOOLS],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes("Use when MCP config is disabled by policy"));
+      assert.ok(skills?.includes("## Available ctrlyoke MCP tools"));
+      assert.ok(skills?.includes("### ctrlyoke_queue_status"));
+      assert.ok(skills?.includes("### ctrlyoke_global_status"));
+      assert.ok(!skills?.includes("ctrlyoke_submit_commit_message"));
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("embeds the built-in commit-message skill with only its tool reference", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-commit-skill-")
+    );
+    try {
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.COMMIT_MESSAGE],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes("Pass the commit output path"));
+      assert.ok(skills?.includes("### ctrlyoke_submit_commit_message"));
+      assert.ok(!skills?.includes("### ctrlyoke_queue_status"));
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
 
@@ -199,5 +299,32 @@ suite("SkillDiscovery helpers", () => {
       ),
       first
     );
+  });
+
+  test("discovers built-in skills after real skills and preserves precedence", async () => {
+    const builtIns = await SkillDiscovery.discoverBuiltInSkills();
+    const builtIn = builtIns.find(
+      (candidate) => candidate.name === MCP_SKILL_NAMES.TOOLS
+    );
+    assert.ok(builtIn);
+    assert.strictEqual(builtIn?.source, DISCOVERY_SOURCES.BUILT_IN);
+    assert.ok(
+      builtIns.some(
+        (candidate) => candidate.name === MCP_SKILL_NAMES.COMMIT_MESSAGE
+      )
+    );
+
+    const overridePath = await createSkill(
+      path.join(workspaceRoot, ".ctrlyoke", "skills"),
+      MCP_SKILL_NAMES.TOOLS
+    );
+    const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+    const matches = discovered.filter(
+      (candidate) => candidate.name === MCP_SKILL_NAMES.TOOLS
+    );
+
+    assert.strictEqual(matches.length, 1);
+    assert.strictEqual(matches[0].path, overridePath);
+    assert.strictEqual(matches[0].source, DISCOVERY_SOURCES.WORKSPACE);
   });
 });

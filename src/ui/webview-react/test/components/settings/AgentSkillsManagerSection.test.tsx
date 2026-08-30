@@ -227,4 +227,36 @@ describe("AgentSkillsManagerSection", () => {
     );
     expect(screen.queryByRole("button", { name: "Set Default" })).toBeNull();
   });
+
+  it("offers built-in skills through the same save flow", async () => {
+    const user = userEvent.setup();
+    const builtInSourcePath =
+      "extension/templates/skills/ctrlyoke-mcp-tools/SKILL.md";
+    renderSkillsSection([
+      {
+        name: "ctrlyoke-mcp-tools",
+        displayName: "ctrlyoke MCP Tools",
+        type: HARNESS_FILE_TYPES.SKILL,
+        locations: [],
+        builtInSourcePath,
+      },
+    ]);
+
+    const fileRow = screen.getByText("ctrlyoke MCP Tools").closest("div")!;
+    await user.click(within(fileRow).getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
+    const claudeCodeTargets = screen.getAllByRole("button", {
+      name: "Claude Code",
+    });
+    await user.click(claudeCodeTargets[claudeCodeTargets.length - 1]);
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.EXPORT_TO_HARNESS,
+      expect.objectContaining({
+        sourcePath: builtInSourcePath,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        fileType: HARNESS_FILE_TYPES.SKILL,
+      })
+    );
+  });
 });

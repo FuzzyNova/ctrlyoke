@@ -51,6 +51,12 @@ import {
   initializeRunHistoryLocation,
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
+import {
+  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_TOOL_DEFINITIONS,
+} from "./utils/McpToolDefinitions";
+
+export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const CTRLYOKE_DIR = ".ctrlyoke";
@@ -58,24 +64,6 @@ const LOGS_DIR = "logs";
 const CAPABILITIES_FILE = "capabilities.json";
 
 const lineageRepository = new WorkflowLineageRepository();
-
-/**
- * Optional narrowing filters for `ctrlyoke_global_status` — the one tool that
- * reports on workflows other than the caller's own, and only ever read-only.
- * No other tool takes an address: they all answer for this server's run.
- */
-const otherWorkflowSelectorProperties = {
-  workflowKey: {
-    type: "string",
-    description:
-      "Report only this workflow, as identified by a previous ctrlyoke_global_status call.",
-  },
-  runRef: {
-    type: "string",
-    description:
-      "Report only this run of that workflow. Requires workflowKey; never a display number.",
-  },
-};
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
@@ -183,120 +171,7 @@ export class CtrlYokeMCPServer {
   }
 
   public getToolDefinitions() {
-    return [
-      {
-        name: "ctrlyoke_queue_status",
-        description:
-          "See the steps in your workflow: which have finished, which is running now, and which are still queued.",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "ctrlyoke_append_queue",
-        description:
-          "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            steps: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  prompt: {
-                    type: "string",
-                    description: "What the step should do.",
-                  },
-                  name: {
-                    type: "string",
-                    description:
-                      "Short display label for this step (e.g. 'Implement security'). The UI already shows the step's position (e.g. '2 of 6'), so don't repeat that here.",
-                  },
-                  model: {
-                    type: "string",
-                    description:
-                      "Model to run this step with. Defaults to the workflow's model.",
-                  },
-                  harness: {
-                    type: "string",
-                    description:
-                      "Harness to run this step with. Defaults to the workflow's harness.",
-                  },
-                  resumeSession: {
-                    type: "boolean",
-                    description:
-                      "Continue an earlier step's conversation instead of starting fresh.",
-                  },
-                  sessionId: {
-                    type: "number",
-                    description:
-                      "1-based step number whose conversation to continue. Requires resumeSession.",
-                  },
-                },
-                required: ["prompt"],
-              },
-              description:
-                "One or more steps to add, in the order to run them.",
-            },
-            position: {
-              type: "string",
-              enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
-              description: `'${QUEUE_POSITION.NEXT}' runs the new steps before the rest of the queue; '${QUEUE_POSITION.END}' runs them last.`,
-            },
-            source: {
-              type: "string",
-              description: "Optional label describing why you added these.",
-            },
-          },
-          required: ["steps", "position"],
-        },
-      },
-      {
-        name: "ctrlyoke_capabilities",
-        description:
-          "List the harnesses installed on this machine and the models each one supports. Call this before setting a harness or model on a step so you pick values that exist.",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "ctrlyoke_read_output",
-        description:
-          "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            indices: {
-              type: "array",
-              items: { type: "number" },
-              description:
-                "Zero-based step numbers to read. Omit to read them all.",
-            },
-          },
-        },
-      },
-      {
-        name: "ctrlyoke_global_status",
-        description:
-          "List the other ctrlyoke workflows in this workspace and what they are doing. Call this before wide-reaching edits so you can leave files another workflow is working on alone, and recognize build or test failures it caused rather than chasing them.",
-        inputSchema: {
-          type: "object",
-          properties: otherWorkflowSelectorProperties,
-        },
-      },
-      {
-        name: "ctrlyoke_submit_commit_message",
-        description:
-          "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            message: {
-              type: "string",
-              description: "The complete commit message",
-            },
-          },
-          required: ["message"],
-        },
-      },
-    ];
+    return MCP_TOOL_DEFINITIONS;
   }
 
   private setupHandlers() {
@@ -349,7 +224,7 @@ export class CtrlYokeMCPServer {
         return this.handleReadOutput(args);
       case "ctrlyoke_global_status":
         return this.handleGlobalStatus(args);
-      case "ctrlyoke_submit_commit_message":
+      case MCP_COMMIT_MESSAGE_TOOL_NAME:
         return this.handleSubmitCommitMessage(args);
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -945,6 +820,7 @@ export class CtrlYokeMCPServer {
   /**
    * Handle ctrlyoke_submit_commit_message tool invocation.
    * Writes the commit message to the output path specified by CTRLYOKE_COMMIT_OUTPUT.
+   * The CLI entrypoint can populate that variable from --commit-output.
    * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
    * as a structured tool argument rather than parsing prose response text.
    */
@@ -1111,14 +987,108 @@ export async function initializeMcpStorage(
   await new ProjectStateRegistry().initialize(root, gitToplevel ?? undefined);
 }
 
+interface McpToolCliOptions {
+  tool: string;
+  argsJson: string;
+  workspace?: string;
+  workingFile?: string;
+  commitOutput?: string;
+}
+
+function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
+  let tool: string | undefined;
+  let argsJson = "{}";
+  let workspace: string | undefined;
+  let workingFile: string | undefined;
+  let commitOutput: string | undefined;
+
+  const readValue = (index: number, option: string): string => {
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`${option} requires a value`);
+    }
+    return value;
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const option = argv[index];
+    switch (option) {
+      case "--tool":
+        tool = readValue(index, option);
+        index += 1;
+        break;
+      case "--args":
+        argsJson = readValue(index, option);
+        index += 1;
+        break;
+      case "--workspace":
+        workspace = readValue(index, option);
+        index += 1;
+        break;
+      case "--working-file":
+        workingFile = readValue(index, option);
+        index += 1;
+        break;
+      case "--commit-output":
+        commitOutput = readValue(index, option);
+        index += 1;
+        break;
+      default:
+        throw new Error(`Unknown option: ${option}`);
+    }
+  }
+
+  if (!tool) {
+    throw new Error("--tool requires a tool name");
+  }
+
+  return { tool, argsJson, workspace, workingFile, commitOutput };
+}
+
+async function runMcpToolCli(argv: readonly string[]): Promise<void> {
+  const options = parseMcpToolCliArgs(argv);
+
+  if (options.workspace !== undefined) {
+    process.env.CTRLYOKE_WORKSPACE = options.workspace;
+  }
+  if (options.workingFile !== undefined) {
+    process.env.CTRLYOKE_WORKING_FILE = options.workingFile;
+  }
+  if (options.commitOutput !== undefined) {
+    process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;
+  }
+
+  await initializeMcpStorage(options.workspace ?? workspaceRoot);
+  const result = await new CtrlYokeMCPServer({
+    workspaceRoot: options.workspace,
+  }).invokeTool(options.tool, JSON.parse(options.argsJson));
+  const text = (result as { content?: Array<{ text?: unknown }> }).content?.[0]
+    ?.text;
+  if (typeof text !== "string") {
+    throw new Error("MCP tool result did not contain text content");
+  }
+  process.stdout.write(`${text}\n`);
+  process.exit(0);
+}
+
 if (require.main === module) {
-  log("Initializing ctrlyoke MCP Server...");
-  initializeMcpStorage()
-    .then(() => new CtrlYokeMCPServer().start())
-    .catch((error) => {
-      log("FATAL ERROR: Failed to start MCP server");
-      log("Error:", error);
-      log("Stack:", error.stack);
+  const cliArgs = process.argv.slice(2);
+  if (cliArgs.includes("--tool")) {
+    runMcpToolCli(cliArgs).catch((error) => {
+      process.stderr.write(
+        `${error instanceof Error ? error.message : String(error)}\n`
+      );
       process.exit(1);
     });
+  } else {
+    log("Initializing ctrlyoke MCP Server...");
+    initializeMcpStorage()
+      .then(() => new CtrlYokeMCPServer().start())
+      .catch((error) => {
+        log("FATAL ERROR: Failed to start MCP server");
+        log("Error:", error);
+        log("Stack:", error.stack);
+        process.exit(1);
+      });
+  }
 }

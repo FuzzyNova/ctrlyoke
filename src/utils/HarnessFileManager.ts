@@ -31,6 +31,12 @@ import {
 } from "./HarnessDirectoryUtils";
 import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
 import { AgentDiscovery, parseAgentFrontmatter } from "./AgentDiscovery";
+import {
+  getBuiltInSkillsDirectoryCandidates,
+  SkillDiscovery,
+} from "./SkillDiscovery";
+import { McpToolSkillGenerator } from "./McpToolSkillGenerator";
+import { pathsEqual } from "./PathCasing";
 
 // ============================================================================
 // Public Types
@@ -95,6 +101,53 @@ async function copyDir(src: string, dest: string): Promise<void> {
     } else {
       await copyFile(srcPath, destPath);
     }
+  }
+}
+
+/** Return the generated built-in skill name for a bundled skill directory. */
+function getBuiltInSkillName(sourceDir: string): string | undefined {
+  const resolvedSourceDir = path.resolve(sourceDir);
+  return getBuiltInSkillsDirectoryCandidates(__dirname)
+    .map((directory) => path.resolve(directory))
+    .some((directory) => pathsEqual(path.dirname(resolvedSourceDir), directory))
+    ? path.basename(resolvedSourceDir)
+    : undefined;
+}
+
+/**
+ * Copy a skill directory and snapshot any live-generated built-in tool reference
+ * into its SKILL.md. Ordinary skills are copied verbatim.
+ */
+async function copySkill(
+  sourcePath: string,
+  destDir: string,
+  skillName: string
+): Promise<void> {
+  const sourceStat = await fs.promises.stat(sourcePath);
+  const sourceDir = sourceStat.isDirectory()
+    ? sourcePath
+    : path.dirname(sourcePath);
+  await copyDir(sourceDir, destDir);
+
+  const builtInSkillName = getBuiltInSkillName(sourceDir);
+  if (!builtInSkillName || builtInSkillName !== skillName) {
+    return;
+  }
+
+  const staticContent = await fs.promises.readFile(
+    path.join(sourceDir, "SKILL.md"),
+    "utf8"
+  );
+  const generatedContent = McpToolSkillGenerator.generateBuiltInSkillContent(
+    skillName,
+    staticContent
+  );
+  if (generatedContent !== undefined) {
+    await fs.promises.writeFile(
+      path.join(destDir, "SKILL.md"),
+      generatedContent,
+      "utf8"
+    );
   }
 }
 
@@ -400,7 +453,27 @@ export class HarnessFileManager {
   ): Promise<ManagedFile[]> {
     try {
       if (type === HARNESS_FILE_TYPES.SKILL) {
-        return collectSkillLocations(workspaceRoot);
+        const files = await collectSkillLocations(workspaceRoot);
+        const filesByName = new Map(files.map((file) => [file.name, file]));
+        for (const skill of await SkillDiscovery.discoverBuiltInSkills()) {
+          const existing = filesByName.get(skill.name);
+          if (existing) {
+            existing.builtInSourcePath = skill.path;
+            if (skill.description && !existing.description) {
+              existing.description = skill.description;
+            }
+            continue;
+          }
+          files.push({
+            name: skill.name,
+            displayName: skill.displayName,
+            type: HARNESS_FILE_TYPES.SKILL,
+            locations: [],
+            builtInSourcePath: skill.path,
+            ...(skill.description ? { description: skill.description } : {}),
+          });
+        }
+        return files;
       }
 
       const files = await collectAgentLocations(workspaceRoot);
@@ -468,13 +541,16 @@ export class HarnessFileManager {
       await copyFile(sourcePath, destFile);
       Log.info(`Exported agent "${internalName}" to ${destFile}`);
     } else {
-      const skillName = path.basename(sourcePath);
+      const sourceStat = await fs.promises.stat(sourcePath);
+      const skillName = sourceStat.isDirectory()
+        ? path.basename(sourcePath)
+        : path.basename(path.dirname(sourcePath));
       const destDir = path.join(targetDir, skillName);
 
       if (!overwrite && fs.existsSync(destDir)) {
         throw new Error(`Skill directory already exists: ${destDir}`);
       }
-      await copyDir(sourcePath, destDir);
+      await copySkill(sourcePath, destDir, skillName);
       Log.info(`Exported skill "${skillName}" to ${destDir}`);
     }
   }

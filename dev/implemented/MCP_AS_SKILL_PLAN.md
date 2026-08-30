@@ -1,9 +1,39 @@
 # MCP-as-Skill: ctrlyoke Queue/Commit Tools Without MCP Configuration
 
-> **Status:** Proposed — not implemented. Written 2026-08-24 against current code;
+> **Status:** Fully implemented (Phases 0-5). Written 2026-08-24 against current code;
 > refined 2026-08-30 against current code — corrected drifted line citations, fixed
 > one wrong-file citation (§1.5), resolved Open Questions 1/3/4 by decision, and
 > answered Open Question 2 with a traced insertion point (§5).
+
+> **Phase 0 status (2026-08-30):** Implemented. `SkillExpander` now keeps its
+> existing pointer block for skills inside the workspace or execution checkout and
+> embeds out-of-trust-root skill files verbatim, including frontmatter. The harness
+> call site passes the execution checkout root through the shared integration seam.
+> No deviation from the Phase 0 design was required.
+
+> **Phase 1 status (2026-08-30):** Implemented. `mcp-server.ts` now accepts the
+> `--tool`, `--args`, `--workspace`, and `--working-file` flags and invokes the
+> existing tool dispatcher without changing its stdio/MCP transport path.
+>
+> **Phase 2 status (2026-08-30):** Implemented. Built-in skills are discovered as
+> immutable fallbacks, and `ctrlyoke-mcp-tools` embeds static usage prose plus a
+> live-generated reference for the queue tools derived from the shared MCP tool
+> definitions. The commit-message tool has its own built-in skill for Phase 4.
+
+> **Phase 3 status (2026-08-30):** Implemented. `mcpAvailability` controls whether
+> normal workflow execution attaches the native ctrlyoke MCP server or the built-in
+> queue-tools skill.
+
+> **Phase 4 status (2026-08-30):** Implemented. Commit-message generation now uses
+> the native MCP capture path when available and the built-in
+> `ctrlyoke-commit-message-tool` skill plus CLI capture path when MCP is disabled.
+
+> **Phase 5 status (2026-08-30):** Implemented. The Agent & Skills Manager now lists
+> built-in skills as immutable exportable fallbacks, using the existing save flow for
+> `.ctrlyoke/skills/` and harness-native directories. Exporting either generated MCP
+> skill snapshots its current tool-reference content into the copied `SKILL.md`; the
+> snapshot does not update automatically if the tool definitions change, so re-export
+> is required to refresh it.
 
 **Problem in one line:** many enterprise Copilot/Claude/Codex deployments block MCP
 configuration entirely (company policy) but freely allow installable skills, so any
@@ -275,7 +305,7 @@ has to be a user-set toggle (see §4 non-goals).
   lines 449-454) completely unaffected; those are a separate, unrelated concern this plan
   does not touch.
 - **Resolved (§5 Q2):** both `resolvedProperties.mcpServers` and `resolvedProperties.skills`
-  come from the *same* single resolver — `PropertyResolver.resolve()`
+  come from the _same_ single resolver — `PropertyResolver.resolve()`
   (`src/utils/PropertyResolver.ts:90-96`), a thin VS Code/settings adapter that wraps the
   platform-neutral `resolveExecutionProperties()`
   (`src/types/ExecutionPropertyResolver.ts:232-320`). That function builds one
@@ -321,13 +351,20 @@ has to be a user-set toggle (see §4 non-goals).
   unavailable, not the surrounding contract documented in
   `.github/instructions/git.instructions.md`.
 
-### Phase 5 (optional) — discoverability
+### Phase 5 — discoverability
 
 `AgentSkillsManagerSection` already lets users export built-in agents into
 `.ctrlyoke/agents/` or a harness-native directory for inspection/customization
-(`templates.instructions.md:13,38`). Evaluate extending the same export affordance to
-built-in skills so a curious user can see the generated tool-reference content outside
-of an active run. Not required for the core capability to work.
+(`templates.instructions.md:13,38`). The same export affordance now covers built-in
+skills, so a curious user can see the generated tool-reference content outside of an
+active run.
+
+Decision: extend the existing flow. Built-in skills are added to the manager's immutable
+fallback list, and their source `SKILL.md` is copied into the selected target. For the
+two MCP-backed skills, export appends a click-time snapshot generated from the shared
+`MCP_TOOL_DEFINITIONS`; this makes the generated reference inspectable/customizable while
+keeping ordinary skill exports verbatim. A later definition change requires re-exporting
+the skill to refresh the snapshot.
 
 ---
 
@@ -382,7 +419,7 @@ as the decision record, since the reasoning matters for anyone revisiting this l
    (`src/types/ExecutionPropertyResolver.ts:232-320`), which builds one
    `ResolvedProperties` object literal (lines 301-318) setting both fields together.
    `CliProviderUtils.planMcpConfigBlock()` and `HarnessIntegration.buildPromptSections()`
-   are two independent *consumers* of that one object — not two independent resolvers.
+   are two independent _consumers_ of that one object — not two independent resolvers.
    See the full insertion-point writeup already folded into Phase 3 above (§2, Phase 3,
    second bullet); no further tracing needed before implementation.
 3. **Same-binary vs. sibling binary for the CLI entrypoint (Phase 1). Decided:
@@ -403,14 +440,14 @@ as the decision record, since the reasoning matters for anyone revisiting this l
 
 ## 6. Phasing
 
-| Phase | Content                                                                   | Ships value alone?                                                                         |
-| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 0     | Fix skill expansion to embed full content for unreadable paths            | Yes — fixes a real, pre-existing sandboxed-harness bug independent of everything else here |
-| 1     | `--tool`/`--args` CLI entrypoint on `mcp-server.ts`, reusing `invokeTool` | Partial — testable in isolation, not yet reachable from a real prompt                      |
-| 2     | Built-in skill registry + autogenerated queue-tools skill content         | Yes — the core "MCP as skill" capability, usable once a user manually attaches the skill   |
-| 3     | `mcpAvailability` setting + auto-swap wiring                              | Yes — completes the "just works when MCP is policy-disabled" loop for queue tools          |
-| 4     | Commit-message skill parity                                               | Yes — completes the loop for the commit-message button specifically                        |
-| 5     | Built-in skill export/discoverability in the Agent & Skills Manager       | Nice-to-have; independent of 0-4                                                           |
+| Phase | Content                                                                         | Ships value alone?                                                                         |
+| ----- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 0     | Fix skill expansion to embed full content for unreadable paths (implemented)    | Yes — fixes a real, pre-existing sandboxed-harness bug independent of everything else here |
+| 1     | `--tool`/`--args` CLI entrypoint on `mcp-server.ts`, reusing `invokeTool`       | Partial — testable in isolation, not yet reachable from a real prompt                      |
+| 2     | Built-in skill registry + autogenerated queue-tools skill content (implemented) | Yes — the core "MCP as skill" capability, usable once a user manually attaches the skill   |
+| 3     | `mcpAvailability` setting + auto-swap wiring (implemented)                      | Yes — completes the "just works when MCP is policy-disabled" loop for queue tools          |
+| 4     | Commit-message skill parity (implemented)                                       | Yes — completes the loop for the commit-message button specifically                        |
+| 5     | Built-in skill export/discoverability in the Agent & Skills Manager (implemented) | Nice-to-have; independent of 0-4                                                           |
 
 Phase 0 should land first regardless of the rest of this plan's priority — it is a
 correctness fix on its own. Phases 1-2 can land and be manually useful (a user attaches

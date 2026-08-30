@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { spawnSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -18,6 +19,7 @@ import {
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
 import {
   initializeRunHistoryLocation,
   isRunHistoryLocationInitialized,
@@ -66,12 +68,18 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   let workspaceRoot: string;
   let priorPinnedFile: string | undefined;
+  let priorCommitOutput: string | undefined;
 
   afterEach(async () => {
     if (priorPinnedFile === undefined) {
       delete process.env.CTRLYOKE_WORKING_FILE;
     } else {
       process.env.CTRLYOKE_WORKING_FILE = priorPinnedFile;
+    }
+    if (priorCommitOutput === undefined) {
+      delete process.env.CTRLYOKE_COMMIT_OUTPUT;
+    } else {
+      process.env.CTRLYOKE_COMMIT_OUTPUT = priorCommitOutput;
     }
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -168,9 +176,107 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   async function setup(): Promise<CtrlYokeMCPServer> {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
+    priorCommitOutput = process.env.CTRLYOKE_COMMIT_OUTPUT;
     delete process.env.CTRLYOKE_WORKING_FILE;
+    delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
+
+  function runMcpToolCli(args: string[], env?: NodeJS.ProcessEnv) {
+    return spawnSync(
+      "node",
+      [path.resolve(__dirname, "../../mcp-server.js"), ...args],
+      { encoding: "utf8", ...(env ? { env } : {}) }
+    );
+  }
+
+  test("invokes a tool through the CLI entrypoint", async () => {
+    await setup();
+    await new ProjectStateRegistry().initialize(workspaceRoot);
+    const run = await createRun("cli", "2026-01-01T00-00-00-000Z");
+    const success = runMcpToolCli([
+      "--tool",
+      "ctrlyoke_queue_status",
+      "--args",
+      "{}",
+      "--workspace",
+      workspaceRoot,
+      "--working-file",
+      run.runFilePath,
+    ]);
+
+    assert.strictEqual(
+      success.status,
+      0,
+      `CLI failed: stdout=${success.stdout} stderr=${success.stderr}`
+    );
+    assert.strictEqual(success.stderr, "");
+    assert.strictEqual(JSON.parse(success.stdout).metadata.runRef, run.runRef);
+
+    const failure = runMcpToolCli([
+      "--tool",
+      "unknown_tool",
+      "--args",
+      "{}",
+      "--workspace",
+      workspaceRoot,
+    ]);
+
+    assert.strictEqual(failure.status, 1);
+    assert.strictEqual(failure.stdout, "");
+    assert.strictEqual(failure.stderr, "Unknown tool: unknown_tool\n");
+  });
+
+  test("writes commit output when the CLI receives --commit-output", async () => {
+    await setup();
+    const outputPath = path.join(workspaceRoot, "commit-output-flag.txt");
+    const result = runMcpToolCli([
+      "--tool",
+      "ctrlyoke_submit_commit_message",
+      "--args",
+      JSON.stringify({ message: "feat: capture via flag" }),
+      "--workspace",
+      workspaceRoot,
+      "--commit-output",
+      outputPath,
+    ]);
+
+    assert.strictEqual(
+      result.status,
+      0,
+      `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+    );
+    assert.strictEqual(
+      await fs.readFile(outputPath, "utf8"),
+      "feat: capture via flag"
+    );
+  });
+
+  test("writes commit output when CTRLYOKE_COMMIT_OUTPUT is set", async () => {
+    await setup();
+    const outputPath = path.join(workspaceRoot, "commit-output-env.txt");
+    const result = runMcpToolCli(
+      [
+        "--tool",
+        "ctrlyoke_submit_commit_message",
+        "--args",
+        JSON.stringify({ message: "fix: capture via env" }),
+        "--workspace",
+        workspaceRoot,
+      ],
+      { ...process.env, CTRLYOKE_COMMIT_OUTPUT: outputPath }
+    );
+
+    assert.strictEqual(
+      result.status,
+      0,
+      `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+    );
+    assert.strictEqual(
+      await fs.readFile(outputPath, "utf8"),
+      "fix: capture via env"
+    );
+  });
 
   test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {
     const server = await setup();
