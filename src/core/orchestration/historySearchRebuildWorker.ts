@@ -32,6 +32,20 @@ export const INDEX_SCHEMA_VERSION = "3.0.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
 export const DOCUMENTS_FILE_NAME = "documents.jsonl";
 export const MAX_INDEXED_TEXT_LENGTH = 2000;
+/**
+ * V8 old-generation heap cap for the rebuild worker's isolate, passed as
+ * `resourceLimits.maxOldGenerationSizeMb` when the worker is spawned. Without
+ * this, a worker hitting V8's default heap ceiling triggers V8's own fatal
+ * OOM handler, which aborts the whole process (worker threads share the OS
+ * process with the main thread) — not just the worker. Setting this makes
+ * Node intercept the near-limit condition instead and emit a catchable
+ * `'error'` on the `Worker` object, so an oversized rebuild fails just that
+ * rebuild instead of crashing the extension host. Sized well above the
+ * ~430MB steady-state heap observed for a full rebuild of this workspace's
+ * history (see HISTORY_SEARCH_PERFORMANCE_PLAN.md), with headroom for
+ * larger histories.
+ */
+export const REBUILD_WORKER_MAX_OLD_GENERATION_MB = 2048;
 const REBUILD_LOCK_TIMEOUT_MS = 60_000;
 const PROGRESS_LOG_INTERVAL = 200;
 const PROGRESS_EMIT_INTERVAL_MS = 150;

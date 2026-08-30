@@ -558,6 +558,13 @@ export function useDesktopLayout({
   // to their persisted sizes atomically.
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
+    // The vertical Group is desktop-only and unmounted on mobile, so
+    // verticalGroupRef.current is legitimately null there — running this sync
+    // anyway spammed the log with false "verticalGroupRef.current is null"
+    // errors and looped startRemountSync's rAF chain for up to 24 frames on
+    // every mobile collapse-state change. isMobile is a dependency so a
+    // mobile→desktop transition still re-runs and stabilizes normally.
+    if (isMobile) return;
     const shouldStabilizeRemount = needsForcedResize.current;
 
     if (shouldStabilizeRemount) {

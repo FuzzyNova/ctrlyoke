@@ -28,6 +28,7 @@ import {
   DOCUMENTS_FILE_NAME,
   INDEX_SCHEMA_VERSION,
   MANIFEST_FILE_NAME,
+  REBUILD_WORKER_MAX_OLD_GENERATION_MB,
   type HistorySearchIndexManifest,
   type HistorySearchRebuildWorkerData,
   type HistorySearchRebuildWorkerMessage,
@@ -287,6 +288,9 @@ export class HistorySearchIndexService {
     };
     const worker = new Worker(this.getWorkerScriptPath(), {
       workerData: data,
+      resourceLimits: {
+        maxOldGenerationSizeMb: REBUILD_WORKER_MAX_OLD_GENERATION_MB,
+      },
     });
     try {
       const result = await this.waitForWorker(worker, data, options.onProgress);

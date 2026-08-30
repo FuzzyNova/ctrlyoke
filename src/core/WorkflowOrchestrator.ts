@@ -327,6 +327,19 @@ export class WorkflowOrchestrator {
    * on every tick. A new lock has no entry and is processed immediately.
    */
   private readonly polledRunnerJsonMtimes = new Map<string, number>();
+  /**
+   * Last logged external-execution decision (as a JSON signature), keyed by
+   * workflowKey. A live lock's heartbeat rewrites `runner.json` every
+   * `HEARTBEAT_INTERVAL_MS` (5s) for the lifetime of every running workflow,
+   * which re-triggers resolution on every tick — without this, a single
+   * long-running self-owned workflow logged thousands of byte-identical
+   * "external execution resolution" lines. Log only when the outcome for a
+   * given lineage actually changes. Lazily created (rather than a field
+   * initializer) so unit-test harnesses that build this class via
+   * `Object.create(WorkflowOrchestrator.prototype)` and wire up only the
+   * fields their scenario touches don't need to know about this cache.
+   */
+  private lastLoggedExternalExecutionDecision?: Map<string, string>;
   private activationWorktreeOwnership?: WorkspaceWorktreeOwnership;
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -1292,7 +1305,15 @@ export class WorkflowOrchestrator {
       this.runnerHostIdentity,
       {
         onDecision: (decision) => {
-          const message = `[WorkflowOrchestrator] external execution resolution: ${JSON.stringify(decision)}`;
+          const key = decision.workflowKey ?? workingFilePath;
+          const signature = JSON.stringify(decision);
+          const cache = (this.lastLoggedExternalExecutionDecision ??=
+            new Map());
+          if (cache.get(key) === signature) {
+            return;
+          }
+          cache.set(key, signature);
+          const message = `[WorkflowOrchestrator] external execution resolution: ${signature}`;
           if (decision.locality === "indeterminate") {
             Log.warn(message);
           } else {
@@ -6075,6 +6096,12 @@ export class WorkflowOrchestrator {
       for (const trackedPath of this.polledRunnerJsonMtimes.keys()) {
         if (!seenRunnerPaths.has(trackedPath)) {
           this.polledRunnerJsonMtimes.delete(trackedPath);
+          // The lineage directory name is the workflowKey the decision log is
+          // keyed by; forget it too so a later run at the same lineage logs
+          // its first resolution instead of being suppressed as unchanged.
+          this.lastLoggedExternalExecutionDecision?.delete(
+            path.basename(path.dirname(trackedPath))
+          );
         }
       }
     } catch (err) {
@@ -6110,25 +6137,18 @@ export class WorkflowOrchestrator {
       lock.runRef
     );
 
-    Log.trace(
-      `[WorkflowOrchestrator] handleRunnerJsonEvent: runner lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
-    );
-
+    // The deduped "external execution resolution" decision log below (and the
+    // startExternalRunWatchSession logs further down) already cover this
+    // event; a per-call trace here would repeat on every 5s heartbeat.
     const resolution = await this.resolveExternalExecutionForPath(
       workingFilePath,
       workspaceFolderPath
     );
     if (resolution.kind !== "external-active-run") {
-      Log.trace(
-        `[WorkflowOrchestrator] handleRunnerJsonEvent: lock is not a proven external execution for "${workflowId}" — skipping`
-      );
       return;
     }
 
     if (this.externalRunSessions.has(workflowId)) {
-      Log.trace(
-        `[WorkflowOrchestrator] handleRunnerJsonEvent: session already exists for "${workflowId}" — skipping`
-      );
       return;
     }
 
@@ -6612,7 +6632,7 @@ export class WorkflowOrchestrator {
     }
 
     Log.info(
-      `[WorkflowOrchestrator] external run session finished for "${workflowId}"`
+      `[WorkflowOrchestrator] external run session finished for "${workflowId}" (reason=${reason})`
     );
 
     // Dispose the session first so watchers stop firing
