@@ -25,7 +25,8 @@ import {
 } from "./HistorySearchResultUtils";
 import {
   checkHistorySearchIndexFreshness,
-  DOCUMENTS_FILE_NAME,
+  DOCUMENTS_DIR_NAME,
+  DOCUMENTS_SHARD_EXTENSION,
   INDEX_SCHEMA_VERSION,
   MANIFEST_FILE_NAME,
   REBUILD_WORKER_MAX_OLD_GENERATION_MB,
@@ -223,7 +224,7 @@ export class HistorySearchIndexService {
     }
 
     const manifestPath = this.getIndexManifestPath(workspaceFolderPath);
-    const documentsPath = this.getDocumentsPath(workspaceFolderPath);
+    const documentsDir = this.getDocumentsDir(workspaceFolderPath);
     const loadStart = Date.now();
     try {
       const manifest = JSON.parse(
@@ -235,7 +236,7 @@ export class HistorySearchIndexService {
         );
         return;
       }
-      const documents = await this.readDocumentsJsonl(documentsPath);
+      const documents = await this.readDocumentsJsonl(documentsDir);
       this.loadedWorkspacePath = workspaceFolderPath;
       this.loadedManifest = manifest;
       this.documents = documents;
@@ -427,21 +428,40 @@ export class HistorySearchIndexService {
   }
 
   private async readDocumentsJsonl(
-    documentsPath: string
+    documentsDir: string
   ): Promise<HistorySearchDocument[]> {
     const documents: HistorySearchDocument[] = [];
-    const reader = readline.createInterface({
-      input: fs.createReadStream(documentsPath, { encoding: "utf8" }),
-      crlfDelay: Infinity,
+    const shardEntries = await fs.promises.readdir(documentsDir, {
+      withFileTypes: true,
     });
-    try {
-      for await (const line of reader) {
-        if (line.trim().length > 0) {
-          documents.push(JSON.parse(line) as HistorySearchDocument);
+    const shardFiles = shardEntries
+      .filter(
+        (entry) =>
+          entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
+      )
+      .sort((left, right) => left.name.localeCompare(right.name));
+    if (shardFiles.length === 0) {
+      const error = new Error(`No document shards found in ${documentsDir}`);
+      (error as NodeJS.ErrnoException).code = "ENOENT";
+      throw error;
+    }
+
+    for (const shardFile of shardFiles) {
+      const reader = readline.createInterface({
+        input: fs.createReadStream(path.join(documentsDir, shardFile.name), {
+          encoding: "utf8",
+        }),
+        crlfDelay: Infinity,
+      });
+      try {
+        for await (const line of reader) {
+          if (line.trim().length > 0) {
+            documents.push(JSON.parse(line) as HistorySearchDocument);
+          }
         }
+      } finally {
+        reader.close();
       }
-    } finally {
-      reader.close();
     }
     return documents;
   }
@@ -496,11 +516,8 @@ export class HistorySearchIndexService {
     return path.join(this.getIndexDir(workspaceFolderPath), MANIFEST_FILE_NAME);
   }
 
-  private getDocumentsPath(workspaceFolderPath: string): string {
-    return path.join(
-      this.getIndexDir(workspaceFolderPath),
-      DOCUMENTS_FILE_NAME
-    );
+  private getDocumentsDir(workspaceFolderPath: string): string {
+    return path.join(this.getIndexDir(workspaceFolderPath), DOCUMENTS_DIR_NAME);
   }
 
   private emptyResponse(

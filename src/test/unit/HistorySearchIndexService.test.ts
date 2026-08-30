@@ -7,6 +7,9 @@ import { HistorySearchIndexService } from "../../core/orchestration/HistorySearc
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   computeHistorySearchIndexDiff,
+  DOCUMENTS_DIR_NAME,
+  DOCUMENTS_SHARD_EXTENSION,
+  getDocumentsShardPath,
   type HistorySearchIndexManifest,
   INDEX_SCHEMA_VERSION,
   listRunSources,
@@ -27,7 +30,10 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import { Log } from "../../utils/Log";
+import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
+import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("HistorySearchIndexService", () => {
   let workspaceRoot: string;
@@ -90,6 +96,51 @@ suite("HistorySearchIndexService", () => {
       workspaceRoot
     );
     assert.strictEqual(codexResults.totalCount, 1);
+  });
+
+  test("stores one document shard per run and searches across shards", async () => {
+    const firstWorkflowId = "sharded-first-2026-06-09T22-00-00";
+    const secondWorkflowId = "sharded-second-2026-06-09T22-01-00";
+    await createRun(firstWorkflowId, 1, 1000, [
+      createStatusDraft(1100, "sharded-search-term"),
+    ]);
+    await createRun(secondWorkflowId, 1, 2000, [
+      createStatusDraft(2100, "sharded-search-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const response = await index.search(
+      { query: "sharded-search-term", limit: 10 },
+      workspaceRoot
+    );
+
+    const documentsDir = path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      DOCUMENTS_DIR_NAME
+    );
+    const shardFiles = await fs.readdir(documentsDir);
+    assert.strictEqual(shardFiles.length, 2);
+    assert.ok(
+      shardFiles.every((fileName) =>
+        fileName.endsWith(DOCUMENTS_SHARD_EXTENSION)
+      )
+    );
+    assert.deepStrictEqual(
+      new Set(shardFiles),
+      new Set(
+        (await listRunSources(workspaceRoot)).map((source) =>
+          path.basename(
+            getDocumentsShardPath(
+              path.dirname(documentsDir),
+              source.manifestPath
+            )
+          )
+        )
+      )
+    );
+    assert.strictEqual(response.totalCount, 2);
+    assert.strictEqual(response.results.length, 2);
   });
 
   test("resets a cursor when its filters change", async () => {

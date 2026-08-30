@@ -28,9 +28,11 @@ import {
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
 
-export const INDEX_SCHEMA_VERSION = "3.0.0" as const;
+export const INDEX_SCHEMA_VERSION = "4.0.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
-export const DOCUMENTS_FILE_NAME = "documents.jsonl";
+export const DOCUMENTS_DIR_NAME = "documents";
+export const DOCUMENTS_SHARD_EXTENSION = ".jsonl";
+const LEGACY_DOCUMENTS_FILE_NAME = "documents.jsonl";
 export const MAX_INDEXED_TEXT_LENGTH = 2000;
 /**
  * V8 old-generation heap cap for the rebuild worker's isolate, passed as
@@ -357,72 +359,67 @@ export async function runHistorySearchRebuild(
         retainDocuments: String(data.retainDocuments),
       });
 
-      const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
+      const documentsDir = path.join(rebuildDir, DOCUMENTS_DIR_NAME);
+      await fs.promises.mkdir(documentsDir, { recursive: true });
       const rebuildManifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
-      const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
       let documentCount = 0;
       let processedRuns = 0;
       let lastProgressEmitAt = 0;
       onProgress?.(0, runSources.length);
       const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
-      try {
-        for (const source of runSources) {
-          const manifest = await readManifestSafe(source.manifestPath);
-          if (!manifest) {
-            continue;
-          }
-          const events = await readEventsSafe(source.manifestPath);
-          let metadata = metadataCache.get(source.workflowKey);
-          if (!metadata) {
-            metadata = await readWorkflowMetadata(
-              data.workspaceFolderPath,
-              source.workflowKey
-            );
-            metadataCache.set(source.workflowKey, metadata);
-          }
-
-          for (const document of buildRunDocuments(
-            manifest,
-            events,
-            metadata,
-            source.workflowKey,
-            source.runRef
-          )) {
-            documentCount += 1;
-            if (!stream.write(JSON.stringify(document) + "\n")) {
-              await once(stream, "drain");
-            }
-          }
-
-          const manifestStats = await fs.promises.stat(source.manifestPath);
-          const eventsStats = await statOptional(source.eventsPath);
-          indexedRuns[path.resolve(source.manifestPath)] = {
-            manifestPath: source.manifestPath,
-            eventsPath: source.eventsPath,
-            workflowId: manifest.workflowId,
-            runId: manifest.runId,
-            startedAt: manifest.startedAt,
-            eventCount: manifest.eventCount,
-            lastUpdatedAt: manifest.lastUpdatedAt,
-            sourceManifestMtimeMs: manifestStats.mtimeMs,
-            sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
-          };
-
-          processedRuns += 1;
-          if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
-            Log.debug(
-              `[HistorySearchIndexService] rebuild progress: ${processedRuns}/${runSources.length} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - listSourcesStart}`
-            );
-          }
-          const now = Date.now();
-          if (now - lastProgressEmitAt >= PROGRESS_EMIT_INTERVAL_MS) {
-            lastProgressEmitAt = now;
-            onProgress?.(processedRuns, runSources.length);
-          }
+      for (const source of runSources) {
+        const manifest = await readManifestSafe(source.manifestPath);
+        if (!manifest) {
+          continue;
         }
-      } finally {
-        stream.end();
-        await once(stream, "finish");
+        const events = await readEventsSafe(source.manifestPath);
+        let metadata = metadataCache.get(source.workflowKey);
+        if (!metadata) {
+          metadata = await readWorkflowMetadata(
+            data.workspaceFolderPath,
+            source.workflowKey
+          );
+          metadataCache.set(source.workflowKey, metadata);
+        }
+
+        const documents = buildRunDocuments(
+          manifest,
+          events,
+          metadata,
+          source.workflowKey,
+          source.runRef
+        );
+        await writeDocumentsShard(
+          getDocumentsShardPath(rebuildDir, source.manifestPath),
+          documents
+        );
+        documentCount += documents.length;
+
+        const manifestStats = await fs.promises.stat(source.manifestPath);
+        const eventsStats = await statOptional(source.eventsPath);
+        indexedRuns[path.resolve(source.manifestPath)] = {
+          manifestPath: source.manifestPath,
+          eventsPath: source.eventsPath,
+          workflowId: manifest.workflowId,
+          runId: manifest.runId,
+          startedAt: manifest.startedAt,
+          eventCount: manifest.eventCount,
+          lastUpdatedAt: manifest.lastUpdatedAt,
+          sourceManifestMtimeMs: manifestStats.mtimeMs,
+          sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
+        };
+
+        processedRuns += 1;
+        if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
+          Log.debug(
+            `[HistorySearchIndexService] rebuild progress: ${processedRuns}/${runSources.length} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - listSourcesStart}`
+          );
+        }
+        const now = Date.now();
+        if (now - lastProgressEmitAt >= PROGRESS_EMIT_INTERVAL_MS) {
+          lastProgressEmitAt = now;
+          onProgress?.(processedRuns, runSources.length);
+        }
       }
 
       const indexManifest: HistorySearchIndexManifest = {
@@ -441,7 +438,7 @@ export async function runHistorySearchRebuild(
         "utf8"
       );
 
-      await swapIndexFiles(indexDir, rebuildManifestPath, documentsPath);
+      await swapIndexFiles(indexDir, rebuildManifestPath, documentsDir);
       await cleanupRebuildDirs(indexDir, rebuildDir);
       onProgress?.(processedRuns, runSources.length);
       Log.info(
@@ -597,6 +594,34 @@ function hashPath(filePath: string): string {
     .digest("hex");
 }
 
+export function getDocumentsShardPath(
+  indexDir: string,
+  manifestPath: string
+): string {
+  return path.join(
+    indexDir,
+    DOCUMENTS_DIR_NAME,
+    `${hashPath(manifestPath)}${DOCUMENTS_SHARD_EXTENSION}`
+  );
+}
+
+async function writeDocumentsShard(
+  shardPath: string,
+  documents: HistorySearchDocument[]
+): Promise<void> {
+  const stream = fs.createWriteStream(shardPath, { encoding: "utf8" });
+  try {
+    for (const document of documents) {
+      if (!stream.write(JSON.stringify(document) + "\n")) {
+        await once(stream, "drain");
+      }
+    }
+  } finally {
+    stream.end();
+    await once(stream, "finish");
+  }
+}
+
 async function readManifestSafe(
   manifestPath: string
 ): Promise<WorkflowRunManifest | undefined> {
@@ -715,17 +740,21 @@ function collectEventCandidates(
 async function swapIndexFiles(
   indexDir: string,
   manifestPath: string,
-  documentsPath: string
+  documentsDir: string
 ): Promise<void> {
   await fs.promises.rm(path.join(indexDir, MANIFEST_FILE_NAME), {
     force: true,
   });
-  await fs.promises.rm(path.join(indexDir, DOCUMENTS_FILE_NAME), {
+  await fs.promises.rm(path.join(indexDir, DOCUMENTS_DIR_NAME), {
+    recursive: true,
+    force: true,
+  });
+  await fs.promises.rm(path.join(indexDir, LEGACY_DOCUMENTS_FILE_NAME), {
     force: true,
   });
   await fs.promises.rename(
-    documentsPath,
-    path.join(indexDir, DOCUMENTS_FILE_NAME)
+    documentsDir,
+    path.join(indexDir, DOCUMENTS_DIR_NAME)
   );
   await fs.promises.rename(
     manifestPath,

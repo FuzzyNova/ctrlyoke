@@ -181,11 +181,11 @@ triggers.
 
 1. **Done — diff-returning freshness check** — added the full new/changed/removed/unchanged
    run diff and routed freshness through it; no deviation from the plan.
-2. **Shard the on-disk document storage** — introduce the `documents/<hash>.jsonl` layout,
-   change the (still-always-full) rebuild to write one shard per run, change search-time
-   loading to concatenate all shards, bump the schema version. This is the storage-format
-   step; rebuilds are still full rescans after this step, just writing/reading a different
-   layout.
+2. **Done — shard the on-disk document storage** — introduced the
+   `documents/<hash>.jsonl` layout, changed the (still-always-full) rebuild to write one
+   shard per run, changed search-time loading to concatenate all shards, and bumped the
+   schema version. No deviation from the plan; rebuilds are still full rescans after this
+   step, just writing/reading a different layout.
 3. **Incremental rebuild** — wire step 1's diff into the rebuild path: changed/new runs get
    their shard regenerated, removed runs get their shard deleted and manifest entry dropped,
    unchanged runs are untouched (no read, no re-parse, no rewrite), with the 50%-ratio
