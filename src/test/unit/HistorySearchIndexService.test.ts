@@ -10,6 +10,7 @@ import {
   DOCUMENTS_DIR_NAME,
   DOCUMENTS_SHARD_EXTENSION,
   getDocumentsShardPath,
+  MAX_INDEXED_TEXT_LENGTH,
   type HistorySearchIndexManifest,
   INDEX_SCHEMA_VERSION,
   listRunSources,
@@ -97,6 +98,48 @@ suite("HistorySearchIndexService", () => {
       workspaceRoot
     );
     assert.strictEqual(codexResults.totalCount, 1);
+  });
+
+  test("streams large event text while preserving index truncation", async () => {
+    const visibleTerm = "streamed-visible-term";
+    const hiddenTerm = "streamed-hidden-term";
+    const response = `${visibleTerm}${"x".repeat(
+      MAX_INDEXED_TEXT_LENGTH - visibleTerm.length
+    )}${hiddenTerm}`;
+    await createRun("streaming-large-event-2026-06-09T22-02-00", 1, 3000, [
+      createCliOutputDraft(3100, HARNESS_IDS.CODEX_CLI, response, 0),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const visibleResponse = await index.search(
+      { query: visibleTerm, limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(visibleResponse.totalCount, 1);
+
+    const hiddenResponse = await index.search(
+      { query: hiddenTerm, limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(hiddenResponse.totalCount, 0);
+
+    const source = (await listRunSources(workspaceRoot))[0];
+    assert.ok(source);
+    const indexDir = path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    );
+    const documents = (
+      await fs.readFile(
+        getDocumentsShardPath(indexDir, source.manifestPath),
+        "utf8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { text: string });
+    assert.strictEqual(documents.length, 1);
+    assert.strictEqual(documents[0]?.text.length, MAX_INDEXED_TEXT_LENGTH);
   });
 
   test("stores one document shard per run and searches across shards", async () => {

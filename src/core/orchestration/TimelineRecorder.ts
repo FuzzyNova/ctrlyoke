@@ -11,7 +11,11 @@ import {
   type WorkflowTimelineEvent,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
-import type { ExecutionState } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  type ExecutionState,
+} from "../../types/DashboardConstants";
+import type { CliEvent } from "../../types/WebviewMessageTypes";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
@@ -197,6 +201,21 @@ export class TimelineRecorder {
     }
   }
 
+  /**
+   * Streams the event projection needed by history indexing. Candidate text is
+   * capped before the event is handed to the indexer, so processed event data
+   * is not retained in the run's shard beyond the configured limit.
+   * `readEvents` remains the lossless reader used by replay/history callers.
+   */
+  async *streamEventsForHistorySearch(
+    manifestPath: string,
+    maxTextLength: number
+  ): AsyncGenerator<WorkflowTimelineEvent, void, undefined> {
+    for await (const event of this.streamEvents(manifestPath)) {
+      yield truncateHistorySearchEvent(event, maxTextLength);
+    }
+  }
+
   async appendEvents(
     manifestPath: string,
     drafts: WorkflowTimelineEventDraft[]
@@ -372,4 +391,170 @@ export class TimelineRecorder {
       }
     }
   }
+}
+
+function truncateHistorySearchEvent(
+  event: WorkflowTimelineEvent,
+  maxTextLength: number
+): WorkflowTimelineEvent {
+  if (event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED) {
+    const cliOutput = event.payload.cliOutput;
+    cliOutput.prompt = truncateString(cliOutput.prompt, maxTextLength);
+    cliOutput.response = truncateRequiredString(
+      cliOutput.response,
+      maxTextLength
+    );
+    cliOutput.cliCommand = truncateString(cliOutput.cliCommand, maxTextLength);
+    for (const structuredEvent of cliOutput.structured?.events ?? []) {
+      truncateStructuredEvent(structuredEvent, maxTextLength);
+    }
+  } else if (event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED) {
+    event.payload.statusMessage.message = truncateRequiredString(
+      event.payload.statusMessage.message,
+      maxTextLength
+    );
+  }
+
+  return event;
+}
+
+function truncateStructuredEvent(event: CliEvent, maxTextLength: number): void {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.TEXT:
+    case CLI_EVENT_TYPES.THINKING:
+      truncateStringProperty(event.data, "text", maxTextLength);
+      break;
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+      truncateStringProperty(event.data, "command", maxTextLength);
+      truncateStringProperty(event.data, "output", maxTextLength);
+      truncateStringProperty(event.data, "error", maxTextLength);
+      break;
+    case CLI_EVENT_TYPES.FILE_WRITE:
+      truncateStringProperty(event.data, "content", maxTextLength);
+      break;
+    case CLI_EVENT_TYPES.FILE_EDIT:
+      truncateStructuredPatch(event.data, maxTextLength);
+      break;
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+    case CLI_EVENT_TYPES.TOOL_CALL:
+      truncateStringProperty(event.data, "server", maxTextLength);
+      truncateStringProperty(event.data, "tool", maxTextLength);
+      truncateStringProperty(event.data, "name", maxTextLength);
+      truncateJsonProperty(event.data, "parameters", maxTextLength);
+      break;
+    case CLI_EVENT_TYPES.TOOL_RESULT: {
+      const result = (event.data as { result?: Record<string, unknown> })
+        .result;
+      if (result) {
+        truncateStringProperty(result, "output", maxTextLength);
+        truncateStringProperty(result, "error", maxTextLength);
+      }
+      break;
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH: {
+      truncateStringProperty(event.data, "query", maxTextLength);
+      const results = (event.data as { results?: unknown }).results;
+      if (Array.isArray(results)) {
+        for (const result of results) {
+          if (result && typeof result === "object") {
+            truncateStringProperty(result, "title", maxTextLength);
+            truncateStringProperty(result, "snippet", maxTextLength);
+            truncateStringProperty(result, "url", maxTextLength);
+          }
+        }
+      }
+      break;
+    }
+    case CLI_EVENT_TYPES.COMPACTION:
+      truncateStringProperty(event.data, "summary", maxTextLength);
+      break;
+    default:
+      break;
+  }
+}
+
+function truncateStructuredPatch(data: unknown, maxTextLength: number): void {
+  if (!data || typeof data !== "object") {
+    return;
+  }
+  const structuredPatch = (data as { structuredPatch?: unknown })
+    .structuredPatch;
+  if (!Array.isArray(structuredPatch)) {
+    return;
+  }
+
+  const lines = structuredPatch.flatMap((hunk) => {
+    if (!hunk || typeof hunk !== "object") {
+      return [];
+    }
+    const hunkLines = (hunk as { lines?: unknown }).lines;
+    return Array.isArray(hunkLines)
+      ? hunkLines.filter((line): line is string => typeof line === "string")
+      : [];
+  });
+  const flattened = lines.join("\n");
+  if (flattened.length <= maxTextLength) {
+    return;
+  }
+
+  (data as { structuredPatch: Array<{ lines: string[] }> }).structuredPatch = [
+    { lines: [flattened.slice(0, maxTextLength)] },
+  ];
+}
+
+function truncateStringProperty(
+  value: unknown,
+  property: string,
+  maxTextLength: number
+): void {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record[property] === "string") {
+    record[property] = truncateString(
+      record[property] as string,
+      maxTextLength
+    );
+  }
+}
+
+function truncateJsonProperty(
+  value: unknown,
+  property: string,
+  maxTextLength: number
+): void {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  const propertyValue = record[property];
+  if (typeof propertyValue === "string") {
+    record[property] = truncateString(propertyValue, maxTextLength);
+    return;
+  }
+  if (propertyValue === undefined) {
+    return;
+  }
+  try {
+    const serialized = JSON.stringify(propertyValue);
+    if (typeof serialized === "string" && serialized.length > maxTextLength) {
+      record[property] = serialized.slice(0, maxTextLength);
+    }
+  } catch {
+    // History indexing already treats unserializable values as best effort.
+  }
+}
+
+function truncateString(
+  value: string | undefined,
+  maxTextLength: number
+): string | undefined {
+  return value && value.length > maxTextLength
+    ? value.slice(0, maxTextLength)
+    : value;
+}
+
+function truncateRequiredString(value: string, maxTextLength: number): string {
+  return value.length > maxTextLength ? value.slice(0, maxTextLength) : value;
 }

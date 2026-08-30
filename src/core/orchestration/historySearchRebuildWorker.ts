@@ -450,7 +450,6 @@ export async function runHistorySearchRebuild(
         if (!manifest) {
           continue;
         }
-        const events = await readEventsSafe(source.manifestPath);
         let metadata = metadataCache.get(source.workflowKey);
         if (!metadata) {
           metadata = await readWorkflowMetadata(
@@ -460,9 +459,9 @@ export async function runHistorySearchRebuild(
           metadataCache.set(source.workflowKey, metadata);
         }
 
-        const documents = buildRunDocuments(
+        const documents = await buildRunDocuments(
           manifest,
-          events,
+          readEventsSafe(source.manifestPath),
           metadata,
           source.workflowKey,
           source.runRef
@@ -555,7 +554,6 @@ async function runIncrementalHistorySearchRebuild(
       continue;
     }
 
-    const events = await readEventsSafe(source.manifestPath);
     let metadata = metadataCache.get(source.workflowKey);
     if (!metadata) {
       metadata = await readWorkflowMetadata(
@@ -565,9 +563,9 @@ async function runIncrementalHistorySearchRebuild(
       metadataCache.set(source.workflowKey, metadata);
     }
 
-    const documents = buildRunDocuments(
+    const documents = await buildRunDocuments(
       runManifest,
-      events,
+      readEventsSafe(source.manifestPath),
       metadata,
       source.workflowKey,
       source.runRef
@@ -826,16 +824,21 @@ async function readManifestSafe(
   }
 }
 
-async function readEventsSafe(
+async function* readEventsSafe(
   manifestPath: string
-): Promise<WorkflowTimelineEvent[]> {
+): AsyncGenerator<WorkflowTimelineEvent, void, undefined> {
   try {
-    return await timelineRecorder.readEvents(manifestPath);
+    for await (const event of timelineRecorder.streamEventsForHistorySearch(
+      manifestPath,
+      MAX_INDEXED_TEXT_LENGTH
+    )) {
+      yield event;
+    }
   } catch (error) {
     Log.warn(
       `[HistorySearchIndexService] Failed to read events ${manifestPath}: ${getErrorMessage(error)}`
     );
-    return [];
+    throw error;
   }
 }
 
@@ -859,55 +862,65 @@ async function readWorkflowMetadata(
   }
 }
 
-function buildRunDocuments(
+async function buildRunDocuments(
   manifest: WorkflowRunManifest,
-  events: WorkflowTimelineEvent[],
+  events: AsyncIterable<WorkflowTimelineEvent>,
   metadata: WorkflowMetadata,
   workflowKey: WorkflowKey,
   runRef: RunRef
-): HistorySearchDocument[] {
-  return events.flatMap((event) => {
-    const candidates = collectEventCandidates(event, candidateExtractor);
-    const target = "target" in event ? event.target : undefined;
-    if (!target) {
-      return [];
-    }
-    const outputMetadata =
-      event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
-        ? (event as CliOutputRecordedEvent).payload.cliOutput.structured
-            ?.metadata
-        : undefined;
-    return candidates.map((candidate, candidateIndex) => ({
-      id: [
-        workflowKey,
-        runRef,
-        manifest.runId,
-        event.sequence,
-        `${candidate.eventKind}:${candidate.matchField}`,
-        candidateIndex,
-      ].join(":"),
-      workflowKey,
-      runRef,
-      workflowName: metadata.workflowName,
-      runId: manifest.runId,
-      startedAt: manifest.startedAt,
-      executionState: manifest.executionState,
-      target,
-      attemptIndex:
+): Promise<HistorySearchDocument[]> {
+  const documents: HistorySearchDocument[] = [];
+  try {
+    for await (const event of events) {
+      const candidates = collectEventCandidates(event, candidateExtractor);
+      const target = "target" in event ? event.target : undefined;
+      if (!target) {
+        continue;
+      }
+      const outputMetadata =
         event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
-          ? (event as CliOutputRecordedEvent).attemptIndex
-          : 0,
-      sequence: event.sequence,
-      timestampMs: event.timestampMs,
-      eventKind: candidate.eventKind,
-      matchField: candidate.matchField,
-      text: candidate.text,
-      filePath: candidate.filePath,
-      harness: outputMetadata?.harness,
-      model: outputMetadata?.model,
-      sessionId: outputMetadata?.sessionId,
-    }));
-  });
+          ? (event as CliOutputRecordedEvent).payload.cliOutput.structured
+              ?.metadata
+          : undefined;
+      documents.push(
+        ...candidates.map((candidate, candidateIndex) => ({
+          id: [
+            workflowKey,
+            runRef,
+            manifest.runId,
+            event.sequence,
+            `${candidate.eventKind}:${candidate.matchField}`,
+            candidateIndex,
+          ].join(":"),
+          workflowKey,
+          runRef,
+          workflowName: metadata.workflowName,
+          runId: manifest.runId,
+          startedAt: manifest.startedAt,
+          executionState: manifest.executionState,
+          target,
+          attemptIndex:
+            event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
+              ? (event as CliOutputRecordedEvent).attemptIndex
+              : 0,
+          sequence: event.sequence,
+          timestampMs: event.timestampMs,
+          eventKind: candidate.eventKind,
+          matchField: candidate.matchField,
+          text: candidate.text,
+          filePath: candidate.filePath,
+          harness: outputMetadata?.harness,
+          model: outputMetadata?.model,
+          sessionId: outputMetadata?.sessionId,
+        }))
+      );
+    }
+  } catch {
+    // Do not publish a partial shard after a read/parse failure. This matches
+    // readEventsSafe's former all-or-nothing result for the worker path.
+    return [];
+  }
+  return documents;
 }
 
 function collectEventCandidates(

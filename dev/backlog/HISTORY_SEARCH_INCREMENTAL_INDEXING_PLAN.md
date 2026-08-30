@@ -1,7 +1,6 @@
 # History Search Incremental Indexing Plan
 
-> **Status:** Core steps 1-3 implemented; only step 4 (`TimelineRecorder.readEvents`
-> streaming) remains. Follow-up to
+> **Status:** Fully implemented — core steps 1-4 are shipped. Follow-up to
 > [`../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md`](../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md)
 > (Phases 1A/1B/2, all shipped). This plan addresses the deeper inefficiency that plan's
 > Phase 2 worker isolation only _contained_ rather than removed — see "Why Phase 2 alone
@@ -191,8 +190,11 @@ triggers.
    dropped, unchanged runs are untouched (no read, no re-parse, no rewrite), with the
    `INCREMENTAL_REBUILD_MAX_CHANGED_RATIO = 0.5` fallback to a full rebuild. No deviation
    from the plan; this is the step that delivers the plan's core goal.
-4. **`TimelineRecorder.readEvents` streaming** — stop materializing a run's full
-   `events.jsonl` before truncation; independent cleanup, lands last.
+4. **Done — search-path timeline streaming** — added
+   `TimelineRecorder.streamEventsForHistorySearch`, which reads events line by line
+   and caps candidate-source text before indexing. The shared `readEvents` method
+   remains unchanged because replay/history callers still require complete,
+   untruncated events; only the rebuild worker uses the new streaming projection.
 
 ## Non-goals
 
