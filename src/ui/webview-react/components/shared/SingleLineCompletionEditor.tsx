@@ -94,12 +94,28 @@ const singleLineTransactionFilter = EditorState.transactionFilter.of(
 // fields. Callers must not add vertical padding (e.g. `py-1`) to the wrapper
 // className: this editor's height is fully fixed here, so any wrapper
 // padding only adds extra height on top of it instead of being absorbed.
+//
+// IMPORTANT — no `overflow` on `&` here. `EditorView.theme({"&": {...}})`
+// compiles `&` to a bare `.<generated-class>` selector (see @codemirror/view's
+// `buildTheme`/`EditorView.theme`), and `TooltipViewManager` (the same
+// module's tooltip-positioning plugin) sets its own tooltip-wrapping
+// `container.className = view.themeClasses` — the SAME generated class,
+// applied to a completely unrelated element that isn't a descendant of this
+// editor at all. Any `overflow` set here leaks onto that container and
+// clips the completions dropdown mounted inside it — invisible on desktop,
+// where the tooltip stays `position: fixed` (which escapes ordinary
+// `overflow` clipping), but on iOS `@codemirror/view` hardcodes tooltips to
+// `position: absolute`, which does NOT escape it — clipped to nothing, with
+// no visible error, is indistinguishable from "never rendered". `.cm-scroller`
+// below (a real *descendant* selector, `cm-scroller` being a literal DOM
+// class only this editor's own scroll container carries) is what actually
+// needs to clip this field's oversized content, and does so on its own —
+// this rule doesn't need its own `overflow` to achieve that.
 const singleLineTheme = EditorView.theme({
   "&": {
     height: "26px",
     minHeight: "26px",
     maxHeight: "26px",
-    overflow: "hidden",
   },
   ".cm-scroller": {
     overflow: "hidden",
@@ -211,16 +227,22 @@ function syncDocument(
   });
 }
 
-// Temporary mobile-completion-bug diagnostics (see
-// dev/backlog or the "mobile completion fix" investigation). Logs when the
-// completion dropdown becomes active and, one frame later — after
-// CodeMirror's own tooltip measure/write pass has run — whether the tooltip
-// DOM actually mounted and where CodeMirror placed it, plus the geometry
-// (`keyboardTooltipSpace`, the editor's `scrollDOM` rect, the caret's
-// measured coords) `@codemirror/view`'s tooltip visibility check reads to
-// decide that placement. `WebviewLog` forwards to the extension-host session
-// log, so this is readable after a repro on a device with no attached
-// devtools.
+// Mobile-completion-dropdown diagnostics: logs when the completion dropdown
+// becomes active and, one frame later — after CodeMirror's own tooltip
+// measure/write pass has run — whether the tooltip DOM actually mounted,
+// where CodeMirror placed it, and its computed style, so a future clipping
+// or positioning regression is diagnosable from the extension-host session
+// log (`WebviewLog`) without an attached mobile devtools session.
+//
+// Context for `tooltipComputedStyle`/`tooltipRect`: `@codemirror/view`
+// hardcodes `position: browser.ios ? "absolute" : "fixed"` for tooltips —
+// desktop always gets `fixed` (escapes ordinary ancestor `overflow: hidden`
+// clipping), iOS always gets `absolute` (does not escape it). A field whose
+// own theme leaks an `overflow` rule onto CodeMirror's tooltip-wrapping
+// container (see `singleLineTheme`'s comment above) is invisible on iOS
+// only, with a valid on-screen `tooltipRect` and no console error — clipped
+// to nothing is indistinguishable from "never rendered" without checking
+// `tooltipComputedStyle` directly.
 function logCompletionDropdownState(
   view: EditorView,
   label: string,
@@ -233,10 +255,21 @@ function logCompletionDropdownState(
       ".cm-tooltip-autocomplete"
     );
     const head = view.state.selection.main.head;
+    const rect = dom?.getBoundingClientRect();
+    const computed = dom ? window.getComputedStyle(dom) : undefined;
     WebviewLog.debug(`[completions:${label}] dropdown activated`, {
       tooltipFound: !!dom,
       tooltipStyleTop: dom?.style.top,
-      tooltipRect: dom?.getBoundingClientRect(),
+      tooltipRect: rect,
+      tooltipComputedStyle: computed
+        ? {
+            opacity: computed.opacity,
+            visibility: computed.visibility,
+            display: computed.display,
+            zIndex: computed.zIndex,
+            position: computed.position,
+          }
+        : undefined,
       caretCoords: view.coordsAtPos(head),
       scrollDOMRect: view.scrollDOM.getBoundingClientRect(),
       keyboardTooltipSpace: keyboardTooltipSpace(),
