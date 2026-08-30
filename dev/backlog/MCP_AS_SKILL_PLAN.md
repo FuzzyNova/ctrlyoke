@@ -1,6 +1,9 @@
 # MCP-as-Skill: ctrlyoke Queue/Commit Tools Without MCP Configuration
 
-> **Status:** Proposed — not implemented. Written 2026-08-24 against current code.
+> **Status:** Proposed — not implemented. Written 2026-08-24 against current code;
+> refined 2026-08-30 against current code — corrected drifted line citations, fixed
+> one wrong-file citation (§1.5), resolved Open Questions 1/3/4 by decision, and
+> answered Open Question 2 with a traced insertion point (§5).
 
 **Problem in one line:** many enterprise Copilot/Claude/Codex deployments block MCP
 configuration entirely (company policy) but freely allow installable skills, so any
@@ -17,16 +20,20 @@ those users — with no equivalent path today.
 `CtrlYokeMCPServer` (`src/mcp-server.ts`) cleanly separates tool _definitions_ from tool
 _dispatch_ from _transport_:
 
-- `getToolDefinitions()` (`mcp-server.ts:184-299`) is the single source of truth for all
-  7 tools' names, descriptions, and JSON-Schema `inputSchema`s — already consumed by
-  `ListToolsRequestSchema`'s handler (`mcp-server.ts:303-308`) and nothing else.
-- `invokeTool(name, args)` (`mcp-server.ts:339-356`) is a **public, already-documented**
+- `getToolDefinitions()` (`mcp-server.ts:185-300`) is the single source of truth for all
+  6 tools' names, descriptions, and JSON-Schema `inputSchema`s — already consumed by
+  `ListToolsRequestSchema`'s handler (`mcp-server.ts:304-309`) and nothing else. (This
+  was 7 tools as of the 2026-08-24 draft; the current set is `ctrlyoke_queue_status`,
+  `ctrlyoke_append_queue`, `ctrlyoke_capabilities`, `ctrlyoke_read_output`,
+  `ctrlyoke_global_status`, `ctrlyoke_submit_commit_message` — verify the count again at
+  implementation time.)
+- `invokeTool(name, args)` (`mcp-server.ts:340-357`) is a **public, already-documented**
   dispatch method: _"Dispatch one tool without transport error wrapping; useful to
   embedders and focused tests."_ `CallToolRequestSchema`'s handler is a thin wrapper
-  around it (`mcp-server.ts:311-335`), and `src/test/unit/McpServer.test.ts` already
+  around it (`mcp-server.ts:312-336`), and `src/test/unit/McpServer.test.ts` already
   calls it directly dozens of times, bypassing stdio/JSON-RPC entirely.
 - Every tool answers for exactly one workflow run, resolved from
-  `process.env.CTRLYOKE_WORKING_FILE` (`requireRunAddress()`, `mcp-server.ts:1005-1026`),
+  `process.env.CTRLYOKE_WORKING_FILE` (`requireRunAddress()`, `mcp-server.ts:1013-1027`),
   not from any tool argument. This addressing model is unaffected by anything below.
 
 So a non-MCP invocation path does not need to reimplement any business logic — it only
@@ -39,20 +46,23 @@ work completely differently:
 
 - **Agents** — `AgentExpander.expandAgent()` (`src/utils/AgentExpander.ts:44-66`) reads
   the agent file itself and returns its **full body** (minus frontmatter). This becomes
-  `agentContent` (`HarnessIntegration.ts:548-550`), which `CliPromptPreparer` chunks and
-  writes verbatim into a workspace-local temp file
-  (`TEMP_FILE_CATEGORIES.AGENT`, `CliPromptPreparer.ts:667-681`), referenced from the
+  `agentContent` (`src/core/HarnessIntegration.ts:549-551`), which `CliPromptPreparer`
+  chunks and writes verbatim into a workspace-local temp file
+  (`TEMP_FILE_CATEGORIES.AGENT`, `CliPromptPreparer.ts:673-681`), referenced from the
   prompt as `@agent.md`. One hop: the temp file the harness reads _is_ the content.
 - **Skills** — `SkillExpander.expandSkills()` (`src/utils/SkillExpander.ts:33-76`) does
   not read the skill body at all. It builds a "progressive disclosure" pointer block per
   skill (`buildSkillBlock`, lines 82-88) containing only `## Skill: name` / `Path:
 <absolute path>` / `Description: ...`, with a header instructing the harness to _"read
   its SKILL.md file directly using your built-in file read tool."_ This block becomes
-  `skillContent` (`HarnessIntegration.ts:544-546`), which is _also_ chunked into a
-  workspace-local temp file (`TEMP_FILE_CATEGORIES.SKILLS`,
-  `CliPromptPreparer.ts:699-712`) and referenced as `@skills.md`
+  `skillContent` (`src/core/HarnessIntegration.ts:545-547`), which is _also_ chunked into
+  a workspace-local temp file (`TEMP_FILE_CATEGORIES.SKILLS`,
+  `CliPromptPreparer.ts:704-712`) and referenced as `@skills.md`
   (`CliIntegration.ts:492-497`, the categorized-instruction format). Two hops: the
   workspace-local file the harness reads only contains a _second_ path to go read.
+  (Note: the file is `src/core/HarnessIntegration.ts`, not
+  `src/core/harness/HarnessIntegration.ts` — the base class lives one level up from the
+  per-harness provider directories.)
 
 That second hop is fine when the skill lives inside the workspace (or another directory
 the executing harness process can actually reach) — it's real, deliberate token savings
@@ -63,8 +73,8 @@ harness's execution environment can read — e.g. a user-level skill at
 container/sandbox that never mounted the user's home directory, or (after this plan) a
 **built-in skill that has no on-disk path inside the workspace at all**. `SkillExpander`
 does no containment check analogous to `ContextExpander`'s existing
-`isPathWithinAnyDirectory` trust-root logic (`src/utils/ContextExpander.ts:158-164`,
-used at `1062`) — it just prints whatever absolute path `SkillDiscovery` resolved.
+`isPathWithinAnyDirectory` trust-root logic (`src/utils/ContextExpander.ts:1062`) — it
+just prints whatever absolute path `SkillDiscovery` resolved.
 
 **This is a real, standalone bug independent of MCP-as-skill**, and it is also a hard
 prerequisite for this plan: a built-in "call the MCP tools via node" skill cannot exist
@@ -82,13 +92,15 @@ and make it selectable like a user/workspace one" for agents:
   `copy-templates` esbuild plugin, `esbuild.js:120-146`) and the source/test layout.
 - `discoverBuiltInAgents()` (`AgentDiscovery.ts:173-182`) scans that directory with
   `DISCOVERY_SOURCES.BUILT_IN` — a constant that **already exists**
-  (`DashboardConstants.ts:2115`, doc'd _"Immutable agents included with the ctrlyoke
+  (`DashboardConstants.ts:2652`, doc'd _"Immutable agents included with the ctrlyoke
   installation"_) and is **already a permitted value for `SkillInfo["source"]`**
   (`SkillDiscovery.ts:33`: `Exclude<DiscoverySource, typeof
 DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>` — `BUILT_IN` is not excluded). Nothing to add
-  to the type system; skills just never populate this source today.
+  to the type system; skills just never populate this source today (confirmed:
+  `SkillDiscovery.discoverSkills()`, `SkillDiscovery.ts:67-154`, has no built-in-scanning
+  branch yet).
 - `discoverAgents()` appends built-ins **after** user/workspace agents and filters out
-  any built-in name a real file already claims (`AgentDiscovery.ts:153-158`) — built-in
+  any built-in name a real file already claims (`AgentDiscovery.ts:154-158`) — built-in
   is the lowest-precedence, user-overridable fallback.
 - Bundled agent files are ordinary `.agent.md` with YAML frontmatter (`name`,
   `description`) — see `src/templates/agents/ctrlyoke-tech-support.agent.md:1-4` for the
@@ -103,25 +115,26 @@ skills have no path to point at — they must always take the "embed full conten
 
 ### 1.4 Commit-message generation already has an MCP-first / text-fallback split, but no "MCP unavailable" _detection_
 
-`CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:144-371`)
+`CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:231-571`)
 already:
 
 - Prefers a structured tool call: attaches a per-call, queue-tools-denied MCP server
-  config (`mcpServerConfig`, lines 227-246, `deniedTools` excludes everything except
-  `ctrlyoke_submit_commit_message`) and instructs the harness in-prompt to call it
-  (lines 212-217).
-- Falls back to parsing the response text (lines 339-370) when the tool wasn't called.
+  config (`mcpServerConfig`, lines 320-339, `deniedTools` excludes everything except
+  `ctrlyoke_submit_commit_message` by denying the 5 queue tools explicitly) and
+  instructs the harness in-prompt to call it (`mcpInstruction`, lines 308-310).
+- Falls back to parsing the response text when the tool wasn't called (see
+  `mcpToolCalled`/`useMcpCapture` handling around lines 465-501).
 
-But `useMcpCapture` (lines 200-206) is decided purely by _"does `out/mcp-server.js` exist
-on disk"_ — there is no concept of _"the file exists but the harness's environment is
-policy-blocked from using any MCP config at all."_ In that situation today, ctrlyoke
-still attaches `mcpServerConfig` to the step, the harness silently ignores/rejects it
-(varies by harness/policy), and generation degrades to the text-extraction fallback with
-no warning that anything different happened. `.github/instructions/git.instructions.md`
-already documents "structured MCP submission is primary, prose parsing is only a
-fallback" as a locked-in contract — this plan needs to preserve that contract while
-giving MCP-disabled environments a _second_ structured path (the skill), not just a
-worse silent one.
+But `useMcpCapture` (lines 293-299) is decided purely by _"does `out/mcp-server.js` exist
+on disk"_ (`fs.access(mcpServerPath)`) — there is no concept of _"the file exists but the
+harness's environment is policy-blocked from using any MCP config at all."_ In that
+situation today, ctrlyoke still attaches `mcpServerConfig` to the step, the harness
+silently ignores/rejects it (varies by harness/policy), and generation degrades to the
+text-extraction fallback with no warning that anything different happened.
+`.github/instructions/git.instructions.md` already documents "structured MCP submission
+is primary, prose parsing is only a fallback" as a locked-in contract — this plan needs
+to preserve that contract while giving MCP-disabled environments a _second_ structured
+path (the skill), not just a worse silent one.
 
 _(Note: `dev/backlog/COMMIT_MESSAGE_GENERATION_VISIBILITY_PLAN.md` addresses a different,
 orthogonal gap — that these one-shot runs aren't persisted/viewable. That plan and this
@@ -131,10 +144,11 @@ one don't conflict; cross-reference only.)_
 
 `CliMcpConfigGenerator.generateJsonConfig()` (and its TOML sibling) sets
 `CTRLYOKE_WORKSPACE`/`CTRLYOKE_WORKING_FILE` **only inside the generated MCP server
-entry's own `env` block** (`CliProviderUtils.ts` — see `generateJsonConfig` in
-`src/core/harness/shared/CliProviderUtils.ts:337-341` and the TOML equivalent). The
-harness CLI process's _own_ environment is built by
-`CliProviderUtils.buildProcessEnv()` (`CliProviderUtils.ts:457-463`), which only spreads
+entry's own `env` block** (`src/core/harness/shared/CliMcpConfigGenerator.ts:337-341` —
+note this is `CliMcpConfigGenerator.ts`, a distinct file from `CliProviderUtils.ts`; the
+2026-08-24 draft cited the wrong file here). The harness CLI process's _own_ environment
+is built by `CliProviderUtils.buildProcessEnv()`
+(`src/core/harness/shared/CliProviderUtils.ts:502-508`), which only spreads
 `process.env` plus `CTRLYOKE_DIAGNOSTIC_LOGS` — it never sets `CTRLYOKE_WORKING_FILE`.
 
 This matters because a skill can only tell the harness to run a shell command; it cannot
@@ -158,7 +172,7 @@ embed full content instead of a pointer whenever the answer is no.
 
 - Thread the same execution-checkout-root concept `ContextExpander` already carries
   (`ContextExpanderOptions.executionCheckoutRoot`, `ContextExpander.ts:89`) into
-  `SkillExpander.expandSkills()`'s call site (`HarnessIntegration.ts:656-663`,
+  `SkillExpander.expandSkills()`'s call site (`src/core/HarnessIntegration.ts:656-663`,
   `expandSkillBlock`).
 - For each resolved `SkillInfo`, if its `path` is not inside the workspace/execution
   trust roots (reuse `isPathWithinAnyDirectory`, `PathSecurity.ts`, the same helper
@@ -178,7 +192,7 @@ embed full content instead of a pointer whenever the answer is no.
 Add a second, non-transport entry path to the same binary, reusing `invokeTool` as-is.
 
 - At the bottom of `mcp-server.ts`'s `if (require.main === module)` block
-  (`mcp-server.ts:1113-1123`), branch on argv: if `--tool <name>` is present, skip
+  (`mcp-server.ts:1114-1124`), branch on argv: if `--tool <name>` is present, skip
   `start()` (the stdio/MCP transport) entirely.
 - Parse `--tool`, `--args <json>`, `--workspace <path>`, `--working-file <path>`, and
   (for Phase 4) `--commit-output <path>` with a small hand-rolled parser — deliberately
@@ -194,7 +208,7 @@ Add a second, non-transport entry path to the same binary, reusing `invokeTool` 
   working-file address) — this is what makes the CLI form usable from _outside_ an
   MCP-launched subprocess (§1.5).
 - Call the same `initializeMcpStorage()` the `start()` path already calls
-  (`mcp-server.ts:1115`), then `new CtrlYokeMCPServer({ workspaceRoot
+  (`mcp-server.ts:1116`), then `new CtrlYokeMCPServer({ workspaceRoot
 }).invokeTool(name, JSON.parse(argsJson))`; print the result's `content[0].text` to
   stdout; `process.exit(0)`. On a thrown error, print `error.message` to stderr and
   `process.exit(1)` — mirroring the existing transport handler's error shape
@@ -220,7 +234,7 @@ from live tool definitions instead of a static file, so it updates automatically
   disabled by policy) and prose explaining: what ctrlyoke is, the CLI invocation shape
   from Phase 1, and the §1.5 caveat (pass workspace/working-file as flags, don't rely on
   env). Do **not** hand-write the per-tool reference — see next bullet.
-- Refactor `getToolDefinitions()`'s literal array (`mcp-server.ts:184-299`) into a
+- Refactor `getToolDefinitions()`'s literal array (`mcp-server.ts:185-300`) into a
   standalone exported constant (e.g. `MCP_TOOL_DEFINITIONS`, in `mcp-server.ts` or a new
   small shared module) so it can be read without instantiating `CtrlYokeMCPServer`.
   `getToolDefinitions()` becomes a one-line wrapper returning it — no behavior change to
@@ -239,7 +253,7 @@ from live tool definitions instead of a static file, so it updates automatically
   one deliberate special case in the Phase 0 mechanism: a built-in skill's "full body"
   isn't file content, it's `<static prose> + <live-generated tool reference>`.
 - Exclude `ctrlyoke_submit_commit_message` from this skill's tool subset — it gets its
-  own skill in Phase 4, mirroring `CommitMessageGenerator.ts:238-244`'s existing
+  own skill in Phase 4, mirroring `CommitMessageGenerator.ts:331-337`'s existing
   `deniedTools` split (queue tools vs. commit tool are already treated as separate
   concerns in the MCP config today).
 
@@ -254,15 +268,33 @@ has to be a user-set toggle (see §4 non-goals).
   `ConfigurationUtils` per this repo's settings single-source-of-truth rule — **not**
   mirrored into `package.json`'s `contributes.configuration`.
 - When `"disabled"`: `CliProviderUtils.planMcpConfigBlock()`
-  (`CliProviderUtils.ts:366-447`) must not resolve the **ctrlyoke** server into a real
-  MCP config even when a step declares `mcpServers: ["ctrlyoke", ...]`
-  (`hasCtrlYokeServer`, lines 401-403) — short-circuit that piece to empty while leaving
-  user-defined `mcpServers` entries (`userServers`, lines 404-409) completely unaffected;
-  those are a separate, unrelated concern this plan does not touch.
-- Whatever resolves `resolvedProperties.skills` alongside `resolvedProperties.mcpServers`
-  needs to auto-append `"ctrlyoke-mcp-tools"` when a step asked for the ctrlyoke MCP
-  server but availability is `"disabled"` — **the exact resolver function was not traced
-  in this research pass; flagged as an implementation-time investigation, see §5 Q2.**
+  (`src/core/harness/shared/CliProviderUtils.ts:411-492`) must not resolve the
+  **ctrlyoke** server into a real MCP config even when a step declares
+  `mcpServers: ["ctrlyoke", ...]` (`hasCtrlYokeServer`, lines 446-448) — short-circuit
+  that piece to empty while leaving user-defined `mcpServers` entries (`userServers`,
+  lines 449-454) completely unaffected; those are a separate, unrelated concern this plan
+  does not touch.
+- **Resolved (§5 Q2):** both `resolvedProperties.mcpServers` and `resolvedProperties.skills`
+  come from the *same* single resolver — `PropertyResolver.resolve()`
+  (`src/utils/PropertyResolver.ts:90-96`), a thin VS Code/settings adapter that wraps the
+  platform-neutral `resolveExecutionProperties()`
+  (`src/types/ExecutionPropertyResolver.ts:232-320`). That function builds one
+  `ResolvedProperties` object literal (`ExecutionPropertyResolver.ts:301-318`) setting
+  `skills: skills.value` and `mcpServers: mcpServers.value` side by side — there is no
+  second, separate skills-resolution path to also touch. The auto-swap belongs here, not
+  in `CliProviderUtils` or `HarnessIntegration`: add `mcpAvailability` to
+  `ExecutionPropertyDefaults` (populated in `PropertyResolver.createDefaults()`,
+  `PropertyResolver.ts:35-67`, from `ConfigurationUtils` — mirroring how
+  `defaults.skills`/`defaults.mcpServers` are already populated there at lines 52 and 55),
+  then splice `"ctrlyoke-mcp-tools"` into the resolved `skills` array inside
+  `resolveExecutionProperties()` itself, right after `mcpServers` and `skills` are both
+  resolved (after `resolveSkills()`/the `mcpServers` `resolveNullable` call, before the
+  `properties` object literal at line 301) — the one place both values are already in
+  scope together. `WorkflowExecutor.ts` calls `PropertyResolver.resolve()` at two sites
+  (`:562` for the pre-condition gate, `:713` for the real step run) — both automatically
+  pick up the swap with zero caller changes. Confirmed by grep: no `mcpAvailability` (or
+  equivalent) setting exists anywhere in the codebase yet — this is a new field, not a
+  rename.
 - Emit a diagnostic when the swap happens (existing pattern:
   `PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE`-style, see
   `CliPromptPreparer.ts:251-253`) so the swap is visible in the prompt-preview UI instead
@@ -270,14 +302,15 @@ has to be a user-set toggle (see §4 non-goals).
 
 ### Phase 4 — commit-message parity in MCP-disabled mode
 
-- Thread `mcpAvailability` into `CommitMessageGenerator.generateMessage()`
-  (`CommitMessageGenerator.ts:200-206`): when `"disabled"`, skip
-  `mcpServerConfig`/`mcpInstruction` entirely and instead pass a built-in
+- Thread `mcpAvailability` into `CommitMessageGenerator.generateMessage()` — specifically
+  the `useMcpCapture` decision (`CommitMessageGenerator.ts:293-299`, currently just
+  `fs.access(mcpServerPath)`): when `"disabled"`, skip
+  `mcpServerConfig`/`mcpInstruction` (lines 308-339) entirely and instead pass a built-in
   `ctrlyoke-commit-message-tool` skill (generated the same way as Phase 2, scoped to just
   `ctrlyoke_submit_commit_message`) through `buildCommitWorkflowOverrides()`'s `skills`
-  field (`CommitMessageGenerator.ts:43-59` — currently hardcoded `skills: null`; make it
+  field (`CommitMessageGenerator.ts:113-141` — currently hardcoded `skills: null`; make it
   conditional on `mcpAvailability`).
-- Capture path: `handleSubmitCommitMessage` (`mcp-server.ts:950-974`) already writes to
+- Capture path: `handleSubmitCommitMessage` (`mcp-server.ts:951-974`) already writes to
   `process.env.CTRLYOKE_COMMIT_OUTPUT` when set. Extend Phase 1's argv parser to also
   accept `--commit-output <path>` (in addition to the env var, for parity with the MCP
   transport path) so the generated skill instruction can pass it as a plain CLI argument
@@ -323,7 +356,7 @@ of an active run. Not required for the core capability to work.
 - `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — new `mcpAvailability` field,
   read only through `CtrlYokeConfigService`/`ConfigurationUtils` per this repo's
   single-settings-surface rule.
-- `buildCommitWorkflowOverrides()` return shape (`CommitMessageGenerator.ts:43-59`) —
+- `buildCommitWorkflowOverrides()` return shape (`CommitMessageGenerator.ts:113-141`) —
   `skills` becomes conditionally non-null; confirm nothing downstream assumes it's always
   `null` for commit-gen runs.
 
@@ -331,32 +364,40 @@ of an active run. Not required for the core capability to work.
 
 ## 5. Open questions
 
-1. **Frontmatter stripping for embedded skill bodies (Phase 0).** Skills' frontmatter
-   today is just `name`/`description` (`SkillDiscovery.ts:296-301` only ever reads
-   `description`) — unlike agents, there's no `model`/`tools` override field to warn
-   about and strip (`AgentExpander.stripFrontmatter`, `AgentExpander.ts:77-104`).
-   Probably safe to embed the body verbatim, frontmatter included — confirm at
-   implementation time that no harness chokes on a leading `---` block in an XML-wrapped
-   attachment.
-2. **Phase 3's exact resolver insertion point.** This research pass confirmed _where_
-   `resolvedProperties.mcpServers` is consumed (`CliProviderUtils.planMcpConfigBlock`)
-   but did not trace the property-resolution layer that would need to also touch
-   `resolvedProperties.skills` in the same pass. Needs a focused look at whatever
-   resolves step properties (likely a `PropertyResolver`-named class) before
-   implementation starts.
-3. **Same-binary vs. sibling binary for the CLI entrypoint (Phase 1).** This plan adds
-   `--tool`/`--args` argv handling directly to `mcp-server.ts`. The alternative — a new
-   `src/mcp-cli.ts` bundled to its own `out/mcp-cli.js` — keeps the stdio-transport
-   binary's argv space uncluttered and gives the skill a name that says "CLI tool," not
-   "MCP server," which might read better in generated skill prose. Leaning toward
-   same-file (single source of truth for `invokeTool`, one less esbuild target to
-   maintain) but worth a second opinion before implementing.
-4. **Skill granularity.** Recommend exactly two built-in skills (queue-management tools,
-   commit-message tool — Phase 2/4 split) rather than one skill per individual tool or
-   one giant skill. Mirrors the `deniedTools` split `CommitMessageGenerator.ts:238-244`
-   already draws between queue tools and the commit tool. Revisit if a workflow author
-   wants to attach only one specific queue tool's worth of instructions (unlikely; queue
-   status/append/capabilities/read-output are normally used together).
+All four questions from the 2026-08-24 draft are now resolved; kept here (not deleted)
+as the decision record, since the reasoning matters for anyone revisiting this later.
+
+1. **Frontmatter stripping for embedded skill bodies (Phase 0). Decided: embed
+   verbatim, no stripping.** Skills' frontmatter today is just `name`/`description`
+   (`SkillDiscovery.ts:296-301` only ever reads `description`) — unlike agents, there's
+   no `model`/`tools` override field to warn about and strip
+   (`AgentExpander.stripFrontmatter`, `AgentExpander.ts:77-104`). Embed the body verbatim,
+   frontmatter included; still worth a smoke test at implementation time that no harness
+   chokes on a leading `---` block inside an XML-wrapped attachment, but that's an
+   implementation check, not an open design question.
+2. **Phase 3's exact resolver insertion point. Resolved — one resolver, not two.**
+   `PropertyResolver.resolve()` (`src/utils/PropertyResolver.ts:90-96`) is the single
+   place both `resolvedProperties.mcpServers` and `resolvedProperties.skills` are
+   produced, via the platform-neutral `resolveExecutionProperties()`
+   (`src/types/ExecutionPropertyResolver.ts:232-320`), which builds one
+   `ResolvedProperties` object literal (lines 301-318) setting both fields together.
+   `CliProviderUtils.planMcpConfigBlock()` and `HarnessIntegration.buildPromptSections()`
+   are two independent *consumers* of that one object — not two independent resolvers.
+   See the full insertion-point writeup already folded into Phase 3 above (§2, Phase 3,
+   second bullet); no further tracing needed before implementation.
+3. **Same-binary vs. sibling binary for the CLI entrypoint (Phase 1). Decided:
+   same-file.** Add `--tool`/`--args` argv handling directly to `mcp-server.ts` rather
+   than a new `src/mcp-cli.ts`/`out/mcp-cli.js` sibling binary — one source of truth for
+   `invokeTool`, one less esbuild target to maintain. Phase 1's description above already
+   reflects this.
+4. **Skill granularity. Decided: two built-in skills.** Exactly two — a
+   queue-management-tools skill (Phase 2) and a commit-message-tool skill (Phase 4) —
+   rather than one skill per individual tool or one giant skill. Mirrors the
+   `deniedTools` split `CommitMessageGenerator.ts:331-337` already draws between queue
+   tools and the commit tool. The plan's Phase 2/Phase 4 split already implements this
+   decision; revisit only if a workflow author later wants just one specific queue tool's
+   worth of instructions (unlikely — queue status/append/capabilities/read-output are
+   normally used together).
 
 ---
 
