@@ -1,5 +1,8 @@
+import * as fs from "fs";
+import * as path from "path";
 import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
+import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { TtlCache } from "./TtlCache";
 
 /**
@@ -28,11 +31,13 @@ export class SkillExpander {
    *
    * @param skillNames Array of skill names to expand
    * @param workspaceRoot Optional workspace root for resolving workspace skills
+   * @param executionCheckoutRoot Optional checkout root visible to the harness
    * @returns Formatted <skillInstructions> block, or null if no skills resolved
    */
   static async expandSkills(
     skillNames: string[],
-    workspaceRoot?: string
+    workspaceRoot?: string,
+    executionCheckoutRoot = workspaceRoot
   ): Promise<string | null> {
     if (skillNames.length === 0) {
       return null;
@@ -60,7 +65,15 @@ export class SkillExpander {
         continue;
       }
 
-      resolvedBlocks.push(this.buildSkillBlock(skill));
+      const block = await this.buildSkillBlock(skill, [
+        workspaceRoot,
+        executionCheckoutRoot,
+      ]);
+      if (!block) {
+        continue;
+      }
+
+      resolvedBlocks.push(block);
       Log.debug(`🎯 Skill "${skillName}" resolved from ${skill.path}`);
     }
 
@@ -79,7 +92,28 @@ export class SkillExpander {
    * Build a concise prompt block for a single skill.
    * Omits description line if the skill has no description.
    */
-  private static buildSkillBlock(skill: SkillInfo): string {
+  private static async buildSkillBlock(
+    skill: SkillInfo,
+    trustedRoots: Array<string | undefined>
+  ): Promise<string | null> {
+    const resolvedSkillPath = path.resolve(skill.path);
+    const resolvedTrustedRoots = trustedRoots
+      .filter((root): root is string => root !== undefined)
+      .map((root) => path.resolve(root));
+
+    if (
+      !isPathWithinAnyDirectory(resolvedSkillPath, resolvedTrustedRoots)
+    ) {
+      try {
+        return await fs.promises.readFile(resolvedSkillPath, "utf-8");
+      } catch (error) {
+        Log.warn(
+          `⚠️ Failed to read out-of-trust-root skill file "${skill.path}": ${error}`
+        );
+        return null;
+      }
+    }
+
     const lines = [`## Skill: ${skill.name}`, `Path: ${skill.path}`];
     if (skill.description) {
       lines.push(`Description: ${skill.description}`);

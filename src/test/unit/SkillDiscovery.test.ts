@@ -52,8 +52,65 @@ suite("Execution-root asset discovery", () => {
       assert.strictEqual(agent, "agent body");
       assert.ok(skills?.includes(path.join(executionRoot, ".ctrlyoke")));
       assert.ok(skills?.includes("execution skill"));
+      assert.ok(!skills?.includes("skill body"));
     } finally {
       fs.rmSync(executionRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("embeds an out-of-trust-root user skill verbatim", async () => {
+    const tempHome = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-skill-home-")
+    );
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-skill-workspace-")
+    );
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    const skillContent =
+      "---\nname: external-skill\ndescription: External skill\n---\n# External skill body\n";
+
+    try {
+      process.env.HOME = tempHome;
+      process.env.USERPROFILE = tempHome;
+      const skillPath = path.join(
+        tempHome,
+        ".agents",
+        "skills",
+        "external-skill",
+        "SKILL.md"
+      );
+      fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+      fs.writeFileSync(skillPath, skillContent);
+
+      const skills = await SkillExpander.expandSkills(
+        ["external-skill"],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes(skillContent));
+      assert.ok(!skills?.includes(`Path: ${skillPath}`));
+
+      const trustedSkills = await SkillExpander.expandSkills(
+        ["external-skill"],
+        workspaceRoot,
+        tempHome
+      );
+      assert.ok(trustedSkills?.includes(`Path: ${skillPath}`));
+      assert.ok(!trustedSkills?.includes(skillContent));
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE;
+      } else {
+        process.env.USERPROFILE = originalUserProfile;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
 
