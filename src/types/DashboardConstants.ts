@@ -2701,6 +2701,12 @@ export const MCP_SERVER_IDS = {
   CTRLYOKE: "ctrlyoke",
 } as const;
 
+// Built-in skill identifiers. Keep these stable because workflows may refer
+// to them by name before a future settings-driven registry exists.
+export const MCP_SKILL_NAMES = {
+  TOOLS: "ctrlyoke-mcp-tools",
+} as const;
+
 // ============================================================================
 // EXTENSION IDENTIFIERS - Development and packaged extension identity values
 // ============================================================================

@@ -5,7 +5,12 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import { AgentExpander } from "../../utils/AgentExpander";
-import { HARNESS_IDS, type HarnessId } from "../../types/DashboardConstants";
+import {
+  DISCOVERY_SOURCES,
+  HARNESS_IDS,
+  MCP_SKILL_NAMES,
+  type HarnessId,
+} from "../../types/DashboardConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { SkillExpander } from "../../utils/SkillExpander";
 
@@ -110,6 +115,26 @@ suite("Execution-root asset discovery", () => {
         process.env.USERPROFILE = originalUserProfile;
       }
       fs.rmSync(tempHome, { recursive: true, force: true });
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("embeds the built-in MCP skill with live queue-tool references", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-skill-")
+    );
+    try {
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.TOOLS],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes("Use when MCP config is disabled by policy"));
+      assert.ok(skills?.includes("## Available ctrlyoke MCP tools"));
+      assert.ok(skills?.includes("### ctrlyoke_queue_status"));
+      assert.ok(skills?.includes("### ctrlyoke_global_status"));
+      assert.ok(!skills?.includes("ctrlyoke_submit_commit_message"));
+    } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
@@ -256,5 +281,27 @@ suite("SkillDiscovery helpers", () => {
       ),
       first
     );
+  });
+
+  test("discovers built-in skills after real skills and preserves precedence", async () => {
+    const builtIns = await SkillDiscovery.discoverBuiltInSkills();
+    const builtIn = builtIns.find(
+      (candidate) => candidate.name === MCP_SKILL_NAMES.TOOLS
+    );
+    assert.ok(builtIn);
+    assert.strictEqual(builtIn?.source, DISCOVERY_SOURCES.BUILT_IN);
+
+    const overridePath = await createSkill(
+      path.join(workspaceRoot, ".ctrlyoke", "skills"),
+      MCP_SKILL_NAMES.TOOLS
+    );
+    const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+    const matches = discovered.filter(
+      (candidate) => candidate.name === MCP_SKILL_NAMES.TOOLS
+    );
+
+    assert.strictEqual(matches.length, 1);
+    assert.strictEqual(matches[0].path, overridePath);
+    assert.strictEqual(matches[0].source, DISCOVERY_SOURCES.WORKSPACE);
   });
 });

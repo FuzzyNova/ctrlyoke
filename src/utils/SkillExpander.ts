@@ -4,6 +4,14 @@ import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { TtlCache } from "./TtlCache";
+import {
+  DISCOVERY_SOURCES,
+  MCP_SKILL_NAMES,
+} from "../types/DashboardConstants";
+import {
+  McpToolSkillGenerator,
+  MCP_TOOL_SKILL_TOOL_NAMES,
+} from "./McpToolSkillGenerator";
 
 /**
  * SkillExpander
@@ -12,7 +20,8 @@ import { TtlCache } from "./TtlCache";
  *
  * Progressive disclosure design:
  * - Only the name, path, and description are included in the prompt (~10-20 tokens per skill)
- * - The full SKILL.md body is NOT included — the harness reads it when it decides to use the skill
+ * - For trusted skills, the full SKILL.md body is NOT included — the harness reads it when it decides to use the skill
+ * - Unreadable skills are embedded; the built-in MCP skill adds its live tool reference to its static prose
  * - This keeps prompts concise while still making skills discoverable
  *
  * Output format (per skill, joined inside <skillInstructions>):
@@ -101,10 +110,21 @@ export class SkillExpander {
       .filter((root): root is string => root !== undefined)
       .map((root) => path.resolve(root));
 
-    if (
-      !isPathWithinAnyDirectory(resolvedSkillPath, resolvedTrustedRoots)
-    ) {
+    if (!isPathWithinAnyDirectory(resolvedSkillPath, resolvedTrustedRoots)) {
       try {
+        if (
+          skill.source === DISCOVERY_SOURCES.BUILT_IN &&
+          skill.name === MCP_SKILL_NAMES.TOOLS
+        ) {
+          const staticContent = await fs.promises.readFile(
+            resolvedSkillPath,
+            "utf-8"
+          );
+          return `${staticContent.trimEnd()}\n\n${McpToolSkillGenerator.generateToolReference(
+            [...MCP_TOOL_SKILL_TOOL_NAMES]
+          )}`;
+        }
+
         return await fs.promises.readFile(resolvedSkillPath, "utf-8");
       } catch (error) {
         Log.warn(

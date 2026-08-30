@@ -17,6 +17,16 @@ import {
 } from "../types/DashboardConstants";
 import { isPathWithinDirectory } from "./PathSecurity";
 
+/** Candidate locations for bundled skills across source, test, and esbuild layouts. */
+export function getBuiltInSkillsDirectoryCandidates(
+  moduleDirectory: string
+): string[] {
+  return [
+    path.join(moduleDirectory, "templates", "skills"),
+    path.join(moduleDirectory, "..", "templates", "skills"),
+  ];
+}
+
 /**
  * Represents a discovered skill
  */
@@ -145,12 +155,36 @@ export class SkillDiscovery {
         }
       }
 
+      // Bundled skills are immutable fallbacks. A same-named user or
+      // workspace skill deliberately shadows the bundled version.
+      const discoveredNames = new Set(skills.map((skill) => skill.name));
+      const builtInSkills = await this.discoverBuiltInSkills();
+      skills.push(
+        ...builtInSkills.filter((skill) => !discoveredNames.has(skill.name))
+      );
+
       Log.trace(`Discovered ${skills.length} skills`);
     } catch (error) {
       Log.warn("Error discovering skills; returning partial results:", error);
     }
 
     return skills;
+  }
+
+  /**
+   * Return the bundled skills from their SKILL.md frontmatter. esbuild
+   * bundles this module into out/extension.js, while tests retain out/utils/,
+   * so support both output layouts as well as the TypeScript source layout.
+   */
+  static async discoverBuiltInSkills(): Promise<SkillInfo[]> {
+    const builtInDir = await this.findBuiltInSkillsDirectory();
+    if (!builtInDir) {
+      return [];
+    }
+    return this.discoverSkillsInDirectory(
+      builtInDir,
+      DISCOVERY_SOURCES.BUILT_IN
+    );
   }
 
   /**
@@ -308,6 +342,21 @@ export class SkillDiscovery {
       );
       return "";
     }
+  }
+
+  private static async findBuiltInSkillsDirectory(): Promise<string | null> {
+    const candidateDirectories = getBuiltInSkillsDirectoryCandidates(__dirname);
+
+    for (const directory of candidateDirectories) {
+      if (await isAccessibleDirectory(directory)) {
+        return directory;
+      }
+    }
+
+    Log.error(
+      `Unable to locate built-in skills directory. Checked: ${candidateDirectories.join(", ")}`
+    );
+    return null;
   }
 
   /**
