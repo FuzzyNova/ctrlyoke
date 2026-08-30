@@ -10,6 +10,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   McpToolSkillGenerator,
+  MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
   MCP_TOOL_SKILL_TOOL_NAMES,
 } from "./McpToolSkillGenerator";
 
@@ -114,14 +115,19 @@ export class SkillExpander {
       try {
         if (
           skill.source === DISCOVERY_SOURCES.BUILT_IN &&
-          skill.name === MCP_SKILL_NAMES.TOOLS
+          (skill.name === MCP_SKILL_NAMES.TOOLS ||
+            skill.name === MCP_SKILL_NAMES.COMMIT_MESSAGE)
         ) {
           const staticContent = await fs.promises.readFile(
             resolvedSkillPath,
             "utf-8"
           );
+          const toolNames =
+            skill.name === MCP_SKILL_NAMES.COMMIT_MESSAGE
+              ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
+              : MCP_TOOL_SKILL_TOOL_NAMES;
           return `${staticContent.trimEnd()}\n\n${McpToolSkillGenerator.generateToolReference(
-            [...MCP_TOOL_SKILL_TOOL_NAMES]
+            [...toolNames]
           )}`;
         }
 

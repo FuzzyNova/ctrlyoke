@@ -68,12 +68,18 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   let workspaceRoot: string;
   let priorPinnedFile: string | undefined;
+  let priorCommitOutput: string | undefined;
 
   afterEach(async () => {
     if (priorPinnedFile === undefined) {
       delete process.env.CTRLYOKE_WORKING_FILE;
     } else {
       process.env.CTRLYOKE_WORKING_FILE = priorPinnedFile;
+    }
+    if (priorCommitOutput === undefined) {
+      delete process.env.CTRLYOKE_COMMIT_OUTPUT;
+    } else {
+      process.env.CTRLYOKE_COMMIT_OUTPUT = priorCommitOutput;
     }
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -170,15 +176,17 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   async function setup(): Promise<CtrlYokeMCPServer> {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
+    priorCommitOutput = process.env.CTRLYOKE_COMMIT_OUTPUT;
     delete process.env.CTRLYOKE_WORKING_FILE;
+    delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
 
-  function runMcpToolCli(args: string[]) {
+  function runMcpToolCli(args: string[], env?: NodeJS.ProcessEnv) {
     return spawnSync(
       "node",
       [path.resolve(__dirname, "../../mcp-server.js"), ...args],
-      { encoding: "utf8" }
+      { encoding: "utf8", ...(env ? { env } : {}) }
     );
   }
 
@@ -203,10 +211,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       `CLI failed: stdout=${success.stdout} stderr=${success.stderr}`
     );
     assert.strictEqual(success.stderr, "");
-    assert.strictEqual(
-      JSON.parse(success.stdout).metadata.runRef,
-      run.runRef
-    );
+    assert.strictEqual(JSON.parse(success.stdout).metadata.runRef, run.runRef);
 
     const failure = runMcpToolCli([
       "--tool",
@@ -220,6 +225,57 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(failure.status, 1);
     assert.strictEqual(failure.stdout, "");
     assert.strictEqual(failure.stderr, "Unknown tool: unknown_tool\n");
+  });
+
+  test("writes commit output when the CLI receives --commit-output", async () => {
+    await setup();
+    const outputPath = path.join(workspaceRoot, "commit-output-flag.txt");
+    const result = runMcpToolCli([
+      "--tool",
+      "ctrlyoke_submit_commit_message",
+      "--args",
+      JSON.stringify({ message: "feat: capture via flag" }),
+      "--workspace",
+      workspaceRoot,
+      "--commit-output",
+      outputPath,
+    ]);
+
+    assert.strictEqual(
+      result.status,
+      0,
+      `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+    );
+    assert.strictEqual(
+      await fs.readFile(outputPath, "utf8"),
+      "feat: capture via flag"
+    );
+  });
+
+  test("writes commit output when CTRLYOKE_COMMIT_OUTPUT is set", async () => {
+    await setup();
+    const outputPath = path.join(workspaceRoot, "commit-output-env.txt");
+    const result = runMcpToolCli(
+      [
+        "--tool",
+        "ctrlyoke_submit_commit_message",
+        "--args",
+        JSON.stringify({ message: "fix: capture via env" }),
+        "--workspace",
+        workspaceRoot,
+      ],
+      { ...process.env, CTRLYOKE_COMMIT_OUTPUT: outputPath }
+    );
+
+    assert.strictEqual(
+      result.status,
+      0,
+      `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+    );
+    assert.strictEqual(
+      await fs.readFile(outputPath, "utf8"),
+      "fix: capture via env"
+    );
   });
 
   test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {

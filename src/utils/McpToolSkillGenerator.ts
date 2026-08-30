@@ -1,11 +1,13 @@
 import {
   MCP_QUEUE_TOOL_NAMES,
   MCP_TOOL_DEFINITIONS,
+  MCP_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
 } from "./McpToolDefinitions";
 
 const MCP_SERVER_PATH_PLACEHOLDER = "<mcp-server.js path>";
 const PATH_PLACEHOLDER = "<path>";
+const COMMIT_OUTPUT_PATH_PLACEHOLDER = "<commit output path>";
 
 function exampleValue(schema: McpToolInputSchema): unknown {
   if (schema.enum && schema.enum.length > 0) {
@@ -70,12 +72,16 @@ export class McpToolSkillGenerator {
       "## Available ctrlyoke MCP tools",
       ...tools.map((tool) => {
         const args = JSON.stringify(exampleValue(tool.inputSchema));
+        const command =
+          tool.name === MCP_COMMIT_MESSAGE_TOOL_NAME
+            ? `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --commit-output \"${COMMIT_OUTPUT_PATH_PLACEHOLDER}\"`
+            : `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --working-file \"${PATH_PLACEHOLDER}\"`;
         return [
           `### ${tool.name}`,
           tool.description,
           renderParameters(tool.inputSchema),
           "Example:",
-          `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --working-file \"${PATH_PLACEHOLDER}\"`,
+          command,
         ].join("\n");
       }),
     ].join("\n\n");
@@ -85,3 +91,8 @@ export class McpToolSkillGenerator {
 /** The built-in skill's queue-only tool subset. */
 export const MCP_TOOL_SKILL_TOOL_NAMES: readonly string[] =
   MCP_QUEUE_TOOL_NAMES;
+
+/** The built-in skill's commit-message tool subset. */
+export const MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES: readonly string[] = [
+  MCP_COMMIT_MESSAGE_TOOL_NAME,
+];

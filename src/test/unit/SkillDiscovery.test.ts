@@ -139,6 +139,24 @@ suite("Execution-root asset discovery", () => {
     }
   });
 
+  test("embeds the built-in commit-message skill with only its tool reference", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-commit-skill-")
+    );
+    try {
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.COMMIT_MESSAGE],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes("Pass the commit output path"));
+      assert.ok(skills?.includes("### ctrlyoke_submit_commit_message"));
+      assert.ok(!skills?.includes("### ctrlyoke_queue_status"));
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("findGitRoot recognizes a linked-worktree .git pointer file", async () => {
     const worktreeRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ctrlyoke-linked-worktree-")
@@ -290,6 +308,11 @@ suite("SkillDiscovery helpers", () => {
     );
     assert.ok(builtIn);
     assert.strictEqual(builtIn?.source, DISCOVERY_SOURCES.BUILT_IN);
+    assert.ok(
+      builtIns.some(
+        (candidate) => candidate.name === MCP_SKILL_NAMES.COMMIT_MESSAGE
+      )
+    );
 
     const overridePath = await createSkill(
       path.join(workspaceRoot, ".ctrlyoke", "skills"),

@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { McpToolSkillGenerator } from "../../utils/McpToolSkillGenerator";
+import {
+  McpToolSkillGenerator,
+  MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
+} from "../../utils/McpToolSkillGenerator";
 
 suite("McpToolSkillGenerator", () => {
   test("renders descriptions, parameters, and executable examples", () => {
@@ -36,5 +39,15 @@ suite("McpToolSkillGenerator", () => {
 
     assert.ok(reference.includes("### ctrlyoke_queue_status"));
     assert.ok(!reference.includes("### ctrlyoke_append_queue"));
+  });
+
+  test("provides a commit-message-only built-in skill subset", () => {
+    const reference = McpToolSkillGenerator.generateToolReference([
+      ...MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
+    ]);
+
+    assert.ok(reference.includes("### ctrlyoke_submit_commit_message"));
+    assert.ok(!reference.includes("### ctrlyoke_queue_status"));
+    assert.ok(reference.includes("--commit-output"));
   });
 });

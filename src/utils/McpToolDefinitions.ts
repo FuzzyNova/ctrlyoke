@@ -21,6 +21,9 @@ export interface McpToolDefinition {
   inputSchema: McpToolInputSchema;
 }
 
+/** Tool used by the structured commit-message capture path. */
+export const MCP_COMMIT_MESSAGE_TOOL_NAME = "ctrlyoke_submit_commit_message";
+
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
@@ -132,7 +135,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: "ctrlyoke_submit_commit_message",
+    name: MCP_COMMIT_MESSAGE_TOOL_NAME,
     description:
       "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
     inputSchema: {

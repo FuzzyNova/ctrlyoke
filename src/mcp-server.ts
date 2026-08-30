@@ -51,7 +51,10 @@ import {
   initializeRunHistoryLocation,
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
-import { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
+import {
+  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_TOOL_DEFINITIONS,
+} from "./utils/McpToolDefinitions";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -221,7 +224,7 @@ export class CtrlYokeMCPServer {
         return this.handleReadOutput(args);
       case "ctrlyoke_global_status":
         return this.handleGlobalStatus(args);
-      case "ctrlyoke_submit_commit_message":
+      case MCP_COMMIT_MESSAGE_TOOL_NAME:
         return this.handleSubmitCommitMessage(args);
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -817,6 +820,7 @@ export class CtrlYokeMCPServer {
   /**
    * Handle ctrlyoke_submit_commit_message tool invocation.
    * Writes the commit message to the output path specified by CTRLYOKE_COMMIT_OUTPUT.
+   * The CLI entrypoint can populate that variable from --commit-output.
    * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
    * as a structured tool argument rather than parsing prose response text.
    */
@@ -988,6 +992,7 @@ interface McpToolCliOptions {
   argsJson: string;
   workspace?: string;
   workingFile?: string;
+  commitOutput?: string;
 }
 
 function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
@@ -995,6 +1000,7 @@ function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
   let argsJson = "{}";
   let workspace: string | undefined;
   let workingFile: string | undefined;
+  let commitOutput: string | undefined;
 
   const readValue = (index: number, option: string): string => {
     const value = argv[index + 1];
@@ -1023,6 +1029,10 @@ function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
         workingFile = readValue(index, option);
         index += 1;
         break;
+      case "--commit-output":
+        commitOutput = readValue(index, option);
+        index += 1;
+        break;
       default:
         throw new Error(`Unknown option: ${option}`);
     }
@@ -1032,7 +1042,7 @@ function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
     throw new Error("--tool requires a tool name");
   }
 
-  return { tool, argsJson, workspace, workingFile };
+  return { tool, argsJson, workspace, workingFile, commitOutput };
 }
 
 async function runMcpToolCli(argv: readonly string[]): Promise<void> {
@@ -1043,6 +1053,9 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
   }
   if (options.workingFile !== undefined) {
     process.env.CTRLYOKE_WORKING_FILE = options.workingFile;
+  }
+  if (options.commitOutput !== undefined) {
+    process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;
   }
 
   await initializeMcpStorage(options.workspace ?? workspaceRoot);

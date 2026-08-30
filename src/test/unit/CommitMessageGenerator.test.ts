@@ -7,6 +7,8 @@ import {
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
 import type {
@@ -42,7 +44,8 @@ suite("CommitMessageGenerator", () => {
     const overrides = buildCommitWorkflowOverrides(
       HARNESS_IDS.OPENCODE_CLI,
       "test-model",
-      mcpServer
+      mcpServer,
+      MCP_AVAILABILITY_MODES.AUTO
     );
 
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
@@ -60,6 +63,18 @@ suite("CommitMessageGenerator", () => {
       deniedTools: [],
     });
     assert.strictEqual(overrides.hooks, null);
+  });
+
+  test("uses the commit-message skill when MCP is disabled", () => {
+    const overrides = buildCommitWorkflowOverrides(
+      HARNESS_IDS.CLAUDE_CLI,
+      undefined,
+      undefined,
+      MCP_AVAILABILITY_MODES.DISABLED
+    );
+
+    assert.strictEqual(overrides.mcpServers, null);
+    assert.deepStrictEqual(overrides.skills, [MCP_SKILL_NAMES.COMMIT_MESSAGE]);
   });
 
   test("explicitly disables inherited MCP servers without capture", () => {
