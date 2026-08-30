@@ -1,6 +1,7 @@
 import type { CompletionResult } from "@codemirror/autocomplete";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import type { BranchListResponseMessage } from "@root/types/WebviewMessageTypes";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
@@ -54,8 +55,16 @@ export function BranchNameEditor(props: BranchNameEditorProps) {
   const vscode = getVsCodeApi();
   const completionSource = useCompletionRequest<BranchListResponseMessage>({
     parseResponse: parseBranchListResponse,
-    buildResult: (response) => buildBranchCompletionResult(response.items),
+    buildResult: (response) => {
+      WebviewLog.trace(
+        `[completions:${props.id}] response seq=${response.seq} items=${response.items.length}`
+      );
+      return buildBranchCompletionResult(response.items);
+    },
     sendRequest: (context, seq) => {
+      WebviewLog.trace(
+        `[completions:${props.id}] request seq=${seq} pos=${context.pos}`
+      );
       vscode.postMessage({
         type: MESSAGE_TYPES.BRANCH_LIST_REQUEST,
         filterText: context.state.doc.toString(),

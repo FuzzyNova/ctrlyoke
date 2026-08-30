@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
+import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES, type HarnessId } from "@root/types/DashboardConstants";
 import type { HarnessFlagCompletionsResponseMessage } from "@root/types/WebviewMessageTypes";
 import type { SingleLineCompletionEditorProps } from "./SingleLineCompletionEditor";
@@ -199,6 +200,9 @@ export function AdditionalArgsEditor({
     useCompletionRequest<HarnessFlagCompletionsResponseMessage>({
       parseResponse: parseHarnessFlagCompletionResponse,
       buildResult: (response) => {
+        WebviewLog.trace(
+          `[completions:${props.id}] response seq=${response.seq} items=${response.items.length}`
+        );
         const context = requestContextRef.current ?? { prefix: "" };
         const result = buildHarnessFlagCompletionResult(
           response.items,
@@ -221,6 +225,9 @@ export function AdditionalArgsEditor({
         requestContextRef.current = parseCursorArgumentContext(
           text,
           context.pos
+        );
+        WebviewLog.trace(
+          `[completions:${props.id}] request seq=${seq} pos=${context.pos}`
         );
         vscode.postMessage({
           type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST,

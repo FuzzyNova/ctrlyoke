@@ -4,6 +4,7 @@ import { linter, type Diagnostic } from "@codemirror/lint";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
+import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import type { PermissionCompletionItem } from "@root/completions/PermissionListCompletionHelpers";
 import type { PermissionCompletionsResponseMessage } from "@root/types/WebviewMessageTypes";
@@ -124,9 +125,16 @@ export function PermissionListEditor({
   const completionSource =
     useCompletionRequest<PermissionCompletionsResponseMessage>({
       parseResponse: parsePermissionCompletionResponse,
-      buildResult: (response) =>
-        buildPermissionCompletionResult(response.items, response.from),
+      buildResult: (response) => {
+        WebviewLog.trace(
+          `[completions:${props.id}] response seq=${response.seq} items=${response.items.length}`
+        );
+        return buildPermissionCompletionResult(response.items, response.from);
+      },
       sendRequest: (context, seq) => {
+        WebviewLog.trace(
+          `[completions:${props.id}] request seq=${seq} pos=${context.pos}`
+        );
         vscode.postMessage({
           type: MESSAGE_TYPES.PERMISSION_COMPLETIONS_REQUEST,
           text: context.state.doc.toString(),

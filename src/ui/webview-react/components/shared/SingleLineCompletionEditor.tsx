@@ -3,6 +3,7 @@ import {
   acceptCompletion,
   autocompletion,
   closeCompletion,
+  completionStatus,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
@@ -24,6 +25,7 @@ import { minimalSetup } from "codemirror";
 import { createThemeExtension } from "@utils/codemirrorTheme";
 import type { ThemeExtensionOptions } from "@utils/codemirrorTheme";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+import { WebviewLog } from "@utils/logger";
 
 export interface SingleLineCompletionEditorProps {
   id: string;
@@ -99,24 +101,7 @@ const singleLineTheme = EditorView.theme({
     maxHeight: "26px",
     overflow: "hidden",
   },
-  // `.cm-scroller` IS `EditorView.scrollDOM`, and CodeMirror's autocomplete
-  // tooltip hides itself entirely (not just repositions) whenever the
-  // caret's measured coords fall outside `scrollDOM.getBoundingClientRect()`
-  // intersected with our `keyboardTooltipSpace`. On mobile, opening the
-  // on-screen keyboard fires `visualViewport` resize/scroll events that both
-  // this editor and App.tsx's iOS root-pinning effect react to independently
-  // (no ordering guarantee), so there's a brief window where the caret's
-  // freshly-measured position and the settling layout disagree by a few
-  // pixels. A 26px-tall scrollDOM has no slack to absorb that and the
-  // dropdown gets hidden outright; taller fields (multiline permission
-  // lists, the full prompt editor) never hit this. Overriding `height` here
-  // gives `scrollDOM`'s own box the same slack without changing what's
-  // visible: `&`'s `overflow: hidden` still clips rendering to 26px, and
-  // `getBoundingClientRect()` reports the (unclipped) box CSS assigns a
-  // child regardless of an ancestor's overflow, so only the tooltip's
-  // internal geometry check sees the extra room.
   ".cm-scroller": {
-    height: "150px",
     overflow: "hidden",
   },
   ".cm-content": {
@@ -223,6 +208,47 @@ function syncDocument(
       insert: nextValue.slice(prefixLength, nextValue.length - suffixLength),
     },
     annotations: externalValueUpdateAnnotation.of(true),
+  });
+}
+
+// Temporary mobile-completion-bug diagnostics (see
+// dev/backlog or the "mobile completion fix" investigation). Logs when the
+// completion dropdown becomes active and, one frame later — after
+// CodeMirror's own tooltip measure/write pass has run — whether the tooltip
+// DOM actually mounted and where CodeMirror placed it, plus the geometry
+// (`keyboardTooltipSpace`, the editor's `scrollDOM` rect, the caret's
+// measured coords) `@codemirror/view`'s tooltip visibility check reads to
+// decide that placement. `WebviewLog` forwards to the extension-host session
+// log, so this is readable after a repro on a device with no attached
+// devtools.
+function logCompletionDropdownState(
+  view: EditorView,
+  label: string,
+  status: "active" | "pending" | null
+): void {
+  WebviewLog.debug(`[completions:${label}] status=${status}`);
+  if (status !== "active") return;
+  requestAnimationFrame(() => {
+    const dom = document.querySelector<HTMLElement>(
+      ".cm-tooltip-autocomplete"
+    );
+    const head = view.state.selection.main.head;
+    WebviewLog.debug(`[completions:${label}] dropdown activated`, {
+      tooltipFound: !!dom,
+      tooltipStyleTop: dom?.style.top,
+      tooltipRect: dom?.getBoundingClientRect(),
+      caretCoords: view.coordsAtPos(head),
+      scrollDOMRect: view.scrollDOM.getBoundingClientRect(),
+      keyboardTooltipSpace: keyboardTooltipSpace(),
+      visualViewport: window.visualViewport
+        ? {
+            width: window.visualViewport.width,
+            height: window.visualViewport.height,
+            offsetTop: window.visualViewport.offsetTop,
+            offsetLeft: window.visualViewport.offsetLeft,
+          }
+        : null,
+    });
   });
 }
 
@@ -354,6 +380,11 @@ export function SingleLineCompletionEditor({
             return;
           }
           onChangeRef.current(update.state.doc.toString());
+        }),
+        EditorView.updateListener.of((update) => {
+          const status = completionStatus(update.state);
+          if (status === completionStatus(update.startState)) return;
+          logCompletionDropdownState(update.view, initialProps.id, status);
         }),
       ],
     });

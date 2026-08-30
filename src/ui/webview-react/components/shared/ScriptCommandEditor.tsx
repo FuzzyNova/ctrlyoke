@@ -6,6 +6,7 @@ import type { ScriptCompletionItem } from "@root/completions/ScriptCommandComple
 import type { ScriptCompletionsResponseMessage } from "@root/types/WebviewMessageTypes";
 import type { SingleLineCompletionEditorProps } from "./SingleLineCompletionEditor";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
+import { WebviewLog } from "@utils/logger";
 
 type ScriptCommandEditorProps = Omit<
   SingleLineCompletionEditorProps,
@@ -50,9 +51,16 @@ export function ScriptCommandEditor(props: ScriptCommandEditorProps) {
   const completionSource =
     useCompletionRequest<ScriptCompletionsResponseMessage>({
       parseResponse: parseScriptCompletionResponse,
-      buildResult: (response) =>
-        buildScriptCompletionResult(response.items, response.from),
+      buildResult: (response) => {
+        WebviewLog.trace(
+          `[completions:${props.id}] response seq=${response.seq} items=${response.items.length}`
+        );
+        return buildScriptCompletionResult(response.items, response.from);
+      },
       sendRequest: (context, seq) => {
+        WebviewLog.trace(
+          `[completions:${props.id}] request seq=${seq} pos=${context.pos}`
+        );
         vscode.postMessage({
           type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST,
           text: context.state.doc.toString(),
