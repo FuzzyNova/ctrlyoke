@@ -155,6 +155,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
+   * Clear all per-session background-work tracking at Claude's session
+   * boundary — one log file per session, so this runs at the start of
+   * `discoverSessionLog()`. See `ILogParser.trackBackgroundWorkState`'s
+   * session-reset contract for why every parser with background-work
+   * tracking must do this at its own boundary.
+   */
+  private resetSessionTrackingState(): void {
+    this.pendingStreamingToolUses.clear();
+    this.backgroundFollowUpState.reset();
+    this.unconfirmedAsyncLaunches.clear();
+    this.backgroundTaskLaunchToolUseIds.clear();
+    this.pendingTaskStopTargets.clear();
+  }
+
+  /**
    * Extract complete response from Claude log events
    *
    * Processes Claude JSONL events and combines:
@@ -708,6 +723,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         this.backgroundFollowUpState.launch(toolUseId);
       }
 
+      // An Agent launch's confirmed-async result carries `agentId` (e.g.
+      // `{isAsync:true, status:"async_launched", agentId:"..."}`) instead of
+      // `backgroundTaskId`. Record it under the same map so a later
+      // notification can be correlated back to this launch by <task-id> even
+      // when it arrives without a <tool-use-id> tag — see the task-id
+      // fallback in trackBackgroundWorkState.
+      const agentId = resultMetadata?.agentId;
+      if (
+        block.is_error !== true &&
+        resultMetadata?.isAsync === true &&
+        typeof agentId === "string"
+      ) {
+        this.backgroundTaskLaunchToolUseIds.set(agentId, toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId);
+      }
+
       const stoppedTaskId = this.pendingTaskStopTargets.get(toolUseId);
       if (stoppedTaskId) {
         this.pendingTaskStopTargets.delete(toolUseId);
@@ -819,10 +850,25 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     const text = this.extractTaskNotificationText(e);
     if (text.includes("<task-notification>")) {
       const toolUseIdMatch = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
+      const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/);
+
       if (toolUseIdMatch) {
         this.backgroundFollowUpState.consumeNotification(toolUseIdMatch[1]);
+      } else if (taskIdMatch) {
+        // Some notifications — observed on a resumed agent's later stop, which
+        // is not the tool_use call's own original completion — omit
+        // <tool-use-id> entirely. Fall back to the launch id recorded against
+        // this <task-id> (populated in trackAsyncLaunchResult from
+        // toolUseResult.backgroundTaskId/agentId) so the launch still gets
+        // consumed instead of blocking completion forever.
+        const launchToolUseId = this.backgroundTaskLaunchToolUseIds.get(
+          taskIdMatch[1]
+        );
+        if (launchToolUseId) {
+          this.backgroundFollowUpState.consumeNotification(launchToolUseId);
+        }
       }
-      const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/);
+
       if (taskIdMatch) {
         this.backgroundTaskLaunchToolUseIds.delete(taskIdMatch[1]);
       }
@@ -888,6 +934,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     sessionId?: string,
     signal?: AbortSignal
   ): Promise<string | null> {
+    // See ILogParser.trackBackgroundWorkState's session-reset contract.
+    this.resetSessionTrackingState();
+
     try {
       if (signal?.aborted) {
         return null;

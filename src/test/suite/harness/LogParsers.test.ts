@@ -1671,6 +1671,104 @@ suite("ClaudeLogParser", () => {
 
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
     });
+
+    test("should consume a task-notification missing <tool-use-id> via <task-id> correlated from an Agent launch's agentId", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_resumed_agent",
+              name: "Agent",
+              input: { description: "Investigate", subagent_type: "fork" },
+            },
+          ],
+        },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_resumed_agent",
+              content: [
+                {
+                  type: "text",
+                  text: "Async agent launched successfully.\nThe agent is working in the background.",
+                },
+              ],
+            },
+          ],
+        },
+        toolUseResult: {
+          isAsync: true,
+          status: "async_launched",
+          agentId: "agent-task-id",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // A resumed agent's later stop can notify without a <tool-use-id> tag —
+      // only <task-id> identifies which launch finished.
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification>\n" +
+            "<task-id>agent-task-id</task-id>\n" +
+            "<status>completed</status>\n" +
+            "</task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should reset background-work tracking at the start of a new session discovery", async () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_leaked_launch",
+              name: "Bash",
+              input: { command: "sleep 60", run_in_background: true },
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // discoverSessionLog is the boundary for a brand-new claude-cli
+      // execution on this reused parser instance (see ClaudeCliProvider —
+      // one ClaudeLogParser lives for the process lifetime). An aborted
+      // signal short-circuits before any filesystem work, isolating just
+      // the reset behavior.
+      const controller = new AbortController();
+      controller.abort();
+      const result = await parser.discoverSessionLog(
+        "unrelated prompt",
+        new Date(),
+        undefined,
+        controller.signal
+      );
+
+      assert.strictEqual(result, null);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
   });
 
   suite("classifyUserEvent", () => {
