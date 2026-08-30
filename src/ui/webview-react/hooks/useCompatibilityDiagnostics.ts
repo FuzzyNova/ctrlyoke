@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { isStandalone } from "@hooks/useVsCodeApi";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import {
   useSettingsStore,
@@ -230,7 +229,11 @@ export function useCompatibilityDiagnostics(
     }
     const context = {
       defaults: createDefaults(globalSettings),
-      hostCanProvidePty: !isStandalone,
+      // Both the VS Code panel and the hosted browser dashboard are relayed
+      // from the same extension-host process, which always spawns the PTY
+      // (see WorkflowOrchestrator.buildWorkflowInstance() / ExecutionPreviewService).
+      // Only the standalone CLI binary can lack a PTY, and it never renders this hook.
+      hostCanProvidePty: true,
     };
     const resolveTarget = (
       prompt: CorePromptStep,
@@ -276,7 +279,6 @@ export function useCompatibilityDiagnostics(
     capabilitySnapshot,
     finalStep,
     globalSettings,
-    isStandalone,
     snapshotStatus,
     steps,
     promptProperties,
