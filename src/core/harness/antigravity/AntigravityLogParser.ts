@@ -827,6 +827,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     return match?.[1];
   }
 
+  /**
+   * See `ILogParser.trackBackgroundWorkState`'s session-reset contract.
+   * Antigravity's session-lifecycle boundary is a tracked session-id change
+   * rather than an in-stream marker event.
+   */
   private resetProviderStateForSession(sessionId: string): void {
     if (this.backgroundStateSessionId === sessionId) {
       return;

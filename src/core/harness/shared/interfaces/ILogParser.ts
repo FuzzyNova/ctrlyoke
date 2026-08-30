@@ -418,6 +418,26 @@ export interface ILogParser {
    * override this to track their own launch/completion markers — see each
    * harness's implementation for its specific rule.
    *
+   * **Session-reset contract:** each `ILogParser` implementation is a single
+   * long-lived instance reused across every session/step run through that
+   * harness for the life of the process (e.g. `ClaudeCliProvider.logParser`,
+   * `readonly logParser = new ClaudeLogParser()`) — it is never one-per-run.
+   * Any override that accumulates state here (a `BackgroundFollowUpState`
+   * plus whatever provider-specific correlation maps it needs) MUST clear
+   * *all* of it at that provider's own session-lifecycle boundary, not just
+   * `BackgroundFollowUpState.reset()`. Skipping this turns one leaked or
+   * misparsed launch in session A into a permanent, silent hang for every
+   * unrelated later session B, C, D... run through the same parser instance,
+   * since `hasPendingBackgroundWork()` never sees a fresh start. The boundary
+   * itself is necessarily protocol-specific — there is no single trigger to
+   * share: Claude has one log file per session, so it resets at the start of
+   * `discoverSessionLog()`; Copilot appends every session into one shared
+   * `events.jsonl`, so it resets on that file's `session.start` event type;
+   * Antigravity resets on a tracked session-id change
+   * (`resetProviderStateForSession`). Follow whichever of those matches your
+   * harness's log shape, but always reset everything this class tracks, not
+   * only the shared `BackgroundFollowUpState`.
+   *
    * @param event - Single parsed log event
    */
   trackBackgroundWorkState?(event: BaseCliEvent): void;

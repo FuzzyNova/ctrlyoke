@@ -704,9 +704,10 @@ export class CopilotLogParser extends BaseLogParser {
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as CopilotProviderEvent;
 
-    // Parser instances may be reused across prompts. A new session.start is
-    // the explicit provider lifecycle boundary; resumed sessions do not emit
-    // another one while appending to the same events.jsonl.
+    // See ILogParser.trackBackgroundWorkState's session-reset contract. A new
+    // session.start is Copilot's session-lifecycle boundary here specifically
+    // because resumed sessions do not emit another one while appending to the
+    // same events.jsonl.
     if (e.type === "session.start") {
       this.backgroundFollowUpState.reset();
       this.resumedTurnStarted = false;
