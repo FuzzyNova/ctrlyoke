@@ -1111,14 +1111,99 @@ export async function initializeMcpStorage(
   await new ProjectStateRegistry().initialize(root, gitToplevel ?? undefined);
 }
 
+interface McpToolCliOptions {
+  tool: string;
+  argsJson: string;
+  workspace?: string;
+  workingFile?: string;
+}
+
+function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
+  let tool: string | undefined;
+  let argsJson = "{}";
+  let workspace: string | undefined;
+  let workingFile: string | undefined;
+
+  const readValue = (index: number, option: string): string => {
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`${option} requires a value`);
+    }
+    return value;
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const option = argv[index];
+    switch (option) {
+      case "--tool":
+        tool = readValue(index, option);
+        index += 1;
+        break;
+      case "--args":
+        argsJson = readValue(index, option);
+        index += 1;
+        break;
+      case "--workspace":
+        workspace = readValue(index, option);
+        index += 1;
+        break;
+      case "--working-file":
+        workingFile = readValue(index, option);
+        index += 1;
+        break;
+      default:
+        throw new Error(`Unknown option: ${option}`);
+    }
+  }
+
+  if (!tool) {
+    throw new Error("--tool requires a tool name");
+  }
+
+  return { tool, argsJson, workspace, workingFile };
+}
+
+async function runMcpToolCli(argv: readonly string[]): Promise<void> {
+  const options = parseMcpToolCliArgs(argv);
+
+  if (options.workspace !== undefined) {
+    process.env.CTRLYOKE_WORKSPACE = options.workspace;
+  }
+  if (options.workingFile !== undefined) {
+    process.env.CTRLYOKE_WORKING_FILE = options.workingFile;
+  }
+
+  await initializeMcpStorage(options.workspace ?? workspaceRoot);
+  const result = await new CtrlYokeMCPServer({
+    workspaceRoot: options.workspace,
+  }).invokeTool(options.tool, JSON.parse(options.argsJson));
+  const text = (result as { content?: Array<{ text?: unknown }> }).content?.[0]
+    ?.text;
+  if (typeof text !== "string") {
+    throw new Error("MCP tool result did not contain text content");
+  }
+  process.stdout.write(`${text}\n`);
+  process.exit(0);
+}
+
 if (require.main === module) {
-  log("Initializing ctrlyoke MCP Server...");
-  initializeMcpStorage()
-    .then(() => new CtrlYokeMCPServer().start())
-    .catch((error) => {
-      log("FATAL ERROR: Failed to start MCP server");
-      log("Error:", error);
-      log("Stack:", error.stack);
+  const cliArgs = process.argv.slice(2);
+  if (cliArgs.includes("--tool")) {
+    runMcpToolCli(cliArgs).catch((error) => {
+      process.stderr.write(
+        `${error instanceof Error ? error.message : String(error)}\n`
+      );
       process.exit(1);
     });
+  } else {
+    log("Initializing ctrlyoke MCP Server...");
+    initializeMcpStorage()
+      .then(() => new CtrlYokeMCPServer().start())
+      .catch((error) => {
+        log("FATAL ERROR: Failed to start MCP server");
+        log("Error:", error);
+        log("Stack:", error.stack);
+        process.exit(1);
+      });
+  }
 }

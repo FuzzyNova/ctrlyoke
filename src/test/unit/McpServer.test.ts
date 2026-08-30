@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { spawnSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -18,6 +19,7 @@ import {
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
 import {
   initializeRunHistoryLocation,
   isRunHistoryLocationInitialized,
@@ -171,6 +173,54 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     delete process.env.CTRLYOKE_WORKING_FILE;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
+
+  function runMcpToolCli(args: string[]) {
+    return spawnSync(
+      "node",
+      [path.resolve(__dirname, "../../mcp-server.js"), ...args],
+      { encoding: "utf8" }
+    );
+  }
+
+  test("invokes a tool through the CLI entrypoint", async () => {
+    await setup();
+    await new ProjectStateRegistry().initialize(workspaceRoot);
+    const run = await createRun("cli", "2026-01-01T00-00-00-000Z");
+    const success = runMcpToolCli([
+      "--tool",
+      "ctrlyoke_queue_status",
+      "--args",
+      "{}",
+      "--workspace",
+      workspaceRoot,
+      "--working-file",
+      run.runFilePath,
+    ]);
+
+    assert.strictEqual(
+      success.status,
+      0,
+      `CLI failed: stdout=${success.stdout} stderr=${success.stderr}`
+    );
+    assert.strictEqual(success.stderr, "");
+    assert.strictEqual(
+      JSON.parse(success.stdout).metadata.runRef,
+      run.runRef
+    );
+
+    const failure = runMcpToolCli([
+      "--tool",
+      "unknown_tool",
+      "--args",
+      "{}",
+      "--workspace",
+      workspaceRoot,
+    ]);
+
+    assert.strictEqual(failure.status, 1);
+    assert.strictEqual(failure.stdout, "");
+    assert.strictEqual(failure.stderr, "Unknown tool: unknown_tool\n");
+  });
 
   test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {
     const server = await setup();

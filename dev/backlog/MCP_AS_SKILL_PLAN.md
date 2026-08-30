@@ -1,6 +1,6 @@
 # MCP-as-Skill: ctrlyoke Queue/Commit Tools Without MCP Configuration
 
-> **Status:** Phase 0 implemented; Phases 1-5 proposed. Written 2026-08-24 against current code;
+> **Status:** Phases 0-1 implemented; Phases 2-5 proposed. Written 2026-08-24 against current code;
 > refined 2026-08-30 against current code — corrected drifted line citations, fixed
 > one wrong-file citation (§1.5), resolved Open Questions 1/3/4 by decision, and
 > answered Open Question 2 with a traced insertion point (§5).
@@ -10,6 +10,10 @@
 > embeds out-of-trust-root skill files verbatim, including frontmatter. The harness
 > call site passes the execution checkout root through the shared integration seam.
 > No deviation from the Phase 0 design was required.
+
+> **Phase 1 status (2026-08-30):** Implemented. `mcp-server.ts` now accepts the
+> `--tool`, `--args`, `--workspace`, and `--working-file` flags and invokes the
+> existing tool dispatcher without changing its stdio/MCP transport path.
 
 **Problem in one line:** many enterprise Copilot/Claude/Codex deployments block MCP
 configuration entirely (company policy) but freely allow installable skills, so any
