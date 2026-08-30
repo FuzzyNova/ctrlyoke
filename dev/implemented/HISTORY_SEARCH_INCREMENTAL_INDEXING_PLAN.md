@@ -1,7 +1,7 @@
 # History Search Incremental Indexing Plan
 
 > **Status:** Fully implemented — core steps 1-4 are shipped. Follow-up to
-> [`../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md`](../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md)
+> [`HISTORY_SEARCH_PERFORMANCE_PLAN.md`](HISTORY_SEARCH_PERFORMANCE_PLAN.md)
 > (Phases 1A/1B/2, all shipped). This plan addresses the deeper inefficiency that plan's
 > Phase 2 worker isolation only _contained_ rather than removed — see "Why Phase 2 alone
 > isn't enough" below for the incident that prompted this.
@@ -195,6 +195,22 @@ triggers.
    and caps candidate-source text before indexing. The shared `readEvents` method
    remains unchanged because replay/history callers still require complete,
    untruncated events; only the rebuild worker uses the new streaming projection.
+
+## Review pass fix (2026-08-30)
+
+`HistorySearchIndexService.readDocumentsJsonl` (introduced in step 2) treated a
+`documents/` shard directory with zero shard files as an error equivalent to a missing
+index (it threw a synthetic `ENOENT`), instead of the valid "successfully loaded, zero
+documents" state the single-file `documents.jsonl` layout handled correctly before this
+plan. This meant `loadIfPossible` could never cache a loaded manifest for a workspace with
+no history runs yet (or, transiently, one whose most recent rebuild indexed zero runs), so
+`ensureReady` treated the index as permanently missing/stale and re-triggered a full
+worker-spawning rebuild on **every single search** — the same repeated-rebuild pattern this
+plan exists to eliminate, just for the empty-history edge case instead of the large-history
+one. Fixed by letting an empty shard directory return `[]` instead of throwing; a genuinely
+missing `documents/` directory still throws its natural `ENOENT` from `readdir` and is still
+treated as "no index" correctly. Covered by a new regression test asserting a second search
+against an empty-history workspace does not re-trigger a worker rebuild.
 
 ## Non-goals
 

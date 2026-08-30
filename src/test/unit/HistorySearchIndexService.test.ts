@@ -187,6 +187,37 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(response.results.length, 2);
   });
 
+  test("caches an empty sharded index for a workspace with no history yet", async () => {
+    const index = new HistorySearchIndexService();
+    const messages: string[] = [];
+    const originalInfo = Log.info;
+    Log.info = (message: string) => {
+      messages.push(message);
+    };
+
+    try {
+      const first = await index.search(
+        { query: "no-runs-yet-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(first.totalCount, 0);
+      const second = await index.search(
+        { query: "no-runs-yet-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(second.totalCount, 0);
+    } finally {
+      Log.info = originalInfo;
+    }
+
+    assert.strictEqual(
+      messages.filter((message) => message.includes("rebuild starting:"))
+        .length,
+      1,
+      messages.join("\n")
+    );
+  });
+
   test("resets a cursor when its filters change", async () => {
     const workflowId = "cursor-filters-2026-06-09T22-10-00";
     await createRun(workflowId, 1, 2000, [

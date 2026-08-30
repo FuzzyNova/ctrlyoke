@@ -440,11 +440,6 @@ export class HistorySearchIndexService {
           entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
       )
       .sort((left, right) => left.name.localeCompare(right.name));
-    if (shardFiles.length === 0) {
-      const error = new Error(`No document shards found in ${documentsDir}`);
-      (error as NodeJS.ErrnoException).code = "ENOENT";
-      throw error;
-    }
 
     for (const shardFile of shardFiles) {
       const reader = readline.createInterface({
