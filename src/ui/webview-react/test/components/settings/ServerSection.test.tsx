@@ -88,4 +88,28 @@ describe("ServerSection", () => {
       screen.queryByText(/ctrlyoke started on localhost only/)
     ).not.toBeInTheDocument();
   });
+
+  it("shows the Pro unlock banner only for Free users", () => {
+    const props = {
+      activeScope: SETTING_SCOPES.USER,
+      onUpdate: vi.fn(),
+      onReset: vi.fn(),
+    };
+    const { rerender } = render(
+      <ServerSection {...props} settings={createSettings("0.0.0.0")} />
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Unlock Pro Features" })
+    ).toBeInTheDocument();
+
+    useSettingsStore.setState({
+      licenseAccess: { isPro: true, hasRemoteAccess: true, trialEndsAt: null },
+    });
+    rerender(<ServerSection {...props} settings={createSettings("0.0.0.0")} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Unlock Pro Features" })
+    ).not.toBeInTheDocument();
+  });
 });

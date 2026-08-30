@@ -45,27 +45,4 @@ describe("GlobalSettingsDrawer", () => {
     expect(content).toHaveClass("max-w-none");
     expect(content).not.toHaveClass("max-w-2xl");
   });
-
-  it("shows the Pro unlock button only for Free users", () => {
-    useSettingsStore.setState({
-      licenseAccess: {
-        isPro: false,
-        hasRemoteAccess: false,
-        trialEndsAt: null,
-      },
-    });
-    const { unmount } = render(<GlobalSettingsDrawer />);
-    expect(
-      screen.getByRole("button", { name: "Unlock Pro Features" })
-    ).toBeInTheDocument();
-    unmount();
-
-    useSettingsStore.setState({
-      licenseAccess: { isPro: true, hasRemoteAccess: true, trialEndsAt: null },
-    });
-    render(<GlobalSettingsDrawer />);
-    expect(
-      screen.queryByRole("button", { name: "Unlock Pro Features" })
-    ).not.toBeInTheDocument();
-  });
 });
