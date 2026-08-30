@@ -81,11 +81,24 @@ interface WorkflowMetadata {
   workflowName: string;
 }
 
-interface WorkflowRunSource {
+export interface WorkflowRunSource {
   workflowKey: WorkflowKey;
   runRef: RunRef;
   manifestPath: string;
   eventsPath: string;
+}
+
+export interface HistorySearchIndexStaleRun {
+  source: WorkflowRunSource;
+  reason: string;
+}
+
+export interface HistorySearchIndexDiff {
+  newRuns: WorkflowRunSource[];
+  changedRuns: WorkflowRunSource[];
+  removedManifestPaths: string[];
+  unchangedManifestPaths: string[];
+  staleRuns: HistorySearchIndexStaleRun[];
 }
 
 export interface HistorySearchRebuildProgressMessage {
@@ -129,6 +142,101 @@ export type HistorySearchRebuildProgressCallback = (
 ) => void;
 
 /**
+ * Compare the current run history with the runs recorded in an index manifest.
+ * The result retains every run's state so later rebuild steps can act on the
+ * complete delta instead of only the first stale run.
+ */
+export async function computeHistorySearchIndexDiff(
+  workspaceFolderPath: string,
+  manifest: HistorySearchIndexManifest
+): Promise<HistorySearchIndexDiff> {
+  const currentRuns = await listRunSources(workspaceFolderPath);
+  const currentManifestPaths = new Set(
+    currentRuns.map((run) => path.resolve(run.manifestPath))
+  );
+  const indexedManifestPaths = new Set(Object.keys(manifest.indexedRuns));
+  const removedManifestPaths = [...indexedManifestPaths].filter(
+    (manifestPath) => !currentManifestPaths.has(manifestPath)
+  );
+
+  const checkResults = await mapWithConcurrency(
+    currentRuns,
+    FRESHNESS_CHECK_CONCURRENCY,
+    async (
+      source
+    ): Promise<
+      | { kind: "new"; source: WorkflowRunSource; reason: string }
+      | { kind: "changed"; source: WorkflowRunSource; reason: string }
+      | { kind: "unchanged"; source: WorkflowRunSource }
+    > => {
+      const key = path.resolve(source.manifestPath);
+      const indexedRun = manifest.indexedRuns[key];
+      if (!indexedRun) {
+        return {
+          kind: "new",
+          source,
+          reason: `new run not yet indexed (${source.workflowKey}/${source.runRef})`,
+        };
+      }
+
+      const sourceManifest = await readManifestSafe(source.manifestPath);
+      if (!sourceManifest) {
+        return {
+          kind: "changed",
+          source,
+          reason: `could not re-read manifest for ${source.workflowKey}/${source.runRef}`,
+        };
+      }
+
+      const [manifestStats, eventsStats] = await Promise.all([
+        statOptional(source.manifestPath),
+        statOptional(source.eventsPath),
+      ]);
+      if (
+        sourceManifest.eventCount !== indexedRun.eventCount ||
+        sourceManifest.lastUpdatedAt !== indexedRun.lastUpdatedAt ||
+        manifestStats?.mtimeMs !== indexedRun.sourceManifestMtimeMs ||
+        (eventsStats?.mtimeMs ?? 0) !== indexedRun.sourceEventsMtimeMs
+      ) {
+        return {
+          kind: "changed",
+          source,
+          reason: `run changed since indexing (${source.workflowKey}/${source.runRef})`,
+        };
+      }
+
+      return { kind: "unchanged", source };
+    }
+  );
+
+  const newRuns: WorkflowRunSource[] = [];
+  const changedRuns: WorkflowRunSource[] = [];
+  const unchangedManifestPaths: string[] = [];
+  const staleRuns: HistorySearchIndexStaleRun[] = [];
+
+  for (const result of checkResults) {
+    const key = path.resolve(result.source.manifestPath);
+    if (result.kind === "new") {
+      newRuns.push(result.source);
+      staleRuns.push({ source: result.source, reason: result.reason });
+    } else if (result.kind === "changed") {
+      changedRuns.push(result.source);
+      staleRuns.push({ source: result.source, reason: result.reason });
+    } else {
+      unchangedManifestPaths.push(key);
+    }
+  }
+
+  return {
+    newRuns,
+    changedRuns,
+    removedManifestPaths,
+    unchangedManifestPaths,
+    staleRuns,
+  };
+}
+
+/**
  * Check whether the on-disk index still describes the current run history.
  * This is shared by the host's preflight check and the worker's lock-scoped
  * recheck, so the latter preserves Phase 1A's contention behavior.
@@ -147,58 +255,24 @@ export async function checkHistorySearchIndexFreshness(
     };
   }
 
-  const currentRuns = await listRunSources(workspaceFolderPath);
-  const currentManifestPaths = new Set(
-    currentRuns.map((run) => path.resolve(run.manifestPath))
+  const diff = await computeHistorySearchIndexDiff(
+    workspaceFolderPath,
+    manifest
   );
-  const indexedManifestPaths = new Set(Object.keys(manifest.indexedRuns));
-  if (currentManifestPaths.size !== indexedManifestPaths.size) {
+  const currentRunCount =
+    diff.newRuns.length +
+    diff.changedRuns.length +
+    diff.unchangedManifestPaths.length;
+  const indexedRunCount = Object.keys(manifest.indexedRuns).length;
+  if (currentRunCount !== indexedRunCount) {
     return {
       fresh: false,
-      reason: `run count changed (current=${currentManifestPaths.size} indexed=${indexedManifestPaths.size})`,
+      reason: `run count changed (current=${currentRunCount} indexed=${indexedRunCount})`,
     };
   }
 
-  const checkResults = await mapWithConcurrency(
-    currentRuns,
-    FRESHNESS_CHECK_CONCURRENCY,
-    async (source): Promise<HistorySearchFreshnessResult> => {
-      const key = path.resolve(source.manifestPath);
-      const indexedRun = manifest.indexedRuns[key];
-      if (!indexedRun) {
-        return {
-          fresh: false,
-          reason: `new run not yet indexed (${source.workflowKey}/${source.runRef})`,
-        };
-      }
-      const sourceManifest = await readManifestSafe(source.manifestPath);
-      if (!sourceManifest) {
-        return {
-          fresh: false,
-          reason: `could not re-read manifest for ${source.workflowKey}/${source.runRef}`,
-        };
-      }
-      const [manifestStats, eventsStats] = await Promise.all([
-        statOptional(source.manifestPath),
-        statOptional(source.eventsPath),
-      ]);
-      if (
-        sourceManifest.eventCount !== indexedRun.eventCount ||
-        sourceManifest.lastUpdatedAt !== indexedRun.lastUpdatedAt ||
-        manifestStats?.mtimeMs !== indexedRun.sourceManifestMtimeMs ||
-        (eventsStats?.mtimeMs ?? 0) !== indexedRun.sourceEventsMtimeMs
-      ) {
-        return {
-          fresh: false,
-          reason: `run changed since indexing (${source.workflowKey}/${source.runRef})`,
-        };
-      }
-      return { fresh: true };
-    }
-  );
-
-  const stale = checkResults.find((result) => !result.fresh);
-  return stale ?? { fresh: true };
+  const stale = diff.staleRuns[0];
+  return stale ? { fresh: false, reason: stale.reason } : { fresh: true };
 }
 
 /** Execute one complete, lock-protected rebuild in the worker isolate. */

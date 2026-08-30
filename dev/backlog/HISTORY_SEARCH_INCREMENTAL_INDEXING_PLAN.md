@@ -1,9 +1,10 @@
 # History Search Incremental Indexing Plan
 
-> **Status:** Not implemented. Follow-up to
+> **Status:** Design finalized (see "Decisions" and "Implementation sequencing" below);
+> implementation in progress via queued orchestration steps. Follow-up to
 > [`../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md`](../implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md)
 > (Phases 1A/1B/2, all shipped). This plan addresses the deeper inefficiency that plan's
-> Phase 2 worker isolation only *contained* rather than removed — see "Why Phase 2 alone
+> Phase 2 worker isolation only _contained_ rather than removed — see "Why Phase 2 alone
 > isn't enough" below for the incident that prompted this.
 
 ## Goal
@@ -31,7 +32,7 @@ and is already computed on every rebuild, it's just thrown away:
 - `checkHistorySearchIndexFreshness` (`historySearchRebuildWorker.ts:122`) already walks
   every current run and compares it against that fingerprint — it knows, per run, whether
   it's new/changed/unchanged. But it calls `.find(r => !r.fresh)` (line 186) and returns on
-  the *first* stale run, collapsing "1 run out of N changed" into a single fresh/not-fresh
+  the _first_ stale run, collapsing "1 run out of N changed" into a single fresh/not-fresh
   boolean.
 - `runHistorySearchRebuild` then discards that signal and does `listRunSources()` → loop
   over **all** runs → re-read every manifest + full `events.jsonl` → rebuild every
@@ -53,7 +54,7 @@ OOM in `HISTORY_SEARCH_PERFORMANCE_PLAN.md`'s "2026-08-27 Incident #2."
 
 `TimelineRecorder.readEvents` (`TimelineRecorder.ts:114`) reads a run's entire
 `events.jsonl` into memory as one string and parses every line into a full JS object,
-*before* `HistoryCandidateExtractor.toCandidate` (`HistoryCandidateExtractor.ts:301`)
+_before_ `HistoryCandidateExtractor.toCandidate` (`HistoryCandidateExtractor.ts:301`)
 truncates each field to `MAX_INDEXED_TEXT_LENGTH` (2000 chars). For workflows whose steps
 are full AI-response text, that means fully materializing a large raw file per run just to
 keep a few KB of truncated candidates from it. Not a leak (discarded per-run, not
@@ -89,7 +90,7 @@ failing at all. This plan is the fix for the volume itself.
 ### 1. Make the freshness check return a diff, not a boolean
 
 Change `checkHistorySearchIndexFreshness` (or add a sibling function used by the rebuild
-path) to collect the *full* set of new/changed/removed runs relative to
+path) to collect the _full_ set of new/changed/removed runs relative to
 `manifest.indexedRuns`, instead of short-circuiting on the first stale entry via `.find()`.
 The per-run comparison logic already exists (lines 148-184) — this is a matter of
 collecting results instead of discarding them after the first miss.
@@ -136,25 +137,67 @@ full-heap-churn pattern driving the RSS baseline creep seen in both this workspa
 OOM incidents, rather than just capping its blast radius (which is what the
 `resourceLimits` fix alone achieves).
 
-## Open questions / decisions for implementation
+## Decisions (resolved during planning)
 
-- Exact shard file naming and the threshold at which "diff is large enough to prefer a
-  full rebuild" kicks in (e.g. percentage of runs changed) — needs a number, not just a
-  qualitative rule.
-- Whether shard cleanup for removed runs needs the same locked-swap-plus-cleanup dance the
-  full rebuild uses (`swapIndexFiles`/`cleanupRebuildDirs`), or whether per-shard
-  create/delete can be simpler given each shard is independent (no cross-shard atomicity
-  requirement the way the single-file swap had).
-- Whether to also address the `TimelineRecorder.readEvents` full-materialization cost
-  noted above as part of this work, or track it separately — it compounds with this plan
-  (delta rebuilds still pay it, just for far fewer runs) but is an independent change to a
-  shared reader used outside this service.
+- **Shard file naming**: reuse the same `path.resolve(manifestPath)` key already used as
+  the `indexedRuns` map key today. Hash it with the existing `hashPath()` (sha256, already
+  used for `workspaceRootHash`) to get a filesystem-safe filename:
+  `<indexDir>/documents/<sha256(resolvedManifestPath)>.jsonl`. This makes "which shard does
+  this run own" a pure function of data already on hand at every call site — no new ID
+  scheme, no lookup table to keep in sync.
+- **Full-rebuild fallback threshold**: trigger a full rebuild (instead of an incremental
+  one) when any of: (a) no on-disk manifest, (b) schema version or workspace-hash mismatch
+  (existing behavior, unchanged), or (c) the diff's combined new+changed+removed run count
+  exceeds **50% of the current total run count** (`INCREMENTAL_REBUILD_MAX_CHANGED_RATIO =
+0.5` in `historySearchRebuildWorker.ts`). Below that ratio, per-shard writes are cheaper
+  than a full rewrite; above it, the full-rebuild path's simpler, already-hardened
+  swap/cleanup logic is worth the extra I/O. Ratio, not an absolute count, so behavior scales
+  sensibly from small workspaces (a few runs) to the 1000+-run workspace that prompted this
+  plan.
+- **Shard cleanup does not need the swap/cleanup dance**: the entire rebuild — full or
+  incremental — already runs inside `withFileLock(lockTargetPath, ...)`, which already
+  serializes every writer (including cross-process, per
+  `.github/instructions/orchestration.instructions.md`'s `HistorySearchIndexService`
+  section). Because shards are independent files, an incremental pass can write/replace a
+  changed or new shard with a plain atomic write (temp file + rename, matching
+  `AtomicFileUtils` conventions) and unlink a removed run's shard directly, all under that
+  same lock — no directory-level staging/swap is needed for the incremental path. The full
+  rebuild keeps its existing staging-directory-then-rename swap (extended to swap a whole
+  `documents/` directory of shards instead of one `documents.jsonl` file), since it already
+  has that machinery and still needs atomicity against a reader mid-load.
+- **`TimelineRecorder.readEvents` full-materialization cost**: address it as part of this
+  work, as the final step. It directly compounds with the incremental path's benefit — once
+  rebuilds only touch changed runs, this becomes the dominant remaining per-run cost — and
+  the fix is small and isolated to one reader with no dependency on the sharding work above,
+  so it can land independently without blocking or being blocked by it.
+
+## Implementation sequencing
+
+Bump `INDEX_SCHEMA_VERSION` (`historySearchRebuildWorker.ts:31`) to `"4.0.0"` as part of the
+shard-storage step below — the on-disk format is changing (single `documents.jsonl` →
+`documents/<hash>.jsonl` shards), so existing indexes must be treated as stale and fully
+rebuilt once under the new layout. After that, delta rebuilds take over for all subsequent
+triggers.
+
+1. **Done — diff-returning freshness check** — added the full new/changed/removed/unchanged
+   run diff and routed freshness through it; no deviation from the plan.
+2. **Shard the on-disk document storage** — introduce the `documents/<hash>.jsonl` layout,
+   change the (still-always-full) rebuild to write one shard per run, change search-time
+   loading to concatenate all shards, bump the schema version. This is the storage-format
+   step; rebuilds are still full rescans after this step, just writing/reading a different
+   layout.
+3. **Incremental rebuild** — wire step 1's diff into the rebuild path: changed/new runs get
+   their shard regenerated, removed runs get their shard deleted and manifest entry dropped,
+   unchanged runs are untouched (no read, no re-parse, no rewrite), with the 50%-ratio
+   fallback to a full rebuild. This is the step that actually delivers the plan's goal.
+4. **`TimelineRecorder.readEvents` streaming** — stop materializing a run's full
+   `events.jsonl` before truncation; independent cleanup, lands last.
 
 ## Non-goals
 
 - No change to the `resourceLimits` worker-isolation safety net — this plan complements it,
   it doesn't replace it. The full-rebuild fallback path still needs that containment.
 - No multi-worker fan-out for large rebuilds. The bottleneck this plan targets is rebuild
-  *frequency at full volume*, not scan throughput — once rebuilds are delta-sized, the
+  _frequency at full volume_, not scan throughput — once rebuilds are delta-sized, the
   rare remaining full-rebuild case is small enough in practice that added worker-pool
   complexity isn't justified by the evidence gathered so far.
