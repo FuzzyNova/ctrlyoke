@@ -19,6 +19,16 @@
 > Claude/Antigravity/OpenCode), but does need new parser wiring, and the probe surfaced a live
 > cost-accuracy bug as a side effect. See the rewritten Copilot rows/section and
 > [Open questions](#open-questions).
+> **Revised again:** August 31, 2026 — live-probed Qwen CLI directly (`qwen -p ...`,
+> CLI `0.22.3`, models `qwen3.5-plus`/`qwen3.8-max` via the DashScope OpenAI-compatible
+> endpoint). Qwen's `reasoningRelationship` is now confirmed `INCLUDED_IN_OUTPUT`, resolving
+> that part of the open question below (Antigravity/OpenCode remain unverified). The probe also
+> surfaced a live double-counting bug in `QwenLogParser.ts`, independent of and more directly
+> visible than the cache-netting issue: it adds `thoughtsTokenCount` on top of
+> `candidatesTokenCount` even though the former is already a subset of the latter, inflating
+> every Qwen attempt's displayed output/total whenever extended thinking occurs. See the new
+> [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output)
+> section below.
 
 ## The report
 
@@ -120,11 +130,14 @@ Antigravity and OpenCode were previously `UNKNOWN` in `HARNESS_TOKEN_SEMANTICS`
 (`ModelPricing.ts:94-97, 90-93`) pending a live run, per the standing rule in
 `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md` Phase 4 that a parser comment alone isn't enough. The
 real captures above satisfy that bar for **cache relationship** specifically. Their
-**reasoning relationship** is a separate, still-unverified dimension (`calculateTokenCost`
+**reasoning relationship** is a separate dimension (`calculateTokenCost`
 in `ModelPricing.ts:151-159` requires *both* to be non-`UNKNOWN` before it will price an
-attempt from the table), and none of the three new captures show a reasoning figure, so
-this round of evidence does not by itself unblock table pricing for any of them — see
-[Open questions](#open-questions). Copilot, uniquely, was **already** marked `DISJOINT` in
+attempt from the table); none of the three new captures shown here carried a reasoning
+figure, so this round of evidence does not by itself unblock table pricing for Antigravity
+or OpenCode — see [Open questions](#open-questions). Qwen's reasoning relationship *is* now
+resolved, but by a separate, later probe — see the
+[Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output)
+below. Copilot, uniquely, was **already** marked `DISJOINT` in
 `HARNESS_TOKEN_SEMANTICS` (`ModelPricing.ts:98-101`) before any of this — apparently a
 forward-looking default rather than evidence-backed, since the code comments elsewhere
 insisted no cache field existed. The live probe below confirms that existing classification
@@ -253,6 +266,75 @@ its total is already correct, but its cache figures aren't captured or displayed
 today (no breakdown line, and a cost-estimate bug — see the Copilot deep dive above and
 Phase 3 below), where Antigravity/OpenCode's parsers already surface theirs correctly.
 
+## Qwen reasoning deep dive: thinking tokens confirmed as a subset of output
+
+Qwen's `reasoningRelationship` (`HARNESS_TOKEN_SEMANTICS[QWEN_CLI]`, `ModelPricing.ts:87-88`)
+was `UNKNOWN`, gating table-priced cost estimates for every Qwen attempt regardless of the
+cache-relationship promotion in Phase 1 (`calculateTokenCost` requires *both* dimensions
+non-`UNKNOWN`). Three live `qwen -p ... -o json` runs (CLI `0.22.3`, models `qwen3.5-plus` and
+`qwen3.8-max`, real DashScope OpenAI-compatible-endpoint traffic — see `.qwen/settings.json`'s
+`baseUrl: https://dashscope-us.aliyuncs.com/compatible-mode/v1`) now resolve it: **thinking
+tokens are `INCLUDED_IN_OUTPUT`, the same classification as Codex, not a `DISJOINT`
+provider-billed-separately pool.**
+
+**Run 1** (`qwen3.5-plus`, a plain step-by-step word problem) — raw `usageMetadata` from the
+session log (`~/.qwen/projects/c--dev-ctrlyoke/chats/6e6c76d9-a48d-4020-8175-650ea9cdab34.jsonl`):
+`promptTokenCount: 29051, candidatesTokenCount: 199, thoughtsTokenCount: 31, totalTokenCount:
+29250`. `29051 + 199 = 29250` exactly — `totalTokenCount` already equals `prompt + candidates`
+with no room left to add `thoughts` again.
+
+**Run 2** (`qwen3.8-max`, same style of prompt) reproduced the identical shape at a different
+model and magnitude: `promptTokenCount: 29069, candidatesTokenCount: 203, thoughtsTokenCount:
+144, totalTokenCount: 29272`. Again `29069 + 203 = 29272` exactly.
+
+Both runs are consistent with two different hypotheses, though: either (a) `thoughtsTokenCount`
+is genuinely a subset already counted inside `candidatesTokenCount`, or (b) it's a disjoint pool
+that `totalTokenCount` simply — buggily — forgets to add. Word-count sanity-checking wasn't
+conclusive (both runs had thinking text short enough, relative to the visible answer, that
+either hypothesis fit the numbers).
+
+**Run 3 was designed to be decisive**: a prompt demanding "at least 15 sentences" of visible
+internal reasoning followed by a **one-token final answer** ("just the raw number, no words").
+If `candidatesTokenCount` only ever counted the *visible* answer, it should have stayed in the
+single digits regardless of how much thinking happened. It didn't. Raw log
+(`~/.qwen/projects/c--dev-ctrlyoke/chats/54f71575-4441-4c88-9b31-8694a9eae04e.jsonl`):
+
+```text
+message.parts[0]: thought: true,  text.length: 1055  ("I need to calculate 47 × 89 ...")
+message.parts[1]: thought: false, text.length: 4     ("4183")
+usageMetadata: { promptTokenCount: 29082, candidatesTokenCount: 614,
+                 thoughtsTokenCount: 605, totalTokenCount: 29696 }
+```
+
+`candidatesTokenCount` (614) tracks the *thinking* text's length (605), not the 4-character
+visible answer — `614 − 605 = 9`, matching a few tokens for `"4183"` plus small formatting
+overhead. If thoughts were disjoint from candidates, `candidatesTokenCount` would have stayed
+near single digits (just `"4183"`) no matter how long the reasoning ran; instead it scaled
+directly with the thinking length. This rules out hypothesis (b): `thoughtsTokenCount` is a
+true subset of `candidatesTokenCount`, and `totalTokenCount = promptTokenCount +
+candidatesTokenCount` is already complete and correct — matching the OpenAI-compatible
+`completion_tokens_details.reasoning_tokens ⊂ completion_tokens` convention (DashScope's
+`compatible-mode` endpoint, not Google's native Gemini API, which is what Qwen CLI's
+Gemini-shaped `usageMetadata` field names would otherwise suggest).
+
+**This confirms a real double-counting bug, not just an unresolved classification.**
+`QwenLogParser.extractResponse()` (`QwenLogParser.ts:267-271`) currently computes:
+
+```typescript
+totalOutputTokens +=
+  (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+```
+
+Since `thoughtsTokenCount` is already inside `candidatesTokenCount`, this adds it a second
+time. For Run 3, the parser would report `outputTokens: 614 + 605 = 1219` — nearly double the
+true value (614) — inflating both the raw "out" figure and `TokenStats.total` (Qwen's `total`
+is parser-computed as `totalInputTokens + totalOutputTokens`, `QwenLogParser.ts:362`, not a
+provider-reported field) for every Qwen attempt that does any extended thinking. This bug is
+independent of, and visible before, the Phase 1 cache-netting fix — it inflates the headline
+number directly, the same way the Copilot cache-pricing bug did. Should be split into its own
+fix alongside the `reasoningRelationship` promotion (both touch the same few lines) — see
+Phase 1's Qwen bullets and Touch points below.
+
 ## Why this isn't a same-session hot-fix
 
 The naive fix — subtract `cached` from `prompt` wherever it's displayed — would corrupt cost
@@ -309,7 +391,22 @@ depend on — worth a reviewed, staged change, not an in-session patch.
   `ANTIGRAVITY_CLI → DISJOINT`, `OPENCODE_CLI → DISJOINT`. This is a one-line-per-harness,
   low-risk change on its own (it only ever *enables* cache-aware cost math where it was
   previously suppressed) and can land ahead of the rest of Phase 1. Leave
-  `reasoningRelationship` as `UNKNOWN` for all three — unrelated evidence, still unverified.
+  `reasoningRelationship` as `UNKNOWN` for Antigravity and OpenCode — unrelated evidence,
+  still unverified (see Phase 2). **Qwen is different**: promote
+  `HARNESS_TOKEN_SEMANTICS[QWEN_CLI].reasoningRelationship` from `UNKNOWN` to
+  `INCLUDED_IN_OUTPUT` in the same change — confirmed by live probe, see the
+  [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output).
+  This is what actually unblocks table-priced cost estimates for Qwen (both dimensions must be
+  non-`UNKNOWN`), not the cache promotion alone.
+- **Fix the Qwen thinking-token double-count while touching this code.** In
+  `QwenLogParser.extractResponse()` (`QwenLogParser.ts:267-271`), change
+  `totalOutputTokens += (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)` to drop
+  the `+ (u.thoughtsTokenCount || 0)` — `thoughtsTokenCount` is already a subset of
+  `candidatesTokenCount` (proven in the deep dive above), so adding it again currently inflates
+  `outputTokens`/`TokenStats.total` for every Qwen attempt with extended thinking. This is a
+  correctness bug independent of the cache-netting work below and worth its own test fixture
+  (a captured turn with a non-trivial `thoughtsTokenCount` asserting `outputTokens ===
+  candidatesTokenCount`, not `candidatesTokenCount + thoughtsTokenCount`).
 - Add a `total` computation at the `resolveTokenCounts` boundary
   (`WorkflowExecutor.ts:1740-1782`) that, when
   `HARNESS_TOKEN_SEMANTICS[harness].cacheInputRelationship === SUBSET`, computes
@@ -425,14 +522,23 @@ Copilot attempt:
 - `src/utils/ModelPricing.ts:98-101` (Phase 3) — correct
   `HARNESS_TOKEN_SEMANTICS[COPILOT_CLI].reasoningRelationship` from `UNREPORTED` to
   `INCLUDED_IN_OUTPUT`.
+- `src/core/harness/qwen/QwenLogParser.ts:267-271` (`extractResponse()`) — drop the
+  `+ (u.thoughtsTokenCount || 0)` term from `totalOutputTokens` (double-counts a value already
+  inside `candidatesTokenCount` — see the
+  [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output)),
+  and promote `HARNESS_TOKEN_SEMANTICS[QWEN_CLI].reasoningRelationship`
+  (`ModelPricing.ts:86-89`) from `UNKNOWN` to `INCLUDED_IN_OUTPUT`.
 - Tests: `src/test/unit/ModelPricing.test.ts` and the per-harness parser tests referenced in
   `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md` Phase 2/3 (streaming replacement, retry inclusion,
   `byHarness === sum(byLocalDay)`) will need Codex **and Qwen** fixtures updated for the new
   expected totals; add a new test asserting cost math is unaffected (raw `prompt`/`cached`
   unchanged) while the headline total is netted. Also add `HARNESS_TOKEN_SEMANTICS`
   promotion tests for `QWEN_CLI`/`ANTIGRAVITY_CLI`/`OPENCODE_CLI` asserting `SUBSET`/
-  `DISJOINT`/`DISJOINT` respectively, and a regression test that `DISJOINT`-harness totals
-  are byte-for-byte unchanged by this plan (Claude, Antigravity, OpenCode).
+  `DISJOINT`/`DISJOINT` (cache) and `QWEN_CLI` asserting `INCLUDED_IN_OUTPUT` (reasoning)
+  respectively, a `QwenLogParser` fixture with a non-zero `thoughtsTokenCount` asserting
+  `outputTokens === candidatesTokenCount` (not `+ thoughtsTokenCount`), and a regression test
+  that `DISJOINT`-harness totals are byte-for-byte unchanged by this plan (Claude, Antigravity,
+  OpenCode).
 
 ## Open questions
 
@@ -462,11 +568,18 @@ Copilot attempt:
   `ACCUMULATED`? A dedicated confidence value might be worth adding to
   `TOKEN_TOTAL_CONFIDENCE` in `DashboardConstants.ts` rather than overloading an existing one
   whose meaning is otherwise "summed from provider per-turn usage."
-- `reasoningRelationship` remains `UNKNOWN` for Qwen, OpenCode, and Antigravity even after
+- ~~`reasoningRelationship` remains `UNKNOWN` for Qwen, OpenCode, and Antigravity even after
   this revision's cache-relationship evidence — a live run showing whether each harness's
   reasoning/thinking tokens are folded into output or billed separately is still needed
   before their table-priced cost estimates can turn on (see Phase 2). This plan's cache-only
-  evidence does not resolve it.
+  evidence does not resolve it.~~ **Resolved this session for Qwen:** three live `qwen -p`
+  runs (including a decisive test isolating thinking length from visible-answer length)
+  mathematically confirm `INCLUDED_IN_OUTPUT` — see the
+  [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output).
+  **Still open for OpenCode and Antigravity** — Phase 2 stands unchanged for both; this
+  session's evidence is Qwen-specific and doesn't generalize (Qwen's shape is driven by its
+  particular DashScope OpenAI-compatible backend, not a property of "reasoning tokens" in
+  general).
 - Is a single real capture per harness a high enough evidentiary bar to promote
   `HARNESS_TOKEN_SEMANTICS` permanently, or should the promotion in Phase 1 note that it
   rests on one example each (Antigravity, Qwen, OpenCode) versus Claude/Codex's broader
@@ -483,3 +596,4 @@ Copilot attempt:
 - [Counting tokens, Gemini API docs](https://ai.google.dev/api/tokens) — confirms `cachedContentTokenCount` is a subset of `promptTokenCount`, matching Qwen's parser comment and the real capture above.
 - [OpenCode issue #30649](https://github.com/anomalyco/opencode/issues/30649) and [#28494](https://github.com/anomalyco/opencode/issues/28494) — corroborate that OpenCode tracks `tokens.cache.read` as a field distinct from `tokens.input`/context accounting, consistent with the `DISJOINT` classification confirmed here.
 - `copilot help monitoring` / `copilot help environment` (CLI `1.0.82`, run locally) — documents `COPILOT_OTEL_FILE_EXPORTER_PATH`/`COPILOT_OTEL_ENABLED` activation and the `gen_ai.client.token.usage` metric shape; the cache attributes themselves (`gen_ai.usage.cache_read.input_tokens`, `gen_ai.usage.cache_write.input_tokens`) are undocumented in either help topic and were found only by inspecting live span output, not by reading the CLI's own docs — see the [Copilot deep dive](#copilot-deep-dive-cache-signal-confirmed-on-cli-1082) for the raw capture.
+- Three live `qwen -p ... -o json` runs (CLI `0.22.3`, local session logs under `~/.qwen/projects/c--dev-ctrlyoke/chats/*.jsonl`, not a published URL) — the decisive third run mathematically rules out `thoughtsTokenCount` being disjoint from `candidatesTokenCount` for Qwen CLI's DashScope OpenAI-compatible-endpoint traffic; see the [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output) for the raw numbers. This is the same `completion_tokens_details.reasoning_tokens ⊂ completion_tokens` convention OpenAI's own [Chat Completions usage object docs](https://platform.openai.com/docs/api-reference/chat/object) describe for its own reasoning models — corroborating, not itself proof for Qwen, since DashScope is a different vendor merely exposing an OpenAI-compatible response shape.
