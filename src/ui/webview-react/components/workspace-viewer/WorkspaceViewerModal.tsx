@@ -88,6 +88,12 @@ export const WorkspaceViewerModal: React.FC = () => {
           <WorkspaceSearchPane />
         )}
       </div>
+
+      {/* fixed inset-0 escapes the App root's flex layout (and its trailing
+          .safe-area-spacer), so reproduce it here — otherwise bottom-anchored
+          content in the active pane can sit under the home indicator. No-op
+          (0px) on desktop/non-notch devices via env(safe-area-inset-bottom). */}
+      <div className="safe-area-spacer" aria-hidden="true" />
     </div>,
     document.body
   );

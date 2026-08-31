@@ -1422,8 +1422,14 @@ const OutputSectionInner: React.FC = () => {
       ref={sectionRef}
       id="output-section"
       className={`bg-editor-bg flex flex-col overflow-hidden ${
+        // `inset-0` alone fills the fixed element to the viewport; pairing it
+        // with an explicit h-screen/w-screen over-constrains position+size
+        // (top+bottom+height), which resolves to height:100vh — the *large*
+        // mobile viewport that ignores safe-area/toolbar shrinkage — and lets
+        // the bottom edge (TerminalControlBar, EditorSection's collapsed
+        // header behind it) land off the visible screen.
         isFullscreen
-          ? "fixed inset-0 z-output-fullscreen h-screen w-screen"
+          ? "fixed inset-0 z-output-fullscreen"
           : "min-h-0 flex-1 h-full"
       }`}
     >
@@ -1567,6 +1573,13 @@ const OutputSectionInner: React.FC = () => {
           onStepRangeChange={outputExport.updateStepRange}
         />
       )}
+
+      {/* Fullscreen escapes the App root's flex layout (position: fixed), so
+          the root's own trailing .safe-area-spacer no longer shrinks this
+          section's height. Reproduce it locally — same mechanism as
+          App.tsx — so TerminalControlBar/EditorSection content chained
+          through the flex-1 area above clears the home indicator. */}
+      {isFullscreen && <div className="safe-area-spacer" aria-hidden="true" />}
     </section>
   );
 };
