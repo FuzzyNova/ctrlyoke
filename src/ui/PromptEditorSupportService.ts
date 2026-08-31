@@ -76,7 +76,7 @@ import {
   getPathSuggestions,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
-import { outputCaptureCache } from "../completions/OutputCaptureCache";
+import { savePendingOutputSnapshot } from "./OutputSnapshotService";
 import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
@@ -701,33 +701,13 @@ export class PromptEditorSupportService {
   ): Promise<void> {
     const { seq } = message;
     try {
-      const workspaceRoot = this.getWorkspaceRoot();
-      if (!workspaceRoot) {
-        throw new Error("No workspace folder open");
-      }
       if (!message.captureId) {
         throw new Error("Missing output capture id");
       }
 
-      const entry = outputCaptureCache.take(message.captureId);
-      if (!entry) {
-        ctx.emit({
-          type: MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED,
-          seq,
-          error: "Output capture expired — try again",
-        });
-        return;
-      }
-
-      const tempFileManager = this.getTempFileManager();
-      const absolutePath = await tempFileManager.createOutputSnapshotFile(
-        entry.text,
-        entry.channel,
-        entry.range,
-        tempFileManager.getAttachmentsDir()
-      );
-      const relativePath = buildFileReferenceValue(
-        tempFileManager.getRelativePath(absolutePath)
+      const relativePath = await savePendingOutputSnapshot(
+        this.getWorkspaceRoot,
+        message.captureId
       );
 
       ctx.emit({

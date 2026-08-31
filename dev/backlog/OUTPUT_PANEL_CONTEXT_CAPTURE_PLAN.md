@@ -1,6 +1,6 @@
 # Output Panel Context Capture Plan
 
-> **Status:** In progress — backend capture plumbing landed (step 1/4); completion-list wiring landed (step 2/4); webview UI wiring landed (step 3/4); native-editor UI still pending.
+> **Status:** Implemented — backend capture plumbing, completion-list wiring, webview resolution, and native-editor resolution are complete (all 4 steps).
 
 ## Goal
 
@@ -56,18 +56,14 @@ now, store it as a durable file, reference the file":
   (`src/ui/webview-react/components/editor/CodeMirrorEditor.tsx:962-1051`) is the editor-side
   placeholder-then-resolve flow.
 
-Proposed equivalents:
+Implemented equivalents:
 
-- A text-oriented sibling of `createPastedImageFile` (either a new
-  `createOutputSnapshotFile(text, targetDir)` or a small generalization of the existing method
-  to accept text as well as binary) that hashes the UTF-8 bytes and writes a readable filename
-  (convention below) under the same `getAttachmentsDir()`.
-- A new message pair mirroring `SAVE_PASTED_IMAGE`/`PASTED_IMAGE_SAVED` (e.g.
-  `SAVE_OUTPUT_SNAPSHOT` / `OUTPUT_SNAPSHOT_SAVED`) and a
-  `PromptEditorSupportService.handleSaveOutputSnapshot()`.
-- A size cap analogous to `MAX_PASTED_IMAGE_BYTES` (15 MB) — a full "Agent Host" channel could
-  be enormous; cap and/or truncate-from-the-end with a note in the attachment, rather than
-  writing an unbounded file.
+- `TempFileManager.createOutputSnapshotFile(text, channel, range, targetDir)` hashes the UTF-8
+  bytes and writes a readable filename (convention below) under the same `getAttachmentsDir()`.
+- `SAVE_OUTPUT_SNAPSHOT` / `OUTPUT_SNAPSHOT_SAVED` and
+  `PromptEditorSupportService.handleSaveOutputSnapshot()` provide the webview round trip.
+- `MAX_OUTPUT_SNAPSHOT_BYTES` caps captures at 15 MB; oversized text is truncated from the start
+  with a marker in the attachment.
 
 ### Filename convention
 
@@ -189,16 +185,18 @@ described above.
 
 ## Affected Components
 
-| Component | Planned role |
+| Component | Implemented role |
 | --- | --- |
-| `src/completions/CompletionHelpers.ts` (`getFileCompletions`/`getAtCompletions`, `getSelectionCompletions`) | Add `output:`-scheme entries to the `@` list; keep the `#` selection entry but reroute what picking it inserts |
-| `src/utils/TempFileManager.ts` | Add a text/content-addressed sibling of `createPastedImageFile` |
+| `src/completions/CompletionHelpers.ts` (`getFileCompletions`/`getAtCompletions`, `getSelectionCompletions`) | Provides `output:`-scheme entries for `@` and `#` captures |
+| `src/utils/TempFileManager.ts` | Writes content-addressed output snapshot attachments |
 | `src/completions/OutputCaptureCache.ts` | Hold captured completion text briefly between list construction and item pick |
-| `src/ui/PromptEditorSupportService.ts` | New `handleSaveOutputSnapshot` mirroring `handleSavePastedImage`; pending-capture cache keyed by completion-item id |
-| `src/ui/WebviewMessageRouter.ts` | Register the new message pair |
-| `src/types/WebviewMessageTypes.ts` / `MESSAGE_TYPES` | New message type constants |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Placeholder-then-resolve flow for the picked capture item (both `@` and `#` sources), mirroring `processPastedImageFile`/`resolvePendingPaste` |
-| `src/completions/PromptCompletionProvider.ts` (native VS Code editor path, not the webview) | Same `@`/`#` branching for prompt files edited directly in a VS Code text editor |
+| `src/ui/PromptEditorSupportService.ts` | Handles the webview save message through the shared snapshot writer |
+| `src/ui/WebviewMessageRouter.ts` | Routes the output snapshot message pair |
+| `src/types/DashboardConstants.ts` / `MESSAGE_TYPES` | Defines the output snapshot message pair |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Resolves picked captures through a placeholder and webview reply |
+| `src/ui/OutputSnapshotService.ts` | Shares cache consumption, file writing, and reference construction |
+| `src/ui/NativeOutputCaptureCommand.ts` | Resolves picked captures in native VS Code text editors |
+| `src/completions/PromptCompletionProvider.ts` (native VS Code editor path, not the webview) | Converts captured `@`/`#` items to placeholder insertions with a command |
 
 No changes needed in `FileReferenceParser.ts`, `ReferencePatterns.ts`, `ContextReferenceBuilder.ts`,
 `atomicReferences.ts`, or `ContextExpander.ts` — the inserted token is always a plain `@file`

@@ -32,6 +32,7 @@ import {
   CAPTURING_OUTPUT_PLACEHOLDER,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  VSCODE_COMMANDS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
@@ -1244,8 +1245,18 @@ export function toVSCodeCompletionItem(
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);
-  vscodeItem.insertText = item.insertText;
+  vscodeItem.insertText = item.captureId
+    ? CAPTURING_OUTPUT_PLACEHOLDER
+    : item.insertText;
   vscodeItem.detail = item.detail;
+
+  if (item.captureId) {
+    vscodeItem.command = {
+      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
+      title: "Resolve output capture",
+      arguments: [item.captureId],
+    };
+  }
 
   if (item.documentation) {
     vscodeItem.documentation = new vscode.MarkdownString(item.documentation);

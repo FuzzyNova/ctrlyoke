@@ -20,10 +20,12 @@ import {
   mapSymbolKindToReferenceKind,
   getSecretCompletions,
   getPriorContextCompletions,
+  toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  VSCODE_COMMANDS,
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
@@ -261,11 +263,31 @@ suite("CompletionHelpers", () => {
     assert.strictEqual(item.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
     assert.ok(item.captureId);
     assert.ok(!item.insertText.includes("agenthost"));
+    const vscodeItem = toVSCodeCompletionItem(item, "@");
+    assert.strictEqual(vscodeItem.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
+    assert.deepStrictEqual(vscodeItem.command, {
+      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
+      title: "Resolve output capture",
+      arguments: [item.captureId],
+    });
     assert.deepStrictEqual(outputCaptureCache.take(item.captureId), {
       text: "latest output",
       channel: "agenthost",
       range: undefined,
     });
+  });
+
+  test("does not attach a native command to ordinary completions", () => {
+    const item = toVSCodeCompletionItem(
+      {
+        label: "README.md",
+        kind: vscode.CompletionItemKind.File,
+        insertText: "README.md",
+      },
+      "@"
+    );
+
+    assert.strictEqual(item.command, undefined);
   });
 
   test("matches @ completions fuzzily against a basename-only query", async () => {

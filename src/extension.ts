@@ -78,6 +78,7 @@ import {
   LICENSE_TIERS,
 } from "./license/LicenseService";
 import { LicenseStatusBarManager } from "./ui/LicenseStatusBarManager";
+import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -542,6 +543,17 @@ function registerCommands(
   };
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
     webviewProvider
+  );
+
+  const resolveOutputCaptureCommand = registerNativeOutputCaptureCommand(
+    () =>
+      vscode.workspace.workspaceFolders?.length ? getVsCodeWorkspaceRoot() : "",
+    (message) =>
+      notifyUserFeedback(
+        workflowOrchestrator.getUserFeedbackSink(),
+        USER_FEEDBACK_SEVERITY.ERROR,
+        message
+      )
   );
 
   // Open Panel command
@@ -1533,7 +1545,8 @@ function registerCommands(
     refreshHarnessUsageCommand,
     refreshWorkspaceStatsCommand,
     generateCommitMessageCommand,
-    cancelCommitMessageGenerationCommand
+    cancelCommitMessageGenerationCommand,
+    resolveOutputCaptureCommand
   );
 
   // Auto-start hosted server if enabled in config (must be after command registration)

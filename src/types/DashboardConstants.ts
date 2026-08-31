@@ -2896,6 +2896,7 @@ export type RetryPromptPlaceholder =
 
 // VS Code command IDs registered by the extension
 export const VSCODE_COMMANDS = {
+  RESOLVE_OUTPUT_CAPTURE: "ctrlyoke.resolveOutputCapture",
   OPEN_SECRETS_SETTINGS: "ctrlyoke.openSecretsSettings",
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
