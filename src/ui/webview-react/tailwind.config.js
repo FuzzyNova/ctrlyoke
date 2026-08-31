@@ -154,7 +154,7 @@ module.exports = {
 
         // Execution status colors (semantic, theme-independent)
         "status-idle": "#2d80c4",
-        "status-running": "#00c278",
+        "status-running": "#1caa63",
         "status-completed": "#26544e",
         "status-stopped": "#7e2332",
         "status-paused": "#bea307",
