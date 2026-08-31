@@ -422,6 +422,7 @@ export class PromptEditorSupportService {
         documentation: item.documentation,
         sortText: item.sortText,
         filterText: item.filterText,
+        captureId: item.captureId,
       })),
       from: position,
       seq,
