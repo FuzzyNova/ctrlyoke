@@ -2,39 +2,64 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useScrollFocusedFieldIntoView } from "@hooks/useScrollFocusedFieldIntoView";
 
-// jsdom does not implement visualViewport — stand in with a minimal
-// EventTarget so the hook's addEventListener/removeEventListener calls work
-// and tests can fire a synthetic "resize".
-class FakeVisualViewport extends EventTarget {}
+// jsdom does not implement ResizeObserver — stand in with a controllable
+// mock (matching useElementNarrow.test.ts's convention) so tests can fire a
+// synthetic resize callback directly.
+let observerCallback: ResizeObserverCallback;
+let mockObserverInstance: {
+  observe: ReturnType<typeof vi.fn>;
+  unobserve: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+};
 
-function dispatchViewportResize(vv: FakeVisualViewport) {
-  vv.dispatchEvent(new Event("resize"));
+const MockResizeObserver = vi.fn(function (cb: ResizeObserverCallback) {
+  observerCallback = cb;
+  mockObserverInstance = {
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  };
+  return mockObserverInstance;
+});
+
+function triggerResize() {
+  observerCallback([], mockObserverInstance as unknown as ResizeObserver);
 }
 
 describe("useScrollFocusedFieldIntoView", () => {
   let container: HTMLElement;
-  let fakeVisualViewport: FakeVisualViewport;
-  let originalVisualViewport: VisualViewport | undefined;
+  let originalResizeObserver: typeof window.ResizeObserver;
+  let originalRaf: typeof window.requestAnimationFrame;
+  let originalCaf: typeof window.cancelAnimationFrame;
 
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
 
-    fakeVisualViewport = new FakeVisualViewport();
-    originalVisualViewport = window.visualViewport ?? undefined;
-    Object.defineProperty(window, "visualViewport", {
-      value: fakeVisualViewport,
-      configurable: true,
-    });
+    originalResizeObserver = window.ResizeObserver;
+    window.ResizeObserver =
+      MockResizeObserver as unknown as typeof ResizeObserver;
+    MockResizeObserver.mockClear();
+
+    // The hook batches ResizeObserver callbacks into an animation frame
+    // (createAnimationFrameResizeObserver). Run rAF synchronously so a
+    // resize trigger applies within the surrounding act().
+    originalRaf = window.requestAnimationFrame;
+    originalCaf = window.cancelAnimationFrame;
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame =
+      (() => {}) as typeof window.cancelAnimationFrame;
   });
 
   afterEach(() => {
     cleanup();
     container.remove();
-    Object.defineProperty(window, "visualViewport", {
-      value: originalVisualViewport,
-      configurable: true,
-    });
+    window.ResizeObserver = originalResizeObserver;
+    window.requestAnimationFrame = originalRaf;
+    window.cancelAnimationFrame = originalCaf;
   });
 
   function renderScrollHook(active: boolean) {
@@ -43,7 +68,7 @@ describe("useScrollFocusedFieldIntoView", () => {
     return containerRef;
   }
 
-  it("scrolls the focused input inside the container into view on viewport resize", () => {
+  it("scrolls the focused input inside the container into view when it resizes", () => {
     renderScrollHook(true);
     const input = document.createElement("input");
     container.appendChild(input);
@@ -52,7 +77,7 @@ describe("useScrollFocusedFieldIntoView", () => {
     input.scrollIntoView = scrollIntoView;
 
     act(() => {
-      dispatchViewportResize(fakeVisualViewport);
+      triggerResize();
     });
 
     expect(scrollIntoView).toHaveBeenCalledWith({
@@ -74,7 +99,7 @@ describe("useScrollFocusedFieldIntoView", () => {
     editable.scrollIntoView = scrollIntoView;
 
     act(() => {
-      dispatchViewportResize(fakeVisualViewport);
+      triggerResize();
     });
 
     expect(scrollIntoView).toHaveBeenCalledOnce();
@@ -82,17 +107,8 @@ describe("useScrollFocusedFieldIntoView", () => {
 
   it("does nothing when inactive (desktop docked panel)", () => {
     renderScrollHook(false);
-    const input = document.createElement("input");
-    container.appendChild(input);
-    input.focus();
-    const scrollIntoView = vi.fn();
-    input.scrollIntoView = scrollIntoView;
 
-    act(() => {
-      dispatchViewportResize(fakeVisualViewport);
-    });
-
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(MockResizeObserver).not.toHaveBeenCalled();
   });
 
   it("does nothing when the focused element is outside the container", () => {
@@ -104,7 +120,7 @@ describe("useScrollFocusedFieldIntoView", () => {
     outside.scrollIntoView = scrollIntoView;
 
     act(() => {
-      dispatchViewportResize(fakeVisualViewport);
+      triggerResize();
     });
 
     expect(scrollIntoView).not.toHaveBeenCalled();
@@ -119,28 +135,26 @@ describe("useScrollFocusedFieldIntoView", () => {
     input.scrollIntoView = scrollIntoView;
 
     act(() => {
-      dispatchViewportResize(fakeVisualViewport);
+      triggerResize();
     });
 
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it("stops listening after unmount", () => {
+  it("observes the container", () => {
+    renderScrollHook(true);
+
+    expect(mockObserverInstance.observe).toHaveBeenCalledWith(container);
+  });
+
+  it("disconnects the observer on unmount", () => {
     const containerRef = { current: container };
     const { unmount } = renderHook(() =>
       useScrollFocusedFieldIntoView(containerRef, true)
     );
-    const input = document.createElement("input");
-    container.appendChild(input);
-    input.focus();
-    const scrollIntoView = vi.fn();
-    input.scrollIntoView = scrollIntoView;
 
     unmount();
-    act(() => {
-      dispatchViewportResize(fakeVisualViewport);
-    });
 
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(mockObserverInstance.disconnect).toHaveBeenCalled();
   });
 });

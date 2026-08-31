@@ -1,20 +1,27 @@
 import { useEffect, type RefObject } from "react";
 import { isEditableElement } from "@utils/domFocus";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 
 /**
  * Scrolls the currently focused field back into view within `containerRef`
- * whenever the mobile on-screen keyboard opens (`visualViewport` "resize").
+ * once the mobile on-screen keyboard has actually finished shrinking it.
  *
- * Focusing a field runs the browser's default scroll-into-view against the
- * pre-keyboard layout. The container this hook watches is a `flex-1`
- * scrollable panel whose height only shrinks once the keyboard finishes
- * animating in — after that initial scroll already ran — so a field that was
- * visible at focus time can end up hidden below the new, shorter viewport
- * with nothing left to re-scroll it into view.
+ * This intentionally does NOT key off `visualViewport`'s "resize" event.
+ * That event fires the moment the keyboard STARTS animating in — well
+ * before the panel's own height changes. On iOS the actual shrink is driven
+ * by React state (`useIosVisualViewportRootStyle` in App.tsx) committed
+ * asynchronously in response to that same event, so a `scrollIntoView()`
+ * run synchronously on "resize" races ahead of the real layout change and
+ * finds nothing to scroll — the container is still its pre-keyboard size.
+ *
+ * Watching the container's own box with `ResizeObserver` instead ties the
+ * scroll to the layout actually shrinking, whatever caused it (the iOS root
+ * pin, or a browser honoring `interactive-widget=resizes-content` natively),
+ * and fires only once there's really somewhere new to scroll into view.
  *
  * CodeMirror-backed fields (AdditionalArgsEditor, BranchNameEditor,
  * ScriptCommandEditor, PermissionListEditor) already keep their own caret
- * visible inside their own internal scroller on this same event (see
+ * visible inside their own internal scroller (see
  * `SingleLineCompletionEditor`/`CodeMirrorEditor`); that alone doesn't help
  * when the whole editor box — often a fixed, short height — sits outside the
  * panel's visible area, which is the gap this hook closes at the panel level
@@ -26,14 +33,12 @@ export function useScrollFocusedFieldIntoView(
 ): void {
   useEffect(() => {
     if (!active) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const handleResize = () => {
-      const container = containerRef.current;
+    const { observer, disconnect } = createAnimationFrameResizeObserver(() => {
       const focused = document.activeElement;
       if (
-        !container ||
         !(focused instanceof HTMLElement) ||
         !isEditableElement(focused) ||
         !container.contains(focused)
@@ -41,9 +46,9 @@ export function useScrollFocusedFieldIntoView(
         return;
       }
       focused.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    };
+    });
 
-    vv.addEventListener("resize", handleResize);
-    return () => vv.removeEventListener("resize", handleResize);
+    observer.observe(container);
+    return disconnect;
   }, [active, containerRef]);
 }
