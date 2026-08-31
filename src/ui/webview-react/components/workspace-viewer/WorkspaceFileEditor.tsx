@@ -263,6 +263,37 @@ export const WorkspaceFileEditor = forwardRef<
       onPendingSelectionAppliedRef.current?.(pendingSelection.requestId);
     }, [content, pendingSelection]);
 
+    // Keep the caret visible above the mobile keyboard on visual viewport
+    // changes — same treatment as CodeMirrorEditor. Resize fires once after
+    // the keyboard fully opens, so a synchronous scrollIntoView dispatch is
+    // safe; scroll fires continuously during native scroll animations, so
+    // only requestMeasure runs there (no dispatches that could interfere).
+    useEffect(() => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const handleScroll = () => {
+        viewRef.current?.requestMeasure();
+      };
+      const handleResize = () => {
+        const view = viewRef.current;
+        if (!view) return;
+        view.requestMeasure();
+        if (!view.hasFocus) return;
+        view.dispatch({
+          effects: EditorView.scrollIntoView(view.state.selection.main.head, {
+            y: "end",
+            yMargin: 24,
+          }),
+        });
+      };
+      vv.addEventListener("resize", handleResize);
+      vv.addEventListener("scroll", handleScroll);
+      return () => {
+        vv.removeEventListener("resize", handleResize);
+        vv.removeEventListener("scroll", handleScroll);
+      };
+    }, []);
+
     if (imageDataUri) {
       return (
         <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-editor-bg p-4">

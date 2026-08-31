@@ -2,6 +2,8 @@ import React, { useCallback, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useIsMobile } from "@hooks/useMediaQuery";
+import { useIosVisualViewportRootStyle } from "@hooks/useIosVisualViewportRootStyle";
 import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
@@ -15,6 +17,12 @@ export const WorkspaceViewerModal: React.FC = () => {
   const close = useWorkspaceViewerStore((s) => s.close);
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
+  const isMobile = useIsMobile();
+  // This modal is portaled to document.body as its own `fixed inset-0` tree,
+  // outside App's root div — App's own use of this hook only pins App's root,
+  // so the mobile-keyboard treatment must be reproduced locally here too (see
+  // useIosVisualViewportRootStyle's doc comment).
+  const iosVisualViewportRootStyle = useIosVisualViewportRootStyle(isMobile);
 
   // Once opened, the modal stays mounted (hidden via CSS) rather than
   // unmounting on close. This keeps WorkspaceExplorerPane / WorkspaceFileEditor
@@ -72,6 +80,7 @@ export const WorkspaceViewerModal: React.FC = () => {
       }`}
       aria-hidden={!isOpen}
       onAnimationEnd={handleAnimationEnd}
+      style={iosVisualViewportRootStyle}
     >
       <WorkspaceViewerHeader
         activeTab={activeTab}

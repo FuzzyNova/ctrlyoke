@@ -14,6 +14,7 @@ export {
   type UseCompatibilityDiagnosticsOptions,
 } from "./useCompatibilityDiagnostics";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
+export { useIosVisualViewportRootStyle } from "./useIosVisualViewportRootStyle";
 export { useElementNarrow } from "./useElementNarrow";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
 export { useNewWorkflowKeyHandler } from "./useNewWorkflowKeyHandler";
