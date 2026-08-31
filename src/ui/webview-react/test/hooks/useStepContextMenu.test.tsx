@@ -2,17 +2,21 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStepContextMenu } from "@hooks/useStepContextMenu";
 import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
-import type { WorkflowStep } from "@store/workflowStore";
+import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 
 function TestHarness({
   step,
   pendingRewind,
   direction = "forward",
+  latestOutput,
+  runtimeMeta,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
   direction?: "rewind" | "forward";
+  latestOutput?: CliOutput | null;
+  runtimeMeta?: { sessionId?: string; elapsed?: number };
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
     isExternallyManaged: false,
@@ -37,6 +41,8 @@ function TestHarness({
             isExecutionTargetLocked: false,
             direction,
             outputText: "step output",
+            latestOutput,
+            runtimeMeta,
           })
         }
       >
@@ -49,15 +55,17 @@ function TestHarness({
 
 describe("useStepContextMenu", () => {
   const readText = vi.fn();
+  const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     useExecutionPreviewStore.getState().reset();
     readText.mockReset();
+    writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
         readText,
-        writeText: vi.fn().mockResolvedValue(undefined),
+        writeText,
       },
     });
   });
@@ -83,6 +91,7 @@ describe("useStepContextMenu", () => {
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
+      "Copy Metadata",
       "Dry Run Step",
       "Paste Step",
       "Set Start Position",
@@ -147,6 +156,55 @@ describe("useStepContextMenu", () => {
       kind: "step",
       stepIndex: 0,
     });
+  });
+
+  it("copies resolved execution properties for a pending step with no output yet", async () => {
+    render(<TestHarness step={{ prompt: "Original prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const copyMetadataButton = screen.getByRole("button", {
+      name: "Copy Metadata",
+    });
+    expect(copyMetadataButton).not.toBeDisabled();
+    fireEvent.click(copyMetadataButton);
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("Prompt step 1");
+    expect(copiedText).toContain("Execution properties:");
+    expect(copiedText).toContain("harness:");
+    expect(copiedText).toContain("model:");
+  });
+
+  it("copies the running step's session ID and token/usage data before completion", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Original prompt" }}
+        latestOutput={{
+          response: "",
+          elapsed: 4.2,
+          isStreaming: true,
+          tokens: {
+            prompt: 1000,
+            completion: 500,
+            total: 1500,
+            cached: 200,
+            contextWindowUsed: 12000,
+            contextWindowSize: 200000,
+            compactionCount: 1,
+          },
+        }}
+        runtimeMeta={{ sessionId: "abc123-session" }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Metadata" }));
+
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("Session ID: abc123-session");
+    expect(copiedText).toContain("Current context window:");
+    expect(copiedText).toContain("Attempt total:");
+    expect(copiedText).toContain("Compactions: 1");
   });
 
   it("adds discard continuation only at the rewind boundary", () => {
