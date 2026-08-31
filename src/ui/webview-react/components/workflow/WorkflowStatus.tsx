@@ -385,13 +385,22 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const wfStatusSize = isMobile
     ? WORKFLOW_STATUS_BUTTON_SIZES.touch
     : WORKFLOW_STATUS_BUTTON_SIZES.default;
-  // Two independent width measurements: the split button's own width drives
-  // the header segments, while the dropdown popup's width drives its rows.
-  // They differ by hundreds of pixels on mobile (a ~180px trigger opening a
-  // full-width popup), so sharing one measurement compacted rows that had room
-  // to spare. The popup's is a three-way tier rather than a boolean — stacking
-  // and abbreviating happen at different widths.
-  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
+  // Two independent width measurements: the main button's own content width
+  // drives its terminal/worktree icons and badge abbreviation, while the
+  // dropdown popup's width drives its rows. Measuring the *main button*
+  // rather than the whole split-button control matters because the control
+  // also has a separator, an optional run-identity-badge segment, and the
+  // dropdown-trigger button eating into its width — a control comfortably
+  // above a "not narrow" threshold can still leave the main button too tight
+  // to fit its terminal icon + worktree icon + execution badge alongside the
+  // name. Since name/terminal/worktree/badge sit in one `overflow-hidden` flex
+  // row (name is the only shrinkable one), that mismatch let a freshly running
+  // workflow's execution badge get visually clipped the moment the terminal
+  // icon appeared, even though `executionState` was already correctly RUNNING.
+  // The threshold approximates the row's own fixed-width budget (icons +
+  // badge + gaps + button padding) so hiding the icons reliably leaves enough
+  // room for the badge before real overflow can happen.
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLButtonElement>(220);
   const [dropdownTierRef, dropdownRowTier] = useElementTier<
     WorkflowRowTier,
     HTMLDivElement
@@ -404,14 +413,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Whichever split-button segment opened the dropdown — Escape restores
   // focus here rather than leaving it stranded on an unmounting popup.
   const dropdownOpenerRef = useRef<HTMLElement | null>(null);
-
-  const mergedContainerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      containerRef.current = node;
-      narrowRef(node);
-    },
-    [narrowRef]
-  );
 
   const mergedDropdownRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -1571,7 +1572,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   return (
     <div
-      ref={mergedContainerRef}
+      ref={containerRef}
       className={`workflow-status relative min-w-0 ${className}`}
     >
       {/* Editing Mode */}
@@ -1600,6 +1601,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         >
           {/* Main Button - Workflow Name */}
           <button
+            ref={narrowRef}
             type="button"
             onClick={startEditing}
             className={`workflow-button-main fp-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}

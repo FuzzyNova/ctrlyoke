@@ -2345,11 +2345,35 @@ export function createMessageHandlers(
         return { status: STEP_STATUS.PENDING };
       }
     );
+    // Guard against a requestless snapshot regressing a genuinely live
+    // execution state. `readAddressedRunView` reads the run's working file
+    // straight off disk, and a snapshot for the same address can be built
+    // from a moment before the executor persisted RUNNING (the comment on
+    // `publishRunViewToClients` documents this exact disk-read race for
+    // draft->run promotion) — landing after EXECUTION_STARTED/
+    // EXECUTION_STATE_CHANGED already set the live state and silently
+    // reverting the header's badge back to idle. A message carrying a
+    // requestId is a client-initiated request and is always trusted as-is.
+    const currentExecutionState = useWorkflowStore.getState().executionState;
+    const isStaleExecutionStateRegression =
+      !message.requestId &&
+      isCurrentAddress &&
+      isWorkflowActive(currentExecutionState) &&
+      !isWorkflowActive(runtime?.executionState ?? EXECUTION_STATES.IDLE);
+    const resolvedExecutionState = isStaleExecutionStateRegression
+      ? currentExecutionState
+      : runtime?.executionState;
+    if (isStaleExecutionStateRegression) {
+      WebviewLog.debug(
+        `[RUN_VIEW_LOADED] ignoring stale executionState=${runtime?.executionState ?? "(none)"} ` +
+          `for ${address.workflowKey}: keeping live state=${currentExecutionState}`
+      );
+    }
     useWorkflowStore.getState().loadWorkflow({
       fileName: workingFile.workflowName,
       workflowName: workingFile.workflowName,
       steps: workingFile.steps ?? [],
-      executionState: runtime?.executionState,
+      executionState: resolvedExecutionState,
       currentStep: runtime?.currentIndex,
       results,
       finalStep: workingFile.finalStep ?? null,
