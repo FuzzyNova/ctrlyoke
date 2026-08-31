@@ -3399,30 +3399,10 @@ export class WorkflowInstance {
       rerunTargets.map((target) => this.getExecutionTargetRunKey(target))
     );
 
-    const history =
-      await this.outputHistoryManager.loadHistory(historyFilePath);
-    const maxRunIndexByTarget = new Map<string, number>();
-
-    for (const entry of history.orderedEntries) {
-      if (entry.kind !== OUTPUT_HISTORY_KINDS.CLI) {
-        continue;
-      }
-      const key = this.getExecutionTargetRunKey(entry.target);
-      if (!targetKeys.has(key)) {
-        continue;
-      }
-      const runIndex = entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
-      maxRunIndexByTarget.set(
-        key,
-        Math.max(maxRunIndexByTarget.get(key) ?? -1, runIndex)
-      );
-    }
-
-    const nextRunIndexByTarget = new Map<string, number>();
-    for (const [key, maxRunIndex] of maxRunIndexByTarget) {
-      nextRunIndexByTarget.set(key, maxRunIndex + 1);
-    }
-    return nextRunIndexByTarget;
+    return this.outputHistoryManager.findNextRunIndexByTarget(
+      historyFilePath,
+      targetKeys
+    );
   }
 
   /** Advance a completed final-step loop before it is reached again in this run. */
@@ -4003,19 +3983,10 @@ export class WorkflowInstance {
       return 0;
     }
     try {
-      const history =
-        await this.outputHistoryManager.loadHistory(historyFilePath);
-      let nextAttemptIndex = 0;
-      for (const entry of history.orderedEntries) {
-        if (
-          entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
-          entry.phase !== EXECUTION_PHASES.WORKTREE_SETUP
-        ) {
-          continue;
-        }
-        nextAttemptIndex = Math.max(nextAttemptIndex, entry.attemptIndex + 1);
-      }
-      return nextAttemptIndex;
+      return await this.outputHistoryManager.findNextAttemptIndexForPhase(
+        historyFilePath,
+        EXECUTION_PHASES.WORKTREE_SETUP
+      );
     } catch (error) {
       Log.warn(
         `[inst:${this.id.slice(0, 8)}] Failed to read prior worktree setup attempts:`,

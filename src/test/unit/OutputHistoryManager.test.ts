@@ -14,6 +14,7 @@ import { getSharedHistorySearchIndexService } from "../../core/orchestration/His
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
@@ -2262,5 +2263,263 @@ suite("OutputHistoryManager usage store feed", () => {
       events[0]?.eventType,
       TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
     );
+  });
+});
+
+suite("OutputHistoryManager narrow bookkeeping reads", () => {
+  let tempWorkspace: string;
+  let manager: OutputHistoryManager;
+  let recorder: TimelineRecorder;
+
+  setup(async () => {
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-bookkeeping-"));
+    manager = new OutputHistoryManager(tempWorkspace);
+    recorder = new TimelineRecorder();
+  });
+
+  teardown(async () => {
+    await manager.flushPendingIndexRefresh();
+    await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  test("saveSnapshotForTarget skips a redundant append when the snapshot is unchanged", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-snap");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 100,
+      strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+      changedFiles: [],
+    };
+
+    await manager.saveSnapshotForTarget(filePath, target, snapshot);
+    await manager.saveSnapshotForTarget(filePath, target, snapshot);
+
+    const events = await recorder.readEvents(filePath);
+    const snapshotEvents = events.filter(
+      (e) => e.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED
+    );
+    assert.strictEqual(
+      snapshotEvents.length,
+      1,
+      "an identical snapshot must not append a second event"
+    );
+
+    const changedSnapshot: WorkspaceSnapshot = {
+      ...snapshot,
+      capturedAt: 200,
+    };
+    await manager.saveSnapshotForTarget(filePath, target, changedSnapshot);
+
+    const eventsAfterChange = await recorder.readEvents(filePath);
+    assert.strictEqual(
+      eventsAfterChange.filter(
+        (e) => e.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED
+      ).length,
+      2,
+      "a changed snapshot must append a new event"
+    );
+  });
+
+  test("saveUndoRecord skips a redundant append when the undo record is unchanged", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-undo");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const undoRecord = {
+      appliedAt: 100,
+      restoredFiles: ["src/file.ts"],
+      redoInstructions: [],
+    };
+
+    await manager.saveUndoRecord(filePath, target, undoRecord);
+    await manager.saveUndoRecord(filePath, target, undoRecord);
+
+    const events = await recorder.readEvents(filePath);
+    assert.strictEqual(
+      events.filter((e) => e.eventType === TIMELINE_EVENT_TYPES.UNDO_APPLIED)
+        .length,
+      1,
+      "an identical undo record must not append a second event"
+    );
+  });
+
+  test("markUndoRecordRedone marks the latest undo record redone via a streamed lookup", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-redo");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    // No undo record exists yet: marking redone must be a no-op.
+    await manager.markUndoRecordRedone(filePath, target, 150);
+    let events = await recorder.readEvents(filePath);
+    assert.strictEqual(
+      events.filter((e) => e.eventType === TIMELINE_EVENT_TYPES.REDO_APPLIED)
+        .length,
+      0
+    );
+
+    await manager.saveUndoRecord(filePath, target, {
+      appliedAt: 100,
+      restoredFiles: ["src/file.ts"],
+      redoInstructions: [],
+    });
+    await manager.markUndoRecordRedone(filePath, target, 150);
+
+    events = await recorder.readEvents(filePath);
+    assert.strictEqual(
+      events.filter((e) => e.eventType === TIMELINE_EVENT_TYPES.REDO_APPLIED)
+        .length,
+      1
+    );
+
+    const history = await manager.loadHistory(filePath);
+    assert.strictEqual(history.promptOutputs[0]?.undoRecord?.isRedone, true);
+    assert.strictEqual(history.promptOutputs[0]?.undoRecord?.redoneAt, 150);
+  });
+
+  test("findNextAttemptIndexForPhase returns one past the highest recorded attempt in that phase", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-phase");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+    assert.strictEqual(
+      await manager.findNextAttemptIndexForPhase(
+        filePath,
+        EXECUTION_PHASES.WORKTREE_SETUP
+      ),
+      0
+    );
+
+    await manager.saveExecutionOutput(
+      filePath,
+      target,
+      [
+        {
+          prompt: "setup",
+          response: "ok",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 100,
+          attemptIndex: 0,
+        } as any,
+      ],
+      undefined,
+      EXECUTION_PHASES.WORKTREE_SETUP
+    );
+    await manager.saveExecutionOutput(
+      filePath,
+      target,
+      [
+        {
+          prompt: "setup retry",
+          response: "ok",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 200,
+          attemptIndex: 1,
+        } as any,
+      ],
+      undefined,
+      EXECUTION_PHASES.WORKTREE_SETUP
+    );
+    // A higher attempt index outside the phase must not count.
+    await manager.saveExecutionOutput(filePath, target, [
+      {
+        prompt: "regular",
+        response: "ok",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 300,
+        attemptIndex: 9,
+      } as any,
+    ]);
+
+    assert.strictEqual(
+      await manager.findNextAttemptIndexForPhase(
+        filePath,
+        EXECUTION_PHASES.WORKTREE_SETUP
+      ),
+      2
+    );
+  });
+
+  test("findNextRunIndexByTarget returns one past the highest recorded runIndex, per target", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-runidx");
+    const target0 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const target1 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+
+    await manager.saveExecutionOutput(filePath, target0, [
+      {
+        prompt: "p0",
+        response: "r0",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 1,
+        attemptIndex: 0,
+        runIndex: 0,
+      } as any,
+    ]);
+    await manager.saveExecutionOutput(filePath, target0, [
+      {
+        prompt: "p0 rerun",
+        response: "r0b",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 2,
+        attemptIndex: 0,
+        runIndex: 1,
+      } as any,
+    ]);
+    await manager.saveExecutionOutput(filePath, target1, [
+      {
+        prompt: "p1",
+        response: "r1",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 3,
+        attemptIndex: 0,
+        runIndex: 0,
+      } as any,
+    ]);
+
+    const result = await manager.findNextRunIndexByTarget(
+      filePath,
+      new Set(["queue:0", "queue:1"])
+    );
+
+    assert.strictEqual(result.get("queue:0"), 2);
+    assert.strictEqual(result.get("queue:1"), 1);
+  });
+
+  test("findNextRunIndexByTarget ignores targets outside the requested key set", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-runidx-scope");
+    const target0 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const target1 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+
+    await manager.saveExecutionOutput(filePath, target0, [
+      {
+        prompt: "p0",
+        response: "r0",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 1,
+        attemptIndex: 0,
+        runIndex: 3,
+      } as any,
+    ]);
+    await manager.saveExecutionOutput(filePath, target1, [
+      {
+        prompt: "p1",
+        response: "r1",
+        elapsed: 1,
+        isStreaming: false,
+        timestampMs: 2,
+        attemptIndex: 0,
+        runIndex: 5,
+      } as any,
+    ]);
+
+    const result = await manager.findNextRunIndexByTarget(
+      filePath,
+      new Set(["queue:1"])
+    );
+
+    assert.strictEqual(result.has("queue:0"), false);
+    assert.strictEqual(result.get("queue:1"), 6);
   });
 });

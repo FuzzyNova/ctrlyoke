@@ -40,7 +40,7 @@ export class OutputHistoryTimelineAdapter {
     ]);
 
     const history = this.project(manifest, events);
-    await this.hydrateCliOutputsFromResolver(manifestPath, history);
+    await this.hydrateCliOutputsFromResolver(manifest, events, history);
     return history;
   }
 
@@ -48,16 +48,24 @@ export class OutputHistoryTimelineAdapter {
    * History retains its ordered snapshot/undo projection, while every CLI
    * response and preview is replaced with the resolver's append-order view.
    * This removes the adapter's separate response reconstruction path.
+   *
+   * Takes the manifest/events already read by `loadHistory` and hands them to
+   * `streamFromEvents` rather than `RunOutputResolver.stream`, so the run's
+   * `events.jsonl` is parsed once per load instead of twice.
    */
   private async hydrateCliOutputsFromResolver(
-    manifestPath: string,
+    manifest: WorkflowRunManifest,
+    events: WorkflowTimelineEvent[],
     history: WorkflowOutputHistory
   ): Promise<void> {
     const outputs = new Map<
       string,
       import("../../types/WebviewMessageTypes").CliOutput
     >();
-    for await (const event of this.outputResolver.stream(manifestPath)) {
+    for await (const event of this.outputResolver.streamFromEvents(
+      manifest,
+      events
+    )) {
       if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT) {
         outputs.set(
           getCliEntryKey(

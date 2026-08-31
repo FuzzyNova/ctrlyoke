@@ -21,7 +21,6 @@ import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
-  FINAL_STEP_PHASES,
   HARNESS_IDS,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
@@ -35,6 +34,7 @@ import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { RunOutputResolver } from "./RunOutputResolver";
+import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
 import {
@@ -130,6 +130,9 @@ export class OutputHistoryManager {
     this.timelineRecorder
   );
   private readonly runOutputResolver = new RunOutputResolver(
+    this.timelineRecorder
+  );
+  private readonly runMetadataScanner = new RunMetadataScanner(
     this.timelineRecorder
   );
   private readonly historySearchIndexService: HistorySearchIndexService;
@@ -746,12 +749,14 @@ export class OutputHistoryManager {
       return;
     }
     try {
-      const history = await this.timelineAdapter.loadHistory(historyFilePath);
-      const stepOutput = this.getStepOutput(history, target);
+      const existingSnapshot =
+        await this.runMetadataScanner.findLatestWorkspaceSnapshot(
+          historyFilePath,
+          target
+        );
       if (
-        stepOutput &&
-        JSON.stringify(stepOutput.workspaceSnapshot) ===
-          JSON.stringify(snapshot)
+        existingSnapshot &&
+        JSON.stringify(existingSnapshot) === JSON.stringify(snapshot)
       ) {
         return;
       }
@@ -905,6 +910,43 @@ export class OutputHistoryManager {
       // timeline remains renderable without a worktree projection.
     }
     return enriched;
+  }
+
+  /**
+   * Next attempt index (one past the highest recorded CLI attempt in `phase`,
+   * 0 if none). Streams the timeline via `RunMetadataScanner` instead of
+   * loading the full history, since callers only need this one count.
+   */
+  async findNextAttemptIndexForPhase(
+    historyFilePath: string,
+    phase: ExecutionPhase
+  ): Promise<number> {
+    if (!historyFilePath) {
+      return 0;
+    }
+    return this.runMetadataScanner.findNextAttemptIndexForPhase(
+      historyFilePath,
+      phase
+    );
+  }
+
+  /**
+   * Next run index (one past the highest recorded CLI `runIndex`) for each
+   * target in `targetKeys`. Streams the timeline via `RunMetadataScanner`
+   * instead of loading the full history, since callers only need these
+   * counts. Keys use the `queue:<index>` / `final:<index>` format.
+   */
+  async findNextRunIndexByTarget(
+    historyFilePath: string,
+    targetKeys: ReadonlySet<string>
+  ): Promise<Map<string, number>> {
+    if (!historyFilePath || targetKeys.size === 0) {
+      return new Map();
+    }
+    return this.runMetadataScanner.findNextRunIndexByTarget(
+      historyFilePath,
+      targetKeys
+    );
   }
 
   /**
@@ -1307,11 +1349,14 @@ export class OutputHistoryManager {
   ): Promise<void> {
     if (!historyFilePath) return;
     try {
-      const history = await this.timelineAdapter.loadHistory(historyFilePath);
-      const stepOutput = this.getStepOutput(history, target);
+      const existingUndoRecord =
+        await this.runMetadataScanner.findLatestUndoRecord(
+          historyFilePath,
+          target
+        );
       if (
-        stepOutput &&
-        JSON.stringify(stepOutput.undoRecord) === JSON.stringify(undoRecord)
+        existingUndoRecord &&
+        JSON.stringify(existingUndoRecord) === JSON.stringify(undoRecord)
       ) {
         return;
       }
@@ -1342,21 +1387,22 @@ export class OutputHistoryManager {
   ): Promise<void> {
     if (!historyFilePath) return;
     try {
-      const history = await this.timelineAdapter.loadHistory(historyFilePath);
-      const stepOutput = this.getStepOutput(history, target);
-      if (!stepOutput?.undoRecord) {
+      const undoRecord = await this.runMetadataScanner.findLatestUndoRecord(
+        historyFilePath,
+        target
+      );
+      if (!undoRecord) {
         return;
       }
 
       const updatedUndoRecord: UndoRecord = {
-        ...stepOutput.undoRecord,
+        ...undoRecord,
         isRedone: true,
         redoneAt,
       };
 
       if (
-        JSON.stringify(stepOutput.undoRecord) ===
-        JSON.stringify(updatedUndoRecord)
+        JSON.stringify(undoRecord) === JSON.stringify(updatedUndoRecord)
       ) {
         return;
       }
@@ -1429,15 +1475,6 @@ export class OutputHistoryManager {
       Object.fromEntries(promptEntries);
 
     return { ...history, promptOutputs, finalStepOutputs };
-  }
-
-  private getStepOutput(
-    history: WorkflowOutputHistory,
-    target: OutputExecutionTarget
-  ) {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? history.promptOutputs[target.stepIndex]
-      : history.finalStepOutputs?.[target.loopIndex];
   }
 
   private async saveTimelineExecutionOutput(

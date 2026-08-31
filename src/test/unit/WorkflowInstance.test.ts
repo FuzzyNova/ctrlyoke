@@ -15,6 +15,7 @@ import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
@@ -3008,6 +3009,231 @@ suite("WorkflowInstance executeSeededRun", () => {
     } finally {
       // initializeRunAt triggers a fire-and-forget search-index refresh; without
       // waiting for it, deleting the workspace can race it (ENOTEMPTY on .search-index).
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("WorkflowInstance run-metadata bookkeeping", () => {
+  test("getNextWorktreeSetupAttemptIndex scans the timeline for the phase's max attempt index", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-worktree-attempt-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
+        "wf-worktree-attempt"
+      );
+
+      assert.strictEqual(
+        await (instance as any).getNextWorktreeSetupAttemptIndex(
+          historyInit.filePath
+        ),
+        0,
+        "an empty timeline has no prior worktree setup attempts"
+      );
+
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "setup",
+            response: "ok",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 100,
+            attemptIndex: 0,
+          } as any,
+        ],
+        undefined,
+        EXECUTION_PHASES.WORKTREE_SETUP
+      );
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "setup retry",
+            response: "ok",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 200,
+            attemptIndex: 1,
+          } as any,
+        ],
+        undefined,
+        EXECUTION_PHASES.WORKTREE_SETUP
+      );
+      // A later attempt outside WORKTREE_SETUP must not affect the phase-scoped count.
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "regular step",
+            response: "ok",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 300,
+            attemptIndex: 5,
+          } as any,
+        ]
+      );
+
+      assert.strictEqual(
+        await (instance as any).getNextWorktreeSetupAttemptIndex(
+          historyInit.filePath
+        ),
+        2
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("computeTargetRunIndices resolves each rerun target's next run index from the timeline", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-rerun-index-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
+        "wf-rerun-index"
+      );
+
+      const target0 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const target1 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target0,
+        [
+          {
+            prompt: "p0",
+            response: "r0",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 1,
+            attemptIndex: 0,
+            runIndex: 0,
+          } as any,
+        ]
+      );
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target0,
+        [
+          {
+            prompt: "p0 rerun",
+            response: "r0b",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 2,
+            attemptIndex: 0,
+            runIndex: 1,
+          } as any,
+        ]
+      );
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target1,
+        [
+          {
+            prompt: "p1",
+            response: "r1",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 3,
+            attemptIndex: 0,
+            runIndex: 0,
+          } as any,
+        ]
+      );
+
+      // currentIndex 0 with two pending steps makes both queue:0 and queue:1
+      // rerun targets, and no final step has run yet.
+      instance.promptQueue.loadPrompts({
+        steps: [{ prompt: "p0" }, { prompt: "p1" }],
+      });
+
+      const nextRunIndices = await (instance as any).computeTargetRunIndices(
+        historyInit.filePath,
+        true
+      );
+
+      assert.strictEqual(nextRunIndices.get("queue:0"), 2);
+      assert.strictEqual(nextRunIndices.get("queue:1"), 1);
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("computeTargetRunIndices returns an empty map when the run is not a continuation", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-rerun-index-noncontinuation-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
+        "wf-rerun-index-noncontinuation"
+      );
+      instance.promptQueue.loadPrompts({
+        steps: [{ prompt: "p0" }],
+      });
+
+      const nextRunIndices = await (instance as any).computeTargetRunIndices(
+        historyInit.filePath,
+        false
+      );
+
+      assert.strictEqual(nextRunIndices.size, 0);
+    } finally {
       await instance?.outputHistoryManager.flushPendingIndexRefresh();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }

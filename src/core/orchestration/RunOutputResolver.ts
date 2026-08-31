@@ -27,6 +27,8 @@ import {
   type TimelineAttemptTerminalState,
   type WorkflowRuntimeTransitionPayload,
   type WorkflowDefinitionSnapshot,
+  type WorkflowRunManifest,
+  type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import {
   CLI_EVENT_TYPES,
@@ -196,6 +198,24 @@ export class RunOutputResolver {
     manifestPath: string
   ): AsyncGenerator<RunOutputResolverEvent, void, undefined> {
     const manifest = await this.recorder.readManifest(manifestPath);
+    yield* this.streamFromEvents(
+      manifest,
+      this.recorder.streamEvents(manifestPath)
+    );
+  }
+
+  /**
+   * Same projection as `stream()`, but over an already-loaded manifest and
+   * event list instead of re-reading `manifestPath` from disk. Used by
+   * callers (e.g. `OutputHistoryTimelineAdapter`) that already hold both from
+   * a prior `TimelineRecorder` read, so a run's events are parsed once.
+   */
+  async *streamFromEvents(
+    manifest: WorkflowRunManifest,
+    events:
+      | Iterable<WorkflowTimelineEvent>
+      | AsyncIterable<WorkflowTimelineEvent>
+  ): AsyncGenerator<RunOutputResolverEvent, void, undefined> {
     let activeDefinition: ResolvedAttemptDefinition | undefined =
       manifest.initialDefinition
         ? {
@@ -204,7 +224,7 @@ export class RunOutputResolver {
           }
         : undefined;
 
-    for await (const event of this.recorder.streamEvents(manifestPath)) {
+    for await (const event of events) {
       if (
         event.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
       ) {
