@@ -1,6 +1,6 @@
 # Token Total Cache Normalization Plan
 
-> **Status:** Not implemented, but every [Open question](#open-questions) is now resolved as of
+> **Status:** Phase 1 is fully implemented; Phase 3 remains queued, and every [Open question](#open-questions) is now resolved as of
 > the August 31, 2026 revisions below, with no design decision blocking implementation.
 > Root-caused and grounded in code + provider docs, so the fix touches durable data consumed by
 > two "Implemented" plans
@@ -619,11 +619,13 @@ depend on — worth a reviewed, staged change, not an in-session patch.
   `242 in | 21.4M cached` (unchanged) for disjoint ones communicates the difference without
   needing the Phase 1 data change.
 
-### Phase 1 — normalize the headline `total` for confirmed cache-subset harnesses
+### Phase 1 — normalize the headline `total` for confirmed cache-subset harnesses — implemented
 
-**Partially implemented:** this change promotes the evidence-backed cache and reasoning
-semantics for Qwen, Antigravity, and OpenCode, and fixes Qwen's thinking-token double count.
-The headline-total normalization and remaining Phase 1 work are still queued below.
+**Implemented:** this change promotes the evidence-backed cache and reasoning semantics for
+Qwen, Antigravity, and OpenCode, fixes Qwen's thinking-token double count, and normalizes the
+headline totals for the two confirmed cache-subset harnesses, Codex and Qwen. The shared
+tooltip and CLI breakdown now explain the cache-netted total while preserving raw provider
+fields for cost calculation.
 
 - First, promote `HARNESS_TOKEN_SEMANTICS` (`ModelPricing.ts:75-102`) `cacheInputRelationship`
   from `UNKNOWN` to the values confirmed above: `QWEN_CLI → SUBSET`,

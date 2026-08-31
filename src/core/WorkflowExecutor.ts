@@ -38,6 +38,8 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   FAILURE_KINDS,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
+  ATTEMPT_COST_CACHE_RELATIONSHIPS,
+  TOKEN_TOTAL_CONFIDENCE,
   type ConditionAction,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
@@ -98,6 +100,7 @@ import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootRes
 import { pathsEqual } from "../utils/PathCasing";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import { calculateAttemptCost } from "../utils/ModelPricing";
+import { HARNESS_TOKEN_SEMANTICS } from "../utils/TokenSemantics";
 import {
   formatVerdictSummary,
   createConditionEvaluationSummary,
@@ -1737,19 +1740,24 @@ export class WorkflowExecutor {
   }
 
   /** Resolves token usage stats from parsed output metadata. */
-  private resolveTokenCounts(
+  protected resolveTokenCounts(
     parsedOutput: ReturnType<HarnessIntegration["getLastParsedOutput"]>
   ): CliOutput["tokens"] {
     if (parsedOutput?.metadata.usage) {
       const u = parsedOutput.metadata.usage;
+      const harness = parsedOutput.metadata.harness;
+      const cacheInputIsSubset =
+        harness !== undefined &&
+        HARNESS_TOKEN_SEMANTICS[harness].cacheInputRelationship ===
+          ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET;
       const compactionSummary = summarizeCompactionEvents(parsedOutput.events);
-      const costResult = parsedOutput.metadata.harness
+      const costResult = harness
         ? calculateAttemptCost({
-            harnessId: parsedOutput.metadata.harness,
+            harnessId: harness,
             modelId: parsedOutput.metadata.model,
             pricingOverride: parsedOutput.metadata.model
               ? ConfigurationUtils.getModelPricingOverride(
-                  parsedOutput.metadata.harness,
+                  harness,
                   parsedOutput.metadata.model
                 )
               : undefined,
@@ -1766,17 +1774,23 @@ export class WorkflowExecutor {
             costUnavailableReason:
               ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL,
           };
+      const total = cacheInputIsSubset
+        ? Math.max(u.inputTokens - (u.cachedInputTokens ?? 0), 0) +
+          u.outputTokens
+        : u.totalTokens;
       return {
         prompt: u.inputTokens,
         completion: u.outputTokens,
         cached: u.cachedInputTokens,
         cacheCreated: u.cacheCreatedTokens,
         reasoning: u.reasoningOutputTokens,
-        total: u.totalTokens,
+        total,
         contextWindowUsed: u.contextWindowUsedTokens,
         contextWindowSize: u.contextWindowSize,
         ...compactionSummary,
-        totalConfidence: u.totalConfidence,
+        totalConfidence: cacheInputIsSubset
+          ? TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+          : u.totalConfidence,
         ...costResult,
       };
     }

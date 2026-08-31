@@ -92,6 +92,22 @@ suite("TokenFormatting", () => {
     );
   });
 
+  test("explains cache netting for subset harness totals", () => {
+    assert.ok(
+      buildAttemptTokenTooltipLines({
+        harness: HARNESS_IDS.QWEN_CLI,
+        attemptTokens: {
+          prompt: 1_000,
+          completion: 100,
+          cached: 900,
+          total: 200,
+        },
+      }).includes(
+        "Cache-read tokens are netted out of the attempt total for this harness."
+      )
+    );
+  });
+
   test("labels cost by source and marks partial cost as a lower bound", () => {
     assert.strictEqual(formatCostLabel(0.41), "≈$0.41");
     assert.strictEqual(formatCostLabel(0.41, true), "≥$0.41");

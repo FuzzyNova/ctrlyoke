@@ -14,6 +14,9 @@ import { HARNESS_TOKEN_SEMANTICS } from "./TokenSemantics";
 /** Explains why the context-window snapshot and attempt total are not additive. */
 export const TOKEN_USAGE_SCOPE_NOTE =
   "Current context window is the last turn only; attempt total sums every turn.";
+/** Explains that a subset harness's headline total excludes cache-read hits. */
+export const TOKEN_TOTAL_CACHE_NETTED_NOTE =
+  "Cache-read tokens are netted out of the attempt total for this harness.";
 
 export interface TokenBreakdownValues {
   input: number | undefined;
@@ -22,6 +25,14 @@ export interface TokenBreakdownValues {
   harness?: HarnessId;
   cached?: number;
   cacheCreated?: number;
+}
+
+export function isCacheInputSubset(harness: HarnessId | undefined): boolean {
+  return (
+    harness !== undefined &&
+    HARNESS_TOKEN_SEMANTICS[harness].cacheInputRelationship ===
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET
+  );
 }
 
 function normalizeTokenCount(tokens: number | undefined): number | undefined {
@@ -84,10 +95,7 @@ export function formatTokenBreakdown(values: TokenBreakdownValues): string {
 
   const cached = formatTokenCount(values.cached);
   const cacheCreated = formatTokenCount(values.cacheCreated);
-  const cacheIsInputSubset =
-    values.harness !== undefined &&
-    HARNESS_TOKEN_SEMANTICS[values.harness].cacheInputRelationship ===
-      ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET;
+  const cacheIsInputSubset = isCacheInputSubset(values.harness);
   const inputLabel =
     cacheIsInputSubset && cached
       ? `${input} in (${cached} cached)`
@@ -251,6 +259,9 @@ export function buildAttemptTokenTooltipLines(params: {
   return [
     contextLabel ? `Current context window: ${contextLabel}` : null,
     contextLabel && attemptTotalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
+    attemptTotalLabel && isCacheInputSubset(harness)
+      ? TOKEN_TOTAL_CACHE_NETTED_NOTE
+      : null,
     attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
     attemptBreakdown || null,
     compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,

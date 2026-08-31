@@ -831,7 +831,7 @@ export const HARNESS_SHARE_METRICS = {
 export const TOKEN_TOTAL_CONFIDENCE = {
   /** Provider reported a cumulative total for the whole attempt. */
   PROVIDER: "provider",
-  /** Summed from provider per-turn usage by a ctrlyoke parser. */
+  /** Summed from provider per-turn usage by a ctrlyoke parser, including cache-netted totals. */
   ACCUMULATED: "accumulated",
   /** Known to be incomplete (e.g. a harness that only reports the last turn). */
   PARTIAL: "partial",
