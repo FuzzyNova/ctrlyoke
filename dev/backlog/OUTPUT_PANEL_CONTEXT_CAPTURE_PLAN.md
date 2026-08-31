@@ -1,6 +1,6 @@
 # Output Panel Context Capture Plan
 
-> **Status:** In progress — backend capture plumbing landed (step 1/4); completion-list wiring, webview UI, and native-editor UI still pending.
+> **Status:** In progress — backend capture plumbing landed (step 1/4); completion-list wiring landed (step 2/4); webview UI and native-editor UI still pending.
 
 ## Goal
 
