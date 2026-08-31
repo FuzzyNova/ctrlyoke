@@ -101,6 +101,9 @@ type StepContextMenuRequest = {
   isExecutionTargetLocked: boolean;
   direction: "rewind" | "forward";
   outputText?: string;
+  latestOutput?: WorkflowStepComponentProps["latestOutput"];
+  runtimeMeta?: WorkflowStepComponentProps["runtimeMeta"];
+  liveContextWindow?: WorkflowStepComponentProps["liveContextWindow"];
 };
 
 type WorkflowStepRowProps = {
@@ -204,11 +207,16 @@ const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
           isExecutionTargetLocked,
           direction: startPositionDirection,
           outputText,
+          latestOutput,
+          runtimeMeta: !isScriptStep(step) ? step._runtime : undefined,
+          liveContextWindow,
         }),
       [
         index,
         isCurrent,
         isExecutionTargetLocked,
+        latestOutput,
+        liveContextWindow,
         onOpenContextMenu,
         outputText,
         setPositionTarget,

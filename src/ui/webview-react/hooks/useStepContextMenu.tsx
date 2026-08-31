@@ -22,6 +22,11 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
+import {
+  buildStepMetadataClipboardText,
+  type StepRuntimeMetaSnapshot,
+} from "@utils/stepMetadataClipboard";
+import type { CliOutput } from "@store/workflowStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import {
   USER_FEEDBACK_SEVERITY,
@@ -55,6 +60,12 @@ interface OpenContextMenuParams {
   direction: WorktreePositionDirection;
   /** Response/output text to copy; undefined disables the Copy output item */
   outputText?: string;
+  /** Latest CLI output for this step, used to build the Copy Metadata text (session ID, tokens, cost) */
+  latestOutput?: CliOutput | null;
+  /** Cached runtime metadata (session ID, elapsed, context window) — used before/without a full CliOutput */
+  runtimeMeta?: StepRuntimeMetaSnapshot;
+  /** Live context-window telemetry while this step is currently running */
+  liveContextWindow?: { used: number; size: number };
 }
 
 const lifecycleMessageTarget = {
@@ -142,6 +153,9 @@ export function useStepContextMenu({
         isExecutionTargetLocked,
         direction,
         outputText,
+        latestOutput,
+        runtimeMeta,
+        liveContextWindow,
       }: OpenContextMenuParams
     ) => {
       const copyContentLabel = isScriptWorkflowStep(step)
@@ -223,6 +237,22 @@ export function useStepContextMenu({
             onClick: () => {
               if (!outputText) return;
               void writeClipboardText(outputText);
+            },
+          },
+          {
+            label: "Copy Metadata",
+            icon: "codicon-copy",
+            disabled: false,
+            onClick: () => {
+              void writeClipboardText(
+                buildStepMetadataClipboardText({
+                  step,
+                  slotNumber: deleteIndex + 1,
+                  latestOutput,
+                  runtimeMeta,
+                  liveContextWindow,
+                })
+              );
             },
           },
           {

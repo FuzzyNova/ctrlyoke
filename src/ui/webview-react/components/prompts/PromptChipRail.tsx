@@ -41,7 +41,10 @@ import {
   isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
-import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
+import {
+  buildWorkflowStepEnabledState,
+  isScriptWorkflowStep,
+} from "@utils/stepClipboard";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   ExecutingStepHighlight,
@@ -255,6 +258,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     finalStep,
     finalStepStatus,
     finalStepPhase,
+    liveContextWindow,
   } = useWorkflowStore();
   const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
@@ -428,6 +432,11 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       outputText: getLatestOutput(i)?.response as
                         | string
                         | undefined,
+                      latestOutput: getLatestOutput(i),
+                      runtimeMeta: !isScriptWorkflowStep(prompt)
+                        ? prompt._runtime
+                        : undefined,
+                      liveContextWindow: liveContextWindow?.[i],
                     })
                   }
                 />
@@ -470,6 +479,11 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       outputText: getLatestOutput(index)?.response as
                         | string
                         | undefined,
+                      latestOutput: getLatestOutput(index),
+                      runtimeMeta: !isScriptWorkflowStep(prompt)
+                        ? prompt._runtime
+                        : undefined,
+                      liveContextWindow: liveContextWindow?.[index],
                     })
                   }
                 />

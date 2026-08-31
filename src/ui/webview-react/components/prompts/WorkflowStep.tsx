@@ -14,10 +14,9 @@ export type { PromptOverride };
 import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import {
-  formatTokenBreakdown,
   formatTokenCount,
-  formatAttemptCostTooltip,
   resolveTokenTotal,
+  buildAttemptTokenTooltipLines,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
@@ -191,36 +190,17 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       attemptTokens?.completion
     )
   );
-  const attemptBreakdown = attemptTokens
-    ? formatTokenBreakdown({
-        input: attemptTokens.prompt,
-        output: attemptTokens.completion,
-        total: attemptTokens.total,
-        cached: attemptTokens.cached,
-        cacheCreated: attemptTokens.cacheCreated,
-      })
-    : "";
   const compactionCount = attemptTokens?.compactionCount;
   const visibleAttemptTotal =
     contextPct !== undefined &&
     compactionCount !== undefined &&
     compactionCount > 0 &&
     !!attemptTotalLabel;
-  const contextLabel =
-    ctx && contextPct !== undefined
-      ? `${formatTokenCount(ctx.used)}/${formatTokenCount(ctx.size)} (${contextPct}%)`
-      : undefined;
-  const tokenTooltip = [
-    contextLabel ? `Current context window: ${contextLabel}` : null,
-    attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
-    attemptBreakdown || null,
-    compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,
-    !hideCost && attemptTokens?.cost
-      ? formatAttemptCostTooltip(attemptTokens.cost)
-      : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join("\n");
+  const tokenTooltip = buildAttemptTokenTooltipLines({
+    contextWindow: ctx,
+    attemptTokens,
+    hideCost,
+  }).join("\n");
 
   // Build class names for the container
   const containerClasses = [

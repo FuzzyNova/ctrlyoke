@@ -182,3 +182,61 @@ export function formatAttemptCostTooltip(
   if (!cost) return "";
   return formatCostTooltip(cost.usd, [cost.source], false, cost.noteCode);
 }
+
+/** Token fields consumed by {@link buildAttemptTokenTooltipLines}, matching the shape of `CliOutput.tokens`. */
+export interface AttemptTokenSnapshot {
+  prompt?: number;
+  completion?: number;
+  total?: number;
+  cached?: number;
+  cacheCreated?: number;
+  compactionCount?: number;
+  cost?: AttemptCostEstimate;
+}
+
+/**
+ * Builds the lines shown in a step's context/token tooltip (context window
+ * usage, attempt total, input/output/cache breakdown, compactions, cost).
+ * Single source shared by the on-hover tooltip and the "Copy Metadata" step
+ * action so both surfaces report identical numbers.
+ */
+export function buildAttemptTokenTooltipLines(params: {
+  contextWindow?: { used: number; size: number };
+  attemptTokens?: AttemptTokenSnapshot;
+  hideCost?: boolean;
+}): string[] {
+  const { contextWindow, attemptTokens, hideCost } = params;
+  const contextPct = contextWindow?.size
+    ? Math.round((contextWindow.used / contextWindow.size) * 100)
+    : undefined;
+  const contextLabel =
+    contextWindow && contextPct !== undefined
+      ? `${formatTokenCount(contextWindow.used)}/${formatTokenCount(contextWindow.size)} (${contextPct}%)`
+      : undefined;
+  const attemptTotalLabel = formatTokenCount(
+    resolveTokenTotal(
+      attemptTokens?.total,
+      attemptTokens?.prompt,
+      attemptTokens?.completion
+    )
+  );
+  const attemptBreakdown = attemptTokens
+    ? formatTokenBreakdown({
+        input: attemptTokens.prompt,
+        output: attemptTokens.completion,
+        total: attemptTokens.total,
+        cached: attemptTokens.cached,
+        cacheCreated: attemptTokens.cacheCreated,
+      })
+    : "";
+  const compactionCount = attemptTokens?.compactionCount;
+  return [
+    contextLabel ? `Current context window: ${contextLabel}` : null,
+    attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
+    attemptBreakdown || null,
+    compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,
+    !hideCost && attemptTokens?.cost
+      ? formatAttemptCostTooltip(attemptTokens.cost)
+      : null,
+  ].filter((part): part is string => part !== null);
+}
