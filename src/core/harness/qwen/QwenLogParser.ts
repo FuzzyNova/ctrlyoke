@@ -59,8 +59,8 @@ import { QWEN_EVENT_TYPES } from "./QwenProtocolConstants";
  *
  * **Usage Metadata (top-level on assistant events):**
  * - `promptTokenCount` - Input tokens (includes cached)
- * - `candidatesTokenCount` - Output text tokens
- * - `thoughtsTokenCount` - Output thinking tokens
+ * - `candidatesTokenCount` - Output tokens, including thinking tokens
+ * - `thoughtsTokenCount` - Thinking-token subset of `candidatesTokenCount`
  * - `cachedContentTokenCount` - Cache hit tokens
  * - `totalTokenCount` - Total tokens for this call
  *
@@ -265,9 +265,8 @@ export class QwenLogParser extends BaseLogParser {
           sawUsageMetadata = true;
           const u = event.usageMetadata;
           totalInputTokens += u.promptTokenCount || 0;
-          // Output = candidate tokens + thinking tokens (both count toward billing)
-          totalOutputTokens +=
-            (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+          // Thinking tokens are already included in candidatesTokenCount.
+          totalOutputTokens += u.candidatesTokenCount || 0;
           totalCachedTokens += u.cachedContentTokenCount || 0;
           lastAssistantUsage = u;
         }

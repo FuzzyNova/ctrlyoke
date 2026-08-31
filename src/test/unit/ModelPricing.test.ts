@@ -58,6 +58,37 @@ suite("ModelPricing", () => {
     assert.strictEqual(disjoint?.usd, 10.9);
   });
 
+  test("uses the evidence-backed token semantics for Qwen, Antigravity, and OpenCode", () => {
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI].cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI]
+        .cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI]
+        .cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI].reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI]
+        .reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI]
+        .reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+  });
+
   test("does not double count reasoning already included in output", () => {
     const included = calculateTokenCost(
       testPricing,
@@ -99,7 +130,10 @@ suite("ModelPricing", () => {
   test("suppresses table pricing when semantics are unknown", () => {
     const result = calculateTokenCost(
       testPricing,
-      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI],
+      semantics(
+        ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN,
+        ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN
+      ),
       { prompt: 1_000, completion: 100 }
     );
 

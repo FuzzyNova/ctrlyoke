@@ -5248,7 +5248,7 @@ suite("QwenLogParser", () => {
         toolResultCount: stdoutSemantics.toolResultCount,
         usage: {
           input_tokens: 28147,
-          output_tokens: 426,
+          output_tokens: 285,
           cached_input_tokens: 24641,
         },
       });
@@ -5271,7 +5271,7 @@ suite("QwenLogParser", () => {
       assert.strictEqual(output.metadata.model, "qwen3.5-plus");
       assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 14167);
       assert.strictEqual(output.metadata.usage?.contextWindowSize, 1_000_000);
-      assert.strictEqual(output.metadata.usage?.totalTokens, 28573);
+      assert.strictEqual(output.metadata.usage?.totalTokens, 28432);
       assert.strictEqual(
         output.metadata.usage?.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED

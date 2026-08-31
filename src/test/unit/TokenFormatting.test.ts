@@ -61,7 +61,7 @@ suite("TokenFormatting", () => {
     );
   });
 
-  test("keeps cached input additive for disjoint and unknown harnesses", () => {
+  test("keeps cached input additive for disjoint harnesses", () => {
     const values = {
       input: 242,
       output: 106_400,
@@ -73,10 +73,6 @@ suite("TokenFormatting", () => {
 
     assert.strictEqual(
       formatTokenBreakdown({ ...values, harness: HARNESS_IDS.CLAUDE_CLI }),
-      expected
-    );
-    assert.strictEqual(
-      formatTokenBreakdown({ ...values, harness: HARNESS_IDS.QWEN_CLI }),
       expected
     );
   });

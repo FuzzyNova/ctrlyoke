@@ -621,6 +621,10 @@ depend on — worth a reviewed, staged change, not an in-session patch.
 
 ### Phase 1 — normalize the headline `total` for confirmed cache-subset harnesses
 
+**Partially implemented:** this change promotes the evidence-backed cache and reasoning
+semantics for Qwen, Antigravity, and OpenCode, and fixes Qwen's thinking-token double count.
+The headline-total normalization and remaining Phase 1 work are still queued below.
+
 - First, promote `HARNESS_TOKEN_SEMANTICS` (`ModelPricing.ts:75-102`) `cacheInputRelationship`
   from `UNKNOWN` to the values confirmed above: `QWEN_CLI → SUBSET`,
   `ANTIGRAVITY_CLI → DISJOINT`, `OPENCODE_CLI → DISJOINT`. This is a one-line-per-harness,
