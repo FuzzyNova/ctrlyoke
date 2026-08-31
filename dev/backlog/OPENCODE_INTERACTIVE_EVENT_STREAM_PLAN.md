@@ -57,23 +57,79 @@ real `/doc` OpenAPI document, confirming both routes exist and are wired in the
 currently-installed `opencode-ai` CLI (matches the `>=1.18.10` version this repo
 already declares as verified for OpenCode elsewhere).
 
+**Update (2026-08-31), verified end-to-end, not just against the OpenAPI doc:**
+drove a real session through the server — `POST /api/session` (response wrapped
+in `{data: {...}}`), `POST /api/session/:sessionID/prompt` with a plain
+`{prompt: {text: "..."}}` body, then `GET /api/session/:sessionID/history?after=0`
+— on CLI `1.18.25`. The response shape matches this doc's prediction exactly,
+with no wrapping surprise: `{data: SessionEvent.Durable[], hasMore: boolean}`
+at the top level (unlike the session-create response, this one is *not*
+double-wrapped). A real run produced this exact sequence of `type` values in
+order: `session.next.prompt.admitted` → `session.next.prompted` →
+`session.next.step.started` → `session.next.text.started` →
+`session.next.text.ended` → `session.next.step.ended`, each with a
+monotonically increasing `durable.seq` (1 through 6) — confirming the cursor
+semantics described above on a live payload, not just the schema. Tool-call and
+reasoning-part event shapes (`session.next.tool.*`, `session.next.reasoning.*`)
+were not exercised by this particular probe (the test prompt didn't trigger a
+tool call, and the model used didn't stream a distinct reasoning part on this
+turn) — still unconfirmed against a live `history` payload, though their
+shapes in `packages/schema/src/session-event.ts` mirror the now-confirmed
+`text.started`/`text.ended` pairing closely enough to be low-risk.
+
 ### Event shapes (`packages/schema/src/session-event.ts`)
 
 `SessionEvent.Durable` is a discriminated union (`type` tag) including
 `session.next.text.ended` (full text for a completed segment),
 `session.next.tool.called` / `.progress` / `.success` / `.failed` (structured
 `content`/`result`), `session.next.step.ended` (carries `finish: string`,
-`cost`, `tokens.{input,output,reasoning,cache.{read,write}}` — `finish` is
-almost certainly where today's `part.reason === "stop"` check maps to, but
-confirm the exact terminal value against a real payload before relying on it),
-`session.next.reasoning.ended`, `session.next.compaction.*`, `session.next.retried`,
-etc. This is materially different from `opencode export`'s `{ info, parts }`
-shape that `OpenCodeEventMapper.ts` / `OpenCodeLogParser.extractNewEventsFromExport`
-currently consume — mapping every one of `isComplete`, `extractContentFromEvent`,
-`extractResponse`, `extractLiveContextWindow`, `extractSessionId`,
-`classifyUserEvent`, `extractUserSteerText`, and the streaming
-`extractCliEventsFromLogEntry`-equivalent path onto the new event shapes is the
-bulk of the implementation work, not the HTTP call itself.
+`cost`, `tokens.{input,output,reasoning,cache.{read,write}}` —
+**confirmed on a live payload (2026-08-31, CLI `1.18.25`): `finish` is
+literally `"stop"`**, matching today's `part.reason === "stop"` check
+one-to-one, so `isComplete`'s re-derivation below can rely on the literal
+string, not a guess), `session.next.reasoning.ended`, `session.next.compaction.*`,
+`session.next.retried`, etc. This is materially different from
+`opencode export`'s `{ info, parts }` shape that `OpenCodeEventMapper.ts` /
+`OpenCodeLogParser.extractNewEventsFromExport` currently consume — mapping
+every one of `isComplete`, `extractContentFromEvent`, `extractResponse`,
+`extractLiveContextWindow`, `extractSessionId`, `classifyUserEvent`,
+`extractUserSteerText`, and the streaming `extractCliEventsFromLogEntry`-
+equivalent path onto the new event shapes is the bulk of the implementation
+work, not the HTTP call itself.
+
+A real captured `session.next.step.ended` event (2026-08-31, CLI `1.18.25`):
+
+```json
+{
+  "id": "evt_...", "type": "session.next.step.ended",
+  "durable": { "aggregateID": "ses_...", "seq": 6, "version": 2 },
+  "data": {
+    "timestamp": 1788214171834, "sessionID": "ses_...",
+    "assistantMessageID": "msg_...", "finish": "stop", "cost": 0,
+    "tokens": { "input": 3396, "output": 76, "reasoning": 138,
+                "cache": { "read": 0, "write": 0 } }
+  }
+}
+```
+
+**Important gap this reveals: `data.tokens` here has no `total` field**, unlike
+`opencode export`'s `step-finish` part, which does carry `tokens.total`
+directly. `extractLiveContextWindow`'s `lastStepTotal` tracking (today reading
+`part.tokens.total` verbatim, see `OpenCodeLogParser.ts:214-223`) cannot just
+be pointed at this new shape — it will need to **derive** the total itself.
+Per the exact identity confirmed against five live `opencode run` captures in
+[`TOKEN_TOTAL_CACHE_NORMALIZATION_PLAN.md`'s OpenCode deep
+dive](TOKEN_TOTAL_CACHE_NORMALIZATION_PLAN.md#opencode-deep-dive-reasoning-tokens-confirmed-as-included-in-output),
+`total = input + output + reasoning + cache.read + cache.write` always holds
+exactly, so this is a one-line sum, not a new unknown — but it is a real code
+difference between the `export` and `history` paths that step 3 below must
+account for, not an oversight to leave unhandled.
+
+Also note a field-shape difference in `session.next.step.started`'s `data`:
+model is a nested object, `{"model": {"id": "ling-3.0-flash-fin-free",
+"providerID": "opencode"}}`, where `opencode export`'s parts carry a flat
+`part.model` string — another concrete instance of the "mapping onto the new
+event shapes is the bulk of the work" point above, not just a generic warning.
 
 ## Headless mode is unaffected — do not change it
 
@@ -145,8 +201,13 @@ cover the inherent TOCTOU race of "probe-then-reuse".
    this is the bulk of the work; expect to rewrite most of
    `OpenCodeEventMapper.ts` alongside `extractNewEventsFromExport`'s
    replacement, and to re-derive `isComplete` from `session.next.step.ended`'s
-   `finish` field (confirm exact terminal value against a live payload — do not
-   assume it is literally `"stop"` without checking).
+   `finish` field, now confirmed literally `"stop"` on a live payload (see
+   Event shapes above — no longer a guess to verify). While rewriting this
+   path, also derive `lastStepTotal`/`contextWindowUsedTokens` as
+   `input + output + reasoning + cache.read + cache.write` rather than reading
+   a `tokens.total` field — the `history` endpoint's `step.ended` event has no
+   `total` field at all, unlike `opencode export`'s `step-finish` part (see
+   Event shapes above).
 4. Keep `opencode export` as an explicit **fallback path**: if the server
    fails to bind (port race exhausted), or the `history` endpoint 404s /
    errors (older CLI versions predating this API), fall back to the current
