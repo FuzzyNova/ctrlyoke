@@ -1,17 +1,25 @@
 import {
+  ATTEMPT_COST_CACHE_RELATIONSHIPS,
   WORKFLOW_TOKEN_COVERAGE,
   ATTEMPT_COST_SOURCES,
   ATTEMPT_COST_NOTE_CODES,
   type AttemptCostSource,
   type AttemptCostNoteCode,
+  type HarnessId,
   type WorkflowTokenCoverage,
 } from "../types/DashboardConstants";
 import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
+import { HARNESS_TOKEN_SEMANTICS } from "./TokenSemantics";
+
+/** Explains why the context-window snapshot and attempt total are not additive. */
+export const TOKEN_USAGE_SCOPE_NOTE =
+  "Current context window is the last turn only; attempt total sums every turn.";
 
 export interface TokenBreakdownValues {
   input: number | undefined;
   output: number | undefined;
   total: number | undefined;
+  harness?: HarnessId;
   cached?: number;
   cacheCreated?: number;
 }
@@ -74,10 +82,18 @@ export function formatTokenBreakdown(values: TokenBreakdownValues): string {
     return "";
   }
 
-  const details = [`Tokens: ${input} in / ${output} out / ${total} total`];
   const cached = formatTokenCount(values.cached);
   const cacheCreated = formatTokenCount(values.cacheCreated);
-  if (cached) details.push(`${cached} cached`);
+  const cacheIsInputSubset =
+    values.harness !== undefined &&
+    HARNESS_TOKEN_SEMANTICS[values.harness].cacheInputRelationship ===
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET;
+  const inputLabel =
+    cacheIsInputSubset && cached
+      ? `${input} in (${cached} cached)`
+      : `${input} in`;
+  const details = [`Tokens: ${inputLabel} / ${output} out / ${total} total`];
+  if (cached && !cacheIsInputSubset) details.push(`${cached} cached`);
   if (cacheCreated) details.push(`${cacheCreated} cache-created`);
   return details.join(" | ");
 }
@@ -202,10 +218,11 @@ export interface AttemptTokenSnapshot {
  */
 export function buildAttemptTokenTooltipLines(params: {
   contextWindow?: { used: number; size: number };
+  harness?: HarnessId;
   attemptTokens?: AttemptTokenSnapshot;
   hideCost?: boolean;
 }): string[] {
-  const { contextWindow, attemptTokens, hideCost } = params;
+  const { contextWindow, harness, attemptTokens, hideCost } = params;
   const contextPct = contextWindow?.size
     ? Math.round((contextWindow.used / contextWindow.size) * 100)
     : undefined;
@@ -225,6 +242,7 @@ export function buildAttemptTokenTooltipLines(params: {
         input: attemptTokens.prompt,
         output: attemptTokens.completion,
         total: attemptTokens.total,
+        harness,
         cached: attemptTokens.cached,
         cacheCreated: attemptTokens.cacheCreated,
       })
@@ -232,6 +250,7 @@ export function buildAttemptTokenTooltipLines(params: {
   const compactionCount = attemptTokens?.compactionCount;
   return [
     contextLabel ? `Current context window: ${contextLabel}` : null,
+    contextLabel && attemptTotalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
     attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
     attemptBreakdown || null,
     compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,

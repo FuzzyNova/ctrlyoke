@@ -606,14 +606,14 @@ depend on — worth a reviewed, staged change, not an in-session patch.
 
 ## Proposed fix
 
-### Phase 0 — tooltip/copy clarification (small, no data-model change)
+### Phase 0 — tooltip/copy clarification (small, no data-model change) — implemented
 
-- In `buildAttemptTokenTooltipLines` (`TokenFormatting.ts`) and the mirrored
+- Implemented in `buildAttemptTokenTooltipLines` (`TokenFormatting.ts`) and the mirrored
   `CliTerminalFormatter.renderStats` text, stop implying the context bar and the attempt
   total should reconcile. Add one line making the distinction explicit, e.g. "Current context
   window is the last turn only; attempt total sums every turn." This is copy-only and
   unblocks confusion immediately regardless of Phase 1's timeline.
-- Clarify the breakdown line's cache semantics per harness so `X in | Y cached` doesn't read
+- Also implemented: clarify the breakdown line's cache semantics per harness so `X in | Y cached` doesn't read
   identically for Claude (additive — cached is *on top of* in) and Codex (overlapping —
   cached is *inside* in). Something like `8.5M in (8.1M cached)` for subset harnesses vs.
   `242 in | 21.4M cached` (unchanged) for disjoint ones communicates the difference without

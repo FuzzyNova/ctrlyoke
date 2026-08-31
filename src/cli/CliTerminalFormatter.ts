@@ -36,6 +36,7 @@ import {
   formatCostSourcePhrase,
   formatTokenCount,
   resolveTokenTotal,
+  TOKEN_USAGE_SCOPE_NOTE,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 
@@ -590,6 +591,7 @@ export class CliTerminalFormatter {
         input: prompt,
         output: completion,
         total: reportedTotal,
+        harness: data.harness,
         cached,
         cacheCreated,
       });
@@ -602,6 +604,7 @@ export class CliTerminalFormatter {
         const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
         const contextParts = [
           `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`,
+          totalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
           totalLabel ? `Total: ${totalLabel}` : null,
           data.hideCost || !cost
             ? null
