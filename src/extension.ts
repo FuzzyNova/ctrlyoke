@@ -32,10 +32,12 @@ import {
   getStagedDiff,
   getStashDiff,
   getStashFiles,
+  listWorktrees,
   repoToplevel,
 } from "./utils/GitUtils";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
+import { pathsEqual } from "./utils/PathCasing";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { secretRedactionService } from "./utils/SecretRedactionService";
@@ -91,6 +93,53 @@ let unprotectServerToken: (() => void) | undefined;
 const GETTING_STARTED_WALKTHROUGH_ID =
   "fuzzynova.ctrlyoke#ctrlyoke.gettingStarted";
 const GETTING_STARTED_SHOWN_KEY = "ctrlyoke.gettingStartedShown";
+
+// Re-run periodically (not just once at activation) so a long-lived VS Code
+// session doesn't accumulate orphaned temp/notification files past their 24h
+// age threshold for days between restarts.
+const TEMP_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/**
+ * Sweep orphaned `.ctrlyoke/temp/` files for the primary workspace root AND
+ * every git worktree of that repo. Workflows executed against a managed or
+ * named worktree (see WorktreeManager) write their own notification/prompt
+ * temp files under `<worktree>/.ctrlyoke/temp/` — a directory tree that is
+ * never opened as its own VS Code workspace, so it would otherwise never be
+ * swept, and kept/named worktrees can persist indefinitely.
+ */
+async function sweepOrphanedTempFiles(primaryWorkspaceRoot: string) {
+  const roots = new Set<string>([primaryWorkspaceRoot]);
+  try {
+    const gitToplevel = await repoToplevel(primaryWorkspaceRoot);
+    if (gitToplevel) {
+      const worktrees = await listWorktrees(gitToplevel);
+      for (const worktree of worktrees) {
+        if (
+          ![...roots].some((root) => pathsEqual(root, worktree.worktreePath))
+        ) {
+          roots.add(worktree.worktreePath);
+        }
+      }
+    }
+  } catch (err) {
+    Log.trace(`ctrlyoke: Worktree discovery for temp cleanup failed: ${err}`);
+  }
+
+  let totalCleaned = 0;
+  for (const root of roots) {
+    try {
+      const count = await new TempFileManager(root).cleanupOrphanedFiles();
+      totalCleaned += count;
+    } catch (err) {
+      Log.warn(`ctrlyoke: Temp cleanup failed for ${root}: ${err}`);
+    }
+  }
+  if (totalCleaned > 0) {
+    Log.info(
+      `ctrlyoke: Cleaned up ${totalCleaned} orphaned temp file(s) across ${roots.size} root(s)`
+    );
+  }
+}
 
 function openGettingStartedWalkthrough(): void {
   void vscode.commands.executeCommand(
@@ -202,14 +251,15 @@ export async function activate(context: vscode.ExtensionContext) {
           Log.warn("ctrlyoke: Workspace initialization failed:", err);
         });
 
-        // Clean up orphaned temp prompt files (from previous sessions)
-        const tempMgr = new TempFileManager(workspaceRoot);
-        tempMgr.cleanupOrphanedFiles().then((count) => {
-          if (count > 0) {
-            Log.info(
-              `ctrlyoke: Cleaned up ${count} orphaned temp prompt file(s)`
-            );
-          }
+        // Clean up orphaned temp prompt files (from previous sessions), across
+        // the primary workspace root and any git worktrees of it, and keep
+        // sweeping periodically for the rest of this VS Code session.
+        void sweepOrphanedTempFiles(workspaceRoot);
+        const tempCleanupTimer = setInterval(() => {
+          void sweepOrphanedTempFiles(workspaceRoot);
+        }, TEMP_CLEANUP_INTERVAL_MS);
+        context.subscriptions.push({
+          dispose: () => clearInterval(tempCleanupTimer),
         });
       } else {
         // Not yet initialized — remember the root so we can set the pending

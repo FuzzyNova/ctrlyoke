@@ -377,12 +377,23 @@ export class TempFileManager {
    * Delete a specific temp file
    * Does not throw on failure (logs error instead)
    *
+   * Cleanup for a given workflow run is invoked from multiple lifecycle
+   * points (retained-integration switch, pause/resume settlement, final
+   * settlement — see WorkflowInstance's cleanup*Artifacts methods), and
+   * several of those paths (e.g. MCP config files) use a deterministic,
+   * non-run-unique filename. A second call legitimately finds the file
+   * already gone, so a missing file is expected/benign, not a warning-worthy
+   * failure — only surface unexpected errors (permissions, locks, etc.).
+   *
    * @param filePath Absolute path to file to delete
    */
   async deleteFile(filePath: string): Promise<void> {
     try {
       await fs.promises.unlink(filePath);
     } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+        return;
+      }
       // Log but don't throw - cleanup is best-effort
       Log.warn(`Failed to delete temp file ${filePath}: ${err}`);
     }
@@ -458,7 +469,12 @@ export class TempFileManager {
               Log.trace(`🗑️ Cleaned up orphaned temp file: ${file}`);
             }
           } catch (err) {
-            Log.warn(`Failed to process temp file ${file}: ${err}`);
+            // A sibling ctrlyoke instance (or the periodic sweep's own prior
+            // pass) may have already deleted this stale file — benign race,
+            // not a failure worth surfacing.
+            if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+              Log.warn(`Failed to process temp file ${file}: ${err}`);
+            }
           }
         }
       }
@@ -497,7 +513,11 @@ export class TempFileManager {
             );
           }
         } catch (err) {
-          Log.warn(`Failed to process notification file ${file}: ${err}`);
+          // Benign race with a sibling instance/prior sweep pass — see the
+          // matching comment in cleanupOrphanedFiles().
+          if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+            Log.warn(`Failed to process notification file ${file}: ${err}`);
+          }
         }
       }
     } catch (err) {

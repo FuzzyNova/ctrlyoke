@@ -543,6 +543,12 @@ export class CliExecutionRunner {
       return this.executeInteractiveCliProcess(args, session, resolvedCommand);
     }
 
+    // Hoisted so the `finally` block below can always stop it — an exception
+    // thrown between start() and the previous inline stop() calls (e.g. from
+    // startInteractiveProcess or resolveSession) used to leak this interval
+    // forever, since the catch block never reached hookMonitor.stop().
+    let hookMonitor: HookEventMonitor | null = null;
+
     try {
       if (!this.deps.provider.logParser) {
         Log.error("❌ Harness does not support log file monitoring");
@@ -596,7 +602,7 @@ export class CliExecutionRunner {
         terminalEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
       }
 
-      const hookMonitor =
+      hookMonitor =
         notifyDir && this.deps.hostCallbacks.onNotificationEvent
           ? new HookEventMonitor({
               runId,
@@ -625,7 +631,6 @@ export class CliExecutionRunner {
       });
 
       if (!discovery) {
-        hookMonitor?.stop();
         return { success: false };
       }
 
@@ -647,8 +652,6 @@ export class CliExecutionRunner {
         startTime,
       });
 
-      hookMonitor?.stop();
-
       // Keep lastInteractiveContext in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.
       if (result.sessionId) {
@@ -661,6 +664,7 @@ export class CliExecutionRunner {
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       throw error;
     } finally {
+      hookMonitor?.stop();
       await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
     }
   }
