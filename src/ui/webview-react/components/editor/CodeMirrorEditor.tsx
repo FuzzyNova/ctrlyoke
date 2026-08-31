@@ -58,6 +58,8 @@ import {
   CTRLYOKE_SLASH_TOKEN_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
+  CAPTURING_OUTPUT_PLACEHOLDER,
+  OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
   type CodeMirrorEditorMode,
 } from "@root/types/DashboardConstants";
 import {
@@ -158,6 +160,7 @@ interface ExtensionCompletionItem {
   kind?: number;
   detail?: string;
   insertText?: string;
+  captureId?: string;
   sortText?: string;
   filterText?: string;
 }
@@ -167,11 +170,17 @@ interface PendingCompletionRequest {
   query: string;
 }
 
-interface PendingPaste {
+interface PendingPlaceholder {
   from: number;
   to: number;
   timeoutId: ReturnType<typeof setTimeout>;
 }
+
+type OutputCapturePickHandler = (
+  captureId: string,
+  from: number,
+  to: number
+) => void;
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
@@ -293,7 +302,8 @@ export function buildCodeMirrorCompletionResult(
   items: ExtensionCompletionItem[],
   from: number,
   request: PendingCompletionRequest | null,
-  symbolIconCache?: Map<string, string>
+  symbolIconCache?: Map<string, string>,
+  onOutputCapturePicked?: OutputCapturePickHandler
 ): CompletionResult {
   const useFilterTextForMatching = !shouldBypassCodeMirrorFiltering(request);
   const completions = items.map((item, index) => {
@@ -366,38 +376,63 @@ export function buildCodeMirrorCompletionResult(
       boost,
       // Don't prepend trigger - it stays in the document at position 'from'
       // We only replace from 'from + 1' onward for trigger-based completions.
-      apply: symbolRef
+      apply: item.captureId
         ? (
             view: EditorView,
             completion: Completion,
             applyFrom: number,
             applyTo: number
           ) => {
-            symbolIconCache!.set(
-              symbolIconCacheKey(
-                symbolRef.path,
-                symbolRef.symbolName,
-                symbolRef.lineStart,
-                symbolRef.lineEnd
-              ),
-              type
-            );
-            // Mirrors applyCompletion()'s own string-apply path (see
-            // @codemirror/autocomplete) so picking a symbol completion still
-            // behaves identically to any other — same insert/cursor/scroll
-            // behavior, same pickedCompletion annotation — with the cache
-            // seed as the only addition.
+            // Output captures are saved asynchronously. Insert a literal
+            // placeholder first, then let the component track the resulting
+            // range and start the extension-host round trip.
             view.dispatch({
               ...insertCompletionText(
                 view.state,
-                applyValue,
+                CAPTURING_OUTPUT_PLACEHOLDER,
                 applyFrom,
                 applyTo
               ),
               annotations: pickedCompletion.of(completion),
             });
+            onOutputCapturePicked?.(
+              item.captureId!,
+              applyFrom,
+              applyFrom + CAPTURING_OUTPUT_PLACEHOLDER.length
+            );
           }
-        : applyValue,
+        : symbolRef
+          ? (
+              view: EditorView,
+              completion: Completion,
+              applyFrom: number,
+              applyTo: number
+            ) => {
+              symbolIconCache!.set(
+                symbolIconCacheKey(
+                  symbolRef.path,
+                  symbolRef.symbolName,
+                  symbolRef.lineStart,
+                  symbolRef.lineEnd
+                ),
+                type
+              );
+              // Mirrors applyCompletion()'s own string-apply path (see
+              // @codemirror/autocomplete) so picking a symbol completion still
+              // behaves identically to any other — same insert/cursor/scroll
+              // behavior, same pickedCompletion annotation — with the cache
+              // seed as the only addition.
+              view.dispatch({
+                ...insertCompletionText(
+                  view.state,
+                  applyValue,
+                  applyFrom,
+                  applyTo
+                ),
+                annotations: pickedCompletion.of(completion),
+              });
+            }
+          : applyValue,
     };
   });
 
@@ -639,7 +674,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // updateListener so the placeholder is replaced in the right spot even if the
   // user keeps typing before the save completes.
   const pasteSeqRef = useRef(0);
-  const pendingPastesRef = useRef<Map<number, PendingPaste>>(new Map());
+  const pendingPastesRef = useRef<Map<number, PendingPlaceholder>>(new Map());
+  // Output-capture placeholders use their own sequence space because their
+  // replies carry a different message type, but share the same range shape
+  // and resolver as pasted-image placeholders.
+  const captureSeqRef = useRef(0);
+  const pendingCapturesRef = useRef<Map<number, PendingPlaceholder>>(new Map());
   // Resolved #sym: symbol-kind icons, keyed by symbolIconCacheKey. Populated
   // asynchronously by createContextReferenceLintExtension's validation pass
   // and read by createAtomicReferenceExtension to upgrade a chip's icon from
@@ -870,6 +910,80 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     initTypoChecker();
   }, [affUri, dicUri]);
 
+  // Replace a pending placeholder with final text — a `@ref ` on success or
+  // an empty string on failure/timeout — then forget the entry. Ranges are
+  // clamped to the current doc length to survive races with concurrent edits.
+  const resolvePendingPlaceholder = useCallback(
+    (
+      pending: Map<number, PendingPlaceholder>,
+      seq: number,
+      replacement: string
+    ) => {
+      const entry = pending.get(seq);
+      if (!entry) return;
+      clearTimeout(entry.timeoutId);
+      pending.delete(seq);
+      const view = viewRef.current;
+      if (!view) return;
+      const docLen = view.state.doc.length;
+      const from = Math.min(entry.from, docLen);
+      const to = Math.min(Math.max(entry.to, from), docLen);
+      view.dispatch({ changes: { from, to, insert: replacement } });
+    },
+    []
+  );
+
+  const resolvePendingPaste = useCallback(
+    (seq: number, replacement: string) => {
+      resolvePendingPlaceholder(pendingPastesRef.current, seq, replacement);
+    },
+    [resolvePendingPlaceholder]
+  );
+
+  const resolvePendingCapture = useCallback(
+    (seq: number, replacement: string) => {
+      resolvePendingPlaceholder(pendingCapturesRef.current, seq, replacement);
+    },
+    [resolvePendingPlaceholder]
+  );
+
+  const handleOutputSnapshotSaved = useCallback(
+    (seq: number, relativePath?: string, error?: string) => {
+      if (error || !relativePath) {
+        resolvePendingCapture(seq, "");
+        const messageText = error || "Failed to save output snapshot";
+        WebviewLog.error(
+          `[CodeMirror] Output snapshot save failed: ${messageText}`
+        );
+        notifyUser(messageText, USER_FEEDBACK_SEVERITY.ERROR);
+        return;
+      }
+      // Trailing space terminates the @ref token so the user can keep typing.
+      resolvePendingCapture(seq, `@${relativePath} `);
+    },
+    [resolvePendingCapture]
+  );
+
+  const handleOutputCapturePicked = useCallback(
+    (captureId: string, from: number, to: number) => {
+      const seq = ++captureSeqRef.current;
+      const timeoutId = setTimeout(() => {
+        handleOutputSnapshotSaved(
+          seq,
+          undefined,
+          "Timed out saving output snapshot"
+        );
+      }, OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS);
+      pendingCapturesRef.current.set(seq, { from, to, timeoutId });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT,
+        seq,
+        captureId,
+      });
+    },
+    [vscode, handleOutputSnapshotSaved]
+  );
+
   // Handle completion response from extension.
   //
   // Some triggers (currently `#`) answer progressively: a `partial` response
@@ -901,7 +1015,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         items,
         from,
         entry.request,
-        symbolIconCacheRef.current
+        symbolIconCacheRef.current,
+        handleOutputCapturePicked
       );
 
       if (partial) {
@@ -935,7 +1050,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         startCompletion(view);
       }
     },
-    []
+    [handleOutputCapturePicked]
   );
 
   const validateContextReferences = useCallback(
@@ -957,26 +1072,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       });
     },
     [vscode]
-  );
-
-  // Replace a pending paste's tracked placeholder range with final text — a
-  // `@ref ` on success or an empty string to remove it on failure/timeout — then
-  // forget the entry. Ranges are clamped to the current doc length to survive
-  // races with concurrent edits.
-  const resolvePendingPaste = useCallback(
-    (seq: number, replacement: string) => {
-      const entry = pendingPastesRef.current.get(seq);
-      if (!entry) return;
-      clearTimeout(entry.timeoutId);
-      pendingPastesRef.current.delete(seq);
-      const view = viewRef.current;
-      if (!view) return;
-      const docLen = view.state.doc.length;
-      const from = Math.min(entry.from, docLen);
-      const to = Math.min(Math.max(entry.to, from), docLen);
-      view.dispatch({ changes: { from, to, insert: replacement } });
-    },
-    []
   );
 
   const handlePastedImageSaved = useCallback(
@@ -1079,14 +1174,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [processPastedImageFile]
   );
 
-  // Clear any outstanding paste timeouts when the component unmounts.
+  // Clear any outstanding async attachment timeouts when the component
+  // unmounts. The maps themselves are cleared so late replies are ignored.
   useEffect(() => {
-    const pending = pendingPastesRef.current;
+    const pendingPastes = pendingPastesRef.current;
+    const pendingCaptures = pendingCapturesRef.current;
     return () => {
-      for (const entry of pending.values()) {
+      for (const entry of pendingPastes.values()) {
         clearTimeout(entry.timeoutId);
       }
-      pending.clear();
+      for (const entry of pendingCaptures.values()) {
+        clearTimeout(entry.timeoutId);
+      }
+      pendingPastes.clear();
+      pendingCaptures.clear();
     };
   }, []);
 
@@ -1113,12 +1214,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           message.relativePath,
           message.error
         );
+      } else if (message.type === MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED) {
+        handleOutputSnapshotSaved(
+          message.seq,
+          message.relativePath,
+          message.error
+        );
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [handleCompletionResponse, handlePastedImageSaved]);
+  }, [
+    handleCompletionResponse,
+    handlePastedImageSaved,
+    handleOutputSnapshotSaved,
+  ]);
 
   // Custom completions source
   const customCompletions = useCallback(
@@ -1410,10 +1521,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (update.docChanged) {
             const newValue = update.state.doc.toString();
             onChangeRef.current(newValue);
-            // Keep pasted-image placeholder ranges pinned to their text as the
-            // user edits before the async save round trip resolves them.
-            if (pendingPastesRef.current.size > 0) {
-              for (const entry of pendingPastesRef.current.values()) {
+            // Keep async attachment placeholder ranges pinned to their text as
+            // the user edits before the save round trip resolves them.
+            for (const pending of [
+              pendingPastesRef.current,
+              pendingCapturesRef.current,
+            ]) {
+              for (const entry of pending.values()) {
                 entry.from = update.changes.mapPos(entry.from, -1);
                 entry.to = update.changes.mapPos(entry.to, 1);
               }

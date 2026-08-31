@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
+import type { Completion } from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import {
   buildCodeMirrorCompletionResult,
@@ -18,6 +19,7 @@ import {
 } from "@components/editor/CodeMirrorEditor";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import {
+  CAPTURING_OUTPUT_PLACEHOLDER,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
@@ -480,6 +482,53 @@ describe("CodeMirrorEditor symbol completion icon cache seeding", () => {
 
     expect(result.options[0].apply).toBe("foo.ts ");
     expect(cache.size).toBe(0);
+  });
+});
+
+describe("CodeMirrorEditor output capture completions", () => {
+  it("uses a function-valued apply and inserts the capture placeholder", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({ parent, doc: "@" });
+    const picked = vi.fn();
+
+    try {
+      const result = buildCodeMirrorCompletionResult(
+        [
+          {
+            label: "Agent Host (Output)",
+            insertText: CAPTURING_OUTPUT_PLACEHOLDER,
+            captureId: "capture-1",
+          },
+        ],
+        0,
+        { trigger: "@", query: "" },
+        undefined,
+        picked
+      );
+      const completion = result.options[0];
+      const apply = completion?.apply as (
+        view: EditorView,
+        completion: Completion,
+        from: number,
+        to: number
+      ) => void;
+
+      expect(typeof completion?.apply).toBe("function");
+      apply(view, completion!, result.from, result.from);
+
+      expect(view.state.doc.toString()).toBe(
+        `@${CAPTURING_OUTPUT_PLACEHOLDER}`
+      );
+      expect(picked).toHaveBeenCalledWith(
+        "capture-1",
+        result.from,
+        result.from + CAPTURING_OUTPUT_PLACEHOLDER.length
+      );
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });
 
