@@ -146,6 +146,15 @@ export const Modal: React.FC<ModalProps> = ({
               {footer}
             </div>
           )}
+
+          {/* size="full" pins this dialog to the viewport (fixed inset-0),
+              which escapes the App root's flex layout and its trailing
+              .safe-area-spacer — reproduce it here so the footer buttons
+              clear the home indicator instead of sitting under it. No-op
+              (0px) on desktop/non-notch devices via env(safe-area-inset-bottom). */}
+          {isFullScreen && (
+            <div className="safe-area-spacer" aria-hidden="true" />
+          )}
         </div>
       </div>
     </>,
