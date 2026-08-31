@@ -564,7 +564,14 @@ export function useDesktopLayout({
     // errors and looped startRemountSync's rAF chain for up to 24 frames on
     // every mobile collapse-state change. isMobile is a dependency so a
     // mobile→desktop transition still re-runs and stabilizes normally.
-    if (isMobile) return;
+    // A remount sync started just before a desktop→mobile transition is still
+    // in flight here (its rAF chain outlives the render that scheduled it), so
+    // cancel it too — otherwise its stale-closure tick loop keeps firing
+    // against the now-unmounted Group and logs the same null-ref errors.
+    if (isMobile) {
+      cancelRemountSync();
+      return;
+    }
     const shouldStabilizeRemount = needsForcedResize.current;
 
     if (shouldStabilizeRemount) {
