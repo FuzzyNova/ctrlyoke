@@ -118,24 +118,11 @@ export class CliProcessManager {
         stderr += data.toString();
       });
 
-      // Handle errors
-      child.on("error", (error: Error) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        this.logger?.(`❌ Process error: ${error}`);
-        this.currentProcess = undefined;
-        this.clearKillTimeout();
-        reject(error);
-      });
-
-      // Handle completion
-      child.on("close", (code: number | null) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
+      // Cleanup (currentProcess/timers) must run whenever the child actually
+      // exits, even if a timeout already flipped `settled` and sent a kill
+      // signal — otherwise a stale `currentProcess` survives the exit and the
+      // SIGKILL escalation timer fires against an already-gone PID.
+      const cleanupProcessState = () => {
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
@@ -143,6 +130,26 @@ export class CliProcessManager {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
+      };
+
+      // Handle errors
+      child.on("error", (error: Error) => {
+        cleanupProcessState();
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.logger?.(`❌ Process error: ${error}`);
+        reject(error);
+      });
+
+      // Handle completion
+      child.on("close", (code: number | null) => {
+        cleanupProcessState();
+        if (settled) {
+          return;
+        }
+        settled = true;
         this.logger?.(`✅ Process exited with code: ${code}`);
 
         resolve({
