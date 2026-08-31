@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as crypto from "crypto";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -25,10 +26,13 @@ import {
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
 import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
+import { outputCaptureCache } from "./OutputCaptureCache";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import {
+  CAPTURING_OUTPUT_PLACEHOLDER,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  VSCODE_COMMANDS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
@@ -51,6 +55,8 @@ export interface PlainCompletionItem {
   label: string;
   kind: vscode.CompletionItemKind;
   insertText: string;
+  // Set only on output-capture completion items; the picker resolves it via SAVE_OUTPUT_SNAPSHOT.
+  captureId?: string;
   detail?: string;
   documentation?: string;
   sortText?: string;
@@ -596,6 +602,24 @@ function collectWorkspaceDirectories(
   }
 }
 
+function getOutputChannelSlug(document: vscode.TextDocument): string {
+  return vscode.workspace.asRelativePath(
+    document.uri,
+    isMultiRootWorkspace()
+  );
+}
+
+function cacheOutputCapture(
+  document: vscode.TextDocument,
+  text: string,
+  range: { startLine: number; endLine: number } | undefined
+): { captureId: string; channel: string } {
+  const captureId = crypto.randomUUID();
+  const channel = getOutputChannelSlug(document);
+  outputCaptureCache.set(captureId, { text, channel, range });
+  return { captureId, channel };
+}
+
 /**
  * Get file completions for @ trigger
  * Returns both file and directory completions
@@ -614,6 +638,37 @@ export async function getFileCompletions(
 
   const MAX_TOTAL_ITEMS = 500;
   const MAX_FILE_ITEMS = 450; // Leave room for directories so they don't get buried
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (editor.document.uri.scheme !== "output") {
+      continue;
+    }
+
+    const channel = getOutputChannelSlug(editor.document);
+    if (!matchesPathCompletionFilter(channel, filter)) {
+      continue;
+    }
+
+    const { captureId } = cacheOutputCapture(
+      editor.document,
+      editor.document.getText(),
+      undefined
+    );
+    fileItems.push({
+      label: `${channel} (Output)`,
+      kind: vscode.CompletionItemKind.File,
+      insertText: CAPTURING_OUTPUT_PLACEHOLDER,
+      captureId,
+      detail: "Output channel snapshot",
+      documentation:
+        `**Output channel attachment**\n\n` +
+        `Capture the current contents of the '${channel}' output channel ` +
+        `and attach it as a file.\n\n` +
+        `_The snapshot is captured when this completion is listed and saved when it is picked._`,
+      sortText: `0_0_output_${channel}`,
+      filterText: `${channel} output`,
+    });
+  }
 
   for (const fileUri of files) {
     const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
@@ -927,11 +982,7 @@ function getSelectionCompletions(): PlainCompletionItem[] {
 
     // Format: #selection:path:startLine-endLine
     // Quote paths with spaces so FileReferenceParser can handle them correctly
-    const completionText = buildSelectionReferenceValue(
-      relativePath,
-      startLine,
-      endLine
-    );
+    const isOutputEditor = document.uri.scheme === "output";
 
     // Create label with file name and line range
     // Label must start with "selection" so both VS Code and CodeMirror can
@@ -949,6 +1000,13 @@ function getSelectionCompletions(): PlainCompletionItem[] {
         ? selectedText.substring(0, 100) + "..."
         : selectedText;
 
+    const outputCapture = isOutputEditor
+      ? cacheOutputCapture(document, selectedText, { startLine, endLine })
+      : undefined;
+    const completionText = isOutputEditor
+      ? CAPTURING_OUTPUT_PLACEHOLDER
+      : buildSelectionReferenceValue(relativePath, startLine, endLine);
+
     const item: PlainCompletionItem = {
       label: label,
       // Unit is otherwise unused by any provider in this file, which makes it
@@ -957,10 +1015,13 @@ function getSelectionCompletions(): PlainCompletionItem[] {
       // two were indistinguishable to clients picking an icon by kind.
       kind: vscode.CompletionItemKind.Unit,
       insertText: completionText,
+      ...(outputCapture ? { captureId: outputCapture.captureId } : {}),
       detail: `Lines ${startLine}-${endLine} in ${relativePath}`,
-      documentation:
-        `Insert reference to selected code:\n\n\`${buildSelectionReference(relativePath, startLine, endLine)}\`\n\n` +
-        `**Preview:**\n\`\`\`\n${preview}\n\`\`\``,
+      documentation: isOutputEditor
+        ? `Capture the selected lines from the '${outputCapture?.channel ?? relativePath}' output channel as an attachment.\n\n` +
+          `**Preview:**\n\`\`\`\n${preview}\n\`\`\``
+        : `Insert reference to selected code:\n\n\`${buildSelectionReference(relativePath, startLine, endLine)}\`\n\n` +
+          `**Preview:**\n\`\`\`\n${preview}\n\`\`\``,
       sortText: `!000_selection_${selectionIndex.toString().padStart(3, "0")}`,
       filterText: `selection ${relativePath} ${fileName} current`,
     };
@@ -1184,8 +1245,18 @@ export function toVSCodeCompletionItem(
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);
-  vscodeItem.insertText = item.insertText;
+  vscodeItem.insertText = item.captureId
+    ? CAPTURING_OUTPUT_PLACEHOLDER
+    : item.insertText;
   vscodeItem.detail = item.detail;
+
+  if (item.captureId) {
+    vscodeItem.command = {
+      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
+      title: "Resolve output capture",
+      arguments: [item.captureId],
+    };
+  }
 
   if (item.documentation) {
     vscodeItem.documentation = new vscode.MarkdownString(item.documentation);

@@ -3,7 +3,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import * as vscode from "vscode";
-import { WORKSPACE_ENTRY_KINDS } from "../../types/DashboardConstants";
+import {
+  CAPTURING_OUTPUT_PLACEHOLDER,
+  WORKSPACE_ENTRY_KINDS,
+} from "../../types/DashboardConstants";
 import {
   clearFilesCache,
   getFileCompletions,
@@ -17,10 +20,12 @@ import {
   mapSymbolKindToReferenceKind,
   getSecretCompletions,
   getPriorContextCompletions,
+  toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  VSCODE_COMMANDS,
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
@@ -28,6 +33,7 @@ import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import { outputCaptureCache } from "../../completions/OutputCaptureCache";
 
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;
@@ -149,6 +155,37 @@ suite("CompletionHelpers", () => {
     });
   }
 
+  function mockOutputEditors(
+    editors: Array<{
+      channel: string;
+      text: string;
+      startLine?: number;
+      endLine?: number;
+    }>
+  ): void {
+    const outputEditors = editors.map((editor) => ({
+      selection: {
+        isEmpty: editor.startLine === undefined,
+        start: { line: (editor.startLine ?? 1) - 1 },
+        end: { line: (editor.endLine ?? editor.startLine ?? 1) - 1 },
+      },
+      document: {
+        uri: vscode.Uri.parse(`output:${editor.channel}`),
+        getText: () => editor.text,
+      },
+    }));
+
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
+      value: (uri: vscode.Uri) =>
+        uri.scheme === "output" ? uri.path : uri.fsPath,
+      configurable: true,
+    });
+    Object.defineProperty(vscode.window, "visibleTextEditors", {
+      value: outputEditors,
+      configurable: true,
+    });
+  }
+
   setup(() => {
     clearFilesCache();
     ConfigurationUtils.shouldRespectGitignoreForCompletions = (() =>
@@ -211,6 +248,46 @@ suite("CompletionHelpers", () => {
     assert.ok(labels.includes("CodeMirrorTheme.ts"));
     assert.ok(!labels.includes("CommandPalette.tsx"));
     assert.ok(!labels.includes("WorkflowFilePickerModal.tsx"));
+  });
+
+  test("captures visible output channels for @ completions", async () => {
+    mockWorkspaceFiles([]);
+    mockOutputEditors([{ channel: "agenthost", text: "latest output" }]);
+
+    const items = await getFileCompletions("");
+    const item = items.find(
+      (candidate) => candidate.label === "agenthost (Output)"
+    );
+
+    assert.ok(item);
+    assert.strictEqual(item.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
+    assert.ok(item.captureId);
+    assert.ok(!item.insertText.includes("agenthost"));
+    const vscodeItem = toVSCodeCompletionItem(item, "@");
+    assert.strictEqual(vscodeItem.insertText, CAPTURING_OUTPUT_PLACEHOLDER);
+    assert.deepStrictEqual(vscodeItem.command, {
+      command: VSCODE_COMMANDS.RESOLVE_OUTPUT_CAPTURE,
+      title: "Resolve output capture",
+      arguments: [item.captureId],
+    });
+    assert.deepStrictEqual(outputCaptureCache.take(item.captureId), {
+      text: "latest output",
+      channel: "agenthost",
+      range: undefined,
+    });
+  });
+
+  test("does not attach a native command to ordinary completions", () => {
+    const item = toVSCodeCompletionItem(
+      {
+        label: "README.md",
+        kind: vscode.CompletionItemKind.File,
+        insertText: "README.md",
+      },
+      "@"
+    );
+
+    assert.strictEqual(item.command, undefined);
   });
 
   test("matches @ completions fuzzily against a basename-only query", async () => {
@@ -321,6 +398,32 @@ suite("CompletionHelpers", () => {
     // Unit is otherwise unused by any provider here, giving clients a
     // collision-free marker distinct from git (~) completions (Reference).
     assert.strictEqual(items[0].kind, vscode.CompletionItemKind.Unit);
+    assert.strictEqual(items[0].captureId, undefined);
+  });
+
+  test("captures output selections while keeping the selection completion label", () => {
+    mockOutputEditors([
+      {
+        channel: "agenthost",
+        text: "line 17\nline 18",
+        startLine: 17,
+        endLine: 18,
+      },
+      { channel: "other", text: "not selected" },
+    ]);
+
+    const items = getHashSelectionCompletions();
+
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].label, "selection: agenthost (lines 17-18)");
+    assert.strictEqual(items[0].insertText, CAPTURING_OUTPUT_PLACEHOLDER);
+    assert.ok(items[0].captureId);
+    assert.ok(!items[0].insertText.includes("#selection:"));
+    assert.deepStrictEqual(outputCaptureCache.take(items[0].captureId), {
+      text: "line 17\nline 18",
+      channel: "agenthost",
+      range: { startLine: 17, endLine: 18 },
+    });
   });
 
   test("getHashSelectionCompletions returns nothing when there is no selection", () => {

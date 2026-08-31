@@ -952,6 +952,10 @@ export class WebviewMessageRouter {
       await this.promptEditorSupport.handleSavePastedImage(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.SAVE_OUTPUT_SNAPSHOT, async (message, ctx) => {
+      await this.promptEditorSupport.handleSaveOutputSnapshot(ctx, message);
+    });
+
     table.set(MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI, async (message, ctx) => {
       await this.promptEditorSupport.handleFilePreviewUriRequest(ctx, message);
     });
