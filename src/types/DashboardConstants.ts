@@ -255,6 +255,8 @@ export const MESSAGE_TYPES = {
   PROMPT_FILE_CREATED: "promptFileCreated", // Extension -> Webview: { seq, reference, resolvedPath } or { seq, error }
   SAVE_PASTED_IMAGE: "savePastedImage", // Webview -> Extension: save a pasted clipboard image to disk
   PASTED_IMAGE_SAVED: "pastedImageSaved", // Extension -> Webview: { seq, relativePath } or { seq, error }
+  SAVE_OUTPUT_SNAPSHOT: "saveOutputSnapshot", // Webview -> Extension: save a pending output capture to disk
+  OUTPUT_SNAPSHOT_SAVED: "outputSnapshotSaved", // Extension -> Webview: { seq, relativePath } or { seq, error }
   REQUEST_FILE_PREVIEW_URI: "requestFilePreviewUri", // Webview -> Extension: resolve a workspace file path to a displayable webview URI
   FILE_PREVIEW_URI_RESPONSE: "filePreviewUriResponse", // Extension -> Webview: { seq, uri } or { seq, error }
 
@@ -1677,6 +1679,12 @@ export const PASTED_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
 /** Maximum size (in bytes) of a pasted image accepted for save (15 MB). */
 export const MAX_PASTED_IMAGE_BYTES = 15 * 1024 * 1024;
 
+/**
+ * Maximum UTF-8 size retained in an output snapshot (15 MB), shared with
+ * pasted images so attachment handling has one predictable size ceiling.
+ */
+export const MAX_OUTPUT_SNAPSHOT_BYTES = MAX_PASTED_IMAGE_BYTES;
+
 /** Maximum UTF-8 content size captured for workspace and undo diffs (512 KB). */
 export const MAX_CONTENT_SIZE = 512 * 1024;
 
@@ -1704,8 +1712,14 @@ export const IMAGE_REF_EXTENSIONS = [
 /** Placeholder inserted at the cursor while a pasted image saves asynchronously. */
 export const PASTING_IMAGE_PLACEHOLDER = "[Pasting image…]";
 
+/** Placeholder inserted at the cursor while an output snapshot saves asynchronously. */
+export const CAPTURING_OUTPUT_PLACEHOLDER = "[Capturing output…]";
+
 /** Milliseconds before an unanswered SAVE_PASTED_IMAGE round trip is treated as failed. */
 export const PASTED_IMAGE_SAVE_TIMEOUT_MS = 30_000;
+
+/** Milliseconds before an unanswered SAVE_OUTPUT_SNAPSHOT round trip is treated as failed. */
+export const OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS = PASTED_IMAGE_SAVE_TIMEOUT_MS;
 
 /** Milliseconds before an unanswered prompt-file conversion is treated as failed. */
 export const PROMPT_FILE_CONVERSION_TIMEOUT_MS = 30_000;

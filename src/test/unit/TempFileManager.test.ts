@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { TempFileManager } from "../../utils/TempFileManager";
+import { MAX_OUTPUT_SNAPSHOT_BYTES } from "../../types/DashboardConstants";
 
 suite("TempFileManager", () => {
   let workspaceRoot: string;
@@ -253,6 +254,91 @@ suite("TempFileManager", () => {
       await fs.promises.utimes(filePath, stale, stale);
       const before = (await fs.promises.stat(filePath)).mtimeMs;
       await manager.createPastedImageFile(data, "png", dir);
+      const after = (await fs.promises.stat(filePath)).mtimeMs;
+      assert.ok(after > before, "mtime should be refreshed on a dedup hit");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("createOutputSnapshotFile", () => {
+    test("writes readable range and full-channel filenames", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const rangePath = await manager.createOutputSnapshotFile(
+        "selected output",
+        "agenthost",
+        { startLine: 17, endLine: 28 },
+        dir
+      );
+      const fullPath = await manager.createOutputSnapshotFile(
+        "whole output",
+        "agenthost",
+        undefined,
+        dir
+      );
+      createdFiles.push(rangePath, fullPath);
+
+      assert.match(
+        path.basename(rangePath),
+        /^output-agenthost-17-28-[0-9a-f]{12}\.log$/
+      );
+      assert.match(
+        path.basename(fullPath),
+        /^output-agenthost-full-[0-9a-f]{12}\.log$/
+      );
+      assert.strictEqual(
+        await fs.promises.readFile(rangePath, "utf-8"),
+        "selected output"
+      );
+    });
+
+    test("truncates from the start and deduplicates identical final content", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const tail = "z".repeat(MAX_OUTPUT_SNAPSHOT_BYTES);
+      const first = await manager.createOutputSnapshotFile(
+        `a${tail}`,
+        "agenthost",
+        undefined,
+        dir
+      );
+      const second = await manager.createOutputSnapshotFile(
+        `b${tail}`,
+        "agenthost",
+        undefined,
+        dir
+      );
+      createdFiles.push(first);
+
+      assert.strictEqual(first, second);
+      const written = await fs.promises.readFile(first, "utf-8");
+      assert.ok(
+        written.startsWith(
+          `[ctrlyoke: output truncated — showing the last ${MAX_OUTPUT_SNAPSHOT_BYTES} of ${MAX_OUTPUT_SNAPSHOT_BYTES + 1} bytes]\n\n`
+        )
+      );
+      assert.ok(written.endsWith(tail));
+    });
+
+    test("refreshes mtime on a dedup hit", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const filePath = await manager.createOutputSnapshotFile(
+        "touch-me",
+        "agenthost",
+        undefined,
+        dir
+      );
+      createdFiles.push(filePath);
+      const stale = new Date(Date.now() - 60 * 60 * 1000);
+      await fs.promises.utimes(filePath, stale, stale);
+      const before = (await fs.promises.stat(filePath)).mtimeMs;
+      await manager.createOutputSnapshotFile(
+        "touch-me",
+        "agenthost",
+        undefined,
+        dir
+      );
       const after = (await fs.promises.stat(filePath)).mtimeMs;
       assert.ok(after > before, "mtime should be refreshed on a dedup hit");
     });

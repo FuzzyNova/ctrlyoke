@@ -1,6 +1,6 @@
 # Output Panel Context Capture Plan
 
-> **Status:** Not implemented.
+> **Status:** In progress — backend capture plumbing landed (step 1/4); completion-list wiring, webview UI, and native-editor UI still pending.
 
 ## Goal
 
@@ -149,6 +149,20 @@ mirroring `handleSavePastedImage`/`PASTED_IMAGE_SAVED` exactly, just fed from th
 of a fresh clipboard read. This avoids both the staleness problem (re-reading a live document
 later) and the disk-spam problem (writing on every keystroke).
 
+**The async-resolve-on-pick mechanism this needs already exists and works — it isn't new
+plumbing.** `buildCodeMirrorCompletionResult()` in `CodeMirrorEditor.tsx` (~line 292) already
+gives individual completions a custom `apply` *function* instead of a plain insert string: the
+`#sym:` symbol-completion path (`symbolRef`, ~lines 369-399) uses this today to run extra logic
+at pick time via `insertCompletionText`/`pickedCompletion`. An output-capture item's `apply`
+follows the same shape, except instead of a synchronous cache seed it (1) inserts a placeholder
+via `insertCompletionText`, (2) posts `SAVE_OUTPUT_SNAPSHOT` with the item's capture id, and (3)
+resolves the placeholder range on the matching `OUTPUT_SNAPSHOT_SAVED` reply — i.e. `apply` does
+what `processPastedImageFile`/`resolvePendingPaste` already do, just entered from a completion
+pick instead of a paste event. The native VS Code editor path (`PromptCompletionProvider.ts`)
+has no equivalent of CodeMirror's function-valued `apply` — there, insert the placeholder via
+plain `insertText` and attach a `vscode.Command` (registered fresh for this feature) that runs
+immediately after insertion, awaits the same write, and edits the placeholder range once done.
+
 ## Completion Behavior Changes
 
 Two independent completion sources change, both gaining an `output:`-scheme branch. Neither
@@ -179,6 +193,7 @@ described above.
 | --- | --- |
 | `src/completions/CompletionHelpers.ts` (`getFileCompletions`/`getAtCompletions`, `getSelectionCompletions`) | Add `output:`-scheme entries to the `@` list; keep the `#` selection entry but reroute what picking it inserts |
 | `src/utils/TempFileManager.ts` | Add a text/content-addressed sibling of `createPastedImageFile` |
+| `src/completions/OutputCaptureCache.ts` | Hold captured completion text briefly between list construction and item pick |
 | `src/ui/PromptEditorSupportService.ts` | New `handleSaveOutputSnapshot` mirroring `handleSavePastedImage`; pending-capture cache keyed by completion-item id |
 | `src/ui/WebviewMessageRouter.ts` | Register the new message pair |
 | `src/types/WebviewMessageTypes.ts` / `MESSAGE_TYPES` | New message type constants |
@@ -197,18 +212,26 @@ reference, which all of these already handle.
   APIs, not `TextEditor`/`TextDocument`) — out of scope for this plan.
 - Any change to how `#selection:`/`@file` behave for ordinary file editors.
 
-## Open Questions
+## Decided (former Open Questions)
 
-- **Recovering a friendly channel display name.** The `output:` URI's path segment is an
-  internal slug (`agenthost`), not the channel's real label ("Agent Host"). VS Code doesn't
-  expose a documented public API mapping an arbitrary `output:` URI back to its display name.
-  `vscode.window.tabGroups` exposes tab labels for output channels opened as *editor tabs*, but
-  the classic bottom **Output panel** (not detached into a tab) may not appear there at all —
-  needs a spike before committing to a UX that shows the real name in the chip/completion list.
-  If no reliable API exists, the slug itself becomes the best available label.
-- Retention/sweep policy for output-snapshot attachment files — same as pasted images (kept
-  forever in the global dedup store, cleaned up only via `Save As`'s asset-bundling flow per
-  `ui.instructions.md`), or should stale, never-referenced output snapshots get swept
-  separately given logs are more likely to be one-off/noisy than a deliberately reused image?
-- Whether to cap/truncate a "full channel" capture of a very large or continuously-growing log,
-  and how to signal truncation in the attachment content itself.
+These were left open in the first draft; resolved now so implementation isn't blocked:
+
+- **Friendly channel display name: not pursued for v1.** No documented public VS Code API maps
+  an arbitrary `output:` URI back to its display name, and the classic bottom Output panel (not
+  detached into a tab) may not appear in `vscode.window.tabGroups` at all. Ship with the mangled
+  slug (`agenthost`) as the label everywhere — completion item label, filename, and chip — same
+  as the filename convention already does. A friendly-name lookup is a separate follow-up, not a
+  blocker.
+- **Retention/sweep policy: reuse the pasted-image policy exactly, unchanged.** Output snapshots
+  live forever in the global content-addressed `.ctrlyoke/attachments/` store and are cleaned up
+  only via `Save As`'s asset-bundling flow (see `ui.instructions.md`, "Save As owns bundle
+  portability"). No separate sweep for output snapshots — a distinct policy per attachment type
+  would need its own tagging/marker scheme for no clear benefit at this stage.
+- **Truncation for large/full-channel captures: cap at `MAX_PASTED_IMAGE_BYTES` (15 MB), reused
+  as `MAX_OUTPUT_SNAPSHOT_BYTES`.** Unlike a pasted image (reject outright over the cap — see
+  `handleSavePastedImage`), truncate *from the start*, keeping the last `MAX_OUTPUT_SNAPSHOT_BYTES`
+  bytes: the most recent lines of a log are almost always the relevant ones. Prepend a one-line
+  marker to the written file noting truncation happened, e.g.
+  `[ctrlyoke: output truncated — showing the last N of M bytes]`, followed by a blank line, then
+  the kept text. Applies to both whole-channel and range captures (a manually selected range large
+  enough to hit the cap is already an unusual case, but the same rule keeps it simple).

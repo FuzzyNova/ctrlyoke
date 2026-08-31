@@ -76,6 +76,7 @@ import {
   getPathSuggestions,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
+import { outputCaptureCache } from "../completions/OutputCaptureCache";
 import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
@@ -687,6 +688,58 @@ export class PromptEditorSupportService {
       Log.error(`Failed to save pasted image: ${errorMessage}`);
       ctx.emit({
         type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+        seq,
+        error: errorMessage,
+      });
+    }
+  }
+
+  /** Save a pending output capture and reply with the workspace-relative reference. */
+  async handleSaveOutputSnapshot(
+    ctx: WebviewClientContext,
+    message: { seq?: number; captureId?: string }
+  ): Promise<void> {
+    const { seq } = message;
+    try {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        throw new Error("No workspace folder open");
+      }
+      if (!message.captureId) {
+        throw new Error("Missing output capture id");
+      }
+
+      const entry = outputCaptureCache.take(message.captureId);
+      if (!entry) {
+        ctx.emit({
+          type: MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED,
+          seq,
+          error: "Output capture expired — try again",
+        });
+        return;
+      }
+
+      const tempFileManager = this.getTempFileManager();
+      const absolutePath = await tempFileManager.createOutputSnapshotFile(
+        entry.text,
+        entry.channel,
+        entry.range,
+        tempFileManager.getAttachmentsDir()
+      );
+      const relativePath = buildFileReferenceValue(
+        tempFileManager.getRelativePath(absolutePath)
+      );
+
+      ctx.emit({
+        type: MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED,
+        seq,
+        relativePath,
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      Log.error(`Failed to save output snapshot: ${errorMessage}`);
+      ctx.emit({
+        type: MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED,
         seq,
         error: errorMessage,
       });

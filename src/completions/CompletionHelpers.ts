@@ -51,6 +51,8 @@ export interface PlainCompletionItem {
   label: string;
   kind: vscode.CompletionItemKind;
   insertText: string;
+  // Set only on output-capture completion items; the picker resolves it via SAVE_OUTPUT_SNAPSHOT.
+  captureId?: string;
   detail?: string;
   documentation?: string;
   sortText?: string;

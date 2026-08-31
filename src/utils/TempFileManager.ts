@@ -3,7 +3,10 @@ import * as fs from "fs";
 import * as crypto from "crypto";
 import { Log } from "./Log";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
-import { TempFileCategory } from "../types/DashboardConstants";
+import {
+  MAX_OUTPUT_SNAPSHOT_BYTES,
+  TempFileCategory,
+} from "../types/DashboardConstants";
 
 /**
  * TempFileManager - Manages temporary prompt files in .ctrlyoke/temp/
@@ -369,6 +372,72 @@ export class TempFileManager {
       } catch (err) {
         Log.error(`Failed to write pasted image file: ${err}`);
         throw new Error(`Cannot write pasted image file: ${filePath}`);
+      }
+    }
+  }
+
+  /**
+   * Write an output-panel snapshot using a content-addressed filename.
+   *
+   * UTF-8 content above {@link MAX_OUTPUT_SNAPSHOT_BYTES} is truncated from
+   * the start, keeping the most recent bytes and prepending a marker before
+   * hashing and writing. The final content hash therefore deduplicates
+   * identical captures, including captures truncated to the same content.
+   * Existing files are reused with a refreshed mtime, just like pasted image
+   * attachments.
+   *
+   * @param text Captured output text
+   * @param channel Mangled output-channel slug used in the filename
+   * @param range Optional 1-based captured line range
+   * @param targetDir Absolute destination directory (normally attachments)
+   * @returns Absolute path to the written (or reused) file
+   */
+  async createOutputSnapshotFile(
+    text: string,
+    channel: string,
+    range: { startLine: number; endLine: number } | undefined,
+    targetDir: string
+  ): Promise<string> {
+    await fs.promises.mkdir(targetDir, { recursive: true });
+
+    const originalBytes = Buffer.from(text, "utf-8");
+    let finalText = text;
+    if (originalBytes.length > MAX_OUTPUT_SNAPSHOT_BYTES) {
+      const keptText = originalBytes
+        .subarray(-MAX_OUTPUT_SNAPSHOT_BYTES)
+        .toString("utf-8");
+      finalText =
+        `[ctrlyoke: output truncated — showing the last ${MAX_OUTPUT_SNAPSHOT_BYTES} of ${originalBytes.length} bytes]\n\n` +
+        keptText;
+    }
+
+    const finalBytes = Buffer.from(finalText, "utf-8");
+    const hash = crypto
+      .createHash("sha256")
+      .update(finalBytes)
+      .digest("hex")
+      .slice(0, 12);
+    const rangePart = range
+      ? `${range.startLine}-${range.endLine}`
+      : "full";
+    const filename = `output-${channel}-${rangePart}-${hash}.log`;
+    const filePath = path.join(targetDir, filename);
+
+    try {
+      // Dedup hit: reuse the existing attachment and refresh its mtime.
+      await fs.promises.access(filePath);
+      const now = new Date();
+      await fs.promises.utimes(filePath, now, now).catch(() => {
+        // Best-effort mtime refresh; ignore failures.
+      });
+      return filePath;
+    } catch {
+      try {
+        await fs.promises.writeFile(filePath, finalText, "utf-8");
+        return filePath;
+      } catch (err) {
+        Log.error(`Failed to write output snapshot file: ${err}`);
+        throw new Error(`Cannot write output snapshot file: ${filePath}`);
       }
     }
   }
