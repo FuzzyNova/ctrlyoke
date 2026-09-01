@@ -517,13 +517,57 @@ describe("CodeMirrorEditor output capture completions", () => {
       expect(typeof completion?.apply).toBe("function");
       apply(view, completion!, result.from, result.from);
 
-      expect(view.state.doc.toString()).toBe(
-        `@${CAPTURING_OUTPUT_PLACEHOLDER}`
-      );
+      // The `@` trigger itself is consumed along with the placeholder — the
+      // resolved reference is always a fresh `@<path>` (see
+      // resolvePendingCapture), so leaving the original `@` in place would
+      // double it up once the snapshot save resolves.
+      expect(view.state.doc.toString()).toBe(CAPTURING_OUTPUT_PLACEHOLDER);
       expect(picked).toHaveBeenCalledWith(
         "capture-1",
-        result.from,
-        result.from + CAPTURING_OUTPUT_PLACEHOLDER.length
+        0,
+        CAPTURING_OUTPUT_PLACEHOLDER.length
+      );
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("consumes a leading # trigger too, since the resolved reference is always @<path>", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({ parent, doc: "#" });
+    const picked = vi.fn();
+
+    try {
+      const result = buildCodeMirrorCompletionResult(
+        [
+          {
+            label: "selection: Agent Host (lines 1-2)",
+            insertText: CAPTURING_OUTPUT_PLACEHOLDER,
+            captureId: "capture-2",
+          },
+        ],
+        0,
+        { trigger: "#", query: "" },
+        undefined,
+        picked
+      );
+      const completion = result.options[0];
+      const apply = completion?.apply as (
+        view: EditorView,
+        completion: Completion,
+        from: number,
+        to: number
+      ) => void;
+
+      apply(view, completion!, result.from, result.from);
+
+      expect(view.state.doc.toString()).toBe(CAPTURING_OUTPUT_PLACEHOLDER);
+      expect(picked).toHaveBeenCalledWith(
+        "capture-2",
+        0,
+        CAPTURING_OUTPUT_PLACEHOLDER.length
       );
     } finally {
       view.destroy();

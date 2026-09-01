@@ -49,8 +49,21 @@ function findOutputPlaceholderRange(
     return undefined;
   }
 
+  // VS Code's completion range (calculateCompletionRange) starts right after
+  // the `@`/`#` trigger character, so that character is still sitting in the
+  // document immediately before the placeholder. The resolved reference is
+  // always a fresh `@<path>` (see executeNativeOutputCaptureCommand below),
+  // so fold that leading trigger character into the replaced range too — or
+  // picking this completion via `#` leaves a stray `#` before the inserted
+  // `@path`, and picking it via `@` doubles it to `@@path`.
+  let placeholderRangeStart = placeholderStart;
+  const precedingChar = documentText[placeholderStart - 1];
+  if (precedingChar === "@" || precedingChar === "#") {
+    placeholderRangeStart -= 1;
+  }
+
   return new vscode.Range(
-    document.positionAt(placeholderStart),
+    document.positionAt(placeholderRangeStart),
     document.positionAt(placeholderEnd)
   );
 }

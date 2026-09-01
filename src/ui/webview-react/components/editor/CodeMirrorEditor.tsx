@@ -380,25 +380,30 @@ export function buildCodeMirrorCompletionResult(
         ? (
             view: EditorView,
             completion: Completion,
-            applyFrom: number,
+            _applyFrom: number,
             applyTo: number
           ) => {
-            // Output captures are saved asynchronously. Insert a literal
-            // placeholder first, then let the component track the resulting
-            // range and start the extension-host round trip.
+            // Output captures always resolve to a fresh `@<path>` reference
+            // (see resolvePendingCapture), regardless of whether this item
+            // was picked via the `@` or `#` trigger. Unlike every other
+            // completion here, the trigger character itself must be consumed
+            // too — replacing only from the usual applyFrom (after the
+            // trigger) would leave a stray `#` in place, or double up `@` into
+            // `@@path`. Replace from the trigger's own position (`from`, the
+            // outer closure variable) instead.
             view.dispatch({
               ...insertCompletionText(
                 view.state,
                 CAPTURING_OUTPUT_PLACEHOLDER,
-                applyFrom,
+                from,
                 applyTo
               ),
               annotations: pickedCompletion.of(completion),
             });
             onOutputCapturePicked?.(
               item.captureId!,
-              applyFrom,
-              applyFrom + CAPTURING_OUTPUT_PLACEHOLDER.length
+              from,
+              from + CAPTURING_OUTPUT_PLACEHOLDER.length
             );
           }
         : symbolRef

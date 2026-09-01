@@ -63,8 +63,8 @@ class MockNativeTextEditor implements Pick<
 }
 
 suite("NativeOutputCaptureCommand", () => {
-  test("replaces the latest placeholder before the cursor", async () => {
-    const text = `before ${CAPTURING_OUTPUT_PLACEHOLDER} ${CAPTURING_OUTPUT_PLACEHOLDER} after`;
+  test("replaces the latest placeholder before the cursor, consuming the leading @ trigger", async () => {
+    const text = `before @${CAPTURING_OUTPUT_PLACEHOLDER} @${CAPTURING_OUTPUT_PLACEHOLDER} after`;
     const secondStart = text.lastIndexOf(CAPTURING_OUTPUT_PLACEHOLDER);
     const editor = await MockNativeTextEditor.create(
       text,
@@ -85,14 +85,40 @@ suite("NativeOutputCaptureCommand", () => {
     assert.strictEqual(capturedId, "capture-1");
     assert.strictEqual(
       editor.currentText,
-      `before ${CAPTURING_OUTPUT_PLACEHOLDER} @attachments/output.log  after`
+      `before @${CAPTURING_OUTPUT_PLACEHOLDER} @attachments/output.log  after`
     );
     assert.strictEqual(editor.edits.length, 1);
     assert.strictEqual(editor.edits[0].replacement, "@attachments/output.log ");
   });
 
-  test("removes the placeholder and reports a save failure", async () => {
-    const text = `prefix ${CAPTURING_OUTPUT_PLACEHOLDER} suffix`;
+  test("replaces a leading # trigger too, converting it to a single @ reference", async () => {
+    const text = `prefix #${CAPTURING_OUTPUT_PLACEHOLDER} suffix`;
+    const editor = await MockNativeTextEditor.create(
+      text,
+      text.indexOf(CAPTURING_OUTPUT_PLACEHOLDER) +
+        CAPTURING_OUTPUT_PLACEHOLDER.length
+    );
+    let capturedId: string | undefined;
+
+    await executeNativeOutputCaptureCommand(
+      "capture-hash",
+      editor,
+      async (captureId) => {
+        capturedId = captureId;
+        return "attachments/output.log";
+      },
+      async () => undefined
+    );
+
+    assert.strictEqual(capturedId, "capture-hash");
+    assert.strictEqual(
+      editor.currentText,
+      "prefix @attachments/output.log  suffix"
+    );
+  });
+
+  test("removes the placeholder and its leading trigger, and reports a save failure", async () => {
+    const text = `prefix @${CAPTURING_OUTPUT_PLACEHOLDER} suffix`;
     const editor = await MockNativeTextEditor.create(
       text,
       text.indexOf(CAPTURING_OUTPUT_PLACEHOLDER) +
@@ -140,7 +166,7 @@ suite("NativeOutputCaptureCommand", () => {
   });
 
   test("registers the command and uses the active editor at invocation time", async () => {
-    const text = `prompt ${CAPTURING_OUTPUT_PLACEHOLDER}`;
+    const text = `prompt @${CAPTURING_OUTPUT_PLACEHOLDER}`;
     const editor = await MockNativeTextEditor.create(text, text.length);
     const originalActiveEditor = vscode.window.activeTextEditor;
     const originalRegisterCommand = vscode.commands.registerCommand;
