@@ -1,12 +1,12 @@
 # Token Total Cache Normalization Plan
 
-> **Status:** Phases 1 and 3 are fully implemented, and every [Open question](#open-questions) is now resolved as of
-> the August 31, 2026 revisions below, with no design decision blocking implementation.
-> Root-caused and grounded in code + provider docs, so the fix touches durable data consumed by
-> two "Implemented" plans
-> ([`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md),
-> [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)), so it
-> is staged here rather than patched ad hoc.
+> **Status:** Implemented. Phases 0, 1, and 3 landed; Phase 2 needed no separate work (folded
+> into Phase 1's `HARNESS_TOKEN_SEMANTICS` promotions). Every [Open question](#open-questions)
+> was resolved before implementation, with no design decision left blocking.
+> Root-caused and grounded in code + provider docs; the fix touches durable data consumed by
+> two other "Implemented" plans
+> ([`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](PROMPT_TOTAL_TOKEN_USAGE_PLAN.md),
+> [`HARNESS_USAGE_TRACKING_PLAN.md`](HARNESS_USAGE_TRACKING_PLAN.md)).
 > **Created:** August 31, 2026, from a user report of implausible-looking token totals in
 > [`StatsUsageSection.tsx`](../../src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx)
 > and the step-metadata tooltip.
