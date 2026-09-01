@@ -328,7 +328,15 @@ suite("WorkflowTokenTotalsReducer", () => {
       start(1, QUEUE_TARGET, { timestampMs: first }),
       output(2, QUEUE_TARGET, { total: 11, harness: HARNESS_IDS.CLAUDE_CLI }),
       start(3, DYNAMIC_TARGET, { timestampMs: second }),
-      output(4, DYNAMIC_TARGET, { total: 22, harness: HARNESS_IDS.CODEX_CLI }),
+      output(4, DYNAMIC_TARGET, {
+        prompt: 100,
+        completion: 2,
+        cached: 90,
+        total: 12,
+        harness: HARNESS_IDS.CODEX_CLI,
+      }),
+      start(5, FINAL_TARGET),
+      output(6, FINAL_TARGET, { total: 13, harness: HARNESS_IDS.QWEN_CLI }),
     ]);
 
     assert.ok(totals);
@@ -349,7 +357,41 @@ suite("WorkflowTokenTotalsReducer", () => {
       assert.strictEqual(partitionedTotal, expected?.total);
     }
     assert.strictEqual(totals.byHarness[HARNESS_IDS.CLAUDE_CLI]?.total, 11);
-    assert.strictEqual(totals.byHarness[HARNESS_IDS.CODEX_CLI]?.total, 22);
+    assert.strictEqual(totals.byHarness[HARNESS_IDS.CODEX_CLI]?.total, 12);
+    assert.strictEqual(totals.byHarness[HARNESS_IDS.QWEN_CLI]?.total, 13);
+  });
+
+  test("aggregates cache-netted Codex and Qwen totals without re-netting them", () => {
+    const totals = new WorkflowTokenTotalsReducer(1).reduce([
+      start(1, QUEUE_TARGET),
+      output(2, QUEUE_TARGET, {
+        prompt: 1_000,
+        completion: 100,
+        cached: 900,
+        total: 200,
+        harness: HARNESS_IDS.CODEX_CLI,
+      }),
+      start(3, SECOND_QUEUE_TARGET),
+      output(4, SECOND_QUEUE_TARGET, {
+        prompt: 2_000,
+        completion: 200,
+        cached: 1_800,
+        total: 400,
+        harness: HARNESS_IDS.QWEN_CLI,
+      }),
+    ]);
+
+    assert.strictEqual(totals?.total, 600);
+    assert.strictEqual(totals?.byHarness[HARNESS_IDS.CODEX_CLI]?.total, 200);
+    assert.strictEqual(totals?.byHarness[HARNESS_IDS.QWEN_CLI]?.total, 400);
+    assert.strictEqual(
+      totals?.byHarness[HARNESS_IDS.CODEX_CLI]?.cachedInput,
+      900
+    );
+    assert.strictEqual(
+      totals?.byHarness[HARNESS_IDS.QWEN_CLI]?.cachedInput,
+      1_800
+    );
   });
 
   test("does not materialize an aggregate when no attempt has a usable total", () => {

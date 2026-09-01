@@ -36,6 +36,9 @@ import {
   formatCostSourcePhrase,
   formatTokenCount,
   resolveTokenTotal,
+  TOKEN_USAGE_SCOPE_NOTE,
+  TOKEN_TOTAL_CACHE_NETTED_NOTE,
+  isCacheInputSubset,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 
@@ -590,6 +593,7 @@ export class CliTerminalFormatter {
         input: prompt,
         output: completion,
         total: reportedTotal,
+        harness: data.harness,
         cached,
         cacheCreated,
       });
@@ -602,6 +606,10 @@ export class CliTerminalFormatter {
         const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
         const contextParts = [
           `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`,
+          totalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
+          totalLabel && isCacheInputSubset(data.harness)
+            ? TOKEN_TOTAL_CACHE_NETTED_NOTE
+            : null,
           totalLabel ? `Total: ${totalLabel}` : null,
           data.hideCost || !cost
             ? null
@@ -612,6 +620,9 @@ export class CliTerminalFormatter {
       } else {
         const tokenParts = [
           tokenBreakdown || null,
+          totalLabel && isCacheInputSubset(data.harness)
+            ? TOKEN_TOTAL_CACHE_NETTED_NOTE
+            : null,
           data.hideCost || !cost
             ? null
             : `${formatCostLabel(cost.usd)} ${formatCostSourcePhrase([cost.source])}`,

@@ -29,12 +29,16 @@ import {
   isContextResolutionDiagnostic,
   STEP_STATUS,
   CONDITION_ACTIONS,
+  TOKEN_TOTAL_CONFIDENCE,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { CliEvent } from "../../types/WebviewMessageTypes";
+import type { CliOutput } from "../../types/WebviewMessageTypes";
+import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
+import { calculateAttemptCost } from "../../utils/ModelPricing";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
 function makeContext(
@@ -104,6 +108,31 @@ function makeExecutor(
   return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
 }
 
+class InspectableWorkflowExecutor extends WorkflowExecutor {
+  resolveTokens(parsedOutput: UniversalCliOutput): CliOutput["tokens"] {
+    return this.resolveTokenCounts(parsedOutput);
+  }
+}
+
+function makeInspectableExecutor(): InspectableWorkflowExecutor {
+  const platform = new MockPlatform();
+  const conditionEvaluator = new EndConditionEvaluator(platform);
+  const handler = new EndConditionHandler(
+    conditionEvaluator,
+    new PromptQueue(),
+    new StatusMessageReporter(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return new InspectableWorkflowExecutor(
+    new PromptQueue(),
+    handler,
+    conditionEvaluator,
+    platform
+  );
+}
+
 class FixedEvaluationEvaluator extends EndConditionEvaluator {
   constructor(
     platform: MockPlatform,
@@ -148,6 +177,108 @@ async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
     await queue.commitRuntimeTransition({ persist: false });
   }
 }
+
+function parsedTokenOutput(
+  harness: (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS],
+  usage: NonNullable<UniversalCliOutput["metadata"]["usage"]>,
+  model?: string
+): UniversalCliOutput {
+  return {
+    events: [],
+    metadata: { harness, model, usage },
+  };
+}
+
+suite("WorkflowExecutor token totals", () => {
+  test("nets cache-subset totals for Codex and Qwen", () => {
+    const executor = makeInspectableExecutor();
+
+    for (const harness of [HARNESS_IDS.CODEX_CLI, HARNESS_IDS.QWEN_CLI]) {
+      const tokens = executor.resolveTokens(
+        parsedTokenOutput(harness, {
+          inputTokens: 1_000,
+          outputTokens: 100,
+          totalTokens: 1_100,
+          cachedInputTokens: 900,
+          totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+        })
+      );
+
+      assert.strictEqual(tokens?.prompt, 1_000);
+      assert.strictEqual(tokens?.cached, 900);
+      assert.strictEqual(tokens?.completion, 100);
+      assert.strictEqual(tokens?.total, 200);
+      assert.strictEqual(
+        tokens?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
+    }
+  });
+
+  test("leaves disjoint harness totals unchanged", () => {
+    const executor = makeInspectableExecutor();
+
+    for (const harness of [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ]) {
+      const tokens = executor.resolveTokens(
+        parsedTokenOutput(harness, {
+          inputTokens: 100,
+          outputTokens: 5,
+          totalTokens: 105,
+          cachedInputTokens: 200,
+          cacheCreatedTokens: 17,
+          reasoningOutputTokens: 3,
+          totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+        })
+      );
+
+      assert.strictEqual(tokens?.prompt, 100);
+      assert.strictEqual(tokens?.completion, 5);
+      assert.strictEqual(tokens?.cached, 200);
+      assert.strictEqual(tokens?.cacheCreated, 17);
+      assert.strictEqual(tokens?.reasoning, 3);
+      assert.strictEqual(tokens?.total, 105);
+      assert.strictEqual(
+        tokens?.totalConfidence,
+        TOKEN_TOTAL_CONFIDENCE.PROVIDER
+      );
+    }
+  });
+
+  test("keeps raw prompt and cache counts for cost calculation", () => {
+    const executor = makeInspectableExecutor();
+    const usage = {
+      inputTokens: 1_000,
+      outputTokens: 100,
+      totalTokens: 1_100,
+      cachedInputTokens: 900,
+      cacheCreatedTokens: 40,
+      totalConfidence: TOKEN_TOTAL_CONFIDENCE.PROVIDER,
+    };
+    const tokens = executor.resolveTokens(
+      parsedTokenOutput(HARNESS_IDS.QWEN_CLI, usage, "qwen3.5-plus")
+    );
+    const expectedCost = calculateAttemptCost({
+      harnessId: HARNESS_IDS.QWEN_CLI,
+      modelId: "qwen3.5-plus",
+      prompt: usage.inputTokens,
+      completion: usage.outputTokens,
+      cached: usage.cachedInputTokens,
+      cacheCreated: usage.cacheCreatedTokens,
+      totalConfidence: usage.totalConfidence,
+    });
+
+    assert.ok(expectedCost.cost);
+    assert.deepStrictEqual(tokens?.cost, expectedCost.cost);
+    assert.strictEqual(tokens?.prompt, usage.inputTokens);
+    assert.strictEqual(tokens?.cached, usage.cachedInputTokens);
+    assert.strictEqual(tokens?.cacheCreated, usage.cacheCreatedTokens);
+    assert.strictEqual(tokens?.total, 200);
+  });
+});
 
 suite("WorkflowExecutor finalStep phase 2", () => {
   test("gates unknown MCP references in fail mode but reports and continues in warn mode", async () => {

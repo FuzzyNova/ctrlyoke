@@ -60,10 +60,16 @@ suite("ObservedHarnessUsageStore", () => {
     };
   }
 
-  function subtotal(total: number) {
+  function subtotal(
+    total: number,
+    details: { input?: number; output?: number; cachedInput?: number } = {}
+  ) {
     return {
-      input: total,
-      output: 0,
+      input: details.input ?? total,
+      output: details.output ?? 0,
+      ...(details.cachedInput === undefined
+        ? {}
+        : { cachedInput: details.cachedInput }),
       total,
       coverage: WORKFLOW_TOKEN_COVERAGE.COMPLETE,
       reportedAttemptCount: 1,
@@ -100,7 +106,20 @@ suite("ObservedHarnessUsageStore", () => {
       runRef,
       totals({
         "2026-08-03": { [HARNESS_IDS.CLAUDE_CLI]: subtotal(7) },
-        "2026-08-08": { [HARNESS_IDS.CODEX_CLI]: subtotal(11) },
+        "2026-08-08": {
+          [HARNESS_IDS.CODEX_CLI]: subtotal(15, {
+            input: 100,
+            output: 5,
+            cachedInput: 90,
+          }),
+        },
+        "2026-08-09": {
+          [HARNESS_IDS.QWEN_CLI]: subtotal(8, {
+            input: 100,
+            output: 4,
+            cachedInput: 96,
+          }),
+        },
       }),
       now
     );
@@ -112,7 +131,7 @@ suite("ObservedHarnessUsageStore", () => {
     );
     assert.strictEqual(
       data.buckets.daily["2026-08-08"]?.[HARNESS_IDS.CODEX_CLI]?.total,
-      11
+      15
     );
     assert.strictEqual(
       data.buckets.monthly["2026-08-01"]?.[HARNESS_IDS.CLAUDE_CLI]?.total,
@@ -120,7 +139,15 @@ suite("ObservedHarnessUsageStore", () => {
     );
     assert.strictEqual(
       data.buckets.monthly["2026-08-01"]?.[HARNESS_IDS.CODEX_CLI]?.total,
-      11
+      15
+    );
+    assert.strictEqual(
+      data.buckets.daily["2026-08-09"]?.[HARNESS_IDS.QWEN_CLI]?.total,
+      8
+    );
+    assert.strictEqual(
+      data.buckets.monthly["2026-08-01"]?.[HARNESS_IDS.QWEN_CLI]?.total,
+      8
     );
   });
 

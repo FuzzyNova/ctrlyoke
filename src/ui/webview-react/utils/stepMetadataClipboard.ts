@@ -256,6 +256,7 @@ export function buildStepMetadataClipboardText({
   runtimeLines.push(
     ...buildAttemptTokenTooltipLines({
       contextWindow,
+      harness: latestOutput?.structured?.metadata.harness,
       attemptTokens: latestOutput?.tokens,
       hideCost,
     })

@@ -1,0 +1,6 @@
+{"type":"session.start","timestamp":"2026-08-31T12:00:00.000Z","data":{"sessionId":"copilot-cache-session","selectedModel":"gpt-5.6-luna"}}
+{"type":"assistant.message","timestamp":"2026-08-31T12:00:01.000Z","data":{"content":"First response.","outputTokens":7}}
+{"type":"model.model_call_success","timestamp":"2026-08-31T12:00:02.000Z","data":{"copilotUsage":{"token_details":[{"token_type":"input","token_count":12},{"token_type":"cache_read","token_count":100},{"token_type":"cache_write","token_count":50},{"token_type":"output","token_count":7}]}}}
+{"type":"assistant.message","timestamp":"2026-08-31T12:00:03.000Z","data":{"content":"Second response.","outputTokens":5}}
+{"type":"model.model_call_success","timestamp":"2026-08-31T12:00:04.000Z","data":{"responseChunk":{"copilot_usage":{"token_details":[{"token_type":"input","token_count":4},{"token_type":"cache_read","token_count":200},{"token_type":"cache_write","token_count":25},{"token_type":"output","token_count":5}]}},"responseUsage":{"prompt_tokens_details":{"cached_tokens":999,"cache_creation_tokens":999}}}}
+{"type":"session.usage_checkpoint","timestamp":"2026-08-31T12:00:05.000Z","data":{"promptCacheBreakState":[{"models":{"gpt-5.6-luna":{"cache_read":300,"cache_write":75}}}]}}

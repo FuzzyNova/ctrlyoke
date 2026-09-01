@@ -198,6 +198,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     !!attemptTotalLabel;
   const tokenTooltip = buildAttemptTokenTooltipLines({
     contextWindow: ctx,
+    harness: harnessId,
     attemptTokens,
     hideCost,
   }).join("\n");

@@ -1,12 +1,12 @@
 # Token Total Cache Normalization Plan
 
-> **Status:** Not implemented, but every [Open question](#open-questions) is now resolved as of
-> the August 31, 2026 revisions below, with no design decision blocking implementation.
-> Root-caused and grounded in code + provider docs, so the fix touches durable data consumed by
-> two "Implemented" plans
-> ([`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md),
-> [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)), so it
-> is staged here rather than patched ad hoc.
+> **Status:** Implemented. Phases 0, 1, and 3 landed; Phase 2 needed no separate work (folded
+> into Phase 1's `HARNESS_TOKEN_SEMANTICS` promotions). Every [Open question](#open-questions)
+> was resolved before implementation, with no design decision left blocking.
+> Root-caused and grounded in code + provider docs; the fix touches durable data consumed by
+> two other "Implemented" plans
+> ([`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](PROMPT_TOTAL_TOKEN_USAGE_PLAN.md),
+> [`HARNESS_USAGE_TRACKING_PLAN.md`](HARNESS_USAGE_TRACKING_PLAN.md)).
 > **Created:** August 31, 2026, from a user report of implausible-looking token totals in
 > [`StatsUsageSection.tsx`](../../src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx)
 > and the step-metadata tooltip.
@@ -606,20 +606,26 @@ depend on — worth a reviewed, staged change, not an in-session patch.
 
 ## Proposed fix
 
-### Phase 0 — tooltip/copy clarification (small, no data-model change)
+### Phase 0 — tooltip/copy clarification (small, no data-model change) — implemented
 
-- In `buildAttemptTokenTooltipLines` (`TokenFormatting.ts`) and the mirrored
+- Implemented in `buildAttemptTokenTooltipLines` (`TokenFormatting.ts`) and the mirrored
   `CliTerminalFormatter.renderStats` text, stop implying the context bar and the attempt
   total should reconcile. Add one line making the distinction explicit, e.g. "Current context
   window is the last turn only; attempt total sums every turn." This is copy-only and
   unblocks confusion immediately regardless of Phase 1's timeline.
-- Clarify the breakdown line's cache semantics per harness so `X in | Y cached` doesn't read
+- Also implemented: clarify the breakdown line's cache semantics per harness so `X in | Y cached` doesn't read
   identically for Claude (additive — cached is *on top of* in) and Codex (overlapping —
   cached is *inside* in). Something like `8.5M in (8.1M cached)` for subset harnesses vs.
   `242 in | 21.4M cached` (unchanged) for disjoint ones communicates the difference without
   needing the Phase 1 data change.
 
-### Phase 1 — normalize the headline `total` for confirmed cache-subset harnesses
+### Phase 1 — normalize the headline `total` for confirmed cache-subset harnesses — implemented
+
+**Implemented:** this change promotes the evidence-backed cache and reasoning semantics for
+Qwen, Antigravity, and OpenCode, fixes Qwen's thinking-token double count, and normalizes the
+headline totals for the two confirmed cache-subset harnesses, Codex and Qwen. The shared
+tooltip and CLI breakdown now explain the cache-netted total while preserving raw provider
+fields for cost calculation.
 
 - First, promote `HARNESS_TOKEN_SEMANTICS` (`ModelPricing.ts:75-102`) `cacheInputRelationship`
   from `UNKNOWN` to the values confirmed above: `QWEN_CLI → SUBSET`,
@@ -700,7 +706,11 @@ folded into Phase 1's `HARNESS_TOKEN_SEMANTICS` bullet. Neither resolution affec
 token-total display fix in Phase 1, only the `≈$` cost line; OpenCode already sidesteps most of
 this via its own `step_finish.part.cost` (Tier 1).
 
-### Phase 3 — wire up Copilot's newly confirmed cache/reasoning signal (parser only, no total-netting)
+### Phase 3 — wire up Copilot's newly confirmed cache/reasoning signal (parser only, no total-netting) — implemented
+
+**Implemented:** Copilot headless token-detail parsing, interactive OTel cache accumulation,
+explicit headless-source precedence, reasoning semantics, stale provider documentation, and
+cache-discount pricing coverage are now in place.
 
 Per the [Copilot deep dive](#copilot-deep-dive-cache-signal-confirmed-on-cli-1082) above,
 Copilot needs no Phase 1 netting (`DISJOINT`, same as Claude/Antigravity/OpenCode) and no

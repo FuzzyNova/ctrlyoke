@@ -8,6 +8,9 @@ import {
   formatTokenCount,
   formatTokenTotal,
   resolveTokenTotal,
+  TOKEN_USAGE_SCOPE_NOTE,
+  TOKEN_TOTAL_CACHE_NETTED_NOTE,
+  isCacheInputSubset,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
@@ -1160,6 +1163,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       input: prompt,
       output: completion,
       total: reportedTotal,
+      harness: harnessId,
       cached,
       cacheCreated,
     });
@@ -1177,6 +1181,10 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         : undefined;
     const tokenTooltip = [
       contextDetails ? `Current context window: ${contextDetails}` : null,
+      contextDetails && totalLabel ? TOKEN_USAGE_SCOPE_NOTE : null,
+      totalLabel && isCacheInputSubset(harnessId)
+        ? TOKEN_TOTAL_CACHE_NETTED_NOTE
+        : null,
       totalLabel ? `Attempt total: ${totalLabel} tokens` : null,
       tokenBreakdown || null,
       compactionLabel ? `Compactions: ${compactionCount}` : null,

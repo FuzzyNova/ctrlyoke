@@ -58,6 +58,39 @@ suite("ModelPricing", () => {
     assert.strictEqual(disjoint?.usd, 10.9);
   });
 
+  test("uses the evidence-backed token semantics for Qwen, Antigravity, and OpenCode", () => {
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI].cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI]
+        .cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI].cacheInputRelationship,
+      ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI].reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.ANTIGRAVITY_CLI]
+        .reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI].reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+    assert.strictEqual(
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.COPILOT_CLI].reasoningRelationship,
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+    );
+  });
+
   test("does not double count reasoning already included in output", () => {
     const included = calculateTokenCost(
       testPricing,
@@ -99,7 +132,10 @@ suite("ModelPricing", () => {
   test("suppresses table pricing when semantics are unknown", () => {
     const result = calculateTokenCost(
       testPricing,
-      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.QWEN_CLI],
+      semantics(
+        ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN,
+        ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN
+      ),
       { prompt: 1_000, completion: 100 }
     );
 
@@ -222,6 +258,24 @@ suite("ModelPricing", () => {
 
     assert.strictEqual(result.cost?.source, ATTEMPT_COST_SOURCES.PRICE_TABLE);
     assert.strictEqual(result.cost?.usd, 3 + 15);
+  });
+
+  test("prices Copilot cache reads at the bundled cache rate", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.COPILOT_CLI,
+      modelId: "gpt-5.6-luna",
+      prompt: 1_000_000,
+      cached: 900_000,
+      completion: 1_000,
+    });
+
+    // Copilot reports cache reads disjoint from prompt tokens. Its registry
+    // rates are $0.20/M input, $0.02/M cached input, and $1.20/M output.
+    assert.ok(Math.abs((result.cost?.usd ?? 0) - 0.2192) < 1e-12);
+    assert.ok(
+      Math.abs((result.cost?.breakdown?.cachedInputUsd ?? 0) - 0.018) < 1e-12
+    );
+    assert.ok((result.cost?.usd ?? Infinity) < 0.2 + 0.18 + 0.0012);
   });
 
   test("reports unknown model for a Copilot model absent from the bundled table", () => {

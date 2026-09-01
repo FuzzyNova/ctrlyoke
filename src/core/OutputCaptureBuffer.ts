@@ -8,6 +8,7 @@ import { isScriptStep } from "../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
+  type HarnessId,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
@@ -36,7 +37,7 @@ export interface PromptCompleteData {
   stepIndex: number;
   tokens?: TokenStats;
   sessionId?: string;
-  harness?: string;
+  harness?: HarnessId;
   elapsed?: number; // seconds
   hideCost?: boolean;
 }

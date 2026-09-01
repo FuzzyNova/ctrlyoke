@@ -7,8 +7,6 @@ import {
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
-  type AttemptCostCacheRelationship,
-  type AttemptCostReasoningRelationship,
   type AttemptCostSource,
   type AttemptCostUnavailableReason,
   type HarnessId,
@@ -18,6 +16,13 @@ import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
 import type { ModelPricingOverride } from "../types/CtrlYokeSettings";
 import { getModelPricingFromRegistry } from "./ModelPricingRegistry";
 import { Log } from "./Log";
+import {
+  HARNESS_TOKEN_SEMANTICS,
+  type HarnessTokenSemantics,
+} from "./TokenSemantics";
+
+export { HARNESS_TOKEN_SEMANTICS } from "./TokenSemantics";
+export type { HarnessTokenSemantics } from "./TokenSemantics";
 
 /** USD rates per one million tokens for a single harness/model pair. */
 export interface ModelPricing {
@@ -35,13 +40,6 @@ export interface ModelPricing {
   sourceUrl: string;
   /** ISO date the entry was last verified against `sourceUrl`. */
   verifiedOn: string;
-}
-
-export interface HarnessTokenSemantics {
-  /** Whether cache-read tokens are included in the harness input count. */
-  cacheInputRelationship: AttemptCostCacheRelationship;
-  /** Whether separately reported reasoning tokens are already in output. */
-  reasoningRelationship: AttemptCostReasoningRelationship;
 }
 
 export interface AttemptTokenCounts {
@@ -66,40 +64,6 @@ export interface AttemptCostCalculationResult {
   cost?: AttemptCostEstimate;
   costUnavailableReason?: AttemptCostUnavailableReason;
 }
-
-/**
- * Billing relationships currently supported by the calculation. The three
- * unverified harnesses stay unknown until a real run confirms their fields;
- * parser comments and synthetic fixtures are not enough for this gate.
- */
-export const HARNESS_TOKEN_SEMANTICS: Record<HarnessId, HarnessTokenSemantics> =
-  {
-    [HARNESS_IDS.CLAUDE_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNREPORTED,
-    },
-    [HARNESS_IDS.CODEX_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.SUBSET,
-      reasoningRelationship:
-        ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT,
-    },
-    [HARNESS_IDS.QWEN_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN,
-    },
-    [HARNESS_IDS.OPENCODE_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN,
-    },
-    [HARNESS_IDS.ANTIGRAVITY_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.UNKNOWN,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNKNOWN,
-    },
-    [HARNESS_IDS.COPILOT_CLI]: {
-      cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNREPORTED,
-    },
-  };
 
 /**
  * Resolve USD-per-million-token rates for a harness/model pair. A user's
