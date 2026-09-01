@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
 import { QueueState, EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import { HarnessStatus } from "../core/HarnessIntegration";
+import {
+  LICENSE_SOURCES,
+  LICENSE_TIERS,
+  type Entitlement,
+  type LicenseService,
+} from "../license/LicenseService";
 
 /**
  * Detailed status from harness integration
@@ -13,17 +19,63 @@ export interface HarnessDetailedStatus {
   maxPollingAttempts?: number;
 }
 
-export class StatusBarManager {
-  private statusBarItem: vscode.StatusBarItem;
+interface StatusBarView {
+  text: string;
+  tooltip: string;
+  backgroundColor: vscode.ThemeColor | undefined;
+}
 
-  constructor(context: vscode.ExtensionContext) {
+/**
+ * A single VS Code status bar item for ctrlyoke. Renders the traversal state
+ * (idle / ready / run progress) together with the current license tier, so the
+ * two previous displays — the compass status and the license key indicator —
+ * live in one place instead of on opposite sides of the window.
+ */
+export class StatusBarManager implements vscode.Disposable {
+  private readonly statusBarItem: vscode.StatusBarItem;
+  private readonly entitlementSubscription: vscode.Disposable | undefined;
+  private readonly showLicense: boolean;
+  private entitlement: Entitlement = createDefaultEntitlement();
+  private baseView: StatusBarView = {
+    text: "$(compass) ctrlyoke",
+    tooltip: "ctrlyoke - Click to open",
+    backgroundColor: undefined,
+  };
+
+  constructor(
+    context: vscode.ExtensionContext,
+    licenseService?: LicenseService
+  ) {
+    this.showLicense = licenseService !== undefined;
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       100
     );
     this.statusBarItem.command = "ctrlyoke.openPanel";
+
+    if (licenseService) {
+      // LicenseService fails open; keep the default Free tier if the host
+      // cannot read the credential store during startup.
+      this.entitlementSubscription = licenseService.onDidChangeEntitlement(
+        (entitlement) => {
+          this.entitlement = entitlement;
+          this.render();
+        }
+      );
+      void licenseService
+        .getEntitlement()
+        .then((entitlement) => {
+          this.entitlement = entitlement;
+          this.render();
+        })
+        .catch(() => {
+          // Keep the default Free tier.
+        });
+    }
+
     this.updateStatusBar();
     context.subscriptions.push(this.statusBarItem);
+    context.subscriptions.push(this);
   }
 
   /**
@@ -103,10 +155,8 @@ export class StatusBarManager {
       tooltip = copilotDisplay.tooltip;
     }
 
-    this.statusBarItem.text = text;
-    this.statusBarItem.tooltip = tooltip;
-    this.statusBarItem.backgroundColor = backgroundColor;
-    this.statusBarItem.show();
+    this.baseView = { text, tooltip, backgroundColor };
+    this.render();
   }
 
   /**
@@ -163,9 +213,59 @@ export class StatusBarManager {
   }
 
   /**
+   * Re-apply the base traversal view combined with the current license tier.
+   */
+  private render(): void {
+    if (this.showLicense) {
+      this.statusBarItem.text = `${this.baseView.text} ${this.getLicenseText()}`;
+      this.statusBarItem.tooltip = `${this.baseView.tooltip}\n\n${this.getLicenseTooltip()}`;
+    } else {
+      this.statusBarItem.text = this.baseView.text;
+      this.statusBarItem.tooltip = this.baseView.tooltip;
+    }
+    this.statusBarItem.backgroundColor = this.baseView.backgroundColor;
+    this.statusBarItem.show();
+  }
+
+  private getLicenseText(): string {
+    const tierLabel =
+      this.entitlement.tier === LICENSE_TIERS.PRO ? "Pro" : "Free";
+    return `$(key) ${tierLabel}`;
+  }
+
+  private getLicenseTooltip(): string {
+    if (this.entitlement.tier === LICENSE_TIERS.PRO) {
+      return `ctrlyoke Pro license — ${formatEntitlementDetails(
+        this.entitlement
+      )}`;
+    }
+    return "ctrlyoke Free tier";
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
+    this.entitlementSubscription?.dispose();
     this.statusBarItem.dispose();
   }
+}
+
+function createDefaultEntitlement(): Entitlement {
+  return {
+    tier: LICENSE_TIERS.FREE,
+    features: new Set<string>(),
+    expiresAt: null,
+  };
+}
+
+function formatEntitlementDetails(entitlement: Entitlement): string {
+  const expiry = entitlement.expiresAt
+    ? `expires ${new Date(entitlement.expiresAt).toLocaleDateString()}`
+    : "no expiry";
+  const source =
+    entitlement.source === LICENSE_SOURCES.OFFLINE_FILE
+      ? "offline license file"
+      : "online activation";
+  return `${expiry}, ${source}`;
 }

@@ -77,6 +77,7 @@ import type {
   ExecutionPreviewScope,
 } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
+import type { LicenseService } from "../license/LicenseService";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -471,7 +472,8 @@ export class WorkflowOrchestrator {
     private readonly context: vscode.ExtensionContext,
     dashboardProvider: DashboardClient | undefined,
     private readonly userFeedbackSink: UserFeedbackSink,
-    private readonly runnerHostIdentity: RunnerHostIdentity
+    private readonly runnerHostIdentity: RunnerHostIdentity,
+    licenseService?: LicenseService
   ) {
     // Create the startup auto-load promise — browser clients await this instead
     // of registering pending callbacks, eliminating the startup race condition.
@@ -523,8 +525,8 @@ export class WorkflowOrchestrator {
     this.antigravityCliIntegration =
       this.integrationFactory.createAntigravityCli();
 
-    // Status bar
-    this.statusBarManager = new StatusBarManager(context);
+    // Status bar — a single item rendering traversal state plus license tier
+    this.statusBarManager = new StatusBarManager(context, licenseService);
 
     // Shared parsers / orchestration helpers
     this.promptFileParser = new PromptFileParser(

@@ -73,11 +73,7 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
-import {
-  LicenseService,
-  LICENSE_TIERS,
-} from "./license/LicenseService";
-import { LicenseStatusBarManager } from "./ui/LicenseStatusBarManager";
+import { LicenseService, LICENSE_TIERS } from "./license/LicenseService";
 import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
 
 let workflowOrchestrator: WorkflowOrchestrator;
@@ -205,7 +201,6 @@ export async function activate(context: vscode.ExtensionContext) {
       { trialState: context.globalState }
     );
     context.subscriptions.push(licenseService);
-    new LicenseStatusBarManager(context, licenseService);
     void licenseService.refresh();
 
     // Freeze storage placement before any history consumer is initialized.
@@ -316,7 +311,8 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       webviewProvider,
       userFeedbackSink,
-      runnerHostIdentity
+      runnerHostIdentity,
+      licenseService
     );
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup
