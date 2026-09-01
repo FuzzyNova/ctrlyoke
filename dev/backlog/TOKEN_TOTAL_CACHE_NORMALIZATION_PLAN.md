@@ -1,6 +1,6 @@
 # Token Total Cache Normalization Plan
 
-> **Status:** Phase 1 is fully implemented; Phase 3 remains queued, and every [Open question](#open-questions) is now resolved as of
+> **Status:** Phases 1 and 3 are fully implemented, and every [Open question](#open-questions) is now resolved as of
 > the August 31, 2026 revisions below, with no design decision blocking implementation.
 > Root-caused and grounded in code + provider docs, so the fix touches durable data consumed by
 > two "Implemented" plans
@@ -706,7 +706,11 @@ folded into Phase 1's `HARNESS_TOKEN_SEMANTICS` bullet. Neither resolution affec
 token-total display fix in Phase 1, only the `≈$` cost line; OpenCode already sidesteps most of
 this via its own `step_finish.part.cost` (Tier 1).
 
-### Phase 3 — wire up Copilot's newly confirmed cache/reasoning signal (parser only, no total-netting)
+### Phase 3 — wire up Copilot's newly confirmed cache/reasoning signal (parser only, no total-netting) — implemented
+
+**Implemented:** Copilot headless token-detail parsing, interactive OTel cache accumulation,
+explicit headless-source precedence, reasoning semantics, stale provider documentation, and
+cache-discount pricing coverage are now in place.
 
 Per the [Copilot deep dive](#copilot-deep-dive-cache-signal-confirmed-on-cli-1082) above,
 Copilot needs no Phase 1 netting (`DISJOINT`, same as Claude/Antigravity/OpenCode) and no

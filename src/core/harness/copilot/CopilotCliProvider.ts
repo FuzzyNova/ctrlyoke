@@ -1188,7 +1188,9 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Augment JSON-mode headless output with context window data from Copilot log files.
    *
-   * Copilot's --output-format json stdout contains output tokens per turn but no input tokens.
+   * Copilot's --output-format json stdout contains per-turn output and cache
+   * token details; cumulative input-token totals still come from OTel when it
+   * is available.
    * Fallback sources are tried in order:
    *
    * 1. **OpenTelemetry chat spans** (this invocation's `otelFilePath`, see `buildOtelSpawnEnv()`)
@@ -1224,8 +1226,13 @@ export class CopilotCliProvider implements ICliProvider {
         ? `, context ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize}`
         : "";
       Log.debug(
-        `[CopilotCliProvider] Token usage from OTel: ${otelUsage.inputTokens} input/${otelUsage.outputTokens} output${contextSummary}`
+        `[CopilotCliProvider] Token usage from OTel: ${otelUsage.inputTokens} input/${otelUsage.outputTokens} output/${otelUsage.cachedInputTokens ?? 0} cached/${otelUsage.cacheCreatedTokens ?? 0} cache-created${contextSummary}`
       );
+      const cachedInputTokens =
+        output.metadata.usage?.cachedInputTokens ?? otelUsage.cachedInputTokens;
+      const cacheCreatedTokens =
+        output.metadata.usage?.cacheCreatedTokens ??
+        otelUsage.cacheCreatedTokens;
       enrichedOutput = {
         ...output,
         metadata: {
@@ -1235,6 +1242,10 @@ export class CopilotCliProvider implements ICliProvider {
             inputTokens: otelUsage.inputTokens,
             outputTokens: otelUsage.outputTokens,
             totalTokens: otelUsage.totalTokens,
+            // Headless JSON token_details is canonical when present. OTel is
+            // the fallback for interactive-only attempts or missing fields.
+            ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+            ...(cacheCreatedTokens !== undefined ? { cacheCreatedTokens } : {}),
             ...(hasExactContext
               ? {
                   contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,

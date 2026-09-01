@@ -47,6 +47,7 @@ export const HARNESS_TOKEN_SEMANTICS: Record<HarnessId, HarnessTokenSemantics> =
     },
     [HARNESS_IDS.COPILOT_CLI]: {
       cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
-      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.UNREPORTED,
+      reasoningRelationship:
+        ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT,
     },
   };

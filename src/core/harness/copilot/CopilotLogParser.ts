@@ -93,9 +93,82 @@ type CopilotPendingTool = {
   timestamp: number;
 };
 
+interface CopilotCacheUsage {
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+/**
+ * Read one model-call cache breakdown. `copilotUsage.token_details` is the
+ * canonical source because Copilot also repeats the same values in the
+ * response chunk and in session.usage_checkpoint events.
+ */
+function extractCopilotCacheUsage(
+  event: CopilotProviderEvent
+): CopilotCacheUsage | undefined {
+  const data = event.data;
+  if (!data) return undefined;
+
+  const tokenDetails = Array.isArray(data.copilotUsage?.token_details)
+    ? data.copilotUsage.token_details
+    : Array.isArray(data.responseChunk?.copilot_usage?.token_details)
+      ? data.responseChunk.copilot_usage.token_details
+      : undefined;
+
+  if (tokenDetails) {
+    let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
+    for (const detail of tokenDetails) {
+      if (
+        !detail ||
+        typeof detail !== "object" ||
+        typeof detail.token_count !== "number" ||
+        !Number.isFinite(detail.token_count) ||
+        detail.token_count < 0
+      ) {
+        continue;
+      }
+      if (detail.token_type === COPILOT_TOKEN_TYPE_CACHE_READ) {
+        cacheReadTokens += detail.token_count;
+      } else if (detail.token_type === COPILOT_TOKEN_TYPE_CACHE_WRITE) {
+        cacheWriteTokens += detail.token_count;
+      }
+    }
+    return { cacheReadTokens, cacheWriteTokens };
+  }
+
+  const promptTokenDetails = data.responseUsage?.prompt_tokens_details;
+  if (!promptTokenDetails || typeof promptTokenDetails !== "object") {
+    return undefined;
+  }
+  const cachedTokens = promptTokenDetails.cached_tokens;
+  const cacheCreationTokens = promptTokenDetails.cache_creation_tokens;
+  if (
+    (typeof cachedTokens !== "number" || !Number.isFinite(cachedTokens)) &&
+    (typeof cacheCreationTokens !== "number" ||
+      !Number.isFinite(cacheCreationTokens))
+  ) {
+    return undefined;
+  }
+  return {
+    cacheReadTokens:
+      typeof cachedTokens === "number" && Number.isFinite(cachedTokens)
+        ? Math.max(cachedTokens, 0)
+        : 0,
+    cacheWriteTokens:
+      typeof cacheCreationTokens === "number" &&
+      Number.isFinite(cacheCreationTokens)
+        ? Math.max(cacheCreationTokens, 0)
+        : 0,
+  };
+}
+
 /** Copilot records injected system reminders as user.message events too. */
 const COPILOT_SYSTEM_USER_MESSAGE_SOURCE = "system";
 const COPILOT_SESSION_USAGE_INFO_EVENT_TYPE = "session.usage_info";
+const COPILOT_MODEL_CALL_SUCCESS_EVENT_TYPE = "model.model_call_success";
+const COPILOT_TOKEN_TYPE_CACHE_READ = "cache_read";
+const COPILOT_TOKEN_TYPE_CACHE_WRITE = "cache_write";
 /** Tool name Copilot uses to terminate a running (including backgrounded) shell. */
 const COPILOT_STOP_SHELL_TOOL_NAME = "stop_powershell";
 /**
@@ -119,6 +192,10 @@ const COPILOT_OTEL_CHAT_SPAN_PREFIX = "chat ";
 const COPILOT_OTEL_USAGE_INFO_EVENT = "github.copilot.session.usage_info";
 const COPILOT_OTEL_INPUT_TOKENS_ATTRIBUTE = "gen_ai.usage.input_tokens";
 const COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE = "gen_ai.usage.output_tokens";
+const COPILOT_OTEL_CACHE_READ_ATTRIBUTE =
+  "gen_ai.usage.cache_read.input_tokens";
+const COPILOT_OTEL_CACHE_WRITE_ATTRIBUTE =
+  "gen_ai.usage.cache_write.input_tokens";
 const COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE = "github.copilot.token_limit";
 const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 
@@ -159,6 +236,10 @@ export class CopilotLogParser extends BaseLogParser {
   private otelCumulativeInputTokens = 0;
   /** Running total of output tokens across all chat spans seen this invocation. */
   private otelCumulativeOutputTokens = 0;
+  /** Running total of cache-read tokens across all chat spans seen this invocation. */
+  private otelCumulativeCacheReadTokens = 0;
+  /** Running total of cache-write tokens across all chat spans seen this invocation. */
+  private otelCumulativeCacheWriteTokens = 0;
   /** Whether at least one OTel chat span was observed this invocation. */
   private otelChatSpanSeen = false;
   /** Exact context-window usage emitted by Copilot's per-turn OTel event. */
@@ -177,6 +258,8 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelReadPosition = 0;
     this.otelCumulativeInputTokens = 0;
     this.otelCumulativeOutputTokens = 0;
+    this.otelCumulativeCacheReadTokens = 0;
+    this.otelCumulativeCacheWriteTokens = 0;
     this.otelChatSpanSeen = false;
     this.otelContextWindowUsedTokens = undefined;
     this.otelContextWindowSize = undefined;
@@ -247,11 +330,19 @@ export class CopilotLogParser extends BaseLogParser {
         this.otelChatSpanSeen = true;
         const input = line.attributes[COPILOT_OTEL_INPUT_TOKENS_ATTRIBUTE];
         const output = line.attributes[COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE];
+        const cacheRead = line.attributes[COPILOT_OTEL_CACHE_READ_ATTRIBUTE];
+        const cacheWrite = line.attributes[COPILOT_OTEL_CACHE_WRITE_ATTRIBUTE];
         if (typeof input === "number") {
           this.otelCumulativeInputTokens += input;
         }
         if (typeof output === "number") {
           this.otelCumulativeOutputTokens += output;
+        }
+        if (typeof cacheRead === "number") {
+          this.otelCumulativeCacheReadTokens += cacheRead;
+        }
+        if (typeof cacheWrite === "number") {
+          this.otelCumulativeCacheWriteTokens += cacheWrite;
         }
 
         const spanEvents = Array.isArray(line.events) ? line.events : [];
@@ -302,6 +393,8 @@ export class CopilotLogParser extends BaseLogParser {
   getFinalOtelUsage(): {
     inputTokens: number;
     outputTokens: number;
+    cachedInputTokens?: number;
+    cacheCreatedTokens?: number;
     totalTokens: number;
     contextWindowUsedTokens?: number;
     contextWindowSize?: number;
@@ -313,6 +406,14 @@ export class CopilotLogParser extends BaseLogParser {
     return {
       inputTokens: this.otelCumulativeInputTokens,
       outputTokens: this.otelCumulativeOutputTokens,
+      cachedInputTokens:
+        this.otelCumulativeCacheReadTokens > 0
+          ? this.otelCumulativeCacheReadTokens
+          : undefined,
+      cacheCreatedTokens:
+        this.otelCumulativeCacheWriteTokens > 0
+          ? this.otelCumulativeCacheWriteTokens
+          : undefined,
       totalTokens:
         this.otelCumulativeInputTokens + this.otelCumulativeOutputTokens,
       contextWindowUsedTokens: this.otelContextWindowUsedTokens,
@@ -358,6 +459,8 @@ export class CopilotLogParser extends BaseLogParser {
     let model: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
+    let cachedInputTokens = 0;
+    let cacheCreatedTokens = 0;
     // Context window usage: persisted legacy logs expose session.truncation, while current
     // Copilot emits session.usage_info only to live subscribers/OTel because it is ephemeral.
     // session.shutdown still supplies a final used-token count, but no numeric limit.
@@ -386,6 +489,17 @@ export class CopilotLogParser extends BaseLogParser {
         }
         if (typeof event.model === "string") {
           model = event.model;
+        }
+      }
+
+      // Copilot's headless JSON stream reports one non-overlapping cache
+      // breakdown on each model call. Do not also consume session.usage_checkpoint:
+      // it repeats these same per-turn values and would double-count them.
+      if (event.type === COPILOT_MODEL_CALL_SUCCESS_EVENT_TYPE) {
+        const cacheUsage = extractCopilotCacheUsage(event);
+        if (cacheUsage) {
+          cachedInputTokens += cacheUsage.cacheReadTokens;
+          cacheCreatedTokens += cacheUsage.cacheWriteTokens;
         }
       }
 
@@ -581,10 +695,17 @@ export class CopilotLogParser extends BaseLogParser {
         model: (model ?? this.resolvedModel) || undefined,
         harness: HARNESS_IDS.COPILOT_CLI,
         usage:
-          effectiveInputTokens > 0 || outputTokens > 0
+          effectiveInputTokens > 0 ||
+          outputTokens > 0 ||
+          cachedInputTokens > 0 ||
+          cacheCreatedTokens > 0
             ? {
                 inputTokens: effectiveInputTokens,
                 outputTokens,
+                cachedInputTokens:
+                  cachedInputTokens > 0 ? cachedInputTokens : undefined,
+                cacheCreatedTokens:
+                  cacheCreatedTokens > 0 ? cacheCreatedTokens : undefined,
                 contextWindowUsedTokens: effectiveInputTokens,
                 ...(contextWindowSize !== undefined
                   ? { contextWindowSize }
@@ -1125,6 +1246,16 @@ export class CopilotLogParser extends BaseLogParser {
     const results: CliEvent[] = [];
 
     if (!data) {
+      return results;
+    }
+
+    // model.model_call_success is a usage-only headless event. Its cache
+    // fields are consumed again by extractResponse() from the raw event list;
+    // there is no display CliEvent to emit for this metadata event.
+    if (
+      ev.type === COPILOT_MODEL_CALL_SUCCESS_EVENT_TYPE &&
+      extractCopilotCacheUsage(ev)
+    ) {
       return results;
     }
 

@@ -1958,6 +1958,32 @@ suite("CopilotLogParser", () => {
       );
       assert.strictEqual(stdoutOutput.metadata.usage?.outputTokens, 20);
     });
+
+    test("reads canonical model-call token details without double-counting checkpoints", () => {
+      const fixtureRoot = path.resolve(
+        __dirname,
+        "../../../../src/test/fixtures/copilot"
+      );
+      const events = fs
+        .readFileSync(
+          path.join(fixtureRoot, "cache-usage.stdout.jsonl"),
+          "utf8"
+        )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+
+      const streamingParser = new CopilotLogParser();
+      assert.deepStrictEqual(
+        streamingParser.extractStructuredEventsFromEvent(events[2]),
+        []
+      );
+
+      const output = parser.extractResponse(events);
+      assert.strictEqual(output.metadata.usage?.outputTokens, 12);
+      assert.strictEqual(output.metadata.usage?.cachedInputTokens, 300);
+      assert.strictEqual(output.metadata.usage?.cacheCreatedTokens, 75);
+    });
   });
 
   suite("extractResponse", () => {
@@ -2498,6 +2524,45 @@ suite("CopilotLogParser", () => {
         assert.strictEqual(final?.contextWindowUsedTokens, 20692);
         assert.strictEqual(final?.contextWindowSize, 1000000);
         assert.strictEqual(final?.outputTokens, 42);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should accumulate cache-read and cache-write attributes per chat span", async () => {
+      const otelLines = [
+        {
+          type: "span",
+          name: "chat gpt-5.6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 1000,
+            "gen_ai.usage.output_tokens": 10,
+            "gen_ai.usage.cache_read.input_tokens": 900,
+            "gen_ai.usage.cache_write.input_tokens": 80,
+          },
+          events: [usageInfoEvent(1200, 128000)],
+        },
+        {
+          type: "span",
+          name: "chat gpt-5.6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 1100,
+            "gen_ai.usage.output_tokens": 11,
+            "gen_ai.usage.cache_read.input_tokens": 950,
+            "gen_ai.usage.cache_write.input_tokens": 90,
+          },
+          events: [usageInfoEvent(1300, 128000)],
+        },
+      ];
+      const filePath = createTempJsonlFile(otelLines);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow();
+
+        const final = parser.getFinalOtelUsage();
+        assert.strictEqual(final?.cachedInputTokens, 1850);
+        assert.strictEqual(final?.cacheCreatedTokens, 170);
       } finally {
         cleanupTempFile(filePath);
       }

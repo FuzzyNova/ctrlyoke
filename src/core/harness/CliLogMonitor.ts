@@ -313,6 +313,24 @@ export class CliLogMonitor {
               inputTokens: otelUsage.inputTokens,
               outputTokens: otelUsage.outputTokens,
               totalTokens: otelUsage.totalTokens,
+              // Headless JSON token_details is canonical when present. OTel
+              // fills only cache fields that headless stdout did not provide.
+              ...(response.metadata.usage?.cachedInputTokens !== undefined ||
+              otelUsage.cachedInputTokens !== undefined
+                ? {
+                    cachedInputTokens:
+                      response.metadata.usage?.cachedInputTokens ??
+                      otelUsage.cachedInputTokens,
+                  }
+                : {}),
+              ...(response.metadata.usage?.cacheCreatedTokens !== undefined ||
+              otelUsage.cacheCreatedTokens !== undefined
+                ? {
+                    cacheCreatedTokens:
+                      response.metadata.usage?.cacheCreatedTokens ??
+                      otelUsage.cacheCreatedTokens,
+                  }
+                : {}),
               ...(hasExactContext
                 ? {
                     contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
