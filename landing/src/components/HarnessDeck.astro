@@ -1,0 +1,186 @@
+---
+// Canonical screenshots live at repo-root images/screenshots/, not duplicated into
+// landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
+// Importing them lets Vite bundle, hash, and cache-bust each PNG normally.
+import agyImg from "../../../images/screenshots/rate-limiter-agy-1200x800.png";
+import claudeImg from "../../../images/screenshots/rate-limiter-claude-1200x800.png";
+import codexImg from "../../../images/screenshots/rate-limiter-codex-1200x800.png";
+import copilotImg from "../../../images/screenshots/rate-limiter-copilot-1200x800.png";
+import opencodeImg from "../../../images/screenshots/rate-limiter-opencode-1200x800.png";
+import qwenImg from "../../../images/screenshots/rate-limiter-qwen-1200x800.png";
+
+const CARD_W = 1200;
+const CARD_H = 800;
+const STEP = 32;
+
+const harnesses = [
+  { id: "claude", name: "Claude Code", img: claudeImg },
+  { id: "codex", name: "Codex CLI", img: codexImg },
+  { id: "copilot", name: "Copilot CLI", img: copilotImg },
+  { id: "opencode", name: "opencode", img: opencodeImg },
+  { id: "qwen", name: "Qwen Code", img: qwenImg },
+  { id: "agy", name: "Antigravity", img: agyImg },
+];
+const N = harnesses.length;
+const CANVAS_W = CARD_W + (N - 1) * STEP;
+const CANVAS_H = CARD_H + (N - 1) * STEP;
+const order = harnesses.map((h) => h.id);
+---
+
+<div class="harness-deck">
+  <div class="harness-deck__stage" style={`aspect-ratio:${CANVAS_W}/${CANVAS_H}`}>
+    <div
+      class="harness-deck__stack"
+      data-deck-stack
+      style={`width:${CANVAS_W}px;height:${CANVAS_H}px`}
+    >
+      {
+        harnesses.map((h) => (
+          <div class="harness-deck__card" data-deck-card={h.id} style={`width:${CARD_W}px;height:${CARD_H}px`}>
+            <img
+              src={h.img.src}
+              width={CARD_W}
+              height={CARD_H}
+              alt={`ctrlyoke running the same workflow with ${h.name}`}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</div>
+
+<style>
+  .harness-deck {
+    display: flex;
+    justify-content: center;
+  }
+  .harness-deck__stage {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+  .harness-deck__stack {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: top left;
+  }
+  .harness-deck__card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    outline: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+      0 30px 60px rgba(0, 0, 0, 0.55),
+      0 4px 12px rgba(0, 0, 0, 0.4);
+    transition:
+      left 900ms cubic-bezier(0.4, 0, 0.2, 1),
+      top 900ms cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 700ms ease,
+      filter 900ms ease,
+      transform 650ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .harness-deck__card img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .harness-deck__card {
+      transition: none;
+    }
+  }
+</style>
+
+<script define:vars={{ order, CARD_W, CARD_H, STEP, N: harnesses.length }}>
+  function initHarnessDeck(root) {
+    const stage = root.querySelector("[data-deck-stack]")?.parentElement;
+    const stack = root.querySelector("[data-deck-stack]");
+    if (!stage || !stack) return;
+
+    const els = {};
+    for (const id of order) {
+      els[id] = root.querySelector(`[data-deck-card="${id}"]`);
+    }
+
+    function slot(i) {
+      return {
+        left: i * STEP,
+        top: i * STEP,
+        opacity: 1 - i * 0.03,
+        filter: `brightness(${(1 - i * 0.1).toFixed(2)}) saturate(${(1 - i * 0.08).toFixed(2)})`,
+        z: N - i,
+      };
+    }
+
+    function applySlot(el, i, transition) {
+      if (!transition) el.style.transition = "none";
+      const s = slot(i);
+      el.style.left = s.left + "px";
+      el.style.top = s.top + "px";
+      el.style.opacity = String(s.opacity);
+      el.style.filter = s.filter;
+      el.style.zIndex = String(s.z);
+      if (!transition) {
+        el.offsetHeight; // force reflow before re-enabling transitions
+        el.style.transition = "";
+      }
+    }
+
+    function fit() {
+      const canvasW = CARD_W + (N - 1) * STEP;
+      const scale = Math.min(1, stage.clientWidth / canvasW);
+      stack.style.transform = `scale(${scale})`;
+    }
+
+    let current = order.slice();
+    current.forEach((id, i) => applySlot(els[id], i, false));
+    fit();
+    window.addEventListener("resize", fit);
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+
+    function tick() {
+      const leavingId = current[0];
+      const next = current.slice(1).concat(leavingId);
+      const leavingEl = els[leavingId];
+
+      next.forEach((id, i) => {
+        if (id === leavingId) return;
+        applySlot(els[id], i, true);
+      });
+
+      leavingEl.style.zIndex = String(N + 1);
+      leavingEl.style.transform = "translateY(-70px) scale(0.97)";
+      leavingEl.style.opacity = "0";
+
+      setTimeout(() => {
+        leavingEl.style.transition = "none";
+        leavingEl.style.transform = "translateY(0) scale(1)";
+        const backSlot = slot(N - 1);
+        leavingEl.style.left = backSlot.left + "px";
+        leavingEl.style.top = backSlot.top + "px";
+        leavingEl.style.filter = backSlot.filter;
+        leavingEl.style.zIndex = "0";
+        leavingEl.offsetHeight; // force reflow
+        leavingEl.style.transition = "";
+        requestAnimationFrame(() => {
+          leavingEl.style.opacity = String(backSlot.opacity);
+          leavingEl.style.zIndex = String(backSlot.z);
+        });
+      }, 650);
+
+      current = next;
+    }
+
+    setInterval(tick, 5000);
+  }
+
+  document.querySelectorAll(".harness-deck").forEach(initHarnessDeck);
+</script>
