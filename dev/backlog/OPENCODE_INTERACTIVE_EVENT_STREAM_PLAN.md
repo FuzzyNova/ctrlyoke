@@ -1,6 +1,6 @@
 # OpenCode Interactive Event Stream Plan
 
-**Status:** Proposed
+**Status:** Implemented
 **Priority:** P2
 
 ## Background
@@ -242,9 +242,12 @@ cover the inherent TOCTOU race of "probe-then-reuse".
    capability-gated feature, not a hard requirement — do not raise the
    documented minimum OpenCode CLI version without evidence real users are
    all above the line where `/api/session/:id/history` exists.
-5. Update `OpenCodeNotificationMonitor`/`OpenCodeCliProvider.capabilities` and
-   `.github/instructions/harness-cli-providers.instructions.md` to document
-   the new dual-path (server-backed history vs. export fallback) once shipped.
+5. Document the new dual-path (server-backed history vs. export fallback) in
+   `.github/instructions/harness-cli-providers.instructions.md`. Review
+   `OpenCodeNotificationMonitor` and `OpenCodeCliProvider.capabilities` for a
+   meaningful capability fact, but do not add a field outside the shared
+   capability schema; the current history/export choice is an internal parser
+   mechanism rather than a user-facing capability domain.
 6. New/updated tests: `src/test/suite/harness/LogParsers.test.ts` (event
    mapping for every `SessionEvent.Durable` variant, cursor/`hasMore` paging,
    fallback-to-export behavior) and `src/test/unit/OpenCodeCliProvider.test.ts`
@@ -267,19 +270,28 @@ cover the inherent TOCTOU race of "probe-then-reuse".
 
 - [x] Interactive OpenCode sessions no longer re-fetch or re-parse the full
       transcript on every poll; each poll only transfers/parses events newer than
-      the last seen sequence.
+      the last seen sequence. Confirmed by `OpenCodeLogParser.fetchNewEvents()`
+      and the cursor/`hasMore` coverage in
+      `src/test/suite/harness/LogParsers.test.ts`.
 - [ ] A session whose transcript would have exceeded the 100 MiB export buffer no
       longer loses events — behavior is verified with a synthetic large-output
       session (e.g. a tool call whose output alone exceeds 100 MiB). The cursor
       implementation removes the architectural buffer limit, but this still needs
-      a real-harness large-output run.
+      a real `opencode` CLI run with a large tool-output session.
 - [x] Multiple concurrent interactive OpenCode sessions in the same workspace each
-      get a distinct port with no collision.
+      get a distinct port with no collision. Confirmed by
+      `src/test/unit/FreePortAllocator.test.ts` and the concurrent-provider test
+      in `src/test/unit/OpenCodeCliProvider.test.ts`.
 - [x] An OpenCode CLI version predating the `history` endpoint still works,
-      transparently falling back to `opencode export` polling.
+      transparently falling back to `opencode export` polling. Confirmed by the
+      404 and no-server fallback tests in
+      `src/test/suite/harness/LogParsers.test.ts`.
 - [x] `isComplete`, `extractResponse`, `extractContentFromEvent`,
       `extractLiveContextWindow`, `extractSessionId`, `classifyUserEvent`, and
       `extractUserSteerText` all produce equivalent output to today's
       export-based path for the same underlying conversation content in synthetic
-      history/export fixtures. Real-harness confirmation remains needed for tool
-      and reasoning event shapes, which were not exercised by the live step-3 probe.
+      history/export fixtures. Confirmed by the history mapping and extraction
+      tests in `src/test/suite/harness/LogParsers.test.ts`. A real `opencode` CLI
+      run is still needed to confirm the live
+      `tool.called`/`.progress`/`.success`/`.failed` and reasoning event shapes;
+      those were not exercised by the live step-3 probe.
