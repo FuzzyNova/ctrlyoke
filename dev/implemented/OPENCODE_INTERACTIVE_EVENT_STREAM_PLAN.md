@@ -119,7 +119,7 @@ directly. `extractLiveContextWindow`'s `lastStepTotal` tracking (today reading
 be pointed at this new shape — it will need to **derive** the total itself.
 Per the exact identity confirmed against five live `opencode run` captures in
 [`TOKEN_TOTAL_CACHE_NORMALIZATION_PLAN.md`'s OpenCode deep
-dive](../implemented/TOKEN_TOTAL_CACHE_NORMALIZATION_PLAN.md#opencode-deep-dive-reasoning-tokens-confirmed-as-included-in-output),
+dive](TOKEN_TOTAL_CACHE_NORMALIZATION_PLAN.md#opencode-deep-dive-reasoning-tokens-confirmed-as-included-in-output),
 `total = input + output + reasoning + cache.read + cache.write` always holds
 exactly, so this is a one-line sum, not a new unknown — but it is a real code
 difference between the `export` and `history` paths that step 3 below must
