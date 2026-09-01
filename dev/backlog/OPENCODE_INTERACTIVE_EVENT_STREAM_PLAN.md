@@ -131,6 +131,27 @@ model is a nested object, `{"model": {"id": "ling-3.0-flash-fin-free",
 `part.model` string — another concrete instance of the "mapping onto the new
 event shapes is the bulk of the work" point above, not just a generic warning.
 
+### Step 3 mapping implementation
+
+The pure durable-event mapping functions now live in
+`src/core/harness/opencode/OpenCodeEventMapper.ts`:
+`mapOpenCodeDurableEventToBaseCliEvent` maps one event, while
+`mapOpenCodeDurableEventsToBaseCliEvents` correlates tool lifecycle records by
+`callID` so the terminal event retains the called tool's name and input before
+the existing export-shaped tool mapper consumes it. The step-ended mapper
+adds `tokens.total` using
+`input + output + reasoning + cache.read + cache.write`; prompt admission and
+text/reasoning start markers are intentionally non-displayable boundaries.
+
+The live fixture coverage is limited to the captured `step.ended` payload and
+the captured six-event type sequence (prompt admitted/prompted, step started,
+text started/ended, step ended) from the 2026-08-31 CLI 1.18.25 run. Tool
+called/progress/success/failed, reasoning started/ended, retry, compaction,
+and step-failed mappings use constructed schema-shaped fixtures because the
+live run did not exercise tool calls or a distinct reasoning part. The next
+step can wire these functions into the history polling path without changing
+the export mapper's contract.
+
 ## Headless mode is unaffected — do not change it
 
 `opencode run` (`packages/opencode/src/cli/cmd/run.ts`, used for ctrlyoke's

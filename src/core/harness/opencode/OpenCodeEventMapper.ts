@@ -14,13 +14,505 @@ import {
   type UnifiedDiffHunk,
   type TokenUsage,
 } from "../../../types/CliOutputTypes";
+import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
+import {
+  OPENCODE_DURABLE_EVENT_TYPES,
+  OPENCODE_EVENT_TYPES,
+} from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
+
+type DurableEventType =
+  (typeof OPENCODE_DURABLE_EVENT_TYPES)[keyof typeof OPENCODE_DURABLE_EVENT_TYPES];
+
+interface OpenCodeDurableBaseData {
+  readonly timestamp: number;
+  readonly sessionID: string;
+}
+
+interface OpenCodeDurableEnvelope<
+  TType extends DurableEventType,
+  TData extends OpenCodeDurableBaseData,
+> {
+  readonly id?: string;
+  readonly type: TType;
+  readonly data: TData;
+  readonly durable?: {
+    readonly aggregateID: string;
+    readonly seq: number;
+    readonly version: number;
+  };
+}
+
+interface OpenCodePromptData extends OpenCodeDurableBaseData {
+  readonly messageID: string;
+  readonly prompt: { readonly text: string };
+  readonly delivery: "steer" | "queue";
+}
+
+interface OpenCodeStepStartedData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly agent: string;
+  readonly model: {
+    readonly id: string;
+    readonly providerID: string;
+    readonly variant?: string;
+  };
+  readonly snapshot?: string;
+}
+
+interface OpenCodeStepEndedData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly finish: string;
+  readonly cost: number;
+  readonly tokens: {
+    readonly input: number;
+    readonly output: number;
+    readonly reasoning: number;
+    readonly cache: { readonly read: number; readonly write: number };
+  };
+  readonly snapshot?: string;
+  readonly files?: readonly string[];
+}
+
+interface OpenCodeStepFailedData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly error: { readonly message: string };
+}
+
+interface OpenCodeTextStartedData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly textID: string;
+}
+
+interface OpenCodeTextEndedData extends OpenCodeTextStartedData {
+  readonly text: string;
+}
+
+interface OpenCodeReasoningStartedData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly reasoningID: string;
+}
+
+interface OpenCodeReasoningEndedData extends OpenCodeReasoningStartedData {
+  readonly text: string;
+}
+
+interface OpenCodeToolBaseData extends OpenCodeDurableBaseData {
+  readonly assistantMessageID: string;
+  readonly callID: string;
+}
+
+interface OpenCodeToolCalledData extends OpenCodeToolBaseData {
+  readonly tool: string;
+  readonly input: Record<string, unknown>;
+  readonly provider: { readonly executed: boolean };
+}
+
+interface OpenCodeToolContentText {
+  readonly type: "text";
+  readonly text: string;
+}
+
+interface OpenCodeToolContentFile {
+  readonly type: "file";
+  readonly uri: string;
+  readonly mime: string;
+  readonly name?: string;
+}
+
+type OpenCodeToolContent = OpenCodeToolContentText | OpenCodeToolContentFile;
+
+interface OpenCodeToolResultData extends OpenCodeToolBaseData {
+  readonly structured: Record<string, unknown>;
+  readonly content: readonly OpenCodeToolContent[];
+  readonly result?: unknown;
+}
+
+interface OpenCodeToolFailedData extends OpenCodeToolBaseData {
+  readonly error: { readonly message: string };
+  readonly result?: unknown;
+}
+
+interface OpenCodeRetriedData extends OpenCodeDurableBaseData {
+  readonly attempt: number;
+  readonly error: { readonly message: string };
+}
+
+interface OpenCodeCompactionStartedData extends OpenCodeDurableBaseData {
+  readonly messageID: string;
+  readonly reason: "auto" | "manual";
+}
+
+interface OpenCodeCompactionEndedData extends OpenCodeCompactionStartedData {
+  readonly text: string;
+  readonly recent: string;
+}
+
+interface OpenCodeShellStartedData extends OpenCodeDurableBaseData {
+  readonly messageID: string;
+  readonly callID: string;
+  readonly command: string;
+}
+
+interface OpenCodeShellEndedData extends OpenCodeDurableBaseData {
+  readonly callID: string;
+  readonly output: string;
+}
+
+export type OpenCodeDurableEvent =
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.PROMPT_ADMITTED,
+      OpenCodePromptData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.PROMPTED,
+      OpenCodePromptData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.STEP_STARTED,
+      OpenCodeStepStartedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.STEP_ENDED,
+      OpenCodeStepEndedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.STEP_FAILED,
+      OpenCodeStepFailedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TEXT_STARTED,
+      OpenCodeTextStartedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TEXT_ENDED,
+      OpenCodeTextEndedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TOOL_CALLED,
+      OpenCodeToolCalledData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TOOL_PROGRESS,
+      OpenCodeToolResultData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS,
+      OpenCodeToolResultData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.TOOL_FAILED,
+      OpenCodeToolFailedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.REASONING_STARTED,
+      OpenCodeReasoningStartedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.REASONING_ENDED,
+      OpenCodeReasoningEndedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.RETRIED,
+      OpenCodeRetriedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.COMPACTION_STARTED,
+      OpenCodeCompactionStartedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.COMPACTION_ENDED,
+      OpenCodeCompactionEndedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.SHELL_STARTED,
+      OpenCodeShellStartedData
+    >
+  | OpenCodeDurableEnvelope<
+      typeof OPENCODE_DURABLE_EVENT_TYPES.SHELL_ENDED,
+      OpenCodeShellEndedData
+    >;
+
+type NormalizedToolState = {
+  readonly status: "pending" | "completed";
+  readonly input?: Record<string, unknown>;
+  readonly output?: string;
+  readonly metadata?: Record<string, unknown>;
+};
+
+function toBaseEvent(
+  event: OpenCodeDurableEvent,
+  type: string,
+  part: Record<string, unknown>
+): BaseCliEvent {
+  return {
+    type,
+    sessionID: event.data.sessionID,
+    timestamp: event.data.timestamp,
+    part,
+  };
+}
+
+function qualifyOpenCodeModel(model: OpenCodeStepStartedData["model"]): string {
+  return model.providerID ? `${model.providerID}/${model.id}` : model.id;
+}
+
+function computeDurableStepTokenTotal(
+  tokens: OpenCodeStepEndedData["tokens"]
+): number {
+  return (
+    tokens.input +
+    tokens.output +
+    tokens.reasoning +
+    tokens.cache.read +
+    tokens.cache.write
+  );
+}
+
+function stringifyToolContent(content: readonly OpenCodeToolContent[]): string {
+  return content
+    .map((item) => (item.type === "text" ? item.text : item.uri))
+    .join("\n");
+}
+
+function mapDurableToolState(
+  status: NormalizedToolState["status"],
+  data: OpenCodeToolCalledData | OpenCodeToolResultData | OpenCodeToolFailedData
+): NormalizedToolState {
+  if ("tool" in data) {
+    return { status, input: data.input };
+  }
+
+  if ("content" in data) {
+    return {
+      status,
+      output: stringifyToolContent(data.content),
+      metadata: {
+        ...data.structured,
+        structured: data.structured,
+        content: data.content,
+        ...(data.result === undefined ? {} : { result: data.result }),
+      },
+    };
+  }
+
+  return {
+    status,
+    output: data.error.message,
+    metadata: {
+      error: data.error.message,
+      ...(data.result === undefined ? {} : { result: data.result }),
+    },
+  };
+}
+
+function durableToolName(
+  data: OpenCodeToolResultData | OpenCodeToolFailedData
+): string {
+  const structured = "structured" in data ? data.structured : undefined;
+  return typeof structured?.tool === "string" ? structured.tool : "unknown";
+}
+
+function withToolContext(
+  event: BaseCliEvent,
+  context: { readonly tool: string; readonly input: Record<string, unknown> }
+): BaseCliEvent {
+  const part = event["part"] as Record<string, unknown>;
+  const state = part.state as Record<string, unknown> | undefined;
+  return {
+    ...event,
+    part: {
+      ...part,
+      tool: context.tool,
+      state: {
+        ...state,
+        input: context.input,
+      },
+    },
+  };
+}
+
+/**
+ * Map one durable history event to the export-shaped BaseCliEvent vocabulary.
+ * Non-displayable lifecycle markers return undefined; their replayable end
+ * events carry the complete text, reasoning, or tool result.
+ */
+export function mapOpenCodeDurableEventToBaseCliEvent(
+  event: OpenCodeDurableEvent
+): BaseCliEvent | undefined {
+  switch (event.type) {
+    case OPENCODE_DURABLE_EVENT_TYPES.PROMPT_ADMITTED:
+      // Admission is a queue boundary; prompted is the single user-text boundary.
+      return undefined;
+
+    case OPENCODE_DURABLE_EVENT_TYPES.PROMPTED:
+      return {
+        type: OPENCODE_EVENT_TYPES.USER_TEXT,
+        sessionID: event.data.sessionID,
+        timestamp: event.data.timestamp,
+        text: event.data.prompt.text,
+      };
+
+    case OPENCODE_DURABLE_EVENT_TYPES.STEP_STARTED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.STEP_START, {
+        model: qualifyOpenCodeModel(event.data.model),
+        providerID: event.data.model.providerID,
+        agent: event.data.agent,
+        snapshot: event.data.snapshot,
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.STEP_ENDED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.STEP_FINISH, {
+        reason: event.data.finish,
+        cost: event.data.cost,
+        tokens: {
+          ...event.data.tokens,
+          total: computeDurableStepTokenTotal(event.data.tokens),
+        },
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.STEP_FAILED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.STEP_FINISH, {
+        reason: "error",
+        error: event.data.error.message,
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.TEXT_STARTED:
+      return undefined;
+
+    case OPENCODE_DURABLE_EVENT_TYPES.TEXT_ENDED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TEXT, {
+        text: event.data.text,
+      });
+
+    // Tool and reasoning durable payloads are schema-derived; no live history capture has exercised them yet.
+    case OPENCODE_DURABLE_EVENT_TYPES.TOOL_CALLED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: event.data.tool,
+        callID: event.data.callID,
+        state: mapDurableToolState("pending", event.data),
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.TOOL_PROGRESS:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: durableToolName(event.data),
+        callID: event.data.callID,
+        state: mapDurableToolState("pending", event.data),
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: durableToolName(event.data),
+        callID: event.data.callID,
+        state: mapDurableToolState("completed", event.data),
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.TOOL_FAILED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: durableToolName(event.data),
+        callID: event.data.callID,
+        state: mapDurableToolState("completed", event.data),
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.REASONING_STARTED:
+      return undefined;
+
+    case OPENCODE_DURABLE_EVENT_TYPES.REASONING_ENDED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.THINKING, {
+        text: event.data.text,
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.RETRIED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.RETRY, {
+        attempt: event.data.attempt,
+        error: event.data.error.message,
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.COMPACTION_STARTED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.COMPACTION, {
+        auto: event.data.reason === "auto",
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.COMPACTION_ENDED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.COMPACTION, {
+        auto: event.data.reason === "auto",
+        summary: event.data.text,
+        recent: event.data.recent,
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.SHELL_STARTED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: "bash",
+        callID: event.data.callID,
+        state: { status: "pending", input: { command: event.data.command } },
+      });
+
+    case OPENCODE_DURABLE_EVENT_TYPES.SHELL_ENDED:
+      return toBaseEvent(event, OPENCODE_EVENT_TYPES.TOOL_USE, {
+        tool: "bash",
+        callID: event.data.callID,
+        state: {
+          status: "completed",
+          output: event.data.output,
+        },
+      });
+  }
+}
+
+/** Map a history page while retaining only events with a displayable boundary. */
+export function mapOpenCodeDurableEventsToBaseCliEvents(
+  events: readonly OpenCodeDurableEvent[]
+): BaseCliEvent[] {
+  const toolContext = new Map<
+    string,
+    { readonly tool: string; readonly input: Record<string, unknown> }
+  >();
+
+  return events.flatMap((event) => {
+    if (event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_CALLED) {
+      toolContext.set(event.data.callID, {
+        tool: event.data.tool,
+        input: event.data.input,
+      });
+    }
+
+    const mapped = mapOpenCodeDurableEventToBaseCliEvent(event);
+    if (!mapped) return [];
+
+    if (
+      event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_PROGRESS ||
+      event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS ||
+      event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_FAILED
+    ) {
+      const context = toolContext.get(event.data.callID);
+      if (context) {
+        const contextualized = withToolContext(mapped, context);
+        if (
+          event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS ||
+          event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_FAILED
+        ) {
+          toolContext.delete(event.data.callID);
+        }
+        return [contextualized];
+      }
+    }
+
+    if (
+      event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS ||
+      event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_FAILED
+    ) {
+      toolContext.delete(event.data.callID);
+    }
+
+    return [mapped];
+  });
+}
 
 /**
  * Compute structured diff hunks from a full before/after file pair.
@@ -163,7 +655,11 @@ export function mapOpenCodeToolPartToCliEvent(
         },
       };
 
-    default:
+    default: {
+      const error =
+        typeof part.state?.metadata?.error === "string"
+          ? part.state.metadata.error
+          : undefined;
       return {
         type: CLI_EVENT_TYPES.TOOL_CALL,
         timestamp,
@@ -172,13 +668,15 @@ export function mapOpenCodeToolPartToCliEvent(
           parameters: input as Record<string, unknown>,
           result: isCompleted
             ? {
-                success: true,
+                success: error === undefined,
                 output:
                   typeof output === "string" ? output : JSON.stringify(output),
+                ...(error === undefined ? {} : { error }),
               }
             : undefined,
         },
       };
+    }
   }
 }
 
@@ -196,11 +694,7 @@ function readLineRange(display: unknown): {
   const d = display as
     | { lineStart?: number; lineEnd?: number; totalLines?: number }
     | undefined;
-  if (
-    !d ||
-    typeof d.lineStart !== "number" ||
-    typeof d.lineEnd !== "number"
-  ) {
+  if (!d || typeof d.lineStart !== "number" || typeof d.lineEnd !== "number") {
     return {};
   }
   const isSegmentRead =
