@@ -34,6 +34,8 @@ interface PromptStepDetailsProps {
   };
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
+  /** Formatted attempt token total (e.g. "14.2k"), shown alongside duration/session ID regardless of compaction state */
+  attemptTotalLabel?: string;
 }
 
 /**
@@ -57,6 +59,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   isSelected = false,
   runtimeMeta,
   overrides,
+  attemptTotalLabel,
 }) => {
   const showCompactStats =
     status === STEP_STATUS.COMPLETED ||
@@ -143,44 +146,51 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         </div>
       )}
 
-      {/* Compact stats — for terminal prompts: [duration] [sessionId {copy}] */}
-      {showCompactStats && (sessionId || durationSeconds !== undefined) && (
-        <div
-          className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
-        >
-          {[
-            durationSeconds !== undefined ? (
-              <span key="dur">{durationSeconds.toFixed(1)}s</span>
-            ) : null,
-            sessionId ? (
-              <span key="session" className="inline-flex items-center gap-0.5">
-                <span>{sessionId.slice(-6)}</span>
-                <button
-                  type="button"
-                  className="icon-btn py-0 px-0.5"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleCopySessionId();
-                  }}
-                  title="Copy session ID"
-                  aria-label="Copy session ID"
+      {/* Compact stats — for terminal prompts: [duration] [token total] [sessionId {copy}] */}
+      {showCompactStats &&
+        (sessionId || durationSeconds !== undefined || attemptTotalLabel) && (
+          <div
+            className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          >
+            {[
+              durationSeconds !== undefined ? (
+                <span key="dur">{durationSeconds.toFixed(1)}s</span>
+              ) : null,
+              attemptTotalLabel ? (
+                <span key="tokens">{attemptTotalLabel} tokens</span>
+              ) : null,
+              sessionId ? (
+                <span
+                  key="session"
+                  className="inline-flex items-center gap-0.5"
                 >
-                  <i
-                    className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
-                  />
-                </button>
-              </span>
-            ) : null,
-          ]
-            .filter(Boolean)
-            .map((part, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="opacity-40">·</span>}
-                {part}
-              </React.Fragment>
-            ))}
-        </div>
-      )}
+                  <span>{sessionId.slice(-6)}</span>
+                  <button
+                    type="button"
+                    className="icon-btn py-0 px-0.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleCopySessionId();
+                    }}
+                    title="Copy session ID"
+                    aria-label="Copy session ID"
+                  >
+                    <i
+                      className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
+                    />
+                  </button>
+                </span>
+              ) : null,
+            ]
+              .filter(Boolean)
+              .map((part, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="opacity-40">·</span>}
+                  {part}
+                </React.Fragment>
+              ))}
+          </div>
+        )}
 
       {/* End condition result */}
       {details?.endConditionResult && (

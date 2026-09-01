@@ -191,11 +191,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     )
   );
   const compactionCount = attemptTokens?.compactionCount;
-  const visibleAttemptTotal =
-    contextPct !== undefined &&
-    compactionCount !== undefined &&
-    compactionCount > 0 &&
-    !!attemptTotalLabel;
+  const hasCompacted = compactionCount !== undefined && compactionCount > 0;
   const tokenTooltip = buildAttemptTokenTooltipLines({
     contextWindow: ctx,
     harness: harnessId,
@@ -321,6 +317,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   details={details}
                   runtimeMeta={runtimeMeta}
                   isSelected={isSelected}
+                  attemptTotalLabel={attemptTotalLabel}
                 />
               </div>
             </>
@@ -354,6 +351,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                   runtimeMeta={runtimeMeta}
                   isSelected={isSelected}
                   overrides={overrides}
+                  attemptTotalLabel={attemptTotalLabel}
                 />
               </div>
             </>
@@ -375,14 +373,14 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                 style={{ height: `${contextPct}%` }}
               />
             </div>
-            {/* Percentage label */}
-            <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5">
-              {contextPct}%
-              {visibleAttemptTotal && (
-                <>
-                  <span aria-hidden="true"> · </span>
-                  <span>{attemptTotalLabel}</span>
-                </>
+            {/* Percentage label, with a compaction badge when the context window has reset */}
+            <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5 inline-flex items-center gap-0.5">
+              <span>{contextPct}%</span>
+              {hasCompacted && (
+                <i
+                  className="codicon codicon-history text-xxs"
+                  aria-label="Context window has compacted"
+                />
               )}
             </span>
           </div>
