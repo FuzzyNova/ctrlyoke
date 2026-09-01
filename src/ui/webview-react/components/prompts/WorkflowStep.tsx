@@ -204,6 +204,8 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     "py-2 px-3",
     "cursor-pointer",
     "group",
+    "select-none",
+    "[-webkit-touch-callout:none]",
     hideBorderBottom ? "" : "border-b border-panel-border",
     "transition-colors",
     dimmed ? "opacity-80" : "",

@@ -99,7 +99,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "Final Step — Disabled";
 
   return (
-    <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
+    <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0 select-none [-webkit-touch-callout:none]">
       {hasFinalStep && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${

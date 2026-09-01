@@ -915,7 +915,7 @@ const WorkflowStepsPanelInner: React.FC<{
   }
 
   return (
-    <div className="flex flex-col h-full bg-editor-bg">
+    <div className="flex flex-col h-full bg-editor-bg select-none [-webkit-touch-callout:none]">
       {/* Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         ref={headerRef}
