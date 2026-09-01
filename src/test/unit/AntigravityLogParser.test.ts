@@ -1053,6 +1053,108 @@ suite("AntigravityLogParser", () => {
         }
       );
     });
+
+    test("maps view_file line-range reads and confirms them from the rendered summary", async () => {
+      await withAntigravityTranscriptSession(
+        [],
+        async ({ parser, logPath, appendTranscript }) => {
+          appendTranscript(
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              created_at: "2026-09-01T14:44:09Z",
+              tool_calls: [
+                {
+                  name: "view_file",
+                  args: {
+                    AbsolutePath: "C:/workspace/src/index.ts",
+                    StartLine: 384,
+                    EndLine: 428,
+                  },
+                },
+              ],
+            },
+            {
+              source: "MODEL",
+              type: "GENERIC",
+              status: "DONE",
+              created_at: "2026-09-01T14:44:11Z",
+              content:
+                "File Path: `file:///C:/workspace/src/index.ts`\n" +
+                "Total Lines: 488\n" +
+                "Total Bytes: 15343\n" +
+                "Showing lines 384 to 428\n" +
+                "384: export const FileReadOutput = () => {",
+            }
+          );
+
+          const events = await parser.readNewLines(logPath);
+          const output = parser.extractResponse(events);
+          const read = output.events.find(
+            (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+          );
+          assert.ok(read);
+          assert.strictEqual(
+            (read?.data as { lineStart?: number }).lineStart,
+            384
+          );
+          assert.strictEqual(
+            (read?.data as { lineEnd?: number }).lineEnd,
+            428
+          );
+        }
+      );
+    });
+
+    test("does not surface a line range for a whole-file view_file read", async () => {
+      await withAntigravityTranscriptSession(
+        [],
+        async ({ parser, logPath, appendTranscript }) => {
+          appendTranscript(
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              created_at: "2026-09-01T14:44:08Z",
+              tool_calls: [
+                {
+                  name: "view_file",
+                  args: { AbsolutePath: "C:/workspace/small.txt" },
+                },
+              ],
+            },
+            {
+              source: "MODEL",
+              type: "GENERIC",
+              status: "DONE",
+              created_at: "2026-09-01T14:44:09Z",
+              content:
+                "File Path: `file:///C:/workspace/small.txt`\n" +
+                "Total Lines: 1\n" +
+                "Total Bytes: 306\n" +
+                "Showing lines 1 to 1\n" +
+                "1: hello world",
+            }
+          );
+
+          const events = await parser.readNewLines(logPath);
+          const output = parser.extractResponse(events);
+          const read = output.events.find(
+            (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+          );
+          assert.ok(read);
+          assert.strictEqual(
+            (read?.data as { lineStart?: number }).lineStart,
+            undefined
+          );
+          assert.strictEqual(
+            (read?.data as { lineEnd?: number }).lineEnd,
+            undefined
+          );
+        }
+      );
+    });
   });
 
   suite("extractResponse", () => {

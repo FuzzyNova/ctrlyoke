@@ -159,6 +159,7 @@ export function mapOpenCodeToolPartToCliEvent(
         timestamp,
         data: {
           path: input.filePath ?? input.path ?? input.file_path ?? "",
+          ...readLineRange(part.state?.metadata?.display),
         },
       };
 
@@ -179,6 +180,33 @@ export function mapOpenCodeToolPartToCliEvent(
         },
       };
   }
+}
+
+/**
+ * OpenCode's read tool result already reports the served range as structured
+ * numbers in `state.metadata.display` (lineStart/lineEnd/totalLines) — unlike
+ * Antigravity, there is no rendered summary line to regex-parse. A whole-file
+ * read reports lineStart 1 and lineEnd === totalLines, which should not
+ * surface as a segment read.
+ */
+function readLineRange(display: unknown): {
+  lineStart?: number;
+  lineEnd?: number;
+} {
+  const d = display as
+    | { lineStart?: number; lineEnd?: number; totalLines?: number }
+    | undefined;
+  if (
+    !d ||
+    typeof d.lineStart !== "number" ||
+    typeof d.lineEnd !== "number"
+  ) {
+    return {};
+  }
+  const isSegmentRead =
+    d.lineStart > 1 ||
+    (typeof d.totalLines === "number" && d.lineEnd < d.totalLines);
+  return isSegmentRead ? { lineStart: d.lineStart, lineEnd: d.lineEnd } : {};
 }
 
 /**

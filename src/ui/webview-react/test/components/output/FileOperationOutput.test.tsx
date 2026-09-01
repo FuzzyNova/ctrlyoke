@@ -107,12 +107,34 @@ describe("FileEditOutput", () => {
     );
   });
 
-  it("shows the requested line range for a file read", () => {
+  it("opens a line-range read scrolled to that range instead of the whole file", () => {
     render(
       <FileReadOutput path="src/example.ts" lineStart={12} lineEnd={24} />
     );
 
-    expect(screen.getByText("(lines 12-24)")).toBeTruthy();
+    expect(
+      screen.getByTitle("Open src/example.ts:12-24")
+    ).toBeTruthy();
+  });
+
+  it("renders a line-range read as a selection reference chip when enabled", () => {
+    render(
+      <FileReadOutput
+        path="src/example.ts"
+        lineStart={12}
+        lineEnd={24}
+        atomicContextReferences
+      />
+    );
+
+    const chip = screen.getByRole("button", {
+      name: "Open src/example.ts:12-24",
+    });
+    expect(chip.classList.contains("atomic-reference-chip")).toBe(true);
+    expect(chip).toHaveTextContent("example.ts:12-24");
+    expect(chip).toHaveAttribute("data-type", "lineRange");
+    expect(chip).toHaveAttribute("data-line-start", "12");
+    expect(chip).toHaveAttribute("data-line-end", "24");
   });
 
   // Multi-root workspaces hand the harness absolute paths, so file events come

@@ -118,6 +118,7 @@ export class AntigravityToolEventBuilder {
             path:
               this.pathArg(args) ?? this.pathFromText(resultText) ?? "unknown",
             content: resultText || undefined,
+            ...this.viewFileLineRange(resultText),
             success,
             error,
             status: success
@@ -592,6 +593,30 @@ export class AntigravityToolEventBuilder {
       }
     }
     return normalized;
+  }
+
+  /**
+   * agy's view_file result never echoes the requested StartLine/EndLine
+   * directly — the only record of what was actually returned is the rendered
+   * summary line ("Showing lines X to Y" / "Total Lines: N"). A whole-file
+   * read reports the same range as [1, totalLines], which should not surface
+   * as a segment read.
+   */
+  private static viewFileLineRange(text: string): {
+    lineStart?: number;
+    lineEnd?: number;
+  } {
+    const showing = text.match(/Showing lines\s+(\d+)\s+to\s+(\d+)/i);
+    if (!showing) {
+      return {};
+    }
+    const lineStart = Number(showing[1]);
+    const lineEnd = Number(showing[2]);
+    const total = text.match(/Total Lines:\s*(\d+)/i);
+    const totalLines = total ? Number(total[1]) : undefined;
+    const isSegmentRead =
+      lineStart > 1 || (totalLines !== undefined && lineEnd < totalLines);
+    return isSegmentRead ? { lineStart, lineEnd } : {};
   }
 
   private static diffBlock(text: string): string | undefined {

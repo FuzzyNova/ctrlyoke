@@ -8,6 +8,8 @@ import React, { memo } from "react";
 import { DiffView } from "./DiffView";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { openFile } from "@hooks/useMessageHandler";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { openContextReference } from "@utils/contextReferenceActions";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
@@ -17,7 +19,9 @@ import { AtomicReferenceChip } from "./AtomicReferenceChip";
 import {
   createAtomicReferencePresentation,
   createFileReferenceChip,
+  createSelectionReferenceChip,
 } from "@utils/atomicReferences";
+import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
 import type { RowFindDecoration } from "@utils/outputFind";
 import { hasRenderableDiff } from "@utils/diffUtils";
 import {
@@ -49,12 +53,15 @@ const FilePath: React.FC<{
   path: string;
   className?: string;
   children?: React.ReactNode;
-}> = ({ path, className = "", children }) => (
+  /** Overrides the default "open whole file" click/title — used for a line-range read. */
+  onClick?: () => void;
+  title?: string;
+}> = ({ path, className = "", children, onClick, title }) => (
   <button
     type="button"
     className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal [overflow-wrap:anywhere] max-w-full ${className}`}
-    onClick={() => openFile(path)}
-    title={`Open ${path}`}
+    onClick={onClick ?? (() => openFile(path))}
+    title={title ?? `Open ${path}`}
   >
     {children ?? path}
   </button>
@@ -68,6 +75,13 @@ interface FileOperationBlockProps {
   pathSuffix?: React.ReactNode;
   atomicContextReferences?: boolean;
   filePathFindMatches?: RowFindDecoration["matches"];
+  /**
+   * When set (a line-range read), the header reference becomes
+   * `#selection:path:start-end` instead of a plain file reference — a chip
+   * when atomicContextReferences is on, a plain link otherwise — and opens
+   * the file scrolled to that range.
+   */
+  selectionReference?: { lineStart: number; lineEnd: number };
   trailingAction?: React.ReactNode;
   /** Failure detail. Rendered in the body so it hangs under the ●, not inline. */
   error?: string;
@@ -86,15 +100,46 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
   pathSuffix,
   atomicContextReferences = false,
   filePathFindMatches = [],
+  selectionReference,
   trailingAction,
   error,
   children,
   fullBleed,
   className,
 }) => {
-  const descriptor = atomicContextReferences
-    ? createFileReferenceChip(path)
+  const selectionSourceText = selectionReference
+    ? buildSelectionReferenceText(
+        path,
+        selectionReference.lineStart,
+        selectionReference.lineEnd
+      )
     : undefined;
+  const sourceText = selectionSourceText ?? path;
+  const descriptor = atomicContextReferences
+    ? selectionReference && selectionSourceText
+      ? createSelectionReferenceChip(
+          path,
+          selectionReference.lineStart,
+          selectionReference.lineEnd,
+          selectionSourceText.length
+        )
+      : createFileReferenceChip(path)
+    : undefined;
+  const openTarget = selectionReference
+    ? () =>
+        openContextReference(
+          {
+            type: "lineRange",
+            path,
+            lineStart: selectionReference.lineStart,
+            lineEnd: selectionReference.lineEnd,
+          },
+          getVsCodeApi()
+        )
+    : () => openFile(path);
+  const plainTitle = selectionReference
+    ? `Open ${path}:${selectionReference.lineStart}-${selectionReference.lineEnd}`
+    : `Open ${path}`;
 
   return (
     <ToolCallBlock
@@ -110,15 +155,17 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
                 descriptor={descriptor}
                 presentation={createAtomicReferencePresentation(
                   descriptor,
-                  path
+                  sourceText
                 )}
                 findMatches={filePathFindMatches}
-                onOpen={() => openFile(path)}
+                onOpen={openTarget}
                 className="text-left align-top"
               />
             ) : (
               <FilePath
                 path={path}
+                onClick={openTarget}
+                title={plainTitle}
                 className="inline-block whitespace-normal [overflow-wrap:anywhere] text-left align-top"
               >
                 {pathContent}
@@ -399,12 +446,6 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
     if (status === OPERATION_STATUS.FAILED) return "Read failed:";
     return "Read";
   };
-  const lineRange =
-    lineStart !== undefined && lineEnd !== undefined
-      ? lineStart === lineEnd
-        ? `line ${lineStart}`
-        : `lines ${lineStart}-${lineEnd}`
-      : undefined;
 
   return (
     <FileOperationBlock
@@ -413,12 +454,10 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
       actionLabel={getActionLabel()}
       path={path}
       pathContent={pathContent}
-      pathSuffix={
-        lineRange ? (
-          <span className="ml-1 shrink-0 text-description-fg">
-            ({lineRange})
-          </span>
-        ) : undefined
+      selectionReference={
+        lineStart !== undefined && lineEnd !== undefined
+          ? { lineStart, lineEnd }
+          : undefined
       }
       atomicContextReferences={atomicContextReferences}
       filePathFindMatches={filePathFindMatches}
