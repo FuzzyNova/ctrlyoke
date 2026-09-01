@@ -73,6 +73,22 @@ export function buildSelectionReference(
   return `#${buildSelectionReferenceValue(relativePath, startLine, endLine)}`;
 }
 
+/**
+ * Build the literal `#selection:<path>:<start>-<end>` text for a path that is
+ * already in its final display form (e.g. an absolute path from a CLI file-read
+ * event). Unlike {@link buildSelectionReference}, this does not normalize
+ * separators via `normalizeReferencePath` — output surfaces show paths
+ * verbatim, backslashes included — it only quotes the field when the path
+ * needs it (Windows drive-letter colons, spaces).
+ */
+export function buildSelectionReferenceText(
+  path: string,
+  startLine: number,
+  endLine: number
+): string {
+  return `#selection:${quoteReferenceField(path)}:${startLine}-${endLine}`;
+}
+
 export function buildSymbolReferenceValue(
   relativePath: string,
   symbolName: string,

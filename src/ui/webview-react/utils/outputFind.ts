@@ -25,6 +25,7 @@ import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
 
 type OutputFindField =
   | "header"
@@ -124,6 +125,18 @@ function getStructuredPatchText(event: CliEvent): string {
     .join("\n");
 }
 
+/**
+ * Canonical header text for a FILE_READ row's "filePath" search segment.
+ * A segment read is shown as a `#selection:path:start-end` reference instead
+ * of the bare path (see FileOperationOutput's FileReadOutput), so the search
+ * corpus must match that same text for find highlighting/expansion to align.
+ */
+export function getFileReadHeaderText(data: FileReadData): string {
+  return data.lineStart !== undefined && data.lineEnd !== undefined
+    ? buildSelectionReferenceText(data.path, data.lineStart, data.lineEnd)
+    : data.path;
+}
+
 function createSegments(
   entries: Array<{ field: OutputFindField; text?: string }>
 ): OutputRowSearchSegment[] {
@@ -218,16 +231,17 @@ export function getOutputRowSearchSegments(
         }
         case CLI_EVENT_TYPES.FILE_EDIT:
         case CLI_EVENT_TYPES.FILE_WRITE:
-        case CLI_EVENT_TYPES.FILE_READ:
         case CLI_EVENT_TYPES.FILE_DELETE: {
-          const data = event.data as
-            | FileEditData
-            | FileWriteData
-            | FileReadData
-            | FileDeleteData;
+          const data = event.data as FileEditData | FileWriteData | FileDeleteData;
           return createSegments([
             { field: "filePath", text: data.path },
             { field: "diff", text: getStructuredPatchText(event) },
+          ]);
+        }
+        case CLI_EVENT_TYPES.FILE_READ: {
+          const data = event.data as FileReadData;
+          return createSegments([
+            { field: "filePath", text: getFileReadHeaderText(data) },
           ]);
         }
         case CLI_EVENT_TYPES.MCP_TOOL_CALL: {

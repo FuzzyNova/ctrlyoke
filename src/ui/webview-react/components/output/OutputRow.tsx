@@ -71,6 +71,7 @@ import {
   isUserStoppedMessage,
 } from "@utils/outputUtils";
 import {
+  getFileReadHeaderText,
   getOutputRowSearchSegments,
   getToolResultText,
   highlightText,
@@ -755,7 +756,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <FileReadOutput
             path={data.path}
-            pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            pathContent={highlightText(
+              getFileReadHeaderText(data),
+              getFieldMatches("filePath")
+            )}
             lineStart={data.lineStart}
             lineEnd={data.lineEnd}
             atomicContextReferences={atomicContextReferences}

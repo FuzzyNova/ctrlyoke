@@ -40,14 +40,29 @@ export function extractFileReadRange(
     input.startLine ?? input.start_line ?? input.lineStart ?? input.line_start;
   const lineEnd =
     input.endLine ?? input.end_line ?? input.lineEnd ?? input.line_end;
-  return {
-    ...(typeof lineStart === "number" && Number.isFinite(lineStart)
-      ? { lineStart }
-      : {}),
-    ...(typeof lineEnd === "number" && Number.isFinite(lineEnd)
-      ? { lineEnd }
-      : {}),
-  };
+  if (typeof lineStart === "number" && Number.isFinite(lineStart)) {
+    return {
+      lineStart,
+      ...(typeof lineEnd === "number" && Number.isFinite(lineEnd)
+        ? { lineEnd }
+        : {}),
+    };
+  }
+
+  // Claude's Read tool reports a 1-based start line via `offset` and a line
+  // count via `limit` instead of an explicit end line.
+  const offset = input.offset;
+  const limit = input.limit;
+  if (typeof offset === "number" && Number.isFinite(offset)) {
+    return {
+      lineStart: offset,
+      ...(typeof limit === "number" && Number.isFinite(limit)
+        ? { lineEnd: offset + limit - 1 }
+        : {}),
+    };
+  }
+
+  return {};
 }
 
 /**

@@ -209,6 +209,35 @@ export function createFileReferenceChip(path: string): AtomicReferenceChip {
   };
 }
 
+/**
+ * Build a line-range file-read descriptor directly from its canonical event
+ * path and line range. `sourceTextLength` must be the length of the literal
+ * `#selection:<path>:<start>-<end>` text the caller will pass as `sourceText`
+ * to {@link createAtomicReferencePresentation} (see
+ * `ContextReferenceBuilder.buildSelectionReferenceText`), so the compact
+ * label's source range and the find-expansion domain stay in sync.
+ */
+export function createSelectionReferenceChip(
+  path: string,
+  lineStart: number,
+  lineEnd: number,
+  sourceTextLength: number
+): AtomicReferenceChip {
+  return {
+    from: 0,
+    to: sourceTextLength,
+    icon: "list-selection",
+    label: `${referenceBasename(path)}:${lineStart}-${lineEnd}`,
+    title: `${path}:${lineStart}-${lineEnd}`,
+    attrs: {
+      "data-type": "lineRange",
+      "data-path": path,
+      "data-line-start": String(lineStart),
+      "data-line-end": String(lineEnd),
+    },
+  };
+}
+
 /** Build the row-local source/label projection consumed by AtomicReferenceChip. */
 export function createAtomicReferencePresentation(
   descriptor: AtomicReferenceChip,

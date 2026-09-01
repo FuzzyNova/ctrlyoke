@@ -422,12 +422,30 @@ export class ClaudeToolBuilder {
       toolUseResult.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT &&
       toolUseResult.file
     ) {
+      const file = toolUseResult.file;
+      // startLine/numLines/totalLines are the CLI's authoritative account of
+      // what was actually read — more reliable than echoing the tool_use
+      // input's requested offset/limit. A full-file read reports
+      // startLine === 1 and numLines === totalLines; only a genuine segment
+      // read (a subset of the file) should surface a line range.
+      const isSegmentRead =
+        typeof file.startLine === "number" &&
+        typeof file.numLines === "number" &&
+        (file.startLine > 1 ||
+          (typeof file.totalLines === "number" &&
+            file.numLines < file.totalLines));
       events.push({
         type: CLI_EVENT_TYPES.FILE_READ,
         timestamp,
         data: {
-          path: toolUseResult.file.filePath || "unknown",
-          content: toolUseResult.file.content || "",
+          path: file.filePath || "unknown",
+          content: file.content || "",
+          ...(isSegmentRead
+            ? {
+                lineStart: file.startLine,
+                lineEnd: file.startLine + file.numLines - 1,
+              }
+            : {}),
           status: OPERATION_STATUS.COMPLETED,
           success: true,
         } as FileReadData,

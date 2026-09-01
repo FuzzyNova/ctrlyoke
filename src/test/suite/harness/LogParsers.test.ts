@@ -1010,6 +1010,96 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(hunks[0].oldStart, 482);
       assert.strictEqual(hunks[0].newStart, 482);
     });
+
+    test("should preserve Claude read ranges from offset/limit and confirm them from toolUseResult.file", () => {
+      const initiatedEvents = parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_read_segment",
+              name: "Read",
+              input: {
+                file_path: "src/example.ts",
+                offset: 12,
+                limit: 13,
+              },
+            },
+          ],
+        },
+        timestamp: "2026-07-26T12:00:01.000Z",
+      } as unknown as BaseCliEvent);
+
+      assert.strictEqual(initiatedEvents.length, 1);
+      assert.strictEqual(initiatedEvents[0].type, CLI_EVENT_TYPES.FILE_READ);
+      assert.strictEqual((initiatedEvents[0].data as any).lineStart, 12);
+      assert.strictEqual((initiatedEvents[0].data as any).lineEnd, 24);
+
+      const completedEvents = parser.extractStructuredEventsFromEvent({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_read_segment",
+              content: "file contents",
+            },
+          ],
+        },
+        toolUseResult: {
+          type: "text",
+          file: {
+            filePath: "src/example.ts",
+            content: "file contents",
+            startLine: 12,
+            numLines: 13,
+            totalLines: 400,
+          },
+        },
+        timestamp: "2026-07-26T12:00:02.000Z",
+      } as unknown as BaseCliEvent);
+
+      const fileReadEvents = completedEvents.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(fileReadEvents.length, 1);
+      assert.strictEqual((fileReadEvents[0].data as any).lineStart, 12);
+      assert.strictEqual((fileReadEvents[0].data as any).lineEnd, 24);
+    });
+
+    test("should not surface a line range for a whole-file read", () => {
+      const completedEvents = parser.extractStructuredEventsFromEvent({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_read_whole",
+              content: "file contents",
+            },
+          ],
+        },
+        toolUseResult: {
+          type: "text",
+          file: {
+            filePath: "src/example.ts",
+            content: "file contents",
+            startLine: 1,
+            numLines: 89,
+            totalLines: 89,
+          },
+        },
+        timestamp: "2026-07-26T12:00:02.000Z",
+      } as unknown as BaseCliEvent);
+
+      const fileReadEvents = completedEvents.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(fileReadEvents.length, 1);
+      assert.strictEqual((fileReadEvents[0].data as any).lineStart, undefined);
+      assert.strictEqual((fileReadEvents[0].data as any).lineEnd, undefined);
+    });
   });
 
   suite("isComplete", () => {
@@ -4938,6 +5028,78 @@ suite("OpenCodeLogParser", () => {
         (events[0].data as AskUserQuestionData).questions[0].answer,
         "Yes"
       );
+    });
+  });
+
+  suite("read line-range events", () => {
+    test("preserves line ranges reported in state.metadata.display", () => {
+      const event = {
+        type: "tool_use",
+        sessionID: "ses_read_segment",
+        timestamp: 1000,
+        part: {
+          tool: "read",
+          callID: "call_read_segment",
+          state: {
+            status: "completed",
+            input: {
+              filePath: "src/example.ts",
+              offset: 384,
+              limit: 45,
+            },
+            output: "<content>...</content>",
+            metadata: {
+              display: {
+                lineStart: 384,
+                lineEnd: 428,
+                totalLines: 487,
+                truncated: true,
+              },
+            },
+          },
+        },
+      } as unknown as BaseCliEvent;
+
+      const response = parser.extractResponse([event]);
+      assert.strictEqual(response.events.length, 1);
+      assert.strictEqual(response.events[0].type, CLI_EVENT_TYPES.FILE_READ);
+      assert.strictEqual((response.events[0].data as any).lineStart, 384);
+      assert.strictEqual((response.events[0].data as any).lineEnd, 428);
+
+      const streamed = parser.extractStructuredEventsFromEvent(event);
+      assert.strictEqual(streamed.length, 1);
+      assert.strictEqual((streamed[0].data as any).lineStart, 384);
+      assert.strictEqual((streamed[0].data as any).lineEnd, 428);
+    });
+
+    test("does not surface a line range for a whole-file read", () => {
+      const event = {
+        type: "tool_use",
+        sessionID: "ses_read_whole",
+        timestamp: 1000,
+        part: {
+          tool: "read",
+          callID: "call_read_whole",
+          state: {
+            status: "completed",
+            input: { filePath: "src/small.ts" },
+            output: "<content>...</content>",
+            metadata: {
+              display: {
+                lineStart: 1,
+                lineEnd: 89,
+                totalLines: 89,
+                truncated: false,
+              },
+            },
+          },
+        },
+      } as unknown as BaseCliEvent;
+
+      const response = parser.extractResponse([event]);
+      assert.strictEqual(response.events.length, 1);
+      assert.strictEqual((response.events[0].data as any).lineStart, undefined);
+      assert.strictEqual((response.events[0].data as any).lineEnd, undefined);
     });
   });
 
