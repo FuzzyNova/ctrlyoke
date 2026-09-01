@@ -265,17 +265,21 @@ cover the inherent TOCTOU race of "probe-then-reuse".
 
 ## Acceptance criteria
 
-- Interactive OpenCode sessions no longer re-fetch or re-parse the full
-  transcript on every poll; each poll only transfers/parses events newer than
-  the last seen sequence.
-- A session whose transcript would have exceeded the 100 MiB export buffer no
-  longer loses events — behavior is verified with a synthetic large-output
-  session (e.g. a tool call whose output alone exceeds 100 MiB).
-- Multiple concurrent interactive OpenCode sessions in the same workspace each
-  get a distinct port with no collision.
-- An OpenCode CLI version predating the `history` endpoint still works,
-  transparently falling back to `opencode export` polling.
-- `isComplete`, `extractResponse`, `extractContentFromEvent`,
-  `extractLiveContextWindow`, `extractSessionId`, `classifyUserEvent`, and
-  `extractUserSteerText` all produce equivalent output to today's
-  export-based path for the same underlying conversation content.
+- [x] Interactive OpenCode sessions no longer re-fetch or re-parse the full
+      transcript on every poll; each poll only transfers/parses events newer than
+      the last seen sequence.
+- [ ] A session whose transcript would have exceeded the 100 MiB export buffer no
+      longer loses events — behavior is verified with a synthetic large-output
+      session (e.g. a tool call whose output alone exceeds 100 MiB). The cursor
+      implementation removes the architectural buffer limit, but this still needs
+      a real-harness large-output run.
+- [x] Multiple concurrent interactive OpenCode sessions in the same workspace each
+      get a distinct port with no collision.
+- [x] An OpenCode CLI version predating the `history` endpoint still works,
+      transparently falling back to `opencode export` polling.
+- [x] `isComplete`, `extractResponse`, `extractContentFromEvent`,
+      `extractLiveContextWindow`, `extractSessionId`, `classifyUserEvent`, and
+      `extractUserSteerText` all produce equivalent output to today's
+      export-based path for the same underlying conversation content in synthetic
+      history/export fixtures. Real-harness confirmation remains needed for tool
+      and reasoning event shapes, which were not exercised by the live step-3 probe.

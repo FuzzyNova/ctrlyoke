@@ -246,6 +246,11 @@ type NormalizedToolState = {
   readonly metadata?: Record<string, unknown>;
 };
 
+export type OpenCodeToolContext = {
+  readonly tool: string;
+  readonly input: Record<string, unknown>;
+};
+
 function toBaseEvent(
   event: OpenCodeDurableEvent,
   type: string,
@@ -321,7 +326,7 @@ function durableToolName(
 
 function withToolContext(
   event: BaseCliEvent,
-  context: { readonly tool: string; readonly input: Record<string, unknown> }
+  context: OpenCodeToolContext
 ): BaseCliEvent {
   const part = event["part"] as Record<string, unknown>;
   const state = part.state as Record<string, unknown> | undefined;
@@ -467,13 +472,9 @@ export function mapOpenCodeDurableEventToBaseCliEvent(
 
 /** Map a history page while retaining only events with a displayable boundary. */
 export function mapOpenCodeDurableEventsToBaseCliEvents(
-  events: readonly OpenCodeDurableEvent[]
+  events: readonly OpenCodeDurableEvent[],
+  toolContext: Map<string, OpenCodeToolContext> = new Map()
 ): BaseCliEvent[] {
-  const toolContext = new Map<
-    string,
-    { readonly tool: string; readonly input: Record<string, unknown> }
-  >();
-
   return events.flatMap((event) => {
     if (event.type === OPENCODE_DURABLE_EVENT_TYPES.TOOL_CALLED) {
       toolContext.set(event.data.callID, {

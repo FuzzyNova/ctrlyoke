@@ -31,7 +31,11 @@ import {
   ILogParser,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
-import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodeProtocolConstants";
+import {
+  OPENCODE_DURABLE_EVENT_TYPES,
+  OPENCODE_EVENT_TYPES,
+} from "../../../core/harness/opencode/OpenCodeProtocolConstants";
+import type { OpenCodeDurableEvent } from "../../../core/harness/opencode/OpenCodeEventMapper";
 import {
   QWEN_CONTENT_PART_TYPES,
   QWEN_EVENT_TYPES,
@@ -4880,6 +4884,19 @@ suite("CodexLogParser", () => {
 suite("OpenCodeLogParser", () => {
   let parser: OpenCodeLogParser;
 
+  function makeHistoryEvent(
+    type: string,
+    data: Record<string, unknown>,
+    seq: number
+  ): OpenCodeDurableEvent {
+    return {
+      id: `evt_history_${seq}`,
+      type,
+      durable: { aggregateID: "ses_history", seq, version: 1 },
+      data,
+    } as unknown as OpenCodeDurableEvent;
+  }
+
   setup(() => {
     parser = new OpenCodeLogParser();
   });
@@ -5164,6 +5181,421 @@ suite("OpenCodeLogParser", () => {
 
       assert.strictEqual(requestedSessionId, "ses_export_test");
       assert.deepStrictEqual(events, []);
+    });
+  });
+
+  suite("interactive history polling", () => {
+    test("uses the sequence cursor and follows hasMore pages in one tick", async () => {
+      const requestedUrls: string[] = [];
+      const pages = new Map<
+        number,
+        { data: OpenCodeDurableEvent[]; hasMore: boolean }
+      >([
+        [
+          0,
+          {
+            data: [
+              makeHistoryEvent(
+                OPENCODE_DURABLE_EVENT_TYPES.PROMPT_ADMITTED,
+                {
+                  timestamp: 1000,
+                  sessionID: "ses_history",
+                  messageID: "msg_user",
+                  prompt: { text: "First prompt" },
+                  delivery: "steer",
+                },
+                1
+              ),
+            ],
+            hasMore: true,
+          },
+        ],
+        [
+          1,
+          {
+            data: [
+              makeHistoryEvent(
+                OPENCODE_DURABLE_EVENT_TYPES.PROMPTED,
+                {
+                  timestamp: 1001,
+                  sessionID: "ses_history",
+                  messageID: "msg_user",
+                  prompt: { text: "First prompt" },
+                  delivery: "steer",
+                },
+                2
+              ),
+            ],
+            hasMore: false,
+          },
+        ],
+        [
+          2,
+          {
+            data: [
+              makeHistoryEvent(
+                OPENCODE_DURABLE_EVENT_TYPES.TEXT_ENDED,
+                {
+                  timestamp: 1002,
+                  sessionID: "ses_history",
+                  assistantMessageID: "msg_assistant",
+                  textID: "text_1",
+                  text: "First response",
+                },
+                3
+              ),
+            ],
+            hasMore: false,
+          },
+        ],
+      ]);
+      const historyParser = new OpenCodeLogParser(
+        () => undefined,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          throw new Error("export should not be used");
+        },
+        async (url) => {
+          requestedUrls.push(url);
+          const after = Number(new URL(url).searchParams.get("after"));
+          const page = pages.get(after);
+          assert.ok(page, `unexpected cursor ${after}`);
+          return {
+            ok: true,
+            status: 200,
+            json: async () => page,
+          };
+        }
+      );
+
+      const firstTick = await historyParser.readNewLines("ses_history");
+      const secondTick = await historyParser.readNewLines("ses_history");
+
+      assert.deepStrictEqual(requestedUrls, [
+        "http://127.0.0.1:4321/api/session/ses_history/history?after=0",
+        "http://127.0.0.1:4321/api/session/ses_history/history?after=1",
+        "http://127.0.0.1:4321/api/session/ses_history/history?after=2",
+      ]);
+      assert.deepStrictEqual(
+        firstTick.map((event) => event.type),
+        [OPENCODE_EVENT_TYPES.USER_TEXT]
+      );
+      assert.deepStrictEqual(
+        secondTick.map((event) => event.type),
+        [OPENCODE_EVENT_TYPES.TEXT]
+      );
+    });
+
+    test("retains tool correlation when lifecycle events cross poll ticks", async () => {
+      const pages = new Map<number, OpenCodeDurableEvent[]>([
+        [
+          0,
+          [
+            makeHistoryEvent(
+              OPENCODE_DURABLE_EVENT_TYPES.TOOL_CALLED,
+              {
+                timestamp: 1100,
+                sessionID: "ses_tool_ticks",
+                assistantMessageID: "msg_tool",
+                callID: "call_tool_ticks",
+                tool: "custom_tool",
+                input: { path: "src/example.ts" },
+                provider: { executed: true },
+              },
+              1
+            ),
+          ],
+        ],
+        [
+          1,
+          [
+            makeHistoryEvent(
+              OPENCODE_DURABLE_EVENT_TYPES.TOOL_SUCCESS,
+              {
+                timestamp: 1101,
+                sessionID: "ses_tool_ticks",
+                assistantMessageID: "msg_tool",
+                callID: "call_tool_ticks",
+                structured: {},
+                content: [{ type: "text", text: "complete" }],
+                provider: { executed: true },
+              },
+              2
+            ),
+          ],
+        ],
+      ]);
+      const historyParser = new OpenCodeLogParser(
+        () => undefined,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          throw new Error("export should not be used");
+        },
+        async (url) => {
+          const after = Number(new URL(url).searchParams.get("after"));
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: pages.get(after) ?? [],
+              hasMore: false,
+            }),
+          };
+        }
+      );
+
+      await historyParser.readNewLines("ses_tool_ticks");
+      const [completed] = await historyParser.readNewLines("ses_tool_ticks");
+
+      assert.strictEqual(completed.type, OPENCODE_EVENT_TYPES.TOOL_USE);
+      assert.strictEqual((completed.part as any).tool, "custom_tool");
+      assert.deepStrictEqual((completed.part as any).state.input, {
+        path: "src/example.ts",
+      });
+    });
+
+    test("falls back to export permanently after a 404", async () => {
+      let historyCalls = 0;
+      let exportCalls = 0;
+      const exportOutput = JSON.stringify({
+        info: { id: "ses_404" },
+        messages: [
+          {
+            info: { role: "assistant", time: { created: 1000 } },
+            parts: [
+              {
+                type: OPENCODE_EVENT_TYPES.TEXT,
+                id: "part_404_text",
+                sessionID: "ses_404",
+                messageID: "msg_404",
+                text: "Fallback response",
+                time: { start: 1000, end: 1001 },
+              },
+            ],
+          },
+        ],
+      });
+      const fallbackParser = new OpenCodeLogParser(
+        () => undefined,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          exportCalls += 1;
+          return exportOutput;
+        },
+        async () => {
+          historyCalls += 1;
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+          };
+        }
+      );
+
+      const firstPoll = await fallbackParser.readNewLines("ses_404");
+      const secondPoll = await fallbackParser.readNewLines("ses_404");
+
+      assert.strictEqual(historyCalls, 1);
+      assert.strictEqual(exportCalls, 2);
+      assert.deepStrictEqual(
+        firstPoll.map((event) => event.type),
+        [OPENCODE_EVENT_TYPES.TEXT]
+      );
+      assert.deepStrictEqual(secondPoll, []);
+    });
+
+    test("falls back to export when no interactive server URL is available", async () => {
+      let historyCalls = 0;
+      let exportCalls = 0;
+      const fallbackParser = new OpenCodeLogParser(
+        () => undefined,
+        () => undefined,
+        async () => {
+          exportCalls += 1;
+          return JSON.stringify({
+            info: { id: "ses_no_server" },
+            messages: [],
+          });
+        },
+        async () => {
+          historyCalls += 1;
+          throw new Error("history should not be attempted");
+        }
+      );
+
+      await fallbackParser.readNewLines("ses_no_server");
+      await fallbackParser.readNewLines("ses_no_server");
+
+      assert.strictEqual(historyCalls, 0);
+      assert.strictEqual(exportCalls, 2);
+    });
+
+    test("maps step completion and derives the history context-window total", async () => {
+      const stepEnded = makeHistoryEvent(
+        OPENCODE_DURABLE_EVENT_TYPES.STEP_ENDED,
+        {
+          timestamp: 2000,
+          sessionID: "ses_context",
+          assistantMessageID: "msg_context",
+          finish: "stop",
+          cost: 0,
+          tokens: {
+            input: 10,
+            output: 20,
+            reasoning: 3,
+            cache: { read: 4, write: 5 },
+          },
+        },
+        1
+      );
+      const historyParser = new OpenCodeLogParser(
+        () => 1000,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          throw new Error("export should not be used");
+        },
+        async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [stepEnded], hasMore: false }),
+        })
+      );
+
+      const [event] = await historyParser.readNewLines("ses_context");
+
+      assert.strictEqual(historyParser.isComplete(event), true);
+      assert.deepStrictEqual(
+        historyParser.extractLiveContextWindow(event, "model"),
+        { used: 42, size: 1000 }
+      );
+    });
+
+    test("produces the expected response for the confirmed six-event sequence", async () => {
+      const sessionId = "ses_live_sequence";
+      const events = [
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.PROMPT_ADMITTED,
+          {
+            timestamp: 3000,
+            sessionID: sessionId,
+            messageID: "msg_user",
+            prompt: { text: "Inspect the workspace." },
+            delivery: "steer",
+          },
+          1
+        ),
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.PROMPTED,
+          {
+            timestamp: 3001,
+            sessionID: sessionId,
+            messageID: "msg_user",
+            prompt: { text: "Inspect the workspace." },
+            delivery: "steer",
+          },
+          2
+        ),
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.STEP_STARTED,
+          {
+            timestamp: 3002,
+            sessionID: sessionId,
+            assistantMessageID: "msg_assistant",
+            agent: "build",
+            model: { id: "ling-3.0-flash-fin-free", providerID: "opencode" },
+          },
+          3
+        ),
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.TEXT_STARTED,
+          {
+            timestamp: 3003,
+            sessionID: sessionId,
+            assistantMessageID: "msg_assistant",
+            textID: "text_1",
+          },
+          4
+        ),
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.TEXT_ENDED,
+          {
+            timestamp: 3004,
+            sessionID: sessionId,
+            assistantMessageID: "msg_assistant",
+            textID: "text_1",
+            text: "Done.",
+          },
+          5
+        ),
+        makeHistoryEvent(
+          OPENCODE_DURABLE_EVENT_TYPES.STEP_ENDED,
+          {
+            timestamp: 3005,
+            sessionID: sessionId,
+            assistantMessageID: "msg_assistant",
+            finish: "stop",
+            cost: 0,
+            tokens: {
+              input: 3396,
+              output: 76,
+              reasoning: 138,
+              cache: { read: 0, write: 0 },
+            },
+          },
+          6
+        ),
+      ];
+      const historyParser = new OpenCodeLogParser(
+        () => 200_000,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          throw new Error("export should not be used");
+        },
+        async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: events, hasMore: false }),
+        })
+      );
+
+      const mappedEvents = await historyParser.readNewLines(sessionId);
+      const output = historyParser.extractResponse(mappedEvents);
+
+      assert.deepStrictEqual(
+        output.events.map((event) => event.type),
+        [CLI_EVENT_TYPES.TEXT]
+      );
+      assert.strictEqual((output.events[0].data as TextData).text, "Done.");
+      assert.strictEqual(output.metadata.sessionId, sessionId);
+      assert.strictEqual(
+        output.metadata.model,
+        "opencode/ling-3.0-flash-fin-free"
+      );
+      assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 3610);
+      assert.strictEqual(
+        historyParser.classifyUserEvent(mappedEvents[0], {
+          dispatchedPromptText: "Inspect the workspace.",
+        }),
+        "injected-prompt"
+      );
+      assert.strictEqual(
+        historyParser.extractUserSteerText(mappedEvents[0]),
+        "Inspect the workspace."
+      );
+      assert.strictEqual(
+        historyParser.extractContentFromEvent(mappedEvents[2]),
+        "Done."
+      );
+      assert.deepStrictEqual(
+        historyParser
+          .extractStructuredEventsFromEvent(mappedEvents[2])
+          .map((event) => event.type),
+        [CLI_EVENT_TYPES.TEXT]
+      );
+      assert.strictEqual(
+        historyParser.extractSessionId(mappedEvents),
+        sessionId
+      );
     });
   });
 
