@@ -62,11 +62,12 @@ describe("WorkflowStep token usage", () => {
     setPercentDirection("used");
   });
 
-  it("shows a compaction badge on the percentage bar after compaction", () => {
+  it("shows a compaction badge above the percentage bar after compaction", () => {
     const { container } = renderStep(2);
 
-    expect(container.querySelector(".codicon-history")).not.toBeNull();
-    expect(container).toHaveTextContent("410k tokens");
+    expect(container.querySelector(".codicon-fold")).not.toBeNull();
+    expect(container.querySelector("[title='Compactions: 2']")).not.toBeNull();
+    expect(container).toHaveTextContent("410k tks");
     expect(
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();
@@ -75,8 +76,8 @@ describe("WorkflowStep token usage", () => {
   it("always shows the attempt total in compact stats, uncompacted", () => {
     const { container } = renderStep(0);
 
-    expect(container.querySelector(".codicon-history")).toBeNull();
-    expect(container).toHaveTextContent("410k tokens");
+    expect(container.querySelector(".codicon-fold")).toBeNull();
+    expect(container).toHaveTextContent("410k tks");
     expect(
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();
@@ -85,8 +86,8 @@ describe("WorkflowStep token usage", () => {
   it("does not infer compaction when its count is unavailable", () => {
     const { container } = renderStep(undefined);
 
-    expect(container.querySelector(".codicon-history")).toBeNull();
-    expect(container).toHaveTextContent("410k tokens");
+    expect(container.querySelector(".codicon-fold")).toBeNull();
+    expect(container).toHaveTextContent("410k tks");
     expect(
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();

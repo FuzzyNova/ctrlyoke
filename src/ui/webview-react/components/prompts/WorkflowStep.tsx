@@ -358,31 +358,40 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
           )}
         </div>
         {contextPct !== undefined && (
-          <div
-            className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5"
-            title={tokenTooltip || undefined}
-          >
-            {/* Track */}
-            <div className="flex-1 w-1.5 rounded-full bg-ctx-bar-track overflow-hidden relative">
-              {/* Fill */}
-              <div
-                key={contextPct}
-                className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${getUsageBarColorClass(
-                  contextPct
-                )}`}
-                style={{ height: `${contextPct}%` }}
-              />
-            </div>
-            {/* Percentage label, with a compaction badge when the context window has reset */}
-            <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5 inline-flex items-center gap-0.5">
-              <span>{contextPct}%</span>
-              {hasCompacted && (
+          <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
+            {/* Compaction badge above the bar — only takes up space when present,
+                so the bar fills the row when this attempt didn't compact. */}
+            {hasCompacted && (
+              <span
+                className="flex-shrink-0 flex items-center justify-center"
+                title={`Compactions: ${compactionCount}`}
+              >
                 <i
-                  className="codicon codicon-history text-xxs"
-                  aria-label="Context window has compacted"
+                  className="codicon codicon-fold text-xxs text-description-fg opacity-90"
+                  aria-label={`Compactions: ${compactionCount}`}
                 />
-              )}
-            </span>
+              </span>
+            )}
+            <div
+              className="flex-1 min-h-0 w-full flex flex-col items-center"
+              title={tokenTooltip || undefined}
+            >
+              {/* Track */}
+              <div className="flex-1 w-1.5 rounded-full bg-ctx-bar-track overflow-hidden relative">
+                {/* Fill */}
+                <div
+                  key={contextPct}
+                  className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${getUsageBarColorClass(
+                    contextPct
+                  )}`}
+                  style={{ height: `${contextPct}%` }}
+                />
+              </div>
+              {/* Percentage label */}
+              <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5">
+                {contextPct}%
+              </span>
+            </div>
           </div>
         )}
         {dragHandleProps && (

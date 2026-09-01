@@ -146,18 +146,18 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         </div>
       )}
 
-      {/* Compact stats — for terminal prompts: [duration] [token total] [sessionId {copy}] */}
+      {/* Compact stats — for terminal prompts: [duration] [token total] [sessionId {copy}], wrapping like the overrides row at narrow widths */}
       {showCompactStats &&
         (sessionId || durationSeconds !== undefined || attemptTotalLabel) && (
           <div
-            className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+            className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
           >
             {[
               durationSeconds !== undefined ? (
                 <span key="dur">{durationSeconds.toFixed(1)}s</span>
               ) : null,
               attemptTotalLabel ? (
-                <span key="tokens">{attemptTotalLabel} tokens</span>
+                <span key="tokens">{attemptTotalLabel} tks</span>
               ) : null,
               sessionId ? (
                 <span
