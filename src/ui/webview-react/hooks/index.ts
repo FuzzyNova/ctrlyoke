@@ -34,7 +34,10 @@ export {
 } from "./useWorkflowContextMenu";
 export { useLongPress } from "./useLongPress";
 export { useSortableDndSensors } from "./useSortableDndSensors";
-export { useLatestStepOutput } from "./useLatestStepOutput";
+export {
+  useLatestStepOutput,
+  useFinalStepLatestOutput,
+} from "./useLatestStepOutput";
 export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export { useIsSystemGeneratedWorkflow } from "./useIsSystemGeneratedWorkflow";
 export { useActiveWorkflowExternalOwner } from "./useActiveWorkflowExternalOwner";

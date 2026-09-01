@@ -22,6 +22,7 @@ import {
   useFinalStepContextMenu,
   useLongPress,
   useLatestStepOutput,
+  useFinalStepLatestOutput,
   usePasteToEndContextMenu,
   useIsViewingDeletedWorkflow,
   useIsSystemGeneratedWorkflow,
@@ -349,12 +350,23 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     });
   }, [isExternallyManaged, isLineageReadOnly, finalStep]);
 
+  const finalStepLatestOutput = useFinalStepLatestOutput();
+  const finalStepOutputText = finalStepLatestOutput?.response as
+    | string
+    | undefined;
+
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
-      hasFinalStep: !!finalStep,
+      finalStep,
       isReadOnly: finalStepIsReadOnly,
       isDisabled: finalStep?.enabled === false,
       onToggleEnabled: handleToggleFinalStepEnabled,
+      outputText: finalStepOutputText,
+      latestOutput: finalStepLatestOutput,
+      runtimeMeta:
+        finalStep && !isScriptWorkflowStep(finalStep)
+          ? finalStep._runtime
+          : undefined,
     });
 
   return (

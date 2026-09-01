@@ -16,16 +16,10 @@ import { useEditorStore } from "@store/editorStore";
 import { isExecutionBusy } from "@utils/status";
 import {
   buildWorkflowStepEnabledUpdate,
-  getWorkflowStepRawText,
-  isScriptWorkflowStep,
   readWorkflowStepFromClipboard,
-  serializeWorkflowStepText,
-  writeClipboardText,
 } from "@utils/stepClipboard";
-import {
-  buildStepMetadataClipboardText,
-  type StepRuntimeMetaSnapshot,
-} from "@utils/stepMetadataClipboard";
+import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
+import { buildStepCopyMenuItems } from "@utils/stepContextMenuItems";
 import type { CliOutput } from "@store/workflowStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import {
@@ -158,9 +152,6 @@ export function useStepContextMenu({
         liveContextWindow,
       }: OpenContextMenuParams
     ) => {
-      const copyContentLabel = isScriptWorkflowStep(step)
-        ? "Copy Script"
-        : "Copy Prompt";
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
       const pasteDisabledTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
@@ -213,48 +204,14 @@ export function useStepContextMenu({
         x,
         y,
         items: [
-          {
-            label: "Copy Step",
-            icon: "codicon-copy",
-            disabled: false,
-            onClick: () => {
-              void writeClipboardText(serializeWorkflowStepText(step));
-            },
-          },
-          {
-            label: copyContentLabel,
-            icon: "codicon-copy",
-            disabled: false,
-            onClick: () => {
-              void writeClipboardText(getWorkflowStepRawText(step));
-            },
-          },
-          {
-            label: "Copy Output",
-            icon: "codicon-copy",
-            disabled: !outputText,
-            disabledTitle: "No output to copy",
-            onClick: () => {
-              if (!outputText) return;
-              void writeClipboardText(outputText);
-            },
-          },
-          {
-            label: "Copy Metadata",
-            icon: "codicon-copy",
-            disabled: false,
-            onClick: () => {
-              void writeClipboardText(
-                buildStepMetadataClipboardText({
-                  step,
-                  slotNumber: deleteIndex + 1,
-                  latestOutput,
-                  runtimeMeta,
-                  liveContextWindow,
-                })
-              );
-            },
-          },
+          ...buildStepCopyMenuItems({
+            step,
+            slotNumber: deleteIndex + 1,
+            outputText,
+            latestOutput,
+            runtimeMeta,
+            liveContextWindow,
+          }),
           {
             label: "Dry Run Step",
             icon: "codicon-telescope",

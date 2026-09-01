@@ -16,6 +16,7 @@ import {
   useStepContextMenu,
   useFinalStepContextMenu,
   useLatestStepOutput,
+  useFinalStepLatestOutput,
   usePasteToEndContextMenu,
   useLongPress,
   useSortableDndSensors,
@@ -43,7 +44,6 @@ import {
   EXECUTION_STATES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
 } from "../../types/messages";
@@ -338,7 +338,6 @@ const WorkflowStepsPanelInner: React.FC<{
     currentStep,
     executionState,
     retryStates,
-    liveOrderedEntries,
     finalStep,
     finalStepStatus,
     finalStepLoopCount,
@@ -772,12 +771,22 @@ const WorkflowStepsPanelInner: React.FC<{
   // selection outright.
   const finalStepSelectionIsReadOnly = isExternallyManaged || isLineageReadOnly;
 
+  // Get the latest CLI output for the current final step loop
+  const finalStepLatestOutput = useFinalStepLatestOutput();
+  const finalStepOutputText = finalStepLatestOutput?.response as
+    | string
+    | undefined;
+
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
-      hasFinalStep: !!finalStep,
+      finalStep,
       isReadOnly: finalStepIsReadOnly,
       isDisabled: finalStep?.enabled === false,
       onToggleEnabled: handleToggleFinalStepEnabled,
+      outputText: finalStepOutputText,
+      latestOutput: finalStepLatestOutput,
+      runtimeMeta:
+        finalStep && !isScriptStep(finalStep) ? finalStep._runtime : undefined,
     });
 
   // Compute resolved harness/model for the final step using the same
@@ -813,19 +822,6 @@ const WorkflowStepsPanelInner: React.FC<{
       modelIsDefault,
     };
   };
-
-  // Get the latest CLI output for the current final step loop
-  const finalStepLatestOutput = (() => {
-    const cliEntries = liveOrderedEntries.filter(
-      (e) =>
-        e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        "target" in e &&
-        (e as any).target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-        (e as any).target.loopIndex === finalStepLoopCount
-    );
-    if (cliEntries.length === 0) return null;
-    return (cliEntries[cliEntries.length - 1] as any).cliOutput;
-  })();
 
   // Compute overrides for the final step (same logic as regular steps)
   const finalStepOverrides = finalStep

@@ -13,8 +13,10 @@ export interface StepRuntimeMetaSnapshot {
 
 export interface StepMetadataClipboardInput {
   step: WorkflowStep;
-  /** 1-based display position, used only for the header line. */
-  slotNumber: number;
+  /** 1-based display position, used only for the header line (ignored when `isFinalStep`). */
+  slotNumber?: number;
+  /** True for the workflow's final step, which has no queue position. */
+  isFinalStep?: boolean;
   latestOutput?: CliOutput | null;
   runtimeMeta?: StepRuntimeMetaSnapshot;
   /** Live context-window telemetry while this step is the one currently running. */
@@ -114,6 +116,7 @@ function resolvedLine(
 export function buildStepMetadataClipboardText({
   step,
   slotNumber,
+  isFinalStep = false,
   latestOutput,
   runtimeMeta,
   liveContextWindow,
@@ -137,8 +140,12 @@ export function buildStepMetadataClipboardText({
   } = useSettingsStore.getState();
 
   const isScript = isScriptWorkflowStep(step);
+  const stepKind = isScript ? "Script" : "Prompt";
+  const headerLabel = isFinalStep
+    ? `Final ${stepKind.toLowerCase()} step`
+    : `${stepKind} step ${slotNumber}`;
   const lines: string[] = [
-    `${isScript ? "Script" : "Prompt"} step ${slotNumber}${step.name ? `: ${step.name}` : ""}`,
+    `${headerLabel}${step.name ? `: ${step.name}` : ""}`,
     "",
     "Execution properties:",
     resolvedLine(
