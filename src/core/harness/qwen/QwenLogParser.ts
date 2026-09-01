@@ -13,6 +13,7 @@ import {
   CliEvent,
   TokenUsage,
   FileEditData,
+  FileReadData,
   FileWriteData,
   ThinkingBlock,
   TextData,
@@ -343,6 +344,20 @@ export class QwenLogParser extends BaseLogParser {
                 success: succeeded,
               } as FileWriteData,
             });
+          }
+        } else if (
+          tcr &&
+          event.message.parts[0]?.functionResponse?.name ===
+            QwenLogParser.READ_FILE_TOOL_NAME
+        ) {
+          const readEvent = this.buildReadFileCompletedEvent(
+            event,
+            tcr,
+            callPathMap.get(tcr.callId) ?? "unknown",
+            timestamp
+          );
+          if (readEvent) {
+            outputEvents.push(readEvent);
           }
         }
       }
@@ -733,11 +748,86 @@ export class QwenLogParser extends BaseLogParser {
     "askuserquestion",
   ]);
 
+  private static readonly READ_FILE_TOOL_NAME = "read_file";
+
   private isAskUserQuestionTool(toolName: string | undefined): boolean {
     return (
       !!toolName &&
       QwenLogParser.ASK_USER_QUESTION_TOOL_NAMES.has(toolName.toLowerCase())
     );
+  }
+
+  /**
+   * Qwen's `read_file` reports a 0-based `offset` (line 384 of a file is
+   * requested as `offset: 383`), unlike Claude's Read tool where `offset`
+   * is already the 1-based start line that the shared
+   * `extractFileReadRange()` (used by every harness via
+   * `BaseToolBuilder.buildInitiatedEvents`) assumes. Shift it by one before
+   * delegating so the INITIATED event's lineStart/lineEnd land on the
+   * requested range instead of being off by one.
+   */
+  private static normalizeReadFileArgs(
+    toolName: string,
+    args: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (
+      toolName !== QwenLogParser.READ_FILE_TOOL_NAME ||
+      typeof args.offset !== "number"
+    ) {
+      return args;
+    }
+    return { ...args, offset: args.offset + 1 };
+  }
+
+  /**
+   * `read_file`'s functionResponse never echoes the requested offset/limit
+   * directly — the only record of what was actually served is
+   * `toolCallResult.resultDisplay`'s rendered "Read lines X-Y of Z from
+   * <path>" summary. A whole-file read (no offset/limit requested) reports
+   * an empty resultDisplay, so this only fires for genuine range reads; a
+   * range that happens to span the entire file should not surface as a
+   * segment read.
+   */
+  private buildReadFileCompletedEvent(
+    event: QwenProviderEvent,
+    tcr: NonNullable<QwenProviderEvent["toolCallResult"]>,
+    fullPath: string,
+    timestamp: number
+  ): CliEvent | undefined {
+    if (typeof tcr.resultDisplay !== "string" || !tcr.resultDisplay) {
+      return undefined;
+    }
+    const match = tcr.resultDisplay.match(
+      /^Read lines (\d+)-(\d+) of (\d+) from/i
+    );
+    if (!match) {
+      return undefined;
+    }
+    const lineStart = Number(match[1]);
+    const lineEnd = Number(match[2]);
+    const totalLines = Number(match[3]);
+    const isSegmentRead = lineStart > 1 || lineEnd < totalLines;
+
+    const rawOutput = event.message?.parts.find(
+      (part) => part.functionResponse?.id === tcr.callId
+    )?.functionResponse?.response.output;
+    const content =
+      typeof rawOutput === "string"
+        ? rawOutput.replace(/^Showing lines[^\n]*\n\n---\n\n/, "")
+        : undefined;
+
+    return {
+      type: CLI_EVENT_TYPES.FILE_READ,
+      timestamp,
+      data: {
+        path: fullPath,
+        content,
+        toolCallId: tcr.callId,
+        ...(isSegmentRead ? { lineStart, lineEnd } : {}),
+        status: OPERATION_STATUS.COMPLETED,
+        success: tcr.status === "success",
+      } as FileReadData,
+    };
   }
 
   private buildFunctionCallEvents(
@@ -749,7 +839,7 @@ export class QwenLogParser extends BaseLogParser {
     if (!this.isAskUserQuestionTool(functionCall.name)) {
       return BaseToolBuilder.buildInitiatedEvents(
         functionCall.name,
-        args,
+        QwenLogParser.normalizeReadFileArgs(functionCall.name, args),
         functionCall.id,
         timestamp
       );

@@ -17,6 +17,7 @@ import {
   ThinkingBlock,
   TextData,
   FileWriteData,
+  FileReadData,
   AskUserQuestionData,
 } from "../../../types/CliOutputTypes";
 import {
@@ -5603,6 +5604,134 @@ suite("QwenLogParser", () => {
         (streamed[1].data as AskUserQuestionData).questions[0].answer,
         "Cat"
       );
+    });
+
+    test("maps Qwen read_file line-range reads and confirms them from the rendered summary", () => {
+      const parser = new QwenLogParser();
+      const events = [
+        {
+          type: "assistant",
+          timestamp: "2026-09-01T14:57:36.808Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "model",
+            parts: [
+              {
+                functionCall: {
+                  id: "call-read-1",
+                  name: "read_file",
+                  args: {
+                    file_path: "src/example.ts",
+                    offset: 383,
+                    limit: 45,
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "tool_result",
+          timestamp: "2026-09-01T14:57:36.833Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "user",
+            parts: [
+              {
+                functionResponse: {
+                  id: "call-read-1",
+                  name: "read_file",
+                  response: {
+                    output:
+                      "Showing lines 384-428 of 488 total lines.\n\n---\n\nexport const FileReadOutput = () => {",
+                  },
+                },
+              },
+            ],
+          },
+          toolCallResult: {
+            callId: "call-read-1",
+            status: "success",
+            resultDisplay: "Read lines 384-428 of 488 from src/example.ts",
+            executionStatus: "success",
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const output = parser.extractResponse(events);
+      const readEvents = output.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(readEvents.length, 2);
+
+      const initiated = readEvents[0].data as FileReadData;
+      assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
+      assert.strictEqual(initiated.lineStart, 384);
+      assert.strictEqual(initiated.lineEnd, 428);
+
+      const completed = readEvents[1].data as FileReadData;
+      assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);
+      assert.strictEqual(completed.lineStart, 384);
+      assert.strictEqual(completed.lineEnd, 428);
+      assert.strictEqual(
+        completed.content,
+        "export const FileReadOutput = () => {"
+      );
+    });
+
+    test("does not surface a line range for a whole-file read_file read", () => {
+      const parser = new QwenLogParser();
+      const events = [
+        {
+          type: "assistant",
+          timestamp: "2026-09-01T14:57:32.659Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "model",
+            parts: [
+              {
+                functionCall: {
+                  id: "call-read-2",
+                  name: "read_file",
+                  args: { file_path: "src/small.md" },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "tool_result",
+          timestamp: "2026-09-01T14:57:32.706Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "user",
+            parts: [
+              {
+                functionResponse: {
+                  id: "call-read-2",
+                  name: "read_file",
+                  response: { output: "hello world" },
+                },
+              },
+            ],
+          },
+          toolCallResult: {
+            callId: "call-read-2",
+            status: "success",
+            resultDisplay: "",
+            executionStatus: "success",
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const output = parser.extractResponse(events);
+      const readEvents = output.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(readEvents.length, 1);
+      const initiated = readEvents[0].data as FileReadData;
+      assert.strictEqual(initiated.lineStart, undefined);
+      assert.strictEqual(initiated.lineEnd, undefined);
     });
   });
 });
