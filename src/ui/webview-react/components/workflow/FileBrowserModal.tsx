@@ -54,15 +54,24 @@ export const FileBrowserModal: React.FC = () => {
   const mode = fileBrowserState?.mode;
   const initialDirectoryPath =
     fileBrowserState?.initialPath ?? fileBrowserLastDirectory ?? "";
+  // Tracks the directory currently being browsed, kept in sync with
+  // directory.path below so sort changes reload the current directory
+  // instead of resetting back to initialDirectoryPath (see
+  // usePagedWorkspaceDirectory's currentPathRef/normalizedOptionPath check).
+  const [currentPath, setCurrentPath] = useState(initialDirectoryPath);
 
   const directory = usePagedWorkspaceDirectory({
-    path: initialDirectoryPath,
+    path: currentPath,
     includeGitIgnored: true,
     sort: workspaceEntrySort,
     sortAnchorPath: selectedFile ?? undefined,
     enabled: fileBrowserState !== null,
   });
   const navigateDirectory = directory.navigate;
+
+  useEffect(() => {
+    setCurrentPath((prev) => (prev === directory.path ? prev : directory.path));
+  }, [directory.path]);
 
   const handleSortKeyRequest = useCallback(
     (key: WorkspaceEntrySortKey) => {
@@ -100,6 +109,7 @@ export const FileBrowserModal: React.FC = () => {
       return;
     }
     setSelectedFile(null);
+    setCurrentPath(initialDirectoryPath);
     rememberedDirectoryFallbackRef.current =
       fileBrowserState.initialPath === undefined &&
       fileBrowserLastDirectory !== null &&

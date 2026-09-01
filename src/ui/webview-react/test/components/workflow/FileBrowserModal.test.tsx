@@ -233,6 +233,34 @@ describe("FileBrowserModal — navigation", () => {
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
   });
 
+  it("keeps sorting the directory currently being browsed, not the directory the modal opened with", async () => {
+    const user = userEvent.setup();
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
+    render(<FileBrowserModal />);
+
+    await user.click(await screen.findByText("src/"));
+    await expectTreeRequest({ path: "src", includeGitIgnored: true });
+    await screen.findByText("index.ts");
+
+    workspaceTreeMock.mockClear();
+    await user.click(
+      screen.getByRole("button", {
+        name: /Date modified, inactive; selecting sorts descending/,
+      })
+    );
+
+    await waitFor(() =>
+      expect(workspaceTreeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "src" }),
+        expect.any(AbortSignal)
+      )
+    );
+    expect(workspaceTreeMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: "" }),
+      expect.any(AbortSignal)
+    );
+  });
+
   it("reopens in the directory used for the previous selection", async () => {
     const user = userEvent.setup();
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
