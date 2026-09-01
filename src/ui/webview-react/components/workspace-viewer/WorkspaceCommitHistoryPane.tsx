@@ -7,6 +7,7 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { useCommitHistoryContextMenu } from "@hooks/useCommitHistoryContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
+import { useElementTier } from "@hooks/useElementNarrow";
 import {
   usePagedCommitHistory,
   type PagedCommitHistoryController,
@@ -40,6 +41,17 @@ const GRAPH_LANE_WIDTH = 14;
 const DESKTOP_INLINE_LANE_CAP = 5;
 const MOBILE_INLINE_LANE_CAP = 3;
 const GRAPH_OVERSCAN = 12;
+/** How much of the pane's measured width the graph column may claim before it scrolls. */
+const GRAPH_RAIL_MAX_PARENT_FRACTION = 0.5;
+
+/**
+ * Buckets a measured width to the nearest lane-width increment so
+ * `useElementTier` only re-renders when the cap would actually shift by a
+ * visible amount, not on every sub-pixel ResizeObserver tick.
+ */
+function resolveContainerWidthBucket(width: number): number {
+  return Math.max(0, Math.floor(width / GRAPH_LANE_WIDTH)) * GRAPH_LANE_WIDTH;
+}
 
 const TRUNK_COLOR_CLASSES = {
   local: "text-scm-graph-local",
@@ -670,6 +682,17 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
   const ownScrollContainerRef = useRef<HTMLDivElement>(null);
   const historyScrollContainerRef = scrollContainerRef ?? ownScrollContainerRef;
+  const [containerWidthCallbackRef, containerWidthBucket] = useElementTier<
+    number,
+    HTMLDivElement
+  >(resolveContainerWidthBucket, 0);
+  const setHistoryScrollContainerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      historyScrollContainerRef.current = node;
+      containerWidthCallbackRef(node);
+    },
+    [containerWidthCallbackRef, historyScrollContainerRef]
+  );
 
   const hookController = usePagedCommitHistory({
     repo: selectedRepoId ?? undefined,
@@ -791,12 +814,26 @@ export const WorkspaceCommitHistoryPane: React.FC<
       Math.max(row.laneIndex + 1, row.inputLanes.length, row.outputLanes.length)
     )
   );
+  const graphContentWidth = (graphLaneCount + 1) * GRAPH_LANE_WIDTH;
+  // Before the pane's width has been measured, fall back to a fixed lane
+  // cap so the first paint doesn't flash the full (possibly very wide)
+  // graph. Once measured, the graph column may grow up to
+  // `GRAPH_RAIL_MAX_PARENT_FRACTION` of the pane before it scrolls.
   const inlineLaneCap = isMobile
     ? MOBILE_INLINE_LANE_CAP
     : DESKTOP_INLINE_LANE_CAP;
-  const graphRailWidth =
+  const fallbackGraphRailWidth =
     (Math.min(graphLaneCount, inlineLaneCap) + 1) * GRAPH_LANE_WIDTH;
-  const graphContentWidth = (graphLaneCount + 1) * GRAPH_LANE_WIDTH;
+  const graphRailWidth =
+    containerWidthBucket > 0
+      ? Math.min(
+          graphContentWidth,
+          Math.max(
+            GRAPH_LANE_WIDTH,
+            Math.floor(containerWidthBucket * GRAPH_RAIL_MAX_PARENT_FRACTION)
+          )
+        )
+      : Math.min(graphContentWidth, fallbackGraphRailWidth);
 
   const handleRangeChange = useCallback(
     (range: VirtualizedListRange): void => controller.onRangeChange(range),
@@ -854,7 +891,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
       )}
 
       <div
-        ref={historyScrollContainerRef}
+        ref={setHistoryScrollContainerNode}
         data-testid="commit-history-scroll-container"
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
       >

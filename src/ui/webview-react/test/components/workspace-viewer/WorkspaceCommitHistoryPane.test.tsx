@@ -304,7 +304,10 @@ describe("WorkspaceCommitHistoryPane", () => {
     ).toBe(2);
   });
 
-  it("caps the graph rail responsively while keeping horizontal overflow local", () => {
+  it("falls back to a fixed lane cap before the pane width is measured", () => {
+    // jsdom reports zero layout size until something stubs
+    // getBoundingClientRect, so this exercises the pre-measurement fallback
+    // path rather than the percentage-of-parent cap.
     const parentHashes = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const parents = parentHashes.map((hash) => ({
       ...commit,
@@ -352,6 +355,78 @@ describe("WorkspaceCommitHistoryPane", () => {
       />
     );
     expect(screen.getByTestId("commit-graph-rail").style.width).toBe("56px");
+  });
+
+  it("grows the graph rail up to 50% of the measured pane width once known", () => {
+    const parentHashes = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const parents = parentHashes.map((hash) => ({
+      ...commit,
+      hash,
+      shortHash: hash,
+      isHead: false,
+      refs: [],
+      parentHashes: [],
+    }));
+    const commits = [
+      {
+        ...commit,
+        hash: "octopus",
+        shortHash: "octopus",
+        isMerge: true,
+        parentHashes,
+      },
+      ...parents,
+    ];
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    const stubPaneWidth = (width: number) => {
+      vi.spyOn(
+        HTMLElement.prototype,
+        "getBoundingClientRect"
+      ).mockImplementation(function (this: HTMLElement) {
+        if (this.dataset.testid === "commit-history-scroll-container") {
+          return {
+            width,
+            height: 400,
+            top: 0,
+            left: 0,
+            right: width,
+            bottom: 400,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+        return originalGetBoundingClientRect.call(this);
+      });
+    };
+
+    try {
+      // A narrow 40px pane buckets down to 28px measured width; 50% of that
+      // (14px, one lane) is far below the fixed 84px fallback cap, proving
+      // the percentage rule — not the old lane cap — is now in control.
+      stubPaneWidth(40);
+      const narrow = renderPane(commits);
+      expect(
+        screen.getByTestId("commit-graph-rail").style.width
+      ).toBe("14px");
+      const surfaceWidthWhenNarrow = Number(
+        screen.getByTestId("commit-graph-surface").getAttribute("width")
+      );
+      expect(surfaceWidthWhenNarrow).toBeGreaterThan(14);
+      narrow.unmount();
+
+      // A pane wide enough that 50% exceeds the graph's natural content
+      // width should show the whole graph with no clamping (no scrollbar
+      // needed).
+      stubPaneWidth(2000);
+      renderPane(commits);
+      const rail = screen.getByTestId("commit-graph-rail");
+      const surface = screen.getByTestId("commit-graph-surface");
+      expect(rail.style.width).toBe(`${surface.getAttribute("width")}px`);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("dims commits that are ahead of the detached HEAD", () => {
