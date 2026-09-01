@@ -186,8 +186,10 @@ cover the inherent TOCTOU race of "probe-then-reuse".
 
 ## Scope (implementation outline for whoever picks this up)
 
-1. Add a free-port allocation utility (loopback-only) under `src/utils/` or
-   `src/core/harness/shared/`, with retry-on-`EADDRINUSE`.
+1. Add `src/utils/FreePortAllocator.ts` exporting
+   `allocateLoopbackPort()`. It probes a loopback port without internal retry;
+   callers should invoke it again if the real process later reports
+   `EADDRINUSE`.
 2. `OpenCodeCliProvider`: when building interactive-mode CLI args, allocate a
    port and append `--port <port> --hostname 127.0.0.1`; do not set
    `OPENCODE_SERVER_PASSWORD`. Plumb the chosen `{ hostname, port }` (or a
