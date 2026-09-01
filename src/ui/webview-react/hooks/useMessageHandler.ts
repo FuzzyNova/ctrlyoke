@@ -2354,10 +2354,21 @@ export function createMessageHandlers(
     // EXECUTION_STATE_CHANGED already set the live state and silently
     // reverting the header's badge back to idle. A message carrying a
     // requestId is a client-initiated request and is always trusted as-is.
+    //
+    // `isCurrentAddress` alone misses the very transition this guard exists
+    // for: `syncExecutingRunViews` fires this snapshot to a client that was
+    // still addressed at the *draft* the instant its run got promoted, so
+    // this is that client's first-ever RUN_VIEW_LOADED for the new run
+    // address — `appliedViewAddress` still names the draft, and the exact
+    // address match can never be true. Falling back to a same-lineage
+    // (workflowKey) match covers that promotion without weakening the check
+    // for a genuinely different lineage.
     const currentExecutionState = useWorkflowStore.getState().executionState;
+    const isSameLineageAsApplied =
+      address.workflowKey === uiStore.appliedViewAddress?.workflowKey;
     const isStaleExecutionStateRegression =
       !message.requestId &&
-      isCurrentAddress &&
+      (isCurrentAddress || isSameLineageAsApplied) &&
       isWorkflowActive(currentExecutionState) &&
       !isWorkflowActive(runtime?.executionState ?? EXECUTION_STATES.IDLE);
     const resolvedExecutionState = isStaleExecutionStateRegression

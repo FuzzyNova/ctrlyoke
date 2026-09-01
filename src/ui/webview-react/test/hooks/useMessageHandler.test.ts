@@ -1603,6 +1603,66 @@ describe("RUN_VIEW_LOADED same-view replay", () => {
   });
 });
 
+describe("RUN_VIEW_LOADED stale execution state regression", () => {
+  // Reproduces the "ExecutingStepHighlight / Running badge flashes then
+  // vanishes" bug: pressing Run on a brand-new draft promotes it to a run and
+  // starts execution. EXECUTION_STARTED lands first and sets RUNNING, but
+  // `syncExecutingRunViews` reads the promoted run's working file straight off
+  // disk to build this client's first RUN_VIEW_LOADED for the new run
+  // address — a read that can finish before the executor's own write
+  // persists RUNNING, so it carries the pre-start "idle" snapshot. That
+  // snapshot must not be allowed to revert the live execution state just
+  // because the client was still addressed at the draft a moment ago.
+  it("keeps RUNNING when a draft-promotion snapshot arrives with a stale idle state", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    const draftAddress = { workflowKey: "wf-fresh" as never, kind: "draft" as const };
+    const runAddress = {
+      workflowKey: "wf-fresh" as never,
+      kind: "run" as const,
+      runRef: "run-2026-09-01T10-00-00-000Z" as never,
+    };
+    useUiStore.setState({
+      appliedViewAddress: draftAddress,
+      pendingRunViewRequestId: null,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf-fresh.yaml",
+        totalSteps: 1,
+      });
+    });
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: runAddress,
+        workingFile: {
+          workflowName: "Fresh workflow",
+          definitionRevision: 1,
+          steps: [makePrompt("first")],
+          _runtime: {
+            executionState: EXECUTION_STATES.IDLE,
+            currentIndex: 0,
+          },
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+  });
+});
+
 describe("run view revision snapshots", () => {
   it("ignores a late requestless snapshot that would regress an appended run", () => {
     renderHook(() => useMessageHandler());
