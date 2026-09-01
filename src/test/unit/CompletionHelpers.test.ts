@@ -722,7 +722,7 @@ suite("slash-token completions", () => {
 
     assert.deepStrictEqual(
       items.map((item) => item.label),
-      ["commit", "playwright", "review"]
+      ["commit", "ctrlyoke", "playwright", "review"]
     );
     assert.strictEqual(
       items.find((item) => item.label === "commit")?.detail,
@@ -731,6 +731,24 @@ suite("slash-token completions", () => {
     assert.strictEqual(
       items.find((item) => item.label === "playwright")?.detail,
       "ctrlyoke MCP server · node playwright-server.js"
+    );
+  });
+
+  test("always includes the built-in ctrlyoke MCP server even though it is never a registry entry", async () => {
+    const bareItems = await getCtrlYokeSlashCompletions("/workspace", "/ctrlyoke");
+    assert.deepStrictEqual(
+      bareItems.map((item) => item.label),
+      ["ctrlyoke"]
+    );
+    assert.strictEqual(bareItems[0].insertText, "/mcp:ctrlyoke");
+
+    const mcpItems = await getCtrlYokeSlashCompletions(
+      "/workspace",
+      "/mcp:ctrlyoke"
+    );
+    assert.deepStrictEqual(
+      mcpItems.map((item) => item.label),
+      ["ctrlyoke"]
     );
   });
 

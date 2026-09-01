@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import type { PlainCompletionItem } from "./CompletionHelpers";
-import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
+import {
+  CTRLYOKE_BUILTIN_MCP_SERVER_INFO,
+  McpRegistryFileManager,
+} from "../utils/McpRegistryFileManager";
 import { SkillDiscovery, type SkillInfo } from "../utils/SkillDiscovery";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import {
@@ -190,17 +193,52 @@ function createMcpTokenCompletions(
   namePrefix: string
 ): McpTokenCompletionItem[] {
   const lowerPrefix = namePrefix.toLowerCase();
-  return managedServers
-    .filter((server) => server.id.toLowerCase().includes(lowerPrefix))
-    .map((server) => ({
-      commandType: "ctrlyokeMcpServer" as const,
+  const items: McpTokenCompletionItem[] = [];
+
+  // The built-in "ctrlyoke" MCP server is a reserved sentinel, never a
+  // registry entry (see CTRLYOKE_BUILTIN_MCP_SERVER_INFO), so it has to be
+  // injected here rather than discovered from `managedServers`.
+  if (
+    CTRLYOKE_BUILTIN_MCP_SERVER_INFO.id
+      .toLowerCase()
+      .includes(lowerPrefix)
+  ) {
+    items.push(createBuiltinCtrlYokeMcpCompletion());
+  }
+
+  for (const server of managedServers) {
+    if (
+      server.id === CTRLYOKE_BUILTIN_MCP_SERVER_INFO.id ||
+      !server.id.toLowerCase().includes(lowerPrefix)
+    ) {
+      continue;
+    }
+    items.push({
+      commandType: "ctrlyokeMcpServer",
       mcpServerName: server.id,
       label: server.id,
       kind: vscode.CompletionItemKind.Module,
       insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${server.id}`,
       detail: formatMcpDetail(server),
       filterText: server.id,
-    }));
+    });
+  }
+
+  return items;
+}
+
+function createBuiltinCtrlYokeMcpCompletion(): McpTokenCompletionItem {
+  const id = CTRLYOKE_BUILTIN_MCP_SERVER_INFO.id;
+  return {
+    commandType: "ctrlyokeMcpServer",
+    mcpServerName: id,
+    label: id,
+    kind: vscode.CompletionItemKind.Module,
+    insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${id}`,
+    detail: `ctrlyoke MCP server (built-in) · ${CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description}`,
+    documentation: CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description,
+    filterText: id,
+  };
 }
 
 function formatMcpDetail(server: ManagedMcpServer): string {

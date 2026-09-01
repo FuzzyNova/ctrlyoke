@@ -14,26 +14,13 @@ import {
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
 import {
+  CTRLYOKE_BUILTIN_MCP_SERVER_INFO,
   McpRegistryFileManager,
   resolveCtrlYokeMcpInvocation,
 } from "../utils/McpRegistryFileManager";
 import { Log } from "../utils/Log";
 import { REDACTION_MARKER } from "../types/PreviewRedactor";
 import type { WebviewClientContext } from "./WebviewClientContext";
-
-/**
- * Static preview shown for `/mcp:ctrlyoke` — the reserved built-in-server
- * sentinel is never a registry entry (see `resolveCtrlYokeMcpInvocation`,
- * which only resolves user-registered servers), so there is no
- * `McpServerConfig` to read back for it.
- */
-const CTRLYOKE_BUILTIN_MCP_SERVER_PREVIEW = {
-  id: SPECIAL_TARGET_IDS.CTRLYOKE,
-  type: "built-in",
-  description:
-    "ctrlyoke's built-in MCP server. Gives the model queue-status and append-queue tools scoped to the current workflow run.",
-  tools: ["ctrlyoke_queue_status", "ctrlyoke_append_queue"],
-};
 
 /** Never send literal MCP env/header values back through the preview modal. */
 function redactMcpConfigPreview(config: unknown): string {
@@ -242,7 +229,11 @@ export class McpManagerService {
       ctx.emit({
         type: MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT,
         mcpServerName,
-        content: JSON.stringify(CTRLYOKE_BUILTIN_MCP_SERVER_PREVIEW, null, 2),
+        content: JSON.stringify(
+          { ...CTRLYOKE_BUILTIN_MCP_SERVER_INFO, type: "built-in" },
+          null,
+          2
+        ),
         found: true,
       });
       return;

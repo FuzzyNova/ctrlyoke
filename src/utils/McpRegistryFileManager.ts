@@ -242,6 +242,19 @@ export class McpRegistryFileManager {
   }
 }
 
+/**
+ * Static metadata for `/mcp:ctrlyoke` — the reserved built-in-server sentinel
+ * is never a registry entry (see {@link resolveCtrlYokeMcpInvocation}, which
+ * only resolves user-registered servers), so completion and preview surfaces
+ * need a synthetic descriptor instead of a real {@link ManagedMcpServer}.
+ */
+export const CTRLYOKE_BUILTIN_MCP_SERVER_INFO = {
+  id: SPECIAL_TARGET_IDS.CTRLYOKE,
+  description:
+    "ctrlyoke's built-in MCP server. Gives the model queue-status and append-queue tools scoped to the current workflow run.",
+  tools: ["ctrlyoke_queue_status", "ctrlyoke_append_queue"],
+} as const;
+
 /** Find a managed MCP server by its ctrlyoke registry ID. */
 export function findManagedMcpServerByName(
   servers: readonly ManagedMcpServer[],
