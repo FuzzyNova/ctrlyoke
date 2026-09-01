@@ -190,11 +190,15 @@ cover the inherent TOCTOU race of "probe-then-reuse".
    `allocateLoopbackPort()`. It probes a loopback port without internal retry;
    callers should invoke it again if the real process later reports
    `EADDRINUSE`.
-2. `OpenCodeCliProvider`: when building interactive-mode CLI args, allocate a
-   port and append `--port <port> --hostname 127.0.0.1`; do not set
-   `OPENCODE_SERVER_PASSWORD`. Plumb the chosen `{ hostname, port }` (or a
-   ready-made base URL) through to `OpenCodeLogParser`, mirroring how
-   `contextWindowSizeFn` is already injected via the constructor.
+2. `OpenCodeCliProvider.planCliArgs()` now calls
+   `allocateLoopbackPort(): Promise<number>` only for interactive executions,
+   appends `--port <port> --hostname 127.0.0.1`, and leaves headless args
+   unchanged. The prepared execution mutation stores
+   `interactiveServerBaseUrl: string | undefined` as
+   `http://127.0.0.1:<port>` (or `undefined` for headless mode or allocation
+   failure), and `OpenCodeLogParser` receives it through the constructor
+   callback `getServerBaseUrl: () => string | undefined`, alongside the
+   existing context-window callback. `OPENCODE_SERVER_PASSWORD` is not set.
 3. `OpenCodeLogParser`: replace `fetchNewEvents`'s `opencode export` call with
    a polling loop against `GET http://<hostname>:<port>/api/session/<id>/history?after=<lastSeq>`,
    tracking `lastSeq` (an integer) instead of `seenPartIds`. Follow `hasMore`

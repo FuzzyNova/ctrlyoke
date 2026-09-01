@@ -19,6 +19,7 @@ import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
+import { allocateLoopbackPort } from "../../../utils/FreePortAllocator";
 import type {
   PromptStep,
   WorkflowStep,
@@ -60,6 +61,8 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
     verifiedVersions: [">=1.18.10"],
   },
 } as const;
+
+const OPENCODE_LOOPBACK_HOSTNAME = "127.0.0.1";
 
 /**
  * OpenCode CLI Harness
@@ -125,8 +128,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     };
   }
   readonly headlessSource = "stdout" as const;
-  readonly logParser = new OpenCodeLogParser(() =>
-    getOpenCodeContextWindowSize(this.resolvedCurrentModel)
+  /** Base URL for the interactive server allocated for the current execution. */
+  private interactiveServerBaseUrl: string | undefined;
+  readonly logParser = new OpenCodeLogParser(
+    () => getOpenCodeContextWindowSize(this.resolvedCurrentModel),
+    () => this.interactiveServerBaseUrl
   );
 
   /** Inline config accumulated while preparing the current prompt. */
@@ -262,6 +268,24 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     const args: string[] = [];
 
+    let interactiveServerBaseUrl: string | undefined;
+    if (isInteractive) {
+      try {
+        const port = await allocateLoopbackPort();
+        interactiveServerBaseUrl = `http://${OPENCODE_LOOPBACK_HOSTNAME}:${port}`;
+        args.push(
+          "--port",
+          String(port),
+          "--hostname",
+          OPENCODE_LOOPBACK_HOSTNAME
+        );
+      } catch (error) {
+        Log.warn(
+          `Unable to allocate an OpenCode interactive server port; continuing without server plumbing: ${error}`
+        );
+      }
+    }
+
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
@@ -344,6 +368,7 @@ export class OpenCodeCliProvider implements ICliProvider {
           apply: async () => {
             this.pendingInlineConfig = { plugin: inlinePlugin };
             this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
+            this.interactiveServerBaseUrl = interactiveServerBaseUrl;
             if (model) {
               this.resolvedCurrentModel = model;
             }

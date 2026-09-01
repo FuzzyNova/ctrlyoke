@@ -464,6 +464,7 @@ suite("OpenCodeCliProvider", () => {
     let exportCalls = 0;
     const logParser = new OpenCodeLogParser(
       () => 200000,
+      () => undefined,
       async () => {
         exportCalls += 1;
         return JSON.stringify({ info: { id: sessionId }, messages: [] });
@@ -503,6 +504,86 @@ suite("OpenCodeCliProvider", () => {
       sessionId
     );
     assert.strictEqual(exportCalls, 0);
+  });
+
+  test("adds a loopback server port only to interactive args", async () => {
+    const provider = new OpenCodeCliProvider();
+    const extensionPath = path.join(os.tmpdir(), "opencode-port-extension");
+
+    const interactiveArgs = await provider.buildCliArgs(
+      { prompt: "interactive" },
+      true,
+      extensionPath,
+      undefined,
+      undefined,
+      { promptIndex: 0, allPrompts: [] }
+    );
+    const portIndex = interactiveArgs.indexOf("--port");
+
+    assert.ok(portIndex >= 0);
+    const port = interactiveArgs[portIndex + 1];
+    assert.ok(port !== undefined);
+    assert.match(port, /^\d+$/);
+    assert.ok(Number(port) > 0);
+    assert.deepStrictEqual(interactiveArgs.slice(portIndex + 2, portIndex + 4), [
+      "--hostname",
+      "127.0.0.1",
+    ]);
+
+    const headlessProvider = new OpenCodeCliProvider();
+    const headlessArgs = await headlessProvider.buildCliArgs(
+      { prompt: "headless" },
+      false,
+      extensionPath,
+      undefined,
+      undefined,
+      { promptIndex: 0, allPrompts: [] }
+    );
+
+    assert.ok(!headlessArgs.includes("--port"));
+    assert.ok(!headlessArgs.includes("--hostname"));
+  });
+
+  test("does not set the OpenCode server password in either spawn environment", () => {
+    const provider = new OpenCodeCliProvider();
+
+    assert.strictEqual(
+      provider.getHeadlessSpawnEnv().OPENCODE_SERVER_PASSWORD,
+      undefined
+    );
+    assert.strictEqual(
+      provider.getInteractiveSpawnEnv().OPENCODE_SERVER_PASSWORD,
+      undefined
+    );
+  });
+
+  test("allocates distinct ports for concurrent interactive providers", async () => {
+    const extensionPath = path.join(
+      os.tmpdir(),
+      "opencode-concurrent-extension"
+    );
+    const [firstArgs, secondArgs] = await Promise.all([
+      new OpenCodeCliProvider().buildCliArgs(
+        { prompt: "first" },
+        true,
+        extensionPath,
+        undefined,
+        undefined,
+        { promptIndex: 0, allPrompts: [] }
+      ),
+      new OpenCodeCliProvider().buildCliArgs(
+        { prompt: "second" },
+        true,
+        extensionPath,
+        undefined,
+        undefined,
+        { promptIndex: 0, allPrompts: [] }
+      ),
+    ]);
+
+    const getPort = (args: string[]): string =>
+      args[args.indexOf("--port") + 1];
+    assert.notStrictEqual(getPort(firstArgs), getPort(secondArgs));
   });
 
   test("passes user hooks through env and leaves both spawn workspaces unchanged", async () => {

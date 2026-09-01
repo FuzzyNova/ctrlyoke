@@ -96,8 +96,25 @@ suite("ExecutionPlanBuilder", () => {
             ? provider.buildInteractiveArgs(baseArgs, session.promptArgument)
             : provider.buildHeadlessArgs(baseArgs, session.promptArgument);
 
-        assert.deepStrictEqual(plan.cliArgs, realArgs);
-        assert.deepStrictEqual(plan.args, realArgs);
+        const normalizeDynamicPort = (args: string[]): string[] => {
+          const portIndex = args.indexOf("--port");
+          if (portIndex < 0) {
+            return args;
+          }
+          assert.match(args[portIndex + 1], /^\d+$/);
+          return args.map((arg, index) =>
+            index === portIndex + 1 ? "<allocated-port>" : arg
+          );
+        };
+
+        assert.deepStrictEqual(
+          normalizeDynamicPort(plan.cliArgs),
+          normalizeDynamicPort(realArgs)
+        );
+        assert.deepStrictEqual(
+          normalizeDynamicPort(plan.args),
+          normalizeDynamicPort(realArgs)
+        );
         assert.strictEqual(plan.resolvedCommand.command, provider.config.name);
       });
     }

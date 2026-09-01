@@ -5149,6 +5149,7 @@ suite("OpenCodeLogParser", () => {
       let requestedSessionId: string | undefined;
       const parserWithExportRunner = new OpenCodeLogParser(
         () => undefined,
+        () => undefined,
         async (sessionId) => {
           requestedSessionId = sessionId;
           return JSON.stringify({

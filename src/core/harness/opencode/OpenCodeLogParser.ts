@@ -126,6 +126,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
   constructor(
     contextWindowSizeFn: () => number | undefined = () => undefined,
+    readonly getServerBaseUrl: () => string | undefined = () => undefined,
     private readonly runExport: OpenCodeExportRunner = runOpenCodeExport
   ) {
     super();
