@@ -75,8 +75,10 @@ Focus on input validation and authentication logic.
 ### 3. Run
 
 - **Panel** — load a workflow file and click Run
-- **Context menu** — right-click any prompt file → Run with ctrlyoke
-- **Context menu** — right-click → Queue with ctrlyoke to append to a running workflow
+- **Run with ctrlyoke submenu** — right-click any prompt file in the Explorer or editor, or
+  use the editor title toolbar, then choose **Run with ctrlyoke**
+- **Run with ctrlyoke submenu** — choose **Queue Steps with ctrlyoke** to append to a running
+  workflow
 
 ---
 
@@ -277,10 +279,10 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 | `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
 | `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
 | Editor convert button                   | Write a step prompt to `.ctrlyoke/prompts/`           |
-| `ctrlyoke: Run with ctrlyoke`           | Run a prompt file (Explorer / editor context menu)    |
-| `ctrlyoke: Load in ctrlyoke`            | Load a prompt file into the dashboard without running |
-| `ctrlyoke: Queue with ctrlyoke`         | Append prompts to the end of the active queue         |
-| `ctrlyoke: Queue Next with ctrlyoke`    | Insert prompts immediately after the current position |
+| `ctrlyoke: Run with ctrlyoke`           | Run a prompt file from the Run with ctrlyoke submenu  |
+| `ctrlyoke: Load in ctrlyoke`            | Load a prompt file from the Run with ctrlyoke submenu |
+| `ctrlyoke: Queue Steps with ctrlyoke`   | Append prompts to the end of the active queue         |
+| `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert prompts immediately after the current position |
 | `ctrlyoke: Pause Execution`             | Pause a running workflow                              |
 | `ctrlyoke: Resume Execution`            | Resume a paused workflow                              |
 | `ctrlyoke: Stop Execution`              | Stop and reset the workflow                           |

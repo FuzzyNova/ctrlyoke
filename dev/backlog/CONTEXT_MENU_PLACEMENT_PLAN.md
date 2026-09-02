@@ -1,7 +1,8 @@
 # Context Menu Placement & Consistency Plan
 
-> **Status:** Research only — no code changes yet. This doc captures the audit and
-> brainstorming requested before any implementation work starts.
+> **Status:** The `package.json` group rename, Run with ctrlyoke submenu collapse, and Queue
+> title rewording have landed, along with documentation updates. Queue/Queue Next context-key
+> gating and the SCM Graph item remain later or blocked work.
 
 ## Goal
 
@@ -468,13 +469,13 @@ ctrlyoke.hasQueuedSteps` appended to its existing file-pattern condition. This i
 implementation task (new context key, new listener wiring), not just a manifest edit — flagged
 in Affected Files below.
 
-## Affected files (once a direction is picked)
+## Affected files (implementation status)
 
 | File | Role |
 | --- | --- |
-| `package.json` | `contributes.menus` group renames to `z_ctrlyoke`, new `contributes.submenus` entry (`ctrlyoke.runSubmenu`) placed in `explorer/context`/`editor/title/context`/`editor/title`, submenu children, reworded Queue/Queue Next titles, `&& ctrlyoke.hasQueuedSteps` added to Queue/Queue Next `when` clauses |
-| `src/extension.ts` (or wherever the active `WorkflowInstance`/`PromptQueue` is already wired to the extension host) | New: subscribe to `PromptQueue.onDidChangeState` (`src/core/PromptQueue.ts:127`) on the active instance and call `vscode.commands.executeCommand('setContext', 'ctrlyoke.hasQueuedSteps', steps.length > 0)` on change and on instance-switch/activation |
-| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/reference/commands.md` | Reference the current command titles/menu locations; need updates to match whatever titles/placement land (found via grep for `queueFromContext`/`queueNextFromContext`/their current titles — not yet read in detail). |
+| `package.json` | **Landed:** `contributes.menus` group renames to `z_ctrlyoke`, the `ctrlyoke.runSubmenu` definition and its `explorer/context`/`editor/title/context`/`editor/title` placements, shared submenu children, and reworded Queue/Queue Next titles. **Pending later step:** add `&& ctrlyoke.hasQueuedSteps` to Queue/Queue Next `when` clauses. |
+| `src/extension.ts` (or wherever the active `WorkflowInstance`/`PromptQueue` is already wired to the extension host) | **Pending later step:** subscribe to `PromptQueue.onDidChangeState` (`src/core/PromptQueue.ts:127`) on the active instance and call `vscode.commands.executeCommand('setContext', 'ctrlyoke.hasQueuedSteps', steps.length > 0)` on change and on instance-switch/activation. |
+| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/guide/quick-start.md`, `docs/reference/commands.md` | **Landed:** reference the current command titles and Run with ctrlyoke submenu locations. `dev/reference/VSCODE_COMMANDS.md` only lists unchanged command IDs, so it required no content change. |
 
 ## Non-Goals
 
@@ -498,7 +499,7 @@ in Affected Files below.
   (`editor/title/context`); no equivalent exists for `editor/lineNumber/context`, either SCM
   menu, or `timeline/item/context`.
 - ~~Which placement option (A or B) does Nathan want, per menu location?~~ **Decided** —
-  Option A, `z_ctrlyoke`, everywhere. See the Decision section above. Not yet implemented in
+  Option A, `z_ctrlyoke`, everywhere. See the Decision section above. Implemented in
   `package.json`.
 - ~~For the submenu, where do the two remaining entries land in `explorer/context`/
   `editor/title/context`?~~ **Decided** — both at the bottom (`z_ctrlyoke`), submenu directly
@@ -516,5 +517,6 @@ in Affected Files below.
   instead of behaving like Load — see "Decided: gate Queue/Queue Next on an active, non-empty
   queue" above).
 
-All open questions in this doc are now resolved. Nothing implemented in `package.json`/
-`src/` yet — that's the next step.
+All open questions in this doc are now resolved. The `package.json` group rename, submenu
+collapse, and title rewording are landed; the `ctrlyoke.hasQueuedSteps` implementation in
+`src/` remains the next queued step.

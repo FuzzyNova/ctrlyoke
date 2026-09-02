@@ -69,6 +69,13 @@
         "label": "ctrlyoke Workflow MCPs"
       }
     ],
+    "submenus": [
+      {
+        "id": "ctrlyoke.runSubmenu",
+        "label": "Run with ctrlyoke",
+        "icon": "$(play)"
+      }
+    ],
     "commands": [
       {
         "command": "ctrlyoke.openPanel",
@@ -190,13 +197,13 @@
       },
       {
         "command": "ctrlyoke.queueFromContext",
-        "title": "Queue with ctrlyoke",
+        "title": "Queue Steps with ctrlyoke",
         "category": "ctrlyoke",
         "icon": "$(add)"
       },
       {
         "command": "ctrlyoke.queueNextFromContext",
-        "title": "Queue Next with ctrlyoke",
+        "title": "Queue Steps Next with ctrlyoke",
         "category": "ctrlyoke",
         "icon": "$(insert)"
       },
@@ -366,125 +373,103 @@
           "when": "ctrlyoke.generatingCommitMessage"
         }
       ],
-      "explorer/context": [
+      "ctrlyoke.runSubmenu": [
         {
           "command": "ctrlyoke.runFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@1"
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
         },
         {
           "command": "ctrlyoke.loadFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@2"
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
         },
         {
           "command": "ctrlyoke.queueFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@3"
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
         },
         {
           "command": "ctrlyoke.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "ctrlyoke.runSubmenu",
           "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@4"
+          "group": "z_ctrlyoke@1"
         },
         {
           "command": "ctrlyoke.addFileToPromptEditor",
           "when": "resourceScheme == file && !explorerResourceIsFolder",
-          "group": "ctrlyoke@5"
+          "group": "z_ctrlyoke@2"
         },
         {
           "command": "ctrlyoke.addDirectoryToPromptEditor",
           "when": "explorerResourceIsFolder",
-          "group": "ctrlyoke@5"
+          "group": "z_ctrlyoke@2"
         }
       ],
       "editor/title": [
         {
-          "command": "ctrlyoke.runFromContext",
+          "submenu": "ctrlyoke.runSubmenu",
           "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation"
-        },
-        {
-          "command": "ctrlyoke.queueFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "navigation@2"
-        },
-        {
-          "command": "ctrlyoke.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "navigation@3"
         }
       ],
       "editor/title/context": [
         {
-          "command": "ctrlyoke.runFromContext",
+          "submenu": "ctrlyoke.runSubmenu",
           "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@1"
-        },
-        {
-          "command": "ctrlyoke.loadFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@2"
-        },
-        {
-          "command": "ctrlyoke.queueFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@3"
-        },
-        {
-          "command": "ctrlyoke.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "ctrlyoke@4"
+          "group": "z_ctrlyoke@1"
         },
         {
           "command": "ctrlyoke.addFileToPromptEditor",
           "when": "resourceScheme == file",
-          "group": "ctrlyoke@5"
+          "group": "z_ctrlyoke@2"
         }
       ],
       "editor/context": [
         {
           "command": "ctrlyoke.addSelectionToPromptEditor",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "2_ctrlyoke@1"
+          "group": "z_ctrlyoke@1"
         },
         {
           "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "!editorHasSelection && resourceScheme == file",
-          "group": "2_ctrlyoke@2"
+          "group": "z_ctrlyoke@2"
         }
       ],
       "editor/lineNumber/context": [
         {
           "command": "ctrlyoke.addSelectionToPromptEditor",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "2_ctrlyoke@1"
+          "group": "z_ctrlyoke@1"
         },
         {
           "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "!editorHasSelection && resourceScheme == file",
-          "group": "2_ctrlyoke@2"
+          "group": "z_ctrlyoke@2"
         }
       ],
       "scm/resourceState/context": [
         {
           "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "scmProvider == git",
-          "group": "2_ctrlyoke"
+          "group": "z_ctrlyoke"
         }
       ],
       "scm/resourceFolder/context": [
         {
           "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "scmProvider == git",
-          "group": "2_ctrlyoke"
+          "group": "z_ctrlyoke"
         }
       ],
       "timeline/item/context": [
         {
           "command": "ctrlyoke.addTimelineCommitToPromptEditor",
           "when": "timelineItem =~ /git:file:commit\\b/",
-          "group": "2_ctrlyoke"
+          "group": "z_ctrlyoke"
         }
       ],
       "scm/title": [

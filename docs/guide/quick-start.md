@@ -33,9 +33,13 @@ steps:
 
 Use one of these entry points:
 
-- `ctrlyoke: Load in ctrlyoke` from the file context menu
+- `ctrlyoke: Load in ctrlyoke` from the **Run with ctrlyoke** submenu in the file context menu
 - `ctrlyoke: Select Prompt File` from the panel
-- `ctrlyoke: Run with ctrlyoke` if you want to load and start in one step
+- `ctrlyoke: Run with ctrlyoke` from the **Run with ctrlyoke** submenu if you want to load and
+  start in one step
+
+The **Run with ctrlyoke** submenu groups Run, Load, Queue Steps, and Queue Steps Next in file
+context menus and the editor title toolbar.
 
 ## Make a workflow durable
 

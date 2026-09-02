@@ -39,10 +39,13 @@ references remain dependencies of the surrounding repository by design.
 
 | Command                              | What it does                                |
 | ------------------------------------ | ------------------------------------------- |
-| `ctrlyoke: Queue with ctrlyoke`      | Append a prompt file to the queue           |
-| `ctrlyoke: Queue Next with ctrlyoke` | Insert a prompt file after the current step |
+| `ctrlyoke: Queue Steps with ctrlyoke`      | Append a prompt file to the queue           |
+| `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert a prompt file after the current step |
 | `ctrlyoke: Queue Prompt File`        | Queue a prompt file from the dashboard      |
 | `ctrlyoke: Resume Session`           | Resume a prior session                      |
+
+The Run, Load, Queue Steps, and Queue Steps Next file actions are grouped under the **Run with
+ctrlyoke** submenu in file context menus and the editor title toolbar.
 
 ## Workspace and helper commands
 

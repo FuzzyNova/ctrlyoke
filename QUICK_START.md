@@ -120,7 +120,9 @@ Analyze #file:src/app.ts and suggest improvements.
 
 **From the Explorer:**
 
-Right-click any `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file and select **Run with ctrlyoke**.
+Right-click any `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file, open the **Run with
+ctrlyoke** submenu, and select **Run with ctrlyoke**. The same submenu is available from the
+editor title toolbar.
 
 **From the ctrlyoke panel:**
 
@@ -202,9 +204,9 @@ Switch modes in ctrlyoke Settings or via the `cliExecutionMode` setting.
 
 You can extend a workflow while it is running, paused, or after it completes without clearing history.
 
-1. Right-click any prompt file in the Explorer
-2. Select **Queue with ctrlyoke** (appends to the end of the current queue)
-3. Or select **Queue Next with ctrlyoke** (inserts immediately after the current step)
+1. Right-click any prompt file in the Explorer and open the **Run with ctrlyoke** submenu
+2. Select **Queue Steps with ctrlyoke** (appends to the end of the current queue)
+3. Or select **Queue Steps Next with ctrlyoke** (inserts immediately after the current step)
 
 The dashboard shows all output continuously regardless of how many files were queued.
 
@@ -249,14 +251,14 @@ references are available in both the step and retry prompts.
 | `ctrlyoke: Resume Session`             | Reconnect to an interrupted session                   |
 | `ctrlyoke: Show Output Panel`          | Open the ctrlyoke output log                          |
 
-Right-click context menu on workflow files:
+Right-click context menu on workflow files — open the **Run with ctrlyoke** submenu:
 
 | Action                   | Effect                                  |
 | ------------------------ | --------------------------------------- |
 | Run with ctrlyoke        | Load and immediately run the file       |
 | Load in ctrlyoke         | Load without running (edit first)       |
-| Queue with ctrlyoke      | Append to the current workflow queue    |
-| Queue Next with ctrlyoke | Insert after the currently running step |
+| Queue Steps with ctrlyoke      | Append to the current workflow queue    |
+| Queue Steps Next with ctrlyoke | Insert after the currently running step |
 
 ---
 
