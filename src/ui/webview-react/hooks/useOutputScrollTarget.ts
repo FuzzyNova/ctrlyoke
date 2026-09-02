@@ -14,6 +14,10 @@ import {
   isProfilingEnabled,
   logProfilerEvent,
 } from "@utils/performanceProfiler";
+import {
+  OUTPUT_SCROLL_ANCHOR_MODES,
+  OUTPUT_SCROLL_TARGET_KINDS,
+} from "@root/types/DashboardConstants";
 
 interface OutputRowLayoutModel {
   rowStartsByKey: Map<string, number>;
@@ -124,7 +128,8 @@ export function useOutputScrollTarget({
     (target: OutputScrollTarget, reason: string) => {
       const previousTarget = scrollTargetRef.current;
       scrollTargetRef.current = target;
-      autoscrollEnabledRef.current = target.kind === "bottom";
+      autoscrollEnabledRef.current =
+        target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM;
       setOutputScrollTarget(workflowScrollTargetId, target);
 
       if (isProfilingEnabled()) {
@@ -137,8 +142,8 @@ export function useOutputScrollTarget({
           // is accepting that as the new resting place — the signature of a
           // jump that never returns.
           offsetDriftPx:
-            previousTarget.kind === "row" &&
-            target.kind === "row" &&
+            previousTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW &&
+            target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW &&
             previousTarget.rowKey === target.rowKey
               ? target.viewportOffsetPx - previousTarget.viewportOffsetPx
               : undefined,
@@ -166,7 +171,7 @@ export function useOutputScrollTarget({
         Math.max(rowLayout.totalSize, scrollElement.scrollHeight) -
           scrollElement.clientHeight
       );
-      if (target.kind === "bottom") {
+      if (target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM) {
         return { top: maxScroll, resolved: true };
       }
 
@@ -251,7 +256,10 @@ export function useOutputScrollTarget({
         return;
       }
 
-      const anchor = captureViewportRowAnchor(scrollElement, "visible-top");
+      const anchor = captureViewportRowAnchor(
+        scrollElement,
+        OUTPUT_SCROLL_ANCHOR_MODES.VISIBLE_TOP
+      );
       if (!anchor) {
         if (scrollTargetCommitRetryCountRef.current < commitMaxRetries) {
           scrollTargetCommitRetryCountRef.current += 1;
@@ -267,7 +275,7 @@ export function useOutputScrollTarget({
 
       setCurrentScrollTarget(
         {
-          kind: "row",
+          kind: OUTPUT_SCROLL_TARGET_KINDS.ROW,
           rowKey: anchor.rowKey,
           viewportOffsetPx: anchor.offsetTop,
         },
@@ -338,7 +346,7 @@ export function useOutputScrollTarget({
       }
 
       if (
-        scrollTargetRef.current.kind === "bottom" &&
+        scrollTargetRef.current.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM &&
         !autoscrollEnabledRef.current
       ) {
         commitScrollTargetFromViewportRef.current(
@@ -352,7 +360,10 @@ export function useOutputScrollTarget({
         return { resolved: false, appliedDelta: 0 };
       }
 
-      if (!resolved.resolved && target.kind === "row") {
+      if (
+        !resolved.resolved &&
+        target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+      ) {
         setCurrentScrollTarget(defaultTarget, "target-missing");
       }
 
@@ -468,7 +479,8 @@ export function useOutputScrollTarget({
     }
 
     scrollTargetRef.current = nextTarget;
-    autoscrollEnabledRef.current = nextTarget.kind === "bottom";
+    autoscrollEnabledRef.current =
+      nextTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM;
     requestAnimationFrame(() => {
       applyScrollTargetRef.current("workflow-target-restore", { force: true });
     });

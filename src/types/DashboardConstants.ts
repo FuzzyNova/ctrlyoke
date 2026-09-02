@@ -69,6 +69,29 @@ export const WORKSPACE_FILE_LANGUAGE_IDS = {
   DOCKERFILE: "dockerfile",
 } as const;
 
+/** Canonical language IDs supported by the workspace CodeMirror editor. */
+export const CODEMIRROR_LANGUAGE_IDS = {
+  JAVASCRIPT: "javascript",
+  JSX: "jsx",
+  TYPESCRIPT: "typescript",
+  TSX: "tsx",
+  PYTHON: "python",
+  RUST: "rust",
+  JSON: "json",
+  MARKUP: "markup",
+  CSS: "css",
+  SCSS: "scss",
+  YAML: "yaml",
+  MARKDOWN: "markdown",
+  JAVA: "java",
+  CPP: "cpp",
+  C: "c",
+  PHP: "php",
+} as const;
+
+export type CodeMirrorLanguageId =
+  (typeof CODEMIRROR_LANGUAGE_IDS)[keyof typeof CODEMIRROR_LANGUAGE_IDS];
+
 /** VS Code URI schemes used by extension-host integrations. */
 export const VSCODE_URI_SCHEMES = {
   OUTPUT: "output",
@@ -2191,6 +2214,16 @@ export const DIFF_CHANGE_TYPES = {
 export type DiffChangeType =
   (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
 
+/** Line discriminants produced by the raw-content diff renderer. */
+export const DIFF_LINE_TYPES = {
+  ADDED: "added",
+  REMOVED: "removed",
+  CONTEXT: "context",
+} as const;
+
+export type DiffLineType =
+  (typeof DIFF_LINE_TYPES)[keyof typeof DIFF_LINE_TYPES];
+
 // ============================================================================
 // FILE OPERATION KINDS - File-operation and prompt undo change discriminants
 // ============================================================================
@@ -2442,6 +2475,7 @@ export const HISTORY_MATCH_FIELDS = {
   DIFF: "diff",
   COMMAND: "command",
   OUTPUT: "output",
+  RESPONSE: "response",
   ERROR: "error",
 } as const;
 
@@ -2738,6 +2772,18 @@ export const PERSISTENT_VALUE_INSTALL_RESULT_KINDS = {
 export type ToolPermissionCategory =
   (typeof TOOL_PERMISSION_CATEGORIES)[keyof typeof TOOL_PERMISSION_CATEGORIES];
 
+/** Tool names used by the output pane's compact tool-badge previews. */
+export const OUTPUT_TOOL_BADGE_LABELS = {
+  BASH: "bash",
+  SHELL: "shell",
+  READ: "read",
+  WRITE: "write",
+  EDIT: "edit",
+} as const;
+
+export type OutputToolBadgeLabel =
+  (typeof OUTPUT_TOOL_BADGE_LABELS)[keyof typeof OUTPUT_TOOL_BADGE_LABELS];
+
 // ============================================================================
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
 // ============================================================================
@@ -2806,6 +2852,41 @@ export const OUTPUT_TABS = {
 } as const;
 
 export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
+
+// ============================================================================
+// OUTPUT SCROLL TARGETS - Persisted output-pane anchor discriminants
+// ============================================================================
+export const OUTPUT_SCROLL_TARGET_KINDS = {
+  ROW: "row",
+  BOTTOM: "bottom",
+} as const;
+
+export type OutputScrollTargetKind =
+  (typeof OUTPUT_SCROLL_TARGET_KINDS)[keyof typeof OUTPUT_SCROLL_TARGET_KINDS];
+
+/** Alignment modes used when navigating output rows. */
+export const OUTPUT_SCROLL_ALIGNMENTS = {
+  START: "start",
+  CENTER: "center",
+  END: "end",
+} as const;
+
+export type OutputScrollAlignment =
+  (typeof OUTPUT_SCROLL_ALIGNMENTS)[keyof typeof OUTPUT_SCROLL_ALIGNMENTS];
+
+/** DOM anchor modes used when capturing a viewport row reference. */
+export const OUTPUT_SCROLL_ANCHOR_MODES = {
+  CENTER_POINT: "center-point",
+  VISIBLE_TOP: "visible-top",
+} as const;
+
+export type OutputScrollAnchorMode =
+  (typeof OUTPUT_SCROLL_ANCHOR_MODES)[keyof typeof OUTPUT_SCROLL_ANCHOR_MODES];
+
+/** Default labels used by structured output renderers. */
+export const OUTPUT_DEFAULT_LABELS = {
+  THINKING: "Thinking",
+} as const;
 
 // ============================================================================
 // OUTPUT ROW KINDS - Discriminants for rendered output rows
@@ -2884,6 +2965,8 @@ export type RunSummaryCacheStatus =
 export const KEYBOARD_KEYS = {
   ENTER: "Enter",
   ESCAPE: "Escape",
+  ARROW_UP: "ArrowUp",
+  ARROW_DOWN: "ArrowDown",
 } as const;
 
 // ============================================================================

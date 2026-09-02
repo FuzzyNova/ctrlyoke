@@ -39,6 +39,19 @@ import {
   normalizeCodexAbsPath,
 } from "@utils/filePathPatterns";
 
+const MARKDOWN_NODE_TYPES = {
+  LINK: "link",
+} as const;
+
+const MERMAID_RENDER_STATES = {
+  RENDERING: "rendering",
+  DONE: "done",
+  ERROR: "error",
+} as const;
+
+type MermaidRenderState =
+  (typeof MERMAID_RENDER_STATES)[keyof typeof MERMAID_RENDER_STATES];
+
 // Ensure the shared VS Code-themed syntax/find-highlight styles are in <head>.
 injectSyntaxHighlightStyles();
 injectFindHighlightStyles();
@@ -127,7 +140,11 @@ function remarkFileLinks() {
     visitParents(tree, "text", (node, ancestors) => {
       const parent = ancestors[ancestors.length - 1];
       const index = parent ? (parent.children as unknown[]).indexOf(node) : -1;
-      if (ancestors.some((ancestor) => ancestor.type === "link")) return;
+      if (
+        ancestors.some((ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.LINK)
+      ) {
+        return;
+      }
       if (!parent || typeof index !== "number" || !node.position) return;
       const value = node.value;
       const regex = new RegExp(FILE_PATH_SOURCE, "gi");
@@ -210,7 +227,11 @@ function remarkImageRefs() {
     visitParents(tree, "text", (node, ancestors) => {
       const parent = ancestors[ancestors.length - 1];
       const index = parent ? (parent.children as unknown[]).indexOf(node) : -1;
-      if (ancestors.some((ancestor) => ancestor.type === "link")) return;
+      if (
+        ancestors.some((ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.LINK)
+      ) {
+        return;
+      }
       if (!parent || typeof index !== "number" || !node.position) return;
       const value = node.value;
       const regex = new RegExp(IMAGE_PATH_SOURCE, "gi");
@@ -575,7 +596,7 @@ function ImageRefThumbnail({
 function remarkLocalLinks() {
   return (tree: Root, file?: { value?: unknown }): undefined => {
     const source = typeof file?.value === "string" ? file.value : "";
-    visit(tree, "link", (node, index, parent) => {
+    visit(tree, MARKDOWN_NODE_TYPES.LINK, (node, index, parent) => {
       if (!parent || typeof index !== "number") return;
       if (!isLocalFileHref(node.url)) return;
 
@@ -766,8 +787,8 @@ function mermaidSvgToPngBlob(svg: string, scale = 2): Promise<Blob> {
 function MermaidBlock({ code }: { code: string }) {
   const cached = mermaidSvgCache.get(code);
   const [svg, setSvg] = useState(cached ?? "");
-  const [state, setState] = useState<"rendering" | "done" | "error">(
-    cached ? "done" : "rendering"
+  const [state, setState] = useState<MermaidRenderState>(
+    cached ? MERMAID_RENDER_STATES.DONE : MERMAID_RENDER_STATES.RENDERING
   );
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
@@ -780,22 +801,22 @@ function MermaidBlock({ code }: { code: string }) {
     const hit = mermaidSvgCache.get(code);
     if (hit) {
       setSvg(hit);
-      setState("done");
+      setState(MERMAID_RENDER_STATES.DONE);
       return;
     }
     let cancelled = false;
-    setState("rendering");
+    setState(MERMAID_RENDER_STATES.RENDERING);
     void (async () => {
       try {
         const { svg: rendered } = await mermaid.render(idRef.current, code);
         if (cancelled) return;
         mermaidSvgCache.set(code, rendered);
         setSvg(rendered);
-        setState("done");
+        setState(MERMAID_RENDER_STATES.DONE);
       } catch (e) {
         if (cancelled) return;
         setErrorMsg(e instanceof Error ? e.message : String(e));
-        setState("error");
+        setState(MERMAID_RENDER_STATES.ERROR);
       }
     })();
     return () => {
@@ -852,7 +873,7 @@ function MermaidBlock({ code }: { code: string }) {
           <button
             type="button"
             onClick={downloadPng}
-            disabled={state !== "done"}
+            disabled={state !== MERMAID_RENDER_STATES.DONE}
             title="Download as PNG"
             aria-label="Download as PNG"
             className={MERMAID_HEADER_BTN_CLASS}
@@ -861,13 +882,13 @@ function MermaidBlock({ code }: { code: string }) {
           </button>
         </div>
       </div>
-      {state === "done" ? (
+      {state === MERMAID_RENDER_STATES.DONE ? (
         <div
           className="p-3 overflow-auto"
           // mermaid.render() produces trusted SVG — no user content reaches here
           dangerouslySetInnerHTML={{ __html: svg }}
         />
-      ) : state === "error" ? (
+      ) : state === MERMAID_RENDER_STATES.ERROR ? (
         <>
           <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap [overflow-wrap:anywhere]">
             {code}

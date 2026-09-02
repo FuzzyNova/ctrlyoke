@@ -7,6 +7,7 @@
 import { truncate } from "./string";
 import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
+import { OUTPUT_TOOL_BADGE_LABELS } from "@root/types/DashboardConstants";
 
 const OUTPUT_TOOL_NAMES = {
   GREP: "grep",
@@ -164,11 +165,18 @@ export function extractKeyParameters(
 
   const lowerName = toolName.toLowerCase();
 
-  if (lowerName === "bash" || lowerName === "shell") {
+  if (
+    lowerName === OUTPUT_TOOL_BADGE_LABELS.BASH ||
+    lowerName === OUTPUT_TOOL_BADGE_LABELS.SHELL
+  ) {
     return truncate((parameters.command as string) || "", 80);
   }
 
-  if (lowerName === "write" || lowerName === "edit" || lowerName === "read") {
+  if (
+    lowerName === OUTPUT_TOOL_BADGE_LABELS.WRITE ||
+    lowerName === OUTPUT_TOOL_BADGE_LABELS.EDIT ||
+    lowerName === OUTPUT_TOOL_BADGE_LABELS.READ
+  ) {
     return shortenPath(parameters.file_path as string);
   }
 

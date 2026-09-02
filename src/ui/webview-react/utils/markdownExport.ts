@@ -27,7 +27,11 @@ import {
   FINAL_STEP_PHASES,
   type FinalStepPhase,
 } from "../types/messages";
-import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  DIFF_LINE_TYPES,
+  OUTPUT_DEFAULT_LABELS,
+  OUTPUT_MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
@@ -136,11 +140,15 @@ function formatDiffForMarkdown(
   const diffLines = generateDiffLines(oldContent, newContent);
   return diffLines.map((line) => {
     const num =
-      line.type === "added"
+      line.type === DIFF_LINE_TYPES.ADDED
         ? String(line.newLineNum ?? "").padStart(4)
         : String(line.oldLineNum ?? "").padStart(4);
     const prefix =
-      line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
+      line.type === DIFF_LINE_TYPES.ADDED
+        ? "+"
+        : line.type === DIFF_LINE_TYPES.REMOVED
+          ? "-"
+          : " ";
     return `${prefix}${num} | ${line.content}`;
   });
 }
@@ -295,7 +303,9 @@ function renderStructuredEventsToMarkdown(
         const data = event.data as ThinkingBlock;
         if (data.text) {
           const label =
-            data.label && data.label !== "Thinking" ? data.label : "Thinking";
+            data.label && data.label !== OUTPUT_DEFAULT_LABELS.THINKING
+              ? data.label
+              : OUTPUT_DEFAULT_LABELS.THINKING;
           lines.push(`● ${label}: ${data.text}`);
           lines.push("");
         }

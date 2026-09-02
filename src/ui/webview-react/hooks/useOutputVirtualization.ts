@@ -28,7 +28,10 @@ import {
 import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
 import { shouldSyncMeasurementCorrection } from "@utils/outputAutoscroll";
 import type { OutputScrollTarget } from "@store/uiStore";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_ROW_KINDS,
+  OUTPUT_SCROLL_TARGET_KINDS,
+} from "@root/types/DashboardConstants";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
@@ -458,7 +461,9 @@ export function useOutputVirtualization({
           rowTopPx: element.getBoundingClientRect().top,
           anchorTopPx:
             scrollElement.getBoundingClientRect().top +
-            (target.kind === "row" ? target.viewportOffsetPx : 0),
+            (target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+              ? target.viewportOffsetPx
+              : 0),
         })
       ) {
         setMeasurementVersion((version) => version + 1);
@@ -538,7 +543,7 @@ export function useOutputVirtualization({
         delta,
         scrollTop: outputRef.current?.scrollTop ?? 0,
         targetRowIndex:
-          target.kind === "row"
+          target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
             ? (rowIndexByKey.get(target.rowKey) ?? null)
             : null,
         overscan: outputOverscanRef.current,
@@ -612,7 +617,7 @@ export function useOutputVirtualization({
         mountedCount: mountedRowElementsRef.current.size,
         targetKind: scrollTargetRef.current.kind,
         targetRowKey:
-          scrollTargetRef.current.kind === "row"
+          scrollTargetRef.current.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
             ? scrollTargetRef.current.rowKey
             : undefined,
       });

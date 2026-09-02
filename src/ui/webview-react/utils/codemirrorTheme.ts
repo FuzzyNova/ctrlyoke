@@ -1,7 +1,13 @@
 import { EditorView } from "@codemirror/view";
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 
-type ThemeSurface = "editor" | "input";
+const CODEMIRROR_THEME_SURFACES = {
+  EDITOR: "editor",
+  INPUT: "input",
+} as const;
+
+type ThemeSurface =
+  (typeof CODEMIRROR_THEME_SURFACES)[keyof typeof CODEMIRROR_THEME_SURFACES];
 
 export interface ThemeExtensionOptions {
   /**
@@ -50,15 +56,15 @@ function buildChipAccentShadowRules(): Record<string, { boxShadow: string }> {
 
 /** VS Code themed base extension for CodeMirror 6.  Shared by the prompt editor and workspace file editor. */
 export function createThemeExtension(
-  surface: ThemeSurface = "editor",
+  surface: ThemeSurface = CODEMIRROR_THEME_SURFACES.EDITOR,
   options: ThemeExtensionOptions = {}
 ) {
   const backgroundColor =
-    surface === "input"
+    surface === CODEMIRROR_THEME_SURFACES.INPUT
       ? "var(--vscode-input-background)"
       : "var(--vscode-editor-background)";
   const foregroundColor =
-    surface === "input"
+    surface === CODEMIRROR_THEME_SURFACES.INPUT
       ? "var(--vscode-input-foreground)"
       : "var(--vscode-editor-foreground)";
   const selectionForegroundColor =
@@ -71,13 +77,13 @@ export function createThemeExtension(
       "&": {
         color: foregroundColor,
         backgroundColor,
-        height: surface === "input" ? "auto" : "100%",
-        ...(surface === "input"
+        height: surface === CODEMIRROR_THEME_SURFACES.INPUT ? "auto" : "100%",
+        ...(surface === CODEMIRROR_THEME_SURFACES.INPUT
           ? { minHeight: "inherit", maxHeight: "inherit" }
           : {}),
       },
       ".cm-scroller":
-        surface === "input"
+        surface === CODEMIRROR_THEME_SURFACES.INPUT
           ? {
               minHeight: "inherit",
               maxHeight: "inherit",
@@ -120,7 +126,7 @@ export function createThemeExtension(
         color: `${selectionForegroundColor} !important`,
       },
       ".cm-activeLine":
-        surface === "input"
+        surface === CODEMIRROR_THEME_SURFACES.INPUT
           ? { backgroundColor: "transparent" }
           : {
               // An inset box-shadow (not outline) is intentional: outlines are
@@ -144,7 +150,9 @@ export function createThemeExtension(
       },
       "&.cm-focused": {
         outline:
-          surface === "input" ? "none" : "1px solid var(--vscode-focusBorder)",
+          surface === CODEMIRROR_THEME_SURFACES.INPUT
+            ? "none"
+            : "1px solid var(--vscode-focusBorder)",
       },
       ".cm-placeholder": {
         color: "var(--vscode-input-placeholderForeground)",

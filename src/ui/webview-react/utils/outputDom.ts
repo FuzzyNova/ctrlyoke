@@ -2,6 +2,12 @@ import {
   OUTPUT_FIND_ACTIVE_ATTRIBUTE,
   OUTPUT_FIND_ACTIVE_CLASS,
 } from "./outputFind";
+import {
+  OUTPUT_SCROLL_ALIGNMENTS,
+  OUTPUT_SCROLL_ANCHOR_MODES,
+  type OutputScrollAlignment,
+  type OutputScrollAnchorMode,
+} from "@root/types/DashboardConstants";
 
 export interface ViewportRowAnchor {
   rowKey: string;
@@ -56,7 +62,7 @@ export function findRenderedRowElementByKey(
 
 export function captureViewportRowAnchor(
   scrollElement: HTMLDivElement,
-  mode: "center-point" | "visible-top" = "visible-top"
+  mode: OutputScrollAnchorMode = OUTPUT_SCROLL_ANCHOR_MODES.VISIBLE_TOP
 ): ViewportRowAnchor | null {
   const containerRect = scrollElement.getBoundingClientRect();
   const viewportCenter = containerRect.top + containerRect.height / 2;
@@ -103,7 +109,7 @@ export function captureViewportRowAnchor(
   }
 
   const anchorElement =
-    mode === "center-point"
+    mode === OUTPUT_SCROLL_ANCHOR_MODES.CENTER_POINT
       ? (best?.element ?? bestVisibleTop?.element ?? null)
       : (bestVisibleTop?.element ?? best?.element ?? null);
   if (!anchorElement) {
@@ -112,7 +118,7 @@ export function captureViewportRowAnchor(
 
   const anchorRect = anchorElement.getBoundingClientRect();
   const anchorPoint =
-    mode === "center-point"
+    mode === OUTPUT_SCROLL_ANCHOR_MODES.CENTER_POINT
       ? Math.min(Math.max(viewportCenter, anchorRect.top), anchorRect.bottom)
       : anchorRect.top;
 
@@ -127,14 +133,14 @@ export function captureViewportRowAnchor(
 export function alignRowElementToViewport(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
-  align: "start" | "center" | "end"
+  align: OutputScrollAlignment
 ): boolean {
   const containerRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const delta =
-    align === "end"
+    align === OUTPUT_SCROLL_ALIGNMENTS.END
       ? rowRect.bottom - containerRect.bottom
-      : align === "center"
+      : align === OUTPUT_SCROLL_ALIGNMENTS.CENTER
         ? rowRect.top +
           rowRect.height / 2 -
           (containerRect.top + containerRect.height / 2)
@@ -158,14 +164,14 @@ export function alignRowElementToViewport(
 export function getRowScopedScrollTop(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
-  align: "start" | "center" | "end"
+  align: OutputScrollAlignment
 ): number {
   const containerRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const delta =
-    align === "end"
+    align === OUTPUT_SCROLL_ALIGNMENTS.END
       ? rowRect.bottom - containerRect.bottom
-      : align === "center"
+      : align === OUTPUT_SCROLL_ALIGNMENTS.CENTER
         ? rowRect.top +
           rowRect.height / 2 -
           (containerRect.top + containerRect.height / 2)
@@ -181,12 +187,12 @@ export function getEstimatedRowScopedScrollTop(
   scrollElement: HTMLDivElement,
   rowStart: number,
   rowSize: number | undefined,
-  align: "start" | "center" | "end"
+  align: OutputScrollAlignment
 ): number {
   const target =
-    align === "end"
+    align === OUTPUT_SCROLL_ALIGNMENTS.END
       ? rowStart + (rowSize ?? 0) - scrollElement.clientHeight
-      : align === "center"
+      : align === OUTPUT_SCROLL_ALIGNMENTS.CENTER
         ? rowStart + (rowSize ?? 0) / 2 - scrollElement.clientHeight / 2
         : rowStart;
   const maxScroll = Math.max(

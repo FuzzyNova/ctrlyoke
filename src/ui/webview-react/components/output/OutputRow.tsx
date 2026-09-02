@@ -19,6 +19,7 @@ import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   HISTORY_MATCH_FIELDS,
   KEYBOARD_KEYS,
+  OUTPUT_DEFAULT_LABELS,
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
 } from "@root/types/DashboardConstants";
@@ -329,14 +330,17 @@ const ThinkingOutput: React.FC<{
   atomicContextReferences?: boolean;
 }> = ({
   text,
-  label = "Thinking",
+  label = OUTPUT_DEFAULT_LABELS.THINKING,
   findQuery,
   findCaseSensitive,
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
 }) => {
-  const displayLabel = label && label !== "Thinking" ? label : "Thinking";
+  const displayLabel =
+    label && label !== OUTPUT_DEFAULT_LABELS.THINKING
+      ? label
+      : OUTPUT_DEFAULT_LABELS.THINKING;
   return (
     <div className="my-2">
       <div className="text-[length:var(--fp-output-font-size-xs)] text-description-fg mb-1">
@@ -488,21 +492,21 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           .trim()
           .replace(/\s*\n+\s*/g, " ") || "command unavailable";
       if (
-        activeFindMatch?.field === "command" &&
+        activeFindMatch?.field === HISTORY_MATCH_FIELDS.COMMAND &&
         isActiveMatchHidden(
           renderedCommand,
-          getFieldMatches("command"),
+          getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND),
           expansion.commandExpanded,
           1,
           DEFAULT_COLLAPSED_COMMAND_MAX_CHARS
         )
       ) {
-        pendingBashExpand = "command";
+        pendingBashExpand = BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND;
       } else if (
-        activeFindMatch?.field === "response" &&
+        activeFindMatch?.field === HISTORY_MATCH_FIELDS.RESPONSE &&
         isActiveMatchHidden(
           data.output ?? "",
-          getFieldMatches("response"),
+          getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
           expansion.outputExpanded,
           collapsedToolOutputLineCount,
           row.collapsedToolOutputMaxCharacters ??
@@ -586,13 +590,20 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             raw={rawTextOutput}
             content={
               rawTextOutput
-                ? highlightText(data.text, getFieldMatches("response"))
+                ? highlightText(
+                    data.text,
+                    getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)
+                  )
                 : undefined
             }
             findQuery={rawTextOutput ? undefined : findQuery}
             findCaseSensitive={findCaseSensitive}
-            highlightActiveIndex={getActiveMatchIndex("response")}
-            findDecorations={{ matches: getFieldMatches("response") }}
+            highlightActiveIndex={getActiveMatchIndex(
+              HISTORY_MATCH_FIELDS.RESPONSE
+            )}
+            findDecorations={{
+              matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
+            }}
             atomicContextReferences={atomicContextReferences}
           />
         );
@@ -606,8 +617,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             label={data.label}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
-            highlightActiveIndex={getActiveMatchIndex("response")}
-            findDecorations={{ matches: getFieldMatches("response") }}
+            highlightActiveIndex={getActiveMatchIndex(
+              HISTORY_MATCH_FIELDS.RESPONSE
+            )}
+            findDecorations={{
+              matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
+            }}
             atomicContextReferences={atomicContextReferences}
           />
         );
@@ -620,8 +635,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             text={data.text}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
-            highlightActiveIndex={getActiveMatchIndex("response")}
-            findDecorations={{ matches: getFieldMatches("response") }}
+            highlightActiveIndex={getActiveMatchIndex(
+              HISTORY_MATCH_FIELDS.RESPONSE
+            )}
+            findDecorations={{
+              matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
+            }}
             atomicContextReferences={atomicContextReferences}
           />
         );
@@ -633,8 +652,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             command={data.command}
             output={data.output}
             error={data.error}
-            commandFindMatches={getFieldMatches("command")}
-            outputFindMatches={getFieldMatches("response")}
+            commandFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND)}
+            outputFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)}
             errorFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)}
             exitCode={data.exitCode}
             status={data.status}
@@ -844,7 +863,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             queryContent={
               <>
                 Web search: &ldquo;
-                {highlightText(data.query, getFieldMatches("response"))}
+                {highlightText(
+                  data.query,
+                  getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)
+                )}
                 &rdquo;
               </>
             }
@@ -1599,7 +1621,7 @@ function OutputRowComponent({
               row.workingDirectory,
               row.wasInjected
             ),
-            getFieldMatches("command"),
+            getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND),
             row.workingDirectory
           )}
         </div>
@@ -1627,7 +1649,7 @@ function OutputRowComponent({
       break;
     }
     case OUTPUT_ROW_KINDS.PLAIN_RESPONSE: {
-      const responseMatches = getFieldMatches("response");
+      const responseMatches = getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE);
       content = (
         <TextOutput
           text={row.text}
@@ -1654,7 +1676,10 @@ function OutputRowComponent({
       content = (
         <ScriptOutputSegment
           row={row}
-          content={highlightText(row.text, getFieldMatches("response"))}
+          content={highlightText(
+            row.text,
+            getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)
+          )}
           onTailToggle={
             tailToggle
               ? (expanded) =>

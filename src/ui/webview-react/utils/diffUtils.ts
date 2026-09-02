@@ -7,6 +7,10 @@
  */
 import * as Diff from "diff";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
+import {
+  DIFF_LINE_TYPES,
+  type DiffLineType,
+} from "@root/types/DashboardConstants";
 
 export interface RenderableDiffSource {
   oldContent?: string;
@@ -23,7 +27,7 @@ export function hasRenderableDiff(s: RenderableDiffSource): boolean {
  * A single line in a rendered diff — used by OutputSection and markdownExport.
  */
 export interface DiffLine {
-  type: "added" | "removed" | "context";
+  type: DiffLineType;
   oldLineNum?: number;
   newLineNum?: number;
   content: string;
@@ -142,13 +146,26 @@ export function generateDiffLines(
 
     partLines.forEach((line) => {
       if (part.added) {
-        lines.push({ type: "added", newLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.ADDED,
+          newLineNum,
+          content: line,
+        });
         newLineNum++;
       } else if (part.removed) {
-        lines.push({ type: "removed", oldLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.REMOVED,
+          oldLineNum,
+          content: line,
+        });
         oldLineNum++;
       } else {
-        lines.push({ type: "context", oldLineNum, newLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.CONTEXT,
+          oldLineNum,
+          newLineNum,
+          content: line,
+        });
         oldLineNum++;
         newLineNum++;
       }
