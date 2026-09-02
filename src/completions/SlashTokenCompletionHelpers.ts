@@ -182,6 +182,8 @@ function createSkillTokenCompletions(
         : `ctrlyoke skill · ${source}`,
       documentation: description || undefined,
       filterText: skill.name,
+      // Matches describeSlashTokenChip's /skill: icon.
+      icon: "tools",
     });
   }
 
@@ -221,6 +223,8 @@ function createMcpTokenCompletions(
       insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${server.id}`,
       detail: formatMcpDetail(server),
       filterText: server.id,
+      // Matches describeSlashTokenChip's /mcp: icon.
+      icon: "mcp",
     });
   }
 
@@ -238,6 +242,7 @@ function createBuiltinCtrlYokeMcpCompletion(): McpTokenCompletionItem {
     detail: `ctrlyoke MCP server (built-in) · ${CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description}`,
     documentation: CTRLYOKE_BUILTIN_MCP_SERVER_INFO.description,
     filterText: id,
+    icon: "mcp",
   };
 }
 

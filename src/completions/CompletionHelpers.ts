@@ -61,6 +61,22 @@ export interface PlainCompletionItem {
   documentation?: string;
   sortText?: string;
   filterText?: string;
+  /**
+   * Explicit codicon name overriding the webview dropdown's default
+   * kind-derived icon (see COMPLETION_KIND_ICONS in CodeMirrorEditor.tsx).
+   * `vscode.CompletionItemKind` has too few free values to give every atomic
+   * reference kind (secret, prior-context, condition-output) its own icon
+   * without colliding with a symbol/file/git meaning already assigned to that
+   * kind, so this field is the escape hatch — it must name one of the icons
+   * in SYMBOL_ICON_COLORS (atomicReferences.ts) to pick up matching color/
+   * accent CSS, and should match the icon the same reference's chip uses
+   * (see describeContextReferenceChip / describePriorContextChip /
+   * describeConditionOutputChip / describeSlashTokenChip) so the completion
+   * and the chip it inserts always agree. Ignored by toVSCodeCompletionItem —
+   * VS Code's native IntelliSense has no per-item custom icon support, so
+   * `kind` alone still drives that surface.
+   */
+  icon?: string;
 }
 
 /** Build value-free completion items for managed or declared secret names. */
@@ -76,6 +92,7 @@ export function getSecretCompletions(
       kind: vscode.CompletionItemKind.Variable,
       insertText: name,
       detail: "Secret name (value is never shown)",
+      icon: "key",
     }));
 }
 
@@ -1203,12 +1220,27 @@ export async function getGitChangeCompletions(
 export function getPriorContextCompletions(
   filterText: string
 ): PlainCompletionItem[] {
+  // icon mirrors the chip icon the inserted reference will render with (see
+  // describePriorContextChip/describeConditionOutputChip in atomicReferences.ts)
+  // so the completion never disagrees with what picking it produces.
   const keywords = [
-    { label: "previous", detail: "Output of the previous step" },
-    { label: "all", detail: "Outputs of all prior steps" },
-    { label: "finalStep", detail: "Previous finalStep output" },
-    { label: "allFinalStep", detail: "All finalStep outputs" },
-    { label: "step:", detail: "Specific steps, e.g. $step:1,3-5" },
+    { label: "previous", detail: "Output of the previous step", icon: "book" },
+    { label: "all", detail: "Outputs of all prior steps", icon: "book" },
+    {
+      label: "finalStep",
+      detail: "Previous finalStep output",
+      icon: "book",
+    },
+    {
+      label: "allFinalStep",
+      detail: "All finalStep outputs",
+      icon: "book",
+    },
+    {
+      label: "step:",
+      detail: "Specific steps, e.g. $step:1,3-5",
+      icon: "book",
+    },
     ...[
       SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
       SCRIPT_OUTPUT_SOURCES.END_CONDITION,
@@ -1220,6 +1252,8 @@ export function getPriorContextCompletions(
             ? "Pre-condition"
             : "End-condition"
         } script ${field}`,
+        icon:
+          phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION ? "shield" : "checklist",
       }))
     ),
   ];
@@ -1233,6 +1267,7 @@ export function getPriorContextCompletions(
       kind: vscode.CompletionItemKind.Keyword,
       insertText: keyword.label,
       detail: keyword.detail,
+      icon: keyword.icon,
     }));
 }
 

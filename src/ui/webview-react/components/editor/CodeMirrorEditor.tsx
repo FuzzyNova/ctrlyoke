@@ -163,6 +163,13 @@ interface ExtensionCompletionItem {
   captureId?: string;
   sortText?: string;
   filterText?: string;
+  /**
+   * Explicit codicon name overriding the kind-derived icon below (see
+   * PlainCompletionItem.icon in CompletionHelpers.ts for why this exists —
+   * some atomic reference kinds share a CompletionItemKind but need distinct
+   * icons matching their chip). Must name a key in SYMBOL_ICON_COLORS.
+   */
+  icon?: string;
 }
 
 interface PendingCompletionRequest {
@@ -191,6 +198,14 @@ const LINK_TOUCH_LONG_PRESS_MS = 500;
 // #sym: refs; see symbolIconCacheKey/createContextReferenceLintExtension).
 // Every name here ships in @vscode/codicons' codicon.css (checked against the
 // pinned package version) — don't add one without verifying it exists there.
+//
+// CompletionItemKind only has a couple of free values, not enough to give
+// secrets/prior-context/condition-output/skill/mcp completions their own
+// entries without colliding with a kind some other provider already uses for
+// its real meaning (e.g. Keyword is shared by prior-context AND skill
+// completions). Those providers set `item.icon` instead (see
+// PlainCompletionItem.icon in CompletionHelpers.ts) to bypass this map
+// entirely — see the `type` computation in buildCodeMirrorCompletionResult.
 //
 // kind 10 (Unit) is repurposed: getSelectionCompletions() (extension host)
 // assigns it to the "current selection" item specifically because Unit is
@@ -324,9 +339,10 @@ export function buildCodeMirrorCompletionResult(
     }
 
     const type =
-      item.kind !== undefined
+      item.icon ??
+      (item.kind !== undefined
         ? COMPLETION_KIND_ICONS[item.kind] || DEFAULT_COMPLETION_ICON
-        : DEFAULT_COMPLETION_ICON;
+        : DEFAULT_COMPLETION_ICON);
     const matchLabel =
       useFilterTextForMatching && item.filterText
         ? item.filterText

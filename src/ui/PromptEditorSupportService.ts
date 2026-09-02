@@ -423,6 +423,7 @@ export class PromptEditorSupportService {
         sortText: item.sortText,
         filterText: item.filterText,
         captureId: item.captureId,
+        icon: item.icon,
       })),
       from: position,
       seq,
