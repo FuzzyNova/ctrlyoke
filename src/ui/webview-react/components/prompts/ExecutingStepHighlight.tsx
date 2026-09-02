@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { useWorkflowStore } from "../../store/workflowStore";
+import { WebviewLog } from "@utils/logger";
+
 interface ExecutingStepHighlightProps {
   borderClassName?: string;
   testId?: string;
@@ -15,6 +19,25 @@ export function ExecutingStepHighlight({
   borderClassName = "border-2",
   testId = "executing-step-highlight",
 }: ExecutingStepHighlightProps) {
+  // Diagnostic logging for the "running highlight never appears on start"
+  // bug — the parent only renders this component when its own isCurrent/
+  // isExecuting condition is true, so a mount/unmount pair here is direct
+  // evidence of when that condition flips, correlated against the store
+  // state logged by workflowStore's setters.
+  useEffect(() => {
+    const { executionState, currentStep } = useWorkflowStore.getState();
+    WebviewLog.debug(
+      `[ExecutingStepHighlight] mount testId=${testId} (executionState=${executionState}, currentStep=${currentStep})`
+    );
+    return () => {
+      const { executionState: unmountExecutionState, currentStep: unmountCurrentStep } =
+        useWorkflowStore.getState();
+      WebviewLog.debug(
+        `[ExecutingStepHighlight] unmount testId=${testId} (executionState=${unmountExecutionState}, currentStep=${unmountCurrentStep})`
+      );
+    };
+  }, [testId]);
+
   return (
     <div
       data-testid={testId}

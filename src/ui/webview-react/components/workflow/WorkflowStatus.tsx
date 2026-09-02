@@ -381,6 +381,26 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const isNewWorkflow =
     fileName === DEFAULT_WORKFLOW_NAME && !workflowName && totalSteps === 0;
 
+  // Diagnostic logging for the "running badge never appears on start" bug —
+  // logs whenever the header badge's own visibility condition flips, so it
+  // can be correlated against the workflowStore transition logs (see
+  // workflowStore.ts's setExecutionState/loadWorkflow) and confirm whether
+  // the store ever reached RUNNING while this was still false.
+  const showExecutionBadge =
+    !!executionState && executionState !== EXECUTION_STATES.IDLE;
+  const prevShowExecutionBadgeRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (prevShowExecutionBadgeRef.current === showExecutionBadge) {
+      return;
+    }
+    prevShowExecutionBadgeRef.current = showExecutionBadge;
+    WebviewLog.debug(
+      `[WorkflowStatus] header badge visible=${showExecutionBadge} ` +
+        `(executionState=${executionState}, fileName="${fileName || "(none)"}", ` +
+        `workflowKey=${displayedViewAddress?.workflowKey ?? "(none)"})`
+    );
+  }, [showExecutionBadge, executionState, fileName, displayedViewAddress]);
+
   const isMobile = useIsMobile();
   const wfStatusSize = isMobile
     ? WORKFLOW_STATUS_BUTTON_SIZES.touch
@@ -1634,7 +1654,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               )}
 
               {/* Execution State */}
-              {executionState && executionState !== EXECUTION_STATES.IDLE && (
+              {showExecutionBadge && (
                 <ExecutionStateBadge
                   state={executionState}
                   isNarrow={isNarrow}

@@ -703,6 +703,16 @@ export const useWorkflowStore = create<
       setWorkflowName: (workflowName) => set({ workflowName }),
 
       setPrompts: (steps) => {
+        // Diagnostic logging for the "running badge/highlight never appear on
+        // start" bug — correlates step-count changes against the
+        // executionState/currentStep transitions logged below.
+        const prevStepCount = get().steps.length;
+        if (prevStepCount !== steps.length) {
+          WebviewLog.debug(
+            `[workflowStore.setPrompts] steps.length ${prevStepCount} -> ${steps.length} ` +
+              `(executionState=${get().executionState}, currentStep=${get().currentStep})`
+          );
+        }
         set({
           steps,
           totalSteps: steps.length,
@@ -717,11 +727,30 @@ export const useWorkflowStore = create<
         }));
       },
 
-      setExecutionState: (executionState) =>
-        withUndoPause(() => set({ executionState })),
+      setExecutionState: (executionState) => {
+        // Diagnostic logging for the "running badge/highlight never appear on
+        // start" bug — every transition this store makes, so we can tell
+        // whether the store itself ever saw RUNNING (vs. a render-only bug).
+        const prevExecutionState = get().executionState;
+        if (prevExecutionState !== executionState) {
+          WebviewLog.debug(
+            `[workflowStore.setExecutionState] ${prevExecutionState} -> ${executionState} ` +
+              `(currentStep=${get().currentStep}, steps.length=${get().steps.length})`
+          );
+        }
+        withUndoPause(() => set({ executionState }));
+      },
 
-      setCurrentStep: (currentStep) =>
-        withUndoPause(() => set({ currentStep })),
+      setCurrentStep: (currentStep) => {
+        const prevCurrentStep = get().currentStep;
+        if (prevCurrentStep !== currentStep) {
+          WebviewLog.debug(
+            `[workflowStore.setCurrentStep] ${prevCurrentStep} -> ${currentStep} ` +
+              `(executionState=${get().executionState}, steps.length=${get().steps.length})`
+          );
+        }
+        withUndoPause(() => set({ currentStep }));
+      },
 
       setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
@@ -936,6 +965,25 @@ export const useWorkflowStore = create<
           ...prompt,
           status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
         })) as WorkflowStep[];
+
+        // Diagnostic logging for the "running badge/highlight never appear on
+        // start" bug — loadWorkflow (RUN_VIEW_LOADED snapshots) sets
+        // executionState/currentStep/steps in one shot, bypassing the
+        // setExecutionState/setCurrentStep/setPrompts logging above, so log
+        // it separately here.
+        {
+          const prev = get();
+          if (
+            prev.executionState !== executionState ||
+            prev.currentStep !== currentStep ||
+            prev.steps.length !== steps.length
+          ) {
+            WebviewLog.debug(
+              `[workflowStore.loadWorkflow] fileName="${fileName}" executionState=${prev.executionState}->${executionState}, ` +
+                `currentStep=${prev.currentStep}->${currentStep}, steps.length=${prev.steps.length}->${steps.length}`
+            );
+          }
+        }
 
         withUndoPause(() =>
           set((state) => ({
