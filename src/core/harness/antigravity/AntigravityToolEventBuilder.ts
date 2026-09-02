@@ -21,6 +21,7 @@ import {
   AntigravityTranscriptEntry,
   isRecord,
 } from "./AntigravityTranscriptTypes";
+import { ANTIGRAVITY_WIRE_VALUES } from "./AntigravityProtocolConstants";
 
 export interface AntigravityToolMapping {
   call?: AntigravityPlannerToolCall;
@@ -68,7 +69,7 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.status === "RUNNING") {
+    if (result.status === ANTIGRAVITY_WIRE_VALUES.RUNNING) {
       return [
         {
           type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -86,7 +87,10 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "RUN_COMMAND" || normalizedName === "run_command") {
+    if (
+      result.type === "RUN_COMMAND" ||
+      normalizedName === ANTIGRAVITY_WIRE_VALUES.RUN_COMMAND
+    ) {
       const exitCode = this.exitCode(result);
       const command = this.stringArg(args, ["CommandLine", "command", "cmd"]);
       const workingDir = this.stringArg(args, ["Cwd", "cwd", "workingDir"]);
@@ -185,7 +189,7 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "SYSTEM_MESSAGE") {
+    if (result.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE) {
       return [
         {
           type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -270,7 +274,7 @@ export class AntigravityToolEventBuilder {
         question.options
       ),
     }));
-    const completed = result.status === "DONE";
+    const completed = result.status === ANTIGRAVITY_WIRE_VALUES.DONE;
 
     return {
       type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
@@ -489,7 +493,10 @@ export class AntigravityToolEventBuilder {
     if (exitCode !== undefined) {
       return exitCode === 0;
     }
-    if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE
+    ) {
       return !/\b(error|failed|failure|cancelled|canceled)\b/i.test(
         this.stringContent(entry)
       );
@@ -501,7 +508,10 @@ export class AntigravityToolEventBuilder {
     ) {
       return false;
     }
-    return entry.source !== "SYSTEM" || entry.type === "SYSTEM_MESSAGE";
+    return (
+      entry.source !== ANTIGRAVITY_WIRE_VALUES.SYSTEM ||
+      entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE
+    );
   }
 
   private static resultError(

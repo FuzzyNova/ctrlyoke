@@ -5,6 +5,7 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
+import { ANTIGRAVITY_WIRE_VALUES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
@@ -1099,10 +1100,7 @@ suite("AntigravityLogParser", () => {
             (read?.data as { lineStart?: number }).lineStart,
             384
           );
-          assert.strictEqual(
-            (read?.data as { lineEnd?: number }).lineEnd,
-            428
-          );
+          assert.strictEqual((read?.data as { lineEnd?: number }).lineEnd, 428);
         }
       );
     });
@@ -1460,7 +1458,8 @@ suite("AntigravityLogParser", () => {
         const launch = output.events.find(
           (event) =>
             event.type === CLI_EVENT_TYPES.TOOL_CALL &&
-            (event.data as { name?: string }).name === "run_command"
+            (event.data as { name?: string }).name ===
+              ANTIGRAVITY_WIRE_VALUES.RUN_COMMAND
         );
         assert.strictEqual(
           (launch?.data as { id?: string }).id,
