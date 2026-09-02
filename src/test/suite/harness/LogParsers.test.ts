@@ -37,6 +37,10 @@ import {
   QWEN_CONTENT_PART_TYPES,
   QWEN_EVENT_TYPES,
 } from "../../../core/harness/qwen/QwenProtocolConstants";
+import {
+  CODEX_PAYLOAD_TYPES,
+  CODEX_TOOL_NAMES,
+} from "../../../core/harness/codex/CodexProtocolConstants";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -3313,7 +3317,7 @@ suite("CodexLogParser", () => {
           .filter(
             (event) =>
               event.type === "item.completed" &&
-              event.item?.type === "agent_message"
+              event.item?.type === CODEX_PAYLOAD_TYPES.AGENT_MESSAGE
           )
           .map((event) => event.item.text),
         commandCount: stdout.filter(
@@ -3884,7 +3888,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -3954,7 +3958,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4037,7 +4041,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4114,7 +4118,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4160,7 +4164,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4239,7 +4243,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(execToolCalls.length, 0, "exec must be unwrapped");
 
@@ -4602,7 +4606,7 @@ suite("CodexLogParser", () => {
         (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
       );
       const completedFileEditEvents = fileEditEvents.filter(
-        (event) => (event.data as any).status === "completed"
+        (event) => (event.data as any).status === OPERATION_STATUS.COMPLETED
       );
 
       assert.strictEqual(fileEditEvents.length, 4);
