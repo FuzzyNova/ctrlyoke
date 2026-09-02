@@ -201,7 +201,9 @@ async function runCase(
   const outputs: Array<{ stdout: string; stderr: string }> = [];
   let ptyCalls = 0;
   const context = makeContext(
-    executionMode === "interactive" ? comparisonCase.ptyOutput : undefined,
+    executionMode === EXECUTION_MODES.INTERACTIVE
+      ? comparisonCase.ptyOutput
+      : undefined,
     async (options) => {
       ptyCalls++;
       options.onOutput(comparisonCase.ptyOutput);
@@ -210,7 +212,7 @@ async function runCase(
     outputs
   );
 
-  if (executionMode === "headless") {
+  if (executionMode === EXECUTION_MODES.HEADLESS) {
     context.spawnScriptPty = undefined;
   }
 
@@ -222,7 +224,7 @@ async function runCase(
         compareSource: comparisonCase.compareSource,
         returns: comparisonCase.returns,
         executionMode:
-          executionMode === "interactive"
+          executionMode === EXECUTION_MODES.INTERACTIVE
             ? EXECUTION_MODES.INTERACTIVE
             : EXECUTION_MODES.HEADLESS,
       },

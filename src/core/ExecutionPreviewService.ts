@@ -20,6 +20,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
+  EXECUTION_MODES,
   WORKTREE_MODES,
   type HarnessId,
   type PreviewPermissionAction,
@@ -831,7 +832,7 @@ export class ExecutionPreviewService {
     );
     const environmentKeys = new Set<string>([
       ...Object.keys(
-        properties.executionMode === "interactive"
+        properties.executionMode === EXECUTION_MODES.INTERACTIVE
           ? (provider.getInteractiveSpawnEnv?.() ?? {})
           : (provider.getHeadlessSpawnEnv?.() ?? {})
       ),

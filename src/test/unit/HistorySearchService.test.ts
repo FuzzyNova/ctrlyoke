@@ -251,7 +251,11 @@ suite("HistorySearchService", () => {
       pathResults.map((result) => result.eventKind).sort(),
       ["fileDelete", "fileEdit", "fileRead", "fileWrite"]
     );
-    assert.ok(pathResults.every((result) => result.matchField === "path"));
+    assert.ok(
+      pathResults.every(
+        (result) => result.matchField === HISTORY_MATCH_FIELDS.PATH
+      )
+    );
 
     const editResults = (
       await service.search("edited-content-term", workspaceRoot)

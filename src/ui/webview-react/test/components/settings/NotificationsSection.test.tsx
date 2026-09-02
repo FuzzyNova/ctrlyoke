@@ -6,7 +6,10 @@ import { useUiStore } from "@store/uiStore";
 import { SETTING_SCOPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
-import { HOOK_EVENT_METADATA } from "@root/types/DashboardConstants";
+import {
+  HOOK_EVENT_METADATA,
+  HOOK_EVENT_NAMES,
+} from "@root/types/DashboardConstants";
 
 function createSettings(): FullGlobalSettings {
   return {
@@ -44,7 +47,7 @@ describe("NotificationsSection", () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     const notificationDescription = HOOK_EVENT_METADATA.find(
-      ({ event }) => event === "notification"
+      ({ event }) => event === HOOK_EVENT_NAMES.NOTIFICATION
     )?.description;
 
     render(

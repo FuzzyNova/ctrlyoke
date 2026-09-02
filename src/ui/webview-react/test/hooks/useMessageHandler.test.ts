@@ -25,7 +25,7 @@ vi.mock("@utils/browserNotifications", () => ({
   getNotificationSeverityColor: (severity: string) =>
     severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR
       ? "error"
-      : severity === "warning"
+      : severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING
         ? "warning"
         : "info",
   handleCompletionNotificationEvent: handleCompletionNotificationEventMock,
