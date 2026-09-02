@@ -39,6 +39,11 @@ import {
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 
+const CONTEXT_REFERENCE_BASES = {
+  WORKFLOW: "workflow",
+  SOURCE_RUNTIME_STORE: "sourceRuntimeStore",
+} as const;
+
 /**
  * Result of context splitting — separates direct file references from embedded excerpts.
  * Used by categorized prompt file creation (CLI and Chat harnesses).
@@ -617,8 +622,8 @@ export class ContextExpander {
     // unlike copied references, nothing was placed at the workspace-relative
     // path for the harness to open.
     const displayPath =
-      resolution.base === "workflow" ||
-      resolution.base === "sourceRuntimeStore" ||
+      resolution.base === CONTEXT_REFERENCE_BASES.WORKFLOW ||
+      resolution.base === CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE ||
       this.effectiveAbsolute
         ? absolutePath
         : ref.path;
@@ -630,7 +635,10 @@ export class ContextExpander {
     // The source-only full-file ref will be copied to the execution checkout
     // by the preparation pass. Preserve its workspace-relative token so the
     // harness opens the mirrored destination after that deferred mutation.
-    if (!isExcerptRef && resolution.base === "sourceRuntimeStore") {
+    if (
+      !isExcerptRef &&
+      resolution.base === CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE
+    ) {
       return null;
     }
 
@@ -639,8 +647,8 @@ export class ContextExpander {
       // path (not the surrounding syntax) can change.
       if (
         !this.effectiveAbsolute &&
-        resolution.base !== "workflow" &&
-        resolution.base !== "sourceRuntimeStore"
+        resolution.base !== CONTEXT_REFERENCE_BASES.WORKFLOW &&
+        resolution.base !== CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE
       ) {
         return null;
       }
@@ -734,7 +742,7 @@ export class ContextExpander {
         } else {
           this.sourceRuntimeResolutions.set(referencePath, {
             absolutePath,
-            base: "sourceRuntimeStore",
+            base: CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE,
           });
         }
       }
@@ -963,7 +971,8 @@ export class ContextExpander {
     // A read-in-place source artifact has no worktree path to name, so its
     // excerpt header must carry the absolute source path (§4.2).
     const displayPath =
-      resolution.base === "sourceRuntimeStore" || this.effectiveAbsolute
+      resolution.base === CONTEXT_REFERENCE_BASES.SOURCE_RUNTIME_STORE ||
+      this.effectiveAbsolute
         ? absolutePath
         : filePath;
 

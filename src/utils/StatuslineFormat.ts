@@ -16,6 +16,20 @@ export const STATUS_LINE_FIELD_IDS = {
 export type StatusLineFieldId =
   (typeof STATUS_LINE_FIELD_IDS)[keyof typeof STATUS_LINE_FIELD_IDS];
 
+const STATUS_LINE_FORMAT_SEGMENT_TYPES = {
+  FIELD: "field",
+  LITERAL: "literal",
+} as const;
+
+const STATUS_LINE_USAGE_DIRECTIONS = {
+  USED: "used",
+  REMAINING: "remaining",
+} as const;
+
+const STATUS_LINE_COLOR_NAMES = {
+  DEFAULT: "default",
+} as const;
+
 /** Field metadata shared by the formatter and the format editor. */
 export const STATUS_LINE_FIELD_REGISTRY = {
   [STATUS_LINE_FIELD_IDS.MODEL]: {
@@ -110,13 +124,13 @@ export const STATUS_LINE_COLOR_SWATCHES: Record<StatusLineColorId, string> = {
 
 export type StatusLineSegment =
   | {
-      type: "field";
+      type: typeof STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD;
       field: StatusLineFieldId;
       label?: string;
       color?: StatusLineColorId;
     }
   | {
-      type: "literal";
+      type: typeof STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL;
       text: string;
       color?: StatusLineColorId;
     };
@@ -127,12 +141,21 @@ export type StatusLineSegment =
  * box from the start, hinting that it can be customized in place.
  */
 export const DEFAULT_STATUS_LINE_FORMAT = [
-  { type: "literal", text: "ctrlyoke" },
-  { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
-  { type: "literal", text: "·" },
-  { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT },
-  { type: "literal", text: "·" },
-  { type: "field", field: STATUS_LINE_FIELD_IDS.USAGE },
+  { type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL, text: "ctrlyoke" },
+  {
+    type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
+    field: STATUS_LINE_FIELD_IDS.MODEL,
+  },
+  { type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL, text: "·" },
+  {
+    type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
+    field: STATUS_LINE_FIELD_IDS.CONTEXT,
+  },
+  { type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL, text: "·" },
+  {
+    type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
+    field: STATUS_LINE_FIELD_IDS.USAGE,
+  },
 ] satisfies readonly StatusLineSegment[];
 
 /** Return whether a format has the same ordered segments and values as the default. */
@@ -149,7 +172,10 @@ export function isDefaultStatusLineFormat(
       return false;
     }
 
-    if (segment.type === "field" && defaultSegment.type === "field") {
+    if (
+      segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD &&
+      defaultSegment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
+    ) {
       return (
         segment.field === defaultSegment.field &&
         segment.label === defaultSegment.label &&
@@ -157,7 +183,10 @@ export function isDefaultStatusLineFormat(
       );
     }
 
-    if (segment.type === "literal" && defaultSegment.type === "literal") {
+    if (
+      segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL &&
+      defaultSegment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL
+    ) {
       return (
         segment.text === defaultSegment.text &&
         segment.color === defaultSegment.color
@@ -168,7 +197,8 @@ export function isDefaultStatusLineFormat(
   });
 }
 
-export type UsagePercentDirection = "used" | "remaining";
+export type UsagePercentDirection =
+  (typeof STATUS_LINE_USAGE_DIRECTIONS)[keyof typeof STATUS_LINE_USAGE_DIRECTIONS];
 
 const STATUS_LINE_USAGE_WINDOW_WEEK_MINUTES = 7 * 24 * 60;
 
@@ -257,7 +287,9 @@ export function formatUsagePercentForDisplay(
   usedPercent: number,
   direction: UsagePercentDirection
 ): number {
-  return direction === "remaining" ? 100 - usedPercent : usedPercent;
+  return direction === STATUS_LINE_USAGE_DIRECTIONS.REMAINING
+    ? 100 - usedPercent
+    : usedPercent;
 }
 
 export const STATUS_LINE_FORMAT_PROVIDERS = {
@@ -275,11 +307,6 @@ export interface StatusLineFormatOptions {
   branch?: string;
   now?: Date;
 }
-
-const STATUS_LINE_FORMAT_SEGMENT_TYPES = {
-  FIELD: "field",
-  LITERAL: "literal",
-} as const;
 
 const STATUS_LINE_CONTEXT_THRESHOLDS = {
   WARNING: 70,
@@ -500,7 +527,7 @@ function basename(value: string): string {
 function applyColor(text: string, color: unknown): string {
   if (
     typeof color === "string" &&
-    color !== "default" &&
+    color !== STATUS_LINE_COLOR_NAMES.DEFAULT &&
     Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, color)
   ) {
     const ansi = STATUS_LINE_COLOR_IDS[color as StatusLineColorId];
@@ -512,7 +539,7 @@ function applyColor(text: string, color: unknown): string {
 function isStatusLineColor(value: unknown): value is StatusLineColorId {
   return (
     typeof value === "string" &&
-    value !== "default" &&
+    value !== STATUS_LINE_COLOR_NAMES.DEFAULT &&
     Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, value)
   );
 }
@@ -521,7 +548,7 @@ function isStatusLineColor(value: unknown): value is StatusLineColorId {
 const ANSI_COLOR_ID_BY_CODE: Record<string, StatusLineColorId> =
   Object.fromEntries(
     Object.entries(STATUS_LINE_COLOR_IDS)
-      .filter(([id]) => id !== "default")
+      .filter(([id]) => id !== STATUS_LINE_COLOR_NAMES.DEFAULT)
       .map(([id, ansi]) => [
         /\[(\d+)m/u.exec(ansi)?.[1] ?? "",
         id as StatusLineColorId,
@@ -569,7 +596,7 @@ export function formatBrandedStatusLine(
   provider: StatusLineFormatProvider,
   payload: unknown,
   format?: readonly StatusLineSegment[],
-  percentDirection: UsagePercentDirection = "used",
+  percentDirection: UsagePercentDirection = STATUS_LINE_USAGE_DIRECTIONS.USED,
   options: StatusLineFormatOptions = {}
 ): string {
   try {
@@ -580,10 +607,13 @@ export function formatBrandedStatusLine(
     const segments: readonly StatusLineSegment[] =
       format && format.length > 0 ? format : DEFAULT_STATUS_LINE_FORMAT;
     const windows = usageWindows(normalized, provider);
-    const direction = percentDirection === "remaining" ? "remaining" : "used";
+    const direction =
+      percentDirection === STATUS_LINE_USAGE_DIRECTIONS.REMAINING
+        ? STATUS_LINE_USAGE_DIRECTIONS.REMAINING
+        : STATUS_LINE_USAGE_DIRECTIONS.USED;
     const now = options.now ?? new Date();
     const rendered: Array<{
-      type: "field" | "literal";
+      type: StatusLineSegment["type"];
       text: string;
     }> = [];
 
@@ -595,7 +625,12 @@ export function formatBrandedStatusLine(
         const literal = safeLabel(segment.text, "");
         text =
           literal.length > 0 ? applyColor(literal, segment.color) : undefined;
-        if (text !== undefined) rendered.push({ type: "literal", text });
+        if (text !== undefined) {
+          rendered.push({
+            type: STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL,
+            text,
+          });
+        }
       } else if (
         segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD &&
         typeof segment.field === "string" &&
@@ -676,20 +711,31 @@ export function formatBrandedStatusLine(
         }
       }
       if (isRecognizedField) {
-        rendered.push({ type: "field", text: text ?? "" });
+        rendered.push({
+          type: STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD,
+          text: text ?? "",
+        });
       }
     }
 
     return rendered
       .filter((segment, index, allSegments) => {
-        if (segment.type !== "literal") return true;
+        if (segment.type !== STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL) {
+          return true;
+        }
         const previousField = [...allSegments]
           .slice(0, index)
           .reverse()
-          .find((candidate) => candidate.type === "field");
+          .find(
+            (candidate) =>
+              candidate.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
+          );
         const nextField = allSegments
           .slice(index + 1)
-          .find((candidate) => candidate.type === "field");
+          .find(
+            (candidate) =>
+              candidate.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
+          );
         return !(
           previousField &&
           nextField &&

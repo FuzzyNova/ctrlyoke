@@ -34,6 +34,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   VSCODE_COMMANDS,
   WORKSPACE_ENTRY_KINDS,
+  VSCODE_URI_SCHEMES,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
 
@@ -654,7 +655,7 @@ export async function getFileCompletions(
   const MAX_FILE_ITEMS = 450; // Leave room for directories so they don't get buried
 
   for (const editor of vscode.window.visibleTextEditors) {
-    if (editor.document.uri.scheme !== "output") {
+    if (editor.document.uri.scheme !== VSCODE_URI_SCHEMES.OUTPUT) {
       continue;
     }
 
@@ -996,7 +997,7 @@ function getSelectionCompletions(): PlainCompletionItem[] {
 
     // Format: #selection:path:startLine-endLine
     // Quote paths with spaces so FileReferenceParser can handle them correctly
-    const isOutputEditor = document.uri.scheme === "output";
+    const isOutputEditor = document.uri.scheme === VSCODE_URI_SCHEMES.OUTPUT;
 
     // Create label with file name and line range
     // Label must start with "selection" so both VS Code and CodeMirror can

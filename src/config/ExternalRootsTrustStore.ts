@@ -1,13 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { TRUST_DECISIONS } from "../types/DashboardConstants";
 
 /**
  * A user's one-time decision about a workspace-configured external root.
  * "allow" and "deny" are both durable — a denied root stays blocked without
  * re-prompting until the user changes the decision in Settings.
  */
-export type ExternalRootTrustDecision = "allow" | "deny";
+export type ExternalRootTrustDecision =
+  (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
 
 interface ExternalRootsTrustFile {
   /** `${workspaceIdentity}␟${canonicalRoot}` -> decision */
@@ -110,7 +112,7 @@ export class ExternalRootsTrustStore {
       return (
         decisions[
           ExternalRootsTrustStore.keyFor(workspaceIdentity, canonicalRoot)
-        ] === "allow"
+        ] === TRUST_DECISIONS.ALLOW
       );
     });
   }

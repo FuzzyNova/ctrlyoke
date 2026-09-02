@@ -1155,7 +1155,7 @@ async function executeAddressedCliOperation(
     );
   };
 
-  if (operation.kind === "rerun") {
+  if (operation.kind === CLI_RUN_OPERATION_KINDS.RERUN) {
     const sourceRunRef = await resolveCliRunRefAtLineage(
       workspaceRoot,
       history,
@@ -1212,7 +1212,7 @@ async function executeAddressedCliOperation(
     lineageRepository
   );
 
-  if (operation.kind === "append") {
+  if (operation.kind === CLI_RUN_OPERATION_KINDS.APPEND) {
     const tail = await parseAppendTail(
       operation,
       options as AppendOptions,

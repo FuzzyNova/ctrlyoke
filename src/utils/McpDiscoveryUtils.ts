@@ -13,7 +13,13 @@ import type {
   RegistryMcpEntry,
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
-import { MCP_TRANSPORTS, type McpTransport } from "../types/DashboardConstants";
+import {
+  MCP_CONFIG_ENTRY_TYPES,
+  MCP_CONFIG_KEYS,
+  MCP_REGISTRY_PACKAGE_TYPES,
+  MCP_TRANSPORTS,
+  type McpTransport,
+} from "../types/DashboardConstants";
 import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
@@ -138,7 +144,9 @@ function normalizeVscodeServerMap(
     }
 
     const entryType = value.type;
-    const isRemote = entryType === "http" || entryType === MCP_TRANSPORTS.SSE;
+    const isRemote =
+      entryType === MCP_CONFIG_ENTRY_TYPES.HTTP ||
+      entryType === MCP_TRANSPORTS.SSE;
     const entry = buildLocalEntry(id, source, filePath, {
       command: typeof value.command === "string" ? value.command : undefined,
       args: isStringArray(value.args) ? value.args : undefined,
@@ -198,11 +206,13 @@ function normalizeCopilotServerMap(
     }
 
     const entryType = value.type;
-    const isLocal = entryType === "local" || entryType === "stdio";
+    const isLocal =
+      entryType === MCP_CONFIG_ENTRY_TYPES.LOCAL ||
+      entryType === MCP_CONFIG_ENTRY_TYPES.STDIO;
     const transport =
       entryType === MCP_TRANSPORTS.SSE
         ? MCP_TRANSPORTS.SSE
-        : entryType === "http"
+        : entryType === MCP_CONFIG_ENTRY_TYPES.HTTP
           ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined;
 
@@ -308,7 +318,8 @@ function normalizeOpenCodeServerMap(
       env: toStringRecord(value.environment),
       url: typeof value.url === "string" ? value.url : undefined,
       transport:
-        entryType === "remote" && typeof value.url === "string"
+        entryType === MCP_CONFIG_ENTRY_TYPES.REMOTE &&
+        typeof value.url === "string"
           ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined,
       headers: toStringRecord(value.headers),
@@ -524,7 +535,10 @@ function normalizeCodexToml(
     const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
 
-    if (key === "command" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+    if (
+      key === MCP_CONFIG_KEYS.COMMAND &&
+      (value.startsWith(`"`) || value.startsWith(`'`))
+    ) {
       currentConfig.command = unquoteTomlString(value);
       continue;
     }
@@ -548,19 +562,19 @@ function normalizeCodexToml(
         currentConfig.transport = MCP_TRANSPORTS.SSE;
       } else if (
         transport === MCP_TRANSPORTS.STREAMABLE_HTTP ||
-        transport === "http"
+        transport === MCP_CONFIG_ENTRY_TYPES.HTTP
       ) {
         currentConfig.transport = MCP_TRANSPORTS.STREAMABLE_HTTP;
       }
       continue;
     }
 
-    if (key === "env") {
+    if (key === MCP_CONFIG_KEYS.ENV) {
       currentConfig.env = parseTomlInlineTable(value);
       continue;
     }
 
-    if (key === "headers") {
+    if (key === MCP_CONFIG_KEYS.HEADERS) {
       currentConfig.headers = parseTomlInlineTable(value);
       continue;
     }
@@ -894,7 +908,9 @@ async function fetchMcpRegistry(
       }
     }
 
-    const npmPkg = s.packages?.find((p) => p.registryType === "npm");
+    const npmPkg = s.packages?.find(
+      (p) => p.registryType === MCP_REGISTRY_PACKAGE_TYPES.NPM
+    );
     const anyPkg = s.packages?.[0];
     const pkg = npmPkg ?? anyPkg;
 

@@ -15,6 +15,7 @@ import {
   toVSCodeCompletionItem,
 } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
+import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 
 /**
  * Trigger character types for context-aware completions
@@ -53,7 +54,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     _context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
     // For JSON files, check for model context first
-    if (document.languageId === "json" || document.languageId === "jsonc") {
+    if (
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
+    ) {
       if (this.isInsideModelString(document, position)) {
         return this.getModelCompletions(document, position);
       }
@@ -243,19 +247,25 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   ): boolean {
     // For Markdown and Prompt files, always provide completions
     if (
-      document.languageId === "markdown" ||
-      document.languageId === "prompt"
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT
     ) {
       return true;
     }
 
     // For YAML files, only provide completions inside "prompt:" values
-    if (document.languageId === "yaml" || document.languageId === "yml") {
+    if (
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YAML ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YML
+    ) {
       return this.isInsideYamlPromptValue(document, position);
     }
 
     // For JSON files, only provide completions inside "prompt" string values
-    if (document.languageId === "json" || document.languageId === "jsonc") {
+    if (
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
+    ) {
       return this.isInsidePromptString(document, position);
     }
 

@@ -50,6 +50,13 @@ export const LICENSE_TIERS = {
   PRO: "pro",
 } as const;
 
+const LICENSE_VALIDATION_CODES = {
+  NO_MACHINES: "NO_MACHINES",
+  FINGERPRINT_SCOPE_MISMATCH: "FINGERPRINT_SCOPE_MISMATCH",
+  TOO_MANY_MACHINES: "TOO_MANY_MACHINES",
+  MACHINE_LIMIT_EXCEEDED: "MACHINE_LIMIT_EXCEEDED",
+} as const;
+
 type LicenseTier = (typeof LICENSE_TIERS)[keyof typeof LICENSE_TIERS];
 
 export interface Entitlement {
@@ -548,9 +555,9 @@ export class LicenseService implements LicenseService {
     const validationCode = readOptionalString(meta?.code);
     const canActivate =
       meta?.valid === true ||
-      validationCode === "NO_MACHINES" ||
-      validationCode === "FINGERPRINT_SCOPE_MISMATCH" ||
-      validationCode === "TOO_MANY_MACHINES";
+      validationCode === LICENSE_VALIDATION_CODES.NO_MACHINES ||
+      validationCode === LICENSE_VALIDATION_CODES.FINGERPRINT_SCOPE_MISMATCH ||
+      validationCode === LICENSE_VALIDATION_CODES.TOO_MANY_MACHINES;
     if (!canActivate) {
       throw new UserFacingLicenseError(
         "That Pro license key was rejected. It may be invalid, expired, suspended, or at its 10-machine limit."
@@ -783,9 +790,10 @@ function toActivationError(
   if (
     error instanceof KeygenApiError &&
     licenseId &&
-    (error.code === "TOO_MANY_MACHINES" ||
-      error.code === "MACHINE_LIMIT_EXCEEDED" ||
-      (validationCode === "TOO_MANY_MACHINES" && error.status === 422))
+    (error.code === LICENSE_VALIDATION_CODES.TOO_MANY_MACHINES ||
+      error.code === LICENSE_VALIDATION_CODES.MACHINE_LIMIT_EXCEEDED ||
+      (validationCode === LICENSE_VALIDATION_CODES.TOO_MANY_MACHINES &&
+        error.status === 422))
   ) {
     return new LicenseActivationLimitError(licenseId);
   }

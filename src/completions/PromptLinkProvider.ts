@@ -23,6 +23,7 @@ import { PromptFileResolver } from "../core/PromptFileResolver";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
+import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import {
@@ -341,10 +342,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       fileName.endsWith(".ctrlyoke.yaml") ||
       fileName.endsWith(".ctrlyoke.yml") ||
       fileName.endsWith(".prompt.md") ||
-      document.languageId === "prompt" ||
-      document.languageId === "markdown" ||
-      document.languageId === "yaml" ||
-      document.languageId === "yml"
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.PROMPT ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.MARKDOWN ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YAML ||
+      document.languageId === PROMPT_FILE_LANGUAGE_IDS.YML
     );
   }
 

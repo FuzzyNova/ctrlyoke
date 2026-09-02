@@ -23,6 +23,21 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Language IDs recognized by prompt-file completion and navigation providers. */
+export const PROMPT_FILE_LANGUAGE_IDS = {
+  JSON: WORKFLOW_FILE_FORMATS.JSON,
+  JSONC: "jsonc",
+  MARKDOWN: "markdown",
+  PROMPT: "prompt",
+  YAML: WORKFLOW_FILE_FORMATS.YAML,
+  YML: "yml",
+} as const;
+
+/** VS Code URI schemes used by extension-host integrations. */
+export const VSCODE_URI_SCHEMES = {
+  OUTPUT: "output",
+} as const;
+
 /** Name of the manifest that identifies a ctrlyoke-managed bundle assets directory. */
 export const BUNDLE_MANIFEST_FILE_NAME = ".ctrlyoke-assets.json";
 
@@ -1053,6 +1068,12 @@ export const PREVIEW_PERMISSION_ACTIONS = {
   DENY: "deny",
 } as const;
 
+/** Durable trust-store decisions shared by workspace trust stores. */
+export const TRUST_DECISIONS = {
+  ALLOW: "allow",
+  DENY: "deny",
+} as const;
+
 export const PREVIEW_PERMISSION_RULE_STATUSES = {
   APPLIED: "applied",
   IGNORED: "ignored",
@@ -1191,6 +1212,25 @@ export const MCP_TRANSPORTS = {
 } as const;
 
 export type McpTransport = (typeof MCP_TRANSPORTS)[keyof typeof MCP_TRANSPORTS];
+
+/** Entry types and property names used by native MCP configuration formats. */
+export const MCP_CONFIG_ENTRY_TYPES = {
+  HTTP: "http",
+  LOCAL: "local",
+  REMOTE: "remote",
+  STDIO: "stdio",
+} as const;
+
+export const MCP_CONFIG_KEYS = {
+  COMMAND: "command",
+  ENV: "env",
+  HEADERS: "headers",
+} as const;
+
+/** Package registry identifiers used by the public MCP registry. */
+export const MCP_REGISTRY_PACKAGE_TYPES = {
+  NPM: "npm",
+} as const;
 
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   INFO: "info",

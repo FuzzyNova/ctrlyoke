@@ -1,4 +1,5 @@
 import { COPILOT_TO_CLAUDE_MAP } from "../core/harness/shared/CliToolPermissionMapper";
+import { TOOL_PERMISSION_CATEGORIES } from "../types/DashboardConstants";
 
 /** Completion item shape used by the tool permission list editor. */
 export interface PermissionListCompletionItem {
@@ -78,7 +79,11 @@ function buildToolCandidates(): PermissionListCompletionItem[] {
 
 function buildShellCandidates(): PermissionListCompletionItem[] {
   return Object.keys(COPILOT_TO_CLAUDE_MAP)
-    .filter((toolName) => toolName === "shell" || toolName === "bash")
+    .filter(
+      (toolName) =>
+        toolName === TOOL_PERMISSION_CATEGORIES.SHELL ||
+        toolName === TOOL_PERMISSION_CATEGORIES.BASH
+    )
     .flatMap((toolName) =>
       SHELL_ARGUMENT_STARTERS.map((argument) => ({
         label: `${toolName}(${argument})`,
