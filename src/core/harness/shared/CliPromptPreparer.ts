@@ -141,8 +141,7 @@ export class CliPromptPreparer {
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
     const mcpAvailabilityDiagnostics =
-      resolvedProperties?.mcpAvailability ===
-      MCP_AVAILABILITY_MODES.DISABLED
+      resolvedProperties?.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED
         ? [
             this.createDiagnostic(
               PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED,
@@ -175,10 +174,10 @@ export class CliPromptPreparer {
       Log.debug(
         `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
       );
-      return this.createInlinePlan(
-        originalPromptText,
-        [...conditionOutputDiagnostics, ...mcpAvailabilityDiagnostics]
-      );
+      return this.createInlinePlan(originalPromptText, [
+        ...conditionOutputDiagnostics,
+        ...mcpAvailabilityDiagnostics,
+      ]);
     }
 
     const promptIndex = workflowContext?.promptIndex ?? 0;

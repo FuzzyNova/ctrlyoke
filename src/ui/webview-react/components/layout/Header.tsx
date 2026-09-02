@@ -38,7 +38,11 @@ import {
   type WorkflowExecutionControlAction,
 } from "@utils/status";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  PREVIEW_SCOPES,
+  WORKFLOW_EXECUTION_CONTROL_ACTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 let saveRequestSequence = 0;
 
@@ -291,7 +295,10 @@ export const Header: React.FC<{
   const openDryRunWorkflow = useCallback(() => {
     useExecutionPreviewStore
       .getState()
-      .open({ kind: "workflow" }, getExecutionPreviewEditorSnapshot());
+      .open(
+        { kind: PREVIEW_SCOPES.WORKFLOW },
+        getExecutionPreviewEditorSnapshot()
+      );
   }, []);
 
   const [runContextMenu, setRunContextMenu] =
@@ -375,7 +382,7 @@ export const Header: React.FC<{
             ? MESSAGE_TYPES.PAUSE_RUN
             : action === "cancel-pause"
               ? MESSAGE_TYPES.CANCEL_PAUSE_RUN
-              : action === "stop"
+              : action === WORKFLOW_EXECUTION_CONTROL_ACTIONS.STOP
                 ? MESSAGE_TYPES.STOP_RUN
                 : null;
         if (type) sendMessage(type, { address: executionRunAddress });
@@ -415,7 +422,7 @@ export const Header: React.FC<{
       expectedDescriptorRevision,
     } = suffixEditConfirmation;
     sendMessage(
-      action === "startNewRunInstead"
+      action === MESSAGE_TYPES.START_NEW_RUN_INSTEAD
         ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
         : MESSAGE_TYPES.DISCARD_CONTINUATION,
       {
@@ -788,17 +795,20 @@ export const Header: React.FC<{
         <SuffixEditConfirmModal
           isOpen={suffixEditConfirmation !== null}
           title={
-            suffixEditConfirmation?.action === "startNewRunInstead"
+            suffixEditConfirmation?.action ===
+            MESSAGE_TYPES.START_NEW_RUN_INSTEAD
               ? "Start New Run Instead"
               : "Discard Continuation"
           }
           message={
-            suffixEditConfirmation?.action === "startNewRunInstead"
+            suffixEditConfirmation?.action ===
+            MESSAGE_TYPES.START_NEW_RUN_INSTEAD
               ? "Discard continuation edits and start a new run? Your changes to the rewound suffix will be lost."
               : "Discard continuation edits? Your changes to the rewound suffix will be lost."
           }
           confirmLabel={
-            suffixEditConfirmation?.action === "startNewRunInstead"
+            suffixEditConfirmation?.action ===
+            MESSAGE_TYPES.START_NEW_RUN_INSTEAD
               ? "Start New Run"
               : "Discard Continuation"
           }

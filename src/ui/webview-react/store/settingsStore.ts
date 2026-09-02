@@ -22,6 +22,7 @@ import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
   WORKTREE_MODES,
+  COMPARE_SOURCES,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -666,7 +667,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       set((state) => ({
         devBuild: {
           ...state.devBuild,
-          output: `${state.devBuild.output}${stream === "stderr" ? "[stderr] " : ""}${chunk}`,
+          output: `${state.devBuild.output}${stream === COMPARE_SOURCES.STDERR ? "[stderr] " : ""}${chunk}`,
         },
       })),
 

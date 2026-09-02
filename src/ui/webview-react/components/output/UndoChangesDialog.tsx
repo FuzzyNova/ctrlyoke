@@ -10,7 +10,10 @@ import {
 } from "@components/diff";
 import { MESSAGE_TYPES } from "../../types/messages";
 import type { UndoFileInstruction } from "../../types/messages";
-import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  UNDO_DIALOG_SCOPE_MODES,
+} from "@root/types/DashboardConstants";
 import type { UndoDialogInput } from "../../utils/promptUndo";
 import {
   buildPromptUndoDialogModel,
@@ -277,7 +280,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const isSingleFileUndo =
     !isWorkflowMode &&
     mode === DIALOG_MODE.UNDO &&
-    input?.scope.mode === "singleFile";
+    input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE;
   const dialogTitle = isWorkflowMode
     ? mode === DIALOG_MODE.REDO
       ? "Redo workflow changes"
@@ -286,7 +289,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       ? "Redo Changes"
       : "Undo Changes";
   const dialogSubtitle =
-    isSingleFileUndo && input?.scope.mode === "singleFile"
+    isSingleFileUndo &&
+    input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
       ? input.scope.path
       : undefined;
   const confirmLabel =
@@ -373,7 +377,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     ? "No file changes found across workflow steps."
     : mode === DIALOG_MODE.REDO
       ? "No redo instructions available."
-      : input?.scope.mode === "singleFile"
+      : input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
         ? "No file changes found for this diff."
         : "No file changes found for this prompt.";
 

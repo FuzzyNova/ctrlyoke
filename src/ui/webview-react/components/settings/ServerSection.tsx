@@ -273,7 +273,10 @@ export function ServerSection({
           aria-label="Unlock Pro Features"
           className="mb-3 flex w-full items-center gap-2 rounded border border-pro-brand px-3 py-2 text-left hover:bg-pro-brand/10"
         >
-          <i className="codicon codicon-key text-pro-brand" aria-hidden="true" />
+          <i
+            className="codicon codicon-key text-pro-brand"
+            aria-hidden="true"
+          />
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-medium text-pro-brand">
               Unlock Pro Features
@@ -283,7 +286,10 @@ export function ServerSection({
               features.
             </span>
           </span>
-          <i className="codicon codicon-chevron-right text-pro-brand" aria-hidden="true" />
+          <i
+            className="codicon codicon-chevron-right text-pro-brand"
+            aria-hidden="true"
+          />
         </button>
       )}
 

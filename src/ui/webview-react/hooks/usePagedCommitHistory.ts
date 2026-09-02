@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
+import { ERROR_NAMES } from "@root/types/DashboardConstants";
 import { workspaceCommitLog } from "@utils/hostedApi";
 import type {
   WorkspaceCommitLogEntry,
@@ -144,7 +145,7 @@ function errorFrom(value: unknown): Error {
 }
 
 function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === "AbortError";
+  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
 }
 
 function responseIsUsable(
@@ -318,7 +319,10 @@ export function usePagedCommitHistory(
           // workspace opens already in detached HEAD), with nothing left to
           // ever correct it. `isCurrent` already guards against a late
           // response from a superseded context.
-          if (!isCurrent(generation, context) || !responseIsUsable(response, 0)) {
+          if (
+            !isCurrent(generation, context) ||
+            !responseIsUsable(response, 0)
+          ) {
             return;
           }
           updateState((current) => ({

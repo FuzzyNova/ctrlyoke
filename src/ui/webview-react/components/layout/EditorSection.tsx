@@ -15,7 +15,11 @@ import {
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
 } from "../../types/messages";
-import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  SETTING_SCOPES,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
@@ -99,9 +103,9 @@ const EditorSectionInner: React.FC = () => {
     (checked: boolean) => {
       const scope =
         globalSettings.settingSources["ui.respectGitignoreForCompletions"] ===
-        "workspace"
-          ? "workspace"
-          : "user";
+        SETTING_SCOPES.WORKSPACE
+          ? SETTING_SCOPES.WORKSPACE
+          : SETTING_SCOPES.USER;
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
         path: "ui.respectGitignoreForCompletions",

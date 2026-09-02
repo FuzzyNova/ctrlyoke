@@ -7,7 +7,16 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  EXTERNAL_EXECUTION_REASONS,
+  EXTERNAL_EXECUTION_RESOLUTION_KINDS,
+  EXTERNAL_EXECUTION_DECISION_STATES,
+  EXTERNAL_EXECUTION_WATCH_ACTIONS,
   EXECUTION_STATES,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
+  type ExternalExecutionReason,
+  type ExternalExecutionWatchAction,
+  type WorkflowLockLocality,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import {
@@ -19,25 +28,22 @@ import {
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 /** Stable reasons why a working file is not eligible for external execution. */
-export type NotExternalReason =
-  | "terminal-run"
-  | "no-active-lock"
-  | "self-owned"
-  | "indeterminate-owner"
-  | "run-ref-mismatch"
-  | "unreadable-working-file";
+export type NotExternalReason = ExternalExecutionReason;
 
 /** The narrowed lock proof required to observe an external execution. */
 export type ActiveExternalLockInspection = {
-  liveness: "active";
-  locality: "external";
+  liveness: typeof WORKFLOW_LOCK_LIVENESS.ACTIVE;
+  locality: typeof WORKFLOW_LOCK_LOCALITIES.EXTERNAL;
   lock: WorkflowRunnerLock;
 };
 
 export type ExternalExecutionResolution =
-  | { kind: "not-external"; reason: NotExternalReason }
   | {
-      kind: "external-active-run";
+      kind: typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL;
+      reason: NotExternalReason;
+    }
+  | {
+      kind: typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN;
       workingFile: WorkingFile;
       inspection: ActiveExternalLockInspection;
     };
@@ -62,17 +68,21 @@ export interface ExternalExecutionDecisionLog {
   workflowKey?: string;
   runRef?: string;
   persistedExecutionState?: ExecutionState;
-  lockLiveness: WorkflowLockInspection["liveness"] | "not-inspected";
+  lockLiveness:
+    | WorkflowLockInspection["liveness"]
+    | typeof EXTERNAL_EXECUTION_DECISION_STATES.NOT_INSPECTED;
   lockRunner?: WorkflowRunnerLock["runner"];
   observerHostId?: string;
   lockHostId?: string;
   hostIdsMatch?: boolean;
   pidsMatch?: boolean;
   pidRelationship?: "same" | "different";
-  locality?: "self" | "external" | "indeterminate";
-  reason?: NotExternalReason | "external-active-run";
+  locality?: WorkflowLockLocality;
+  reason?:
+    | NotExternalReason
+    | typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN;
   externalWatchEligible: boolean;
-  watchAction: "eligible" | "rejected";
+  watchAction: ExternalExecutionWatchAction;
 }
 
 /** Stateless service that resolves whether one exact working file is external. */
@@ -94,13 +104,16 @@ export class ExternalExecutionResolver {
       event: "external-execution-resolution",
       workflowKey: address?.workflowKey,
       runRef: address?.runRef,
-      lockLiveness: "not-inspected",
+      lockLiveness: EXTERNAL_EXECUTION_DECISION_STATES.NOT_INSPECTED,
       externalWatchEligible: false,
-      watchAction: "rejected",
+      watchAction: EXTERNAL_EXECUTION_WATCH_ACTIONS.REJECTED,
     };
 
     if (!address) {
-      return this.finish(decision, this.notExternal("unreadable-working-file"));
+      return this.finish(
+        decision,
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.UNREADABLE_WORKING_FILE)
+      );
     }
 
     let workingFile: WorkingFile;
@@ -111,28 +124,40 @@ export class ExternalExecutionResolver {
       if (!isWorkingFile(rawWorkingFile)) {
         return this.finish(
           decision,
-          this.notExternal("unreadable-working-file")
+          this.notExternal(EXTERNAL_EXECUTION_REASONS.UNREADABLE_WORKING_FILE)
         );
       }
       workingFile = rawWorkingFile;
     } catch {
-      return this.finish(decision, this.notExternal("unreadable-working-file"));
+      return this.finish(
+        decision,
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.UNREADABLE_WORKING_FILE)
+      );
     }
 
     const persistedExecutionState = workingFile._runtime?.executionState;
     if (persistedExecutionState === undefined) {
       return this.finish(
-        { ...decision, lockLiveness: "not-inspected" },
-        this.notExternal("terminal-run")
+        {
+          ...decision,
+          lockLiveness: EXTERNAL_EXECUTION_DECISION_STATES.NOT_INSPECTED,
+        },
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.TERMINAL_RUN)
       );
     }
     if (!isExecutionState(persistedExecutionState)) {
-      return this.finish(decision, this.notExternal("unreadable-working-file"));
+      return this.finish(
+        decision,
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.UNREADABLE_WORKING_FILE)
+      );
     }
 
     decision.persistedExecutionState = persistedExecutionState;
     if (!ACTIVE_EXECUTION_STATES.has(persistedExecutionState)) {
-      return this.finish(decision, this.notExternal("terminal-run"));
+      return this.finish(
+        decision,
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.TERMINAL_RUN)
+      );
     }
 
     const firstInspection = await this.inspectLock(address.workflowKey);
@@ -147,7 +172,7 @@ export class ExternalExecutionResolver {
     if (!sameAddress(firstInspection.lock, address)) {
       return this.finish(
         decision,
-        this.notExternal("run-ref-mismatch"),
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.RUN_REF_MISMATCH),
         firstInspection
       );
     }
@@ -164,7 +189,7 @@ export class ExternalExecutionResolver {
     if (firstInspection.lock.ownerToken !== secondInspection.lock.ownerToken) {
       return this.finish(
         decision,
-        this.notExternal("no-active-lock"),
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.NO_ACTIVE_LOCK),
         secondInspection
       );
     }
@@ -172,18 +197,18 @@ export class ExternalExecutionResolver {
     if (!sameAddress(secondInspection.lock, address)) {
       return this.finish(
         decision,
-        this.notExternal("run-ref-mismatch"),
+        this.notExternal(EXTERNAL_EXECUTION_REASONS.RUN_REF_MISMATCH),
         secondInspection
       );
     }
 
     const resolution: ExternalExecutionResolution = {
-      kind: "external-active-run",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN,
       workingFile,
       inspection: secondInspection,
     };
     decision.externalWatchEligible = true;
-    decision.watchAction = "eligible";
+    decision.watchAction = EXTERNAL_EXECUTION_WATCH_ACTIONS.ELIGIBLE;
     return this.finish(decision, resolution, secondInspection);
   }
 
@@ -195,12 +220,15 @@ export class ExternalExecutionResolver {
         this.options.inspectLock ?? readWorkflowLockOwnershipInspection
       )(this.workspaceRoot, workflowKey, this.observer, this.options);
     } catch {
-      return { liveness: "absent" };
+      return { liveness: WORKFLOW_LOCK_LIVENESS.ABSENT };
     }
   }
 
   private notExternal(reason: NotExternalReason): ExternalExecutionResolution {
-    return { kind: "not-external", reason };
+    return {
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason,
+    };
   }
 
   private finish(
@@ -216,7 +244,8 @@ export class ExternalExecutionResolver {
     if (resolution.kind === "not-external") {
       enrichedDecision.reason = resolution.reason;
     } else {
-      enrichedDecision.reason = "external-active-run";
+      enrichedDecision.reason =
+        EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN;
     }
     this.options.onDecision?.(enrichedDecision);
     if (!this.options.onDecision) {
@@ -225,7 +254,7 @@ export class ExternalExecutionResolver {
       // Node-only diagnostic fallback.
       /* eslint-disable no-console -- console is the CLI/MCP sink. */
       const log =
-        enrichedDecision.locality === "indeterminate"
+        enrichedDecision.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
           ? console.warn
           : console.debug;
       log("External execution resolution", enrichedDecision);
@@ -304,16 +333,16 @@ function sameAddress(
 function getNotExternalReason(
   inspection: WorkflowLockInspection
 ): NotExternalReason {
-  if (inspection.liveness !== "active") {
-    return "no-active-lock";
+  if (inspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
+    return EXTERNAL_EXECUTION_REASONS.NO_ACTIVE_LOCK;
   }
-  if (inspection.locality === "self") {
-    return "self-owned";
+  if (inspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF) {
+    return EXTERNAL_EXECUTION_REASONS.SELF_OWNED;
   }
-  if (inspection.locality === "indeterminate") {
-    return "indeterminate-owner";
+  if (inspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE) {
+    return EXTERNAL_EXECUTION_REASONS.INDETERMINATE_OWNER;
   }
-  return "no-active-lock";
+  return EXTERNAL_EXECUTION_REASONS.NO_ACTIVE_LOCK;
 }
 
 function addInspectionDetails(
@@ -324,7 +353,7 @@ function addInspectionDetails(
   if (!inspection) {
     return decision;
   }
-  if (inspection.liveness === "absent") {
+  if (inspection.liveness === WORKFLOW_LOCK_LIVENESS.ABSENT) {
     return { ...decision, lockLiveness: inspection.liveness };
   }
   return {
@@ -335,7 +364,7 @@ function addInspectionDetails(
     lockHostId: shortenHostId(inspection.lock.hostInstanceId),
     pidRelationship:
       inspection.lock.pid === observer.pid ? "same" : "different",
-    ...(inspection.liveness === "active"
+    ...(inspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE
       ? {
           hostIdsMatch:
             inspection.lock.hostInstanceId !== undefined &&

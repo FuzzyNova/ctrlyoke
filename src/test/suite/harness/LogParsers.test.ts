@@ -22,6 +22,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  CLI_OUTPUT_METADATA_KEYS,
   HARNESS_IDS,
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -37,6 +38,10 @@ import {
   QWEN_CONTENT_PART_TYPES,
   QWEN_EVENT_TYPES,
 } from "../../../core/harness/qwen/QwenProtocolConstants";
+import {
+  CODEX_PAYLOAD_TYPES,
+  CODEX_TOOL_NAMES,
+} from "../../../core/harness/codex/CodexProtocolConstants";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -171,7 +176,10 @@ suite("ClaudeLogParser", () => {
       const normalize = (output: UniversalCliOutput) =>
         JSON.parse(
           JSON.stringify(output, (key, value) =>
-            key === "timestamp" || key === "totalConfidence" ? undefined : value
+            key === CLI_OUTPUT_METADATA_KEYS.TIMESTAMP ||
+            key === CLI_OUTPUT_METADATA_KEYS.TOTAL_CONFIDENCE
+              ? undefined
+              : value
           )
         );
 
@@ -770,7 +778,7 @@ suite("ClaudeLogParser", () => {
       const completed = response.events.find(
         (e) =>
           e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
-          (e.data as AskUserQuestionData).status === "completed"
+          (e.data as AskUserQuestionData).status === OPERATION_STATUS.COMPLETED
       )!.data as AskUserQuestionData;
 
       assert.strictEqual(
@@ -1093,7 +1101,7 @@ suite("ClaudeLogParser", () => {
             {
               type: "tool_result",
               tool_use_id: "toolu_read_dedup",
-              content: "1\timport React from \"react\";\n",
+              content: '1\timport React from "react";\n',
             },
           ],
         },
@@ -3313,7 +3321,7 @@ suite("CodexLogParser", () => {
           .filter(
             (event) =>
               event.type === "item.completed" &&
-              event.item?.type === "agent_message"
+              event.item?.type === CODEX_PAYLOAD_TYPES.AGENT_MESSAGE
           )
           .map((event) => event.item.text),
         commandCount: stdout.filter(
@@ -3884,7 +3892,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -3954,7 +3962,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4037,7 +4045,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4114,7 +4122,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4160,7 +4168,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(
         execToolCalls.length,
@@ -4239,7 +4247,7 @@ suite("CodexLogParser", () => {
       const execToolCalls = response.events.filter(
         (e) =>
           e.type === CLI_EVENT_TYPES.TOOL_CALL &&
-          (e.data as { name?: string }).name === "exec"
+          (e.data as { name?: string }).name === CODEX_TOOL_NAMES.EXEC
       );
       assert.strictEqual(execToolCalls.length, 0, "exec must be unwrapped");
 
@@ -4602,7 +4610,7 @@ suite("CodexLogParser", () => {
         (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
       );
       const completedFileEditEvents = fileEditEvents.filter(
-        (event) => (event.data as any).status === "completed"
+        (event) => (event.data as any).status === OPERATION_STATUS.COMPLETED
       );
 
       assert.strictEqual(fileEditEvents.length, 4);
@@ -5496,7 +5504,7 @@ suite("QwenLogParser", () => {
       const stdoutSemantics = {
         sessionId: stdout.find((event) => event.session_id)?.session_id,
         thinkingCount: stdoutAssistantParts.filter(
-          (part) => part.type === "thinking"
+          (part) => part.type === QWEN_CONTENT_PART_TYPES.THINKING
         ).length,
         text: stdoutAssistantParts
           .filter((part) => part.type === QWEN_CONTENT_PART_TYPES.TEXT)
@@ -5508,7 +5516,8 @@ suite("QwenLogParser", () => {
           (event) =>
             event.type === QWEN_EVENT_TYPES.USER && event.message?.content
         ).length,
-        usage: stdout.find((event) => event.type === "result")?.usage,
+        usage: stdout.find((event) => event.type === QWEN_EVENT_TYPES.RESULT)
+          ?.usage,
       };
       const logSemantics = {
         sessionId: output.metadata.sessionId,

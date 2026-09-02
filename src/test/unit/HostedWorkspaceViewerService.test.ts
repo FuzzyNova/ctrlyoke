@@ -20,6 +20,7 @@ import {
 } from "../../server/WorkspaceTreeErrors";
 import {
   DIFF_PAYLOAD_KINDS,
+  GIT_REF_LABEL_TYPES,
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
 
@@ -1579,11 +1580,9 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(root, "commit", "-m", "Large commit");
       const commit = runGit(root, "rev-parse", "HEAD");
 
-      const page = await new HostedWorkspaceViewerService(root).getGitRefDiffPage(
-        commit,
-        0,
-        1
-      );
+      const page = await new HostedWorkspaceViewerService(
+        root
+      ).getGitRefDiffPage(commit, 0, 1);
       assert.strictEqual(page.totalEntries, fileNames.length);
       assert.strictEqual(page.entries.length, 1);
       assert.strictEqual(page.entries[0]?.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
@@ -1730,7 +1729,10 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(head.isHead, true);
       assert.strictEqual(head.isMerge, false);
       assert.ok(
-        head.refs.some((r) => r.type === "localBranch" && r.name === branch),
+        head.refs.some(
+          (r) =>
+            r.type === GIT_REF_LABEL_TYPES.LOCAL_BRANCH && r.name === branch
+        ),
         `expected a localBranch ref named ${branch}`
       );
     });
@@ -1755,7 +1757,7 @@ suite("HostedWorkspaceViewerService", function () {
 
       const head = result.commits[0];
       const remoteBranchRefs = head.refs.filter(
-        (r) => r.type === "remoteBranch"
+        (r) => r.type === GIT_REF_LABEL_TYPES.REMOTE_BRANCH
       );
       assert.strictEqual(
         remoteBranchRefs.length,

@@ -6,6 +6,7 @@ import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
+import { HARNESS_CONFIG_KEYS } from "../../../types/DashboardConstants";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
@@ -739,7 +740,7 @@ export class SettingsJsonMcpTracker {
             .map(([, owner]) => owner.workflowKey);
           if (otherOwners.length > 0) {
             const conflictDescription =
-              key === "permission"
+              key === HARNESS_CONFIG_KEYS.PERMISSION
                 ? "permission policy conflict"
                 : `${key} value conflict`;
             throw new Error(
@@ -771,7 +772,7 @@ export class SettingsJsonMcpTracker {
           const activeOwner = sidecar.owners[0].workflowKey;
           throw new Error(
             `${this.toolName} ${
-              key === "permission"
+              key === HARNESS_CONFIG_KEYS.PERMISSION
                 ? "permission policy conflict"
                 : `${key} value conflict`
             } in ${settingsPath}; active owner: ${activeOwner}`
@@ -1104,7 +1105,7 @@ export class SettingsJsonMcpTracker {
     const settings = await this.readProjectConfig(settingsPath);
     if (!this.jsonEquals(settings[key], lease.appliedValue)) {
       Log.warn(
-        key === "permission"
+        key === HARNESS_CONFIG_KEYS.PERMISSION
           ? `${this.toolName} permission cleanup preserved user-modified permission rules in ${settingsPath}`
           : `${this.toolName} ${key} cleanup preserved user-modified value in ${settingsPath}`
       );

@@ -18,6 +18,8 @@ import {
 } from "./WorkflowTokenUsage";
 import {
   WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE,
+  WORKFLOW_ROW_KINDS,
+  WORKFLOW_ROW_TIERS,
   type WorkflowRowTier,
 } from "../../constants";
 import { HARNESS_INFO } from "../../types/messages";
@@ -47,7 +49,7 @@ import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
  */
 export type UnifiedWorkflowRow =
   | {
-      kind: "running";
+      kind: typeof WORKFLOW_ROW_KINDS.RUNNING;
       key: string;
       workflow: WorkflowSummary;
       /**
@@ -57,13 +59,19 @@ export type UnifiedWorkflowRow =
        */
       lineage?: RecentWorkflow;
     }
-  | { kind: "recent"; key: string; workflow: RecentWorkflow };
+  | {
+      kind: typeof WORKFLOW_ROW_KINDS.RECENT;
+      key: string;
+      workflow: RecentWorkflow;
+    };
 
 /** The run-navigation summary a row's drill affordance reads, whichever kind it is. */
 function rowRunNav(
   row: UnifiedWorkflowRow
 ): WorkflowRunNavigationSummary | undefined {
-  return row.kind === "recent" ? row.workflow.runNav : row.lineage?.runNav;
+  return row.kind === WORKFLOW_ROW_KINDS.RECENT
+    ? row.workflow.runNav
+    : row.lineage?.runNav;
 }
 
 /** Imperative handle for saving/restoring the recent-list scroll position across a drill-in/back round trip. */
@@ -367,7 +375,7 @@ export const WorkflowList = React.forwardRef<
     onToggleFilters,
     filterControls,
     isFiltering = false,
-    tier = "stacked",
+    tier = WORKFLOW_ROW_TIERS.STACKED,
     className = "",
   },
   ref
@@ -388,12 +396,20 @@ export const WorkflowList = React.forwardRef<
     []
   );
   const runningRows = rows.filter(
-    (row): row is Extract<UnifiedWorkflowRow, { kind: "running" }> =>
-      row.kind === "running"
+    (
+      row
+    ): row is Extract<
+      UnifiedWorkflowRow,
+      { kind: typeof WORKFLOW_ROW_KINDS.RUNNING }
+    > => row.kind === WORKFLOW_ROW_KINDS.RUNNING
   );
   const recentRows = rows.filter(
-    (row): row is Extract<UnifiedWorkflowRow, { kind: "recent" }> =>
-      row.kind === "recent"
+    (
+      row
+    ): row is Extract<
+      UnifiedWorkflowRow,
+      { kind: typeof WORKFLOW_ROW_KINDS.RECENT }
+    > => row.kind === WORKFLOW_ROW_KINDS.RECENT
   );
   const hasRunningRows = runningRows.length > 0;
   const hasRecentRows = recentRows.length > 0;

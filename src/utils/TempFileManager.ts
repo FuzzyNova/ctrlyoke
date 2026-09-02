@@ -417,9 +417,7 @@ export class TempFileManager {
       .update(finalBytes)
       .digest("hex")
       .slice(0, 12);
-    const rangePart = range
-      ? `${range.startLine}-${range.endLine}`
-      : "full";
+    const rangePart = range ? `${range.startLine}-${range.endLine}` : "full";
     const filename = `output-${channel}-${rangePart}-${hash}.log`;
     const filePath = path.join(targetDir, filename);
 

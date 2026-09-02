@@ -1,5 +1,6 @@
 import {
   INHERIT_DEFAULT_OPTION,
+  RESUME_SESSION_SELECTIONS,
   SESSION_ID_SENTINELS,
 } from "@root/types/DashboardConstants";
 
@@ -40,8 +41,11 @@ export function modelNamespaceForHarness(harness: string): string {
  */
 export function getResumeSessionOptions(defaultLabel?: string) {
   const base = [
-    { value: "yes", label: "Yes - Resume previous" },
-    { value: "no", label: "No - Create New" },
+    {
+      value: RESUME_SESSION_SELECTIONS.YES,
+      label: "Yes - Resume previous",
+    },
+    { value: RESUME_SESSION_SELECTIONS.NO, label: "No - Create New" },
     { value: SESSION_ID_SENTINELS.FINAL_STEP, label: "Final Step Session" },
   ] as const;
   return defaultLabel
@@ -79,7 +83,7 @@ export function resumeSessionSelection(
       sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
     };
   }
-  if (selection === "yes") {
+  if (selection === RESUME_SESSION_SELECTIONS.YES) {
     // Keep a real session ID the user typed; only the sentinel is stale here.
     return {
       resumeSession: true,

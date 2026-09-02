@@ -14,7 +14,10 @@ import type {
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  RUN_NAVIGATION_DIRECTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 /** Builds the stable list key for a run-panel row — draft or run:{workflowKey}:{runRef}. */
 function runPanelRowKey(workflowKey: WorkflowKey, row: RunPanelRow): string {
@@ -158,10 +161,14 @@ export const RunPanel: React.FC<RunPanelProps> = ({
     onSelectRow(addressForRow(workflowKey, row));
   };
 
-  const handleNavigateAdjacent = (direction: "newer" | "older") => {
+  const handleNavigateAdjacent = (
+    direction: (typeof RUN_NAVIGATION_DIRECTIONS)[keyof typeof RUN_NAVIGATION_DIRECTIONS]
+  ) => {
     if (viewedIndex === -1) return;
     const targetIndex =
-      direction === "newer" ? viewedIndex - 1 : viewedIndex + 1;
+      direction === RUN_NAVIGATION_DIRECTIONS.NEWER
+        ? viewedIndex - 1
+        : viewedIndex + 1;
     const target = rows[targetIndex];
     if (!target) return;
     handleSelect(target);
@@ -207,7 +214,9 @@ export const RunPanel: React.FC<RunPanelProps> = ({
         </span>
         <button
           type="button"
-          onClick={() => handleNavigateAdjacent("newer")}
+          onClick={() =>
+            handleNavigateAdjacent(RUN_NAVIGATION_DIRECTIONS.NEWER)
+          }
           disabled={!canGoNewer}
           title="Newer run"
           aria-label="Newer run"
@@ -217,7 +226,9 @@ export const RunPanel: React.FC<RunPanelProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => handleNavigateAdjacent("older")}
+          onClick={() =>
+            handleNavigateAdjacent(RUN_NAVIGATION_DIRECTIONS.OLDER)
+          }
           disabled={!canGoOlder}
           title="Older run"
           aria-label="Older run"

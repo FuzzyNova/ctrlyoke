@@ -1,6 +1,12 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { RUNNER_IDS, type RunnerId } from "../../types/DashboardConstants";
+import {
+  RUNNER_IDS,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
+  type RunnerId,
+  type WorkflowLockLocality,
+} from "../../types/DashboardConstants";
 import type {
   RunRef,
   RunnerHostIdentity,
@@ -23,7 +29,7 @@ interface LockCase {
   observer: RunnerHostIdentity;
   expected: {
     liveness: WorkflowLockInspection["liveness"];
-    locality?: "self" | "external" | "indeterminate";
+    locality?: WorkflowLockLocality;
     diagnostic?: boolean;
   };
 }
@@ -76,37 +82,43 @@ suite("WorkflowLockInspector ownership classification", () => {
       name: "no file",
       lock: null,
       observer: makeObserver(),
-      expected: { liveness: "absent" },
+      expected: { liveness: WORKFLOW_LOCK_LIVENESS.ABSENT },
     },
     {
       name: "unreadable or invalid file",
       lock: { not: "a runner lock" },
       observer: makeObserver(),
-      expected: { liveness: "absent" },
+      expected: { liveness: WORKFLOW_LOCK_LIVENESS.ABSENT },
     },
     {
       name: "dead PID",
       lock: makeLock({ pid: 999 }),
       observer: makeObserver(),
-      expected: { liveness: "stale" },
+      expected: { liveness: WORKFLOW_LOCK_LIVENESS.STALE },
     },
     {
       name: "expired heartbeat",
       lock: makeLock({ lastHeartbeat: NOW - 30_001 }),
       observer: makeObserver(),
-      expected: { liveness: "stale" },
+      expected: { liveness: WORKFLOW_LOCK_LIVENESS.STALE },
     },
     {
       name: "same VS Code host and PID",
       lock: makeLock({ runner: RUNNER_IDS.VSCODE }),
       observer: makeObserver(RUNNER_IDS.VSCODE),
-      expected: { liveness: "active", locality: "self" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.SELF,
+      },
     },
     {
       name: "same CLI host and PID",
       lock: makeLock({ runner: RUNNER_IDS.CLI }),
       observer: makeObserver(RUNNER_IDS.CLI),
-      expected: { liveness: "active", locality: "self" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.SELF,
+      },
     },
     {
       name: "different live VS Code host and PID",
@@ -116,7 +128,10 @@ suite("WorkflowLockInspector ownership classification", () => {
         pid: 202,
       }),
       observer: makeObserver(RUNNER_IDS.VSCODE),
-      expected: { liveness: "active", locality: "external" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+      },
     },
     {
       name: "CLI lock observed by VS Code",
@@ -126,7 +141,10 @@ suite("WorkflowLockInspector ownership classification", () => {
         pid: 202,
       }),
       observer: makeObserver(RUNNER_IDS.VSCODE),
-      expected: { liveness: "active", locality: "external" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+      },
     },
     {
       name: "VS Code lock observed by CLI",
@@ -136,15 +154,18 @@ suite("WorkflowLockInspector ownership classification", () => {
         pid: 202,
       }),
       observer: makeObserver(RUNNER_IDS.CLI),
-      expected: { liveness: "active", locality: "external" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+      },
     },
     {
       name: "same host ID with a contradictory PID",
       lock: makeLock({ pid: 202 }),
       observer: makeObserver(),
       expected: {
-        liveness: "active",
-        locality: "indeterminate",
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
         diagnostic: true,
       },
     },
@@ -153,8 +174,8 @@ suite("WorkflowLockInspector ownership classification", () => {
       lock: makeLock({ hostInstanceId: "other-host" }),
       observer: makeObserver(),
       expected: {
-        liveness: "active",
-        locality: "indeterminate",
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
         diagnostic: true,
       },
     },
@@ -165,7 +186,10 @@ suite("WorkflowLockInspector ownership classification", () => {
         executionInstanceId: undefined,
       }),
       observer: makeObserver(),
-      expected: { liveness: "active", locality: "self" },
+      expected: {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.SELF,
+      },
     },
     {
       name: "legacy live lock with a different PID",
@@ -176,8 +200,8 @@ suite("WorkflowLockInspector ownership classification", () => {
       }),
       observer: makeObserver(),
       expected: {
-        liveness: "active",
-        locality: "indeterminate",
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
         diagnostic: true,
       },
     },
@@ -193,7 +217,7 @@ suite("WorkflowLockInspector ownership classification", () => {
       );
 
       assert.strictEqual(result.liveness, lockCase.expected.liveness);
-      if (result.liveness === "active") {
+      if (result.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
         assert.strictEqual(result.locality, lockCase.expected.locality);
       }
       assert.strictEqual(

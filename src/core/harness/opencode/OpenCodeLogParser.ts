@@ -17,6 +17,7 @@ import {
   COMPACTION_TRIGGERS,
   CALLER_TYPES,
   HARNESS_IDS,
+  OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import {
   mapOpenCodeToolPartToCliEvent,
@@ -24,6 +25,8 @@ import {
 } from "./OpenCodeEventMapper";
 import {
   OPENCODE_EVENT_TYPES,
+  OPENCODE_PART_TYPES,
+  OPENCODE_STEP_FINISH_REASONS,
   OPENCODE_MESSAGE_ROLES,
 } from "./OpenCodeProtocolConstants";
 import { Log } from "../../../utils/Log";
@@ -201,8 +204,9 @@ export class OpenCodeLogParser extends BaseLogParser {
    */
   isComplete(event: BaseCliEvent): boolean {
     return (
-      event.type === "step_finish" &&
-      (event as Record<string, any>).part?.reason === "stop"
+      event.type === OPENCODE_EVENT_TYPES.STEP_FINISH &&
+      (event as Record<string, any>).part?.reason ===
+        OPENCODE_STEP_FINISH_REASONS.STOP
     );
   }
 
@@ -210,7 +214,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     event: BaseCliEvent,
     _modelId: string
   ): { used: number; size: number } | null {
-    if (event.type === "step_finish") {
+    if (event.type === OPENCODE_EVENT_TYPES.STEP_FINISH) {
       const tokens = (event as Record<string, any>).part?.tokens as
         | Record<string, any>
         | undefined;
@@ -344,7 +348,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
         break;
       }
-      case "compaction": {
+      case OPENCODE_EVENT_TYPES.COMPACTION: {
         // Context was compacted to free up the context window
         cliEvents.push({
           type: CLI_EVENT_TYPES.COMPACTION,
@@ -359,7 +363,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         });
         break;
       }
-      case "subtask": {
+      case OPENCODE_EVENT_TYPES.SUBTASK: {
         // A subagent was spawned via the task tool — show as a generic tool call
         const desc = e.part?.description as string | undefined;
         const agent = e.part?.agent as string | undefined;
@@ -463,7 +467,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           }
           break;
         }
-        case "compaction": {
+        case OPENCODE_EVENT_TYPES.COMPACTION: {
           cliEvents.push({
             type: CLI_EVENT_TYPES.COMPACTION,
             timestamp: e.timestamp as number | undefined,
@@ -477,7 +481,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           });
           break;
         }
-        case "subtask": {
+        case OPENCODE_EVENT_TYPES.SUBTASK: {
           cliEvents.push({
             type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp: e.timestamp as number | undefined,
@@ -506,7 +510,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           });
           break;
         }
-        case "step_finish": {
+        case OPENCODE_EVENT_TYPES.STEP_FINISH: {
           const tokens = e.part?.tokens as Record<string, any> | undefined;
           if (tokens) {
             sawStepUsage = true;
@@ -658,11 +662,11 @@ export class OpenCodeLogParser extends BaseLogParser {
   private isPartCompleted(part: OpenCodeExportPart): boolean {
     const p = part as any;
     switch (part.type) {
-      case "tool":
+      case OPENCODE_PART_TYPES.TOOL:
         // Tool parts transition through "pending" → "completed"; only emit when done.
-        return p.state?.status === "completed";
+        return p.state?.status === OPERATION_STATUS.COMPLETED;
       case OPENCODE_EVENT_TYPES.TEXT:
-      case "reasoning":
+      case OPENCODE_PART_TYPES.REASONING:
         // Text/reasoning parts are finalized when time.end is set.
         return p.time?.end !== undefined;
       default:
@@ -700,17 +704,17 @@ export class OpenCodeLogParser extends BaseLogParser {
     const { sessionID } = part;
 
     switch (part.type) {
-      case "step-start":
+      case OPENCODE_PART_TYPES.STEP_START:
         return {
-          type: "step_start",
+          type: OPENCODE_EVENT_TYPES.STEP_START,
           sessionID,
           timestamp: messageTimestamp,
           part,
         };
 
-      case "step-finish":
+      case OPENCODE_PART_TYPES.STEP_FINISH:
         return {
-          type: "step_finish",
+          type: OPENCODE_EVENT_TYPES.STEP_FINISH,
           sessionID,
           timestamp: messageTimestamp,
           part: {
@@ -728,7 +732,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           part: { text: (part as any).text },
         };
 
-      case "reasoning":
+      case OPENCODE_PART_TYPES.REASONING:
         return {
           type: CLI_EVENT_TYPES.THINKING,
           sessionID,
@@ -736,7 +740,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           part: { text: (part as any).text },
         };
 
-      case "tool":
+      case OPENCODE_PART_TYPES.TOOL:
         return {
           type: OPENCODE_EVENT_TYPES.TOOL_USE,
           sessionID,
@@ -748,10 +752,10 @@ export class OpenCodeLogParser extends BaseLogParser {
           },
         };
 
-      case "compaction":
+      case OPENCODE_PART_TYPES.COMPACTION:
         // Context was compacted to free up the context window
         return {
-          type: "compaction",
+          type: OPENCODE_EVENT_TYPES.COMPACTION,
           sessionID,
           timestamp: messageTimestamp,
           part: {
@@ -760,10 +764,10 @@ export class OpenCodeLogParser extends BaseLogParser {
           },
         };
 
-      case "subtask":
+      case OPENCODE_PART_TYPES.SUBTASK:
         // A subagent was spawned via the task tool
         return {
-          type: "subtask",
+          type: OPENCODE_EVENT_TYPES.SUBTASK,
           sessionID,
           timestamp: messageTimestamp,
           part: {

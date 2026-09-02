@@ -139,8 +139,8 @@ suite("PromptFileLoader Tests", () => {
         ConfigurationUtils.getCliExecutionMode()
       );
       assert.ok(
-        defaults.executionMode === "interactive" ||
-          defaults.executionMode === "headless"
+        defaults.executionMode === EXECUTION_MODES.INTERACTIVE ||
+          defaults.executionMode === EXECUTION_MODES.HEADLESS
       );
     });
 

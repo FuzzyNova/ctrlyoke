@@ -1,4 +1,5 @@
 import {
+  HOOK_CONFIG_TYPES,
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
@@ -105,7 +106,7 @@ export class OpenCodeNotificationMonitor
     _userHooks?: UserHookConfig[],
     _ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
-    return { type: "none" };
+    return { type: HOOK_CONFIG_TYPES.NONE };
   }
 
   /**

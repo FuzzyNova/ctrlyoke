@@ -63,7 +63,7 @@ in `{data: {...}}`), `POST /api/session/:sessionID/prompt` with a plain
 `{prompt: {text: "..."}}` body, then `GET /api/session/:sessionID/history?after=0`
 — on CLI `1.18.25`. The response shape matches this doc's prediction exactly,
 with no wrapping surprise: `{data: SessionEvent.Durable[], hasMore: boolean}`
-at the top level (unlike the session-create response, this one is *not*
+at the top level (unlike the session-create response, this one is _not_
 double-wrapped). A real run produced this exact sequence of `type` values in
 order: `session.next.prompt.admitted` → `session.next.prompted` →
 `session.next.step.started` → `session.next.text.started` →
@@ -101,13 +101,21 @@ A real captured `session.next.step.ended` event (2026-08-31, CLI `1.18.25`):
 
 ```json
 {
-  "id": "evt_...", "type": "session.next.step.ended",
+  "id": "evt_...",
+  "type": "session.next.step.ended",
   "durable": { "aggregateID": "ses_...", "seq": 6, "version": 2 },
   "data": {
-    "timestamp": 1788214171834, "sessionID": "ses_...",
-    "assistantMessageID": "msg_...", "finish": "stop", "cost": 0,
-    "tokens": { "input": 3396, "output": 76, "reasoning": 138,
-                "cache": { "read": 0, "write": 0 } }
+    "timestamp": 1788214171834,
+    "sessionID": "ses_...",
+    "assistantMessageID": "msg_...",
+    "finish": "stop",
+    "cost": 0,
+    "tokens": {
+      "input": 3396,
+      "output": 76,
+      "reasoning": 138,
+      "cache": { "read": 0, "write": 0 }
+    }
   }
 }
 ```

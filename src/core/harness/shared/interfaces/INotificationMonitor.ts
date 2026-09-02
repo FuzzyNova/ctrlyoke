@@ -3,7 +3,9 @@ import * as path from "path";
 import { Log } from "../../../../utils/Log";
 import {
   HOOK_EVENT_NAMES,
+  NOTIFICATION_HOOK_EVENTS,
   NOTIFICATION_OUTCOME_KINDS,
+  STEP_STATUS,
   type NotificationOutcomeKind,
 } from "../../../../types/DashboardConstants";
 import type {
@@ -42,6 +44,13 @@ export interface NotificationResult {
   data?: any;
 }
 
+/** Hook configuration format discriminants returned by notification monitors. */
+export const HOOK_CONFIG_TYPES = {
+  JSON: "json",
+  JSON_STRING: "json-string",
+  NONE: "none",
+} as const;
+
 /**
  * Hook configuration result (varies by CLI)
  *
@@ -51,9 +60,9 @@ export interface NotificationResult {
  * - Codex: TOML inline string
  */
 export type HookConfig =
-  | { type: "json"; config: object } // Copilot/Qwen/Antigravity/Codex: JSON object
-  | { type: "json-string"; config: string } // Claude: JSON string
-  | { type: "none" }; // No hook support
+  | { type: typeof HOOK_CONFIG_TYPES.JSON; config: object } // Copilot/Qwen/Antigravity/Codex: JSON object
+  | { type: typeof HOOK_CONFIG_TYPES.JSON_STRING; config: string } // Claude: JSON string
+  | { type: typeof HOOK_CONFIG_TYPES.NONE }; // No hook support
 
 /**
  * Notification monitoring interface
@@ -299,7 +308,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           if (await this.isFileNewerThan(stopFile, startTime)) {
             const data = await this.readNotificationFile(stopFile);
 
-            if (data?.hookEvent === "Stop" && data?.status === "completed") {
+            if (
+              data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
+              data?.status === STEP_STATUS.COMPLETED
+            ) {
               Log.info(
                 `✅ Completion detected via Stop hook (session: ${sessionId})`
               );
@@ -351,7 +363,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             if (await this.isFileNewerThan(file, startTime)) {
               const data = await this.readNotificationFile(file);
 
-              if (data?.hookEvent === "Stop" && data?.status === "completed") {
+              if (
+                data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
+                data?.status === STEP_STATUS.COMPLETED
+              ) {
                 Log.info(
                   `✅ Completion detected via Stop hook (file: ${file})`
                 );

@@ -11,6 +11,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   BOOLEAN_STRING_VALUES,
+  SCRIPT_BOOLEAN_OUTPUT_VALUES,
   COMPARE_SOURCES,
   END_CONDITION_SCRIPT_TYPES,
   type EndConditionScriptType,
@@ -301,7 +302,7 @@ export class EndConditionEvaluator {
       success: boolean;
     },
     returns: string | undefined,
-    compareSource: EndConditionCompareSource = "auto"
+    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
   ): EvaluationComparison {
     return this.evaluateSuccess(result, returns, compareSource);
   }
@@ -658,7 +659,7 @@ export class EndConditionEvaluator {
       success: boolean;
     },
     returns: string | undefined,
-    compareSource: EndConditionCompareSource = "auto"
+    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
   ): EvaluationComparison {
     const actualSource = this.resolveActualSource(returns, compareSource);
 
@@ -750,7 +751,7 @@ export class EndConditionEvaluator {
 
   private resolveActualSource(
     returns: string | undefined,
-    compareSource: EndConditionCompareSource = "auto"
+    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
   ): "stdout" | "stderr" | "exitCode" {
     if (compareSource === COMPARE_SOURCES.STDERR) return "stderr";
     if (compareSource === COMPARE_SOURCES.STDOUT) return "stdout";
@@ -800,16 +801,16 @@ export class EndConditionEvaluator {
     // just because it exited cleanly (exit code 0).
     const isExplicitTrue =
       actual === BOOLEAN_STRING_VALUES.TRUE ||
-      actual === "1" ||
-      actual === "yes" ||
-      actual === "pass" ||
-      actual === "passed";
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_NUMERIC ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_YES ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_PASS ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_PASSED;
     const isExplicitFalse =
       actual === BOOLEAN_STRING_VALUES.FALSE ||
-      actual === "0" ||
-      actual === "no" ||
-      actual === "fail" ||
-      actual === "failed";
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_NUMERIC ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_NO ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_FAIL ||
+      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_FAILED;
 
     if (expected === BOOLEAN_STRING_VALUES.TRUE) {
       if (isExplicitFalse) return matched(false, "boolean"); // Explicit "false" stdout overrides exit code

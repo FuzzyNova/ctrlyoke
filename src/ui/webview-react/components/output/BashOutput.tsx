@@ -108,7 +108,7 @@ export const BashOutput = memo<BashOutputProps>(
       if (expansion === undefined) {
         setUncontrolledExpansion((previous) => ({
           ...previous,
-          [section === "command"
+          [section === BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND
             ? "commandExpanded"
             : section === BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT
               ? "outputExpanded"
@@ -263,7 +263,10 @@ export const BashOutput = memo<BashOutputProps>(
               <ToolCallExpandToggle
                 expanded={resolvedExpansion.commandExpanded}
                 onToggle={() =>
-                  updateExpansion("command", !resolvedExpansion.commandExpanded)
+                  updateExpansion(
+                    BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND,
+                    !resolvedExpansion.commandExpanded
+                  )
                 }
                 label="Show full command"
                 showLabel={showLabel}

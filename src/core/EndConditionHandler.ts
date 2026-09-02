@@ -9,6 +9,8 @@ import {
   STATUS_MESSAGE_SEVERITY,
   CONDITION_ACTIONS,
   FINAL_STEP_PHASES,
+  RETRY_KINDS,
+  type RetryKind,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
@@ -216,7 +218,7 @@ export class EndConditionHandler {
               retryContext,
               sendRetryPrompt,
               currentAttemptIndex,
-              "pass"
+              RETRY_KINDS.PASS
             );
             if ("handlerResult" in retryResult) {
               return retryResult.handlerResult;
@@ -330,7 +332,7 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback,
     currentAttemptIndex: number,
-    retryKind: "pass" | "failure"
+    retryKind: RetryKind
   ): Promise<
     | { evaluationResult: EvaluationResult; attemptIndex: number }
     | { handlerResult: EndConditionHandlerResult }
@@ -348,7 +350,7 @@ export class EndConditionHandler {
     const currentIndex = this.promptQueue.getState().currentIndex;
     const nextAttemptIndex = currentAttemptIndex + 1;
     const retryPromptText =
-      retryKind === "pass"
+      retryKind === RETRY_KINDS.PASS
         ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
 
@@ -360,7 +362,7 @@ export class EndConditionHandler {
     );
 
     Log.info(
-      retryKind === "pass"
+      retryKind === RETRY_KINDS.PASS
         ? `🔄 End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
         : `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
     );
@@ -373,7 +375,7 @@ export class EndConditionHandler {
         .substring(0, 60);
       const ellipsis = retryPromptText.length > 60 ? "..." : "";
       const statusMessage =
-        retryKind === "pass"
+        retryKind === RETRY_KINDS.PASS
           ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
           : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`;
       this.statusMessageReporter.report(

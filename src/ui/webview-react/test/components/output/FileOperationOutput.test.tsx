@@ -112,9 +112,7 @@ describe("FileEditOutput", () => {
       <FileReadOutput path="src/example.ts" lineStart={12} lineEnd={24} />
     );
 
-    expect(
-      screen.getByTitle("Open src/example.ts:12-24")
-    ).toBeTruthy();
+    expect(screen.getByTitle("Open src/example.ts:12-24")).toBeTruthy();
   });
 
   it("renders a line-range read as a selection reference chip when enabled", () => {

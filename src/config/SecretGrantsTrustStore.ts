@@ -2,8 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { ExternalRootsTrustStore } from "./ExternalRootsTrustStore";
+import { TRUST_DECISIONS } from "../types/DashboardConstants";
 
-export type SecretGrantTrustDecision = "allow" | "deny";
+export type SecretGrantTrustDecision =
+  (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
 
 interface SecretGrantsTrustFile {
   /** `${workspaceIdentity}␟${secretName}` -> decision */
@@ -82,7 +84,8 @@ export class SecretGrantsTrustStore {
     const decisions = this.load().decisions;
     return candidateNames.filter(
       (name) =>
-        decisions[SecretGrantsTrustStore.keyFor(identity, name)] === "allow"
+        decisions[SecretGrantsTrustStore.keyFor(identity, name)] ===
+        TRUST_DECISIONS.ALLOW
     );
   }
 

@@ -26,6 +26,7 @@ import {
   MCP_AVAILABILITY_MODES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
+  MCP_SECRET_CONFIG_MODES,
 } from "../../../types/DashboardConstants";
 
 const execFileAsync = promisify(execFile);
@@ -108,7 +109,10 @@ export class CliProviderUtils {
     resolvedValues?: Readonly<Record<string, string>>
   ): McpSecretConfigOptions | undefined {
     if (referenceToken) {
-      return { mode: "reference", referenceToken };
+      return {
+        mode: MCP_SECRET_CONFIG_MODES.REFERENCE,
+        referenceToken,
+      };
     }
     if (resolvedValues) {
       return {

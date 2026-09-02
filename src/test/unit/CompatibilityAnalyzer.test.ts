@@ -7,10 +7,13 @@ import {
 import { resolveExecutionProperties } from "../../types/ExecutionPropertyResolver";
 import {
   CAPABILITY_DOMAINS,
+  CAPABILITY_FIDELITIES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   type HookEvent,
   type HarnessId,
@@ -41,7 +44,8 @@ function installed(
 ): InstalledHarnessCapabilities {
   const state = {
     fidelity,
-    mechanism: fidelity === "unsupported" ? "none" : "native",
+    mechanism:
+      fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED ? "none" : "native",
     verification,
   } as const;
   const declaration = {
@@ -114,7 +118,8 @@ function withImageCapability(
 ): InstalledHarnessCapabilities {
   const state = {
     fidelity,
-    mechanism: fidelity === "unsupported" ? "none" : "native",
+    mechanism:
+      fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED ? "none" : "native",
     verification,
   } as const;
   const declaration = {
@@ -230,7 +235,10 @@ suite("CompatibilityAnalyzer", () => {
       ]
     );
     assert.ok(
-      diagnostics.every((diagnostic) => diagnostic.severity === "warning")
+      diagnostics.every(
+        (diagnostic) =>
+          diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      )
     );
     assert.ok(
       diagnostics.every((diagnostic) =>
@@ -485,7 +493,9 @@ suite("CompatibilityAnalyzer", () => {
     assert.deepStrictEqual(
       diagnostics
         .filter(
-          (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+          (diagnostic) =>
+            diagnostic.capability ===
+            MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
         )
         .map(({ code, capability, sourceTier, propertyPointer }) => ({
           code,
@@ -535,7 +545,8 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     const denial = diagnostics.find(
-      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+      (diagnostic) =>
+        diagnostic.capability === MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
     );
     assert.ok(denial);
     assert.strictEqual(denial.sourceTier, "prompt");
@@ -566,7 +577,8 @@ suite("CompatibilityAnalyzer", () => {
         ),
       })
     ).filter(
-      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+      (diagnostic) =>
+        diagnostic.capability === MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
     );
 
     assert.deepStrictEqual(
@@ -614,7 +626,9 @@ suite("CompatibilityAnalyzer", () => {
 
     assert.strictEqual(
       diagnostics.some(
-        (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+        (diagnostic) =>
+          diagnostic.capability ===
+          MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
       ),
       false
     );
@@ -878,7 +892,10 @@ suite("CompatibilityAnalyzer", () => {
       diagnostics.some((diagnostic) => diagnostic.code.endsWith("unverified"))
     );
     assert.ok(
-      diagnostics.every((diagnostic) => diagnostic.severity === "warning")
+      diagnostics.every(
+        (diagnostic) =>
+          diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      )
     );
   });
 
@@ -979,7 +996,7 @@ suite("CompatibilityAnalyzer", () => {
       assert.ok(
         diagnostics.some(
           (diagnostic) =>
-            diagnostic.capability === "notification" &&
+            diagnostic.capability === HOOK_EVENT_NAMES.NOTIFICATION &&
             diagnostic.code ===
               COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED
         ),

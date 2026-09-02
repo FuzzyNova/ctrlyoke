@@ -30,17 +30,15 @@ describe("WorkflowSwitchOverlay", () => {
     render(<WorkflowSwitchOverlay />);
 
     act(() => {
-      useUiStore
-        .getState()
-        .requestRunViewLoad(
-          {
-            workflowKey: "wf-target" as never,
-            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-          },
-          [],
-          undefined,
-          "Target workflow"
-        );
+      useUiStore.getState().requestRunViewLoad(
+        {
+          workflowKey: "wf-target" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        [],
+        undefined,
+        "Target workflow"
+      );
     });
     expect(
       screen.getByLabelText('Loading "Target workflow"…')
@@ -83,17 +81,15 @@ describe("WorkflowSwitchOverlay", () => {
     render(<WorkflowSwitchOverlay />);
 
     act(() => {
-      useUiStore
-        .getState()
-        .requestRunViewLoad(
-          {
-            workflowKey: "wf-lost" as never,
-            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-          },
-          [],
-          undefined,
-          "Target workflow"
-        );
+      useUiStore.getState().requestRunViewLoad(
+        {
+          workflowKey: "wf-lost" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        [],
+        undefined,
+        "Target workflow"
+      );
     });
     expect(
       screen.getByLabelText('Loading "Target workflow"…')

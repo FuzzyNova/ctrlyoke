@@ -11,7 +11,11 @@ import {
 } from "../../types/CtrlYokeTypes";
 import type { ActiveExternalLockInspection } from "./ExternalExecutionResolver";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
-import { ACTIVE_EXECUTION_STATES } from "../../types/DashboardConstants";
+import {
+  ACTIVE_EXECUTION_STATES,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
@@ -246,8 +250,8 @@ export class ExternalRunWatchSession implements vscode.Disposable {
       this.observer
     );
     if (
-      currentInspection.liveness === "active" &&
-      currentInspection.locality === "external" &&
+      currentInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE &&
+      currentInspection.locality === WORKFLOW_LOCK_LOCALITIES.EXTERNAL &&
       sameLockAcquisition(currentInspection.lock, this.inspection.lock)
     ) {
       return;

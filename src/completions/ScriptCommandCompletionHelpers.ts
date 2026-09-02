@@ -32,8 +32,21 @@ export interface ScriptCompletionContext {
   beforeCursor: string;
 }
 
-const PACKAGE_MANAGERS = ["npm", "pnpm", "yarn"] as const;
-type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+const PACKAGE_MANAGERS = {
+  NPM: "npm",
+  PNPM: "pnpm",
+  YARN: "yarn",
+} as const;
+const PACKAGE_MANAGER_LIST = [
+  PACKAGE_MANAGERS.NPM,
+  PACKAGE_MANAGERS.PNPM,
+  PACKAGE_MANAGERS.YARN,
+] as const;
+const SCRIPT_COMPLETION_MODES = {
+  FULL: "full",
+  SCRIPT_NAME: "script-name",
+} as const;
+type PackageManager = (typeof PACKAGE_MANAGER_LIST)[number];
 
 interface ScriptRecord {
   name: string;
@@ -41,7 +54,7 @@ interface ScriptRecord {
 }
 
 interface CompletionCandidate extends ScriptCommandCompletionItem {
-  mode: "full" | "script-name";
+  mode: (typeof SCRIPT_COMPLETION_MODES)[keyof typeof SCRIPT_COMPLETION_MODES];
   manager?: PackageManager;
   scriptName?: string;
 }
@@ -509,9 +522,9 @@ function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
     const detail = script.command
       ? `package.json script: ${script.command}`
       : "package.json script";
-    for (const manager of PACKAGE_MANAGERS) {
+    for (const manager of PACKAGE_MANAGER_LIST) {
       const shorthand =
-        manager === "npm"
+        manager === PACKAGE_MANAGERS.NPM
           ? `${manager} run ${script.name}`
           : `${manager} ${script.name}`;
       candidates.push({
@@ -522,7 +535,7 @@ function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
         mode: "full",
         manager,
         scriptName: script.name,
-        sortText: manager === "npm" ? "10" : "12",
+        sortText: manager === PACKAGE_MANAGERS.NPM ? "10" : "12",
       });
       const runCommand = `${manager} run ${script.name}`;
       candidates.push({
@@ -533,7 +546,7 @@ function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
         mode: "full",
         manager,
         scriptName: script.name,
-        sortText: manager === "npm" ? "11" : "13",
+        sortText: manager === PACKAGE_MANAGERS.NPM ? "11" : "13",
       });
       candidates.push({
         label: runCommand,
@@ -544,7 +557,7 @@ function packageCandidates(scripts: ScriptRecord[]): CompletionCandidate[] {
         mode: "script-name",
         manager,
         scriptName: script.name,
-        sortText: manager === "npm" ? "10" : "12",
+        sortText: manager === PACKAGE_MANAGERS.NPM ? "10" : "12",
       });
     }
   }
@@ -596,7 +609,7 @@ export async function getScriptCommandCompletions(
     const scriptPrefix = runMatch[2].trim();
     filtered = candidates.filter(
       (candidate) =>
-        candidate.mode === "script-name" &&
+        candidate.mode === SCRIPT_COMPLETION_MODES.SCRIPT_NAME &&
         candidate.manager === manager &&
         Boolean(candidate.scriptName) &&
         matchesPrefix(candidate.scriptName ?? "", scriptPrefix)
@@ -605,7 +618,7 @@ export async function getScriptCommandCompletions(
     const manager = beforeCursor.split(/\s+/, 1)[0].toLowerCase();
     filtered = candidates.filter(
       (candidate) =>
-        candidate.mode === "full" &&
+        candidate.mode === SCRIPT_COMPLETION_MODES.FULL &&
         matchesPrefix(candidate.insertText, beforeCursor) &&
         (candidate.manager === undefined || candidate.manager === manager)
     );

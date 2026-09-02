@@ -10,13 +10,20 @@
  * webview bundle.
  */
 
-export type CommandDisplayShell = "cmd" | "powershell" | "posix";
+export const COMMAND_DISPLAY_SHELLS = {
+  CMD: "cmd",
+  POWERSHELL: "powershell",
+  POSIX: "posix",
+} as const;
+
+export type CommandDisplayShell =
+  (typeof COMMAND_DISPLAY_SHELLS)[keyof typeof COMMAND_DISPLAY_SHELLS];
 
 export const COMMAND_DISPLAY_SHELL_LABELS: Record<CommandDisplayShell, string> =
   {
-    cmd: "Command Prompt",
-    powershell: "PowerShell",
-    posix: "POSIX shell",
+    [COMMAND_DISPLAY_SHELLS.CMD]: "Command Prompt",
+    [COMMAND_DISPLAY_SHELLS.POWERSHELL]: "PowerShell",
+    [COMMAND_DISPLAY_SHELLS.POSIX]: "POSIX shell",
   };
 
 const CMD_META_CHARS_REGEXP = /([()\][%!^"`<>&|;, *?])/g;
@@ -86,9 +93,9 @@ export function renderCommandForDisplay(
     return [executable, ...args].join(" ");
   }
   const escape =
-    shell === "cmd"
+    shell === COMMAND_DISPLAY_SHELLS.CMD
       ? (value: string) => escapeCmdArgument(value, false)
-      : shell === "powershell"
+      : shell === COMMAND_DISPLAY_SHELLS.POWERSHELL
         ? escapePowerShellArgument
         : escapePosixArgument;
   return [executable, ...args].map(escape).join(" ");

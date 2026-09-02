@@ -1,6 +1,10 @@
 import * as crypto from "crypto";
 import { normalizeCodexHookMatcher } from "../shared/CodexHookUtils";
 import { Log } from "../../../utils/Log";
+import {
+  CODEX_HOOK_EVENTS,
+  CODEX_HOOK_HANDLER_TYPES,
+} from "./CodexProtocolConstants";
 
 export type CodexHooksSection = Record<string, unknown[]>;
 
@@ -219,21 +223,21 @@ export function buildCodexHookKey(
 
 export function getCodexEventKeyLabel(event: string): string {
   switch (event) {
-    case "PreToolUse":
+    case CODEX_HOOK_EVENTS.PRE_TOOL_USE:
       return "pre_tool_use";
-    case "PermissionRequest":
+    case CODEX_HOOK_EVENTS.PERMISSION_REQUEST:
       return "permission_request";
-    case "PostToolUse":
+    case CODEX_HOOK_EVENTS.POST_TOOL_USE:
       return "post_tool_use";
-    case "PreCompact":
+    case CODEX_HOOK_EVENTS.PRE_COMPACT:
       return "pre_compact";
-    case "PostCompact":
+    case CODEX_HOOK_EVENTS.POST_COMPACT:
       return "post_compact";
-    case "SessionStart":
+    case CODEX_HOOK_EVENTS.SESSION_START:
       return "session_start";
-    case "UserPromptSubmit":
+    case CODEX_HOOK_EVENTS.USER_PROMPT_SUBMIT:
       return "user_prompt_submit";
-    case "Stop":
+    case CODEX_HOOK_EVENTS.STOP:
       return "stop";
     default:
       return event.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
@@ -280,7 +284,10 @@ function parseCodexCommandHook(
   }
 
   const parsed = handler as Record<string, unknown>;
-  if (parsed.type !== "command" || typeof parsed.command !== "string") {
+  if (
+    parsed.type !== CODEX_HOOK_HANDLER_TYPES.COMMAND ||
+    typeof parsed.command !== "string"
+  ) {
     return null;
   }
 

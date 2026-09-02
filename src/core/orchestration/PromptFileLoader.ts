@@ -12,6 +12,9 @@ import {
   FINAL_STEP_PHASES,
   WORKFLOW_PROPERTY_KEYS,
   STATUS_MESSAGE_SEVERITY,
+  PROMPT_FILE_RELOAD_MODES,
+  STEP_TYPES,
+  type PromptFileReloadMode,
 } from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
@@ -267,7 +270,7 @@ export class PromptFileLoader {
    */
   async reloadFromWorkingFile(
     workingFilePath: string,
-    mode: "replace" | "merge" | "auto" = "auto",
+    mode: PromptFileReloadMode = PROMPT_FILE_RELOAD_MODES.AUTO,
     preventRunningAutoStart: boolean = false,
     workspaceFolderPath?: string
   ): Promise<void> {
@@ -295,11 +298,13 @@ export class PromptFileLoader {
 
       // Determine actual mode based on parameter and queue state
       let actualMode = mode;
-      if (mode === "auto") {
-        actualMode = isIdle ? "replace" : "merge";
+      if (mode === PROMPT_FILE_RELOAD_MODES.AUTO) {
+        actualMode = isIdle
+          ? PROMPT_FILE_RELOAD_MODES.REPLACE
+          : PROMPT_FILE_RELOAD_MODES.MERGE;
       }
 
-      if (actualMode === "replace") {
+      if (actualMode === PROMPT_FILE_RELOAD_MODES.REPLACE) {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
@@ -383,7 +388,9 @@ export class PromptFileLoader {
     promptTexts.push(
       ...(workflow.steps ?? [])
         .filter(
-          (step): step is Exclude<typeof step, { type: "script" }> =>
+          (
+            step
+          ): step is Exclude<typeof step, { type: typeof STEP_TYPES.SCRIPT }> =>
             typeof step === "object" &&
             step !== null &&
             "prompt" in step &&

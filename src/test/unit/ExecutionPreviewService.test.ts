@@ -16,6 +16,7 @@ import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBui
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import {
   HARNESS_IDS,
+  MCP_CAPABILITY_KEYS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
   SETTING_SCOPES,
@@ -358,7 +359,9 @@ suite("ExecutionPreviewService", () => {
     );
     assert.strictEqual(
       step.diagnostics.some(
-        (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+        (diagnostic) =>
+          diagnostic.capability ===
+          MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
       ),
       false
     );

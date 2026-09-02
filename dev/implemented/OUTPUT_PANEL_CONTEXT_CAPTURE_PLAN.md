@@ -28,7 +28,7 @@ can never resolve:
   `TextDocument`), never on disk, so no path resolution fix can make this work — the
   file-based resolution path is structurally the wrong mechanism for it.
 
-Fixing this means *not* offering a plain `#selection:` completion for `output:`-scheme editors
+Fixing this means _not_ offering a plain `#selection:` completion for `output:`-scheme editors
 at all, and replacing it with a real capture mechanism (below).
 
 ## Design: Snapshot, Not Live Reference
@@ -99,7 +99,7 @@ exactly the same thing:
 - **Range capture** keeps showing up in the **`#` completions dropdown**
   (`getHashCompletions`/`getSelectionCompletions`) exactly as it does today for a real editor
   selection (the "selection: Agent Host (lines 17–28)" entry) — the discoverability and
-  wording don't need to change. What changes is only what gets *inserted*: instead of the
+  wording don't need to change. What changes is only what gets _inserted_: instead of the
   currently-broken `#selection:agenthost:17-28`, picking it captures the selected text, writes
   it to the attachments store, and inserts `@<attachmentPath>` — same conversion as the
   whole-channel case, just scoped to the selected range instead of the full document.
@@ -129,12 +129,12 @@ channel content or "current selection" may have changed (especially for a stream
 
 Do **not** capture-and-write-to-disk eagerly while building either completion list — both
 re-run on every keystroke of the `@`/`#` query, and would spam the attachments store with
-mostly-unpicked captures of a scrolling log (content-addressed dedup only mitigates *identical*
+mostly-unpicked captures of a scrolling log (content-addressed dedup only mitigates _identical_
 repeats, not a log that's actively changing).
 
 Recommended approach: reuse the existing placeholder-then-resolve pattern already built for
 pasted images (`PASTING_IMAGE_PLACEHOLDER` / `resolvePendingPaste` in `CodeMirrorEditor.tsx`).
-Capture the actual text once, synchronously, when the completion *item* is built (the extension
+Capture the actual text once, synchronously, when the completion _item_ is built (the extension
 host already reads `document.getText(selection)` for the preview shown in today's `#selection:`
 completion `documentation` field — same moment, just also keep the full text, and the same for
 a whole-channel `@` item's `document.getText()`) and hold it server-side in a short-lived
@@ -147,7 +147,7 @@ later) and the disk-spam problem (writing on every keystroke).
 
 **The async-resolve-on-pick mechanism this needs already exists and works — it isn't new
 plumbing.** `buildCodeMirrorCompletionResult()` in `CodeMirrorEditor.tsx` (~line 292) already
-gives individual completions a custom `apply` *function* instead of a plain insert string: the
+gives individual completions a custom `apply` _function_ instead of a plain insert string: the
 `#sym:` symbol-completion path (`symbolRef`, ~lines 369-399) uses this today to run extra logic
 at pick time via `insertCompletionText`/`pickedCompletion`. An output-capture item's `apply`
 follows the same shape, except instead of a synchronous cache seed it (1) inserts a placeholder
@@ -173,7 +173,7 @@ semantic (`@` = attach the whole thing, `#` = attach a selection):
 - **`getSelectionCompletions()`** (`#` trigger): keeps offering a "selection: Agent Host
   (lines 17–28)" entry for a non-empty selection in an `output:`-scheme editor exactly as it
   does today for real files — this is the fix for the reported bug, and requires no change to
-  *when* the item appears, only to what picking it produces. Today it inserts
+  _when_ the item appears, only to what picking it produces. Today it inserts
   `#selection:<mangled-path>:<range>` (broken); after this change it triggers the same
   capture-then-placeholder flow and resolves to `@<attachmentPath>`.
 
@@ -185,18 +185,18 @@ described above.
 
 ## Affected Components
 
-| Component | Implemented role |
-| --- | --- |
-| `src/completions/CompletionHelpers.ts` (`getFileCompletions`/`getAtCompletions`, `getSelectionCompletions`) | Provides `output:`-scheme entries for `@` and `#` captures |
-| `src/utils/TempFileManager.ts` | Writes content-addressed output snapshot attachments |
-| `src/completions/OutputCaptureCache.ts` | Hold captured completion text briefly between list construction and item pick |
-| `src/ui/PromptEditorSupportService.ts` | Handles the webview save message through the shared snapshot writer |
-| `src/ui/WebviewMessageRouter.ts` | Routes the output snapshot message pair |
-| `src/types/DashboardConstants.ts` / `MESSAGE_TYPES` | Defines the output snapshot message pair |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Resolves picked captures through a placeholder and webview reply |
-| `src/ui/OutputSnapshotService.ts` | Shares cache consumption, file writing, and reference construction |
-| `src/ui/NativeOutputCaptureCommand.ts` | Resolves picked captures in native VS Code text editors |
-| `src/completions/PromptCompletionProvider.ts` (native VS Code editor path, not the webview) | Converts captured `@`/`#` items to placeholder insertions with a command |
+| Component                                                                                                   | Implemented role                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/completions/CompletionHelpers.ts` (`getFileCompletions`/`getAtCompletions`, `getSelectionCompletions`) | Provides `output:`-scheme entries for `@` and `#` captures                    |
+| `src/utils/TempFileManager.ts`                                                                              | Writes content-addressed output snapshot attachments                          |
+| `src/completions/OutputCaptureCache.ts`                                                                     | Hold captured completion text briefly between list construction and item pick |
+| `src/ui/PromptEditorSupportService.ts`                                                                      | Handles the webview save message through the shared snapshot writer           |
+| `src/ui/WebviewMessageRouter.ts`                                                                            | Routes the output snapshot message pair                                       |
+| `src/types/DashboardConstants.ts` / `MESSAGE_TYPES`                                                         | Defines the output snapshot message pair                                      |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                                               | Resolves picked captures through a placeholder and webview reply              |
+| `src/ui/OutputSnapshotService.ts`                                                                           | Shares cache consumption, file writing, and reference construction            |
+| `src/ui/NativeOutputCaptureCommand.ts`                                                                      | Resolves picked captures in native VS Code text editors                       |
+| `src/completions/PromptCompletionProvider.ts` (native VS Code editor path, not the webview)                 | Converts captured `@`/`#` items to placeholder insertions with a command      |
 
 No changes needed in `FileReferenceParser.ts`, `ReferencePatterns.ts`, `ContextReferenceBuilder.ts`,
 `atomicReferences.ts`, or `ContextExpander.ts` — the inserted token is always a plain `@file`
@@ -227,7 +227,7 @@ These were left open in the first draft; resolved now so implementation isn't bl
   would need its own tagging/marker scheme for no clear benefit at this stage.
 - **Truncation for large/full-channel captures: cap at `MAX_PASTED_IMAGE_BYTES` (15 MB), reused
   as `MAX_OUTPUT_SNAPSHOT_BYTES`.** Unlike a pasted image (reject outright over the cap — see
-  `handleSavePastedImage`), truncate *from the start*, keeping the last `MAX_OUTPUT_SNAPSHOT_BYTES`
+  `handleSavePastedImage`), truncate _from the start_, keeping the last `MAX_OUTPUT_SNAPSHOT_BYTES`
   bytes: the most recent lines of a log are almost always the relevant ones. Prepend a one-line
   marker to the written file noting truncation happened, e.g.
   `[ctrlyoke: output truncated — showing the last N of M bytes]`, followed by a blank line, then

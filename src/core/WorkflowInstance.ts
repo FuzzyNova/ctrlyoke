@@ -73,6 +73,7 @@ import {
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
+  WORKFLOW_RUNTIME_COMMANDS,
   WORKTREE_MODES,
   type ActionType,
   type ExecutionMode,
@@ -4905,7 +4906,9 @@ export class WorkflowInstance {
   }
 
   private onRuntimeTransition(transition: WorkflowRuntimeTransition): void {
-    if (transition.command === "reopenForContinuation") {
+    if (
+      transition.command === WORKFLOW_RUNTIME_COMMANDS.REOPEN_FOR_CONTINUATION
+    ) {
       return;
     }
 
@@ -4936,17 +4939,17 @@ export class WorkflowInstance {
       `Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
       `(step ${state.currentIndex}/${state.steps.length})`;
     switch (transition.command) {
-      case "startExecution":
+      case WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION:
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow started`);
         break;
-      case "complete":
+      case WORKFLOW_RUNTIME_COMMANDS.COMPLETE:
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow completed`);
         break;
-      case "fail":
+      case WORKFLOW_RUNTIME_COMMANDS.FAIL:
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow failed`);
         break;
-      case "requestStop":
-      case "confirmStopped":
+      case WORKFLOW_RUNTIME_COMMANDS.REQUEST_STOP:
+      case WORKFLOW_RUNTIME_COMMANDS.CONFIRM_STOPPED:
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow stopped`);
         break;
       default:
@@ -4958,13 +4961,13 @@ export class WorkflowInstance {
 
     if (this.dashboardSink) {
       this.dashboardSink.updateExecutionState(executionState);
-      if (transition.command === "complete") {
+      if (transition.command === WORKFLOW_RUNTIME_COMMANDS.COMPLETE) {
         this.dashboardSink.updateExecutionCompleted?.();
       }
     }
 
     if (
-      transition.command === "confirmStopped" &&
+      transition.command === WORKFLOW_RUNTIME_COMMANDS.CONFIRM_STOPPED &&
       this.pendingRunAfterCancel !== null
     ) {
       const { harness } = this.pendingRunAfterCancel;

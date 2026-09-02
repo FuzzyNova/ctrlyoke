@@ -45,10 +45,17 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
 
+const DIFF_LINE_TYPES = {
+  ADDED: "added",
+  REMOVED: "removed",
+  CONTEXT: "context",
+} as const;
+type DiffLineType = (typeof DIFF_LINE_TYPES)[keyof typeof DIFF_LINE_TYPES];
+
 // ---- Diff helpers (ported from webview outputUtils — no shared import to avoid bundle coupling) ----
 
 interface DiffLine {
-  type: "added" | "removed" | "context";
+  type: DiffLineType;
   oldLineNum?: number;
   newLineNum?: number;
   content: string;
@@ -63,13 +70,18 @@ function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
       const prefix = line[0];
       const content = line.slice(1);
       if (prefix === "+") {
-        lines.push({ type: "added", newLineNum, content });
+        lines.push({ type: DIFF_LINE_TYPES.ADDED, newLineNum, content });
         newLineNum++;
       } else if (prefix === "-") {
-        lines.push({ type: "removed", oldLineNum, content });
+        lines.push({ type: DIFF_LINE_TYPES.REMOVED, oldLineNum, content });
         oldLineNum++;
       } else {
-        lines.push({ type: "context", oldLineNum, newLineNum, content });
+        lines.push({
+          type: DIFF_LINE_TYPES.CONTEXT,
+          oldLineNum,
+          newLineNum,
+          content,
+        });
         oldLineNum++;
         newLineNum++;
       }
@@ -88,13 +100,26 @@ function generateDiffLines(oldContent: string, newContent: string): DiffLine[] {
     if (partLines[partLines.length - 1] === "") partLines.pop();
     for (const line of partLines) {
       if (part.added) {
-        lines.push({ type: "added", newLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.ADDED,
+          newLineNum,
+          content: line,
+        });
         newLineNum++;
       } else if (part.removed) {
-        lines.push({ type: "removed", oldLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.REMOVED,
+          oldLineNum,
+          content: line,
+        });
         oldLineNum++;
       } else {
-        lines.push({ type: "context", oldLineNum, newLineNum, content: line });
+        lines.push({
+          type: DIFF_LINE_TYPES.CONTEXT,
+          oldLineNum,
+          newLineNum,
+          content: line,
+        });
         oldLineNum++;
         newLineNum++;
       }
@@ -137,13 +162,13 @@ function renderDiffBlock(data: FileEditData): void {
     const nums = chalk.dim(`${oldN} ${newN}`);
 
     switch (line.type) {
-      case "added":
+      case DIFF_LINE_TYPES.ADDED:
         console.log(chalk.green(`  ${nums} + ${line.content}`));
         break;
-      case "removed":
+      case DIFF_LINE_TYPES.REMOVED:
         console.log(chalk.red(`  ${nums} - ${line.content}`));
         break;
-      case "context":
+      case DIFF_LINE_TYPES.CONTEXT:
         console.log(chalk.dim(`  ${nums}   ${line.content}`));
         break;
     }

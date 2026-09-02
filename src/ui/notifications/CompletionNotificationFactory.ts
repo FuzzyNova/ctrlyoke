@@ -11,6 +11,7 @@ import {
   type NotificationKind,
   type StepStatus,
   HOOK_EVENT_METADATA,
+  HOOK_EVENT_NAMES,
 } from "../../types/DashboardConstants";
 import type {
   WorkflowRunAddress,
@@ -367,7 +368,7 @@ export function buildHookNotificationEvent(
     bodyParts.push(artifact.toolName);
   }
 
-  if (artifact.hookEvent === "notification") {
+  if (artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION) {
     const notificationMessage = artifact.notificationMessage?.trim();
     const notificationTitle = artifact.notificationTitle?.trim();
     const notificationType = artifact.notificationType?.trim();
@@ -386,7 +387,7 @@ export function buildHookNotificationEvent(
     severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: artifact.workflowId,
     title:
-      artifact.hookEvent === "notification"
+      artifact.hookEvent === HOOK_EVENT_NAMES.NOTIFICATION
         ? "ctrlyoke - Notification"
         : titleParts.join(" "),
     body: bodyParts.join(" - ") || label,

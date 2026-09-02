@@ -21,6 +21,33 @@ import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+import {
+  CODEX_EXEC_OPERATION_KINDS,
+  CODEX_TOOL_NAMES,
+  CODEX_TODO_ITEM_STATUS,
+} from "./CodexProtocolConstants";
+
+type CodexExecOperation =
+  | {
+      kind: typeof CODEX_EXEC_OPERATION_KINDS.SHELL;
+      command: string;
+      workdir?: string;
+    }
+  | { kind: typeof CODEX_EXEC_OPERATION_KINDS.PATCH; patch: string }
+  | {
+      kind: typeof CODEX_EXEC_OPERATION_KINDS.MCP;
+      toolName: string;
+      argsText: string;
+    }
+  | {
+      kind: typeof CODEX_EXEC_OPERATION_KINDS.PLAN;
+      items: Array<{ step: string; status: string }>;
+    }
+  | {
+      kind: typeof CODEX_EXEC_OPERATION_KINDS.CONTINUE;
+      sessionId?: string;
+      chars: string;
+    };
 
 /**
  * Event types that need toolCallMap registration (i.e. they have a matching
@@ -94,7 +121,7 @@ export class CodexToolBuilder {
 
     // Codex-specific: apply_patch encodes multi-file edits in a custom patch format
     if (
-      toolName === "apply_patch" &&
+      toolName === CODEX_TOOL_NAMES.APPLY_PATCH &&
       CliEventMapper.classifyTool(toolName).type === CLI_EVENT_TYPES.FILE_EDIT
     ) {
       const patchInput = (params.input as string | undefined) ?? "";
@@ -210,23 +237,23 @@ export class CodexToolBuilder {
         "[CodexToolBuilder] exec input not recognized, emitting generic tool call"
       );
       return BaseToolBuilder.buildInitiatedEvents(
-        "exec",
+        CODEX_TOOL_NAMES.EXEC,
         { input },
         callId,
         timestamp
       );
     }
 
-    if (parsed.kind === "patch") {
+    if (parsed.kind === CODEX_EXEC_OPERATION_KINDS.PATCH) {
       return this.buildLogToolInitiatedEvents(
-        "apply_patch",
+        CODEX_TOOL_NAMES.APPLY_PATCH,
         { input: parsed.patch },
         callId,
         timestamp
       );
     }
 
-    if (parsed.kind === "mcp") {
+    if (parsed.kind === CODEX_EXEC_OPERATION_KINDS.MCP) {
       return this.buildLogToolInitiatedEvents(
         parsed.toolName,
         this.parseMcpCallArguments(parsed.argsText),
@@ -235,17 +262,17 @@ export class CodexToolBuilder {
       );
     }
 
-    if (parsed.kind === "plan") {
+    if (parsed.kind === CODEX_EXEC_OPERATION_KINDS.PLAN) {
       return this.buildPlanEvents(parsed.items, timestamp);
     }
 
-    if (parsed.kind === "continue") {
+    if (parsed.kind === CODEX_EXEC_OPERATION_KINDS.CONTINUE) {
       const sessionLabel = parsed.sessionId ?? "?";
       const command = parsed.chars
         ? `(sending input to running command, session ${sessionLabel}): ${parsed.chars}`
         : `(waiting for output from running command, session ${sessionLabel})`;
       return this.buildLogToolInitiatedEvents(
-        "shell_command",
+        CODEX_TOOL_NAMES.SHELL_COMMAND,
         { command },
         callId,
         timestamp
@@ -253,7 +280,7 @@ export class CodexToolBuilder {
     }
 
     return this.buildLogToolInitiatedEvents(
-      "shell_command",
+      CODEX_TOOL_NAMES.SHELL_COMMAND,
       { command: parsed.command, workingDir: parsed.workdir },
       callId,
       timestamp
@@ -279,15 +306,7 @@ export class CodexToolBuilder {
    *          (`write_stdin`), an MCP tool invocation, or null when the
    *          snippet matches no known helper.
    */
-  static parseExecInput(
-    input: string
-  ):
-    | { kind: "shell"; command: string; workdir?: string }
-    | { kind: "patch"; patch: string }
-    | { kind: "mcp"; toolName: string; argsText: string }
-    | { kind: "plan"; items: Array<{ step: string; status: string }> }
-    | { kind: "continue"; sessionId?: string; chars: string }
-    | null {
+  static parseExecInput(input: string): CodexExecOperation | null {
     const mcpMatch = this.MCP_TOOL_CALL_PATTERN.exec(input);
     if (mcpMatch) {
       const toolName = mcpMatch[1];
@@ -296,34 +315,41 @@ export class CodexToolBuilder {
         input,
         argsStart
       ).trim();
-      return { kind: "mcp", toolName, argsText };
+      return { kind: CODEX_EXEC_OPERATION_KINDS.MCP, toolName, argsText };
     }
 
-    if (input.includes("apply_patch") || input.includes("*** Begin Patch")) {
+    if (
+      input.includes(CODEX_TOOL_NAMES.APPLY_PATCH) ||
+      input.includes("*** Begin Patch")
+    ) {
       const patch = this.extractJsStringLiterals(input).find((literal) =>
         literal.includes("*** Begin Patch")
       );
       if (patch) {
-        return { kind: "patch", patch };
+        return { kind: CODEX_EXEC_OPERATION_KINDS.PATCH, patch };
       }
     }
 
-    if (input.includes("update_plan")) {
+    if (input.includes(CODEX_TOOL_NAMES.UPDATE_PLAN)) {
       const items = this.parsePlanItems(input);
       if (items.length > 0) {
-        return { kind: "plan", items };
+        return { kind: CODEX_EXEC_OPERATION_KINDS.PLAN, items };
       }
     }
 
-    if (input.includes("write_stdin")) {
+    if (input.includes(CODEX_TOOL_NAMES.WRITE_STDIN)) {
       const sessionIdMatch = /\bsession_id\s*:\s*(\d+)/.exec(input);
       const chars = this.readJsObjectStringValue(input, "chars") ?? "";
-      return { kind: "continue", sessionId: sessionIdMatch?.[1], chars };
+      return {
+        kind: CODEX_EXEC_OPERATION_KINDS.CONTINUE,
+        sessionId: sessionIdMatch?.[1],
+        chars,
+      };
     }
 
     if (
-      input.includes("shell_command") ||
-      input.includes("exec_command") ||
+      input.includes(CODEX_TOOL_NAMES.SHELL_COMMAND) ||
+      input.includes(CODEX_TOOL_NAMES.EXEC_COMMAND) ||
       /\bcommand\s*:/.test(input) ||
       /\bcmd\s*:/.test(input)
     ) {
@@ -332,7 +358,7 @@ export class CodexToolBuilder {
         this.readJsObjectStringValue(input, "cmd");
       if (command !== undefined) {
         const workdir = this.readJsObjectStringValue(input, "workdir");
-        return { kind: "shell", command, workdir };
+        return { kind: CODEX_EXEC_OPERATION_KINDS.SHELL, command, workdir };
       }
     }
 
@@ -364,7 +390,7 @@ export class CodexToolBuilder {
     const todoText = items
       .map(
         (item, index) =>
-          `${index + 1}. [${item.status === "completed" ? "x" : " "}] ${item.step}`
+          `${index + 1}. [${item.status === CODEX_TODO_ITEM_STATUS.COMPLETED ? "x" : " "}] ${item.step}`
       )
       .join("\n");
     return [

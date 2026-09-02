@@ -5,11 +5,14 @@ import type {
   ScriptRuntimeOutput,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
+import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
+  RUN_FILE_CHANGE_SCOPES,
+  SCRIPT_OUTPUT_SOURCES,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type {
@@ -75,7 +78,8 @@ export interface ResolvedRunAttemptValue extends ResolvedRunAttempt {
 }
 
 export type RunFileChangeOperation = "created" | "modified" | "deleted";
-export type RunFileChangeScope = "workspace" | "external";
+export type RunFileChangeScope =
+  (typeof RUN_FILE_CHANGE_SCOPES)[keyof typeof RUN_FILE_CHANGE_SCOPES];
 
 export interface RunFileChangeProjection {
   /** Workspace-relative for workspace files; absolute only when explicitly external. */
@@ -276,8 +280,11 @@ export class RunOutputResolver {
               output: event.payload.cliOutput,
               responseText: event.payload.cliOutput.response,
               kind:
-                event.responseKind ??
-                (event.payload.cliOutput.source === "script" ? "script" : "ai"),
+                (event.responseKind ??
+                event.payload.cliOutput.source ===
+                  SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP)
+                  ? TIMELINE_ATTEMPT_KINDS.SCRIPT
+                  : TIMELINE_ATTEMPT_KINDS.AI,
             },
           };
           break;
@@ -762,13 +769,16 @@ export class RunOutputResolver {
     }
 
     const normalizedPath =
-      access.reason === "workspace"
+      access.reason === RUN_FILE_CHANGE_SCOPES.WORKSPACE
         ? toPortableRelativePath(access.matchedRoot, candidate)
         : candidate;
     return {
       key: `${operation}:${candidate}`,
       path: normalizedPath,
-      scope: access.reason === "workspace" ? "workspace" : "external",
+      scope:
+        access.reason === RUN_FILE_CHANGE_SCOPES.WORKSPACE
+          ? RUN_FILE_CHANGE_SCOPES.WORKSPACE
+          : RUN_FILE_CHANGE_SCOPES.EXTERNAL,
       operation,
       failed: data.success === false,
     };
@@ -825,7 +835,7 @@ export class RunOutputResolver {
         );
         const step = value?.definition?.step ?? allPrompts[index];
         if (!step || !value) return [];
-        if ("script" in step) {
+        if (isScriptStep(step)) {
           const scriptOutput = value.scriptOutput;
           const text = scriptOutput
             ? [

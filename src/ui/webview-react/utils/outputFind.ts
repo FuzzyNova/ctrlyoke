@@ -232,7 +232,10 @@ export function getOutputRowSearchSegments(
         case CLI_EVENT_TYPES.FILE_EDIT:
         case CLI_EVENT_TYPES.FILE_WRITE:
         case CLI_EVENT_TYPES.FILE_DELETE: {
-          const data = event.data as FileEditData | FileWriteData | FileDeleteData;
+          const data = event.data as
+            | FileEditData
+            | FileWriteData
+            | FileDeleteData;
           return createSegments([
             { field: "filePath", text: data.path },
             { field: "diff", text: getStructuredPatchText(event) },

@@ -1,5 +1,9 @@
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+
 export interface ActionFeedback {
-  status: "success" | "error";
+  status:
+    | typeof USER_FEEDBACK_SEVERITY.SUCCESS
+    | typeof USER_FEEDBACK_SEVERITY.ERROR;
   message: string;
 }
 
@@ -91,7 +95,7 @@ export function ActionButton({
       </button>
       {feedback && (
         <span
-          className={`text-xxs ${feedback.status === "success" ? "text-indicator-success" : "text-error-fg"}`}
+          className={`text-xxs ${feedback.status === USER_FEEDBACK_SEVERITY.SUCCESS ? "text-indicator-success" : "text-error-fg"}`}
           role="status"
         >
           {feedback.message}

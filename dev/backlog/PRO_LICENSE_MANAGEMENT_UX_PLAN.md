@@ -9,7 +9,7 @@
 
 ## Why this plan exists
 
-`PRO_LICENSE_PLAN.md` shipped the licensing *engine* — `LicenseService`, Keygen
+`PRO_LICENSE_PLAN.md` shipped the licensing _engine_ — `LicenseService`, Keygen
 integration, offline verification, the remote-access trial, and gate
 enforcement — but its only user-facing surface is four Command Palette
 entries (`ctrlyoke.activatePro`, `ctrlyoke.activateOfflinePro`,
@@ -39,7 +39,7 @@ missing already exist; the actual gaps are narrower.
 
 **Why the original ask read these as broken:** the 14-day remote-access
 trial makes `hasRemoteAccess` `true` for every new install, so the bind
-selector, TLS fieldset, and QR button are all genuinely *enabled* during the
+selector, TLS fieldset, and QR button are all genuinely _enabled_ during the
 trial — only `isPro` (never granted by the trial) keeps the icon-color
 inputs locked. That reads as "only icon color is gated," but it is the
 designed trial behavior, not a missing gate. The plan below still closes two
@@ -69,10 +69,10 @@ countdown so this stops being ambiguous to the user.
    affordance exists anywhere under `src/ui/webview-react/components/settings/`
    or `GlobalSettingsDrawer.tsx`'s tab list (`GlobalSettingsDrawer.tsx:33-54`).
    All four license commands are Command-Palette-only.
-4. **No machine-management UX.** `LicenseService` can activate/release *this*
+4. **No machine-management UX.** `LicenseService` can activate/release _this_
    machine (`activateMachine`/`releaseMachine`,
    `LicenseService.ts:496-537,623-635`) but has no way to list or remotely
-   deactivate *other* machines on the same license — the only path today when
+   deactivate _other_ machines on the same license — the only path today when
    a user hits the 10-machine cap is the generic rejection message in
    `toActivationError` (`:662-677`): "...or at its 10-machine limit," with no
    recovery short of the Keygen web dashboard.
@@ -101,10 +101,10 @@ dashboard once `ctrlyoke server` ships (`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`
 Stage 10), since it never depends on `vscode.window.showInputBox` or
 `showOpenDialog`. `LicenseService` itself already satisfies that plan's
 capability boundaries (constructor-injected `SecretStore`); this plan only
-adds new *public methods* to it, not new VS Code coupling.
+adds new _public methods_ to it, not new VS Code coupling.
 
 **Important scoping note for the UI copy:** a Pro license activates the
-*machine running the ctrlyoke extension host* (wherever the secret store
+_machine running the ctrlyoke extension host_ (wherever the secret store
 lives), not the browser tab used to submit the key. A user opening the
 dashboard from their phone to activate Pro is still activating their desktop
 machine. The License tab must say this explicitly (see Phase 3).
@@ -132,8 +132,8 @@ machine. The License tab must say this explicitly (see Phase 3).
 
 - Phase 2 sign-in/device-code activation (`activateWithSignIn`) — still
   future work per `PRO_LICENSE_PLAN.md` §Phase 2.
-- Building a Keygen admin UI. Machine management here is scoped to *this
-  license's* machines via the license-scoped Keygen API, not general account
+- Building a Keygen admin UI. Machine management here is scoped to _this
+  license's_ machines via the license-scoped Keygen API, not general account
   administration.
 - Changing pricing, the trial length, or the EULA — those are commercial/legal
   decisions tracked in `PRO_LICENSE_PLAN.md`, not this UX plan.
@@ -289,7 +289,7 @@ Stage 6/Phase 5's `WebviewClientContext` pattern: `LICENSE_ACTION_RESULT` and
 `LICENSE_MACHINES_UPDATED` reply only to the requesting client
 (`ctx.postMessage`, not `ctx.emit`/broadcast) — one browser tab's failed key
 paste must not flash an error in every other connected client. The
-`LicenseAccessState` broadcast that carries status *should* stay a broadcast,
+`LicenseAccessState` broadcast that carries status _should_ stay a broadcast,
 since Pro status is genuinely global — this is just the existing
 `sendLicenseAccessUpdate` behavior, unchanged.
 
@@ -406,7 +406,7 @@ normally from the tab list for status/machine management.
    `WebviewSettingsSync.handleUpdateGlobalSetting` (`:1325-1360`). Simplest
    correct fix: extend the existing `isRemoteTlsSetting` check (or rename it
    `isRemoteAccessSetting`) to also cover the bind-address path when the
-   incoming `value` is a non-loopback address — a *write* of `"127.0.0.1"`
+   incoming `value` is a non-loopback address — a _write_ of `"127.0.0.1"`
    must still be allowed unconditionally (downgrading is never gated), only
    a write attempting a non-loopback value needs `hasRemoteAccess`. Reuse
    `isLoopbackBindAddress()` from `CtrlYokeHostedServer.ts:2422-2427` (export
@@ -432,15 +432,15 @@ normally from the tab list for status/machine management.
      `portFallback` state (`:...` — same store, same pattern).
    - In `ServerSection.tsx`, render it exactly like the existing
      `portFallbackForCurrentSetting` banner (`:149-152,423-434`): only while
-     it still describes the *currently configured* `bindAddress` (so editing
+     it still describes the _currently configured_ `bindAddress` (so editing
      the dropdown back to loopback — or any further edit — clears the stale
      warning), with copy like "ctrlyoke started on localhost only — a Pro
      license or active trial is required for All Interfaces (0.0.0.0)."
-   This keeps the user's hand-edited file intent visible (never silently
-   rewritten) while still delivering the "auto switch to localhost on
-   launch" behavior the request asked for — the effective bind is corrected
-   every launch, and the user is told why, exactly like the port-conflict
-   case.
+     This keeps the user's hand-edited file intent visible (never silently
+     rewritten) while still delivering the "auto switch to localhost on
+     launch" behavior the request asked for — the effective bind is corrected
+     every launch, and the user is told why, exactly like the port-conflict
+     case.
 
    **Implementation note:** the shared `isLoopbackBindAddress()` check now
    lives in `src/utils/NetworkUtils.ts`, and the fallback follows the existing
@@ -500,7 +500,7 @@ borders pointlessly.
 
 `src/extension.ts` commands stay registered (Command Palette discoverability
 matters, and `package.json`'s existing four entries are fine as-is), but
-change what they *do*:
+change what they _do_:
 
 - **`ctrlyoke.manageLicense`** (`:629-655`): replace the `showQuickPick`
   body with `await workflowOrchestrator.openPanel(); webviewProvider.openGlobalSettingsTab("license");`

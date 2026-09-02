@@ -10,7 +10,10 @@ import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "../types/HostedWorkspaceViewerTypes";
-import { BOOLEAN_STRING_VALUES } from "../types/DashboardConstants";
+import {
+  BOOLEAN_STRING_VALUES,
+  WORKSPACE_TREE_QUERY_KEYS,
+} from "../types/DashboardConstants";
 import { WorkspaceTreeBadRequestError } from "./WorkspaceTreeErrors";
 
 export type WorkspaceTreeRequest =
@@ -49,7 +52,7 @@ export function parseWorkspaceTreeQuery(
     };
   }
 
-  const path = readOptionalString(query, "path") ?? "";
+  const path = readOptionalString(query, WORKSPACE_TREE_QUERY_KEYS.PATH) ?? "";
   const anchorPath = readOptionalString(query, "anchorPath");
   const pageSizeValue = readOptionalString(query, "pageSize");
   const pageSize =
@@ -114,7 +117,10 @@ function readOptionalString(
 ): string | undefined {
   const value = query[key];
   if (value === undefined) return undefined;
-  if (typeof value !== "string" || (value.length === 0 && key !== "path")) {
+  if (
+    typeof value !== "string" ||
+    (value.length === 0 && key !== WORKSPACE_TREE_QUERY_KEYS.PATH)
+  ) {
     throw new WorkspaceTreeBadRequestError(`${key} is invalid`);
   }
   return value;

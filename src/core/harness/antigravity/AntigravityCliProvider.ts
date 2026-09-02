@@ -7,7 +7,10 @@ import {
   HarnessConfig,
   type CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
+import {
+  HOOK_CONFIG_TYPES,
+  INotificationMonitor,
+} from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -16,6 +19,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   STATUS_LINE_TRACKING_PROVIDERS,
   type HookEvent,
 } from "../../../types/DashboardConstants";
@@ -143,7 +147,7 @@ export class AntigravityCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new AntigravityLogParser();
-  readonly headlessSource = "log" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
   private readonly streamJsonUsage =
     new AntigravityStreamJsonUsageAccumulator();
 
@@ -531,7 +535,7 @@ export class AntigravityCliProvider implements ICliProvider {
         ]),
       ]
     );
-    if (hookConfig.type !== "json") {
+    if (hookConfig.type !== HOOK_CONFIG_TYPES.JSON) {
       throw new Error("Unexpected Antigravity hook config type");
     }
 
@@ -600,7 +604,7 @@ export class AntigravityCliProvider implements ICliProvider {
       userHooks,
       enabledNotificationHookEvents
     );
-    if (hookConfig.type !== "json") {
+    if (hookConfig.type !== HOOK_CONFIG_TYPES.JSON) {
       throw new Error("Unexpected Antigravity hook config type");
     }
 

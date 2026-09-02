@@ -4,8 +4,14 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import {
+  EXTERNAL_EXECUTION_REASONS,
+  EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   EXECUTION_STATES,
   RUNNER_IDS,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
+  type WorkflowLockLiveness,
+  type WorkflowLockLocality,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import type {
@@ -28,8 +34,8 @@ const WORKFLOW_KEY = "resolver-fixture-2026-08-28T00-00-00-000Z" as WorkflowKey;
 const MATCHING_RUN_REF = "run-2026-08-28T00-00-00-000Z" as RunRef;
 const DIFFERENT_RUN_REF = "run-2026-08-28T00-00-00-001Z" as RunRef;
 
-type LockLiveness = "absent" | "stale" | "active";
-type Locality = "self" | "external" | "indeterminate";
+type LockLiveness = WorkflowLockLiveness;
+type Locality = WorkflowLockLocality;
 
 let fixtureRoot: string;
 
@@ -63,11 +69,11 @@ function makeLock(
     workflowKey: WORKFLOW_KEY,
     runRef,
     runner: RUNNER_IDS.CLI,
-    pid: locality === "self" ? 101 : 202,
+    pid: locality === WORKFLOW_LOCK_LOCALITIES.SELF ? 101 : 202,
     hostInstanceId:
-      locality === "self"
+      locality === WORKFLOW_LOCK_LOCALITIES.SELF
         ? "observer-host"
-        : locality === "external"
+        : locality === WORKFLOW_LOCK_LOCALITIES.EXTERNAL
           ? "external-host"
           : "observer-host",
     executionInstanceId: "execution-id",
@@ -111,12 +117,12 @@ function expectedResolutionKind(
 ): ExternalExecutionResolution["kind"] {
   return executionState !== undefined &&
     executionState !== EXECUTION_STATES.COMPLETED &&
-    lockLiveness === "active" &&
-    locality === "external" &&
+    lockLiveness === WORKFLOW_LOCK_LIVENESS.ACTIVE &&
+    locality === WORKFLOW_LOCK_LOCALITIES.EXTERNAL &&
     addressMatches &&
     acquisitionStable
-    ? "external-active-run"
-    : "not-external";
+    ? EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    : EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL;
 }
 
 suite("ExternalExecutionResolver", () => {
@@ -136,8 +142,10 @@ suite("ExternalExecutionResolver", () => {
       EXECUTION_STATES.COMPLETED,
       undefined,
     ];
-    const lockLivenesses: LockLiveness[] = ["absent", "stale", "active"];
-    const localities: Locality[] = ["self", "external", "indeterminate"];
+    const lockLivenesses: LockLiveness[] = Object.values(
+      WORKFLOW_LOCK_LIVENESS
+    );
+    const localities: Locality[] = Object.values(WORKFLOW_LOCK_LOCALITIES);
     const addressMatches = [true, false];
     const acquisitionStability = [true, false];
 
@@ -151,13 +159,13 @@ suite("ExternalExecutionResolver", () => {
                 executionState
               );
               const firstLock =
-                lockLiveness === "absent"
+                lockLiveness === WORKFLOW_LOCK_LIVENESS.ABSENT
                   ? null
                   : makeLock(
                       locality,
                       addressMatchesCase ? MATCHING_RUN_REF : DIFFERENT_RUN_REF
                     );
-              if (lockLiveness === "stale" && firstLock) {
+              if (lockLiveness === WORKFLOW_LOCK_LIVENESS.STALE && firstLock) {
                 firstLock.lastHeartbeat = NOW - 30_001;
               }
               const secondLock =
@@ -212,13 +220,15 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        inspectLock: injectLockInspection(() => makeLock("external")),
+        inspectLock: injectLockInspection(() =>
+          makeLock(WORKFLOW_LOCK_LOCALITIES.EXTERNAL)
+        ),
       }
     ).resolve(workingFilePath);
 
     assert.deepStrictEqual(resolution, {
-      kind: "not-external",
-      reason: "terminal-run",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.TERMINAL_RUN,
     });
   });
 
@@ -235,14 +245,14 @@ suite("ExternalExecutionResolver", () => {
         isProcessAlive: () => true,
         onDecision: () => undefined,
         inspectLock: injectLockInspection(() =>
-          makeLock("external", DIFFERENT_RUN_REF)
+          makeLock(WORKFLOW_LOCK_LOCALITIES.EXTERNAL, DIFFERENT_RUN_REF)
         ),
       }
     ).resolve(workingFilePath);
 
     assert.deepStrictEqual(resolution, {
-      kind: "not-external",
-      reason: "run-ref-mismatch",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.RUN_REF_MISMATCH,
     });
   });
 
@@ -261,15 +271,23 @@ suite("ExternalExecutionResolver", () => {
         onDecision: () => undefined,
         inspectLock: injectLockInspection(() =>
           reads++ === 0
-            ? makeLock("external", MATCHING_RUN_REF, "first-owner")
-            : makeLock("external", MATCHING_RUN_REF, "replacement-owner")
+            ? makeLock(
+                WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+                MATCHING_RUN_REF,
+                "first-owner"
+              )
+            : makeLock(
+                WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+                MATCHING_RUN_REF,
+                "replacement-owner"
+              )
         ),
       }
     ).resolve(workingFilePath);
 
     assert.deepStrictEqual(resolution, {
-      kind: "not-external",
-      reason: "no-active-lock",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.NO_ACTIVE_LOCK,
     });
   });
 
@@ -285,13 +303,15 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        inspectLock: injectLockInspection(() => makeLock("self")),
+        inspectLock: injectLockInspection(() =>
+          makeLock(WORKFLOW_LOCK_LOCALITIES.SELF)
+        ),
       }
     ).resolve(workingFilePath);
 
     assert.deepStrictEqual(resolution, {
-      kind: "not-external",
-      reason: "self-owned",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.SELF_OWNED,
     });
   });
 
@@ -307,8 +327,8 @@ suite("ExternalExecutionResolver", () => {
     ).resolve(workingFilePath);
 
     assert.deepStrictEqual(resolution, {
-      kind: "not-external",
-      reason: "unreadable-working-file",
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.UNREADABLE_WORKING_FILE,
     });
   });
 
@@ -317,7 +337,11 @@ suite("ExternalExecutionResolver", () => {
       MATCHING_RUN_REF,
       EXECUTION_STATES.RUNNING
     );
-    const lock = makeLock("external", MATCHING_RUN_REF, "stable-owner");
+    const lock = makeLock(
+      WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+      MATCHING_RUN_REF,
+      "stable-owner"
+    );
     let decision: ExternalExecutionDecisionLog | undefined;
     const resolution = await new ExternalExecutionResolver(
       fixtureRoot,
@@ -332,8 +356,14 @@ suite("ExternalExecutionResolver", () => {
       }
     ).resolve(workingFilePath);
 
-    assert.strictEqual(resolution.kind, "external-active-run");
-    if (resolution.kind === "external-active-run") {
+    assert.strictEqual(
+      resolution.kind,
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    );
+    if (
+      resolution.kind ===
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    ) {
       assert.strictEqual(resolution.inspection.lock.ownerToken, "stable-owner");
       assert.strictEqual(resolution.inspection.lock.runRef, MATCHING_RUN_REF);
     }

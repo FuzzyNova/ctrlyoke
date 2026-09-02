@@ -4,7 +4,12 @@ import type {
   WorkflowRunnerLock,
   WorkflowKey,
 } from "../types/CtrlYokeTypes";
-import { RUNNER_IDS } from "../types/DashboardConstants";
+import {
+  RUNNER_IDS,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
+  type WorkflowLockLocality,
+} from "../types/DashboardConstants";
 import * as WorkflowPaths from "./WorkflowPaths";
 import {
   isOwnerStale,
@@ -15,11 +20,14 @@ import {
 /** Shared, Node-only runner-lock reader for CLI and MCP process boundaries. */
 
 export type WorkflowLockInspection =
-  | { liveness: "absent" }
-  | { liveness: "stale"; lock: WorkflowRunnerLock }
+  | { liveness: typeof WORKFLOW_LOCK_LIVENESS.ABSENT }
   | {
-      liveness: "active";
-      locality: "self" | "external" | "indeterminate";
+      liveness: typeof WORKFLOW_LOCK_LIVENESS.STALE;
+      lock: WorkflowRunnerLock;
+    }
+  | {
+      liveness: typeof WORKFLOW_LOCK_LIVENESS.ACTIVE;
+      locality: WorkflowLockLocality;
       lock: WorkflowRunnerLock;
     };
 
@@ -45,33 +53,43 @@ export type WorkflowLockIdentityDiagnostic = {
     | "legacy-lock-different-pid"
     | "same-host-different-pid"
     | "different-host-same-pid";
-  locality: "indeterminate";
+  locality: typeof WORKFLOW_LOCK_LOCALITIES.INDETERMINATE;
 };
 
 type ActiveWorkflowLockInspection = Extract<
   WorkflowLockInspection,
-  { liveness: "active" }
+  { liveness: typeof WORKFLOW_LOCK_LIVENESS.ACTIVE }
 >;
 
 /** Return whether an inspection found a live lock. */
 export function isActiveLock(
   inspection: WorkflowLockInspection
 ): inspection is ActiveWorkflowLockInspection {
-  return inspection.liveness === "active";
+  return inspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE;
 }
 
 /** Return whether an active lock belongs to the observing host. */
 export function isSelfOwnedLock(
   inspection: WorkflowLockInspection
-): inspection is ActiveWorkflowLockInspection & { locality: "self" } {
-  return isActiveLock(inspection) && inspection.locality === "self";
+): inspection is ActiveWorkflowLockInspection & {
+  locality: typeof WORKFLOW_LOCK_LOCALITIES.SELF;
+} {
+  return (
+    isActiveLock(inspection) &&
+    inspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF
+  );
 }
 
 /** Return whether an active lock belongs to another host. */
 export function isExternalOwnedLock(
   inspection: WorkflowLockInspection
-): inspection is ActiveWorkflowLockInspection & { locality: "external" } {
-  return isActiveLock(inspection) && inspection.locality === "external";
+): inspection is ActiveWorkflowLockInspection & {
+  locality: typeof WORKFLOW_LOCK_LOCALITIES.EXTERNAL;
+} {
+  return (
+    isActiveLock(inspection) &&
+    inspection.locality === WORKFLOW_LOCK_LOCALITIES.EXTERNAL
+  );
 }
 
 /**
@@ -88,25 +106,33 @@ export function inspectWorkflowLockOwnership(
   options: WorkflowLockInspectionOptions = {}
 ): WorkflowLockInspection {
   if (!isWorkflowRunnerLock(rawLock)) {
-    return { liveness: "absent" };
+    return { liveness: WORKFLOW_LOCK_LIVENESS.ABSENT };
   }
 
   const now = options.now ?? Date.now;
   const processAlive = options.isProcessAlive ?? isProcessAlive;
   if (isOwnerStale(rawLock.pid, rawLock.lastHeartbeat, now(), processAlive)) {
-    return { liveness: "stale", lock: rawLock };
+    return { liveness: WORKFLOW_LOCK_LIVENESS.STALE, lock: rawLock };
   }
 
   // Liveness-only consumers deliberately do not provide an observer identity.
   // Keep the lock active without inventing a locality classification for them.
   if (!observer) {
-    return { liveness: "active", locality: "indeterminate", lock: rawLock };
+    return {
+      liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+      locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
+      lock: rawLock,
+    };
   }
 
   const lockHostInstanceId = rawLock.hostInstanceId;
   if (!lockHostInstanceId) {
     if (rawLock.pid === observer.pid) {
-      return { liveness: "active", locality: "self", lock: rawLock };
+      return {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.SELF,
+        lock: rawLock,
+      };
     }
 
     logIdentityDiagnostic(
@@ -115,12 +141,20 @@ export function inspectWorkflowLockOwnership(
       "legacy-lock-different-pid",
       options.onIdentityDiagnostic
     );
-    return { liveness: "active", locality: "indeterminate", lock: rawLock };
+    return {
+      liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+      locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
+      lock: rawLock,
+    };
   }
 
   if (lockHostInstanceId === observer.hostInstanceId) {
     if (rawLock.pid === observer.pid) {
-      return { liveness: "active", locality: "self", lock: rawLock };
+      return {
+        liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+        locality: WORKFLOW_LOCK_LOCALITIES.SELF,
+        lock: rawLock,
+      };
     }
 
     logIdentityDiagnostic(
@@ -129,7 +163,11 @@ export function inspectWorkflowLockOwnership(
       "same-host-different-pid",
       options.onIdentityDiagnostic
     );
-    return { liveness: "active", locality: "indeterminate", lock: rawLock };
+    return {
+      liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+      locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
+      lock: rawLock,
+    };
   }
 
   if (rawLock.pid === observer.pid) {
@@ -139,10 +177,18 @@ export function inspectWorkflowLockOwnership(
       "different-host-same-pid",
       options.onIdentityDiagnostic
     );
-    return { liveness: "active", locality: "indeterminate", lock: rawLock };
+    return {
+      liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+      locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
+      lock: rawLock,
+    };
   }
 
-  return { liveness: "active", locality: "external", lock: rawLock };
+  return {
+    liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+    locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
+    lock: rawLock,
+  };
 }
 
 function isWorkflowRunnerLock(value: unknown): value is WorkflowRunnerLock {
@@ -191,7 +237,7 @@ function logIdentityDiagnostic(
     observerPid: observer.pid,
     pidRelationship: lock.pid === observer.pid ? "same" : "different",
     reason,
-    locality: "indeterminate",
+    locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
   };
 
   if (onIdentityDiagnostic) {

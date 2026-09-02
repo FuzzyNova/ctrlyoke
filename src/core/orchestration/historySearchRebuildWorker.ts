@@ -5,6 +5,7 @@ import { once } from "events";
 import { isMainThread, parentPort, workerData } from "worker_threads";
 import type { RunHistoryLocation } from "../../types/CtrlYokeSettings";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
@@ -109,19 +110,19 @@ export interface HistorySearchIndexDiff {
 }
 
 export interface HistorySearchRebuildProgressMessage {
-  type: "progress";
+  type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.PROGRESS;
   processedRuns: number;
   totalRuns: number;
 }
 
 export interface HistorySearchRebuildSuccessMessage {
-  type: "success";
+  type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS;
   skipped: boolean;
   freshnessReason?: string;
 }
 
 export interface HistorySearchRebuildErrorMessage {
-  type: "error";
+  type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.ERROR;
   message: string;
   stack?: string;
 }
@@ -518,7 +519,11 @@ export async function runHistorySearchRebuild(
     { timeoutMs: REBUILD_LOCK_TIMEOUT_MS }
   );
 
-  return { type: "success", skipped, freshnessReason };
+  return {
+    type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS,
+    skipped,
+    freshnessReason,
+  };
 }
 
 async function runIncrementalHistorySearchRebuild(
@@ -681,7 +686,7 @@ if (!isMainThread) {
 
   void runHistorySearchRebuild(data, (processedRuns, totalRuns) => {
     parentPort?.postMessage({
-      type: "progress",
+      type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.PROGRESS,
       processedRuns,
       totalRuns,
     } satisfies HistorySearchRebuildProgressMessage);
@@ -691,7 +696,7 @@ if (!isMainThread) {
     })
     .catch((error: unknown) => {
       const message: HistorySearchRebuildErrorMessage = {
-        type: "error",
+        type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.ERROR,
         message: getErrorMessage(error),
         stack: error instanceof Error ? error.stack : undefined,
       };

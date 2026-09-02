@@ -1,5 +1,13 @@
 import React from "react";
 
+const DROPDOWN_DIVIDER_SIDES = {
+  TOP: "top",
+  BOTTOM: "bottom",
+} as const;
+
+type DropdownDividerSide =
+  (typeof DROPDOWN_DIVIDER_SIDES)[keyof typeof DROPDOWN_DIVIDER_SIDES];
+
 interface DropdownHiddenToggleProps {
   /** Number of currently-hidden options. The button is disabled when 0. */
   hiddenCount: number;
@@ -12,7 +20,7 @@ interface DropdownHiddenToggleProps {
    * "top" (default) for a footer bar rendered below the list; "bottom" for a
    * header bar rendered above an upward-opening list (MultiCheckboxDropdown).
    */
-  dividerSide?: "top" | "bottom";
+  dividerSide?: DropdownDividerSide;
 }
 
 /**
@@ -27,10 +35,10 @@ export const DropdownHiddenToggle: React.FC<DropdownHiddenToggleProps> = ({
   hiddenCount,
   showHidden,
   onToggle,
-  dividerSide = "top",
+  dividerSide = DROPDOWN_DIVIDER_SIDES.TOP,
 }) => (
   <div
-    className={`${dividerSide === "bottom" ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
+    className={`${dividerSide === DROPDOWN_DIVIDER_SIDES.BOTTOM ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
   >
     <button
       type="button"

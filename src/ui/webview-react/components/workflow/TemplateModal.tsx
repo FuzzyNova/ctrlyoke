@@ -1,5 +1,8 @@
 import {
   KEYBOARD_KEYS,
+  TEMPLATE_IDS,
+  TEMPLATE_SOURCES,
+  TEMPLATE_VARIABLE_TYPES,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -38,10 +41,13 @@ function seedVariableDefaults(
   for (const variable of template?.variables ?? []) {
     if (variable.default !== undefined) {
       seed[variable.name] = variable.default;
-    } else if (variable.type === "select" && variable.options?.length) {
+    } else if (
+      variable.type === TEMPLATE_VARIABLE_TYPES.SELECT &&
+      variable.options?.length
+    ) {
       // A dropdown with no explicit default pre-selects its first option.
       seed[variable.name] = variable.options[0];
-    } else if (variable.type === "harness") {
+    } else if (variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS) {
       // No "unselected" state for a harness variable — it must always
       // substitute a valid HarnessId, so fall back to the first known one.
       seed[variable.name] = HARNESS_IDS.CLAUDE_CLI;
@@ -121,10 +127,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const prevIsOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
-      const requestedId = defaultTemplateId || "blank";
+      const requestedId = defaultTemplateId || TEMPLATE_IDS.BLANK;
       const template =
         templates.find((candidate) => candidate.id === requestedId) ??
-        templates.find((candidate) => candidate.id === "blank") ??
+        templates.find((candidate) => candidate.id === TEMPLATE_IDS.BLANK) ??
         templates[0] ??
         null;
       const initId = template?.id ?? "";
@@ -368,10 +374,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Group templates for display
   const builtInTemplates = templates.filter((t) => t.isBuiltIn);
   const workspaceTemplates = templates.filter(
-    (t) => !t.isBuiltIn && t.source !== "user"
+    (t) => !t.isBuiltIn && t.source !== TEMPLATE_SOURCES.USER
   );
   const userTemplates = templates.filter(
-    (t) => !t.isBuiltIn && t.source === "user"
+    (t) => !t.isBuiltIn && t.source === TEMPLATE_SOURCES.USER
   );
 
   return (
@@ -577,8 +583,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               const isDirectory =
                 variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
               const isPicker = isFile || isDirectory;
-              const isSelect = variable.type === "select";
-              const isHarness = variable.type === "harness";
+              const isSelect = variable.type === TEMPLATE_VARIABLE_TYPES.SELECT;
+              const isHarness =
+                variable.type === TEMPLATE_VARIABLE_TYPES.HARNESS;
               const isMultiline =
                 !!variable.multiline && !isPicker && !isSelect && !isHarness;
               const inputClass =

@@ -78,6 +78,7 @@ import {
   COMPLETION_NOTIFICATION_SEVERITY,
   NOTIFICATION_KINDS,
   USER_FEEDBACK_SEVERITY,
+  UX_SNAPSHOT_STATUSES,
   type UserFeedbackSeverity,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -743,14 +744,14 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.UX_SNAPSHOT_SAVED] = (message) => {
     const ui = useUiStore.getState();
     if (message.error) {
-      ui.setUxSnapshotStatus("error");
+      ui.setUxSnapshotStatus(UX_SNAPSHOT_STATUSES.ERROR);
       notifyUser(
         `UX snapshot failed: ${message.error}`,
         USER_FEEDBACK_SEVERITY.ERROR
       );
       return;
     }
-    ui.setUxSnapshotStatus("saved");
+    ui.setUxSnapshotStatus(UX_SNAPSHOT_STATUSES.SAVED);
     notifyUser(
       `UX snapshot saved to ${message.path}`,
       USER_FEEDBACK_SEVERITY.SUCCESS
@@ -2163,7 +2164,7 @@ export function createMessageHandlers(
         .confirmContinuationDiscardOperations
     ) {
       sendMessage(
-        message.action === "startNewRunInstead"
+        message.action === MESSAGE_TYPES.START_NEW_RUN_INSTEAD
           ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
           : MESSAGE_TYPES.DISCARD_CONTINUATION,
         {

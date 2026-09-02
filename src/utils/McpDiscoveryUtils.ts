@@ -13,7 +13,17 @@ import type {
   RegistryMcpEntry,
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
-import { MCP_TRANSPORTS, type McpTransport } from "../types/DashboardConstants";
+import {
+  MCP_CONFIG_ENTRY_TYPES,
+  MCP_CONFIG_KEYS,
+  MCP_REGISTRY_PACKAGE_TYPES,
+  MCP_TRANSPORTS,
+  getMcpLocalSource,
+  HARNESS_IDS,
+  SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
+  type McpTransport,
+} from "../types/DashboardConstants";
 import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
@@ -138,7 +148,9 @@ function normalizeVscodeServerMap(
     }
 
     const entryType = value.type;
-    const isRemote = entryType === "http" || entryType === MCP_TRANSPORTS.SSE;
+    const isRemote =
+      entryType === MCP_CONFIG_ENTRY_TYPES.HTTP ||
+      entryType === MCP_TRANSPORTS.SSE;
     const entry = buildLocalEntry(id, source, filePath, {
       command: typeof value.command === "string" ? value.command : undefined,
       args: isStringArray(value.args) ? value.args : undefined,
@@ -198,11 +210,13 @@ function normalizeCopilotServerMap(
     }
 
     const entryType = value.type;
-    const isLocal = entryType === "local" || entryType === "stdio";
+    const isLocal =
+      entryType === MCP_CONFIG_ENTRY_TYPES.LOCAL ||
+      entryType === MCP_CONFIG_ENTRY_TYPES.STDIO;
     const transport =
       entryType === MCP_TRANSPORTS.SSE
         ? MCP_TRANSPORTS.SSE
-        : entryType === "http"
+        : entryType === MCP_CONFIG_ENTRY_TYPES.HTTP
           ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined;
 
@@ -308,7 +322,8 @@ function normalizeOpenCodeServerMap(
       env: toStringRecord(value.environment),
       url: typeof value.url === "string" ? value.url : undefined,
       transport:
-        entryType === "remote" && typeof value.url === "string"
+        entryType === MCP_CONFIG_ENTRY_TYPES.REMOTE &&
+        typeof value.url === "string"
           ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined,
       headers: toStringRecord(value.headers),
@@ -524,7 +539,10 @@ function normalizeCodexToml(
     const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
 
-    if (key === "command" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+    if (
+      key === MCP_CONFIG_KEYS.COMMAND &&
+      (value.startsWith(`"`) || value.startsWith(`'`))
+    ) {
       currentConfig.command = unquoteTomlString(value);
       continue;
     }
@@ -548,19 +566,19 @@ function normalizeCodexToml(
         currentConfig.transport = MCP_TRANSPORTS.SSE;
       } else if (
         transport === MCP_TRANSPORTS.STREAMABLE_HTTP ||
-        transport === "http"
+        transport === MCP_CONFIG_ENTRY_TYPES.HTTP
       ) {
         currentConfig.transport = MCP_TRANSPORTS.STREAMABLE_HTTP;
       }
       continue;
     }
 
-    if (key === "env") {
+    if (key === MCP_CONFIG_KEYS.ENV) {
       currentConfig.env = parseTomlInlineTable(value);
       continue;
     }
 
-    if (key === "headers") {
+    if (key === MCP_CONFIG_KEYS.HEADERS) {
       currentConfig.headers = parseTomlInlineTable(value);
       continue;
     }
@@ -666,72 +684,93 @@ function getLocalConfigDescriptors(
   return [
     {
       path: getVscodeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "vscode-workspace",
+      source: getMcpLocalSource(
+        SPECIAL_TARGET_IDS.VSCODE,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "vscode-json",
     },
     {
       path: getClaudeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "claude-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.CLAUDE_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "claude-json",
     },
     ...getCopilotWorkspaceMcpConfigPaths(workspaceRoot).map((filePath) => ({
       path: filePath,
-      source: "copilot-workspace" as const,
+      source: getMcpLocalSource(
+        HARNESS_IDS.COPILOT_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "copilot-json" as const,
     })),
     {
       path: getCodexWorkspaceMcpConfigPath(workspaceRoot),
-      source: "codex-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.CODEX_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "codex-toml",
     },
     {
       path: getOpenCodeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "opencode-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.OPENCODE_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "opencode-json",
     },
     {
       path: getQwenWorkspaceMcpConfigPath(workspaceRoot),
-      source: "qwen-workspace",
+      source: getMcpLocalSource(HARNESS_IDS.QWEN_CLI, SETTING_SCOPES.WORKSPACE),
       format: "qwen-json",
     },
     {
       path: getAntigravityWorkspaceMcpConfigPath(workspaceRoot),
-      source: "antigravity-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "antigravity-json",
     },
     {
       path: getVscodeUserMcpConfigPath(),
-      source: "vscode-user",
+      source: getMcpLocalSource(SPECIAL_TARGET_IDS.VSCODE, SETTING_SCOPES.USER),
       format: "vscode-json",
     },
     {
       path: getClaudeUserConfigPath(),
-      source: "claude-user",
+      source: getMcpLocalSource(HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.USER),
       format: "claude-json",
     },
     {
       path: getCopilotUserMcpConfigPath(),
-      source: "copilot-user",
+      source: getMcpLocalSource(HARNESS_IDS.COPILOT_CLI, SETTING_SCOPES.USER),
       format: "copilot-json",
     },
     {
       path: getCodexUserMcpConfigPath(),
-      source: "codex-user",
+      source: getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.USER),
       format: "codex-toml",
     },
     {
       path: getOpenCodeUserMcpConfigPath(),
-      source: "opencode-user",
+      source: getMcpLocalSource(HARNESS_IDS.OPENCODE_CLI, SETTING_SCOPES.USER),
       format: "opencode-json",
     },
     {
       path: getQwenUserMcpConfigPath(),
-      source: "qwen-user",
+      source: getMcpLocalSource(HARNESS_IDS.QWEN_CLI, SETTING_SCOPES.USER),
       format: "qwen-json",
     },
     {
       path: getAntigravityUserMcpConfigPath(),
-      source: "antigravity-user",
+      source: getMcpLocalSource(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        SETTING_SCOPES.USER
+      ),
       format: "antigravity-json",
     },
   ];
@@ -894,7 +933,9 @@ async function fetchMcpRegistry(
       }
     }
 
-    const npmPkg = s.packages?.find((p) => p.registryType === "npm");
+    const npmPkg = s.packages?.find(
+      (p) => p.registryType === MCP_REGISTRY_PACKAGE_TYPES.NPM
+    );
     const anyPkg = s.packages?.[0];
     const pkg = npmPkg ?? anyPkg;
 

@@ -64,7 +64,15 @@ export function useFinalStepContextMenu({
         ],
       });
     },
-    [finalStep, isDisabled, isReadOnly, onToggleEnabled, outputText, latestOutput, runtimeMeta]
+    [
+      finalStep,
+      isDisabled,
+      isReadOnly,
+      onToggleEnabled,
+      outputText,
+      latestOutput,
+      runtimeMeta,
+    ]
   );
 
   const finalStepContextMenuPortal = contextMenu ? (

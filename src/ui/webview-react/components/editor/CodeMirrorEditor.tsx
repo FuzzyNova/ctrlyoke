@@ -49,7 +49,10 @@ import {
 } from "@codemirror/lint";
 import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
-import { openContextReference } from "@utils/contextReferenceActions";
+import {
+  asAtomicReferenceKind,
+  openContextReference,
+} from "@utils/contextReferenceActions";
 import {
   ATOMIC_REFERENCE_KINDS,
   BOOLEAN_STRING_VALUES,
@@ -60,7 +63,9 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   CAPTURING_OUTPUT_PLACEHOLDER,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
+  COMPLETION_TRIGGERS,
   type CodeMirrorEditorMode,
+  type CompletionTrigger,
 } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
@@ -152,8 +157,6 @@ export interface ContextReferenceValidationResult {
    */
   suggestions?: string[];
 }
-
-export type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "!" | "path";
 
 interface ExtensionCompletionItem {
   label: string;
@@ -249,7 +252,7 @@ function shouldBypassCodeMirrorFiltering(
 
   return (
     request.trigger === "/" ||
-    request.trigger === "path" ||
+    request.trigger === COMPLETION_TRIGGERS.PATH ||
     (request.trigger === "@" &&
       (request.query.startsWith('"') ||
         request.query.includes("/") ||
@@ -299,7 +302,7 @@ function withReferenceBoundarySpace(
 ): string {
   if (
     trigger === "/" ||
-    trigger === "path" ||
+    trigger === COMPLETION_TRIGGERS.PATH ||
     applyText.length === 0 ||
     /\s$/.test(applyText)
   ) {
@@ -376,7 +379,7 @@ export function buildCodeMirrorCompletionResult(
     // seed silently no-ops (the chip flashes the misc icon until the async pass
     // resolves it). `path` is a pseudo-trigger with no document char.
     const referenceText =
-      request && request.trigger !== "path"
+      request && request.trigger !== COMPLETION_TRIGGERS.PATH
         ? `${request.trigger}${applyText}`
         : applyText;
     const symbolRef =
@@ -458,7 +461,7 @@ export function buildCodeMirrorCompletionResult(
   });
 
   const result: CompletionResult = {
-    from: from + (request?.trigger === "path" ? 0 : 1),
+    from: from + (request?.trigger === COMPLETION_TRIGGERS.PATH ? 0 : 1),
     options: completions,
   };
 
@@ -2680,7 +2683,7 @@ function createPriorContextDecorationExtension(
                 ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices!.join(",")}`
                 : ref.kind;
             const attributes: Record<string, string> = {
-              "data-type": "priorContext",
+              "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
               "data-ref": dataRef,
             };
             if (referenceValidity?.get(ref.token) === false) {
@@ -2932,7 +2935,7 @@ function openContextReferenceLink(
   // logic (single-sourced with the output prompt row's inline links).
   return openContextReference(
     {
-      type: target.getAttribute("data-type"),
+      type: asAtomicReferenceKind(target.getAttribute("data-type")),
       path: target.getAttribute("data-path"),
       gitRef: target.getAttribute("data-git-ref"),
       lineStart: target.getAttribute("data-line-start"),
@@ -3035,10 +3038,10 @@ export function createClickHandlerExtension(
       const type = target.getAttribute("data-type");
       if (
         !target.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS) &&
-        type !== "git" &&
-        type !== "priorContext" &&
-        type !== "skill" &&
-        type !== "mcp" &&
+        type !== ATOMIC_REFERENCE_KINDS.GIT &&
+        type !== ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT &&
+        type !== ATOMIC_REFERENCE_KINDS.SKILL &&
+        type !== ATOMIC_REFERENCE_KINDS.MCP &&
         !(event.ctrlKey || event.metaKey)
       ) {
         return false;

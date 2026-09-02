@@ -55,7 +55,8 @@ function fmtToolPermissions(v: unknown): string {
     | undefined;
   if (!tp?.mode) return "(none)";
   const parts = [tp.mode];
-  if (tp.allowedTools?.length) parts.push(`allow: ${tp.allowedTools.join(", ")}`);
+  if (tp.allowedTools?.length)
+    parts.push(`allow: ${tp.allowedTools.join(", ")}`);
   if (tp.deniedTools?.length) parts.push(`deny: ${tp.deniedTools.join(", ")}`);
   return parts.join(" | ");
 }
@@ -161,12 +162,7 @@ export function buildStepMetadataClipboardText({
       resolvedLine("harness", step.harness, getEffectiveHarness(), fmtString),
       resolvedLine("model", step.model, getEffectiveModel(), fmtString),
       resolvedLine("agent", step.agent, getEffectiveAgent(), fmtString),
-      resolvedLine(
-        "skills",
-        step.skills,
-        getEffectiveSkills(),
-        fmtStringArray
-      ),
+      resolvedLine("skills", step.skills, getEffectiveSkills(), fmtStringArray),
       resolvedLine(
         "secrets",
         step.secrets,
@@ -180,7 +176,10 @@ export function buildStepMetadataClipboardText({
         fmtBool
       )
     );
-    if (step.sessionId !== undefined || workflowProperties.sessionId !== undefined) {
+    if (
+      step.sessionId !== undefined ||
+      workflowProperties.sessionId !== undefined
+    ) {
       lines.push(
         resolvedLine(
           "sessionId (resume target)",
@@ -245,7 +244,8 @@ export function buildStepMetadataClipboardText({
   const elapsed = latestOutput?.elapsed ?? runtimeMeta?.elapsed;
   const runtimeLines: string[] = [];
   if (sessionId) runtimeLines.push(`Session ID: ${sessionId}`);
-  if (elapsed !== undefined) runtimeLines.push(`Duration: ${elapsed.toFixed(1)}s`);
+  if (elapsed !== undefined)
+    runtimeLines.push(`Duration: ${elapsed.toFixed(1)}s`);
 
   const completedContext = latestOutput?.tokens?.contextWindowSize
     ? {

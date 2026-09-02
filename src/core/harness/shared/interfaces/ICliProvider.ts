@@ -20,7 +20,10 @@ import type {
 } from "../../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
-import type { HarnessId } from "../../../../types/DashboardConstants";
+import type {
+  HarnessId,
+  HeadlessSourceMode,
+} from "../../../../types/DashboardConstants";
 import type { HarnessCapabilityFacts } from "../../../../types/CompatibilityTypes";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
 import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
@@ -134,7 +137,7 @@ export interface ICliProvider {
    * that can parse its own stdout may still pin itself to the richer session
    * log. Resolved in one place by `resolveHeadlessSourceMode()`.
    */
-  readonly headlessSource?: "stdout" | "log";
+  readonly headlessSource?: HeadlessSourceMode;
 
   /**
    * Convert headless stdout into the event vocabulary understood by this

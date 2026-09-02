@@ -31,7 +31,9 @@ import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_EVENT_TYPES,
+  CLAUDE_PROGRESS_TYPES,
   CLAUDE_STOP_REASONS,
+  CLAUDE_SYSTEM_SUBTYPES,
 } from "./ClaudeProtocolConstants";
 
 /**
@@ -255,7 +257,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       // Claude's headless stream ends with a result event that is not present
       // in the session JSONL. Fold its billing/session metadata into the same
       // output metadata used by the log path; it is never a user-facing event.
-      if (event.type === "result") {
+      if (event.type === CLAUDE_EVENT_TYPES.RESULT) {
         if (event.sessionId) {
           sessionId = event.sessionId;
         }
@@ -287,7 +289,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
       }
 
-      if (event.type === "system" && event.model && !model) {
+      if (event.type === CLAUDE_EVENT_TYPES.SYSTEM && event.model && !model) {
         model = event.model;
       }
 
@@ -318,7 +320,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
 
           // THINKING - Note: field is 'thinking' NOT 'text'
-          if (contentBlock.type === "thinking" && contentBlock.thinking) {
+          if (
+            contentBlock.type === CLAUDE_CONTENT_BLOCK_TYPES.THINKING &&
+            contentBlock.thinking
+          ) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.THINKING,
               timestamp,
@@ -387,7 +392,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         if (event.toolUseResult && typeof event.toolUseResult === "object") {
           const toolResultBlock = (
             event.message.content as Array<Record<string, any>>
-          ).find((block) => block.type === "tool_result");
+          ).find(
+            (block) => block.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT
+          );
           ClaudeToolBuilder.processToolUseResultMetadata(
             event.toolUseResult as Record<string, any>,
             timestamp,
@@ -398,17 +405,17 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
 
       // Process system events
-      if (event.type === "system") {
+      if (event.type === CLAUDE_EVENT_TYPES.SYSTEM) {
         // Turn duration → elapsed time metadata
         if (
-          event.subtype === "turn_duration" &&
+          event.subtype === CLAUDE_SYSTEM_SUBTYPES.TURN_DURATION &&
           typeof event.durationMs === "number"
         ) {
           elapsed = event.durationMs;
         }
 
         // Compact boundary → visible compaction event
-        if (event.subtype === "compact_boundary") {
+        if (event.subtype === CLAUDE_SYSTEM_SUBTYPES.COMPACT_BOUNDARY) {
           const meta =
             (event as any).compactMetadata ??
             (event as any).compact_metadata ??
@@ -630,7 +637,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return (
       Array.isArray(e.message?.content) &&
       (e.message.content as Array<Record<string, any>>).some(
-        (block) => block.type === "tool_result"
+        (block) => block.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT
       )
     );
   }
@@ -707,7 +714,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     for (const block of e.message.content as Array<Record<string, any>>) {
       const toolUseId = block.tool_use_id;
-      if (block.type !== "tool_result" || typeof toolUseId !== "string") {
+      if (
+        block.type !== CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT ||
+        typeof toolUseId !== "string"
+      ) {
         continue;
       }
 
@@ -1148,7 +1158,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Bash progress: Extract output for streaming display
-    if (e.type === "progress" && e.data?.type === "bash_progress") {
+    if (
+      e.type === CLAUDE_EVENT_TYPES.PROGRESS &&
+      e.data?.type === CLAUDE_PROGRESS_TYPES.BASH
+    ) {
       // Prefer incremental output over fullOutput for streaming
       return e.data.output || e.data.fullOutput || undefined;
     }
@@ -1183,7 +1196,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           });
         }
 
-        if (block.type === "thinking" && block.thinking) {
+        if (
+          block.type === CLAUDE_CONTENT_BLOCK_TYPES.THINKING &&
+          block.thinking
+        ) {
           events.push({
             type: CLI_EVENT_TYPES.THINKING,
             timestamp,
@@ -1218,7 +1234,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     ) {
       let toolResultId: string | undefined;
       for (const block of e.message.content) {
-        if (block.type === "tool_result") {
+        if (block.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT) {
           toolResultId = block.tool_use_id;
           const toolName = block.tool_use_id
             ? this.pendingStreamingToolUses.get(block.tool_use_id)
@@ -1273,7 +1289,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
-    if (e.type === "progress" && e.data?.type === "bash_progress") {
+    if (
+      e.type === CLAUDE_EVENT_TYPES.PROGRESS &&
+      e.data?.type === CLAUDE_PROGRESS_TYPES.BASH
+    ) {
       const text = e.data.output || e.data.fullOutput;
       if (text) {
         events.push({
@@ -1285,7 +1304,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Compact boundary → emit visible compaction event during live log monitoring
-    if (e.type === "system" && e.subtype === "compact_boundary") {
+    if (
+      e.type === CLAUDE_EVENT_TYPES.SYSTEM &&
+      e.subtype === CLAUDE_SYSTEM_SUBTYPES.COMPACT_BOUNDARY
+    ) {
       const meta =
         (e as any).compactMetadata ?? (e as any).compact_metadata ?? {};
       events.push({

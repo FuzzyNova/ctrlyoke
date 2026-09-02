@@ -9,6 +9,7 @@ import {
 } from "../../cli/CliValidation";
 import {
   CAPABILITY_DOMAINS,
+  CAPABILITY_FIDELITIES,
   CLI_VALIDATE_STRICT_POLICIES,
   CLI_VALIDATE_TARGET_KINDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -34,7 +35,8 @@ function installed(
 ): InstalledHarnessCapabilities {
   const state = {
     fidelity,
-    mechanism: fidelity === "unsupported" ? "none" : "native",
+    mechanism:
+      fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED ? "none" : "native",
     verification,
   } as const;
   const declaration = {

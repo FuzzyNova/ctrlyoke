@@ -24,19 +24,19 @@ function atomicReferenceAriaLabel(
   switch (type) {
     case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       return `Reveal ${attrs["data-path"] ?? title}`;
-    case "lineRange":
+    case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
       return `Open ${attrs["data-path"] ?? title}:${attrs["data-line-start"] ?? ""}-${attrs["data-line-end"] ?? ""}`;
     case ATOMIC_REFERENCE_KINDS.SYMBOL:
       return `Go to ${attrs["data-symbol-name"] ?? "symbol"} in ${attrs["data-path"] ?? title}:${attrs["data-line-start"] ?? ""}-${attrs["data-line-end"] ?? ""}`;
-    case "git":
+    case ATOMIC_REFERENCE_KINDS.GIT:
       return `Open git ${attrs["data-git-ref"] ?? title}`;
-    case "priorContext":
+    case ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT:
       return `Open ${title}`;
-    case "skill":
+    case ATOMIC_REFERENCE_KINDS.SKILL:
       return `Open ctrlyoke skill ${attrs["data-skill-name"] ?? title}`;
-    case "mcp":
+    case ATOMIC_REFERENCE_KINDS.MCP:
       return `Open ctrlyoke MCP server ${attrs["data-mcp-server-name"] ?? title} in MCP Manager`;
-    case "secret":
+    case ATOMIC_REFERENCE_KINDS.SECRET:
       return `Open ctrlyoke Secrets settings for ${attrs["data-secret-name"] ?? title}`;
     case ATOMIC_REFERENCE_KINDS.FILE:
     default:

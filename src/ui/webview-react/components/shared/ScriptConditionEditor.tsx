@@ -19,6 +19,8 @@ import {
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
+  PROMPT_PROPERTIES,
+  SCRIPT_CONDITION_VARIANTS,
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   type EndConditionScriptType,
@@ -95,7 +97,10 @@ interface ScriptConditionEditorProps {
    * "preCondition" shows skip-prompt action options;
    * "scriptStep" shows continue/stopWorkflow only with optional timeout
    */
-  variant: "endCondition" | "preCondition" | "scriptStep";
+  variant:
+    | typeof PROMPT_PROPERTIES.END_CONDITION
+    | typeof PROMPT_PROPERTIES.PRE_CONDITION
+    | typeof SCRIPT_CONDITION_VARIANTS.SCRIPT_STEP;
   /** Narrow layout mode (stacks columns vertically) */
   narrow?: boolean;
   /** Disables all inputs */
@@ -141,16 +146,18 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
 }) => {
   const v = value ?? {};
   const actionOptions =
-    variant === "endCondition"
+    variant === PROMPT_PROPERTIES.END_CONDITION
       ? END_CONDITION_ACTION_OPTIONS
-      : variant === "preCondition"
+      : variant === PROMPT_PROPERTIES.PRE_CONDITION
         ? PRE_CONDITION_ACTION_OPTIONS
         : SCRIPT_STEP_ACTION_OPTIONS;
 
   const hasPassRetry =
-    variant === "endCondition" && v.onPass === CONDITION_ACTIONS.RETRY;
+    variant === PROMPT_PROPERTIES.END_CONDITION &&
+    v.onPass === CONDITION_ACTIONS.RETRY;
   const hasFailRetry =
-    variant === "endCondition" && v.onFail === CONDITION_ACTIONS.RETRY;
+    variant === PROMPT_PROPERTIES.END_CONDITION &&
+    v.onFail === CONDITION_ACTIONS.RETRY;
   const hasRetry = hasPassRetry || hasFailRetry;
 
   // Local string state for text fields — committed on blur/Enter to avoid
@@ -356,7 +363,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         disabled={disabled}
       />
 
-      {variant === "endCondition" && (
+      {variant === PROMPT_PROPERTIES.END_CONDITION && (
         <DrawerRow narrow={narrow}>
           <div className="flex items-end w-full">
             <ActionButton
@@ -447,7 +454,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             id={`${idPrefix}-on-fail`}
             value={
               v.onFail ??
-              (variant === "preCondition"
+              (variant === PROMPT_PROPERTIES.PRE_CONDITION
                 ? CONDITION_ACTIONS.SKIP_PROMPT
                 : CONDITION_ACTIONS.STOP_WORKFLOW)
             }
@@ -459,7 +466,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       </DrawerRow>
 
       {/* Timeout + Max Retries (Max Retries shares row with Timeout in wide view when retry is active) */}
-      {variant === "endCondition" && hasRetry ? (
+      {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry ? (
         <DrawerRow narrow={narrow}>
           <div className="flex flex-col gap-1 w-full">
             <label
@@ -508,7 +515,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             </span>
           </div>
         </DrawerRow>
-      ) : variant === "scriptStep" ? (
+      ) : variant === SCRIPT_CONDITION_VARIANTS.SCRIPT_STEP ? (
         <DrawerRow narrow={narrow}>
           <div className="flex flex-col gap-1 w-full">
             <label
@@ -584,7 +591,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       )}
 
       {/* endCondition-only: retry fields (shown when retry is an action) */}
-      {variant === "endCondition" && hasRetry && (
+      {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry && (
         <>
           {hasPassRetry && (
             <div className="flex flex-col gap-1">
@@ -605,7 +612,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 affUri={affUri}
                 dicUri={dicUri}
                 readOnly={disabled}
-                mode="endCondition"
+                mode={PROMPT_PROPERTIES.END_CONDITION}
                 surface="input"
                 hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
@@ -638,7 +645,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 affUri={affUri}
                 dicUri={dicUri}
                 readOnly={disabled}
-                mode="endCondition"
+                mode={PROMPT_PROPERTIES.END_CONDITION}
                 surface="input"
                 hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
@@ -674,7 +681,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </>
       )}
       <CreateScriptModal
-        isOpen={variant === "endCondition" && createScriptModalOpen}
+        isOpen={
+          variant === PROMPT_PROPERTIES.END_CONDITION && createScriptModalOpen
+        }
         onClose={() => setCreateScriptModalOpen(false)}
         onCreate={handleCreateScript}
         pending={creatingScript}

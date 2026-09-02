@@ -10,6 +10,7 @@ import type {
   UserHookConfig,
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
+import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -79,6 +80,8 @@ import {
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
+  RESUME_SESSION_SELECTIONS,
+  WORKFLOW_EXECUTION_OUTCOMES,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
@@ -103,6 +106,16 @@ const SETTINGS_DRAWER_BREAKPOINT = 400;
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
+type ExecutionPropertyKey = (typeof EXECUTION_PROPERTY_KEYS)[number];
+
+function isExecutionPropertyKey(
+  property: keyof WorkflowProperties
+): property is ExecutionPropertyKey {
+  return (
+    typeof property === "string" &&
+    EXECUTION_PROPERTY_KEYS.includes(property as ExecutionPropertyKey)
+  );
+}
 
 function worktreeConfigForMode(
   mode: (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
@@ -482,8 +495,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const isDifferentFromGlobal = useCallback(
     (property: keyof WorkflowProperties) => {
       const workflowValue = workflowProperties[property];
+      const globalValue =
+        globalSettings[property as keyof typeof globalSettings];
       if (workflowValue === undefined) return false;
-      if (property === "worktree") {
+      if (property === PROMPT_PROPERTIES.WORKTREE) {
         const normalize = (value: unknown) => {
           if (
             value === undefined ||
@@ -520,7 +535,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
           JSON.stringify(normalize(globalSettings.worktree))
         );
       }
-      if (property === "model") {
+      if (!isExecutionPropertyKey(property)) {
+        return workflowValue !== globalValue;
+      }
+      if (property === PROMPT_PROPERTIES.MODEL) {
         // Compare against the global default for the effective harness, not the
         // global harness default — they differ when a non-default harness is selected
         return (
@@ -528,7 +546,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           globalSettings.harnessDefaultModels[effectiveHarness]
         );
       }
-      if (property === "additionalArgs") {
+      if (property === PROMPT_PROPERTIES.ADDITIONAL_ARGS) {
         // Compare against the harness-specific default, treating empty string,
         // null, and undefined as equivalent — all mean "no args"
         const harnessDefault =
@@ -542,21 +560,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
         return (workflowValue || "") !== (globalSettings.agent || "");
       }
       // Array comparison for skills — compare against global default skills
-      if (property === "skills") {
+      if (property === PROMPT_PROPERTIES.SKILLS) {
         return (
           JSON.stringify(workflowValue) !==
           JSON.stringify(globalSettings.skills ?? [])
         );
       }
       // Secret grants use the same replace-not-merge array semantics as skills.
-      if (property === "secrets") {
+      if (property === PROMPT_PROPERTIES.SECRETS) {
         return (
           JSON.stringify(workflowValue ?? []) !==
           JSON.stringify(globalSettings.secrets ?? [])
         );
       }
       // JSON comparison for priorContext — value can be a string or number[]
-      if (property === "priorContext") {
+      if (property === PROMPT_PROPERTIES.PRIOR_CONTEXT) {
         return (
           JSON.stringify(workflowValue) !==
           JSON.stringify(globalSettings.priorContext)
@@ -564,7 +582,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       }
       // Deep comparison for mcpServers — null and [] are both "no servers" and
       // must not trigger the "Set as Default" button when the global is also empty.
-      if (property === "mcpServers") {
+      if (property === PROMPT_PROPERTIES.MCP_SERVERS) {
         const normalize = (v: unknown) => (Array.isArray(v) ? v : []);
         return (
           JSON.stringify(normalize(workflowValue)) !==
@@ -572,7 +590,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for hooks
-      if (property === "hooks") {
+      if (property === PROMPT_PROPERTIES.HOOKS) {
         const normalize = (v: unknown) => (Array.isArray(v) ? v : []);
         return (
           JSON.stringify(normalize(workflowValue)) !==
@@ -580,7 +598,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for endCondition — null/undefined both mean "no condition"
-      if (property === "endCondition") {
+      if (property === PROMPT_PROPERTIES.END_CONDITION) {
         const normalize = (v: unknown) => (v == null ? null : v);
         return (
           JSON.stringify(normalize(workflowValue)) !==
@@ -588,7 +606,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for preCondition — null/undefined both mean "no condition"
-      if (property === "preCondition") {
+      if (property === PROMPT_PROPERTIES.PRE_CONDITION) {
         const normalize = (v: unknown) => (v == null ? null : v);
         return (
           JSON.stringify(normalize(workflowValue)) !==
@@ -596,10 +614,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for errorBehavior — null/undefined both fall back to
-      // the hardcoded "stop" default, so they're equivalent to an explicit
-      // { onError: "stop" } for this comparison.
-      if (property === "errorBehavior") {
-        const normalize = (v: unknown) => v ?? { onError: "stop" as const };
+      // the default stop outcome, so they're equivalent to an explicit
+      // { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP } for this comparison.
+      if (property === PROMPT_PROPERTIES.ERROR_BEHAVIOR) {
+        const normalize = (v: unknown) =>
+          v ?? { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP };
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.defaultErrorBehavior))
@@ -607,7 +626,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       }
       // Deep comparison for toolPermissions — normalize null/undefined/none
       // to a canonical form so the button hides when values match the global defaults.
-      if (property === "toolPermissions") {
+      if (property === PROMPT_PROPERTIES.TOOL_PERMISSIONS) {
         const wv = workflowValue as WorkflowProperties["toolPermissions"];
         const gv = globalSettings.toolPermissions;
         // null/undefined/none all mean "no override" — compare as empty
@@ -638,8 +657,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
           JSON.stringify(normalizePerms(gv))
         );
       }
-      const globalValue =
-        globalSettings[property as keyof typeof globalSettings];
       return workflowValue !== globalValue;
     },
     [workflowProperties, globalSettings, effectiveHarness]
@@ -724,12 +741,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
     (model: string) => {
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("model", model);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.MODEL, model);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "model",
+        property: PROMPT_PROPERTIES.MODEL,
         value: model,
       });
     },
@@ -740,14 +757,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
     (executionMode: string) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(
-        "executionMode",
+        PROMPT_PROPERTIES.EXECUTION_MODE,
         executionMode as WorkflowProperties["executionMode"]
       );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "executionMode",
+        property: PROMPT_PROPERTIES.EXECUTION_MODE,
         value: executionMode,
       });
     },
@@ -813,12 +830,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
             };
       const next = { ...currentConfig, [field]: value } as WorktreeConfig;
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("worktree", next);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.WORKTREE, next);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "worktree",
+        property: PROMPT_PROPERTIES.WORKTREE,
         value: next,
       });
     },
@@ -831,12 +848,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       // so that getEffectiveAgent() can distinguish "no override" (undefined)
       // from "explicitly set to None" (""), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("agent", agent);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.AGENT, agent);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "agent",
+        property: PROMPT_PROPERTIES.AGENT,
         value: agent,
       });
     },
@@ -849,12 +866,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       // so that getEffectiveSkills() can distinguish "no override" (undefined)
       // from "explicitly cleared" ([]), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("skills", skills);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.SKILLS, skills);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "skills",
+        property: PROMPT_PROPERTIES.SKILLS,
         value: skills,
       });
     },
@@ -868,12 +885,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       // undefined value as an explicit delete.
       const nextVars = Object.keys(vars).length > 0 ? vars : undefined;
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("vars", nextVars);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.VARS, nextVars);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "vars",
+        property: PROMPT_PROPERTIES.VARS,
         value: nextVars,
       });
     },
@@ -889,12 +906,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
         inlineSecretNames
       );
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("secrets", explicitSecrets);
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.SECRETS,
+        explicitSecrets
+      );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "secrets",
+        property: PROMPT_PROPERTIES.SECRETS,
         value: explicitSecrets,
       });
     },
@@ -911,7 +931,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         });
         return;
       }
-      const checked = v === "yes";
+      const checked = v === RESUME_SESSION_SELECTIONS.YES;
       const updates: Partial<WorkflowProperties> = { resumeSession: checked };
       // Clear session ID when disabling or when switching away from Final Step Session.
       // Use "" instead of undefined so the value survives JSON serialization and the
@@ -938,12 +958,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("sessionId", parsedValue);
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.SESSION_ID,
+        parsedValue
+      );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "sessionId",
+        property: PROMPT_PROPERTIES.SESSION_ID,
         value: parsedValue,
       });
     },
@@ -954,14 +977,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
     (newValue: McpServersValue) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(
-        "mcpServers",
+        PROMPT_PROPERTIES.MCP_SERVERS,
         newValue as WorkflowProperties["mcpServers"]
       );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "mcpServers",
+        property: PROMPT_PROPERTIES.MCP_SERVERS,
         value: newValue,
       });
     },
@@ -971,12 +994,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleHooksChange = useCallback(
     (newValue: UserHookConfig[] | null | undefined) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("hooks", newValue);
+      settingsStore.updateWorkflowProperty(PROMPT_PROPERTIES.HOOKS, newValue);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "hooks",
+        property: PROMPT_PROPERTIES.HOOKS,
         value: newValue,
       });
     },
@@ -986,12 +1009,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleToolPermissionsChange = useCallback(
     (value: WorkflowProperties["toolPermissions"]) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("toolPermissions", value);
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+        value
+      );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "toolPermissions",
+        property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
         value: value,
       });
     },
@@ -1004,12 +1030,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
       // Store the empty string explicitly (not undefined) so the extension
       // receives the update and "Set as Default" can appear when the field
       // is cleared while a non-empty VS Code default exists.
-      settingsStore.updateWorkflowProperty("additionalArgs", value);
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+        value
+      );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "additionalArgs",
+        property: PROMPT_PROPERTIES.ADDITIONAL_ARGS,
         value: value,
       });
     },
@@ -1019,12 +1048,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handlePriorContextChange = useCallback(
     (value: PriorContext | undefined) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("priorContext", value);
+      settingsStore.updateWorkflowProperty(
+        PROMPT_PROPERTIES.PRIOR_CONTEXT,
+        value
+      );
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "priorContext",
+        property: PROMPT_PROPERTIES.PRIOR_CONTEXT,
         value: value,
       });
     },
@@ -1040,11 +1072,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (!enabled) {
         // null is an explicit workflow-level disable. Using undefined would
         // inherit the global default again for a newly-created workflow.
-        settingsStore.updateWorkflowProperty("endCondition", null);
+        settingsStore.updateWorkflowProperty(
+          PROMPT_PROPERTIES.END_CONDITION,
+          null
+        );
         syncWorkflowPropertiesForUndo();
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "endCondition",
+          property: PROMPT_PROPERTIES.END_CONDITION,
           value: null,
         });
       } else {
@@ -1056,13 +1091,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
           returns: "true",
         };
         settingsStore.updateWorkflowProperty(
-          "endCondition",
+          PROMPT_PROPERTIES.END_CONDITION,
           defaultEndCondition
         );
         syncWorkflowPropertiesForUndo();
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "endCondition",
+          property: PROMPT_PROPERTIES.END_CONDITION,
           value: defaultEndCondition,
         });
       }
@@ -1074,13 +1109,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
     (updated: ScriptConditionValue) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(
-        "endCondition",
+        PROMPT_PROPERTIES.END_CONDITION,
         updated as WorkflowProperties["endCondition"]
       );
       syncWorkflowPropertiesForUndo();
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "endCondition",
+        property: PROMPT_PROPERTIES.END_CONDITION,
         value: updated,
       });
     },
@@ -1106,11 +1141,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (!enabled) {
         // null is an explicit workflow-level disable. Using undefined would
         // inherit the global default again for a newly-created workflow.
-        settingsStore.updateWorkflowProperty("preCondition", null);
+        settingsStore.updateWorkflowProperty(
+          PROMPT_PROPERTIES.PRE_CONDITION,
+          null
+        );
         syncWorkflowPropertiesForUndo();
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "preCondition",
+          property: PROMPT_PROPERTIES.PRE_CONDITION,
           value: null,
         });
       } else {
@@ -1123,13 +1161,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
             onFail: CONDITION_ACTIONS.SKIP_PROMPT,
           };
         settingsStore.updateWorkflowProperty(
-          "preCondition",
+          PROMPT_PROPERTIES.PRE_CONDITION,
           defaultPreCondition
         );
         syncWorkflowPropertiesForUndo();
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "preCondition",
+          property: PROMPT_PROPERTIES.PRE_CONDITION,
           value: defaultPreCondition,
         });
       }
@@ -1142,13 +1180,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
       useSettingsStore
         .getState()
         .updateWorkflowProperty(
-          "preCondition",
+          PROMPT_PROPERTIES.PRE_CONDITION,
           updated as import("@root/types/CtrlYokeTypes").PreCondition
         );
       syncWorkflowPropertiesForUndo();
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "preCondition",
+        property: PROMPT_PROPERTIES.PRE_CONDITION,
         value: updated,
       });
     },
@@ -1160,13 +1198,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
       useSettingsStore
         .getState()
         .updateWorkflowProperty(
-          "errorBehavior",
+          PROMPT_PROPERTIES.ERROR_BEHAVIOR,
           updated as WorkflowProperties["errorBehavior"]
         );
       syncWorkflowPropertiesForUndo();
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "errorBehavior",
+        property: PROMPT_PROPERTIES.ERROR_BEHAVIOR,
         value: updated,
       });
     },
@@ -1180,7 +1218,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
         property,
         value,
         harness:
-          harness ?? (property === "model" ? effectiveHarness : undefined),
+          harness ??
+          (property === PROMPT_PROPERTIES.MODEL ? effectiveHarness : undefined),
       });
     },
     [vscode, effectiveHarness]
@@ -1299,7 +1338,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
         globalSettings.toolPermissions.mode ??
         PERMISSION_MODES.ALLOW_ALL);
   const effectiveErrorBehavior = workflowProperties.errorBehavior ??
-    globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
+    globalSettings.defaultErrorBehavior ?? {
+      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+    };
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
@@ -1424,11 +1465,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="AI harness for execution"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="harness"
-                      show={isDifferentFromGlobal("harness")}
+                      property={PROMPT_PROPERTIES.HARNESS}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.HARNESS)}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "harness",
+                          PROMPT_PROPERTIES.HARNESS,
                           workflowProperties.harness
                         )
                       }
@@ -1462,10 +1503,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="AI model for execution"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="model"
-                      show={isDifferentFromGlobal("model")}
+                      property={PROMPT_PROPERTIES.MODEL}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.MODEL)}
                       onSetDefault={() =>
-                        handleSetAsDefault("model", workflowProperties.model)
+                        handleSetAsDefault(
+                          PROMPT_PROPERTIES.MODEL,
+                          workflowProperties.model
+                        )
                       }
                     />
                   }
@@ -1508,10 +1552,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Custom agent file (.agent.md)"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="agent"
-                      show={isDifferentFromGlobal("agent")}
+                      property={PROMPT_PROPERTIES.AGENT}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.AGENT)}
                       onSetDefault={() =>
-                        handleSetAsDefault("agent", workflowProperties.agent)
+                        handleSetAsDefault(
+                          PROMPT_PROPERTIES.AGENT,
+                          workflowProperties.agent
+                        )
                       }
                     />
                   }
@@ -1547,10 +1594,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Attach skills (frontmatter only, progressive disclosure)"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="skills"
-                      show={isDifferentFromGlobal("skills")}
+                      property={PROMPT_PROPERTIES.SKILLS}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.SKILLS)}
                       onSetDefault={() =>
-                        handleSetAsDefault("skills", workflowProperties.skills)
+                        handleSetAsDefault(
+                          PROMPT_PROPERTIES.SKILLS,
+                          workflowProperties.skills
+                        )
                       }
                     />
                   }
@@ -1592,11 +1642,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
                 setAsDefaultButton={
                   <SetAsDefaultButton
-                    property="additionalArgs"
-                    show={isDifferentFromGlobal("additionalArgs")}
+                    property={PROMPT_PROPERTIES.ADDITIONAL_ARGS}
+                    show={isDifferentFromGlobal(
+                      PROMPT_PROPERTIES.ADDITIONAL_ARGS
+                    )}
                     onSetDefault={() =>
                       handleSetAsDefault(
-                        "additionalArgs",
+                        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
                         workflowProperties.additionalArgs,
                         effectiveHarness
                       )
@@ -1623,11 +1675,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description={EXECUTION_MODE_HELP_TEXT}
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="executionMode"
-                      show={isDifferentFromGlobal("executionMode")}
+                      property={PROMPT_PROPERTIES.EXECUTION_MODE}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.EXECUTION_MODE
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "executionMode",
+                          PROMPT_PROPERTIES.EXECUTION_MODE,
                           workflowProperties.executionMode
                         )
                       }
@@ -1647,11 +1701,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description={WORKTREE_MODE_HELP_TEXT}
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="worktree"
-                      show={isDifferentFromGlobal("worktree")}
+                      property={PROMPT_PROPERTIES.WORKTREE}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.WORKTREE)}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "worktree",
+                          PROMPT_PROPERTIES.WORKTREE,
                           workflowProperties.worktree
                         )
                       }
@@ -1803,11 +1857,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="resumeSession"
-                      show={isDifferentFromGlobal("resumeSession")}
+                      property={PROMPT_PROPERTIES.RESUME_SESSION}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.RESUME_SESSION
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "resumeSession",
+                          PROMPT_PROPERTIES.RESUME_SESSION,
                           workflowProperties.resumeSession
                         )
                       }
@@ -1822,8 +1878,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       effectiveResumeSession
                         ? SESSION_ID_SENTINELS.FINAL_STEP
                         : effectiveResumeSession
-                          ? "yes"
-                          : "no"
+                          ? RESUME_SESSION_SELECTIONS.YES
+                          : RESUME_SESSION_SELECTIONS.NO
                     }
                     onChange={handleResumeSessionChange}
                     options={[...getResumeSessionOptions()]}
@@ -1876,11 +1932,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Send prior step outputs with the prompt"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="priorContext"
-                      show={isDifferentFromGlobal("priorContext")}
+                      property={PROMPT_PROPERTIES.PRIOR_CONTEXT}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.PRIOR_CONTEXT
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "priorContext",
+                          PROMPT_PROPERTIES.PRIOR_CONTEXT,
                           workflowProperties.priorContext
                         )
                       }
@@ -1934,11 +1992,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   </label>
                   {preConditionEnabled && (
                     <SetAsDefaultButton
-                      property="preCondition"
-                      show={isDifferentFromGlobal("preCondition")}
+                      property={PROMPT_PROPERTIES.PRE_CONDITION}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.PRE_CONDITION
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "preCondition",
+                          PROMPT_PROPERTIES.PRE_CONDITION,
                           workflowProperties.preCondition
                         )
                       }
@@ -1954,7 +2014,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <AnimatedSection visible={preConditionEnabled}>
                   <div className="space-y-3">
                     <ScriptConditionEditor
-                      variant="preCondition"
+                      variant={PROMPT_PROPERTIES.PRE_CONDITION}
                       value={
                         effectivePreCondition as
                           | ScriptConditionValue
@@ -1991,11 +2051,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   </label>
                   {endConditionEnabled && (
                     <SetAsDefaultButton
-                      property="endCondition"
-                      show={isDifferentFromGlobal("endCondition")}
+                      property={PROMPT_PROPERTIES.END_CONDITION}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.END_CONDITION
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "endCondition",
+                          PROMPT_PROPERTIES.END_CONDITION,
                           workflowProperties.endCondition
                         )
                       }
@@ -2011,7 +2073,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <AnimatedSection visible={endConditionEnabled}>
                   <div className="space-y-3">
                     <ScriptConditionEditor
-                      variant="endCondition"
+                      variant={PROMPT_PROPERTIES.END_CONDITION}
                       value={
                         effectiveEndCondition as
                           | ScriptConditionValue
@@ -2037,11 +2099,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     Error Behavior
                   </label>
                   <SetAsDefaultButton
-                    property="errorBehavior"
-                    show={isDifferentFromGlobal("errorBehavior")}
+                    property={PROMPT_PROPERTIES.ERROR_BEHAVIOR}
+                    show={isDifferentFromGlobal(
+                      PROMPT_PROPERTIES.ERROR_BEHAVIOR
+                    )}
                     onSetDefault={() =>
                       handleSetAsDefault(
-                        "errorBehavior",
+                        PROMPT_PROPERTIES.ERROR_BEHAVIOR,
                         workflowProperties.errorBehavior
                       )
                     }
@@ -2069,11 +2133,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 className="flex-1 min-h-0"
                 setAsDefaultButton={
                   <SetAsDefaultButton
-                    property="mcpServers"
-                    show={isDifferentFromGlobal("mcpServers")}
+                    property={PROMPT_PROPERTIES.MCP_SERVERS}
+                    show={isDifferentFromGlobal(PROMPT_PROPERTIES.MCP_SERVERS)}
                     onSetDefault={() =>
                       handleSetAsDefault(
-                        "mcpServers",
+                        PROMPT_PROPERTIES.MCP_SERVERS,
                         workflowProperties.mcpServers
                       )
                     }
@@ -2102,11 +2166,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Tool permission mode for CLI harnesses"
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="toolPermissions"
-                      show={isDifferentFromGlobal("toolPermissions")}
+                      property={PROMPT_PROPERTIES.TOOL_PERMISSIONS}
+                      show={isDifferentFromGlobal(
+                        PROMPT_PROPERTIES.TOOL_PERMISSIONS
+                      )}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "toolPermissions",
+                          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
                           workflowProperties.toolPermissions
                         )
                       }
@@ -2135,11 +2201,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   description="Grant named credentials to this workflow. Inline !NAME references in prompt text are always granted."
                   setAsDefaultButton={
                     <SetAsDefaultButton
-                      property="secrets"
-                      show={isDifferentFromGlobal("secrets")}
+                      property={PROMPT_PROPERTIES.SECRETS}
+                      show={isDifferentFromGlobal(PROMPT_PROPERTIES.SECRETS)}
                       onSetDefault={() =>
                         handleSetAsDefault(
-                          "secrets",
+                          PROMPT_PROPERTIES.SECRETS,
                           workflowProperties.secrets
                         )
                       }
@@ -2180,7 +2246,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     className="flex-1 min-h-0"
                     setAsDefaultButton={
                       <SetAsDefaultButton
-                        property="toolPermissions.allowedTools"
+                        property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.allowedTools`}
                         show={
                           JSON.stringify(effectiveAllowedTools) !==
                           JSON.stringify(
@@ -2188,11 +2254,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           )
                         }
                         onSetDefault={() =>
-                          handleSetAsDefault("toolPermissions", {
-                            ...(workflowProperties.toolPermissions ?? {}),
-                            allowedTools: effectiveAllowedTools,
-                            deniedTools: effectiveDeniedTools,
-                          })
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                            {
+                              ...(workflowProperties.toolPermissions ?? {}),
+                              allowedTools: effectiveAllowedTools,
+                              deniedTools: effectiveDeniedTools,
+                            }
+                          )
                         }
                       />
                     }
@@ -2245,7 +2314,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     className="flex-1 min-h-0"
                     setAsDefaultButton={
                       <SetAsDefaultButton
-                        property="toolPermissions.deniedTools"
+                        property={`${PROMPT_PROPERTIES.TOOL_PERMISSIONS}.deniedTools`}
                         show={
                           JSON.stringify(effectiveDeniedTools) !==
                           JSON.stringify(
@@ -2253,11 +2322,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           )
                         }
                         onSetDefault={() =>
-                          handleSetAsDefault("toolPermissions", {
-                            ...(workflowProperties.toolPermissions ?? {}),
-                            allowedTools: effectiveAllowedTools,
-                            deniedTools: effectiveDeniedTools,
-                          })
+                          handleSetAsDefault(
+                            PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                            {
+                              ...(workflowProperties.toolPermissions ?? {}),
+                              allowedTools: effectiveAllowedTools,
+                              deniedTools: effectiveDeniedTools,
+                            }
+                          )
                         }
                       />
                     }
@@ -2318,10 +2390,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
                 setAsDefaultButton={
                   <SetAsDefaultButton
-                    property="hooks"
-                    show={isDifferentFromGlobal("hooks")}
+                    property={PROMPT_PROPERTIES.HOOKS}
+                    show={isDifferentFromGlobal(PROMPT_PROPERTIES.HOOKS)}
                     onSetDefault={() =>
-                      handleSetAsDefault("hooks", workflowProperties.hooks)
+                      handleSetAsDefault(
+                        PROMPT_PROPERTIES.HOOKS,
+                        workflowProperties.hooks
+                      )
                     }
                   />
                 }

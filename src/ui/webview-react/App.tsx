@@ -1,4 +1,8 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import {
+  DOCUMENT_VISIBILITY_STATES,
+  KEYBOARD_KEYS,
+  MOBILE_STEPS_MODES,
+} from "@root/types/DashboardConstants";
 import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import {
@@ -266,12 +270,14 @@ function App() {
 
   // Sidebar chip rail closing animation state — same pattern as the fullwidth overlay.
   // sidebarAfterClose fires after the collapse animation completes (width 32→0).
-  const sidebarShouldShow = mobileStepsOpen && mobileStepsMode === "sidebar";
+  const sidebarShouldShow =
+    mobileStepsOpen && mobileStepsMode === MOBILE_STEPS_MODES.SIDEBAR;
   const [sidebarChipClosing, setSidebarChipClosing] = useState(false);
   const sidebarAfterClose = useRef<(() => void) | null>(null);
 
   const handlePromptsRequestSidebar = () => {
-    promptsAfterClose.current = () => setMobileStepsMode("sidebar");
+    promptsAfterClose.current = () =>
+      setMobileStepsMode(MOBILE_STEPS_MODES.SIDEBAR);
     setPromptsOverlayClosing(true);
   };
   const handlePromptsRequestClose = () => {
@@ -284,17 +290,21 @@ function App() {
   };
 
   const handleSidebarExpand = () => {
-    sidebarAfterClose.current = () => setMobileStepsMode("fullwidth");
+    sidebarAfterClose.current = () =>
+      setMobileStepsMode(MOBILE_STEPS_MODES.FULLWIDTH);
     setSidebarChipClosing(true);
   };
 
   // Header toggle handlers — route through close animation when panels are already open.
   // Calling toggleMobileSteps/toggleMobileWorkflowProps directly skips the animation path.
   const handleToggleMobileSteps = () => {
-    if (mobileStepsOpen && mobileStepsMode === "fullwidth") {
+    if (mobileStepsOpen && mobileStepsMode === MOBILE_STEPS_MODES.FULLWIDTH) {
       promptsAfterClose.current = () => closeMobileSteps();
       setPromptsOverlayClosing(true);
-    } else if (mobileStepsOpen && mobileStepsMode === "sidebar") {
+    } else if (
+      mobileStepsOpen &&
+      mobileStepsMode === MOBILE_STEPS_MODES.SIDEBAR
+    ) {
       sidebarAfterClose.current = () => closeMobileSteps();
       setSidebarChipClosing(true);
     } else {
@@ -369,7 +379,7 @@ function App() {
   useEffect(() => {
     if (!isStandalone) return;
     const clearBadge = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === DOCUMENT_VISIBILITY_STATES.VISIBLE) {
         void clearNotificationBadgeCount();
       }
     };
@@ -594,7 +604,8 @@ function App() {
                     <OutputSection />
 
                     {/* Fullwidth steps — covers the output area only */}
-                    {((mobileStepsOpen && mobileStepsMode === "fullwidth") ||
+                    {((mobileStepsOpen &&
+                      mobileStepsMode === MOBILE_STEPS_MODES.FULLWIDTH) ||
                       promptsOverlayClosing) && (
                       <div
                         className={`absolute inset-0 z-header bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}

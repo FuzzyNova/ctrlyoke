@@ -8,6 +8,7 @@ import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
+  SHELL_TYPES,
   TERMINAL_SESSION_STATUS,
   type SessionKind,
   type ShellKind,
@@ -91,13 +92,19 @@ export function resolveShellKind(shellPath: string): ShellKind {
   const name = shellDisplayName(shellPath).toLowerCase();
   if (/^pwsh([.-]|$)/.test(name)) return SHELL_KINDS.PWSH;
   if (name.startsWith("powershell")) return SHELL_KINDS.POWERSHELL;
-  if (name === "zsh") return SHELL_KINDS.ZSH;
-  if (name === "bash") return SHELL_KINDS.BASH;
-  if (name === "fish") return SHELL_KINDS.FISH;
-  if (name === "cmd") return SHELL_KINDS.CMD;
-  if (name === "wsl") return SHELL_KINDS.WSL;
-  if (name === "nu" || name === "nushell") return SHELL_KINDS.NUSHELL;
-  if (name === "sh" || name === "dash" || name === "ksh") {
+  if (name === SHELL_TYPES.ZSH) return SHELL_KINDS.ZSH;
+  if (name === SHELL_TYPES.BASH) return SHELL_KINDS.BASH;
+  if (name === SHELL_TYPES.FISH) return SHELL_KINDS.FISH;
+  if (name === SHELL_TYPES.CMD) return SHELL_KINDS.CMD;
+  if (name === SHELL_TYPES.WSL) return SHELL_KINDS.WSL;
+  if (name === SHELL_TYPES.NU || name === SHELL_TYPES.NUSHELL) {
+    return SHELL_KINDS.NUSHELL;
+  }
+  if (
+    name === SHELL_TYPES.SH ||
+    name === SHELL_TYPES.DASH ||
+    name === SHELL_TYPES.KSH
+  ) {
     return SHELL_KINDS.SH;
   }
   if (name.endsWith("sh")) return SHELL_KINDS.SH;

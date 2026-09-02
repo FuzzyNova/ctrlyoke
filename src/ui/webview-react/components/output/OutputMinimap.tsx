@@ -545,13 +545,16 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         onMouseLeave={() => setIsThumbHovered(false)}
         onKeyDown={(e) => {
           // Allow keyboard scrolling: ArrowUp/ArrowDown move the viewport
-          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          if (
+            e.key === KEYBOARD_KEYS.ARROW_UP ||
+            e.key === KEYBOARD_KEYS.ARROW_DOWN
+          ) {
             e.preventDefault();
             const el = scrollContainerRef.current;
             if (!el) return;
             const sharedContentHeight = getSharedContentHeight();
             const maxScroll = sharedContentHeight - el.clientHeight;
-            const delta = e.key === "ArrowUp" ? -0.05 : 0.05;
+            const delta = e.key === KEYBOARD_KEYS.ARROW_UP ? -0.05 : 0.05;
             el.scrollTop = Math.max(
               0,
               Math.min(maxScroll, el.scrollTop + delta * sharedContentHeight)

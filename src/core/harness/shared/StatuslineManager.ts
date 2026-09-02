@@ -5,6 +5,7 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import {
   STATUS_LINE_TRACKING_PROVIDERS,
   HARNESS_IDS,
+  SETTING_SCOPES,
   SETTING_PATHS,
   type StatusLineTrackingHarnessId,
   type StatusLineTrackingProvider,
@@ -152,7 +153,8 @@ export class StatuslineManager implements StatuslineManagerLike {
         // user-scoped re-enable is the explicit opt-in that permits replacement,
         // so no separate persisted "already asked" flag is needed.
         const explicitlyEnabledByUser =
-          configService.getLeafSources()[enabledSettingPath] === "user";
+          configService.getLeafSources()[enabledSettingPath] ===
+          SETTING_SCOPES.USER;
         if (
           hadKey &&
           customCommand === undefined &&

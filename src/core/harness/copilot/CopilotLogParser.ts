@@ -22,6 +22,11 @@ import {
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import {
+  COPILOT_EVENT_TYPES,
+  COPILOT_SESSION_INFO_TYPES,
+  COPILOT_USER_MESSAGE_DELIVERIES,
+} from "./CopilotProtocolConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -483,7 +488,7 @@ export class CopilotLogParser extends BaseLogParser {
 
       // Headless stdout carries the session identity in its final result event
       // instead of the session.start event used by events.jsonl.
-      if (event.type === "result") {
+      if (event.type === COPILOT_EVENT_TYPES.RESULT) {
         if (typeof event.sessionId === "string") {
           sessionId = event.sessionId;
         }
@@ -504,11 +509,11 @@ export class CopilotLogParser extends BaseLogParser {
       }
 
       // Handle session.info events (log for debugging, not emitted as output)
-      if (event.type === "session.info" && event.data) {
+      if (event.type === COPILOT_EVENT_TYPES.SESSION_INFO && event.data) {
         if (event.data.infoType === "authentication") {
           Log.debug(`[CopilotLogParser] ${event.data.message}`);
         }
-        if (event.data.infoType === "mcp") {
+        if (event.data.infoType === COPILOT_SESSION_INFO_TYPES.MCP) {
           Log.debug(`[CopilotLogParser] MCP: ${event.data.message}`);
         }
       }
@@ -935,7 +940,7 @@ export class CopilotLogParser extends BaseLogParser {
       }
       // Copilot marks the initial prompt submitted while idle distinctly from
       // human steering. The logged content can differ after prompt transforms.
-      if (e.data?.delivery === "idle") {
+      if (e.data?.delivery === COPILOT_USER_MESSAGE_DELIVERIES.IDLE) {
         return "injected-prompt";
       }
     }

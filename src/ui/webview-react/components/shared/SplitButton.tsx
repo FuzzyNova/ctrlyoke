@@ -1,4 +1,4 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import { BUTTON_VARIANTS, KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { HEADER_BUTTON_SIZES } from "@/constants";
@@ -22,7 +22,7 @@ export interface SplitButtonProps {
   /** Dropdown menu options */
   options: SplitButtonOption[];
   /** Button style variant */
-  variant?: "primary" | "secondary";
+  variant?: (typeof BUTTON_VARIANTS)[keyof typeof BUTTON_VARIANTS];
   /** Whether the entire split button is disabled */
   disabled?: boolean;
   /** Whether only the main button is disabled (dropdown still works) */
@@ -47,7 +47,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   mainLabel,
   mainAction,
   options,
-  variant = "primary",
+  variant = BUTTON_VARIANTS.PRIMARY,
   disabled = false,
   mainDisabled = false,
   dropdownDisabled = false,
@@ -105,7 +105,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     (e: React.KeyboardEvent) => {
       if (!isOpen) {
         if (
-          e.key === "ArrowDown" ||
+          e.key === KEYBOARD_KEYS.ARROW_DOWN ||
           e.key === KEYBOARD_KEYS.ENTER ||
           e.key === " "
         ) {
@@ -121,7 +121,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         .filter(({ opt }) => !opt.disabled && !opt.divider);
 
       switch (e.key) {
-        case "ArrowDown":
+        case KEYBOARD_KEYS.ARROW_DOWN:
           e.preventDefault();
           {
             const currentPos = enabledOptions.findIndex(
@@ -132,7 +132,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           }
           break;
 
-        case "ArrowUp":
+        case KEYBOARD_KEYS.ARROW_UP:
           e.preventDefault();
           {
             const currentPos = enabledOptions.findIndex(
@@ -191,14 +191,14 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   const baseButtonClass =
     "inline-flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1";
   const variantClass =
-    variant === "primary"
+    variant === BUTTON_VARIANTS.PRIMARY
       ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
       : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
   // Separator outer div: background matches button so padding area is invisible,
   // text color set so the inner div's bg-current inherits the right foreground.
   // Mirrors VS Code's formula: transparent(buttonForeground, 0.4)
   const separatorClass =
-    variant === "primary"
+    variant === BUTTON_VARIANTS.PRIMARY
       ? "bg-btn-bg text-btn-fg"
       : "bg-btn-secondary-bg text-btn-secondary-fg";
   const disabledClass = "opacity-50 cursor-not-allowed";

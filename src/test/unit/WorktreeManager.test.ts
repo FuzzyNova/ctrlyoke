@@ -1928,9 +1928,9 @@ suite("WorktreeManager", function () {
       { encoding: "utf8" }
     );
     assert.ok(
-      !listed.replace(/\\/g, "/").includes(
-        info.worktreePath.replace(/\\/g, "/")
-      ),
+      !listed
+        .replace(/\\/g, "/")
+        .includes(info.worktreePath.replace(/\\/g, "/")),
       "Git no longer lists this worktree at all"
     );
     await assert.doesNotReject(

@@ -12,10 +12,13 @@ import {
 import { WebviewLog } from "@utils/logger";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  CLIPBOARD_OPERATIONS,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 
 export interface WorkspaceClipboard {
-  operation: "copy" | "cut";
+  operation: (typeof CLIPBOARD_OPERATIONS)[keyof typeof CLIPBOARD_OPERATIONS];
   path: string;
   kind:
     | typeof WORKSPACE_ENTRY_KINDS.FILE
@@ -108,7 +111,7 @@ export function useWorkspaceExplorerContextMenu({
     if (!clipboard || isRootsList) return;
     const destDir = explorerPath;
     try {
-      if (clipboard.operation === "cut") {
+      if (clipboard.operation === CLIPBOARD_OPERATIONS.CUT) {
         await workspaceMoveEntry({ sourcePath: clipboard.path, destDir });
         setClipboard(null);
       } else {
@@ -148,7 +151,7 @@ export function useWorkspaceExplorerContextMenu({
             disabledTitle: rootDisabledTitle,
             onClick: () => {
               setClipboard({
-                operation: "cut",
+                operation: CLIPBOARD_OPERATIONS.CUT,
                 path: entry.path,
                 kind: entry.kind,
               });
@@ -161,7 +164,7 @@ export function useWorkspaceExplorerContextMenu({
             disabledTitle: rootDisabledTitle,
             onClick: () => {
               setClipboard({
-                operation: "copy",
+                operation: CLIPBOARD_OPERATIONS.COPY,
                 path: entry.path,
                 kind: entry.kind,
               });

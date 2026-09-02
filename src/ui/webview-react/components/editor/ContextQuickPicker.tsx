@@ -2,14 +2,18 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { SESSION_ID_SENTINELS } from "../../types/messages";
-import { FOOTER_PICKERS } from "../../types/messages";
+import { FOOTER_PICKERS, SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   getResumeSessionOptions,
   resumeSessionSelection,
 } from "../../types/dropdownNamespaces";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import {
+  INHERIT_DEFAULT_OPTION,
+  PROMPT_PROPERTIES,
+  RESUME_SESSION_SELECTIONS,
+} from "@root/types/DashboardConstants";
 
 interface ContextQuickPickerProps {
   isNarrow: boolean;
@@ -61,20 +65,22 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
 
   const resumeSessionValue =
     properties.resumeSession === undefined
-      ? "default"
+      ? INHERIT_DEFAULT_OPTION
       : properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP &&
           properties.resumeSession
         ? SESSION_ID_SENTINELS.FINAL_STEP
         : properties.resumeSession
-          ? "yes"
-          : "no";
+          ? RESUME_SESSION_SELECTIONS.YES
+          : RESUME_SESSION_SELECTIONS.NO;
 
   const handleResumeSessionChange = (v: string) => {
     const next = resumeSessionSelection(v, properties.sessionId);
-    setProperty("resumeSession", next.resumeSession);
-    setProperty("sessionId", next.sessionId);
+    setProperty(PROMPT_PROPERTIES.RESUME_SESSION, next.resumeSession);
+    setProperty(PROMPT_PROPERTIES.SESSION_ID, next.sessionId);
 
-    setFooterOpenPicker(v === "yes" ? "context" : null);
+    setFooterOpenPicker(
+      v === RESUME_SESSION_SELECTIONS.YES ? FOOTER_PICKERS.CONTEXT : null
+    );
   };
 
   // ── Session ID input ──────────────────────────────────────────────────────
@@ -103,7 +109,9 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       valueLabel={valueLabel}
       isOverride={isOverride}
       isOpen={isOpen}
-      onToggle={() => setFooterOpenPicker(isOpen ? null : "context")}
+      onToggle={() =>
+        setFooterOpenPicker(isOpen ? null : FOOTER_PICKERS.CONTEXT)
+      }
       onClose={() => setFooterOpenPicker(null)}
       title="Context override"
       heading="Context"

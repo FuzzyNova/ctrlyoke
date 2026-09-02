@@ -1,4 +1,5 @@
 import {
+  HOOK_CONFIG_TYPES,
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
@@ -134,7 +135,7 @@ export class QwenNotificationMonitor
     }
 
     return {
-      type: "json",
+      type: HOOK_CONFIG_TYPES.JSON,
       config: { hooks },
     };
   }

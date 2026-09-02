@@ -47,9 +47,9 @@ function sourceForEntry(
         newContent: entry.newContent,
       };
     case DIFF_PAYLOAD_KINDS.IMAGE:
-      return { kind: "image", image: entry.image };
+      return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: entry.image };
     case DIFF_PAYLOAD_KINDS.BINARY:
-      return { kind: "binary" };
+      return { kind: DIFF_PAYLOAD_KINDS.BINARY };
   }
 }
 
@@ -246,7 +246,7 @@ export const DiffRefDiffList = React.forwardRef<
           {
             path: `placeholder-${index}`,
             changeType: "modified",
-            source: { kind: "binary" },
+            source: { kind: DIFF_PAYLOAD_KINDS.BINARY },
           },
           estimateOptions
         );

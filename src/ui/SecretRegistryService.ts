@@ -3,10 +3,12 @@ import * as path from "node:path";
 import * as yaml from "js-yaml";
 import {
   PROMPT_PROPERTIES,
+  MCP_CONFIG_KEYS,
   SECRET_REGISTRY_STATES,
   SETTING_SCOPES,
   type SettingWriteScope,
 } from "../types/DashboardConstants";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import type {
   SecretRegistryEntry,
   SecretRegistryUsage,
@@ -103,7 +105,7 @@ function collectWorkflowNames(
   if (!value || typeof value !== "object") return;
 
   for (const [key, child] of Object.entries(value)) {
-    if (key === "secrets" && Array.isArray(child)) {
+    if (key === PROMPT_PROPERTIES.SECRETS && Array.isArray(child)) {
       for (const name of child) {
         if (typeof name === "string" && isValidSecretName(name)) {
           names.add(name);
@@ -117,11 +119,14 @@ function collectWorkflowNames(
       }
     }
 
-    if ((key === "env" || key === "headers") && child) {
+    if (
+      (key === MCP_CONFIG_KEYS.ENV || key === MCP_CONFIG_KEYS.HEADERS) &&
+      child
+    ) {
       for (const name of collectInterpolationNames(child)) names.add(name);
     }
 
-    if (key === "mcpServers" && Array.isArray(child)) {
+    if (key === PROMPT_PROPERTIES.MCP_SERVERS && Array.isArray(child)) {
       for (const server of child) {
         if (!server || typeof server !== "object") continue;
         const record = server as Record<string, unknown>;
@@ -198,12 +203,12 @@ async function discoverWorkflowFiles(root: string): Promise<string[]> {
         if (
           entry.name === ".git" ||
           entry.name === "node_modules" ||
-          entry.name === "out" ||
+          entry.name === PATH_CONSTANTS.OUT_DIR ||
           entry.name === "dist" ||
           entry.name === "coverage" ||
           entry.name === ".runs" ||
-          entry.name === "temp" ||
-          entry.name === "attachments"
+          entry.name === PATH_CONSTANTS.TEMP_DIR ||
+          entry.name === PATH_CONSTANTS.ATTACHMENTS_DIR
         ) {
           continue;
         }

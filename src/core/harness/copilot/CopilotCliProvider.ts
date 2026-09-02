@@ -4,6 +4,8 @@ import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
+  PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
   STATUS_LINE_TRACKING_PROVIDERS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
@@ -52,6 +54,7 @@ import {
   type CliProviderPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
+import { COPILOT_EVENT_TYPES } from "./CopilotProtocolConstants";
 
 const COPILOT_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -137,7 +140,7 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new CopilotLogParser();
-  readonly headlessSource = "stdout" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */
   parseHeadlessStdout(stdout: string): BaseCliEvent[] {
@@ -147,7 +150,9 @@ export class CopilotCliProvider implements ICliProvider {
   /** Extract the session ID carried by Copilot's final result event. */
   extractSessionIdFromStdout(chunk: string): string | undefined {
     const result = CliParseUtils.parseJsonLines(chunk).find(
-      (event) => event.type === "result" && typeof event.sessionId === "string"
+      (event) =>
+        event.type === COPILOT_EVENT_TYPES.RESULT &&
+        typeof event.sessionId === "string"
     );
     return result?.sessionId as string | undefined;
   }
@@ -726,7 +731,7 @@ export class CopilotCliProvider implements ICliProvider {
         workspaceRoot,
         command
       );
-      if (result.kind !== "declined") {
+      if (result.kind !== PERSISTENT_VALUE_INSTALL_RESULT_KINDS.DECLINED) {
         this.statusLineDirectory = snapshotDirectory;
         this.statusLineWorkspaceRoot = workspaceRoot;
         this.statusLineEnabledForPrompt = true;

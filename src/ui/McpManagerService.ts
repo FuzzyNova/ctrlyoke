@@ -1,4 +1,8 @@
-import { MESSAGE_TYPES, SPECIAL_TARGET_IDS } from "../types/DashboardConstants";
+import {
+  MCP_CONFIG_KEYS,
+  MESSAGE_TYPES,
+  SPECIAL_TARGET_IDS,
+} from "../types/DashboardConstants";
 import type {
   DeleteMcpFromHarnessMessage,
   DeleteMcpRegistryServerMessage,
@@ -27,7 +31,7 @@ function redactMcpConfigPreview(config: unknown): string {
   const redacted = JSON.parse(
     JSON.stringify(config, (key, value: unknown) => {
       if (
-        (key === "env" || key === "headers") &&
+        (key === MCP_CONFIG_KEYS.ENV || key === MCP_CONFIG_KEYS.HEADERS) &&
         value &&
         typeof value === "object"
       ) {

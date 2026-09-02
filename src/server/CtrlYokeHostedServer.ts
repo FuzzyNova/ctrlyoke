@@ -48,6 +48,7 @@ import {
   type StatusMessageSeverity,
   BOOLEAN_STRING_VALUES,
   WORKSPACE_SEARCH_SCOPES,
+  NETWORK_INTERFACE_FAMILIES,
 } from "../types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -2353,7 +2354,12 @@ export class CtrlYokeHostedServer
     for (const ifaces of Object.values(os.networkInterfaces())) {
       if (!ifaces) continue;
       for (const iface of ifaces) {
-        if (iface.family === "IPv4" && !iface.internal) ips.push(iface.address);
+        if (
+          iface.family === NETWORK_INTERFACE_FAMILIES.IPV4 &&
+          !iface.internal
+        ) {
+          ips.push(iface.address);
+        }
       }
     }
     return ips;

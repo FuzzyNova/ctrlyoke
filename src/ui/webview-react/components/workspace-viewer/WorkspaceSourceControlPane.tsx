@@ -148,8 +148,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     repo: selectedRepoId ?? undefined,
     // While detached, keep the branch we came from visible so the commits
     // "ahead" of the checked-out point still render in the graph.
-    branchHint:
-      detached && previousBranch ? detachedBranchHint() : undefined,
+    branchHint: detached && previousBranch ? detachedBranchHint() : undefined,
     detached,
   });
   const refreshCommitHistory = commitHistoryController.refresh;

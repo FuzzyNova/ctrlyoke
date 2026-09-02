@@ -14,6 +14,12 @@ import type { PromptStep } from "../../types/CtrlYokeTypes";
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
+const DASHBOARD_SINK_METHODS = {
+  UPDATE_CLI_OUTPUT: "updateCliOutput",
+  UPDATE_CLI_STREAMING_CHUNK: "updateCliStreamingChunk",
+  UPDATE_RETRY_ATTEMPT: "updateRetryAttempt",
+} as const;
+
 function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   callbacks: OutputCaptureCallbacks;
   promptStarts: PromptStartData[];
@@ -145,7 +151,7 @@ suite("OutputCaptureBuffer", () => {
       );
       const streamingOutput = calls.find(
         (c) =>
-          c.method === "updateCliOutput" &&
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
           c.args[0] === 0 &&
           c.args[1]?.isStreaming
       );
@@ -155,7 +161,7 @@ suite("OutputCaptureBuffer", () => {
         "copilot --prompt foo"
       );
       const chunkCall = calls.find(
-        (c) => c.method === "updateCliStreamingChunk"
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
       );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "partial response");
@@ -206,7 +212,7 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
       const chunkCall = calls.find(
-        (c) => c.method === "updateCliStreamingChunk"
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
       );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "hello world");
@@ -359,7 +365,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const outputCalls = calls.filter((c) => c.method === "updateCliOutput");
+      const outputCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
+      );
       assert.strictEqual(outputCalls.length, 2, "should replay both attempts");
     });
 
@@ -382,7 +390,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const retryCalls = calls.filter((c) => c.method === "updateRetryAttempt");
+      const retryCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_RETRY_ATTEMPT
+      );
       assert.ok(retryCalls.length > 0, "should replay retry state");
       assert.strictEqual(retryCalls[0].args[1], 1); // currentRetry
       assert.strictEqual(retryCalls[0].args[2], 3); // maxRetries
@@ -536,7 +546,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const outputCalls = calls.filter((c) => c.method === "updateCliOutput");
+      const outputCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
+      );
       assert.strictEqual(outputCalls.length, 2);
     });
 
@@ -557,7 +569,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const retryCalls = calls.filter((c) => c.method === "updateRetryAttempt");
+      const retryCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_RETRY_ATTEMPT
+      );
       assert.strictEqual(retryCalls.length, 1);
       assert.strictEqual(retryCalls[0].args[1], 1);
       assert.strictEqual(retryCalls[0].args[2], 2);
@@ -604,7 +618,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const outputCalls = calls.filter((c) => c.method === "updateCliOutput");
+      const outputCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
+      );
       assert.strictEqual(
         outputCalls.length,
         0,
@@ -643,7 +659,9 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
 
-      const outputCalls = calls.filter((c) => c.method === "updateCliOutput");
+      const outputCalls = calls.filter(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT
+      );
       assert.strictEqual(outputCalls.length, 2);
       assert.strictEqual(outputCalls[0].args[0], 0);
       assert.strictEqual(outputCalls[1].args[0], 1);
@@ -675,14 +693,16 @@ suite("OutputCaptureBuffer", () => {
       );
 
       const outputCall = calls.find(
-        (c) => c.method === "updateCliOutput" && c.args[1]?.isStreaming
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+          c.args[1]?.isStreaming
       );
       assert.ok(outputCall, "should replay streaming output init");
       assert.strictEqual(outputCall!.args[1].prompt, "streaming prompt");
       assert.strictEqual(outputCall!.args[1].rawTextOutput, true);
 
       const chunkCall = calls.find(
-        (c) => c.method === "updateCliStreamingChunk"
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_STREAMING_CHUNK
       );
       assert.ok(chunkCall, "should replay accumulated text");
       assert.strictEqual(chunkCall!.args[1], "partial data");
@@ -713,7 +733,9 @@ suite("OutputCaptureBuffer", () => {
       );
 
       const streamingCalls = calls.filter(
-        (c) => c.method === "updateCliOutput" && c.args[1]?.isStreaming
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+          c.args[1]?.isStreaming
       );
       assert.strictEqual(streamingCalls.length, 0);
     });
@@ -805,12 +827,16 @@ suite("OutputCaptureBuffer", () => {
       );
 
       const completedOutputs = calls.filter(
-        (c) => c.method === "updateCliOutput" && !c.args[1]?.isStreaming
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+          !c.args[1]?.isStreaming
       );
       assert.strictEqual(completedOutputs.length, 2);
 
       const streamingOutput = calls.find(
-        (c) => c.method === "updateCliOutput" && c.args[1]?.isStreaming
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+          c.args[1]?.isStreaming
       );
       assert.ok(streamingOutput);
     });
@@ -846,7 +872,9 @@ suite("OutputCaptureBuffer", () => {
       );
 
       // Verify retryState was sent
-      const retryCall = calls.find((c) => c.method === "updateRetryAttempt");
+      const retryCall = calls.find(
+        (c) => c.method === DASHBOARD_SINK_METHODS.UPDATE_RETRY_ATTEMPT
+      );
       assert.ok(retryCall, "should send retryState for attemptIndex > 0");
       assert.strictEqual(retryCall!.args[1], 1); // currentRetry
       assert.strictEqual(retryCall!.args[2], 2); // maxRetries

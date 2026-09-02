@@ -1,4 +1,5 @@
 import {
+  HOOK_CONFIG_TYPES,
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
@@ -170,7 +171,7 @@ export class CopilotNotificationMonitor
     }
 
     return {
-      type: "json",
+      type: HOOK_CONFIG_TYPES.JSON,
       config: { version: 1, hooks },
     };
   }

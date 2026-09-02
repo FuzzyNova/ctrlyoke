@@ -1,7 +1,10 @@
 import * as path from "path";
 import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
+} from "../../../types/DashboardConstants";
 import type {
   PermissionContext,
   ToolPermissionApplication,
@@ -124,7 +127,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
     };
   }
-  readonly headlessSource = "stdout" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );

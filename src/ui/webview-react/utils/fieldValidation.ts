@@ -18,7 +18,12 @@ export function fieldValidationBorderClass(
   ) {
     return "border-input-error-border";
   }
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "warning")) {
+  if (
+    diagnostics.some(
+      (diagnostic) =>
+        diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+    )
+  ) {
     return "border-warning-fg";
   }
   return "border-input-border";

@@ -19,6 +19,7 @@ import {
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
+import { OPENCODE_TOOL_NAMES } from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
 
@@ -102,14 +103,14 @@ export function mapOpenCodeToolPartToCliEvent(
 
   const input = part.state?.input ?? {};
   const output = part.state?.output ?? "";
-  const isCompleted = part.state?.status === "completed";
+  const isCompleted = part.state?.status === OPERATION_STATUS.COMPLETED;
 
   if (toolName === OPEN_CODE_QUESTION_TOOL) {
     return mapOpenCodeQuestionPartToCliEvent(timestamp, part, isCompleted);
   }
 
   switch (toolName) {
-    case "bash":
+    case OPENCODE_TOOL_NAMES.BASH:
       return {
         type: CLI_EVENT_TYPES.BASH_COMMAND,
         timestamp,
@@ -120,7 +121,7 @@ export function mapOpenCodeToolPartToCliEvent(
         },
       };
 
-    case "write":
+    case OPENCODE_TOOL_NAMES.WRITE:
       return {
         type: CLI_EVENT_TYPES.FILE_WRITE,
         timestamp,
@@ -130,7 +131,7 @@ export function mapOpenCodeToolPartToCliEvent(
         },
       };
 
-    case "edit": {
+    case OPENCODE_TOOL_NAMES.EDIT: {
       const filediff = part.state?.metadata?.filediff;
       const filePath = input.filePath ?? input.path ?? input.file_path ?? "";
       const structuredPatch =
@@ -153,7 +154,7 @@ export function mapOpenCodeToolPartToCliEvent(
       };
     }
 
-    case "read":
+    case OPENCODE_TOOL_NAMES.READ:
       return {
         type: CLI_EVENT_TYPES.FILE_READ,
         timestamp,
@@ -196,11 +197,7 @@ function readLineRange(display: unknown): {
   const d = display as
     | { lineStart?: number; lineEnd?: number; totalLines?: number }
     | undefined;
-  if (
-    !d ||
-    typeof d.lineStart !== "number" ||
-    typeof d.lineEnd !== "number"
-  ) {
+  if (!d || typeof d.lineStart !== "number" || typeof d.lineEnd !== "number") {
     return {};
   }
   const isSegmentRead =

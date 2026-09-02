@@ -19,6 +19,7 @@ import {
   OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX,
 } from "./outputScrollConstants";
 import type { OutputScrollTarget } from "@store/uiStore";
+import { OUTPUT_SCROLL_TARGET_KINDS } from "@root/types/DashboardConstants";
 
 export interface AutoscrollLatchInput {
   /** Current gap between the viewport bottom and the content bottom. */
@@ -310,7 +311,10 @@ export function resolveDiffGapExpansionScrollTarget(
   rowKey: string,
   insertedHeightPx: number
 ): OutputScrollTarget | null {
-  if (currentTarget.kind !== "row" || currentTarget.rowKey !== rowKey) {
+  if (
+    currentTarget.kind !== OUTPUT_SCROLL_TARGET_KINDS.ROW ||
+    currentTarget.rowKey !== rowKey
+  ) {
     return null;
   }
   if (Math.abs(insertedHeightPx) < 1) {

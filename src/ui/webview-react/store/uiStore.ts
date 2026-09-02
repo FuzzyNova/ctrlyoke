@@ -42,6 +42,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   type UserFeedbackSeverity,
   HISTORY_EVENT_KINDS,
+  OUTPUT_SCROLL_TARGET_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import {
@@ -297,8 +298,12 @@ export interface MobilePanelSizes {
 }
 
 export type OutputScrollTarget =
-  | { kind: "row"; rowKey: string; viewportOffsetPx: number }
-  | { kind: "bottom" };
+  | {
+      kind: typeof OUTPUT_SCROLL_TARGET_KINDS.ROW;
+      rowKey: string;
+      viewportOffsetPx: number;
+    }
+  | { kind: typeof OUTPUT_SCROLL_TARGET_KINDS.BOTTOM };
 
 export interface PendingOutputFindRequest {
   query: string;
@@ -397,10 +402,10 @@ export function areOutputScrollTargetsEqual(
   if (!left || !right || left.kind !== right.kind) {
     return false;
   }
-  if (left.kind === "bottom") {
+  if (left.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM) {
     return true;
   }
-  if (right.kind !== "row") {
+  if (right.kind !== OUTPUT_SCROLL_TARGET_KINDS.ROW) {
     return false;
   }
 

@@ -19,6 +19,7 @@ import {
   type PagedFileHistoryFetcher,
 } from "@hooks/usePagedFileHistory";
 import type { WorkspaceFileHistoryEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import { DIFF_FILE_SOURCE_KINDS } from "@root/types/DashboardConstants";
 
 export interface DiffFileHistoryListProps {
   path: string;
@@ -55,7 +56,7 @@ function cardProps(
     findQuery,
     findCaseSensitive,
     source: {
-      kind: "deferred",
+      kind: DIFF_FILE_SOURCE_KINDS.DEFERRED,
       commit: entry.hash,
       state: "not-loaded",
       ...(repo === undefined ? {} : { repo }),
@@ -137,7 +138,7 @@ export function DiffFileHistoryList({
             path,
             changeType: "modified",
             source: {
-              kind: "deferred",
+              kind: DIFF_FILE_SOURCE_KINDS.DEFERRED,
               commit: `placeholder-${index}`,
               state: "not-loaded",
             },

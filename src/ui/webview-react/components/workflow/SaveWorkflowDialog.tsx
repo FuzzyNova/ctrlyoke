@@ -12,6 +12,7 @@ import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
 import {
   KEYBOARD_KEYS,
+  SETTING_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
@@ -292,7 +293,9 @@ export const SaveWorkflowDialog: React.FC = () => {
   // Preview of the final file path, shown at the bottom of the dialog so
   // the user can see exactly what will be written before hitting Save.
   const templateDirPreview =
-    templateScope === "user" ? "~/.ctrlyoke/templates" : ".ctrlyoke/templates";
+    templateScope === SETTING_SCOPES.USER
+      ? "~/.ctrlyoke/templates"
+      : ".ctrlyoke/templates";
   const previewPath = saveAsTemplate
     ? `${templateDirPreview}/${templateName.trim() || "…"}.ctrlyoke.${templateFormat}`
     : workflowPreviewPath;

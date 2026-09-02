@@ -1,3 +1,8 @@
+import {
+  DIFF_VIEW_TYPES,
+  type DiffViewType,
+} from "@root/types/DashboardConstants";
+
 /**
  * Measured DOM geometry of the output pane's rows.
  *
@@ -160,7 +165,7 @@ export function diffCharWidth(outputFontSize: number): number {
  * which is the signature of lost width rather than of a bad wrap model.
  */
 export function diffHorizontalChrome(
-  viewType: "split" | "unified",
+  viewType: DiffViewType,
   outputFontSize: number
 ): number {
   const codeColumns = diffCodeColumns(viewType);
@@ -175,8 +180,8 @@ export function diffHorizontalChrome(
 }
 
 /** Code columns the diff table renders: one for unified, one per side for split. */
-export function diffCodeColumns(viewType: "split" | "unified"): number {
-  return viewType === "split" ? 2 : 1;
+export function diffCodeColumns(viewType: DiffViewType): number {
+  return viewType === DIFF_VIEW_TYPES.SPLIT ? 2 : 1;
 }
 
 /** `.diff-gutter-col { width: 7ch }`, rendered twice by both view types. */

@@ -387,6 +387,13 @@ export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
   "gpt-oss-120b-medium": "GPT-OSS 120B (Medium)",
 };
 
+const MODEL_LABEL_HARNESS_IDS = {
+  CLAUDE_CLI: "claude-cli",
+  CODEX_CLI: "codex-cli",
+  ANTIGRAVITY_CLI: "antigravity-cli",
+  QWEN_CLI: "qwen-cli",
+} as const;
+
 export function getAntigravityModelName(model: string): string | undefined {
   if (ANTIGRAVITY_CLI_MODELS.includes(model as any)) {
     return model;
@@ -426,13 +433,13 @@ export function getHarnessModelDisplayName(
   modelId: string
 ): string {
   switch (harnessId) {
-    case "claude-cli":
+    case MODEL_LABEL_HARNESS_IDS.CLAUDE_CLI:
       return CLAUDE_CLI_MODEL_LABELS[modelId] ?? modelId;
-    case "codex-cli":
+    case MODEL_LABEL_HARNESS_IDS.CODEX_CLI:
       return CODEX_CLI_MODEL_LABELS[modelId] ?? modelId;
-    case "antigravity-cli":
+    case MODEL_LABEL_HARNESS_IDS.ANTIGRAVITY_CLI:
       return ANTIGRAVITY_CLI_MODEL_LABELS[modelId] ?? modelId;
-    case "qwen-cli":
+    case MODEL_LABEL_HARNESS_IDS.QWEN_CLI:
       return QWEN_CLI_MODEL_LABELS[modelId] ?? modelId;
     default:
       return COPILOT_CLI_MODEL_LABELS[modelId] ?? modelId;

@@ -23,6 +23,104 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Completion trigger discriminants shared by the extension host and webview. */
+export const COMPLETION_TRIGGERS = {
+  SLASH: "/",
+  AT: "@",
+  HASH: "#",
+  TILDE: "~",
+  DOLLAR: "$",
+  BANG: "!",
+  PATH: "path",
+} as const;
+
+export type CompletionTrigger =
+  (typeof COMPLETION_TRIGGERS)[keyof typeof COMPLETION_TRIGGERS];
+
+/** Build modes consumed by the Vite webview configuration. */
+export const BUILD_MODES = {
+  PRODUCTION: "production",
+} as const;
+
+/** Standard JavaScript error names used by browser-facing async flows. */
+export const ERROR_NAMES = {
+  ABORT: "AbortError",
+} as const;
+
+/** Language IDs recognized by prompt-file completion and navigation providers. */
+export const PROMPT_FILE_LANGUAGE_IDS = {
+  JSON: WORKFLOW_FILE_FORMATS.JSON,
+  JSONC: "jsonc",
+  MARKDOWN: "markdown",
+  PROMPT: "prompt",
+  YAML: WORKFLOW_FILE_FORMATS.YAML,
+  YML: "yml",
+} as const;
+
+/** Bases used when resolving workspace-relative prompt references. */
+export const REFERENCE_PATH_BASES = {
+  ABSOLUTE: "absolute",
+  WORKFLOW: "workflow",
+  NAMED_ROOT: "namedRoot",
+  WORKSPACE: "workspace",
+  SOURCE_RUNTIME_STORE: "sourceRuntimeStore",
+} as const;
+
+/** Query keys accepted by the hosted workspace tree endpoint. */
+export const WORKSPACE_TREE_QUERY_KEYS = {
+  PATH: "path",
+} as const;
+
+/** Line-ending names used by text-file transport and persistence. */
+export const LINE_ENDINGS = {
+  LF: "lf",
+  CRLF: "crlf",
+} as const;
+
+/** Node network-interface address families used by hosted-server discovery. */
+export const NETWORK_INTERFACE_FAMILIES = {
+  IPV4: "IPv4",
+} as const;
+
+/** Promise settlement states used when inspecting concurrent operations. */
+export const PROMISE_SETTLED_STATUSES = {
+  FULFILLED: "fulfilled",
+  REJECTED: "rejected",
+} as const;
+
+/** Language IDs for workspace files identified by their full filename. */
+export const WORKSPACE_FILE_LANGUAGE_IDS = {
+  DOCKERFILE: "dockerfile",
+} as const;
+
+/** Canonical language IDs supported by the workspace CodeMirror editor. */
+export const CODEMIRROR_LANGUAGE_IDS = {
+  JAVASCRIPT: "javascript",
+  JSX: "jsx",
+  TYPESCRIPT: "typescript",
+  TSX: "tsx",
+  PYTHON: "python",
+  RUST: "rust",
+  JSON: "json",
+  MARKUP: "markup",
+  CSS: "css",
+  SCSS: "scss",
+  YAML: "yaml",
+  MARKDOWN: "markdown",
+  JAVA: "java",
+  CPP: "cpp",
+  C: "c",
+  PHP: "php",
+} as const;
+
+export type CodeMirrorLanguageId =
+  (typeof CODEMIRROR_LANGUAGE_IDS)[keyof typeof CODEMIRROR_LANGUAGE_IDS];
+
+/** VS Code URI schemes used by extension-host integrations. */
+export const VSCODE_URI_SCHEMES = {
+  OUTPUT: "output",
+} as const;
+
 /** Name of the manifest that identifies a ctrlyoke-managed bundle assets directory. */
 export const BUNDLE_MANIFEST_FILE_NAME = ".ctrlyoke-assets.json";
 
@@ -47,6 +145,18 @@ export type StatusLineTrackingProvider =
 export const BOOLEAN_STRING_VALUES = {
   TRUE: "true",
   FALSE: "false",
+} as const;
+
+/** Boolean-like stdout values accepted by script condition evaluation. */
+export const SCRIPT_BOOLEAN_OUTPUT_VALUES = {
+  TRUE_NUMERIC: "1",
+  TRUE_YES: "yes",
+  TRUE_PASS: "pass",
+  TRUE_PASSED: "passed",
+  FALSE_NUMERIC: "0",
+  FALSE_NO: "no",
+  FALSE_FAIL: "fail",
+  FALSE_FAILED: "failed",
 } as const;
 
 /** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
@@ -541,6 +651,22 @@ export const BROWSER_NOTIFICATION_MODES = {
 export type BrowserNotificationMode =
   (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
 
+/** Permission states reported by the browser Notification API. */
+export const BROWSER_NOTIFICATION_PERMISSION_STATES = {
+  UNSUPPORTED: "unsupported",
+  BLOCKED: "blocked",
+  NEEDS_PERMISSION: "needs-permission",
+  GRANTED: "granted",
+} as const;
+
+export type BrowserPermissionStatus =
+  (typeof BROWSER_NOTIFICATION_PERMISSION_STATES)[keyof typeof BROWSER_NOTIFICATION_PERMISSION_STATES];
+
+/** Browser document visibility states used by notification and badge flows. */
+export const DOCUMENT_VISIBILITY_STATES = {
+  VISIBLE: "visible",
+} as const;
+
 export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
   INCREMENT_NOTIFICATION_BADGE: "ctrlyoke:incrementNotificationBadge",
   CLEAR_NOTIFICATION_BADGE: "ctrlyoke:clearNotificationBadge",
@@ -676,6 +802,40 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
+/** Commands emitted by the workflow runtime state machine. */
+export const WORKFLOW_RUNTIME_COMMANDS = {
+  START_EXECUTION: "startExecution",
+  PAUSE: "pause",
+  CONFIRM_PAUSED: "confirmPaused",
+  CANCEL_PAUSE: "cancelPause",
+  RESUME: "resume",
+  REQUEST_STOP: "requestStop",
+  CONFIRM_STOPPED: "confirmStopped",
+  COMPLETE: "complete",
+  FAIL: "fail",
+  REOPEN_FOR_CONTINUATION: "reopenForContinuation",
+} as const;
+
+/** Actions exposed by the workflow execution control buttons. */
+export const WORKFLOW_EXECUTION_CONTROL_ACTIONS = {
+  RUN_DRAFT: "run-draft",
+  START_RUN: "start-run",
+  RERUN: "rerun",
+  RESTART: "restart",
+  CONTINUE: "continue",
+  PAUSE: "pause",
+  CANCEL_PAUSE: "cancel-pause",
+  RESUME: "resume",
+  STOP: "stop",
+  NONE: "none",
+} as const;
+
+export type WorkflowExecutionControlAction =
+  (typeof WORKFLOW_EXECUTION_CONTROL_ACTIONS)[keyof typeof WORKFLOW_EXECUTION_CONTROL_ACTIONS];
+
+export type WorkflowRuntimeCommand =
+  (typeof WORKFLOW_RUNTIME_COMMANDS)[keyof typeof WORKFLOW_RUNTIME_COMMANDS];
+
 /** Lifecycle states in which a run may still be owned by an executor. */
 export const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
   EXECUTION_STATES.RUNNING,
@@ -756,6 +916,16 @@ export const PROMPT_FILE_RESOLUTION_STATUSES = {
   RESOLVED: "resolved",
 } as const;
 
+/** How a working file reload is applied to the current queue. */
+export const PROMPT_FILE_RELOAD_MODES = {
+  REPLACE: "replace",
+  MERGE: "merge",
+  AUTO: "auto",
+} as const;
+
+export type PromptFileReloadMode =
+  (typeof PROMPT_FILE_RELOAD_MODES)[keyof typeof PROMPT_FILE_RELOAD_MODES];
+
 export type PromptFileResolutionStatus =
   (typeof PROMPT_FILE_RESOLUTION_STATUSES)[keyof typeof PROMPT_FILE_RESOLUTION_STATUSES];
 
@@ -823,6 +993,8 @@ export const CLAUDE_TOOL_NAMES = {
   AGENT: "Agent",
   MONITOR: "Monitor",
   TASK_STOP: "TaskStop",
+  ASK_USER_QUESTION: "AskUserQuestion",
+  MULTI_EDIT: "multiedit",
 } as const;
 
 /** Metrics available in the workspace harness-share breakdown. */
@@ -1002,12 +1174,23 @@ export const PREVIEW_STATUSES = {
   READY: "ready",
 } as const;
 
+/** Navigation selection used by the workflow-level execution preview. */
+export const PREVIEW_RAIL_SELECTIONS = {
+  OVERVIEW: "overview",
+} as const;
+
 export const PREVIEW_STEP_TYPES = {
   PROMPT: "prompt",
   SCRIPT: "script",
 } as const;
 
 export const PREVIEW_PERMISSION_ACTIONS = {
+  ALLOW: "allow",
+  DENY: "deny",
+} as const;
+
+/** Durable trust-store decisions shared by workspace trust stores. */
+export const TRUST_DECISIONS = {
   ALLOW: "allow",
   DENY: "deny",
 } as const;
@@ -1129,6 +1312,18 @@ export const MCP_CAPABILITY_KEYS = {
   PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
+export const MCP_SECRET_CONFIG_MODES = {
+  REFERENCE: "reference",
+  SUBSTITUTE: "substitute",
+} as const;
+
+// ============================================================================
+// HARNESS CONFIG KEYS - Shared keys in harness-owned JSON configuration
+// ============================================================================
+export const HARNESS_CONFIG_KEYS = {
+  PERMISSION: "permission",
+} as const;
+
 // ============================================================================
 // MCP TRANSPORTS - Remote MCP protocol values
 // ============================================================================
@@ -1138,6 +1333,25 @@ export const MCP_TRANSPORTS = {
 } as const;
 
 export type McpTransport = (typeof MCP_TRANSPORTS)[keyof typeof MCP_TRANSPORTS];
+
+/** Entry types and property names used by native MCP configuration formats. */
+export const MCP_CONFIG_ENTRY_TYPES = {
+  HTTP: "http",
+  LOCAL: "local",
+  REMOTE: "remote",
+  STDIO: "stdio",
+} as const;
+
+export const MCP_CONFIG_KEYS = {
+  COMMAND: "command",
+  ENV: "env",
+  HEADERS: "headers",
+} as const;
+
+/** Package registry identifiers used by the public MCP registry. */
+export const MCP_REGISTRY_PACKAGE_TYPES = {
+  NPM: "npm",
+} as const;
 
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   INFO: "info",
@@ -1306,6 +1520,11 @@ export const HOOK_EVENT_NAMES = {
   ERROR: "error",
 } as const;
 
+/** Exact provider payload event names used by notification monitors. */
+export const NOTIFICATION_HOOK_EVENTS = {
+  STOP: "Stop",
+} as const;
+
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
@@ -1406,6 +1625,27 @@ export const WORKTREE_LIFECYCLE_OWNERS = {
 export type WorktreeLifecycleOwner =
   (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 
+export const WORKTREE_LIFECYCLE_STATES = {
+  PROVISIONING: "provisioning",
+  READY: "ready",
+  FINALIZING: "finalizing",
+  SETTLED: "settled",
+  BLOCKED: "blocked",
+  ORPHANED: "orphaned",
+} as const;
+
+/**
+ * Display-only worktree management states used by the settings UI. These are
+ * intentionally separate from the orchestration lifecycle/state contracts.
+ */
+export const WORKTREE_UI_STATUSES = {
+  BRANCH_PRESENT: "present",
+  DIRECTORY_REMOVED: "removed",
+} as const;
+
+export type WorktreeLifecycleState =
+  (typeof WORKTREE_LIFECYCLE_STATES)[keyof typeof WORKTREE_LIFECYCLE_STATES];
+
 // ============================================================================
 // WORKTREE EDIT KINDS - Lineage preparation and start-position edit kinds
 // ============================================================================
@@ -1438,6 +1678,15 @@ export const WORKTREE_DIRECTORY_STATES = {
 export type WorktreeDirectoryState =
   (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
 
+export const WORKTREE_DIRECTORY_OUTCOMES = {
+  REMOVED: WORKTREE_DIRECTORY_STATES.REMOVED,
+  KEPT: "kept",
+  REMOVE_FAILED: "remove-failed",
+} as const;
+
+export type WorktreeDirectoryOutcome =
+  (typeof WORKTREE_DIRECTORY_OUTCOMES)[keyof typeof WORKTREE_DIRECTORY_OUTCOMES];
+
 export const WORKTREE_BRANCH_STATES = {
   PRESENT: "present",
   DELETED: "deleted",
@@ -1465,6 +1714,15 @@ export const WORKTREE_LANDING_OUTCOMES = {
 
 export type WorktreeLandingOutcome =
   (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+
+export const WORKTREE_RECOVERY_OUTCOMES = {
+  LANDED: WORKTREE_LANDING_OUTCOMES.LANDED,
+  NO_CHANGES: WORKTREE_LANDING_OUTCOMES.NO_CHANGES,
+  ORPHANED: "orphaned",
+} as const;
+
+export type WorktreeRecoveryOutcome =
+  (typeof WORKTREE_RECOVERY_OUTCOMES)[keyof typeof WORKTREE_RECOVERY_OUTCOMES];
 
 export const WORKTREE_MERGE_OUTCOMES = {
   FAST_FORWARD: "fast-forward",
@@ -1512,6 +1770,14 @@ export const EXECUTION_MODES = {
   INTERACTIVE: "interactive",
   HEADLESS: "headless",
 } as const;
+
+export const HEADLESS_SOURCE_MODES = {
+  STDOUT: "stdout",
+  LOG: "log",
+} as const;
+
+export type HeadlessSourceMode =
+  (typeof HEADLESS_SOURCE_MODES)[keyof typeof HEADLESS_SOURCE_MODES];
 
 export const CONTEXT_RESOLUTION_FAILURE_MODES = {
   WARN: "warn",
@@ -1849,6 +2115,22 @@ export const SESSION_KINDS = {
 } as const;
 
 // ============================================================================
+// SHELL TYPES - Executable names recognized when inferring a shell kind
+// ============================================================================
+export const SHELL_TYPES = {
+  BASH: "bash",
+  ZSH: "zsh",
+  FISH: "fish",
+  WSL: "wsl",
+  NU: "nu",
+  NUSHELL: "nushell",
+  SH: "sh",
+  DASH: "dash",
+  KSH: "ksh",
+  CMD: "cmd",
+} as const;
+
+// ============================================================================
 // SHELL KINDS - Specific shell variant for SHELL sessions
 // ============================================================================
 export const SHELL_KINDS = {
@@ -1857,19 +2139,19 @@ export const SHELL_KINDS = {
   /** Windows PowerShell 5.1 fallback (powershell.exe) */
   POWERSHELL: "powershell",
   /** zsh */
-  ZSH: "zsh",
+  ZSH: SHELL_TYPES.ZSH,
   /** bash */
-  BASH: "bash",
+  BASH: SHELL_TYPES.BASH,
   /** POSIX sh / dash / ksh-style shells */
-  SH: "sh",
+  SH: SHELL_TYPES.SH,
   /** fish shell */
-  FISH: "fish",
+  FISH: SHELL_TYPES.FISH,
   /** Windows Command Prompt */
-  CMD: "cmd",
+  CMD: SHELL_TYPES.CMD,
   /** WSL launcher */
-  WSL: "wsl",
+  WSL: SHELL_TYPES.WSL,
   /** Nushell */
-  NUSHELL: "nu",
+  NUSHELL: SHELL_TYPES.NU,
 } as const;
 
 export type ShellKind = (typeof SHELL_KINDS)[keyof typeof SHELL_KINDS];
@@ -1948,6 +2230,36 @@ export const PROPERTY_EDITOR_MODES = {
 export type PropertyEditorMode =
   (typeof PROPERTY_EDITOR_MODES)[keyof typeof PROPERTY_EDITOR_MODES];
 
+/** Tabs exposed by the global settings drawer. */
+export const GLOBAL_SETTINGS_TABS = {
+  GENERAL: "general",
+  WORKFLOW: "workflow",
+  EXECUTION: "execution",
+  QUEUE: "queue",
+  WORKTREES: "worktrees",
+  TERMINAL: "terminal",
+  STATUS_LINE: "statusline",
+  COMMIT: "commit",
+  PERMISSIONS: "permissions",
+  SECRETS: "secrets",
+  SERVER: "server",
+  AGENT_SKILLS_MANAGER: "agentskillsmanager",
+  MCP_MANAGER: "mcpmanager",
+  NOTIFICATIONS: "notifications",
+  STATS: "stats",
+  LICENSE: "license",
+  DEVELOPER: "developer",
+} as const;
+
+export type GlobalSettingsTab =
+  (typeof GLOBAL_SETTINGS_TABS)[keyof typeof GLOBAL_SETTINGS_TABS];
+
+/** Text values used by the Resume Session dropdown. */
+export const RESUME_SESSION_SELECTIONS = {
+  YES: "yes",
+  NO: "no",
+} as const;
+
 // ============================================================================
 // CODEMIRROR EDITOR MODES - Context modes for the prompt editor
 // ============================================================================
@@ -2003,6 +2315,16 @@ export const DIFF_CHANGE_TYPES = {
 export type DiffChangeType =
   (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
 
+/** Line discriminants produced by the raw-content diff renderer. */
+export const DIFF_LINE_TYPES = {
+  ADDED: "added",
+  REMOVED: "removed",
+  CONTEXT: "context",
+} as const;
+
+export type DiffLineType =
+  (typeof DIFF_LINE_TYPES)[keyof typeof DIFF_LINE_TYPES];
+
 // ============================================================================
 // FILE OPERATION KINDS - File-operation and prompt undo change discriminants
 // ============================================================================
@@ -2040,6 +2362,92 @@ export type DiffPayloadKind =
   (typeof DIFF_PAYLOAD_KINDS)[keyof typeof DIFF_PAYLOAD_KINDS];
 
 // ============================================================================
+// DIFF FILE SOURCE KINDS - Render-source discriminants for diff file cards
+// ============================================================================
+export const DIFF_FILE_SOURCE_KINDS = {
+  HUNKS: "hunks",
+  PATCH: "patch",
+  DEFERRED: "deferred",
+} as const;
+
+export type DiffFileSourceKind =
+  (typeof DIFF_FILE_SOURCE_KINDS)[keyof typeof DIFF_FILE_SOURCE_KINDS];
+
+// ============================================================================
+// DIFF VIEW TYPES - Layout variants used by diff renderers and metrics
+// ============================================================================
+export const DIFF_VIEW_TYPES = {
+  SPLIT: "split",
+  UNIFIED: "unified",
+} as const;
+
+export type DiffViewType =
+  (typeof DIFF_VIEW_TYPES)[keyof typeof DIFF_VIEW_TYPES];
+
+// ============================================================================
+// DIFF SIDES - Old/new sides of a rendered diff
+// ============================================================================
+export const DIFF_SIDES = {
+  OLD: "old",
+  NEW: "new",
+} as const;
+
+export type DiffSide = (typeof DIFF_SIDES)[keyof typeof DIFF_SIDES];
+
+// ============================================================================
+// DIFF TOKEN TYPES - Token discriminants emitted by react-diff-view
+// ============================================================================
+export const DIFF_TOKEN_TYPES = {
+  MARK: "mark",
+} as const;
+
+export type DiffTokenType =
+  (typeof DIFF_TOKEN_TYPES)[keyof typeof DIFF_TOKEN_TYPES];
+
+/** Mark subtypes used by diff find highlighting. */
+export const DIFF_MARK_TYPES = {
+  FIND: "find",
+  FIND_ACTIVE: "find-active",
+} as const;
+
+export type DiffMarkType =
+  (typeof DIFF_MARK_TYPES)[keyof typeof DIFF_MARK_TYPES];
+
+// ============================================================================
+// DIFF FILE LIST ROW KINDS - Virtualized diff-list row discriminants
+// ============================================================================
+export const DIFF_FILE_LIST_ROW_KINDS = {
+  SELECTION_SUMMARY: "selection-summary",
+  GROUP_HEADING: "group-heading",
+} as const;
+
+export type DiffFileListRowKind =
+  (typeof DIFF_FILE_LIST_ROW_KINDS)[keyof typeof DIFF_FILE_LIST_ROW_KINDS];
+
+// ============================================================================
+// CONTENT PREVIEW LANGUAGES - Transient modal export format discriminants
+// ============================================================================
+export const CONTENT_PREVIEW_LANGUAGES = {
+  DIFF: "diff",
+  JSON: "json",
+  XML: "xml",
+} as const;
+
+export type ContentPreviewLanguage =
+  (typeof CONTENT_PREVIEW_LANGUAGES)[keyof typeof CONTENT_PREVIEW_LANGUAGES];
+
+// ============================================================================
+// UNDO DIALOG SCOPE MODES - Scope discriminants for undo/redo dialogs
+// ============================================================================
+export const UNDO_DIALOG_SCOPE_MODES = {
+  PROMPT: "prompt",
+  SINGLE_FILE: "singleFile",
+} as const;
+
+export type UndoDialogScopeMode =
+  (typeof UNDO_DIALOG_SCOPE_MODES)[keyof typeof UNDO_DIALOG_SCOPE_MODES];
+
+// ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type
 // ============================================================================
 export const STEP_TYPES = {
@@ -2056,6 +2464,24 @@ export const CONDITION_ACTIONS = {
   RETRY: "retry",
   SKIP_PROMPT: "skipPrompt",
 } as const;
+
+/** Retry paths used by end-condition handling. */
+export const RETRY_KINDS = {
+  PASS: "pass",
+  FAILURE: "failure",
+} as const;
+
+export type RetryKind = (typeof RETRY_KINDS)[keyof typeof RETRY_KINDS];
+
+/** Outcomes returned by one phase of the workflow executor. */
+export const WORKFLOW_EXECUTION_OUTCOMES = {
+  CONTINUE: CONDITION_ACTIONS.CONTINUE,
+  RETRY: CONDITION_ACTIONS.RETRY,
+  STOP: "stop",
+} as const;
+
+export type WorkflowExecutionOutcome =
+  (typeof WORKFLOW_EXECUTION_OUTCOMES)[keyof typeof WORKFLOW_EXECUTION_OUTCOMES];
 
 // ============================================================================
 // COMPARE_SOURCES - compareSource values for script evaluation
@@ -2088,6 +2514,44 @@ export const SCRIPT_OUTPUT_SOURCES = {
   WORKTREE_SETUP: "worktreeSetup",
 } as const;
 
+/** Scope values for templates stored in user or workspace state. */
+export const TEMPLATE_SCOPES = {
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
+export type TemplateScope =
+  (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
+
+/** IDs for built-in templates whose content is generated or bundled. */
+export const TEMPLATE_IDS = {
+  BLANK: "blank",
+} as const;
+
+/** Sources reported for user-created and workspace-discovered templates. */
+export const TEMPLATE_SOURCES = {
+  USER: "user",
+} as const;
+
+/** Message discriminants exchanged with the history-index rebuild worker. */
+export const HISTORY_SEARCH_REBUILD_MESSAGE_TYPES = {
+  PROGRESS: "progress",
+  SUCCESS: "success",
+  ERROR: "error",
+} as const;
+
+export type HistorySearchRebuildMessageType =
+  (typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES)[keyof typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES];
+
+/** Scope values projected for files changed during a run. */
+export const RUN_FILE_CHANGE_SCOPES = {
+  WORKSPACE: "workspace",
+  EXTERNAL: "external",
+} as const;
+
+export type RunFileChangeScope =
+  (typeof RUN_FILE_CHANGE_SCOPES)[keyof typeof RUN_FILE_CHANGE_SCOPES];
+
 // ============================================================================
 // HISTORY SEARCH TAXONOMY - Independent event and matched-field dimensions
 // ============================================================================
@@ -2117,6 +2581,7 @@ export const HISTORY_MATCH_FIELDS = {
   DIFF: "diff",
   COMMAND: "command",
   OUTPUT: "output",
+  RESPONSE: "response",
   ERROR: "error",
 } as const;
 
@@ -2185,6 +2650,13 @@ export const PROMPT_PROPERTIES = {
   EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
+} as const;
+
+/** Rendering variants supported by the shared script condition editor. */
+export const SCRIPT_CONDITION_VARIANTS = {
+  END_CONDITION: PROMPT_PROPERTIES.END_CONDITION,
+  PRE_CONDITION: PROMPT_PROPERTIES.PRE_CONDITION,
+  SCRIPT_STEP: "scriptStep",
 } as const;
 
 /**
@@ -2285,6 +2757,11 @@ export const CLI_EVENT_TYPES = {
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
+export const CLI_OUTPUT_METADATA_KEYS = {
+  TIMESTAMP: "timestamp",
+  TOTAL_CONFIDENCE: "totalConfidence",
+} as const;
+
 /**
  * What triggered a context compaction event.
  * Used by CompactionData.trigger across all harnesses (Claude, OpenCode, etc.)
@@ -2318,6 +2795,62 @@ export const RUNNER_IDS = {
 } as const;
 
 // ============================================================================
+// WORKFLOW LOCK STATES - Runner-lock liveness and locality classifications
+// ============================================================================
+export const WORKFLOW_LOCK_LIVENESS = {
+  ABSENT: "absent",
+  STALE: "stale",
+  ACTIVE: "active",
+} as const;
+
+export type WorkflowLockLiveness =
+  (typeof WORKFLOW_LOCK_LIVENESS)[keyof typeof WORKFLOW_LOCK_LIVENESS];
+
+export const WORKFLOW_LOCK_LOCALITIES = {
+  SELF: "self",
+  EXTERNAL: "external",
+  INDETERMINATE: "indeterminate",
+} as const;
+
+export type WorkflowLockLocality =
+  (typeof WORKFLOW_LOCK_LOCALITIES)[keyof typeof WORKFLOW_LOCK_LOCALITIES];
+
+// ============================================================================
+// EXTERNAL EXECUTION - Resolver discriminants and rejection reasons
+// ============================================================================
+export const EXTERNAL_EXECUTION_RESOLUTION_KINDS = {
+  NOT_EXTERNAL: "not-external",
+  EXTERNAL_ACTIVE_RUN: "external-active-run",
+} as const;
+
+export type ExternalExecutionResolutionKind =
+  (typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS)[keyof typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS];
+
+export const EXTERNAL_EXECUTION_REASONS = {
+  TERMINAL_RUN: "terminal-run",
+  NO_ACTIVE_LOCK: "no-active-lock",
+  SELF_OWNED: "self-owned",
+  INDETERMINATE_OWNER: "indeterminate-owner",
+  RUN_REF_MISMATCH: "run-ref-mismatch",
+  UNREADABLE_WORKING_FILE: "unreadable-working-file",
+} as const;
+
+export type ExternalExecutionReason =
+  (typeof EXTERNAL_EXECUTION_REASONS)[keyof typeof EXTERNAL_EXECUTION_REASONS];
+
+export const EXTERNAL_EXECUTION_DECISION_STATES = {
+  NOT_INSPECTED: "not-inspected",
+} as const;
+
+export const EXTERNAL_EXECUTION_WATCH_ACTIONS = {
+  ELIGIBLE: "eligible",
+  REJECTED: "rejected",
+} as const;
+
+export type ExternalExecutionWatchAction =
+  (typeof EXTERNAL_EXECUTION_WATCH_ACTIONS)[keyof typeof EXTERNAL_EXECUTION_WATCH_ACTIONS];
+
+// ============================================================================
 // PERMISSION MODES - Tool permission mode values
 // ============================================================================
 export const PERMISSION_MODES = {
@@ -2329,6 +2862,40 @@ export const PERMISSION_MODES = {
 
 export type PermissionMode =
   (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
+
+// ============================================================================
+// TOOL PERMISSION CATEGORIES - Shared tool categories used by permission rules
+// ============================================================================
+export const TOOL_PERMISSION_CATEGORIES = {
+  BASH: "bash",
+  SHELL: "shell",
+  READ: "read",
+  WRITE: "write",
+  EDIT: "edit",
+  MCP: "mcp",
+  GIT: "git",
+} as const;
+
+export const PERSISTENT_VALUE_INSTALL_RESULT_KINDS = {
+  NO_OP: "no-op",
+  WRITTEN: "written",
+  DECLINED: "declined",
+} as const;
+
+export type ToolPermissionCategory =
+  (typeof TOOL_PERMISSION_CATEGORIES)[keyof typeof TOOL_PERMISSION_CATEGORIES];
+
+/** Tool names used by the output pane's compact tool-badge previews. */
+export const OUTPUT_TOOL_BADGE_LABELS = {
+  BASH: "bash",
+  SHELL: "shell",
+  READ: "read",
+  WRITE: "write",
+  EDIT: "edit",
+} as const;
+
+export type OutputToolBadgeLabel =
+  (typeof OUTPUT_TOOL_BADGE_LABELS)[keyof typeof OUTPUT_TOOL_BADGE_LABELS];
 
 // ============================================================================
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
@@ -2398,6 +2965,41 @@ export const OUTPUT_TABS = {
 } as const;
 
 export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
+
+// ============================================================================
+// OUTPUT SCROLL TARGETS - Persisted output-pane anchor discriminants
+// ============================================================================
+export const OUTPUT_SCROLL_TARGET_KINDS = {
+  ROW: "row",
+  BOTTOM: "bottom",
+} as const;
+
+export type OutputScrollTargetKind =
+  (typeof OUTPUT_SCROLL_TARGET_KINDS)[keyof typeof OUTPUT_SCROLL_TARGET_KINDS];
+
+/** Alignment modes used when navigating output rows. */
+export const OUTPUT_SCROLL_ALIGNMENTS = {
+  START: "start",
+  CENTER: "center",
+  END: "end",
+} as const;
+
+export type OutputScrollAlignment =
+  (typeof OUTPUT_SCROLL_ALIGNMENTS)[keyof typeof OUTPUT_SCROLL_ALIGNMENTS];
+
+/** DOM anchor modes used when capturing a viewport row reference. */
+export const OUTPUT_SCROLL_ANCHOR_MODES = {
+  CENTER_POINT: "center-point",
+  VISIBLE_TOP: "visible-top",
+} as const;
+
+export type OutputScrollAnchorMode =
+  (typeof OUTPUT_SCROLL_ANCHOR_MODES)[keyof typeof OUTPUT_SCROLL_ANCHOR_MODES];
+
+/** Default labels used by structured output renderers. */
+export const OUTPUT_DEFAULT_LABELS = {
+  THINKING: "Thinking",
+} as const;
 
 // ============================================================================
 // OUTPUT ROW KINDS - Discriminants for rendered output rows
@@ -2476,6 +3078,52 @@ export type RunSummaryCacheStatus =
 export const KEYBOARD_KEYS = {
   ENTER: "Enter",
   ESCAPE: "Escape",
+  ARROW_UP: "ArrowUp",
+  ARROW_DOWN: "ArrowDown",
+} as const;
+
+/** Visual variants supported by shared action buttons. */
+export const BUTTON_VARIANTS = {
+  PRIMARY: "primary",
+  SECONDARY: "secondary",
+} as const;
+
+/** Workflow dropdown views shared by the status control and its panels. */
+export const WORKFLOW_DROPDOWN_VIEWS = {
+  WORKFLOWS: "workflows",
+  RUNS: "runs",
+} as const;
+
+/** File-picker modes used by workflow load and queue actions. */
+export const WORKFLOW_FILE_PICKER_MODES = {
+  LOAD: "load",
+  QUEUE: "queue",
+} as const;
+
+/** Row categories used by the unified workflow dropdown list. */
+export const WORKFLOW_ROW_KINDS = {
+  RUNNING: "running",
+  RECENT: "recent",
+} as const;
+
+/** Layout tiers used by workflow dropdown rows. */
+export const WORKFLOW_ROW_TIERS = {
+  STACKED: "stacked",
+  COMPACT: "compact",
+} as const;
+
+/** Mobile steps drawer presentation modes. */
+export const MOBILE_STEPS_MODES = {
+  SIDEBAR: "sidebar",
+  FULLWIDTH: "fullwidth",
+} as const;
+
+/** Transient feedback states for the developer UX snapshot button. */
+export const UX_SNAPSHOT_STATUSES = {
+  IDLE: "idle",
+  CAPTURING: "capturing",
+  SAVED: "saved",
+  ERROR: "error",
 } as const;
 
 // ============================================================================
@@ -2494,12 +3142,18 @@ export const NONE_OPTION = "none" as const;
 export const SCRIPT_MATCH_RULE_NONE = "none" as const;
 
 // ============================================================================
-// ATOMIC REFERENCE KINDS - @-mention file/directory/symbol references
+// ATOMIC REFERENCE KINDS - Atomic file/context references across UI layers
 // ============================================================================
 export const ATOMIC_REFERENCE_KINDS = {
   FILE: "file",
   DIRECTORY: "directory",
   SYMBOL: "symbol",
+  LINE_RANGE: "lineRange",
+  GIT: "git",
+  PRIOR_CONTEXT: "priorContext",
+  SKILL: "skill",
+  MCP: "mcp",
+  SECRET: "secret",
 } as const;
 
 export type AtomicReferenceKind =
@@ -2522,6 +3176,36 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
 
+/** Git ref labels rendered by the workspace commit graph. */
+export const GIT_REF_LABEL_TYPES = {
+  LOCAL_BRANCH: "localBranch",
+  REMOTE_BRANCH: "remoteBranch",
+  TAG: "tag",
+  HEAD: "head",
+} as const;
+
+export type GitRefLabelType =
+  (typeof GIT_REF_LABEL_TYPES)[keyof typeof GIT_REF_LABEL_TYPES];
+
+/** Relative positions used when comparing commits with the checked-out HEAD. */
+export const GIT_HEAD_RELATIONS = {
+  AHEAD: "ahead",
+  AT: "at",
+  BEHIND: "behind",
+} as const;
+
+/** Clipboard operations supported by the workspace explorer. */
+export const CLIPBOARD_OPERATIONS = {
+  COPY: "copy",
+  CUT: "cut",
+} as const;
+
+/** Directions supported by the run-history adjacent navigation controls. */
+export const RUN_NAVIGATION_DIRECTIONS = {
+  NEWER: "newer",
+  OLDER: "older",
+} as const;
+
 // ============================================================================
 // TEMPLATE VARIABLE TYPES - Input control types for template variables
 // ============================================================================
@@ -2531,6 +3215,12 @@ export const TEMPLATE_VARIABLE_TYPES = {
   DIRECTORY: WORKSPACE_ENTRY_KINDS.DIRECTORY,
   SELECT: "select",
   HARNESS: "harness",
+} as const;
+
+/** Tabs for the two input shapes in the shared MCP server form. */
+export const MCP_FORM_TABS = {
+  STDIO: "stdio",
+  REMOTE: "remote",
 } as const;
 
 export type TemplateVariableType =
@@ -2747,8 +3437,8 @@ export const EXTENSION_IDENTIFIERS = {
 
 // Explicit ctrlyoke prompt references. Plain slash commands remain harness-native.
 export const CTRLYOKE_SLASH_TOKEN_KINDS = {
-  SKILL: "skill",
-  MCP: "mcp",
+  SKILL: ATOMIC_REFERENCE_KINDS.SKILL,
+  MCP: ATOMIC_REFERENCE_KINDS.MCP,
 } as const;
 
 export type CtrlYokeSlashTokenKind =
@@ -2764,6 +3454,25 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+type HarnessMcpSourcePrefix<T extends string> = T extends `${infer Prefix}-cli`
+  ? Prefix
+  : never;
+export type McpLocalSource =
+  | `${typeof SPECIAL_TARGET_IDS.VSCODE}-${SettingWriteScope}`
+  | `${HarnessMcpSourcePrefix<HarnessId>}-${SettingWriteScope}`;
+
+/** Build the stable source key used for a local MCP discovery result. */
+export function getMcpLocalSource(
+  targetId: HarnessId | typeof SPECIAL_TARGET_IDS.VSCODE,
+  scope: SettingWriteScope
+): McpLocalSource {
+  const sourcePrefix =
+    targetId === SPECIAL_TARGET_IDS.VSCODE
+      ? targetId
+      : targetId.replace(/-cli$/, "");
+  return `${sourcePrefix}-${scope}` as McpLocalSource;
+}
+
 export type ClaudeToolName =
   (typeof CLAUDE_TOOL_NAMES)[keyof typeof CLAUDE_TOOL_NAMES];
 export type HarnessShareMetric =
@@ -2831,6 +3540,8 @@ export type FileOperationStatus =
   (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
 export type CliEventType =
   (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+export type CliOutputMetadataKey =
+  (typeof CLI_OUTPUT_METADATA_KEYS)[keyof typeof CLI_OUTPUT_METADATA_KEYS];
 export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];

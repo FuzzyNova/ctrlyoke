@@ -10,6 +10,7 @@ import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
+  TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
 
 const QWEN_PERMISSION_VERIFICATION = {
@@ -212,20 +213,20 @@ export class QwenToolPermissionMapper
       const normalizedToolName = toolName.toLowerCase();
 
       if (
-        normalizedToolName === "shell" ||
-        normalizedToolName === "bash" ||
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.SHELL ||
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.BASH ||
         normalizedToolName === "run_shell_command"
       ) {
         qwenTools.add(this.buildQwenShellSpec("ShellTool", toolArgs));
       } else if (
-        normalizedToolName === "write" ||
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.WRITE ||
         normalizedToolName === "create"
       ) {
         qwenTools.add("WriteFile");
-      } else if (normalizedToolName === "read") {
+      } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.READ) {
         qwenTools.add("Read");
       } else if (
-        normalizedToolName === "edit" ||
+        normalizedToolName === TOOL_PERMISSION_CATEGORIES.EDIT ||
         normalizedToolName === "str_replace"
       ) {
         qwenTools.add("Edit");
@@ -251,7 +252,7 @@ export class QwenToolPermissionMapper
         normalizedToolName === "web_fetch"
       ) {
         qwenTools.add("WebFetch");
-      } else if (normalizedToolName === "mcp") {
+      } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.MCP) {
         // MCP tools: preserve full pattern for server-level or tool-level matching.
         // Qwen supports: mcp__server (all tools) and mcp__server__tool (specific).
         if (toolArgs) {

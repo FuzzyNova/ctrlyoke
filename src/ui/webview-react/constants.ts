@@ -2,6 +2,13 @@
  * Panel sizing constants for consistent layout management across mobile and desktop
  */
 
+import {
+  WORKFLOW_ROW_KINDS,
+  WORKFLOW_ROW_TIERS,
+} from "@root/types/DashboardConstants";
+
+export { WORKFLOW_ROW_KINDS, WORKFLOW_ROW_TIERS };
+
 /** Collapsed panel size - fixed height/width bar when panel is minimized */
 export const PANEL_COLLAPSED_SIZE_DEFAULT = "30px";
 export const PANEL_COLLAPSED_SIZE_DEFAULT_PX = 30;
@@ -176,11 +183,14 @@ export const WORKFLOW_DROPDOWN_COMPACT_WIDTH =
  * Every row is always two lines (name, then metadata) — `compact` additionally
  * drops the state badge to its icon-only form and the run indicator to `#12`.
  */
-export type WorkflowRowTier = "stacked" | "compact";
+export type WorkflowRowTier =
+  (typeof WORKFLOW_ROW_TIERS)[keyof typeof WORKFLOW_ROW_TIERS];
 
 /** Resolves the row tier for a measured dropdown width. */
 export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
-  return width < WORKFLOW_DROPDOWN_COMPACT_WIDTH ? "compact" : "stacked";
+  return width < WORKFLOW_DROPDOWN_COMPACT_WIDTH
+    ? WORKFLOW_ROW_TIERS.COMPACT
+    : WORKFLOW_ROW_TIERS.STACKED;
 }
 
 /**

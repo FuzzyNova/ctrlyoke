@@ -10,6 +10,8 @@ import {
   MESSAGE_TYPES,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
+  PREVIEW_RAIL_SELECTIONS,
+  PREVIEW_STATUSES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_TRUNCATION_REASON_COPY,
@@ -72,7 +74,7 @@ const DRY_RUN_TABS = {
 } as const;
 
 type DryRunTab = (typeof DRY_RUN_TABS)[keyof typeof DRY_RUN_TABS];
-type RailSelection = "overview" | number;
+type RailSelection = typeof PREVIEW_RAIL_SELECTIONS.OVERVIEW | number;
 
 const DRY_RUN_TAB_DEFINITIONS = [
   { id: DRY_RUN_TABS.SUMMARY, label: "Summary", codicon: "map-vertical" },
@@ -1188,8 +1190,8 @@ function Rail({
     >
       <button
         type="button"
-        className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === "overview" ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
-        onClick={() => onSelect("overview")}
+        className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
+        onClick={() => onSelect(PREVIEW_RAIL_SELECTIONS.OVERVIEW)}
       >
         <i className="codicon codicon-dashboard" aria-hidden="true" />
         <span className="min-w-0 truncate">Overview</span>
@@ -1243,7 +1245,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   const open = useExecutionPreviewStore((state) => state.open);
   const close = useExecutionPreviewStore((state) => state.close);
   const [selection, setSelection] = useState<RailSelection>(
-    scope.kind === PREVIEW_SCOPES.STEP ? scope.stepIndex : "overview"
+    scope.kind === PREVIEW_SCOPES.STEP
+      ? scope.stepIndex
+      : PREVIEW_RAIL_SELECTIONS.OVERVIEW
   );
   const [activeTabs, setActiveTabs] = useState<Record<number, DryRunTab>>({});
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>(
@@ -1264,7 +1268,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   });
 
   useEffect(() => {
-    setSelection(scopeStepIndex ?? "overview");
+    setSelection(scopeStepIndex ?? PREVIEW_RAIL_SELECTIONS.OVERVIEW);
     setActiveTabs({});
     setExpandedChunks({});
     setSelectedShells({});
@@ -1346,9 +1350,13 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   const payloadText = activeStep?.prompt
     ? buildExpandedPayloadText(activeStep.prompt)
     : undefined;
-  const workflowNarrow = scope.kind === "workflow" && isNarrow;
+  const workflowNarrow = scope.kind === PREVIEW_SCOPES.WORKFLOW && isNarrow;
   const selectOptions: SelectOption[] = [
-    { value: "overview", label: "Overview", description: "Workflow summary" },
+    {
+      value: PREVIEW_RAIL_SELECTIONS.OVERVIEW,
+      label: "Overview",
+      description: "Workflow summary",
+    },
     ...(preview?.steps.map((step) => ({
       value: String(step.stepIndex),
       label: `${step.stepIndex + 1}. ${stepLabel(step)}`,
@@ -1419,7 +1427,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
         </>
       }
     >
-      {status === "checking" || !preview ? (
+      {status === PREVIEW_STATUSES.CHECKING || !preview ? (
         <div className="flex min-h-48 items-center justify-center p-6 text-sm text-description-fg">
           <i className="codicon codicon-loading mr-2 animate-spin" />
           Preparing dry run…
@@ -1451,7 +1459,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
                 value={String(selection)}
                 onChange={(value) =>
                   setSelection(
-                    value === "overview" ? "overview" : Number(value)
+                    value === PREVIEW_RAIL_SELECTIONS.OVERVIEW
+                      ? PREVIEW_RAIL_SELECTIONS.OVERVIEW
+                      : Number(value)
                   )
                 }
                 options={selectOptions}
@@ -1460,14 +1470,15 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             </div>
           )}
           <div className="flex min-h-0 flex-1">
-            {!workflowNarrow && scope.kind === "workflow" && (
+            {!workflowNarrow && scope.kind === PREVIEW_SCOPES.WORKFLOW && (
               <Rail
                 preview={preview}
                 selection={selection}
                 onSelect={setSelection}
               />
             )}
-            {selection === "overview" && scope.kind === "workflow" ? (
+            {selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW &&
+            scope.kind === PREVIEW_SCOPES.WORKFLOW ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <OverviewPanel
                   preview={preview}

@@ -12,40 +12,41 @@ import { php } from "@codemirror/lang-php";
 import { yaml } from "@codemirror/lang-yaml";
 import { markdown } from "@codemirror/lang-markdown";
 import { getLanguageFromPath } from "../utils/syntaxHighlighting";
+import { CODEMIRROR_LANGUAGE_IDS } from "@root/types/DashboardConstants";
 
 /** Maps a file path to the appropriate CodeMirror LanguageSupport extension. Returns null for plain text. */
 export function getLanguageExtension(filePath: string) {
   const lang = getLanguageFromPath(filePath);
   switch (lang) {
-    case "javascript":
+    case CODEMIRROR_LANGUAGE_IDS.JAVASCRIPT:
       return javascript({ jsx: false });
-    case "jsx":
+    case CODEMIRROR_LANGUAGE_IDS.JSX:
       return javascript({ jsx: true });
-    case "typescript":
+    case CODEMIRROR_LANGUAGE_IDS.TYPESCRIPT:
       return javascript({ typescript: true });
-    case "tsx":
+    case CODEMIRROR_LANGUAGE_IDS.TSX:
       return javascript({ typescript: true, jsx: true });
-    case "python":
+    case CODEMIRROR_LANGUAGE_IDS.PYTHON:
       return python();
-    case "rust":
+    case CODEMIRROR_LANGUAGE_IDS.RUST:
       return rust();
-    case "json":
+    case CODEMIRROR_LANGUAGE_IDS.JSON:
       return json();
-    case "markup":
+    case CODEMIRROR_LANGUAGE_IDS.MARKUP:
       return html();
-    case "css":
-    case "scss":
+    case CODEMIRROR_LANGUAGE_IDS.CSS:
+    case CODEMIRROR_LANGUAGE_IDS.SCSS:
       return css();
-    case "yaml":
+    case CODEMIRROR_LANGUAGE_IDS.YAML:
       return yaml();
-    case "markdown":
+    case CODEMIRROR_LANGUAGE_IDS.MARKDOWN:
       return markdown();
-    case "java":
+    case CODEMIRROR_LANGUAGE_IDS.JAVA:
       return java();
-    case "cpp":
-    case "c":
+    case CODEMIRROR_LANGUAGE_IDS.CPP:
+    case CODEMIRROR_LANGUAGE_IDS.C:
       return cpp();
-    case "php":
+    case CODEMIRROR_LANGUAGE_IDS.PHP:
       return php();
     default:
       return null;

@@ -20,6 +20,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
+  EXECUTION_MODES,
   WORKTREE_MODES,
   type HarnessId,
   type PreviewPermissionAction,
@@ -831,7 +832,7 @@ export class ExecutionPreviewService {
     );
     const environmentKeys = new Set<string>([
       ...Object.keys(
-        properties.executionMode === "interactive"
+        properties.executionMode === EXECUTION_MODES.INTERACTIVE
           ? (provider.getInteractiveSpawnEnv?.() ?? {})
           : (provider.getHeadlessSpawnEnv?.() ?? {})
       ),
@@ -1259,7 +1260,7 @@ export class ExecutionPreviewService {
     switch (source) {
       case PREVIEW_PROPERTY_SOURCES.PROMPT:
         return PREVIEW_PROPERTY_SOURCES.PROMPT;
-      case "workflow":
+      case PREVIEW_PROPERTY_SOURCES.WORKFLOW:
         return PREVIEW_PROPERTY_SOURCES.WORKFLOW;
       default:
         return PREVIEW_PROPERTY_SOURCES.GLOBAL_DEFAULT;

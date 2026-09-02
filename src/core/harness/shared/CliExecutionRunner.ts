@@ -2,7 +2,11 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import { FAILURE_KINDS, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  FAILURE_KINDS,
+  HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
+} from "../../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
@@ -847,7 +851,10 @@ export class CliExecutionRunner {
     }
 
     const model = session.resolvedProperties?.model ?? "";
-    if (mode === "stdout" && this.deps.provider.parseHeadlessStdout) {
+    if (
+      mode === HEADLESS_SOURCE_MODES.STDOUT &&
+      this.deps.provider.parseHeadlessStdout
+    ) {
       return {
         parser,
         mode,
@@ -858,7 +865,7 @@ export class CliExecutionRunner {
       };
     }
 
-    if (mode === "log") {
+    if (mode === HEADLESS_SOURCE_MODES.LOG) {
       return {
         parser,
         mode,

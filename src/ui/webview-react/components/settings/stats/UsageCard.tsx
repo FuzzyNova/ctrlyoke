@@ -14,6 +14,7 @@ import {
   formatTokenTotal,
 } from "@root/utils/TokenFormatting";
 import {
+  STATUS_LINE_USAGE_DIRECTIONS,
   formatUsagePercentForDisplay,
   type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
@@ -223,7 +224,9 @@ function UsagePercentBar({
 }) {
   const clampedUsedPercent = Math.max(0, Math.min(100, usedPercent));
   const fillPercent =
-    direction === "remaining" ? 100 - clampedUsedPercent : clampedUsedPercent;
+    direction === STATUS_LINE_USAGE_DIRECTIONS.REMAINING
+      ? 100 - clampedUsedPercent
+      : clampedUsedPercent;
   return (
     <div className="mt-1 mx-1 h-1.5 rounded-full bg-ctx-bar-track overflow-hidden">
       <div
@@ -258,7 +261,9 @@ function formatQuotaDisplay(
       : "";
 
   const directedValue =
-    percentDirection === "remaining" ? window.remaining : window.used;
+    percentDirection === STATUS_LINE_USAGE_DIRECTIONS.REMAINING
+      ? window.remaining
+      : window.used;
   if (directedValue !== undefined) {
     return `${formatQuotaValue(directedValue, window.unit)}${totalSuffix} ${percentDirection} ${quotaUnitLabel(window.unit)}`;
   }

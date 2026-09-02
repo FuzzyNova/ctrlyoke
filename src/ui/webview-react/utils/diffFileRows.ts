@@ -13,7 +13,14 @@ import {
   getRenderedDiffStats,
   toRdvHunks,
 } from "./rdvAdapter";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_FILE_LIST_ROW_KINDS,
+  DIFF_FILE_SOURCE_KINDS,
+  DIFF_PAYLOAD_KINDS,
+  DIFF_VIEW_TYPES,
+  WORKSPACE_ENTRY_KINDS,
+  type DiffViewType,
+} from "@root/types/DashboardConstants";
 
 /** The existing `gap-3` between list items, folded into each row's size. */
 export const DIFF_FILE_LIST_ROW_GAP = 12;
@@ -57,7 +64,7 @@ const GROUP_KEY_SEPARATOR = "\u001f";
 
 export interface DiffFileRowEstimateOptions {
   collapsed?: boolean;
-  viewType?: "split" | "unified";
+  viewType?: DiffViewType;
   outputFontSize?: number;
   outputContentWidth?: number;
 }
@@ -71,11 +78,11 @@ interface DiffFileListRowBase {
 
 export type DiffFileListRow =
   | (DiffFileListRowBase & {
-      kind: "selection-summary";
+      kind: typeof DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY;
       content: NonNullable<DiffFileListProps["selectionSummary"]>;
     })
   | (DiffFileListRowBase & {
-      kind: "group-heading";
+      kind: typeof DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING;
       groupKey: string;
       heading: string;
       headingHint?: string;
@@ -103,7 +110,7 @@ function normalizedOptions(
 ): Required<DiffFileRowEstimateOptions> {
   return {
     collapsed: options.collapsed ?? false,
-    viewType: options.viewType ?? "unified",
+    viewType: options.viewType ?? DIFF_VIEW_TYPES.UNIFIED,
     outputFontSize: options.outputFontSize ?? DEFAULT_OUTPUT_FONT_SIZE,
     outputContentWidth:
       options.outputContentWidth && options.outputContentWidth > 0
@@ -202,7 +209,7 @@ function getPatchEstimate(
   collapsed: boolean,
   options: Required<DiffFileRowEstimateOptions>
 ): number {
-  if (file.source.kind !== "patch") return 0;
+  if (file.source.kind !== DIFF_FILE_SOURCE_KINDS.PATCH) return 0;
   const displayLineCount = countStructuredPatchDisplayLines(
     file.source.structuredPatch
   );
@@ -258,13 +265,14 @@ function getContentEstimate(
   // layout pairs them into one row. Keep the allowance bounded by the source
   // line count; this is deliberately a cheap upper-bound estimate, not a diff.
   const replacementRows =
-    metrics.changedLineCount * (options.viewType === "unified" ? 2 : 1);
+    metrics.changedLineCount *
+    (options.viewType === DIFF_VIEW_TYPES.UNIFIED ? 2 : 1);
   const contextRows = Math.min(
     6,
     Math.floor(Math.max(0, metrics.lineCount - metrics.changedLineCount) * 0.15)
   );
   const estimatedRows = Math.min(
-    metrics.lineCount * (options.viewType === "unified" ? 2 : 1),
+    metrics.lineCount * (options.viewType === DIFF_VIEW_TYPES.UNIFIED ? 2 : 1),
     replacementRows + contextRows
   );
   const plan = buildDiffRenderPlanFromStats(
@@ -295,7 +303,7 @@ function getContentEstimate(
 }
 
 function getImageEstimate(file: DiffFileCardProps, collapsed: boolean): number {
-  if (file.source.kind !== "image") return 0;
+  if (file.source.kind !== DIFF_PAYLOAD_KINDS.IMAGE) return 0;
   return (
     DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
     (collapsed ? 0 : DIFF_FILE_IMAGE_PREVIEW_HEIGHT)
@@ -306,7 +314,7 @@ function getBinaryEstimate(
   file: DiffFileCardProps,
   collapsed: boolean
 ): number {
-  if (file.source.kind !== "binary") return 0;
+  if (file.source.kind !== DIFF_PAYLOAD_KINDS.BINARY) return 0;
   return (
     DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
     (collapsed ? 0 : DIFF_FILE_BINARY_PREVIEW_HEIGHT)
@@ -317,7 +325,7 @@ function getDeferredEstimate(
   file: DiffFileCardProps,
   _collapsed: boolean
 ): number {
-  return file.source.kind === "deferred"
+  return file.source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED
     ? DIFF_FILE_DEFERRED_PREVIEW_HEIGHT
     : 0;
 }
@@ -327,7 +335,7 @@ function getHunkEstimate(
   collapsed: boolean,
   options: Required<DiffFileRowEstimateOptions>
 ): number {
-  if (file.source.kind !== "hunks") return 0;
+  if (file.source.kind !== DIFF_FILE_SOURCE_KINDS.HUNKS) return 0;
   if (!file.source.hunks.some((hunk) => hunk.changes.length > 0)) return 0;
 
   const stats = getRenderedDiffStats(file.source.hunks, options.viewType);
@@ -361,15 +369,15 @@ function getDiffBodyEstimate(
   if (cached !== undefined) return cached;
 
   const estimate =
-    file.source.kind === "hunks"
+    file.source.kind === DIFF_FILE_SOURCE_KINDS.HUNKS
       ? getHunkEstimate(file, collapsed, options)
-      : file.source.kind === "patch"
+      : file.source.kind === DIFF_FILE_SOURCE_KINDS.PATCH
         ? getPatchEstimate(file, collapsed, options)
         : file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT
           ? getContentEstimate(file, collapsed, options)
-          : file.source.kind === "image"
+          : file.source.kind === DIFF_PAYLOAD_KINDS.IMAGE
             ? getImageEstimate(file, collapsed)
-            : file.source.kind === "binary"
+            : file.source.kind === DIFF_PAYLOAD_KINDS.BINARY
               ? getBinaryEstimate(file, collapsed)
               : getDeferredEstimate(file, collapsed);
   sourceCache.set(cacheKey, estimate);
@@ -427,7 +435,7 @@ function addInterRowSpacing(rows: DiffFileListRow[]): DiffFileListRow[] {
     const hasInterRowGap =
       next !== undefined &&
       !(
-        row.kind === "group-heading" &&
+        row.kind === DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING &&
         next.kind === WORKSPACE_ENTRY_KINDS.FILE &&
         row.groupKey === next.groupKey
       );
@@ -450,8 +458,8 @@ export function projectDiffFileListRows(
 
   if (hasRenderableSelectionSummary(props.selectionSummary)) {
     rows.push({
-      kind: "selection-summary",
-      key: "selection-summary",
+      kind: DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY,
+      key: DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY,
       content: props.selectionSummary,
       estimateSize: DIFF_FILE_LIST_TEXT_LINE_HEIGHT,
       hasInterRowGap: false,
@@ -466,7 +474,7 @@ export function projectDiffFileListRows(
     const groupKey = getGroupKey(group);
     if (hasHeadings && group.heading) {
       rows.push({
-        kind: "group-heading",
+        kind: DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING,
         key: `${groupKey}${GROUP_KEY_SEPARATOR}heading`,
         groupKey,
         heading: group.heading,

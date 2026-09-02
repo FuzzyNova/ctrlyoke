@@ -8,6 +8,7 @@ import type {
 import {
   FINAL_STEP_PHASES,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
   type CompareSource,
   type ConditionAction,
@@ -107,7 +108,7 @@ export function formatVerdictSummary(
       : verdict.actualSource === "exitCode"
         ? `exit code ${verdict.actual}`
         : `${verdict.actualSource} ${
-            verdict.outcome === "passed" ? "=" : "≠"
+            verdict.outcome === SCRIPT_VERDICT_OUTCOMES.PASSED ? "=" : "≠"
           } ${JSON.stringify(verdict.expected ?? "")}`;
   const action = verdict.actionDetail ?? verdict.action;
   return `${label} ${verdict.outcome} (${comparison}) → ${action}`;
@@ -331,7 +332,11 @@ export class ScriptExecutionReporter {
       actual: result.actual,
       actualSource: result.actualSource,
       exitCode: result.exitCode,
-      outcome: result.errored ? "errored" : result.passed ? "passed" : "failed",
+      outcome: result.errored
+        ? SCRIPT_VERDICT_OUTCOMES.ERRORED
+        : result.passed
+          ? SCRIPT_VERDICT_OUTCOMES.PASSED
+          : SCRIPT_VERDICT_OUTCOMES.FAILED,
       matchRule: result.matchRule,
       action: result.errored
         ? request.actionForErrored
@@ -401,7 +406,7 @@ export class ScriptExecutionReporter {
     const outcome = verdict.outcome;
     const message = formatVerdictSummary(label, verdict);
     const severity: StatusMessageSeverity =
-      outcome === "passed"
+      outcome === SCRIPT_VERDICT_OUTCOMES.PASSED
         ? STATUS_MESSAGE_SEVERITY.INFO
         : STATUS_MESSAGE_SEVERITY.ERROR;
     const timestampMs = Date.now();

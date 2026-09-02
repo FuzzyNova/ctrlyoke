@@ -1,4 +1,5 @@
 import React from "react";
+import { WORKFLOW_ROW_TIERS } from "@root/types/DashboardConstants";
 import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "../../constants";
 import { runNavIndicatorLabel, isDrillableRunNav } from "@utils/runNavigation";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
@@ -12,7 +13,7 @@ import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
  * abbreviates" stays a single decision.
  */
 export function isCompactRow(tier: WorkflowRowTier): boolean {
-  return tier === "compact";
+  return tier === WORKFLOW_ROW_TIERS.COMPACT;
 }
 
 interface WorkflowRowLayoutProps {
@@ -165,7 +166,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   usage,
   time,
 }) => {
-  const visibleUsage = tier === "compact" ? undefined : usage;
+  const visibleUsage = tier === WORKFLOW_ROW_TIERS.COMPACT ? undefined : usage;
   const buttonClassName = `workflow-row-primary workflow-row-primary-stacked min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
 
   // Absent metadata is omitted rather than reserved, so the second line never

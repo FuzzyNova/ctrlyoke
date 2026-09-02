@@ -20,7 +20,7 @@ also the code path `EndConditionEvaluator` uses for script steps, pre-conditions
 end-conditions. Well-behaved CLIs (npm, eslint, jest, vitest, tsc, most Node tooling) detect
 `!process.stdout.isTTY` and disable their own color output. **No amount of preserving ANSI
 codes downstream helps if the child process never wrote any.** The one place ctrlyoke already
-runs scripts through a real PTY is *interactive* script steps
+runs scripts through a real PTY is _interactive_ script steps
 (`WorkflowExecutor.ts:1193-1214`, via `context.spawnScriptPty` →
 `WorkflowInstance.ts:3722-3741` → `node-pty`), and that raw, colored PTY output already reaches
 the webview live through a `TERMINAL_OUTPUT` postMessage rendered by a separate `@xterm/xterm`
@@ -78,7 +78,7 @@ backlog plan rather than a same-session patch.
   the existing `sanitizeTerminalOutput` LRU cache behavior for callers that still want plain text
   (row-height estimation, condition status summaries via `summarizeStatusError`, timeline logs).
 - Opt-in or safely-defaulted: a tool whose output happens to contain byte sequences that only
-  *look* like SGR codes must not corrupt rendering, and forcing color must not be sprung on users
+  _look_ like SGR codes must not corrupt rendering, and forcing color must not be sprung on users
   who rely on today's plain-text behavior without warning.
 
 Non-goals: full terminal emulation (cursor addressing, alternate screens, interactive TUIs) —
@@ -154,14 +154,14 @@ ANSI→structured-segments parser (e.g. the `anser` package, which returns
 `{ content, fg, bg, decoration }[]` rather than an HTML string) and map segments to `<span
 style={...}>` in a new render helper, likely alongside `OutputRow.tsx`'s existing response
 rendering (`:250, :286, :372, :405, :1579`) or as a small new component next to `BashOutput.tsx`.
-`chalk` is already a dependency (`package.json:776`) but is a *generator* of ANSI codes for the
+`chalk` is already a dependency (`package.json:776`) but is a _generator_ of ANSI codes for the
 CLI's own console output, not a parser — it doesn't help here.
 
 ### Composing with find-in-page highlighting
 
 `highlightText`/`outputFind.ts` currently slice plain strings by character offset to insert
 highlight spans. Once the same string can also carry SGR codes that must be stripped from the
-*displayed* text but whose surrounding color must still apply to the visible characters, offset
+_displayed_ text but whose surrounding color must still apply to the visible characters, offset
 math has two independent transforms fighting over the same string. The safest approach: parse
 ANSI into segments first (each segment: plain text + style), then run the existing find/highlight
 offset logic per-segment against each segment's plain text, re-splitting a segment further only
@@ -172,7 +172,7 @@ cleanly today.
 
 ### Virtualization
 
-`estimateSize` (`outputRows.ts:1232` and friends) must estimate off the *displayed* character
+`estimateSize` (`outputRows.ts:1232` and friends) must estimate off the _displayed_ character
 count (post-ANSI-strip length), not the raw string length — a heavily-colored line has
 significantly more bytes than visible characters, and estimating off raw length would
 systematically over-estimate row height and cause scroll jump. This is the same class of risk the

@@ -99,6 +99,7 @@ import type {
 } from "./UsageTypes";
 import type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
 export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
+import type { McpLocalSource } from "./DashboardConstants";
 import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
@@ -128,6 +129,7 @@ export {
   type StatusMessageSeverity,
   type ActionType,
   type AnyTargetId,
+  type McpLocalSource,
   type SettingScope,
   type SettingWriteScope,
   type SecretRegistryActionState,
@@ -2141,21 +2143,7 @@ export interface LocalMcpServerEntry {
   /** Absolute path to the config file where this entry was discovered */
   path: string;
   /** Where this entry was discovered from */
-  source:
-    | "vscode-workspace"
-    | "vscode-user"
-    | "claude-workspace"
-    | "claude-user"
-    | "copilot-workspace"
-    | "copilot-user"
-    | "codex-workspace"
-    | "codex-user"
-    | "opencode-workspace"
-    | "opencode-user"
-    | "qwen-workspace"
-    | "qwen-user"
-    | "antigravity-workspace"
-    | "antigravity-user";
+  source: McpLocalSource;
 }
 
 /**

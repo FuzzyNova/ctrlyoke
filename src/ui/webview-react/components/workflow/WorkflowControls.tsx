@@ -13,7 +13,11 @@ import {
 } from "@components/shared/SplitButton";
 import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePickerModal";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  BUTTON_VARIANTS,
+  WORKFLOW_FILE_PICKER_MODES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 interface WorkflowControlsProps {
   /** Additional className for styling */
@@ -53,9 +57,10 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const openDuplicateWorkflowDialog = useUiStore(
     (state) => state.openDuplicateWorkflowDialog
   );
-  const [filePickerMode, setFilePickerMode] = useState<"load" | "queue" | null>(
-    null
-  );
+  const [filePickerMode, setFilePickerMode] = useState<
+    | (typeof WORKFLOW_FILE_PICKER_MODES)[keyof typeof WORKFLOW_FILE_PICKER_MODES]
+    | null
+  >(null);
 
   const hasQueue = fileName !== null;
   const isViewingRun =
@@ -83,7 +88,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   // Handle load file action
   const handleLoadFile = useCallback(() => {
     if (isStandalone) {
-      setFilePickerMode("load");
+      setFilePickerMode(WORKFLOW_FILE_PICKER_MODES.LOAD);
       return;
     }
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
@@ -93,7 +98,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const handleQueueFile = useCallback(() => {
     if (!hasQueue) return;
     if (isStandalone) {
-      setFilePickerMode("queue");
+      setFilePickerMode(WORKFLOW_FILE_PICKER_MODES.QUEUE);
       return;
     }
     postWorkflowDefinitionMutation(vscode, { type: MESSAGE_TYPES.APPEND_FILE });
@@ -115,11 +120,11 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
 
   const handlePickerSelect = useCallback(
     (filePath: string) => {
-      if (filePickerMode === "load") {
+      if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.LOAD) {
         vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath });
         return;
       }
-      if (filePickerMode === "queue") {
+      if (filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE) {
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.APPEND_FILE,
           filePath,
@@ -181,7 +186,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         }
         mainAction={handleNewWorkflow}
         options={dropdownOptions}
-        variant="primary"
+        variant={BUTTON_VARIANTS.PRIMARY}
         mainTitle="Create new workflow"
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"
@@ -189,11 +194,15 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       <WorkflowFilePickerModal
         isOpen={filePickerMode !== null}
         title={
-          filePickerMode === "queue"
+          filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
             ? "Queue Workflow File"
             : "Load Workflow File"
         }
-        actionLabel={filePickerMode === "queue" ? "Queue File" : "Load File"}
+        actionLabel={
+          filePickerMode === WORKFLOW_FILE_PICKER_MODES.QUEUE
+            ? "Queue File"
+            : "Load File"
+        }
         onClose={() => setFilePickerMode(null)}
         onSelect={handlePickerSelect}
       />

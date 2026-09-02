@@ -60,6 +60,7 @@ UI still in flux. Everything else is capture-ready today.
 
   Compose multi-theme shots (#2) as canvas compositions from same-context single captures, not as one
   giant native screenshot spanning contexts.
+
 - **Demo data required before capturing:** several targets below are empty by default in a fresh
   workspace and need seeded/representative content first (noted per item). Don't screenshot the
   empty state unless the empty state itself is the point (e.g. onboarding docs).
@@ -102,16 +103,16 @@ dictated by the sidebar's natural portrait shape, the hosted dashboard's natural
 iPhone's natural portrait shape, or the snippet's line count, and the surrounding container just sizes
 to whatever they are.
 
-| Category                       | Applies to        | Ratio target                                      | Px floor                               | Notes                                                                                                                                                            |
-| ------------------------------ | ----------------- | ------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A. Raw panel screenshot        | #4, #5, #11, #12  | none — natural portrait, crop to content          | 880–960px wide                         | 2x of the real 420–480 webview width                                                                                                                             |
-| B. Flattened composite         | #1, #2            | ~3:2 to 16:10 landscape                           | 1152px wide (2304px+ at 2x)            | targets the `max-w-6xl` features-grid slot                                                                                                                       |
-| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape                                    | 896px wide (1800px+ at 2x)             | targets `max-w-4xl` Pro callout                                                                                                                                  |
-| D. Hero GIF                    | #6                | ~4:3 to 16:10 landscape                           | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero                                                 |
-| G. Raw wide/browser screenshot | #10               | none — natural desktop landscape, crop to content | 1200px+ wide (2400px+ at 2x)           | `WorkspaceViewerModal` is hosted-dashboard-only — VS Code itself is the workspace viewer in the panel case. Narrow version is category H, not this one.         |
-| E. In-body docs GIF            | #9                | none forced                                       | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                                                                               |
-| F. Styled code snippet         | #8                | none — content-driven height                      | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                                                                |
-| H. Raw mobile/PWA screenshot   | #7, #10           | none — natural mobile portrait, crop to content   | 750–860px wide                         | 2x of a real iPhone's ~375–430px CSS width; capture on an actual device, not an emulator, for anything touching the PWA-install/cert flow                       |
+| Category                       | Applies to        | Ratio target                                      | Px floor                               | Notes                                                                                                                                                   |
+| ------------------------------ | ----------------- | ------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Raw panel screenshot        | #4, #5, #11, #12  | none — natural portrait, crop to content          | 880–960px wide                         | 2x of the real 420–480 webview width                                                                                                                    |
+| B. Flattened composite         | #1, #2            | ~3:2 to 16:10 landscape                           | 1152px wide (2304px+ at 2x)            | targets the `max-w-6xl` features-grid slot                                                                                                              |
+| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape                                    | 896px wide (1800px+ at 2x)             | targets `max-w-4xl` Pro callout                                                                                                                         |
+| D. Hero GIF                    | #6                | ~4:3 to 16:10 landscape                           | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero                                        |
+| G. Raw wide/browser screenshot | #10               | none — natural desktop landscape, crop to content | 1200px+ wide (2400px+ at 2x)           | `WorkspaceViewerModal` is hosted-dashboard-only — VS Code itself is the workspace viewer in the panel case. Narrow version is category H, not this one. |
+| E. In-body docs GIF            | #9                | none forced                                       | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                                                                      |
+| F. Styled code snippet         | #8                | none — content-driven height                      | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                                                       |
+| H. Raw mobile/PWA screenshot   | #7, #10           | none — natural mobile portrait, crop to content   | 750–860px wide                         | 2x of a real iPhone's ~375–430px CSS width; capture on an actual device, not an emulator, for anything touching the PWA-install/cert flow               |
 
 One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
 screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
@@ -210,6 +211,7 @@ Each item: what to capture, what prep it needs, where it's used.
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
   well.
+
 - **Prep:** real devices, not emulators — install-prompt UI, camera-to-browser hand-off, and app-drawer/
   home-screen placement after install are all real-device/real-browser-version behavior that doesn't
   emulate meaningfully.

@@ -1,4 +1,7 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import {
+  GLOBAL_SETTINGS_TABS,
+  KEYBOARD_KEYS,
+} from "@root/types/DashboardConstants";
 import { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -34,38 +37,86 @@ import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   // Core
-  { id: "general", label: "General", icon: "codicon-settings" },
-  { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
+  {
+    id: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "General",
+    icon: "codicon-settings",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    label: "Workflow Defaults",
+    icon: "codicon-globe",
+  },
   // Execution
-  { id: "execution", label: "Execution", icon: "codicon-play" },
-  { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
-  { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
+  {
+    id: GLOBAL_SETTINGS_TABS.EXECUTION,
+    label: "Execution",
+    icon: "codicon-play",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.QUEUE,
+    label: "Queue",
+    icon: "codicon-list-ordered",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.WORKTREES,
+    label: "Worktrees",
+    icon: "codicon-source-control",
+  },
   // Output
-  { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
-  { id: "statusline", label: "Status Line", icon: "codicon-list-flat" },
-  { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
+  {
+    id: GLOBAL_SETTINGS_TABS.TERMINAL,
+    label: "Terminal",
+    icon: "codicon-terminal",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.STATUS_LINE,
+    label: "Status Line",
+    icon: "codicon-list-flat",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.COMMIT,
+    label: "Commit Message",
+    icon: "codicon-git-commit",
+  },
   // Security
   {
-    id: "permissions",
+    id: GLOBAL_SETTINGS_TABS.PERMISSIONS,
     label: "Advanced Permissions",
     icon: "codicon-shield",
   },
-  { id: "secrets", label: "Secrets", icon: "codicon-lock" },
+  { id: GLOBAL_SETTINGS_TABS.SECRETS, label: "Secrets", icon: "codicon-lock" },
   // Integrations
-  { id: "server", label: "Server", icon: "codicon-server" },
+  { id: GLOBAL_SETTINGS_TABS.SERVER, label: "Server", icon: "codicon-server" },
   {
-    id: "agentskillsmanager",
+    id: GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER,
     label: "Agent & Skills Manager",
     icon: "codicon-agent",
   },
-  { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
+  {
+    id: GLOBAL_SETTINGS_TABS.MCP_MANAGER,
+    label: "MCP Manager",
+    icon: "codicon-mcp",
+  },
   // Insights
-  { id: "notifications", label: "Notifications", icon: "codicon-bell" },
-  { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
+  {
+    id: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
+    label: "Notifications",
+    icon: "codicon-bell",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Stats & Usage",
+    icon: "codicon-graph",
+  },
   // Account
-  { id: "license", label: "License", icon: "codicon-key" },
+  { id: GLOBAL_SETTINGS_TABS.LICENSE, label: "License", icon: "codicon-key" },
   // Developer (dev builds only)
-  { id: "developer", label: "Developer", icon: "codicon-tools" },
+  {
+    id: GLOBAL_SETTINGS_TABS.DEVELOPER,
+    label: "Developer",
+    icon: "codicon-tools",
+  },
 ];
 
 const TABS = ALL_TABS;
@@ -84,11 +135,14 @@ export function GlobalSettingsDrawer() {
     SETTING_SCOPES.USER
   );
   const [shouldRender, setShouldRender] = useState(globalSettingsOpen);
-  const visibleTabs = TABS.filter((t) => t.id !== "developer" || dev?.enabled);
+  const visibleTabs = TABS.filter(
+    (t) => t.id !== GLOBAL_SETTINGS_TABS.DEVELOPER || dev?.enabled
+  );
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab
-    : "general";
-  const isFullWidthSettingsTab = effectiveActiveTab === "mcpmanager";
+    : GLOBAL_SETTINGS_TABS.GENERAL;
+  const isFullWidthSettingsTab =
+    effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER;
 
   useEffect(() => {
     if (globalSettingsOpen) {
@@ -226,7 +280,9 @@ export function GlobalSettingsDrawer() {
         {/* Left: vertical tab bar */}
         <GlobalSettingsVerticalTabBar
           tabs={visibleTabs.map((t) =>
-            t.id === "server" ? { ...t, indicator: serverRunning } : t
+            t.id === GLOBAL_SETTINGS_TABS.SERVER
+              ? { ...t, indicator: serverRunning }
+              : t
           )}
           activeTab={effectiveActiveTab}
           onTabChange={setActiveTab}
@@ -239,7 +295,8 @@ export function GlobalSettingsDrawer() {
             It must be a direct flex child so h-full resolves to a definite
             size. MCP also gets the full available width so its wide layout can
             use equal columns; all other tabs use the standard width cap. */}
-        {fullSettings && effectiveActiveTab === "workflow" ? (
+        {fullSettings &&
+        effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
           <div className="flex-1 flex flex-col min-h-0">
             <WorkflowDefaultsSection
               settings={fullSettings}
@@ -253,71 +310,88 @@ export function GlobalSettingsDrawer() {
                 isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
               }`}
             >
-              {fullSettings && effectiveActiveTab === "general" && (
-                <GeneralSection
-                  settings={fullSettings}
-                  {...sectionProps}
-                  onReload={handleReloadWindow}
-                />
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.GENERAL && (
+                  <GeneralSection
+                    settings={fullSettings}
+                    {...sectionProps}
+                    onReload={handleReloadWindow}
+                  />
+                )}
+              {effectiveActiveTab === GLOBAL_SETTINGS_TABS.LICENSE && (
+                <LicenseSection />
               )}
-              {effectiveActiveTab === "license" && <LicenseSection />}
-              {fullSettings && effectiveActiveTab === "stats" && (
-                <StatsUsageSection
-                  hideCost={fullSettings.settings.ui.hideCost}
-                  isNarrow={isNarrow}
-                  settings={fullSettings}
-                  {...sectionProps}
-                />
-              )}
-              {fullSettings && effectiveActiveTab === "statusline" && (
-                <StatusLineSection settings={fullSettings} />
-              )}
-              {fullSettings && effectiveActiveTab === "permissions" && (
-                <AdvancedPermissionsSection
-                  settings={fullSettings}
-                  {...sectionProps}
-                />
-              )}
-              {fullSettings && effectiveActiveTab === "secrets" && (
-                <SecretsSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "execution" && (
-                <ExecutionSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "worktrees" && (
-                <WorktreesSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "notifications" && (
-                <NotificationsSection
-                  settings={fullSettings}
-                  {...sectionProps}
-                />
-              )}
-              {fullSettings && effectiveActiveTab === "terminal" && (
-                <TerminalSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "queue" && (
-                <QueueSection settings={fullSettings} {...sectionProps} />
-              )}
-              {fullSettings && effectiveActiveTab === "server" && (
-                <ServerSection settings={fullSettings} {...sectionProps} />
-              )}
-              {effectiveActiveTab === "agentskillsmanager" && (
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATS && (
+                  <StatsUsageSection
+                    hideCost={fullSettings.settings.ui.hideCost}
+                    isNarrow={isNarrow}
+                    settings={fullSettings}
+                    {...sectionProps}
+                  />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATUS_LINE && (
+                  <StatusLineSection settings={fullSettings} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.PERMISSIONS && (
+                  <AdvancedPermissionsSection
+                    settings={fullSettings}
+                    {...sectionProps}
+                  />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.SECRETS && (
+                  <SecretsSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.EXECUTION && (
+                  <ExecutionSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKTREES && (
+                  <WorktreesSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.NOTIFICATIONS && (
+                  <NotificationsSection
+                    settings={fullSettings}
+                    {...sectionProps}
+                  />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.TERMINAL && (
+                  <TerminalSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.QUEUE && (
+                  <QueueSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.SERVER && (
+                  <ServerSection settings={fullSettings} {...sectionProps} />
+                )}
+              {effectiveActiveTab ===
+                GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER && (
                 <AgentSkillsManagerSection activeScope={activeScope} />
               )}
-              {effectiveActiveTab === "mcpmanager" && (
+              {effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
                 <McpManagerSection activeScope={activeScope} />
               )}
-              {fullSettings && effectiveActiveTab === "commit" && (
-                <CommitSection settings={fullSettings} {...sectionProps} />
-              )}
-              {dev?.enabled && effectiveActiveTab === "developer" && (
-                <DeveloperSection />
-              )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.COMMIT && (
+                  <CommitSection settings={fullSettings} {...sectionProps} />
+                )}
+              {dev?.enabled &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.DEVELOPER && (
+                  <DeveloperSection />
+                )}
               {!fullSettings &&
-                effectiveActiveTab !== "developer" &&
-                effectiveActiveTab !== "agentskillsmanager" &&
-                effectiveActiveTab !== "mcpmanager" && (
+                effectiveActiveTab !== GLOBAL_SETTINGS_TABS.DEVELOPER &&
+                effectiveActiveTab !==
+                  GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER &&
+                effectiveActiveTab !== GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
                   <div className="text-description-fg text-sm">
                     Loading settings…
                   </div>

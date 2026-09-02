@@ -6,6 +6,7 @@ import { suite, test } from "mocha";
 import {
   BROWSER_NOTIFICATION_MODES,
   HOOK_EVENT_METADATA,
+  HOOK_EVENT_NAMES,
   HOOK_EVENT_ORDER,
   NOTIFICATION_EVENT_MODES,
 } from "../../types/DashboardConstants";
@@ -40,7 +41,9 @@ suite("Notification settings defaults", () => {
       HOOK_EVENT_ORDER
     );
     assert.deepStrictEqual(
-      HOOK_EVENT_METADATA.find(({ event }) => event === "notification"),
+      HOOK_EVENT_METADATA.find(
+        ({ event }) => event === HOOK_EVENT_NAMES.NOTIFICATION
+      ),
       {
         event: "notification",
         label: "Notification",

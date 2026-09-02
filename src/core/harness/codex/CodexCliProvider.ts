@@ -1,6 +1,9 @@
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
+import {
+  HOOK_CONFIG_TYPES,
+  INotificationMonitor,
+} from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -22,6 +25,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
@@ -201,7 +205,7 @@ export class CodexCliProvider implements ICliProvider {
       promptInputs: { images: CODEX_IMAGE_INPUT_CAPABILITY },
     };
   }
-  readonly headlessSource = "log" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
 
   /** Extract Codex's session ID from the headless JSONL clock stream. */
   extractSessionIdFromStdout(chunk: string): string | undefined {
@@ -579,7 +583,7 @@ export class CodexCliProvider implements ICliProvider {
       userHooks,
       ctrlyokeEvents
     );
-    if (hookConfig.type !== "json") {
+    if (hookConfig.type !== HOOK_CONFIG_TYPES.JSON) {
       throw new Error("Unexpected hook config type for Codex CLI");
     }
 

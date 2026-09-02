@@ -21,6 +21,7 @@ import {
   secretGrantsTrustStore,
 } from "../config/SecretGrantsTrustStore";
 import { getEffectiveSecretGrants } from "./SecretReferenceParser";
+import { TRUST_DECISIONS } from "../types/DashboardConstants";
 
 const SECRET_INTERPOLATION_PATTERN = /\$\{secret:([^}]+)\}/g;
 
@@ -361,7 +362,8 @@ export async function preflightWorkflowSecrets(
   const missingSecretNames = new Set<string>();
   const workflowGrants = getWorkflowSecretGrants(workflow);
   const unapprovedGrants = workflowGrants.filter(
-    (name) => trustStore.getDecision(workspaceRoot, name) !== "allow"
+    (name) =>
+      trustStore.getDecision(workspaceRoot, name) !== TRUST_DECISIONS.ALLOW
   );
 
   // Prompt-text `${secret:NAME}` is deliberately *not* checked here. It is

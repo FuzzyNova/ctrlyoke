@@ -251,9 +251,7 @@ function logCompletionDropdownState(
   WebviewLog.debug(`[completions:${label}] status=${status}`);
   if (status !== "active") return;
   requestAnimationFrame(() => {
-    const dom = document.querySelector<HTMLElement>(
-      ".cm-tooltip-autocomplete"
-    );
+    const dom = document.querySelector<HTMLElement>(".cm-tooltip-autocomplete");
     const head = view.state.selection.main.head;
     const rect = dom?.getBoundingClientRect();
     const computed = dom ? window.getComputedStyle(dom) : undefined;

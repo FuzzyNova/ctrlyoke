@@ -31,6 +31,7 @@ import {
   AntigravityTranscriptRecord,
 } from "./AntigravityTranscriptReader";
 import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
+import { ANTIGRAVITY_WIRE_VALUES } from "./AntigravityProtocolConstants";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   parseStatuslineCurrentUsage,
@@ -562,13 +563,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     // has nothing worth mapping yet). See the launch-detection note on
     // trackTranscriptBackgroundState.
     const isBackgroundLaunch =
-      entry.source === "MODEL" &&
-      entry.type === "GENERIC" &&
-      entry.status === "RUNNING";
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.GENERIC &&
+      entry.status === ANTIGRAVITY_WIRE_VALUES.RUNNING;
     const isAskQuestionResult =
-      entry.source === "MODEL" && entry.type === "ASK_QUESTION";
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      entry.type === "ASK_QUESTION";
     if (
-      entry.status !== "DONE" &&
+      entry.status !== ANTIGRAVITY_WIRE_VALUES.DONE &&
       !isBackgroundLaunch &&
       !isAskQuestionResult
     ) {
@@ -593,7 +595,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return text ? [{ type: "user_input", line: text, ...base }] : [];
     }
 
-    if (entry.source === "MODEL" && entry.type === "PLANNER_RESPONSE") {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      entry.type === "PLANNER_RESPONSE"
+    ) {
       const text =
         typeof entry.content === "string" ? entry.content.trim() : "";
       const thinking = entry.thinking?.trim() ?? "";
@@ -624,7 +629,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       ];
     }
 
-    if (entry.source === "MODEL" && this.isToolResultEntry(entry)) {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      this.isToolResultEntry(entry)
+    ) {
       const call = this.takePlannerCallForResult(entry);
       return [
         {
@@ -639,7 +647,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       ];
     }
 
-    if (entry.source === "SYSTEM" && entry.type === "SYSTEM_MESSAGE") {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE
+    ) {
       return [
         {
           type: "transcript.tool",
@@ -651,7 +662,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       ];
     }
 
-    if (entry.source === "SYSTEM" && entry.type === "CHECKPOINT") {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      entry.type === "CHECKPOINT"
+    ) {
       const line = typeof entry.content === "string" ? entry.content : "";
       if (BASELINE_CHECKPOINT_REGEX.test(line)) {
         return [];
@@ -666,7 +680,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     if (
-      entry.source === "SYSTEM" &&
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
       (entry.type === "ERROR_MESSAGE" || entry.type.includes("CANCEL"))
     ) {
       if (typeof entry.content !== "string" || !entry.content.trim()) {
@@ -719,7 +733,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     const name = call.name.toLowerCase();
     switch (result.type) {
       case "RUN_COMMAND":
-        return name === "run_command";
+        return name === ANTIGRAVITY_WIRE_VALUES.RUN_COMMAND;
       case "VIEW_FILE":
         return name === "view_file";
       case "CODE_ACTION":
@@ -742,7 +756,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         return name === "list_dir";
       case "GREP_SEARCH":
         return name === "grep_search";
-      case "GENERIC":
+      case ANTIGRAVITY_WIRE_VALUES.GENERIC:
         // Observed agy output (1.1.12+) types every tool result "GENERIC" —
         // run_command, view_file, write_to_file, grep_search, manage_task,
         // etc. all lose their distinct per-tool type. Type can no longer
@@ -772,9 +786,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     this.resetProviderStateForSession(sessionId);
 
     if (
-      entry.source === "MODEL" &&
-      entry.type === "GENERIC" &&
-      entry.status === "RUNNING"
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.GENERIC &&
+      entry.status === ANTIGRAVITY_WIRE_VALUES.RUNNING
     ) {
       const taskId = this.extractTaskId(entry);
       if (taskId) {
@@ -784,9 +798,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     if (
-      entry.source === "SYSTEM" &&
-      entry.type === "SYSTEM_MESSAGE" &&
-      entry.status === "DONE"
+      entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
+      entry.type === ANTIGRAVITY_WIRE_VALUES.SYSTEM_MESSAGE &&
+      entry.status === ANTIGRAVITY_WIRE_VALUES.DONE
     ) {
       const taskId = this.extractCompletedTaskId(entry);
       if (taskId) {
@@ -805,9 +819,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   ): boolean {
     if (
       !this.backgroundFollowUpState.isResumedTurnPending() ||
-      entry.source !== "MODEL" ||
+      entry.source !== ANTIGRAVITY_WIRE_VALUES.MODEL ||
       entry.type !== "PLANNER_RESPONSE" ||
-      entry.status !== "DONE"
+      entry.status !== ANTIGRAVITY_WIRE_VALUES.DONE
     ) {
       return false;
     }

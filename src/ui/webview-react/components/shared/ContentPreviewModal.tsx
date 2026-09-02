@@ -5,6 +5,7 @@ import { isStandalone } from "@hooks/useVsCodeApi";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { downloadTextFile } from "@utils/diff";
+import { CONTENT_PREVIEW_LANGUAGES } from "@root/types/DashboardConstants";
 
 /**
  * Modal that displays prior-context XML preview content, a resolved
@@ -41,9 +42,9 @@ export const ContentPreviewModal: React.FC = () => {
     if (!modal) return;
     if (isStandalone) {
       const ext =
-        modal.language === "diff"
+        modal.language === CONTENT_PREVIEW_LANGUAGES.DIFF
           ? ".diff"
-          : modal.language === "json"
+          : modal.language === CONTENT_PREVIEW_LANGUAGES.JSON
             ? ".json"
             : ".xml";
       const filename = `ctrlyoke-${modal.ref.replace(/[^a-z0-9_]/gi, "-").toLowerCase()}${ext}`;

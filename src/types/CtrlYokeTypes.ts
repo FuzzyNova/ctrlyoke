@@ -11,6 +11,7 @@ import {
   type WorkflowAttemptStatus,
   PRIOR_CONTEXT_KEYWORDS,
   type ConditionAction,
+  type WorkflowExecutionOutcome,
   type CompareSource,
   type HarnessId,
   type ExecutionMode,
@@ -24,11 +25,14 @@ import {
   type WorkflowTokenCoverage,
   WORKTREE_MODES,
   WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_LIFECYCLE_STATES,
   WORKTREE_BRANCH_STATES,
   WORKTREE_DIRECTORY_STATES,
+  WORKTREE_DIRECTORY_OUTCOMES,
   WORKTREE_EDIT_KINDS,
   WORKTREE_LANDING_OUTCOMES,
   WORKTREE_MERGE_OUTCOMES,
+  WORKFLOW_LOCK_LOCALITIES,
   WORKTREE_SETUP_OUTCOMES,
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -133,7 +137,7 @@ export interface ToolPermissionsOverride {
   deniedTools?: string[];
 }
 
-export type ErrorBehaviorAction = "stop" | "retry" | "continue";
+export type ErrorBehaviorAction = WorkflowExecutionOutcome;
 
 /** Policy for internal errors in any step phase: pre-condition, prompt/harness, end-condition, or script execution. */
 export interface ErrorBehavior {
@@ -484,13 +488,7 @@ export interface WorkingFileWorktreeRuntime {
   sourceCheckoutDirty?: boolean;
   targetBranch?: string;
   lifecycleOwner: (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
-  lifecycleState:
-    | "provisioning"
-    | "ready"
-    | "finalizing"
-    | "settled"
-    | "blocked"
-    | "orphaned";
+  lifecycleState: (typeof WORKTREE_LIFECYCLE_STATES)[keyof typeof WORKTREE_LIFECYCLE_STATES];
   setupOutcome?: (typeof WORKTREE_SETUP_OUTCOMES)[keyof typeof WORKTREE_SETUP_OUTCOMES];
   landingOutcome?: (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
   mergeOutcome?: (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
@@ -567,7 +565,7 @@ export type WorkingFileWorktreeRuntimePatch =
 export interface WorktreeCompletionResult {
   landingOutcome: (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
   mergeOutcome?: (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
-  directoryOutcome: "removed" | "kept" | "remove-failed";
+  directoryOutcome: (typeof WORKTREE_DIRECTORY_OUTCOMES)[keyof typeof WORKTREE_DIRECTORY_OUTCOMES];
   branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   branchName: string;
   targetBranch?: string;
@@ -624,16 +622,7 @@ export interface WorkflowRuntimeState {
 }
 
 export type WorkflowRuntimeCommand =
-  | "startExecution"
-  | "pause"
-  | "confirmPaused"
-  | "cancelPause"
-  | "resume"
-  | "requestStop"
-  | "confirmStopped"
-  | "complete"
-  | "fail"
-  | "reopenForContinuation";
+  import("./DashboardConstants").WorkflowRuntimeCommand;
 
 export interface WorkflowRuntimeTransition {
   command: WorkflowRuntimeCommand;
@@ -1050,7 +1039,7 @@ export interface WorkflowHarnessTokenTotals {
 
 /** Redacted ownership projection for a proven external execution. */
 export interface ExternalExecutionOwnerSummary {
-  locality: "external";
+  locality: typeof WORKFLOW_LOCK_LOCALITIES.EXTERNAL;
   runner: RunnerId;
 }
 

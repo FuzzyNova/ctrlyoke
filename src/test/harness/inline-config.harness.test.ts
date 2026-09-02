@@ -26,6 +26,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
 } from "../../types/CtrlYokeTypes";
+import { EXECUTION_MODES } from "../../types/DashboardConstants";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
@@ -336,7 +337,7 @@ suite("Inline harness configuration regression tests", function () {
           ],
         } satisfies PromptFile;
         const result =
-          mode === "headless"
+          mode === EXECUTION_MODES.HEADLESS
             ? runWorkflowFile(workflow, tmpDir, `opencode-plugin-${mode}`)
             : runInteractiveWorkflowFile(
                 workflow,
@@ -549,7 +550,7 @@ suite("Inline harness configuration regression tests", function () {
           "Do not use shell or any other tool.",
         ].join(" ");
         const result =
-          mode === "headless"
+          mode === EXECUTION_MODES.HEADLESS
             ? runWorkflowFile(
                 qwenMcpWorkflow(server, prompt, mode),
                 tmpDir,

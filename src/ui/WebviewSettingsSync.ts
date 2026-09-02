@@ -25,6 +25,7 @@ import {
   isStatusLineTrackingHarnessId,
   type StatusLineTrackingHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  NETWORK_INTERFACE_FAMILIES,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -1444,7 +1445,9 @@ export class WebviewSettingsSync {
             .flat()
             .filter(
               (iface): iface is os.NetworkInterfaceInfo =>
-                !!iface && iface.family === "IPv4" && !iface.internal
+                !!iface &&
+                iface.family === NETWORK_INTERFACE_FAMILIES.IPV4 &&
+                !iface.internal
             )
             .map((iface) => iface.address)
         : [];

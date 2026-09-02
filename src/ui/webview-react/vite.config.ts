@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import path from "path";
-import { HOSTED_ICON_FILES } from "../../types/DashboardConstants";
+import { BUILD_MODES, HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -85,7 +85,7 @@ export default defineConfig(({ mode }) => ({
   // Explicit build-time flags so dead-code elimination works correctly.
   // import.meta.env.DEV is unreliable in Vite 8 build mode — use these instead.
   define: {
-    __WEBVIEW_DEV_MODE__: mode !== "production" ? "true" : "false",
+    __WEBVIEW_DEV_MODE__: mode !== BUILD_MODES.PRODUCTION ? "true" : "false",
     // `vite build` forces process.env.NODE_ENV='production' regardless of --mode,
     // making React use its minified build (no full error messages). Override for react-debug.
     ...(mode === "react-debug"
@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: path.resolve(__dirname, "../../../out/ui/webview-react"),
     emptyOutDir: true,
-    minify: mode === "production" ? "esbuild" : false,
+    minify: mode === BUILD_MODES.PRODUCTION ? "esbuild" : false,
     sourcemap: true,
     // Webview requirements: single bundle, predictable names (no hashes)
     cssCodeSplit: false,

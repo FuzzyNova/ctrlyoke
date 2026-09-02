@@ -69,7 +69,7 @@ mechanics: same text, different destination.
 ### Scope and behavior
 
 - Steer is available **only in new-prompt mode** (`selectionTarget.kind ===
-  EDITOR_TARGET_KINDS.NEW_PROMPT`), never while editing an existing queued
+EDITOR_TARGET_KINDS.NEW_PROMPT`), never while editing an existing queued
   step. Steering is an out-of-band action unrelated to the queue; mixing it
   with Update/Delete semantics on an existing step is confusing.
 - Steer is available **only in prompt mode** (`stepType === STEP_TYPES.PROMPT`),
@@ -206,7 +206,7 @@ all). The handler needs to:
 `HarnessIntegration.canReuseForInject()` / `CliIntegration.canReuseForInject()`
 (`HarnessIntegration.ts:302-312`, `CliIntegration.ts:1682-1698`) governs
 whether an integration is kept alive **across separate workflow runs** so
-the *next* run can resume the same PTY via inject mode. Steering targets a
+the _next_ run can resume the same PTY via inject mode. Steering targets a
 session that is already alive **within the current run** — it does not go
 through `canReuseForInject`, `WorkflowInstance.executeLoadedPromptFile`, or
 the queue/execution-state machine at all. This is worth stating explicitly

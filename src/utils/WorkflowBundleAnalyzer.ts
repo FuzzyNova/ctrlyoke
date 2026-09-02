@@ -20,12 +20,20 @@ import {
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
+  STEP_TYPES,
 } from "../types/DashboardConstants";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 export const BUNDLE_MANIFEST_VERSION = 1;
 
-export type BundleGeneratedStore = "attachments" | "prompts" | "temp";
+export const BUNDLE_GENERATED_STORES = {
+  ATTACHMENTS: "attachments",
+  PROMPTS: "prompts",
+  TEMP: "temp",
+} as const;
+
+export type BundleGeneratedStore =
+  (typeof BUNDLE_GENERATED_STORES)[keyof typeof BUNDLE_GENERATED_STORES];
 export type BundleReferenceSyntax = "@" | "selection" | "symbol";
 
 export interface BundleDiagnostic {
@@ -253,7 +261,7 @@ function collectPromptFields(workflow: Record<string, unknown>): PromptField[] {
     workflow.steps.forEach((step, index) => {
       if (
         !isRecord(step) ||
-        step.type === "script" ||
+        step.type === STEP_TYPES.SCRIPT ||
         typeof step.prompt !== "string"
       ) {
         return;
@@ -399,7 +407,10 @@ async function analyzeLonePromptFile(
     return false;
   }
 
-  if (generatedStore === "temp" || generatedStore === "attachments") {
+  if (
+    generatedStore === BUNDLE_GENERATED_STORES.TEMP ||
+    generatedStore === BUNDLE_GENERATED_STORES.ATTACHMENTS
+  ) {
     addBlocker(
       plan,
       "unsupported-generated-prompt",
@@ -410,7 +421,7 @@ async function analyzeLonePromptFile(
     return false;
   }
 
-  if (generatedStore !== "prompts") {
+  if (generatedStore !== BUNDLE_GENERATED_STORES.PROMPTS) {
     return false;
   }
 
@@ -483,7 +494,7 @@ async function analyzeInlineReferences(
     if (!generatedStore && !bundleManagedAsset) {
       continue;
     }
-    if (generatedStore === "temp") {
+    if (generatedStore === BUNDLE_GENERATED_STORES.TEMP) {
       addBlocker(
         plan,
         "temporary-reference",
@@ -1053,7 +1064,7 @@ function getGeneratedStore(
 ): BundleGeneratedStore | undefined {
   for (const root of trustedRoots) {
     const generatedRoot = path.join(root, PATH_CONSTANTS.CTRLYOKE_DIR);
-    for (const store of ["attachments", "prompts", "temp"] as const) {
+    for (const store of Object.values(BUNDLE_GENERATED_STORES)) {
       if (isPathWithinDirectory(filePath, path.join(generatedRoot, store))) {
         return store;
       }
@@ -1064,7 +1075,7 @@ function getGeneratedStore(
 
 function looksLikeGeneratedStoreReference(referencePath: string): boolean {
   const normalized = referencePath.replace(/\\/g, "/").replace(/^\.\//, "");
-  return ["attachments", "prompts", "temp"].some(
+  return Object.values(BUNDLE_GENERATED_STORES).some(
     (store) =>
       normalized.startsWith(`${PATH_CONSTANTS.CTRLYOKE_DIR}/${store}/`) ||
       normalized.startsWith(`${store}/`)

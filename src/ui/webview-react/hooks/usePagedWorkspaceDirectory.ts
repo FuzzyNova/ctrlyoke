@@ -12,6 +12,7 @@ import {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
+import { ERROR_NAMES } from "@root/types/DashboardConstants";
 
 export interface PagedWorkspaceDirectoryOptions {
   /** Workspace-relative directory path. An empty path represents the root. */
@@ -170,7 +171,7 @@ function errorFrom(value: unknown): Error {
 }
 
 function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === "AbortError";
+  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
 }
 
 function isExpiredError(value: unknown): boolean {

@@ -13,6 +13,11 @@ import {
   type OutputNavigationOptions,
   type OutputNavigationController,
 } from "@utils/outputNavigation";
+import {
+  OUTPUT_SCROLL_ALIGNMENTS,
+  OUTPUT_SCROLL_TARGET_KINDS,
+  type OutputScrollAlignment,
+} from "@root/types/DashboardConstants";
 
 interface OutputRowLayoutModel {
   rowSizesByKey: Map<string, number>;
@@ -27,7 +32,7 @@ interface OutputRow {
 
 interface PendingNavigationState {
   rowIndex: number;
-  align: "start" | "center" | "end";
+  align: OutputScrollAlignment;
   revealActiveFindMatch: boolean;
   targetKind: OutputMessageTarget["kind"];
   targetIndex: number;
@@ -43,7 +48,7 @@ interface RowVirtualizerLike {
   scrollToIndex: (
     index: number,
     options?: {
-      align?: "start" | "center" | "end";
+      align?: OutputScrollAlignment;
       behavior?: ScrollBehavior;
     }
   ) => void;
@@ -73,7 +78,11 @@ interface UseOutputNavigationInput {
   rowVirtualizer: RowVirtualizerLike;
   rows: OutputRow[];
   setCurrentScrollTarget: (
-    target: { kind: "row"; rowKey: string; viewportOffsetPx: number },
+    target: {
+      kind: typeof OUTPUT_SCROLL_TARGET_KINDS.ROW;
+      rowKey: string;
+      viewportOffsetPx: number;
+    },
     reason: string
   ) => void;
 }
@@ -191,7 +200,7 @@ export function useOutputNavigation({
           if (revealResult.rowKey && revealResult.rowViewportOffsetPx != null) {
             setCurrentScrollTarget(
               {
-                kind: "row",
+                kind: OUTPUT_SCROLL_TARGET_KINDS.ROW,
                 rowKey: revealResult.rowKey,
                 viewportOffsetPx: revealResult.rowViewportOffsetPx,
               },
@@ -276,7 +285,7 @@ export function useOutputNavigation({
         return;
       }
 
-      const align = options?.align ?? "start";
+      const align = options?.align ?? OUTPUT_SCROLL_ALIGNMENTS.START;
       const revealActiveFindMatch = options?.revealActiveFindMatch ?? false;
       const requestedBehavior = options?.behavior ?? "auto";
       const behavior =
@@ -288,9 +297,9 @@ export function useOutputNavigation({
       if (row) {
         const rowSize = rowLayout.rowSizesByKey.get(row.key);
         const viewportOffsetPx =
-          align === "end"
+          align === OUTPUT_SCROLL_ALIGNMENTS.END
             ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
-            : align === "center"
+            : align === OUTPUT_SCROLL_ALIGNMENTS.CENTER
               ? Math.max(
                   0,
                   outputRef.current.clientHeight / 2 - (rowSize ?? 0) / 2
@@ -298,7 +307,7 @@ export function useOutputNavigation({
               : 0;
         setCurrentScrollTarget(
           {
-            kind: "row",
+            kind: OUTPUT_SCROLL_TARGET_KINDS.ROW,
             rowKey: row.key,
             viewportOffsetPx,
           },
@@ -351,7 +360,7 @@ export function useOutputNavigation({
           ) {
             setCurrentScrollTarget(
               {
-                kind: "row",
+                kind: OUTPUT_SCROLL_TARGET_KINDS.ROW,
                 rowKey: revealResult.rowKey,
                 viewportOffsetPx: revealResult.rowViewportOffsetPx,
               },

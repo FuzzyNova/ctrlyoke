@@ -19,6 +19,9 @@ import {
   type AtomicReferenceKind,
   SETTING_SCOPES,
   type SettingWriteScope,
+  PROMPT_FILE_RESOLUTION_STATUSES,
+  REFERENCE_PATH_BASES,
+  COMPLETION_TRIGGERS,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -457,7 +460,7 @@ export class PromptEditorSupportService {
       }
       const names = await this.secretRegistry.getCompletionNames();
       return getSecretCompletions(names, prefix.substring(1));
-    } else if (trigger === "path") {
+    } else if (trigger === COMPLETION_TRIGGERS.PATH) {
       return await getPromptFileCompletions(prefix);
     }
 
@@ -510,10 +513,13 @@ export class PromptEditorSupportService {
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
       seq,
       filePath,
-      exists: resolution.status === "resolved" || resolution.status === "empty",
-      isEmpty: resolution.status === "empty",
+      exists:
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
+      isEmpty: resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
       resolvedPath:
-        resolution.status === "resolved" || resolution.status === "empty"
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
           ? resolution.path
           : undefined,
     });
@@ -587,7 +593,10 @@ export class PromptEditorSupportService {
           ),
       });
       const resolution = await resolver.resolve(filePath.trim());
-      if (resolution.status !== "resolved" && resolution.status !== "empty") {
+      if (
+        resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED &&
+        resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
+      ) {
         throw new Error(`Prompt file could not be found: ${filePath}`);
       }
 
@@ -838,7 +847,7 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: Array<{
       id: string;
-      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
+      type: AtomicReferenceKind;
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -881,7 +890,7 @@ export class PromptEditorSupportService {
 
   private async validateContextReference(
     reference: {
-      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
+      type: AtomicReferenceKind;
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -898,7 +907,7 @@ export class PromptEditorSupportService {
     symbolKind?: number;
     suggestions?: string[];
   }> {
-    if (reference.type === "secret") {
+    if (reference.type === ATOMIC_REFERENCE_KINDS.SECRET) {
       const name = reference.secretName ?? "";
       const exists =
         !!this.secretRegistry && (await this.secretRegistry.isResolvable(name));
@@ -907,7 +916,7 @@ export class PromptEditorSupportService {
         : { exists: false, message: "secret not found" };
     }
 
-    if (reference.type === "git") {
+    if (reference.type === ATOMIC_REFERENCE_KINDS.GIT) {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
     }
 
@@ -948,7 +957,7 @@ export class PromptEditorSupportService {
     }
 
     if (
-      reference.type === "lineRange" ||
+      reference.type === ATOMIC_REFERENCE_KINDS.LINE_RANGE ||
       reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
     ) {
       const startLine = Number.parseInt(reference.lineStart ?? "", 10);
@@ -1072,7 +1081,7 @@ export class PromptEditorSupportService {
     }
 
     const candidates = [resolution.absolutePath];
-    if (resolution.base === "workspace") {
+    if (resolution.base === REFERENCE_PATH_BASES.WORKSPACE) {
       candidates.push(
         resolveReferencePath(
           path.join(

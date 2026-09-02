@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { STEP_TYPES, PROMPT_PROPERTIES } from "../types/DashboardConstants";
+import {
+  STEP_TYPES,
+  PROMPT_PROPERTIES,
+  PROMPT_FILE_LANGUAGE_IDS,
+} from "../types/DashboardConstants";
 
 /**
  * Provides YAML property key completions for ctrlyoke workflow files.
@@ -202,8 +206,8 @@ export class PromptPropertyCompletionProvider
   ): Promise<vscode.CompletionList | undefined> {
     // Only active for YAML workflow files
     if (
-      document.languageId !== "yaml" &&
-      document.languageId !== "yml" &&
+      document.languageId !== PROMPT_FILE_LANGUAGE_IDS.YAML &&
+      document.languageId !== PROMPT_FILE_LANGUAGE_IDS.YML &&
       !document.fileName.endsWith(".ctrlyoke.yaml") &&
       !document.fileName.endsWith(".ctrlyoke.yml")
     ) {

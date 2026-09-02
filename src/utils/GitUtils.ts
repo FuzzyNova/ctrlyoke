@@ -3,6 +3,7 @@ import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
 import type { ExecFileOptions } from "child_process";
+import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
@@ -670,7 +671,7 @@ export async function gitRefExists(
   gitRef: string
 ): Promise<{ exists: boolean; message?: string }> {
   try {
-    if (gitRef === "diff") {
+    if (gitRef === GIT_CHANGE_KINDS.DIFF) {
       const { stdout } = await execFileAsync(
         "git",
         ["-C", workspaceRoot, "status", "--short"],
@@ -681,7 +682,7 @@ export async function gitRefExists(
         : { exists: false, message: "git diff not found" };
     }
 
-    if (gitRef === "staged") {
+    if (gitRef === GIT_CHANGE_KINDS.STAGED) {
       const { stdout } = await execFileAsync(
         "git",
         ["-C", workspaceRoot, "diff", "--cached", "--name-only"],

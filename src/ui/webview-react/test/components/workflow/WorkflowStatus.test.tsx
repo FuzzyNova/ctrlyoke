@@ -296,9 +296,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
     fireEvent.click(
       screen.getByRole("button", { name: "Copy Run Directory Path" })
@@ -341,9 +339,7 @@ describe("WorkflowStatus — loaded state", () => {
       }))
     );
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
 
     expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
@@ -362,9 +358,7 @@ describe("WorkflowStatus — loaded state", () => {
     ]);
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
     const favoriteMenuItem = screen.getByRole("button", {
       name: "Add to Favorites",
@@ -434,9 +428,7 @@ describe("WorkflowStatus — loaded state", () => {
     ]);
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
     fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
 
@@ -462,9 +454,7 @@ describe("WorkflowStatus — loaded state", () => {
     }));
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
 
     const modal = screen.getByRole("dialog");
@@ -498,9 +488,7 @@ describe("WorkflowStatus — loaded state", () => {
     }));
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
     fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
 
     expect(postMessageSpy).toHaveBeenCalledWith({
@@ -644,9 +632,7 @@ describe("WorkflowStatus — loaded state", () => {
   it("dropdown toggle sends GET_RECENT_WORKFLOWS and GET_WORKFLOWS_LIST", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
     });
@@ -671,9 +657,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(screen.getAllByText("Pausing Workflow").length).toBeGreaterThan(0);
     expect(
@@ -705,9 +689,7 @@ describe("WorkflowStatus — loaded state", () => {
         isFavorite: false,
       },
     ]);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     // The pinned running region exists and holds the running row — never the
     // recent scroll container, so it stays visible regardless of recent scroll.
@@ -761,9 +743,7 @@ describe("WorkflowStatus — loaded state", () => {
         isFavorite: false,
       },
     ]);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
       document.querySelector(".running-workflow-item")
@@ -809,9 +789,7 @@ describe("WorkflowStatus — loaded state", () => {
           isFavorite: false,
         },
       ]);
-      await user.click(
-        screen.getByRole("button", { name: /Show workflows/i })
-      );
+      await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     }
 
     it("leaves a workflow first seen paused out of the pinned region", async () => {
@@ -925,9 +903,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     // The lineage is hidden from the recent list while running, so its run
     // metadata has to come from the recent entry behind it.
@@ -965,9 +941,7 @@ describe("WorkflowStatus — loaded state", () => {
         isFavorite: false,
       },
     ]);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
       document.querySelector(".running-workflows-region")
@@ -986,9 +960,7 @@ describe("WorkflowStatus — loaded state", () => {
     ]);
     // Open the dropdown
     const user = userEvent.setup();
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await waitFor(() => {
       // Count badge or workflow name should appear
       expect(screen.getByText("1")).toBeInTheDocument();
@@ -1060,9 +1032,7 @@ describe("WorkflowStatus — loaded state", () => {
     ]);
     render(<WorkflowStatus />);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
       within(screen.getByTitle("test-1")).getByRole("button", {
         name: /^Another Workflow\b/,
@@ -1106,9 +1076,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
     render(<WorkflowStatus />);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     act(() => {
       useUiStore.getState().setLoadedWorkflows([]);
@@ -1148,9 +1116,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     const favoriteWorkflow = screen.getByText("Favorite Workflow");
     const regularWorkflow = screen.getByText("Regular Workflow");
@@ -1182,9 +1148,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     const workflowARow = screen
       .getByText("Workflow A")
       .closest(".workflow-menu-item");
@@ -1257,9 +1221,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
       within(screen.getByTitle("Click to edit workflow name")).queryByLabelText(
@@ -1331,9 +1293,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
       screen.getAllByLabelText("Terminal session is still running").length
@@ -1357,9 +1317,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.type(screen.getByRole("searchbox"), "alpha");
 
     expect(screen.getByText("Alpha Workflow")).toBeInTheDocument();
@@ -1383,9 +1341,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     const filterButton = screen.getByRole("button", {
       name: "Filter workflows",
     });
@@ -1424,9 +1380,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
     await user.click(document.getElementById("workflow-harness-filter")!);
     await user.click(
@@ -1458,9 +1412,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
     await user.selectOptions(
       screen.getByLabelText("Workflow date preset"),
@@ -1505,9 +1457,7 @@ describe("WorkflowStatus — loaded state", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
     await user.click(screen.getByRole("button", { name: "Favorites only" }));
 
@@ -1555,9 +1505,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
@@ -1596,9 +1544,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
       screen.queryByRole("button", { name: /Browse runs of/i })
@@ -1687,9 +1633,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );
@@ -1740,9 +1684,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: /Show workflows/i })
-    );
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
       screen.getByRole("button", { name: /Browse runs of Multi-run Workflow/i })
     );

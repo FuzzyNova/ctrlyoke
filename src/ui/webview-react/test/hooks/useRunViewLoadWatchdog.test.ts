@@ -203,15 +203,13 @@ describe("useRunViewLoadWatchdog", () => {
 
     let secondId = "";
     act(() => {
-      secondId = useUiStore
-        .getState()
-        .requestRunViewLoad(
-          {
-            workflowKey: "wf-other" as never,
-            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-          },
-          []
-        );
+      secondId = useUiStore.getState().requestRunViewLoad(
+        {
+          workflowKey: "wf-other" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        []
+      );
     });
     // The new request gets a full retry budget, not the previous one's remainder.
     act(() => {

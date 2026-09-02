@@ -10,7 +10,7 @@ import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProv
 import { QwenCliProvider } from "../../core/harness/qwen/QwenCliProvider";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
-import { HARNESS_IDS } from "../../types/DashboardConstants";
+import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 
 const fsPromises = require("fs/promises") as typeof import("fs/promises");
@@ -84,7 +84,7 @@ suite("ExecutionPlanBuilder", () => {
         const plan = await createBuilder(provider).plan(session);
         const baseArgs = await provider.buildCliArgs(
           session.prompt,
-          executionMode === "interactive",
+          executionMode === EXECUTION_MODES.INTERACTIVE,
           "extension",
           undefined,
           undefined,
@@ -92,7 +92,7 @@ suite("ExecutionPlanBuilder", () => {
           []
         );
         const realArgs =
-          executionMode === "interactive"
+          executionMode === EXECUTION_MODES.INTERACTIVE
             ? provider.buildInteractiveArgs(baseArgs, session.promptArgument)
             : provider.buildHeadlessArgs(baseArgs, session.promptArgument);
 

@@ -17,6 +17,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
   buildPromptUndoDialogModel,
   aggregateWorkflowUndoFiles,
+  UNDO_FILE_CANDIDATE_TIERS,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, UNDO_FILE_ACTIONS } from "@/types/messages";
@@ -235,7 +236,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
-    expect(c.tier).toBe("tier1");
+    expect(c.tier).toBe(UNDO_FILE_CANDIDATE_TIERS.TIER1);
     expect(c.changeType).toBe(FILE_OPERATION_KINDS.MODIFIED);
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.REVERSE_PATCH);
   });
@@ -381,7 +382,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].tier).toBe("tier1");
+    expect(candidates[0].tier).toBe(UNDO_FILE_CANDIDATE_TIERS.TIER1);
     expect(candidates[0].changeType).toBe(FILE_OPERATION_KINDS.CREATED);
     expect(candidates[0].instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
@@ -496,7 +497,9 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
     ]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
-    const tier2 = candidates.filter((c) => c.tier === "tier2");
+    const tier2 = candidates.filter(
+      (c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER2
+    );
     expect(tier2).toHaveLength(1);
     expect(tier2[0].path).toBe("src/b.ts");
   });
@@ -508,7 +511,7 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
         { path: "src/x.ts", changeType: FILE_OPERATION_KINDS.MODIFIED },
       ])
     );
-    expect(candidates[0].tier).toBe("tier2");
+    expect(candidates[0].tier).toBe(UNDO_FILE_CANDIDATE_TIERS.TIER2);
     expect(candidates[0].instruction).toBeNull();
   });
 
@@ -518,7 +521,7 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
       makeSnapshot([makeModifiedSnap("src/x.ts", PATCH, "snapshot-before")])
     );
 
-    expect(candidates[0].tier).toBe("tier2");
+    expect(candidates[0].tier).toBe(UNDO_FILE_CANDIDATE_TIERS.TIER2);
     expect(candidates[0].oldContent).toBe("snapshot-before");
     expect(candidates[0].structuredPatch).toEqual(PATCH);
   });
@@ -557,13 +560,13 @@ describe("getPromptUndoSummary", () => {
   it("counts only candidates with a non-null instruction", () => {
     const candidates = [
       {
-        tier: "tier1" as const,
+        tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
         instruction: { path: "a.ts", action: UNDO_FILE_ACTIONS.DELETE },
         path: "a.ts",
         changeType: FILE_OPERATION_KINDS.CREATED,
       },
       {
-        tier: "tier1" as const,
+        tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
         instruction: null,
         path: "b.ts",
         changeType: FILE_OPERATION_KINDS.MODIFIED,
@@ -577,7 +580,7 @@ describe("getPromptUndoSummary", () => {
   it("reports hasTier2 when any candidate is tier2", () => {
     const candidates = [
       {
-        tier: "tier2" as const,
+        tier: UNDO_FILE_CANDIDATE_TIERS.TIER2,
         instruction: null,
         path: "b.ts",
         changeType: FILE_OPERATION_KINDS.MODIFIED,
@@ -847,7 +850,7 @@ function makeWorkflowCandidate(
   return {
     path,
     changeType,
-    tier: "tier1",
+    tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
     instruction,
     ...options,
   };

@@ -7,6 +7,8 @@ import { afterEach, suite, test } from "mocha";
 import { getGitIgnoredPaths } from "../utils/GitUtils";
 import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
 
+const GIT_COMMIT_SUBCOMMAND = "commit";
+
 suite("SourceRuntimeArtifactResolver", () => {
   const temporaryDirectories: string[] = [];
 
@@ -214,7 +216,7 @@ suite("SourceRuntimeArtifactResolver", () => {
 
   function git(repositoryRoot: string, ...args: string[]): void {
     const gitArgs =
-      args[0] === "commit"
+      args[0] === GIT_COMMIT_SUBCOMMAND
         ? [
             "-c",
             "user.name=ctrlyoke-test",
