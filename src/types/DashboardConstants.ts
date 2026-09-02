@@ -33,6 +33,42 @@ export const PROMPT_FILE_LANGUAGE_IDS = {
   YML: "yml",
 } as const;
 
+/** Bases used when resolving workspace-relative prompt references. */
+export const REFERENCE_PATH_BASES = {
+  ABSOLUTE: "absolute",
+  WORKFLOW: "workflow",
+  NAMED_ROOT: "namedRoot",
+  WORKSPACE: "workspace",
+  SOURCE_RUNTIME_STORE: "sourceRuntimeStore",
+} as const;
+
+/** Query keys accepted by the hosted workspace tree endpoint. */
+export const WORKSPACE_TREE_QUERY_KEYS = {
+  PATH: "path",
+} as const;
+
+/** Line-ending names used by text-file transport and persistence. */
+export const LINE_ENDINGS = {
+  LF: "lf",
+  CRLF: "crlf",
+} as const;
+
+/** Node network-interface address families used by hosted-server discovery. */
+export const NETWORK_INTERFACE_FAMILIES = {
+  IPV4: "IPv4",
+} as const;
+
+/** Promise settlement states used when inspecting concurrent operations. */
+export const PROMISE_SETTLED_STATUSES = {
+  FULFILLED: "fulfilled",
+  REJECTED: "rejected",
+} as const;
+
+/** Language IDs for workspace files identified by their full filename. */
+export const WORKSPACE_FILE_LANGUAGE_IDS = {
+  DOCKERFILE: "dockerfile",
+} as const;
+
 /** VS Code URI schemes used by extension-host integrations. */
 export const VSCODE_URI_SCHEMES = {
   OUTPUT: "output",

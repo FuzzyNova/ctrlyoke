@@ -6,6 +6,7 @@ import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   WORKTREE_DIRECTORY_STATES,
+  WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
@@ -277,8 +278,8 @@ export class UndoRedoCoordinator {
     }
     if (
       directoryGone ||
-      recorded.lifecycleState === "orphaned" ||
-      recorded.lifecycleState === "blocked"
+      recorded.lifecycleState === WORKTREE_LIFECYCLE_STATES.ORPHANED ||
+      recorded.lifecycleState === WORKTREE_LIFECYCLE_STATES.BLOCKED
     ) {
       throw new Error("the recorded worktree is no longer an active checkout");
     }

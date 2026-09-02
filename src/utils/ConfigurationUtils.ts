@@ -153,6 +153,9 @@ export const PATH_CONSTANTS = {
   /** Templates directory name (subdirectory of CTRLYOKE_DIR) */
   TEMPLATES_DIR: "templates",
 
+  /** Compiled extension output directory name. */
+  OUT_DIR: "out",
+
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 

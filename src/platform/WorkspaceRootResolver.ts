@@ -4,6 +4,7 @@ import {
   isPathWithinDirectory,
 } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
+import { REFERENCE_PATH_BASES } from "../types/DashboardConstants";
 
 /**
  * A workspace folder reduced to the fields the resolver needs.
@@ -139,11 +140,7 @@ export function resolveTrustedWorkspaceRoots(
 }
 
 export type ReferencePathBase =
-  | "absolute"
-  | "workflow"
-  | "namedRoot"
-  | "workspace"
-  | "sourceRuntimeStore";
+  (typeof REFERENCE_PATH_BASES)[keyof typeof REFERENCE_PATH_BASES];
 
 export interface ReferencePathResolutionOptions {
   primaryRoot: string;
@@ -223,7 +220,10 @@ export function resolveReferencePath(
   options: ReferencePathResolutionOptions
 ): ReferencePathResolution {
   if (path.isAbsolute(referencePath)) {
-    return { absolutePath: path.resolve(referencePath), base: "absolute" };
+    return {
+      absolutePath: path.resolve(referencePath),
+      base: REFERENCE_PATH_BASES.ABSOLUTE,
+    };
   }
 
   const normalized = referencePath.replace(/\\/g, "/");
@@ -235,7 +235,7 @@ export function resolveReferencePath(
     }
     return {
       absolutePath: path.resolve(options.sourceDefinitionDir, normalized),
-      base: "workflow",
+      base: REFERENCE_PATH_BASES.WORKFLOW,
     };
   }
 
@@ -252,7 +252,10 @@ function resolveWorkspaceOrNamedPath(
   namedRoots: readonly ResolverWorkspaceFolder[]
 ): ReferencePathResolution {
   if (path.isAbsolute(referencePath)) {
-    return { absolutePath: path.resolve(referencePath), base: "absolute" };
+    return {
+      absolutePath: path.resolve(referencePath),
+      base: REFERENCE_PATH_BASES.ABSOLUTE,
+    };
   }
 
   const normalized = referencePath.replace(/\\/g, "/");
@@ -268,14 +271,14 @@ function resolveWorkspaceOrNamedPath(
     if (match) {
       return {
         absolutePath: path.resolve(match.fsPath, rest),
-        base: "namedRoot",
+        base: REFERENCE_PATH_BASES.NAMED_ROOT,
       };
     }
   }
 
   return {
     absolutePath: path.resolve(primaryRoot, normalized),
-    base: "workspace",
+    base: REFERENCE_PATH_BASES.WORKSPACE,
   };
 }
 

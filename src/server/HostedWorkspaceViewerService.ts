@@ -45,6 +45,10 @@ import type {
 import {
   WORKSPACE_SEARCH_SCOPES,
   USER_SETTINGS_VIEWER_SENTINEL_PATH,
+  GIT_CHANGE_KINDS,
+  LINE_ENDINGS,
+  PROMISE_SETTLED_STATUSES,
+  WORKSPACE_FILE_LANGUAGE_IDS,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -278,14 +282,17 @@ const LANGUAGE_MAP: Record<string, string> = {
   graphql: "graphql",
   gql: "graphql",
   tf: "hcl",
-  dockerfile: "dockerfile",
+  [WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE]:
+    WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE,
   txt: "plaintext",
 };
 
 function languageFromPath(filePath: string): string | undefined {
   const base = path.basename(filePath).toLowerCase();
   // Special full-filename matches
-  if (base === "dockerfile") return "dockerfile";
+  if (base === WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE) {
+    return WORKSPACE_FILE_LANGUAGE_IDS.DOCKERFILE;
+  }
   if (base === ".env" || base.startsWith(".env.")) return "properties";
   const ext = path.extname(filePath).toLowerCase().replace(/^\./, "");
   return LANGUAGE_MAP[ext];
@@ -1264,7 +1271,7 @@ export class HostedWorkspaceViewerService {
     }
 
     const raw = await fs.promises.readFile(resolved, "utf8");
-    const eol: "lf" | "crlf" = raw.includes("\r\n") ? "crlf" : "lf";
+    const eol = raw.includes("\r\n") ? LINE_ENDINGS.CRLF : LINE_ENDINGS.LF;
     const relPath = this.relativePath(resolved);
 
     return {
@@ -1318,13 +1325,16 @@ export class HostedWorkspaceViewerService {
     }
 
     // Check if existing file is binary — refuse to overwrite
-    let originalEol: "lf" | "crlf" = "lf";
+    let originalEol: (typeof LINE_ENDINGS)[keyof typeof LINE_ENDINGS] =
+      LINE_ENDINGS.LF;
     try {
       if (await this.isBinaryFile(resolved)) {
         throw new Error("Cannot overwrite binary file");
       }
       const existing = await fs.promises.readFile(resolved, "utf8");
-      originalEol = existing.includes("\r\n") ? "crlf" : "lf";
+      originalEol = existing.includes("\r\n")
+        ? LINE_ENDINGS.CRLF
+        : LINE_ENDINGS.LF;
     } catch (err) {
       if (
         err instanceof Error &&
@@ -1337,7 +1347,7 @@ export class HostedWorkspaceViewerService {
 
     // Normalize incoming content to the original EOL
     let content = req.content.replace(/\r\n/g, "\n");
-    if (originalEol === "crlf") {
+    if (originalEol === LINE_ENDINGS.CRLF) {
       content = content.replace(/\n/g, "\r\n");
     }
 
@@ -1485,7 +1495,7 @@ export class HostedWorkspaceViewerService {
       this.getSyncCounts(repoRoot),
     ]);
 
-    if (statusResult.status !== "fulfilled") {
+    if (statusResult.status !== PROMISE_SETTLED_STATUSES.FULFILLED) {
       return {
         files: [],
         incomingCommitCount: 0,
@@ -1494,7 +1504,7 @@ export class HostedWorkspaceViewerService {
     }
 
     const syncCounts =
-      syncCountsResult.status === "fulfilled"
+      syncCountsResult.status === PROMISE_SETTLED_STATUSES.FULFILLED
         ? syncCountsResult.value
         : {
             incomingCommitCount: 0,
@@ -2400,18 +2410,18 @@ export class HostedWorkspaceViewerService {
       ]);
 
     const rawBranch =
-      branchName.status === "fulfilled"
+      branchName.status === PROMISE_SETTLED_STATUSES.FULFILLED
         ? branchName.value.stdout.trim()
         : "HEAD";
     const detached = rawBranch === "" || rawBranch === "HEAD";
     const currentBranch = detached ? null : rawBranch;
     const headHash =
-      headHashResult.status === "fulfilled"
+      headHashResult.status === PROMISE_SETTLED_STATUSES.FULFILLED
         ? headHashResult.value.stdout.trim()
         : null;
 
     const unpushedHashes = new Set<string>();
-    if (upstreamCommitsResult.status === "fulfilled") {
+    if (upstreamCommitsResult.status === PROMISE_SETTLED_STATUSES.FULFILLED) {
       for (const line of upstreamCommitsResult.value.stdout
         .trim()
         .split("\n")
@@ -2494,7 +2504,7 @@ export class HostedWorkspaceViewerService {
     }
     if (ref === GIT_REF_DIFF_REFS.STAGED) {
       return {
-        kind: "staged",
+        kind: GIT_CHANGE_KINDS.STAGED,
         sources: {
           baseRef: "HEAD",
           targetRef: ":",
@@ -2796,7 +2806,7 @@ export class HostedWorkspaceViewerService {
         ),
       };
     }
-    if (resolution.kind === "staged") {
+    if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
       const [unifiedDiff, changedFiles] = await Promise.all([
         getStagedDiff(repoRoot),
         getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),

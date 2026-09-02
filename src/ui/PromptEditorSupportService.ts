@@ -19,6 +19,8 @@ import {
   type AtomicReferenceKind,
   SETTING_SCOPES,
   type SettingWriteScope,
+  PROMPT_FILE_RESOLUTION_STATUSES,
+  REFERENCE_PATH_BASES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -510,10 +512,13 @@ export class PromptEditorSupportService {
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
       seq,
       filePath,
-      exists: resolution.status === "resolved" || resolution.status === "empty",
-      isEmpty: resolution.status === "empty",
+      exists:
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
+      isEmpty: resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
       resolvedPath:
-        resolution.status === "resolved" || resolution.status === "empty"
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+        resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
           ? resolution.path
           : undefined,
     });
@@ -587,7 +592,10 @@ export class PromptEditorSupportService {
           ),
       });
       const resolution = await resolver.resolve(filePath.trim());
-      if (resolution.status !== "resolved" && resolution.status !== "empty") {
+      if (
+        resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED &&
+        resolution.status !== PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
+      ) {
         throw new Error(`Prompt file could not be found: ${filePath}`);
       }
 
@@ -1072,7 +1080,7 @@ export class PromptEditorSupportService {
     }
 
     const candidates = [resolution.absolutePath];
-    if (resolution.base === "workspace") {
+    if (resolution.base === REFERENCE_PATH_BASES.WORKSPACE) {
       candidates.push(
         resolveReferencePath(
           path.join(
