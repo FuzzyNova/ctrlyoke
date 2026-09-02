@@ -133,6 +133,25 @@ suite("SecretRegistryService", () => {
     );
   });
 
+  test("additionalKnownNames surfaces a name's real resolvable state even when nothing has declared it yet", async () => {
+    const store = new InMemorySecretStore();
+    const service = serviceFor(store, { OPENAI_API_KEY: "sk-live" });
+
+    const withoutHint = await service.list(SETTING_SCOPES.USER);
+    assert.strictEqual(
+      withoutHint.find((entry) => entry.name === "OPENAI_API_KEY"),
+      undefined
+    );
+
+    const withHint = await service.list(SETTING_SCOPES.USER, [
+      "OPENAI_API_KEY",
+    ]);
+    assert.strictEqual(
+      withHint.find((entry) => entry.name === "OPENAI_API_KEY")?.state,
+      SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
+    );
+  });
+
   test("validates names before writing any value", async () => {
     const store = new InMemorySecretStore();
     const service = serviceFor(store, {});
@@ -180,6 +199,35 @@ suite("SecretRegistryService", () => {
     ]);
     assert.ok(
       !JSON.stringify(messages).includes("secret-value-that-must-not-escape")
+    );
+  });
+
+  test("REQUEST_SECRET_REGISTRY forwards additionalKnownNames so an unsaved inline grant reports its real state", async () => {
+    const store = new InMemorySecretStore();
+    const service = serviceFor(store, { OPENAI_API_KEY: "sk-live" });
+    const messages: unknown[] = [];
+    const router = new WebviewMessageRouter(
+      (message: unknown) => messages.push(message),
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+      service
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_SECRET_REGISTRY,
+      scope: SETTING_SCOPES.USER,
+      additionalKnownNames: ["OPENAI_API_KEY"],
+    });
+
+    const update = messages[0] as {
+      secrets: Array<{ name: string; state: string }>;
+    };
+    assert.strictEqual(
+      update.secrets.find((entry) => entry.name === "OPENAI_API_KEY")?.state,
+      SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
     );
   });
 });

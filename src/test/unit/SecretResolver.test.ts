@@ -632,5 +632,38 @@ suite("SecretResolver", () => {
         /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/
       );
     });
+
+    test("distinguishes an unapproved grant from a genuinely unresolvable one in the error text", async () => {
+      const unapprovedTrustStore: Pick<SecretGrantsTrustStore, "getDecision"> =
+        { getDecision: () => undefined };
+
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          { TRUSTED_TOKEN: "resolved" },
+          { trustStore: unapprovedTrustStore }
+        ),
+        /has not been approved for this workspace.*ctrlyoke trust-secret-grants/
+      );
+
+      const allowAllTrustStore = new AllowAllSecretGrantsTrustStore();
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          {},
+          { trustStore: allowAllTrustStore }
+        ),
+        (error: unknown) =>
+          error instanceof Error &&
+          /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/.test(
+            error.message
+          ) &&
+          !/has not been approved/.test(error.message)
+      );
+    });
   });
 });

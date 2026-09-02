@@ -2300,6 +2300,14 @@ export interface SecretRegistryEntry {
 export interface RequestSecretRegistryMessage {
   type: typeof MESSAGE_TYPES.REQUEST_SECRET_REGISTRY;
   scope: SettingWriteScope;
+  /**
+   * Names the caller already knows are actively granted (e.g. unsaved inline
+   * `!NAME` references or a `secrets:` array in the open editor) that may not
+   * yet be discoverable by scanning saved workflow files on disk. Included so
+   * the registry can classify their real resolvable state instead of the
+   * caller having to guess from a stale/incomplete list.
+   */
+  additionalKnownNames?: string[];
 }
 
 /** Webview -> Extension: write-only secret value submission. */
@@ -2339,6 +2347,39 @@ export interface SecretDeletedMessage {
   name: string;
   scope: SettingWriteScope;
   state: Extract<SecretRegistryActionState, "deleted">;
+}
+
+// ============================================================================
+// BATCH APPROVAL INTERACTION PORT TYPES
+// ============================================================================
+
+/** One checklist row in a batch-approval request. */
+export interface BatchApprovalItemPayload {
+  value: string;
+  label: string;
+  checked: boolean;
+}
+
+/** Extension -> Webview: ask the connected client to approve/deny a batch of named items. */
+export interface ShowBatchApprovalRequestMessage {
+  type: typeof MESSAGE_TYPES.SHOW_BATCH_APPROVAL_REQUEST;
+  request: {
+    id: string;
+    title: string;
+    description: string;
+    items: BatchApprovalItemPayload[];
+  };
+}
+
+/**
+ * Webview -> Extension: the user's decision for one batch-approval request.
+ * `result: null` means the request was dismissed with no decision made (the
+ * extension asks again later, same as a QuickPick Escape).
+ */
+export interface BatchApprovalResponseMessage {
+  type: typeof MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE;
+  id: string;
+  result: { approvedValues: string[]; deniedValues: string[] } | null;
 }
 
 // ============================================================================
@@ -2556,6 +2597,7 @@ export type IncomingMessage =
   | SecretRegistryUpdateMessage
   | SecretSetMessage
   | SecretDeletedMessage
+  | ShowBatchApprovalRequestMessage
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage

@@ -185,6 +185,12 @@ export const MESSAGE_TYPES = {
   DELETE_SECRET: "deleteSecret",
   SECRET_DELETED: "secretDeleted",
 
+  // Batch approval interaction port - Extension <-> Webview. First caller is
+  // workspace secret-grant approval (see SecretGrantsTrustPrompt.ts); the
+  // extension awaits BATCH_APPROVAL_RESPONSE before continuing.
+  SHOW_BATCH_APPROVAL_REQUEST: "showBatchApprovalRequest",
+  BATCH_APPROVAL_RESPONSE: "batchApprovalResponse",
+
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
   UPDATE_WORKFLOW_PROPERTIES: "updateWorkflowProperties", // Webview -> Extension: Save multiple workflow properties atomically

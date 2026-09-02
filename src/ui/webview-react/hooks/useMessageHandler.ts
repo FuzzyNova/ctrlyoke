@@ -62,6 +62,7 @@ import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { useHarnessUsageStore } from "../store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
 import { useSecretRegistryStore } from "../store/secretRegistryStore";
+import { useBatchApprovalStore } from "../store/batchApprovalStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -1777,6 +1778,15 @@ export function createMessageHandlers(
 
   handlers[MESSAGE_TYPES.SECRET_DELETED] = (message) => {
     useSecretRegistryStore.getState().setLastAction(message);
+  };
+
+  // --------------------------------------------------------------------------
+  // SHOW_BATCH_APPROVAL_REQUEST - UserInteractionPort batch-approval prompt
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SHOW_BATCH_APPROVAL_REQUEST] = (message) => {
+    if (message.request) {
+      useBatchApprovalStore.getState().setPendingRequest(message.request);
+    }
   };
 
   // --------------------------------------------------------------------------

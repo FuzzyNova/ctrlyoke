@@ -47,6 +47,20 @@ export class MissingSecretError extends Error {
   }
 }
 
+/**
+ * A grant the workflow declares but whose workspace trust decision is not
+ * "allow" (no decision yet, or explicitly denied) — distinct from a name
+ * that is simply unresolvable. Extends MissingSecretError so existing
+ * `instanceof MissingSecretError` / message-substring checks (e.g.
+ * `isMissingSecretPreflightError` in SecretCommands.ts) keep matching.
+ */
+export class UnapprovedSecretGrantError extends MissingSecretError {
+  constructor(name: string, names: readonly string[] = [name]) {
+    super(name, names);
+    this.name = "UnapprovedSecretGrantError";
+  }
+}
+
 export interface SecretResolutionContext {
   workspaceRoot: string;
   secretStore?: SecretStore;
@@ -377,7 +391,10 @@ export async function preflightWorkflowSecrets(
         for (const name of unapprovedGrants) {
           missingSecretNames.add(name);
         }
-        throw new MissingSecretError(unapprovedGrants[0], unapprovedGrants);
+        throw new UnapprovedSecretGrantError(
+          unapprovedGrants[0],
+          unapprovedGrants
+        );
       }
       if (grants.length > 0) {
         const missing = await findMissingSecretNames(grants, {
@@ -395,6 +412,16 @@ export async function preflightWorkflowSecrets(
         }
       }
     } catch (error) {
+      if (error instanceof UnapprovedSecretGrantError) {
+        const missingNames = error.secretNames.map(
+          (name) =>
+            `Secret "${name}" is missing for scope "${scope}" (${error.scope}) — ` +
+            `this grant has not been approved for this workspace. Approve it with ` +
+            `"ctrlyoke trust-secret-grants <file>" (or from the ctrlyoke panel in ` +
+            `VS Code), then re-run.`
+        );
+        throw new Error(missingNames.join(" "));
+      }
       if (error instanceof MissingSecretError) {
         const missingNames = error.secretNames.map(
           (name) =>

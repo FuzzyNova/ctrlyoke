@@ -121,31 +121,4 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
       !CTRLYOKE_SETTINGS_DEFAULTS.ui.offerTrustForUntrustedFileLinks
     );
   });
-
-  it("reflects the heuristic secret redaction setting and calls onUpdate on toggle", async () => {
-    const onUpdate = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <AdvancedPermissionsSection
-        settings={createSettings()}
-        activeScope={SETTING_SCOPES.USER}
-        onUpdate={onUpdate}
-        onReset={() => {}}
-      />
-    );
-
-    const checkbox = screen.getByRole("checkbox", {
-      name: /Heuristic secret redaction/i,
-    }) as HTMLInputElement;
-    expect(checkbox.checked).toBe(
-      CTRLYOKE_SETTINGS_DEFAULTS.permissions.heuristicSecretRedactionEnabled
-    );
-
-    await user.click(checkbox);
-
-    expect(onUpdate).toHaveBeenCalledWith(
-      "permissions.heuristicSecretRedactionEnabled",
-      !CTRLYOKE_SETTINGS_DEFAULTS.permissions.heuristicSecretRedactionEnabled
-    );
-  });
 });

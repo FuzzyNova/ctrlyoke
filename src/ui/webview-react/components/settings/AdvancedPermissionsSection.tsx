@@ -65,7 +65,8 @@ export function AdvancedPermissionsSection({
           <code className="font-mono">opencode.json</code>.
         </p>
         <p className="text-xs text-description-fg mb-2">
-          Manage secret values and declarations in the separate Secrets tab.
+          Manage secret values, declarations, and redaction settings in the
+          separate Secrets tab.
         </p>
         <PermissionCapabilitySummary
           id="advanced-allowed-tools-diagnostic"
@@ -74,21 +75,6 @@ export function AdvancedPermissionsSection({
         <PermissionCapabilitySummary
           id="advanced-denied-tools-diagnostic"
           field="deniedTools"
-        />
-      </div>
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Secret Redaction
-        </h3>
-        <SettingToggleRow
-          label="Heuristic secret redaction"
-          description="Also redact pattern-based matches (e.g. token=..., Bearer ..., private-key blocks) from logs, transports, exports, and history — not just exact matches of resolved managed/env secret values, which always redact regardless of this setting. Turn this off if the heuristics are over-matching and corrupting legitimate output, such as code samples or public identifiers that merely look like credentials."
-          checked={permissions.heuristicSecretRedactionEnabled}
-          onChange={(v) =>
-            onUpdate("permissions.heuristicSecretRedactionEnabled", v)
-          }
-          path="permissions.heuristicSecretRedactionEnabled"
-          {...rowProps}
         />
       </div>
       <div>

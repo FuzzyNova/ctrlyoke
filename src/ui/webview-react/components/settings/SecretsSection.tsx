@@ -6,14 +6,24 @@ import {
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
 import type {
+  FullGlobalSettings,
   SecretRegistryEntry,
   SecretRegistryState,
+  SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
-import { Button, CustomSelect, Modal } from "@components/shared";
+import {
+  Button,
+  CustomSelect,
+  Modal,
+  SettingToggleRow,
+} from "@components/shared";
 
 interface SecretsSectionProps {
+  settings: FullGlobalSettings;
   activeScope: SettingWriteScope;
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 type SecretDialogMode = "set" | "replace";
@@ -121,9 +131,9 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
         {stateLabel(entry)}
       </div>
       <SecretUsage entry={entry} />
-      <div className="flex flex-wrap items-start justify-end gap-1 md:justify-start">
+      <div className="flex items-start justify-end md:justify-start">
         {entry.state === SECRET_REGISTRY_STATES.MANAGED_AND_SET && (
-          <>
+          <div className="grid grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
@@ -141,11 +151,11 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
             >
               Delete
             </Button>
-          </>
+          </div>
         )}
         {entry.state ===
           SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED && (
-          <>
+          <div className="grid grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
@@ -164,11 +174,11 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
             >
               Remove declaration
             </Button>
-          </>
+          </div>
         )}
         {entry.state ===
           SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_NOT_FOUND && (
-          <>
+          <div className="grid grid-cols-1 gap-1">
             <Button
               type="button"
               variant="secondary"
@@ -187,7 +197,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
             >
               Remove declaration
             </Button>
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -400,7 +410,13 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
   );
 }
 
-export function SecretsSection({ activeScope }: SecretsSectionProps) {
+export function SecretsSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: SecretsSectionProps) {
+  const sources = settings.sources as Record<string, SettingSource>;
   const entries = useSecretRegistryStore(
     (state) => state.entriesByScope[activeScope]
   );
@@ -447,28 +463,25 @@ export function SecretsSection({ activeScope }: SecretsSectionProps) {
               embedding it. Reference one inline in a prompt with{" "}
               <code className="text-foreground">!NAME</code> (for example{" "}
               <code className="text-foreground">!SUPABASE_PAT</code>), or grant
-              it to a step explicitly with a <code className="text-foreground">
-                secrets:
-              </code>{" "}
-              list — either way the harness is told only the name, never the
-              value, alongside a short instruction on how to read it from its
-              own environment.
+              it to a step explicitly with a{" "}
+              <code className="text-foreground">secrets:</code> list — either
+              way the harness is told only the name, never the value, alongside
+              a short instruction on how to read it from its own environment.
             </p>
             <p className="mt-2 text-xs text-description-fg">
               Two entry kinds share that same reference. If a name is already
-              exported in your shell, ctrlyoke reads it there and stores
-              nothing — the common case. If it isn&apos;t, you can set a
-              managed value below; ctrlyoke encrypts it in OS-backed storage
-              and injects it as an environment variable into the harness&apos;s
-              child process, and only for a step that actually grants that
-              name.
+              exported in your shell, ctrlyoke reads it there and stores nothing
+              — the common case. If it isn&apos;t, you can set a managed value
+              below; ctrlyoke encrypts it in OS-backed storage and injects it as
+              an environment variable into the harness&apos;s child process, and
+              only for a step that actually grants that name.
             </p>
             <p className="mt-2 text-xs text-description-fg">
-              Granted names can be used in prompts, MCP server env and
-              headers, and hook or script commands. Values are resolved only
-              when the process spawns and are redacted from logs, run
-              history, previews, and exports — this tab itself only ever
-              shows names, state, metadata, and usage, never secret contents.
+              Granted names can be used in prompts, MCP server env and headers,
+              and hook or script commands. Values are resolved only when the
+              process spawns and are redacted from logs, run history, previews,
+              and exports — this tab itself only ever shows names, state,
+              metadata, and usage, never secret contents.
             </p>
           </div>
           <Button
@@ -508,6 +521,26 @@ export function SecretsSection({ activeScope }: SecretsSectionProps) {
             ))}
           </div>
         )}
+
+        <div className="border-t border-panel-border pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg mb-3">
+            Secret Redaction
+          </h3>
+          <SettingToggleRow
+            label="Heuristic secret redaction"
+            description="The exact values of the secrets listed above are always redacted from logs, transports, exports, and history — this cannot be turned off. This setting adds broader pattern-based redaction (e.g. token=..., Bearer ..., private-key blocks) that also catches credentials ctrlyoke was never told about. Turn it off if those patterns are over-matching and corrupting legitimate output, such as code samples or public identifiers that merely look like credentials."
+            checked={
+              settings.settings.permissions.heuristicSecretRedactionEnabled
+            }
+            onChange={(v) =>
+              onUpdate("permissions.heuristicSecretRedactionEnabled", v)
+            }
+            path="permissions.heuristicSecretRedactionEnabled"
+            sources={sources}
+            onReset={onReset}
+            activeScope={activeScope}
+          />
+        </div>
       </div>
       <SecretDialog
         dialog={dialog}

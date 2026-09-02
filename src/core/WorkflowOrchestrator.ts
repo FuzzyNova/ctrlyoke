@@ -130,6 +130,10 @@ import {
   type DashboardClient,
 } from "../ui/DashboardBroadcastHub";
 import { promptBatchApprovalForPendingWorkspaceSecretGrants } from "../ui/SecretGrantsTrustPrompt";
+import {
+  NullUserInteractionPort,
+  type UserInteractionPort,
+} from "../ui/UserInteractionPort";
 
 /**
  * WorkflowOrchestrator
@@ -473,7 +477,8 @@ export class WorkflowOrchestrator {
     dashboardProvider: DashboardClient | undefined,
     private readonly userFeedbackSink: UserFeedbackSink,
     private readonly runnerHostIdentity: RunnerHostIdentity,
-    licenseService?: LicenseService
+    licenseService?: LicenseService,
+    private readonly userInteractionPort: UserInteractionPort = new NullUserInteractionPort()
   ) {
     // Create the startup auto-load promise — browser clients await this instead
     // of registering pending callbacks, eliminating the startup race condition.
@@ -5519,6 +5524,26 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Gate secret-grant approval on VS Code's own workspace-trust concept
+   * before delegating to the (vscode-free) shared prompt helper — an
+   * untrusted workspace never gets asked, same as before this was made
+   * interaction-port-based.
+   */
+  private async approveSecretGrantsForWorkflow(
+    workflow: PromptFile,
+    workspaceRoot: string
+  ): Promise<void> {
+    if (!vscode.workspace.isTrusted) {
+      return;
+    }
+    await promptBatchApprovalForPendingWorkspaceSecretGrants(
+      workflow,
+      workspaceRoot,
+      this.userInteractionPort
+    );
+  }
+
+  /**
    * Construct a new WorkflowInstance wired to this orchestrator's integrations.
    */
   private buildWorkflowInstance(): WorkflowInstance {
@@ -5539,7 +5564,8 @@ export class WorkflowOrchestrator {
       (harnessId) =>
         this.harnessUsageService?.refreshHarnessUsage(harnessId) ??
         Promise.resolve(),
-      promptBatchApprovalForPendingWorkspaceSecretGrants,
+      (workflow, workspaceRoot) =>
+        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
       this.runnerHostIdentity
     );
 

@@ -61,6 +61,8 @@ import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTr
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { SecretRegistryService } from "./SecretRegistryService";
+import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+import type { UserInteractionPort } from "./UserInteractionPort";
 import type { LicenseService } from "../license/LicenseService";
 
 // Re-export CliOutput for external use
@@ -115,6 +117,7 @@ export class CtrlYokeWebviewProvider
   private readonly serializer: WorkflowSerializer;
   private readonly router: WebviewMessageRouter;
   private readonly secretRegistry: SecretRegistryService;
+  private readonly interactionPort: WebviewUserInteractionPort;
   private readonly historySearchService = new HistorySearchService();
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
@@ -160,6 +163,10 @@ export class CtrlYokeWebviewProvider
       secretStore: new VsCodeAdapter(context).getSecretStore(),
       getWorkspaceRoot: getVsCodeWorkspaceRoot,
     });
+    this.interactionPort = new WebviewUserInteractionPort(
+      postMessage,
+      () => this.panelReady && !!this.view
+    );
 
     // Create delegate classes
     this.settingsSync = new WebviewSettingsSync(
@@ -221,6 +228,8 @@ export class CtrlYokeWebviewProvider
         getPortFallback: () => this.runningServerPortFallback,
         getBindAddressFallback: () => this.runningServerBindAddressFallback,
         onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
+        handleBatchApprovalResponse: (id, result) =>
+          this.interactionPort.handleResponse(id, result ?? undefined),
       },
       this.secretRegistry,
       licenseService
@@ -317,6 +326,7 @@ export class CtrlYokeWebviewProvider
         this.view = undefined;
       }
       this.cancelReconnectRetry();
+      this.interactionPort.disposeAllPending();
     });
 
     this.startPanelReconnectRecovery(webviewView);
@@ -1133,6 +1143,7 @@ export class CtrlYokeWebviewProvider
     this.commitMessageGenerationUnsubscribe?.();
     this.licenseEntitlementSubscription?.dispose();
     this.cancelReconnectRetry();
+    this.interactionPort.disposeAllPending();
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -1320,6 +1331,10 @@ export class CtrlYokeWebviewProvider
 
   public getSecretRegistryService(): SecretRegistryService {
     return this.secretRegistry;
+  }
+
+  public getUserInteractionPort(): UserInteractionPort {
+    return this.interactionPort;
   }
 
   public openGlobalSettingsTab(tab: "secrets" | "license"): void {

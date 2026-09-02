@@ -1,27 +1,54 @@
-import * as vscode from "vscode";
 import type { SecretGrantsTrustStore } from "../config/SecretGrantsTrustStore";
 import { secretGrantsTrustStore } from "../config/SecretGrantsTrustStore";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { PromptFile } from "../types/CtrlYokeTypes";
 import { getWorkflowSecretGrants } from "../utils/SecretResolver";
+import type { UserInteractionPort } from "./UserInteractionPort";
+
+/**
+ * A workflow declares one or more secret grants with no recorded trust
+ * decision, and no interactive client is connected to ask. The caller
+ * (`preflightWorkflowSecrets`) is what actually blocks the run either way —
+ * this error exists so a run that couldn't even attempt to ask reports *why*,
+ * distinctly from a prompt the user dismissed (which silently asks again
+ * next run, same as an unanswered VS Code QuickPick always did).
+ */
+export class PendingSecretGrantsError extends Error {
+  readonly secretNames: readonly string[];
+
+  constructor(secretNames: readonly string[]) {
+    super(
+      `${secretNames.length} secret grant(s) require approval and no interactive client is connected: ` +
+        `${secretNames.join(", ")}. Approve them with "ctrlyoke trust-secret-grants <file>", ` +
+        `or open this workspace in the ctrlyoke panel and approve them there.`
+    );
+    this.secretNames = [...secretNames];
+    this.name = "PendingSecretGrantsError";
+  }
+}
 
 /**
  * One-time batch approval for a workspace's requested workflow secret grants.
- * Shows a single scrollable, reviewable picker listing every grant that has no
- * recorded decision yet for this workspace identity. Each item defaults checked
- * ("Allow"); unchecking an item before confirming records a "deny" for it
- * instead. Dismissing the picker (Escape) records no decision at all, so the
- * user is asked again next time. Requires VS Code Workspace Trust first.
+ * Asks the given interaction port for a single reviewable batch decision
+ * covering every grant that has no recorded decision yet for this workspace
+ * identity. Each item defaults checked ("Allow"); unchecking an item before
+ * confirming records a "deny" for it instead. Dismissing the request (Escape
+ * in the VS Code implementation) records no decision at all, so the user is
+ * asked again next time.
+ *
+ * Workspace-trust gating (VS Code's own "is this folder trusted" concept) is
+ * the caller's concern, not this function's — it has no `vscode` dependency
+ * so it works identically for any interaction port implementation.
  */
 export async function promptBatchApprovalForPendingWorkspaceSecretGrants(
   workflow: PromptFile,
   workspaceRoot: string,
-  store: SecretGrantsTrustStore = secretGrantsTrustStore
+  port: UserInteractionPort,
+  store: Pick<
+    SecretGrantsTrustStore,
+    "getPendingGrants" | "setDecisions"
+  > = secretGrantsTrustStore
 ): Promise<void> {
-  if (!vscode.workspace.isTrusted) {
-    return;
-  }
-
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
   const pendingNames = store.getPendingGrants(
@@ -32,33 +59,30 @@ export async function promptBatchApprovalForPendingWorkspaceSecretGrants(
     return;
   }
 
-  const picks = pendingNames.map((name) => ({ label: name, picked: true }));
-  const selection = await vscode.window.showQuickPick(picks, {
-    canPickMany: true,
-    ignoreFocusOut: true,
-    title: `ctrlyoke: this workflow requests ${pendingNames.length} secret grant(s)`,
-    placeHolder:
-      "Uncheck a grant to keep it blocked, then press Enter to confirm — Escape asks again next time",
+  if (!port.canPrompt()) {
+    throw new PendingSecretGrantsError(pendingNames);
+  }
+
+  const result = await port.requestBatchApproval({
+    id: crypto.randomUUID(),
+    title: `This workflow requests ${pendingNames.length} secret grant(s)`,
+    description:
+      "Uncheck a grant to keep it blocked. Dismissing asks again next time.",
+    items: pendingNames.map((name) => ({
+      value: name,
+      label: name,
+      checked: true,
+    })),
   });
 
-  if (selection === undefined) {
+  if (result === undefined) {
     return;
   }
 
-  const approvedNames = selection.map((item) => item.label);
-  const deniedNames = pendingNames.filter(
-    (name) => !approvedNames.includes(name)
-  );
-
-  if (approvedNames.length > 0) {
-    await store.setDecisions(workspaceIdentity, approvedNames, "allow");
+  if (result.approvedValues.length > 0) {
+    await store.setDecisions(workspaceIdentity, result.approvedValues, "allow");
   }
-  if (deniedNames.length > 0) {
-    await store.setDecisions(workspaceIdentity, deniedNames, "deny");
+  if (result.deniedValues.length > 0) {
+    await store.setDecisions(workspaceIdentity, result.deniedValues, "deny");
   }
-
-  vscode.window.showInformationMessage(
-    `ctrlyoke: approved ${approvedNames.length} secret grant(s)` +
-      (deniedNames.length > 0 ? `, kept ${deniedNames.length} blocked.` : ".")
-  );
 }

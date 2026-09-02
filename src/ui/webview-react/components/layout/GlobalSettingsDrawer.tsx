@@ -278,8 +278,8 @@ export function GlobalSettingsDrawer() {
                   {...sectionProps}
                 />
               )}
-              {effectiveActiveTab === "secrets" && (
-                <SecretsSection activeScope={activeScope} />
+              {fullSettings && effectiveActiveTab === "secrets" && (
+                <SecretsSection settings={fullSettings} {...sectionProps} />
               )}
               {fullSettings && effectiveActiveTab === "execution" && (
                 <ExecutionSection settings={fullSettings} {...sectionProps} />

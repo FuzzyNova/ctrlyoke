@@ -7,10 +7,31 @@ import {
   SETTING_SCOPES,
   MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
-import type { SecretRegistryEntry } from "@root/types/WebviewMessageTypes";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type {
+  FullGlobalSettings,
+  SecretRegistryEntry,
+} from "@root/types/WebviewMessageTypes";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 
 const postMessageSpy = vi.fn();
+
+const defaultSettings: FullGlobalSettings = {
+  settings: CTRLYOKE_SETTINGS_DEFAULTS,
+  sources: {},
+  isMultiRoot: false,
+};
+
+function renderSecretsSection() {
+  return render(
+    <SecretsSection
+      settings={defaultSettings}
+      activeScope={SETTING_SCOPES.USER}
+      onUpdate={() => {}}
+      onReset={() => {}}
+    />
+  );
+}
 
 beforeEach(() => {
   useSecretRegistryStore.getState().resetSecretRegistry();
@@ -54,7 +75,7 @@ describe("SecretsSection", () => {
       ),
     ]);
 
-    render(<SecretsSection activeScope={SETTING_SCOPES.USER} />);
+    renderSecretsSection();
 
     const managed = within(screen.getByTestId("secret-row-SERVICE_API_TOKEN"));
     expect(managed.getByText(/Managed · set/)).toBeInTheDocument();
@@ -101,7 +122,7 @@ describe("SecretsSection", () => {
       }),
     ]);
 
-    render(<SecretsSection activeScope={SETTING_SCOPES.USER} />);
+    renderSecretsSection();
     await user.click(screen.getByText("Used by (2)"));
 
     expect(screen.getByText("release-api")).toBeInTheDocument();
@@ -115,7 +136,7 @@ describe("SecretsSection", () => {
     setEntries([
       entry("EXISTING_TOKEN", SECRET_REGISTRY_STATES.MANAGED_AND_SET),
     ]);
-    render(<SecretsSection activeScope={SETTING_SCOPES.USER} />);
+    renderSecretsSection();
 
     await user.click(screen.getByRole("button", { name: "Set secret" }));
     const nameInput = screen.getByLabelText("Name");
@@ -138,7 +159,7 @@ describe("SecretsSection", () => {
 
   it("provides a masked multi-line textarea variant", async () => {
     const user = userEvent.setup();
-    render(<SecretsSection activeScope={SETTING_SCOPES.USER} />);
+    renderSecretsSection();
 
     await user.click(screen.getByRole("button", { name: "Set secret" }));
     await user.click(
@@ -153,7 +174,7 @@ describe("SecretsSection", () => {
   it("clears component state after the one write submission and does not echo the value", async () => {
     const user = userEvent.setup();
     const secretValue = "line-one\nline-two-secret";
-    render(<SecretsSection activeScope={SETTING_SCOPES.USER} />);
+    renderSecretsSection();
 
     await user.click(screen.getByRole("button", { name: "Set secret" }));
     await user.type(screen.getByLabelText("Name"), "NEW_TOKEN");
@@ -190,5 +211,32 @@ describe("SecretsSection", () => {
         return candidate.type !== MESSAGE_TYPES.SET_SECRET;
       }).length
     ).toBeGreaterThan(0);
+  });
+
+  it("reflects the heuristic secret redaction setting and calls onUpdate on toggle", async () => {
+    const onUpdate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SecretsSection
+        settings={defaultSettings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /Heuristic secret redaction/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(
+      CTRLYOKE_SETTINGS_DEFAULTS.permissions.heuristicSecretRedactionEnabled
+    );
+
+    await user.click(checkbox);
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      "permissions.heuristicSecretRedactionEnabled",
+      !CTRLYOKE_SETTINGS_DEFAULTS.permissions.heuristicSecretRedactionEnabled
+    );
   });
 });

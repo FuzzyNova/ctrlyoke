@@ -6,7 +6,11 @@ import { suite, test } from "mocha";
 
 export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
   directMessage: {
-    boundary: 50,
+    // Shrank from 50 to 49: SecretGrantsTrustPrompt.ts's `vscode` dependency
+    // was removed entirely (it now goes through UserInteractionPort), so its
+    // one showInformationMessage() call — and the file's allowlist entry —
+    // are both gone rather than migrated.
+    boundary: 49,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
@@ -16,7 +20,6 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
       "src/scm/ScmCommitCommand.ts",
       "src/ui/ExternalFileTrustPrompt.ts",
       "src/ui/NotificationManager.ts",
-      "src/ui/SecretGrantsTrustPrompt.ts",
       "src/ui/WebviewMessageRouter.ts",
     ] as readonly string[],
   },

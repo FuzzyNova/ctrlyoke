@@ -312,7 +312,8 @@ export async function activate(context: vscode.ExtensionContext) {
       webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
-      licenseService
+      licenseService,
+      webviewProvider.getUserInteractionPort()
     );
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup

@@ -15,6 +15,7 @@ export {
   type AgentSelectEntry,
 } from "./agentSelectOptions";
 export { Modal } from "./Modal";
+export { BatchApprovalModal } from "./BatchApprovalModal";
 export {
   PortabilityReportSection,
   type PortabilityReportSectionProps,

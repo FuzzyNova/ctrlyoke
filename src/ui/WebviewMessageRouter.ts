@@ -61,6 +61,7 @@ import type {
   RetryHarnessDetectionMessage,
   DeleteSecretMessage,
   SetSecretMessage,
+  BatchApprovalResponseMessage,
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
 } from "../types/WebviewMessageTypes";
@@ -305,6 +306,7 @@ export class WebviewMessageRouter {
     this.registerEditorSupport(table);
     this.registerMcpManager(table);
     this.registerSecretRegistry(table);
+    this.registerUserInteraction(table);
     this.registerHarnessFiles(table);
     this.registerOutputHistory(table);
     this.registerWorkflowVariants(table);
@@ -337,6 +339,17 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, (message, ctx) =>
       this.licenseHandlers.handleDeactivateLicenseMachine(message, ctx)
     );
+  }
+
+  /** Webview's reply to a UserInteractionPort SHOW_BATCH_APPROVAL_REQUEST. */
+  private registerUserInteraction(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE, (message) => {
+      const request = message as BatchApprovalResponseMessage;
+      this.callbacks.handleBatchApprovalResponse?.(
+        request.id,
+        request.result ?? undefined
+      );
+    });
   }
 
   private registerUserFeedback(table: DispatchTable): void {
@@ -1044,7 +1057,10 @@ export class WebviewMessageRouter {
         ctx.emit({
           type: MESSAGE_TYPES.SECRET_REGISTRY_UPDATE,
           scope: message.scope,
-          secrets: await this.secretRegistry!.list(message.scope),
+          secrets: await this.secretRegistry!.list(
+            message.scope,
+            message.additionalKnownNames ?? []
+          ),
         });
       } catch (error) {
         this.emitSecretRegistryFailure(ctx, "load secret registry", error);
@@ -2326,6 +2342,16 @@ export interface WebviewRouterCallbacks {
    * always be handled or the reloaded panel never receives CLIENT_ID_ASSIGNED.
    */
   onPanelReady?: (pageLoadId: string | undefined) => boolean;
+  /**
+   * Forward the panel's decision for one batch-approval request (see
+   * UserInteractionPort) back to the WebviewUserInteractionPort that raised
+   * it. `result` is undefined when the request was dismissed with no
+   * decision made.
+   */
+  handleBatchApprovalResponse?: (
+    id: string,
+    result: { approvedValues: string[]; deniedValues: string[] } | undefined
+  ) => void;
 }
 
 export interface WebviewRouteOptions {

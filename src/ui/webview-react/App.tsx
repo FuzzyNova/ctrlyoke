@@ -57,6 +57,7 @@ import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 import { ToastViewport } from "@components/shared/ToastViewport";
+import { BatchApprovalModal } from "@components/shared/BatchApprovalModal";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -731,6 +732,8 @@ function App() {
 
         <ToastViewport />
 
+        <BatchApprovalModal />
+
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
             Placing it here (flex sibling of the main content area) means every
@@ -981,6 +984,8 @@ function App() {
       <UxSnapshotButton />
 
       <ToastViewport />
+
+      <BatchApprovalModal />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

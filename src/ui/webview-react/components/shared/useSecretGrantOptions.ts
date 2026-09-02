@@ -70,11 +70,25 @@ export function useSecretGrantOptions({
     (state) => state.requestEntries
   );
 
+  // Active grants may include names typed into the editor but not yet saved to
+  // a workflow file on disk (e.g. an inline `!NAME` reference just added), so
+  // the registry wouldn't otherwise discover them by scanning saved workflow
+  // files. Pass them through as `additionalKnownNames` so the registry still
+  // reports their real resolvable state instead of the panel treating an
+  // unknown-but-resolvable name as unresolved.
+  const activeGrantNamesKey = uniqueSortedNames([
+    ...declaredSecrets,
+    ...inlineSecretNames,
+  ]).join(",");
+
   useEffect(() => {
+    const activeGrantNames = activeGrantNamesKey
+      ? activeGrantNamesKey.split(",")
+      : [];
     for (const scope of SECRET_REGISTRY_SCOPES) {
-      requestEntries(scope);
+      requestEntries(scope, activeGrantNames);
     }
-  }, [requestEntries]);
+  }, [requestEntries, activeGrantNamesKey]);
 
   return useMemo(() => {
     const registryEntries: SecretRegistryEntry[] = [

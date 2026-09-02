@@ -23,7 +23,10 @@ export interface SecretRegistryState {
     entries: SecretRegistryEntry[]
   ) => void;
   setLastAction: (action: SecretRegistryAction) => void;
-  requestEntries: (scope: SettingWriteScope) => void;
+  requestEntries: (
+    scope: SettingWriteScope,
+    additionalKnownNames?: string[]
+  ) => void;
   setSecret: (
     name: string,
     scope: SettingWriteScope,
@@ -64,11 +67,16 @@ export const useSecretRegistryStore = create<SecretRegistryState>((set) => ({
       },
     })),
 
-  requestEntries: (scope) => {
+  requestEntries: (scope, additionalKnownNames) => {
     set((state) => ({
       loadingByScope: { ...state.loadingByScope, [scope]: true },
     }));
-    sendMessage(MESSAGE_TYPES.REQUEST_SECRET_REGISTRY, { scope });
+    sendMessage(MESSAGE_TYPES.REQUEST_SECRET_REGISTRY, {
+      scope,
+      ...(additionalKnownNames && additionalKnownNames.length > 0
+        ? { additionalKnownNames }
+        : {}),
+    });
   },
 
   // The value is passed directly to the transport and is never stored in
