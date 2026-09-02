@@ -14,7 +14,13 @@ import type {
 } from "../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
 
-type PendingKind = "semantic" | "toolCall" | "mcp" | "webSearch";
+const PENDING_KINDS = {
+  SEMANTIC: "semantic",
+  TOOL_CALL: "toolCall",
+  MCP: "mcp",
+  WEB_SEARCH: "webSearch",
+} as const;
+type PendingKind = (typeof PENDING_KINDS)[keyof typeof PENDING_KINDS];
 
 interface PendingEvent {
   index: number;
@@ -239,7 +245,7 @@ function createPendingEvent(
   if (isSemanticInitiatedEvent(event)) {
     return {
       index,
-      kind: "semantic",
+      kind: PENDING_KINDS.SEMANTIC,
       type: event.type,
       key: getEventKey(event),
       toolCallId: getToolCallId(event),
@@ -251,7 +257,7 @@ function createPendingEvent(
     if (!data.result) {
       return {
         index,
-        kind: "toolCall",
+        kind: PENDING_KINDS.TOOL_CALL,
         type: event.type,
         key: getEventKey(event),
         toolCallId: data.id,
@@ -264,7 +270,7 @@ function createPendingEvent(
     if (!data.result) {
       return {
         index,
-        kind: "mcp",
+        kind: PENDING_KINDS.MCP,
         type: event.type,
         key: getEventKey(event),
       };
@@ -276,7 +282,7 @@ function createPendingEvent(
     if (data.success === undefined && !data.error) {
       return {
         index,
-        kind: "webSearch",
+        kind: PENDING_KINDS.WEB_SEARCH,
         type: event.type,
         key: getEventKey(event),
       };
@@ -300,7 +306,10 @@ function findMatchingPendingForCompletion(
   const key = getEventKey(event);
   for (let i = pending.length - 1; i >= 0; i--) {
     const candidate = pending[i];
-    if (candidate.kind !== "semantic" || candidate.type !== event.type) {
+    if (
+      candidate.kind !== PENDING_KINDS.SEMANTIC ||
+      candidate.type !== event.type
+    ) {
       continue;
     }
     if (candidate.key && key) {
@@ -648,7 +657,7 @@ export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
         );
         if (merged) {
           output[pendingMatch.index] = merged;
-          if (pendingMatch.kind !== "semantic") {
+          if (pendingMatch.kind !== PENDING_KINDS.SEMANTIC) {
             removePending(pending, pendingMatch);
           }
           continue;

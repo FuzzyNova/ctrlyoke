@@ -24,6 +24,9 @@ export interface McpToolDefinition {
 /** Tool used by the structured commit-message capture path. */
 export const MCP_COMMIT_MESSAGE_TOOL_NAME = "ctrlyoke_submit_commit_message";
 
+/** Tool used to add one or more steps to the workflow's queue. */
+export const MCP_APPEND_QUEUE_TOOL_NAME = "ctrlyoke_append_queue";
+
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
@@ -33,7 +36,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "ctrlyoke_append_queue",
+    name: MCP_APPEND_QUEUE_TOOL_NAME,
     description:
       "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
     inputSchema: {
@@ -154,7 +157,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
 /** Queue tools documented by the built-in MCP skill. */
 export const MCP_QUEUE_TOOL_NAMES = [
   "ctrlyoke_queue_status",
-  "ctrlyoke_append_queue",
+  MCP_APPEND_QUEUE_TOOL_NAME,
   "ctrlyoke_capabilities",
   "ctrlyoke_read_output",
   "ctrlyoke_global_status",

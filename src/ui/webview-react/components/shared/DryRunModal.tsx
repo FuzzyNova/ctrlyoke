@@ -16,6 +16,7 @@ import {
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
+  WORKTREE_CONFIG_ORIGINS,
   WORKTREE_MODE_OPTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
@@ -234,7 +235,12 @@ function WorktreeSummary({
 }): React.ReactElement {
   const entries: [string, React.ReactNode][] = [
     ["Mode", WORKTREE_MODE_LABEL[worktree.mode] ?? worktree.mode],
-    ["Source", worktree.origin === "authored" ? "Workflow" : "Default setting"],
+    [
+      "Source",
+      worktree.origin === WORKTREE_CONFIG_ORIGINS.AUTHORED
+        ? "Workflow"
+        : "Default setting",
+    ],
     ...(worktree.branch
       ? ([["Branch", worktree.branch]] as [string, React.ReactNode][])
       : []),

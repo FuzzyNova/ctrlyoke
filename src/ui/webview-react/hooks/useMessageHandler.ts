@@ -77,6 +77,7 @@ import {
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
   NOTIFICATION_KINDS,
+  THEME_KINDS,
   USER_FEEDBACK_SEVERITY,
   UX_SNAPSHOT_STATUSES,
   type UserFeedbackSeverity,
@@ -276,10 +277,10 @@ export function captureAndSendThemeVars(
   // cachedThemeVars / buildThemeStyleBlock pipeline as the --vscode-* vars.
   const bodyClasses = document.body.classList;
   const themeKind = bodyClasses.contains("vscode-high-contrast")
-    ? "high-contrast"
+    ? THEME_KINDS.HIGH_CONTRAST
     : bodyClasses.contains("vscode-dark")
-      ? "dark"
-      : "light";
+      ? THEME_KINDS.DARK
+      : THEME_KINDS.LIGHT;
   vars["--fp-color-theme-kind"] = themeKind;
 
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });

@@ -34,6 +34,7 @@ import {
   WORKTREE_MERGE_OUTCOMES,
   WORKFLOW_LOCK_LOCALITIES,
   WORKTREE_SETUP_OUTCOMES,
+  type WorktreeConfigOrigin,
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "./DashboardConstants";
@@ -182,7 +183,7 @@ export interface WorktreeDefaultConfig {
 export interface WorktreeResolution {
   /** Absent means the resolved mode is `none`. */
   config?: WorktreeDefaultConfig;
-  origin: "authored" | "default";
+  origin: WorktreeConfigOrigin;
 }
 
 /**

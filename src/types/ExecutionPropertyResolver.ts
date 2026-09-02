@@ -24,7 +24,13 @@ import type {
   ToolPermissionConfig,
 } from "./ExecutionPropertyTypes";
 
-export type ResolutionSource = "prompt" | "workflow" | "defaults";
+export const RESOLUTION_SOURCES = {
+  PROMPT: "prompt",
+  WORKFLOW: "workflow",
+  DEFAULTS: "defaults",
+} as const;
+export type ResolutionSource =
+  (typeof RESOLUTION_SOURCES)[keyof typeof RESOLUTION_SOURCES];
 
 /** Platform-neutral defaults supplied by a settings/capability adapter. */
 export interface ExecutionPropertyDefaults {
@@ -302,7 +308,7 @@ export function resolveExecutionProperties(
     ? executionMode.value
     : EXECUTION_MODES.HEADLESS;
   const resolvedPriorContext =
-    priorContext.source === "defaults" &&
+    priorContext.source === RESOLUTION_SOURCES.DEFAULTS &&
     priorContext.value === PRIOR_CONTEXT_KEYWORDS.NONE
       ? undefined
       : priorContext.value;

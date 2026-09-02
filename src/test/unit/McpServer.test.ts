@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
+import { MCP_APPEND_QUEUE_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
   WorkflowKey,
@@ -303,7 +304,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     const append: any = server
       .getToolDefinitions()
-      .find((tool) => tool.name === "ctrlyoke_append_queue")!.inputSchema;
+      .find((tool) => tool.name === MCP_APPEND_QUEUE_TOOL_NAME)!.inputSchema;
     assert.deepStrictEqual(Object.keys(append.properties).sort(), [
       "position",
       "source",

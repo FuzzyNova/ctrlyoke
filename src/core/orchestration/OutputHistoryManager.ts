@@ -23,6 +23,7 @@ import {
   EXECUTION_STATES,
   HARNESS_IDS,
   STEP_TYPES,
+  WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
   type ExecutionState,
@@ -1334,7 +1335,7 @@ export class OutputHistoryManager {
       this._workspaceFolderPath,
       workflowKey
     );
-    if (lockInspection.liveness === "active") {
+    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
       protectedRunRefs.add(lockInspection.lock.runRef);
     }
     return protectedRunRefs;

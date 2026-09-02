@@ -1715,6 +1715,15 @@ export const WORKTREE_LANDING_OUTCOMES = {
 export type WorktreeLandingOutcome =
   (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
 
+/** Which tier supplied a resolved worktree config: the workflow itself, or a settings default. */
+export const WORKTREE_CONFIG_ORIGINS = {
+  AUTHORED: "authored",
+  DEFAULT: "default",
+} as const;
+
+export type WorktreeConfigOrigin =
+  (typeof WORKTREE_CONFIG_ORIGINS)[keyof typeof WORKTREE_CONFIG_ORIGINS];
+
 export const WORKTREE_RECOVERY_OUTCOMES = {
   LANDED: WORKTREE_LANDING_OUTCOMES.LANDED,
   NO_CHANGES: WORKTREE_LANDING_OUTCOMES.NO_CHANGES,
@@ -2336,6 +2345,17 @@ export const FILE_OPERATION_KINDS = {
 
 export type FileOperationKind =
   (typeof FILE_OPERATION_KINDS)[keyof typeof FILE_OPERATION_KINDS];
+
+// ============================================================================
+// THEME KINDS - Values of the ctrlyoke-forwarded --fp-color-theme-kind CSS var
+// ============================================================================
+export const THEME_KINDS = {
+  LIGHT: "light",
+  DARK: "dark",
+  HIGH_CONTRAST: "high-contrast",
+} as const;
+
+export type ThemeKind = (typeof THEME_KINDS)[keyof typeof THEME_KINDS];
 
 // ============================================================================
 // APPLY PATCH FILE EDIT KINDS - Codex patch parser file-operation values
@@ -3080,7 +3100,17 @@ export const KEYBOARD_KEYS = {
   ESCAPE: "Escape",
   ARROW_UP: "ArrowUp",
   ARROW_DOWN: "ArrowDown",
+  TAB: "Tab",
 } as const;
+
+/** Friendly host-OS tag detected client-side from `navigator`, distinct from Node's `process.platform`. */
+export const UI_PLATFORMS = {
+  WINDOWS: "windows",
+  MAC: "mac",
+  LINUX: "linux",
+} as const;
+
+export type UiPlatform = (typeof UI_PLATFORMS)[keyof typeof UI_PLATFORMS];
 
 /** Visual variants supported by shared action buttons. */
 export const BUTTON_VARIANTS = {

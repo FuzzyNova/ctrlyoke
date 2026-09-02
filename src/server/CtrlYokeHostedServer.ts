@@ -49,6 +49,7 @@ import {
   BOOLEAN_STRING_VALUES,
   WORKSPACE_SEARCH_SCOPES,
   NETWORK_INTERFACE_FAMILIES,
+  THEME_KINDS,
 } from "../types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -1664,9 +1665,9 @@ export class CtrlYokeHostedServer
 
   private resolveThemeBodyClass(): string {
     const themeKind = this.cachedThemeVars["--fp-color-theme-kind"];
-    return themeKind === "light"
+    return themeKind === THEME_KINDS.LIGHT
       ? "vscode-light"
-      : themeKind === "high-contrast"
+      : themeKind === THEME_KINDS.HIGH_CONTRAST
         ? "vscode-high-contrast"
         : "vscode-dark";
   }

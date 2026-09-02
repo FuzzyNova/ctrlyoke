@@ -39,6 +39,11 @@ export type DevDashboardAction =
   | "runTests"
   | "sendTestNotification";
 
+const DEV_ACTION_BUILD_EXTENSION_AND_RELOAD: DevDashboardAction =
+  "buildExtensionAndReload";
+const DEV_ACTION_BUILD_WEBVIEW_AND_RELOAD: DevDashboardAction =
+  "buildWebviewAndReload";
+
 export interface DevDashboardActionOptions {
   context: vscode.ExtensionContext;
   postMessage: (message: unknown) => void;
@@ -283,9 +288,11 @@ export async function handleDevDashboardAction(
   }
 
   const scriptName =
-    action === "buildExtension" || action === "buildExtensionAndReload"
+    action === "buildExtension" ||
+    action === DEV_ACTION_BUILD_EXTENSION_AND_RELOAD
       ? "compile:extension"
-      : action === "buildWebview" || action === "buildWebviewAndReload"
+      : action === "buildWebview" ||
+          action === DEV_ACTION_BUILD_WEBVIEW_AND_RELOAD
         ? "compile:webview"
         : action === "runTests"
           ? "test"
@@ -295,12 +302,15 @@ export async function handleDevDashboardAction(
     return;
   }
 
-  if (action === "buildWebviewAndReload") {
+  if (action === DEV_ACTION_BUILD_WEBVIEW_AND_RELOAD) {
     await executeRestartCommand(DEV_RELOAD_WINDOW_COMMAND, postMessage);
     return;
   }
 
-  if (action === "buildExtensionAndReload" || action === "buildAllAndReload") {
+  if (
+    action === DEV_ACTION_BUILD_EXTENSION_AND_RELOAD ||
+    action === "buildAllAndReload"
+  ) {
     await executeRestartCommand(
       DEV_RESTART_EXTENSION_HOST_COMMAND,
       postMessage

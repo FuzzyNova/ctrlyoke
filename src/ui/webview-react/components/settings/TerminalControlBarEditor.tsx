@@ -176,7 +176,7 @@ function keyEventToCapture(
 
   if (e.key === KEYBOARD_KEYS.ESCAPE && !ctrl && !alt && !shift)
     return { sequence: "\\x1b", humanLabel: "Esc" };
-  if (e.key === "Tab" && !ctrl && !alt)
+  if (e.key === KEYBOARD_KEYS.TAB && !ctrl && !alt)
     return shift
       ? { sequence: "\\x1b[Z", humanLabel: "Shift+Tab" }
       : { sequence: "\\t", humanLabel: "Tab" };

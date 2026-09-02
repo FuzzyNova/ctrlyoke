@@ -93,7 +93,13 @@ export type WorktreeMode =
   | typeof WORKTREE_MODES.MANAGED
   | typeof WORKTREE_MODES.NAMED;
 export type WorktreeManagerMode = WorktreeMode;
-export type WorktreeOrigin = "created" | "discovered" | "recovered";
+export const WORKTREE_ORIGINS = {
+  CREATED: "created",
+  DISCOVERED: "discovered",
+  RECOVERED: "recovered",
+} as const;
+export type WorktreeOrigin =
+  (typeof WORKTREE_ORIGINS)[keyof typeof WORKTREE_ORIGINS];
 export type WorktreeLifecycleOwner =
   (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 export type ManagedWorktreeRecoveryOutcome =
@@ -2369,7 +2375,7 @@ export class WorktreeManager {
     const executionRoot = mapSourcePath(repositoryInputs.executionRoot);
     if (
       namedSetupRecord &&
-      namedSetupRecord.setupOutcome !== "succeeded" &&
+      namedSetupRecord.setupOutcome !== WORKTREE_SETUP_OUTCOMES.SUCCEEDED &&
       !options.setup?.trim()
     ) {
       throw new Error(
@@ -2467,7 +2473,8 @@ export class WorktreeManager {
     // branch, so removing and recreating one reuses the earlier record's key.
     const shouldRunSetup =
       Boolean(options.setup?.trim()) &&
-      (origin === "created" || namedSetupRecord?.setupOutcome !== "succeeded");
+      (origin === WORKTREE_ORIGINS.CREATED ||
+        namedSetupRecord?.setupOutcome !== WORKTREE_SETUP_OUTCOMES.SUCCEEDED);
     let setupOutcome: WorktreeInfo["setupOutcome"] = options.setup?.trim()
       ? namedSetupRecord?.setupOutcome
       : undefined;
@@ -3004,7 +3011,7 @@ export class WorktreeManager {
     }
     const shouldRunSetup =
       Boolean(args.options.setup?.trim()) &&
-      (args.origin === "created" || args.directoryRecreated);
+      (args.origin === WORKTREE_ORIGINS.CREATED || args.directoryRecreated);
     let setupOutcome: WorktreeInfo["setupOutcome"];
     if (shouldRunSetup) {
       setupOutcome = "pending";

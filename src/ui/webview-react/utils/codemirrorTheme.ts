@@ -1,5 +1,6 @@
 import { EditorView } from "@codemirror/view";
 import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
+import { THEME_KINDS } from "@root/types/DashboardConstants";
 
 const CODEMIRROR_THEME_SURFACES = {
   EDITOR: "editor",
@@ -224,7 +225,7 @@ export function createThemeExtension(
         window
           .getComputedStyle(document.documentElement)
           .getPropertyValue("--fp-color-theme-kind")
-          .trim() !== "light",
+          .trim() !== THEME_KINDS.LIGHT,
     }
   );
 }

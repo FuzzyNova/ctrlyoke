@@ -11,7 +11,12 @@ import {
 } from "../../utils/LockSafetyPrimitives";
 import { foldPathForCompare } from "../../utils/PathCasing";
 
-export type ExecutionLeaseMode = "shared-native" | "exclusive-worktree";
+export const EXECUTION_LEASE_MODES = {
+  SHARED_NATIVE: "shared-native",
+  EXCLUSIVE_WORKTREE: "exclusive-worktree",
+} as const;
+export type ExecutionLeaseMode =
+  (typeof EXECUTION_LEASE_MODES)[keyof typeof EXECUTION_LEASE_MODES];
 
 export interface ExecutionLease {
   ownerToken: string;
@@ -215,7 +220,10 @@ function isCompatible(
   requestedMode: ExecutionLeaseMode,
   existingMode: ExecutionLeaseMode
 ): boolean {
-  return requestedMode === "shared-native" && existingMode === "shared-native";
+  return (
+    requestedMode === EXECUTION_LEASE_MODES.SHARED_NATIVE &&
+    existingMode === EXECUTION_LEASE_MODES.SHARED_NATIVE
+  );
 }
 
 async function verifyScopeRecord(scope: LeaseScope): Promise<void> {

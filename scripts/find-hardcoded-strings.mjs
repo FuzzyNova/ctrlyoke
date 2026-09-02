@@ -27,6 +27,18 @@
  * Each reported group still needs a human to check before consolidating onto
  * one constant.
  *
+ * Test files are scanned but treated differently from production code: a
+ * literal that repeats *only* across test files (independent fixture/expected
+ * values like `"success"` or `"defaults"` showing up in two unrelated specs)
+ * is test vocabulary, not an application-owned enum tag, and single-sourcing
+ * it onto DashboardConstants.ts would only add indirection and couple
+ * unrelated tests together. Those are reported as informational `testOnly`
+ * groups but never fail the ratchet (see find-hardcoded-strings.test.mjs).
+ * A literal shared between production code and a test asserting against it
+ * IS actionable: if the production tag gets renamed and the test only has a
+ * copy-pasted string literal instead of importing the same constant, the test
+ * keeps passing against the wrong value instead of catching the rename.
+ *
  * Excluded on purpose:
  *   - `typeof x === "string"` and friends — the literal is a JS primitive-type
  *     tag, not an application-defined one, so a constant would add nothing.
@@ -42,8 +54,16 @@
  *     API outside this codebase, not an internal enum this project owns, so
  *     "single-source it" doesn't apply the way it does for e.g. tab-kind
  *     tags — see EXTERNAL_API_CONSTANTS below to extend the list.
+ *   - A fixed blocklist of literals verified to be coincidental overlaps
+ *     between unrelated concepts (e.g. the keyboard key "Tab" vs. a UI
+ *     tab-kind tag) — see KNOWN_UNRELATED_LITERALS below. Only add a value
+ *     here after confirming by hand that every site is a genuinely different
+ *     concept; if the sites really are the same concept, fix the duplication
+ *     instead of suppressing it.
  *
- * Usage: node scripts/find-hardcoded-strings.mjs [--json]
+ * Usage: node scripts/find-hardcoded-strings.mjs [--json] [--all]
+ *   --json  emit machine-readable output instead of the human report
+ *   --all   also print full location detail for testOnly groups (informational)
  */
 
 import fs from "fs";
@@ -60,6 +80,10 @@ const SKIP_DIR_NAMES = new Set(["node_modules", "coverage", "static"]);
 
 /** Only flag literals shaped like a tag/enum member, not prose or paths. */
 const TAG_SHAPE = /^[A-Za-z][A-Za-z0-9_-]*$/;
+
+/** Matches any path under a `test/` directory or ending in `.test.ts(x)`. */
+const TEST_PATH = /(^|\/)test\//;
+const TEST_FILE = /\.test\.tsx?$/;
 
 /**
  * External-API-mandated string constants: Node `err.code` values,
@@ -102,6 +126,30 @@ const EXTERNAL_API_CONSTANTS = new Set([
   "DELETE",
   "HEAD",
   "OPTIONS",
+  // Node child_process stdio stream names
+  "stdout",
+  "stderr",
+  // Promise.allSettled()'s PromiseSettledResult.status (TC39 spec vocabulary)
+  "fulfilled",
+  "rejected",
+  // JSON Schema `type` keyword values (Draft vocabulary; extend with
+  // "array"/"string"/"number"/"integer"/"boolean"/"null" if they start
+  // repeating too)
+  "object",
+]);
+
+/**
+ * Literals manually verified to be coincidental overlaps between unrelated
+ * concepts that happen to share spelling. Each entry names every site
+ * checked and why they don't share meaning, so a future pass can re-verify
+ * rather than trust the suppression blindly.
+ */
+const KNOWN_UNRELATED_LITERALS = new Set([
+  // "partial": workspaceStatsExport.ts compares a cost-coverage discriminant
+  // ("full" | "partial" | "none"); WorkflowList.test.tsx compares an
+  // unrelated token-totals-variant discriminant ("complete" | "partial" |
+  // "running"). Different domains, same English word.
+  "partial",
 ]);
 
 const EQUALITY_OPERATORS = new Set([
@@ -110,6 +158,10 @@ const EQUALITY_OPERATORS = new Set([
   ts.SyntaxKind.ExclamationEqualsToken,
   ts.SyntaxKind.ExclamationEqualsEqualsToken,
 ]);
+
+function isTestPath(relPath) {
+  return TEST_PATH.test(relPath) || TEST_FILE.test(relPath);
+}
 
 function walkFiles(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -138,16 +190,23 @@ function collectFromFile(filePath, occurrences) {
     true,
     filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   );
+  const relPath = toRelative(filePath);
+  const fileIsTest = isTestPath(relPath);
 
   function record(value, node, kind) {
     if (value.length < MIN_LITERAL_LENGTH) return;
     if (!TAG_SHAPE.test(value)) return;
     if (EXTERNAL_API_CONSTANTS.has(value)) return;
+    if (KNOWN_UNRELATED_LITERALS.has(value)) return;
     const { line } = sourceFile.getLineAndCharacterOfPosition(
       node.getStart(sourceFile)
     );
     const list = occurrences.get(value) ?? [];
-    list.push({ location: `${toRelative(filePath)}:${line + 1}`, kind });
+    list.push({
+      location: `${relPath}:${line + 1}`,
+      kind,
+      isTest: fileIsTest,
+    });
     occurrences.set(value, list);
   }
 
@@ -178,9 +237,14 @@ function collectFromFile(filePath, occurrences) {
   visit(sourceFile);
 }
 
-function main() {
-  const jsonOutput = process.argv.includes("--json");
-  const files = walkFiles(SRC_ROOT);
+/**
+ * Scans `srcRoot` and returns repeated flow-control string literals, split
+ * into `actionable` (at least one non-test occurrence — the rule's real
+ * target) and `testOnly` (every occurrence is in a test file — informational
+ * only, see the file-header comment for why these don't fail the ratchet).
+ */
+export function findHardcodedStringGroups({ srcRoot = SRC_ROOT } = {}) {
+  const files = walkFiles(srcRoot);
   const occurrences = new Map();
   for (const file of files) {
     collectFromFile(file, occurrences);
@@ -188,50 +252,86 @@ function main() {
 
   const duplicates = [...occurrences.entries()]
     .filter(([, locs]) => locs.length > 1)
-    .sort((a, b) => b[1].length - a[1].length);
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([value, locs]) => ({ value, count: locs.length, locations: locs }));
+
+  const actionable = duplicates.filter((group) =>
+    group.locations.some((loc) => !loc.isTest)
+  );
+  const testOnly = duplicates.filter((group) =>
+    group.locations.every((loc) => loc.isTest)
+  );
+
+  return {
+    totalFiles: files.length,
+    totalDistinctLiterals: occurrences.size,
+    actionable,
+    testOnly,
+  };
+}
+
+function printGroup(group) {
+  console.log(`  "${group.value}"  (${group.count}x)`);
+  for (const loc of group.locations) {
+    console.log(`      ${loc.location}  [${loc.kind}]`);
+  }
+}
+
+function main() {
+  const jsonOutput = process.argv.includes("--json");
+  const showAll = process.argv.includes("--all");
+  const { totalFiles, totalDistinctLiterals, actionable, testOnly } =
+    findHardcodedStringGroups();
 
   if (jsonOutput) {
-    console.log(
-      JSON.stringify(
-        duplicates.map(([value, locs]) => ({
-          value,
-          count: locs.length,
-          locations: locs,
-        })),
-        null,
-        2
-      )
-    );
+    console.log(JSON.stringify({ actionable, testOnly }, null, 2));
+    if (actionable.length > 0) process.exitCode = 1;
     return;
   }
 
   console.log(
-    `Scanned ${files.length} files under src/, ${occurrences.size} distinct string ` +
+    `Scanned ${totalFiles} files under src/, ${totalDistinctLiterals} distinct string ` +
       `literals used in ==, !=, or switch/case.\n`
   );
 
-  if (duplicates.length === 0) {
-    console.log("No repeated flow-control string literals found.\n");
-    return;
+  if (actionable.length === 0) {
+    console.log("No actionable repeated flow-control string literals found.\n");
+  } else {
+    console.log(
+      `${actionable.length} literal(s) repeated across more than one flow-control site ` +
+        `(at least one site is production code):\n`
+    );
+    for (const group of actionable) printGroup(group);
+    console.log(
+      "\nEach repeated literal is a candidate for a shared constant/enum in " +
+        "DashboardConstants.ts or CtrlYokeTypes.ts (per copilot-instructions.md " +
+        '"No hardcoded strings for flow control"). This is a heuristic report, not ' +
+        "a source of truth: some repeats may be lexically identical but semantically " +
+        'unrelated (two unrelated switches that both happen to use "error") — verify ' +
+        "each group before consolidating onto one constant, or add a verified-unrelated " +
+        "literal to KNOWN_UNRELATED_LITERALS.\n"
+    );
   }
 
-  console.log(
-    `${duplicates.length} literal(s) repeated across more than one flow-control site:\n`
-  );
-  for (const [value, locs] of duplicates) {
-    console.log(`  "${value}"  (${locs.length}x)`);
-    for (const loc of locs) {
-      console.log(`      ${loc.location}  [${loc.kind}]`);
+  if (testOnly.length > 0) {
+    console.log(
+      `${testOnly.length} additional literal(s) repeat only across test files ` +
+        `(informational — not a ratchet failure; see file header comment).`
+    );
+    if (showAll) {
+      console.log();
+      for (const group of testOnly) printGroup(group);
+    } else {
+      console.log("Pass --all to list them.\n");
     }
   }
-  console.log(
-    "\nEach repeated literal is a candidate for a shared constant/enum in " +
-      "DashboardConstants.ts or CtrlYokeTypes.ts (per copilot-instructions.md " +
-      '"No hardcoded strings for flow control"). This is a heuristic report, not ' +
-      "a source of truth: some repeats may be lexically identical but semantically " +
-      'unrelated (two unrelated switches that both happen to use "error") — verify ' +
-      "each group before consolidating onto one constant.\n"
-  );
+
+  if (actionable.length > 0) process.exitCode = 1;
 }
 
-main();
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
+}

@@ -162,7 +162,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           triggerRef.current?.focus();
           break;
 
-        case "Tab":
+        case KEYBOARD_KEYS.TAB:
           setIsOpen(false);
           setFocusedIndex(-1);
           break;

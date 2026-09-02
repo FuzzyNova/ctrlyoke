@@ -52,6 +52,7 @@ import {
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
 import {
+  MCP_APPEND_QUEUE_TOOL_NAME,
   MCP_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
 } from "./utils/McpToolDefinitions";
@@ -216,7 +217,7 @@ export class CtrlYokeMCPServer {
     switch (name) {
       case "ctrlyoke_queue_status":
         return this.handleQueueStatus();
-      case "ctrlyoke_append_queue":
+      case MCP_APPEND_QUEUE_TOOL_NAME:
         return this.queueOperation(() => this.handleQueueAppend(args));
       case "ctrlyoke_capabilities":
         return this.handleCapabilities();

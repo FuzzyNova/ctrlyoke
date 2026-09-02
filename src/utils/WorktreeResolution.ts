@@ -1,5 +1,9 @@
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
-import { WORKTREE_MODES, type WorktreeMode } from "../types/DashboardConstants";
+import {
+  WORKTREE_CONFIG_ORIGINS,
+  WORKTREE_MODES,
+  type WorktreeMode,
+} from "../types/DashboardConstants";
 import type {
   WorktreeConfig,
   WorktreeDefaultConfig,
@@ -89,7 +93,7 @@ export async function resolveWorktreeForWorkspace(
 
   const reason =
     eligibility.reason ?? "Workspace is not eligible for worktree mode.";
-  if (selection.origin === "authored") {
+  if (selection.origin === WORKTREE_CONFIG_ORIGINS.AUTHORED) {
     // Keep the shared eligibility reason in the hard failure.
     throw new Error(reason);
   }

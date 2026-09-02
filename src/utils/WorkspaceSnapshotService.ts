@@ -19,6 +19,7 @@ import type {
 import type { UnifiedDiffHunk } from "../types/CliOutputTypes";
 import { Log } from "./Log";
 import {
+  FILE_OPERATION_KINDS,
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
   UNDO_FILE_ACTIONS,
@@ -1215,7 +1216,7 @@ export class WorkspaceSnapshotService {
     const enrichedFiles = await Promise.all(
       snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
         if (
-          change.changeType !== "modified" ||
+          change.changeType !== FILE_OPERATION_KINDS.MODIFIED ||
           change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
           change.beforeContent !== undefined ||
           change.contentCaptureSkipped
@@ -1265,7 +1266,7 @@ export class WorkspaceSnapshotService {
     const enrichedFiles = await Promise.all(
       snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
         if (
-          change.changeType !== "modified" ||
+          change.changeType !== FILE_OPERATION_KINDS.MODIFIED ||
           change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
           change.beforeContent !== undefined ||
           change.contentCaptureSkipped

@@ -71,6 +71,7 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
+import { SETTINGS_JSON_INSTALL_KIND_WRITTEN } from "./shared/SettingsJsonMcpTracker";
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
 import { type RunSecretRedactor } from "../../utils/SecretRedactionService";
 
@@ -1218,7 +1219,7 @@ export class CliIntegration extends HarnessIntegration {
       );
       return;
     }
-    if (result.kind !== "written") {
+    if (result.kind !== SETTINGS_JSON_INSTALL_KIND_WRITTEN) {
       return;
     }
     const harness = this.provider.config.terminalName;

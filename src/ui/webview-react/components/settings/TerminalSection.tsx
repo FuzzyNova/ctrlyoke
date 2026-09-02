@@ -3,8 +3,10 @@ import { LocalTextInput } from "../shared/LocalInputs";
 import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
+  UI_PLATFORMS,
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
+  type UiPlatform,
 } from "@root/types/DashboardConstants";
 import type {
   FullGlobalSettings,
@@ -47,16 +49,16 @@ const WINDOWS_SHELL_OPTIONS = [
   { value: "__custom__", label: "Custom path..." },
 ];
 
-function detectPlatform(): "windows" | "mac" | "linux" {
+function detectPlatform(): UiPlatform {
   const platform = navigator.platform.toLowerCase();
   const userAgent = navigator.userAgent.toLowerCase();
   if (platform.includes("win") || userAgent.includes("windows")) {
-    return "windows";
+    return UI_PLATFORMS.WINDOWS;
   }
   if (platform.includes("mac")) {
-    return "mac";
+    return UI_PLATFORMS.MAC;
   }
-  return "linux";
+  return UI_PLATFORMS.LINUX;
 }
 
 function FontStepper({
@@ -254,7 +256,7 @@ export function TerminalSection({
           Shell
         </h3>
 
-        {platform === "windows" ? (
+        {platform === UI_PLATFORMS.WINDOWS ? (
           <>
             <SettingInputRow
               label="Shell executable"
@@ -318,7 +320,7 @@ export function TerminalSection({
                 id="terminal-shell"
                 value={terminal.shellExecutable}
                 placeholder={
-                  platform === "mac"
+                  platform === UI_PLATFORMS.MAC
                     ? "Auto-detected from $SHELL, then /bin/zsh"
                     : "Auto-detected from $SHELL, then /bin/bash"
                 }
@@ -332,12 +334,13 @@ export function TerminalSection({
               login shell environment.
             </p>
 
-            {platform === "mac" && terminal.shellExecutable === "/bin/bash" && (
-              <p className="text-xs text-warning-fg">
-                The system bash on macOS may fail with Permission denied under
-                SIP. Use Homebrew bash (/usr/local/bin/bash) instead.
-              </p>
-            )}
+            {platform === UI_PLATFORMS.MAC &&
+              terminal.shellExecutable === "/bin/bash" && (
+                <p className="text-xs text-warning-fg">
+                  The system bash on macOS may fail with Permission denied under
+                  SIP. Use Homebrew bash (/usr/local/bin/bash) instead.
+                </p>
+              )}
           </>
         )}
       </section>

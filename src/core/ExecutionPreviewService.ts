@@ -1128,9 +1128,7 @@ export class ExecutionPreviewService {
         condition.timeout !== undefined
           ? `timeout=${condition.timeout}s`
           : undefined,
-        kind === "pre"
-          ? `onPass=${condition.onPass ?? CONDITION_ACTIONS.CONTINUE}`
-          : `onPass=${condition.onPass ?? CONDITION_ACTIONS.CONTINUE}`,
+        `onPass=${condition.onPass ?? CONDITION_ACTIONS.CONTINUE}`,
         `onFail=${condition.onFail ?? (kind === "pre" ? CONDITION_ACTIONS.SKIP_PROMPT : CONDITION_ACTIONS.STOP_WORKFLOW)}`,
       ]
         .filter((part): part is string => Boolean(part))

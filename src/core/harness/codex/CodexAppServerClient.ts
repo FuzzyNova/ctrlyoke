@@ -6,6 +6,9 @@ import { normalizeCodexAppServerQuota } from "./CodexUsageNormalization";
 
 export const CODEX_APP_SERVER_PROBE_TIMEOUT_MS = 5_000;
 
+/** Codex app-server `account.type` value for a ChatGPT-authenticated session. */
+const CODEX_ACCOUNT_TYPE_CHATGPT = "chatgpt";
+
 export interface CodexAppServerProcess {
   stdin: {
     write(data: string): boolean;
@@ -168,11 +171,11 @@ export class CodexAppServerClient {
       : undefined;
     const accountType =
       typeof account?.type === "string" ? account.type : undefined;
-    if (accountType && accountType !== "chatgpt") {
+    if (accountType && accountType !== CODEX_ACCOUNT_TYPE_CHATGPT) {
       return HARNESS_USAGE_STATUS_CODES.UNSUPPORTED_AUTH_MODE;
     }
     return accountResult.requiresOpenaiAuth === true &&
-      accountType !== "chatgpt"
+      accountType !== CODEX_ACCOUNT_TYPE_CHATGPT
       ? HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED
       : undefined;
   }

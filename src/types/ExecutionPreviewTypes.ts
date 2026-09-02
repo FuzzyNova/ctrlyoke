@@ -7,6 +7,7 @@ import {
   type PreviewPromptCategory,
   type PreviewStepType,
   type PreviewTruncationReason,
+  type WorktreeConfigOrigin,
   type WorktreeMode,
 } from "./DashboardConstants";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
@@ -42,7 +43,7 @@ export interface WorkflowExecutionPreview {
 export interface WorktreeExecutionPreview {
   mode: WorktreeMode;
   /** Which tier supplied the mode: the workflow itself, or a settings default. */
-  origin: "authored" | "default";
+  origin: WorktreeConfigOrigin;
   branch?: string;
   base?: string;
   eligible: boolean;

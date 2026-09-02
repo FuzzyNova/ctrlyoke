@@ -5,6 +5,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
@@ -342,7 +343,7 @@ suite("PortabilityReport", () => {
     assert.ok(
       codex.diagnostics.every(
         (diagnostic) =>
-          diagnostic.sourceTier === "defaults" &&
+          diagnostic.sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS &&
           diagnostic.propertyPointer === undefined
       )
     );

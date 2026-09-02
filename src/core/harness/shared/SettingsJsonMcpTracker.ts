@@ -43,6 +43,9 @@ export type SettingsJsonPermissionPolicy = Record<
 export const STATUS_LINE_SETTING_KEY = "statusLine" as const;
 export type SettingsJsonPersistentValueKey = string;
 
+/** {@link SettingsJsonPersistentValueInstallResult} discriminant for an actual write. */
+export const SETTINGS_JSON_INSTALL_KIND_WRITTEN = "written" as const;
+
 export interface SettingsJsonPersistentValueCaptureResult {
   readonly proceed?: boolean;
 }
@@ -66,7 +69,7 @@ export type SettingsJsonPersistentValueInstallResult =
       readonly hadKey: boolean;
     }
   | {
-      readonly kind: "written";
+      readonly kind: typeof SETTINGS_JSON_INSTALL_KIND_WRITTEN;
       readonly preexistingValue: unknown;
       readonly hadKey: boolean;
     }

@@ -14,6 +14,7 @@ import { configService } from "../../../config/CtrlYokeConfigService";
 import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
 import {
+  SETTINGS_JSON_INSTALL_KIND_WRITTEN,
   STATUS_LINE_SETTING_KEY,
   type SettingsJsonPersistentValueInstallResult,
 } from "./SettingsJsonMcpTracker";
@@ -197,7 +198,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     // files. Updating that owned command is still a real write, but the
     // notification must reflect an already-preserved custom output rather
     // than claim ctrlyoke styling will become visible.
-    if (result.kind === "written" && !captured) {
+    if (result.kind === SETTINGS_JSON_INSTALL_KIND_WRITTEN && !captured) {
       const settings = this.getSettings();
       captured =
         settings.customCommand.length > 0 && !settings.useCtrlyokeStyle;
