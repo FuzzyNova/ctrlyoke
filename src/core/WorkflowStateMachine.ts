@@ -3,6 +3,7 @@ import {
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_ATTEMPT_STATUS,
+  WORKFLOW_RUNTIME_COMMANDS,
   type ExecutionState,
 } from "../types/DashboardConstants";
 import type {
@@ -403,7 +404,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.RUNNING;
     this._stopped = false;
-    this.emitTransition("startExecution", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION, previous);
     return true;
   }
 
@@ -419,7 +420,7 @@ export class WorkflowStateMachine {
 
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.PAUSING;
-    this.emitTransition("pause", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.PAUSE, previous);
     return true;
   }
 
@@ -436,7 +437,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.PAUSED;
     this._pausedTime ??= Date.now();
-    this.emitTransition("confirmPaused", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.CONFIRM_PAUSED, previous);
     return true;
   }
 
@@ -451,7 +452,7 @@ export class WorkflowStateMachine {
 
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.RUNNING;
-    this.emitTransition("cancelPause", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.CANCEL_PAUSE, previous);
     return true;
   }
 
@@ -472,7 +473,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._stopped = false;
     this._status = EXECUTION_STATES.RUNNING;
-    this.emitTransition("resume", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.RESUME, previous);
     return true;
   }
 
@@ -492,7 +493,11 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.CANCELLING;
     this._stopped = true;
-    this.emitTransition("requestStop", previous, timestampMs);
+    this.emitTransition(
+      WORKFLOW_RUNTIME_COMMANDS.REQUEST_STOP,
+      previous,
+      timestampMs
+    );
     return true;
   }
 
@@ -507,7 +512,7 @@ export class WorkflowStateMachine {
     const previous = this.getSnapshot();
     this.finishExecutionTimer();
     this._status = EXECUTION_STATES.STOPPED;
-    this.emitTransition("confirmStopped", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.CONFIRM_STOPPED, previous);
     return true;
   }
 
@@ -523,7 +528,7 @@ export class WorkflowStateMachine {
     this.finishExecutionTimer();
     this._stopped = false;
     this._status = EXECUTION_STATES.COMPLETED;
-    this.emitTransition("complete", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.COMPLETE, previous);
     return true;
   }
 
@@ -539,7 +544,7 @@ export class WorkflowStateMachine {
     this.finishExecutionTimer();
     this._stopped = false;
     this._status = EXECUTION_STATES.ERROR;
-    this.emitTransition("fail", previous);
+    this.emitTransition(WORKFLOW_RUNTIME_COMMANDS.FAIL, previous);
     return true;
   }
 
@@ -583,7 +588,10 @@ export class WorkflowStateMachine {
     this._pausedTime = undefined;
     this._status = EXECUTION_STATES.STOPPED;
     this._stopped = true;
-    this.emitTransition("reopenForContinuation", previous);
+    this.emitTransition(
+      WORKFLOW_RUNTIME_COMMANDS.REOPEN_FOR_CONTINUATION,
+      previous
+    );
     return true;
   }
 

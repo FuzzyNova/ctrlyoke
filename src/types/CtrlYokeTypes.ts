@@ -11,6 +11,7 @@ import {
   type WorkflowAttemptStatus,
   PRIOR_CONTEXT_KEYWORDS,
   type ConditionAction,
+  type WorkflowExecutionOutcome,
   type CompareSource,
   type HarnessId,
   type ExecutionMode,
@@ -136,7 +137,7 @@ export interface ToolPermissionsOverride {
   deniedTools?: string[];
 }
 
-export type ErrorBehaviorAction = "stop" | "retry" | "continue";
+export type ErrorBehaviorAction = WorkflowExecutionOutcome;
 
 /** Policy for internal errors in any step phase: pre-condition, prompt/harness, end-condition, or script execution. */
 export interface ErrorBehavior {
@@ -621,16 +622,7 @@ export interface WorkflowRuntimeState {
 }
 
 export type WorkflowRuntimeCommand =
-  | "startExecution"
-  | "pause"
-  | "confirmPaused"
-  | "cancelPause"
-  | "resume"
-  | "requestStop"
-  | "confirmStopped"
-  | "complete"
-  | "fail"
-  | "reopenForContinuation";
+  import("./DashboardConstants").WorkflowRuntimeCommand;
 
 export interface WorkflowRuntimeTransition {
   command: WorkflowRuntimeCommand;

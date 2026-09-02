@@ -49,6 +49,18 @@ export const BOOLEAN_STRING_VALUES = {
   FALSE: "false",
 } as const;
 
+/** Boolean-like stdout values accepted by script condition evaluation. */
+export const SCRIPT_BOOLEAN_OUTPUT_VALUES = {
+  TRUE_NUMERIC: "1",
+  TRUE_YES: "yes",
+  TRUE_PASS: "pass",
+  TRUE_PASSED: "passed",
+  FALSE_NUMERIC: "0",
+  FALSE_NO: "no",
+  FALSE_FAIL: "fail",
+  FALSE_FAILED: "failed",
+} as const;
+
 /** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
 export const PRO_FEATURES = {
   HOSTED_DASHBOARD: "hosted-dashboard",
@@ -676,6 +688,23 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
+/** Commands emitted by the workflow runtime state machine. */
+export const WORKFLOW_RUNTIME_COMMANDS = {
+  START_EXECUTION: "startExecution",
+  PAUSE: "pause",
+  CONFIRM_PAUSED: "confirmPaused",
+  CANCEL_PAUSE: "cancelPause",
+  RESUME: "resume",
+  REQUEST_STOP: "requestStop",
+  CONFIRM_STOPPED: "confirmStopped",
+  COMPLETE: "complete",
+  FAIL: "fail",
+  REOPEN_FOR_CONTINUATION: "reopenForContinuation",
+} as const;
+
+export type WorkflowRuntimeCommand =
+  (typeof WORKFLOW_RUNTIME_COMMANDS)[keyof typeof WORKFLOW_RUNTIME_COMMANDS];
+
 /** Lifecycle states in which a run may still be owned by an executor. */
 export const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
   EXECUTION_STATES.RUNNING,
@@ -755,6 +784,16 @@ export const PROMPT_FILE_RESOLUTION_STATUSES = {
   EMPTY: "empty",
   RESOLVED: "resolved",
 } as const;
+
+/** How a working file reload is applied to the current queue. */
+export const PROMPT_FILE_RELOAD_MODES = {
+  REPLACE: "replace",
+  MERGE: "merge",
+  AUTO: "auto",
+} as const;
+
+export type PromptFileReloadMode =
+  (typeof PROMPT_FILE_RELOAD_MODES)[keyof typeof PROMPT_FILE_RELOAD_MODES];
 
 export type PromptFileResolutionStatus =
   (typeof PROMPT_FILE_RESOLUTION_STATUSES)[keyof typeof PROMPT_FILE_RESOLUTION_STATUSES];
@@ -2130,6 +2169,24 @@ export const CONDITION_ACTIONS = {
   SKIP_PROMPT: "skipPrompt",
 } as const;
 
+/** Retry paths used by end-condition handling. */
+export const RETRY_KINDS = {
+  PASS: "pass",
+  FAILURE: "failure",
+} as const;
+
+export type RetryKind = (typeof RETRY_KINDS)[keyof typeof RETRY_KINDS];
+
+/** Outcomes returned by one phase of the workflow executor. */
+export const WORKFLOW_EXECUTION_OUTCOMES = {
+  CONTINUE: CONDITION_ACTIONS.CONTINUE,
+  RETRY: CONDITION_ACTIONS.RETRY,
+  STOP: "stop",
+} as const;
+
+export type WorkflowExecutionOutcome =
+  (typeof WORKFLOW_EXECUTION_OUTCOMES)[keyof typeof WORKFLOW_EXECUTION_OUTCOMES];
+
 // ============================================================================
 // COMPARE_SOURCES - compareSource values for script evaluation
 // ============================================================================
@@ -2160,6 +2217,39 @@ export const SCRIPT_OUTPUT_SOURCES = {
   END_CONDITION: "endCondition",
   WORKTREE_SETUP: "worktreeSetup",
 } as const;
+
+/** Scope values for templates stored in user or workspace state. */
+export const TEMPLATE_SCOPES = {
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
+export type TemplateScope =
+  (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
+
+/** IDs for built-in templates whose content is generated or bundled. */
+export const TEMPLATE_IDS = {
+  BLANK: "blank",
+} as const;
+
+/** Message discriminants exchanged with the history-index rebuild worker. */
+export const HISTORY_SEARCH_REBUILD_MESSAGE_TYPES = {
+  PROGRESS: "progress",
+  SUCCESS: "success",
+  ERROR: "error",
+} as const;
+
+export type HistorySearchRebuildMessageType =
+  (typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES)[keyof typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES];
+
+/** Scope values projected for files changed during a run. */
+export const RUN_FILE_CHANGE_SCOPES = {
+  WORKSPACE: "workspace",
+  EXTERNAL: "external",
+} as const;
+
+export type RunFileChangeScope =
+  (typeof RUN_FILE_CHANGE_SCOPES)[keyof typeof RUN_FILE_CHANGE_SCOPES];
 
 // ============================================================================
 // HISTORY SEARCH TAXONOMY - Independent event and matched-field dimensions

@@ -22,6 +22,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   HARNESS_IDS,
+  STEP_TYPES,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
   type ExecutionState,
@@ -1185,7 +1186,7 @@ export class OutputHistoryManager {
       const harnesses = new Set<string>();
       const models = new Set<string>();
       for (const step of workingFile.steps ?? []) {
-        if (step.type === "script") {
+        if (step.type === STEP_TYPES.SCRIPT) {
           continue;
         }
         const harness =

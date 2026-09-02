@@ -33,6 +33,9 @@ import {
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
   CONDITION_ACTIONS,
+  STEP_TYPES,
+  SCRIPT_VERDICT_OUTCOMES,
+  WORKFLOW_EXECUTION_OUTCOMES,
   COMPARE_SOURCES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
@@ -42,6 +45,7 @@ import {
   TOKEN_TOTAL_CONFIDENCE,
   type ConditionAction,
   type StatusMessageSeverity,
+  type WorkflowExecutionOutcome,
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
@@ -101,6 +105,10 @@ import { pathsEqual } from "../utils/PathCasing";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import { calculateAttemptCost } from "../utils/ModelPricing";
 import { HARNESS_TOKEN_SEMANTICS } from "../utils/TokenSemantics";
+import {
+  TIMELINE_ATTEMPT_START_REASONS,
+  type TimelineAttemptStartReason,
+} from "../types/WorkflowTimelineTypes";
 import {
   formatVerdictSummary,
   createConditionEvaluationSummary,
@@ -259,12 +267,12 @@ function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
 }
 
 type PromptFailureDisposition =
-  | { outcome: "retry" }
-  | { outcome: "continue" }
-  | { outcome: "stop" };
+  | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.RETRY }
+  | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.CONTINUE }
+  | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.STOP };
 
 type PhaseDisposition = {
-  outcome: "retry" | "continue" | "stop";
+  outcome: WorkflowExecutionOutcome;
   nextAttemptIndex?: number;
 };
 
@@ -673,7 +681,7 @@ export class WorkflowExecutor {
             attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
             continue;
           }
-          if (preDisposition.outcome === "stop") {
+          if (preDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
             return false;
           }
         } else {
@@ -682,7 +690,11 @@ export class WorkflowExecutor {
             : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
 
           Log.info(
-            `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
+            `Pre-condition ${
+              preResult.passed
+                ? SCRIPT_VERDICT_OUTCOMES.PASSED
+                : SCRIPT_VERDICT_OUTCOMES.FAILED
+            } → action: ${preAction}`
           );
 
           await this.trackConditionResult(
@@ -903,7 +915,9 @@ export class WorkflowExecutor {
           continue;
         }
 
-        return failureDisposition.outcome === "continue";
+        return (
+          failureDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+        );
       }
 
       const { responseText, duration } = result;
@@ -959,7 +973,7 @@ export class WorkflowExecutor {
           continue;
         }
 
-        if (endDisposition.outcome === "stop") {
+        if (endDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
           Log.info("Workflow stopped due to end condition failure");
           if (
             runtime.status === EXECUTION_STATES.RUNNING ||
@@ -1038,7 +1052,7 @@ export class WorkflowExecutor {
     const stepLabel =
       !isScriptStep(step) && (step as PromptStep).name
         ? (step as PromptStep).name!
-        : step.type === "script"
+        : step.type === STEP_TYPES.SCRIPT
           ? (step as ScriptStep).script.split(/\s+/)[0]
           : "prompt";
 
@@ -1304,7 +1318,7 @@ export class WorkflowExecutor {
           attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
           continue;
         }
-        if (errorDisposition.outcome === "stop") {
+        if (errorDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
           return false;
         }
       } else {
@@ -1949,7 +1963,7 @@ export class WorkflowExecutor {
     failureSeverity: string = STATUS_MESSAGE_SEVERITY.ERROR
   ): Promise<void> {
     const severity =
-      verdict.outcome === "passed"
+      verdict.outcome === SCRIPT_VERDICT_OUTCOMES.PASSED
         ? STATUS_MESSAGE_SEVERITY.INFO
         : failureSeverity;
 
@@ -1989,7 +2003,7 @@ export class WorkflowExecutor {
     switch (errorBehavior?.onError) {
       case CONDITION_ACTIONS.RETRY:
         return CONDITION_ACTIONS.RETRY;
-      case "continue":
+      case WORKFLOW_EXECUTION_OUTCOMES.CONTINUE:
         return CONDITION_ACTIONS.CONTINUE;
       default:
         return CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -2014,16 +2028,18 @@ export class WorkflowExecutor {
     attemptIndex: number,
     completeAttemptOnContinue: boolean = false
   ): Promise<PhaseDisposition> {
-    const policy = errorBehavior ?? { onError: "stop" as const };
+    const policy = errorBehavior ?? {
+      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+    };
     const maxRetries = policy.maxRetries ?? 0;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
       ? `retry ${attemptIndex + 1} of ${maxRetries === -1 ? "unlimited" : maxRetries}`
-      : policy.onError === "continue"
-        ? "continue"
-        : "stop";
+      : policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+        ? WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+        : WORKFLOW_EXECUTION_OUTCOMES.STOP;
     const severity =
-      canRetry || policy.onError === "continue"
+      canRetry || policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
         ? STATUS_MESSAGE_SEVERITY.WARNING
         : STATUS_MESSAGE_SEVERITY.ERROR;
     const reason = this.getEvaluationErrorMessage(result);
@@ -2048,14 +2064,17 @@ export class WorkflowExecutor {
       if ((policy.retryDelayMs ?? 0) > 0) {
         await this.delay(policy.retryDelayMs!);
       }
-      return { outcome: "retry", nextAttemptIndex };
+      return {
+        outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
+        nextAttemptIndex,
+      };
     }
 
-    if (policy.onError === "continue") {
+    if (policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE) {
       if (completeAttemptOnContinue) {
         this.getRuntime().completeAttempt(target, attemptIndex);
       }
-      return { outcome: "continue" };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
     }
 
     await this.failStepForInternalError(
@@ -2065,7 +2084,7 @@ export class WorkflowExecutor {
       attemptIndex,
       `${phase}: ${reason}`
     );
-    return { outcome: "stop" };
+    return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
 
   private async failStepForInternalError(
@@ -2427,7 +2446,11 @@ export class WorkflowExecutor {
       }
     }
 
-    return { outcome: result.shouldContinue ? "continue" : "stop" };
+    return {
+      outcome: result.shouldContinue
+        ? WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+        : WORKFLOW_EXECUTION_OUTCOMES.STOP,
+    };
   }
 
   /**
@@ -2487,7 +2510,7 @@ export class WorkflowExecutor {
     attemptIndex: number,
     sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>,
-    attemptStartReason: "initial" | "retry" | "resumed" = "initial",
+    attemptStartReason: TimelineAttemptStartReason = TIMELINE_ATTEMPT_START_REASONS.INITIAL,
     beginAttempt: boolean = true
   ): Promise<{ responseText: string; duration: number } | null> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
@@ -2812,7 +2835,7 @@ export class WorkflowExecutor {
             | undefined,
         },
         undefined,
-        "retry"
+        TIMELINE_ATTEMPT_START_REASONS.RETRY
       );
 
       if (!result) {
@@ -3293,7 +3316,7 @@ export class WorkflowExecutor {
         await this.promptQueue.commitRuntimeTransition();
       }
 
-      return { outcome: "stop" };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
     }
 
     if (integration.wasLastFailureUserCancellation()) {
@@ -3313,7 +3336,7 @@ export class WorkflowExecutor {
         failureReason,
         resolvedProperties?.harness
       );
-      return { outcome: "stop" };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
     }
 
     const failureKind =
@@ -3411,7 +3434,7 @@ export class WorkflowExecutor {
       resolvedProperties?.harness
     );
 
-    return { outcome: "stop" };
+    return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
 
   private async handleHarnessFailure(
@@ -3435,7 +3458,7 @@ export class WorkflowExecutor {
       this.getPromptPhaseStartedAt(target) ?? Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
-      onError: "stop" as const,
+      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
     };
 
     const failureLabel =
@@ -3466,7 +3489,7 @@ export class WorkflowExecutor {
         await this.delay(errorBehavior.retryDelayMs!);
       }
 
-      return { outcome: "retry" };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY };
     }
 
     runtime.failAttempt(target, attemptIndex, failureReason);
@@ -3516,7 +3539,7 @@ export class WorkflowExecutor {
       }
     };
 
-    if (errorBehavior.onError === "continue") {
+    if (errorBehavior.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE) {
       await this.trackStatusMessage(
         context,
         target,
@@ -3534,7 +3557,7 @@ export class WorkflowExecutor {
           const live = this.promptQueue.getProgress();
           context.dashboardProvider.updateProgress(live.current, live.total);
         }
-        return { outcome: "continue" };
+        return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
 
       await this.setFinalStepRuntime(context, {
@@ -3546,7 +3569,7 @@ export class WorkflowExecutor {
           attemptTimestampMs,
         completedAt: Date.now(),
       });
-      return { outcome: "continue" };
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
     }
 
     await this.trackStatusMessage(
@@ -3575,7 +3598,7 @@ export class WorkflowExecutor {
 
     runtime.fail();
     await this.promptQueue.commitRuntimeTransition();
-    return { outcome: "stop" };
+    return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
 
   private async delay(ms: number): Promise<void> {

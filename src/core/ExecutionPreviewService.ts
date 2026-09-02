@@ -1259,7 +1259,7 @@ export class ExecutionPreviewService {
     switch (source) {
       case PREVIEW_PROPERTY_SOURCES.PROMPT:
         return PREVIEW_PROPERTY_SOURCES.PROMPT;
-      case "workflow":
+      case PREVIEW_PROPERTY_SOURCES.WORKFLOW:
         return PREVIEW_PROPERTY_SOURCES.WORKFLOW;
       default:
         return PREVIEW_PROPERTY_SOURCES.GLOBAL_DEFAULT;

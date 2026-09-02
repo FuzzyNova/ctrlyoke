@@ -12,6 +12,8 @@ import {
   DISCOVERY_SOURCES,
   TEMPLATE_VARIABLE_TYPES,
   WORKFLOW_FILE_FORMATS,
+  TEMPLATE_SCOPES,
+  TEMPLATE_IDS,
   type TemplateVariableType,
   type DiscoverySource,
   type WorkflowFileFormat,
@@ -20,7 +22,8 @@ import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
 
 /** Scope for a custom (non-built-in) template: where it's stored and read from. */
-export type TemplateScope = "user" | "workspace";
+export type TemplateScope =
+  (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
 
 const TEMPLATE_STARTER_ID = "template-starter";
 const CUSTOM_TEMPLATE_EXTENSIONS = [
@@ -118,7 +121,7 @@ export class TemplateManager {
   // Ordered list of built-in template IDs. "blank" is special-cased (generated, no file).
   // All others are self-describing via _templateMeta in their YAML files.
   private readonly BUILT_IN_TEMPLATE_IDS = [
-    "blank",
+    TEMPLATE_IDS.BLANK,
     TEMPLATE_STARTER_ID,
     "simple-feature",
     "fix-tests",
@@ -295,7 +298,7 @@ export class TemplateManager {
    * "workspace" scope when no workspace folder is open.
    */
   private getTemplatesPathForScope(scope: TemplateScope): string | null {
-    return scope === "user"
+    return scope === TEMPLATE_SCOPES.USER
       ? this.getUserTemplatesPath()
       : this.getCustomTemplatesPath();
   }
@@ -321,7 +324,7 @@ export class TemplateManager {
     }
     const scope = rest.substring(0, separatorIndex);
     const name = rest.substring(separatorIndex + 1);
-    if (scope !== "user" && scope !== "workspace") {
+    if (scope !== TEMPLATE_SCOPES.USER && scope !== TEMPLATE_SCOPES.WORKSPACE) {
       throw new Error(`Malformed custom template ID: ${templateId}`);
     }
     return { scope, name };
@@ -359,9 +362,9 @@ export class TemplateManager {
   async getAvailableTemplates(): Promise<TemplateInfo[]> {
     const templates: TemplateInfo[] = [];
 
-    // "blank" is generated — no file, no metadata to parse
+    // The blank template is generated — no file, no metadata to parse
     templates.push({
-      id: "blank",
+      id: TEMPLATE_IDS.BLANK,
       name: "Blank",
       description: "Empty 2-prompt workflow",
       path: null,
@@ -371,7 +374,7 @@ export class TemplateManager {
 
     // All other built-ins are loaded from their YAML files
     for (const id of this.BUILT_IN_TEMPLATE_IDS) {
-      if (id === "blank") continue;
+      if (id === TEMPLATE_IDS.BLANK) continue;
       const templatePath = path.join(
         this.getBuiltInTemplatesPath(),
         `${id}.ctrlyoke.yaml`
@@ -409,7 +412,7 @@ export class TemplateManager {
    * Get template content by ID
    */
   async getTemplateContent(templateId: string): Promise<string> {
-    if (templateId === "blank") {
+    if (templateId === TEMPLATE_IDS.BLANK) {
       return this.getBlankTemplateContent();
     }
 
@@ -639,7 +642,7 @@ export class TemplateManager {
    */
   async createCustomTemplate(
     templateName: string,
-    scope: TemplateScope = "workspace",
+    scope: TemplateScope = TEMPLATE_SCOPES.WORKSPACE,
     format: WorkflowFileFormat = WORKFLOW_FILE_FORMATS.YAML,
     baseTemplateId: string = TEMPLATE_STARTER_ID
   ): Promise<string> {

@@ -15,6 +15,7 @@ import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
+import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
   matchesFilters,
   normalizeHistorySearchFilters,
@@ -363,7 +364,12 @@ export class HistorySearchIndexService {
     worker: Worker,
     data: HistorySearchRebuildWorkerData,
     onProgress?: IndexRebuildProgressCallback
-  ): Promise<Extract<HistorySearchRebuildWorkerMessage, { type: "success" }>> {
+  ): Promise<
+    Extract<
+      HistorySearchRebuildWorkerMessage,
+      { type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS }
+    >
+  > {
     return new Promise((resolve, reject) => {
       let settled = false;
       let startLogged = false;
@@ -378,7 +384,7 @@ export class HistorySearchIndexService {
         if (settled) {
           return;
         }
-        if (message.type === "progress") {
+        if (message.type === HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.PROGRESS) {
           if (!startLogged) {
             startLogged = true;
             Log.info(
@@ -390,7 +396,9 @@ export class HistorySearchIndexService {
           } catch (error) {
             fail(error);
           }
-        } else if (message.type === "success") {
+        } else if (
+          message.type === HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS
+        ) {
           settled = true;
           resolve(message);
         } else {
