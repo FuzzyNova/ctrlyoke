@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_FILE_SOURCE_KINDS,
+  DIFF_PAYLOAD_KINDS,
+  DIFF_VIEW_TYPES,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 import type { HunkData } from "react-diff-view";
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
 import {
@@ -24,7 +29,7 @@ import {
 
 const CALIBRATION_OPTIONS = {
   collapsed: false,
-  viewType: "unified" as const,
+  viewType: DIFF_VIEW_TYPES.UNIFIED,
   outputFontSize: 13,
   outputContentWidth: 800,
 };
@@ -51,10 +56,10 @@ function countWrappedNoteLines(note: string): number {
 function realizedDiffBody(file: DiffFileCardProps): number {
   let hunks: HunkData[];
   switch (file.source.kind) {
-    case "hunks":
+    case DIFF_FILE_SOURCE_KINDS.HUNKS:
       hunks = file.source.hunks;
       break;
-    case "patch":
+    case DIFF_FILE_SOURCE_KINDS.PATCH:
       hunks = toRdvHunks(file.source.structuredPatch);
       break;
     case WORKSPACE_ENTRY_KINDS.CONTENT:
@@ -69,9 +74,9 @@ function realizedDiffBody(file: DiffFileCardProps): number {
         file.source.newContent
       ).hunks;
       break;
-    case "image":
-    case "binary":
-    case "deferred":
+    case DIFF_PAYLOAD_KINDS.IMAGE:
+    case DIFF_PAYLOAD_KINDS.BINARY:
+    case DIFF_FILE_SOURCE_KINDS.DEFERRED:
       return 0;
   }
 
@@ -121,7 +126,9 @@ describe("diff file fixture", () => {
     (fileCount) => {
       const files = flattenDiffFileFixture(createDiffFileFixture(fileCount));
       expect(files).toHaveLength(fileCount);
-      expect(files.some((file) => file.source.kind === "patch")).toBe(true);
+      expect(
+        files.some((file) => file.source.kind === DIFF_FILE_SOURCE_KINDS.PATCH)
+      ).toBe(true);
       expect(
         files.some((file) => file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT)
       ).toBe(true);
@@ -138,7 +145,7 @@ describe("diff file fixture", () => {
       expect(
         files.some(
           (file) =>
-            file.source.kind === "patch" &&
+            file.source.kind === DIFF_FILE_SOURCE_KINDS.PATCH &&
             file.source.structuredPatch.length > 1
         )
       ).toBe(true);

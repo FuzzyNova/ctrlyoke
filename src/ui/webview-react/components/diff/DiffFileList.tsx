@@ -16,7 +16,11 @@ import {
 } from "@utils/diffFileRows";
 import { DEFAULT_OUTPUT_CONTENT_WIDTH } from "@utils/outputLineMetrics";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_FILE_LIST_ROW_KINDS,
+  DIFF_VIEW_TYPES,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 
 export interface DiffFileListCommand {
   /** Changes whenever Expand all or Collapse all should reset local state. */
@@ -108,8 +112,8 @@ export const DiffFileList = React.forwardRef<
   const viewType =
     contentWidthBucket * DIFF_FILE_CONTENT_WIDTH_BUCKET >=
     DIFF_SPLIT_VIEW_THRESHOLD
-      ? "split"
-      : "unified";
+      ? DIFF_VIEW_TYPES.SPLIT
+      : DIFF_VIEW_TYPES.UNIFIED;
   const outputFontSize = useUiStore((state) => state.outputFontSize);
   const rows = projectDiffFileListRows(
     { groups, selectionSummary },
@@ -284,8 +288,8 @@ export const DiffFileList = React.forwardRef<
         ? { "data-diff-file-key": row.key }
         : {})}
     >
-      {row.kind === "selection-summary" && row.content}
-      {row.kind === "group-heading" && (
+      {row.kind === DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY && row.content}
+      {row.kind === DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING && (
         <div className="flex flex-col gap-0.5">
           <h3 className="text-xs font-semibold text-description-fg">
             {row.heading}

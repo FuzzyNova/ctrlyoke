@@ -846,7 +846,7 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: Array<{
       id: string;
-      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
+      type: AtomicReferenceKind;
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -889,7 +889,7 @@ export class PromptEditorSupportService {
 
   private async validateContextReference(
     reference: {
-      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
+      type: AtomicReferenceKind;
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -906,7 +906,7 @@ export class PromptEditorSupportService {
     symbolKind?: number;
     suggestions?: string[];
   }> {
-    if (reference.type === "secret") {
+    if (reference.type === ATOMIC_REFERENCE_KINDS.SECRET) {
       const name = reference.secretName ?? "";
       const exists =
         !!this.secretRegistry && (await this.secretRegistry.isResolvable(name));
@@ -915,7 +915,7 @@ export class PromptEditorSupportService {
         : { exists: false, message: "secret not found" };
     }
 
-    if (reference.type === "git") {
+    if (reference.type === ATOMIC_REFERENCE_KINDS.GIT) {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
     }
 
@@ -956,7 +956,7 @@ export class PromptEditorSupportService {
     }
 
     if (
-      reference.type === "lineRange" ||
+      reference.type === ATOMIC_REFERENCE_KINDS.LINE_RANGE ||
       reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
     ) {
       const startLine = Number.parseInt(reference.lineStart ?? "", 10);

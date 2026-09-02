@@ -49,7 +49,10 @@ import {
 } from "@codemirror/lint";
 import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
-import { openContextReference } from "@utils/contextReferenceActions";
+import {
+  asAtomicReferenceKind,
+  openContextReference,
+} from "@utils/contextReferenceActions";
 import {
   ATOMIC_REFERENCE_KINDS,
   BOOLEAN_STRING_VALUES,
@@ -2680,7 +2683,7 @@ function createPriorContextDecorationExtension(
                 ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices!.join(",")}`
                 : ref.kind;
             const attributes: Record<string, string> = {
-              "data-type": "priorContext",
+              "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
               "data-ref": dataRef,
             };
             if (referenceValidity?.get(ref.token) === false) {
@@ -2932,7 +2935,7 @@ function openContextReferenceLink(
   // logic (single-sourced with the output prompt row's inline links).
   return openContextReference(
     {
-      type: target.getAttribute("data-type"),
+      type: asAtomicReferenceKind(target.getAttribute("data-type")),
       path: target.getAttribute("data-path"),
       gitRef: target.getAttribute("data-git-ref"),
       lineStart: target.getAttribute("data-line-start"),
@@ -3035,10 +3038,10 @@ export function createClickHandlerExtension(
       const type = target.getAttribute("data-type");
       if (
         !target.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS) &&
-        type !== "git" &&
-        type !== "priorContext" &&
-        type !== "skill" &&
-        type !== "mcp" &&
+        type !== ATOMIC_REFERENCE_KINDS.GIT &&
+        type !== ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT &&
+        type !== ATOMIC_REFERENCE_KINDS.SKILL &&
+        type !== ATOMIC_REFERENCE_KINDS.MCP &&
         !(event.ctrlKey || event.metaKey)
       ) {
         return false;

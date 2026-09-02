@@ -32,6 +32,7 @@ import {
   FILE_OPERATION_KINDS,
   MAX_CONTENT_SIZE,
   UNDO_REDO_DIRECTIONS,
+  UNDO_DIALOG_SCOPE_MODES,
   type DiffChangeType,
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
@@ -880,7 +881,10 @@ export function buildUndoDialogInputForPrompt(
   workspacePath: string,
   excludePaths?: UndoFileInstruction[]
 ): UndoDialogInput {
-  const scope: UndoDialogScope = { mode: "prompt", target };
+  const scope: UndoDialogScope = {
+    mode: UNDO_DIALOG_SCOPE_MODES.PROMPT,
+    target,
+  };
   const allCandidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
 
   // Strip out files already undone (present in redo instructions).
@@ -925,7 +929,7 @@ export function buildUndoDialogInputForSpecificEvent(
   fallback?: SpecificEventDiffFallback
 ): UndoDialogInput {
   const scope: UndoDialogScope = {
-    mode: "singleFile",
+    mode: UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE,
     target,
     attemptIndex: eventIndex,
     path,

@@ -7,6 +7,7 @@ import {
   SETTING_SCOPES,
   USER_SETTINGS_VIEWER_SENTINEL_PATH,
   WORKSPACE_SETTINGS_RELATIVE_PATH,
+  type AtomicReferenceKind,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
 
@@ -16,7 +17,7 @@ import {
  * {@link ContextReferenceMatch} rendered in the output prompt row).
  */
 export interface ContextReferenceTarget {
-  type: string | null | undefined;
+  type: AtomicReferenceKind | null | undefined;
   path?: string | null;
   gitRef?: string | null;
   lineStart?: string | number | null;
@@ -33,6 +34,18 @@ export interface ContextReferenceTarget {
 
 interface VsCodeLike {
   postMessage: (message: unknown) => void;
+}
+
+/** Narrow a DOM data-type attribute at the boundary to the shared contract. */
+export function asAtomicReferenceKind(
+  value: string | null | undefined
+): AtomicReferenceKind | undefined {
+  if (!value) return undefined;
+  return (Object.values(ATOMIC_REFERENCE_KINDS) as readonly string[]).includes(
+    value
+  )
+    ? (value as AtomicReferenceKind)
+    : undefined;
 }
 
 function toLineNumber(
@@ -60,7 +73,7 @@ export function openContextReference(
 ): boolean {
   const { type } = target;
 
-  if (type === "git") {
+  if (type === ATOMIC_REFERENCE_KINDS.GIT) {
     const gitRef = target.gitRef ?? "";
     if (isStandalone) {
       void useWorkspaceViewerStore.getState().openToGitRef(gitRef);
@@ -70,7 +83,7 @@ export function openContextReference(
     return true;
   }
 
-  if (type === "priorContext") {
+  if (type === ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT) {
     vscode.postMessage({
       type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
       ref: target.ref,
@@ -79,7 +92,7 @@ export function openContextReference(
     return true;
   }
 
-  if (type === "skill") {
+  if (type === ATOMIC_REFERENCE_KINDS.SKILL) {
     vscode.postMessage({
       type: MESSAGE_TYPES.OPEN_SKILL,
       skillName: target.skillName ?? "",
@@ -87,7 +100,7 @@ export function openContextReference(
     return true;
   }
 
-  if (type === "mcp") {
+  if (type === ATOMIC_REFERENCE_KINDS.MCP) {
     vscode.postMessage({
       type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
       mcpServerName: target.mcpServerName ?? "",
@@ -95,7 +108,7 @@ export function openContextReference(
     return true;
   }
 
-  if (type === "secret") {
+  if (type === ATOMIC_REFERENCE_KINDS.SECRET) {
     const ui = useUiStore.getState();
     ui.setGlobalSettingsTab("secrets");
     if (!ui.globalSettingsOpen) ui.toggleGlobalSettings();
@@ -114,7 +127,7 @@ export function openContextReference(
     }
     if (
       type === ATOMIC_REFERENCE_KINDS.FILE ||
-      type === "lineRange" ||
+      type === ATOMIC_REFERENCE_KINDS.LINE_RANGE ||
       type === ATOMIC_REFERENCE_KINDS.SYMBOL
     ) {
       store.openToFile(path, lineStart, lineEnd);
@@ -131,7 +144,10 @@ export function openContextReference(
     return true;
   }
 
-  if (type === "lineRange" || type === ATOMIC_REFERENCE_KINDS.SYMBOL) {
+  if (
+    type === ATOMIC_REFERENCE_KINDS.LINE_RANGE ||
+    type === ATOMIC_REFERENCE_KINDS.SYMBOL
+  ) {
     vscode.postMessage({
       type: MESSAGE_TYPES.OPEN_FILE,
       path,

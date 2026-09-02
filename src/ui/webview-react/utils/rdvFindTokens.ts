@@ -20,9 +20,14 @@
 
 import type { HunkTokens, TokenNode } from "react-diff-view";
 import type { DiffActiveMatchLocation } from "./rdvAdapter";
+import {
+  DIFF_MARK_TYPES,
+  DIFF_SIDES,
+  DIFF_TOKEN_TYPES,
+} from "@root/types/DashboardConstants";
 
-const FIND_MARK_TYPE = "find";
-const FIND_ACTIVE_MARK_TYPE = "find-active";
+const FIND_MARK_TYPE = DIFF_MARK_TYPES.FIND;
+const FIND_ACTIVE_MARK_TYPE = DIFF_MARK_TYPES.FIND_ACTIVE;
 
 function splitTokenValue(
   token: TokenNode,
@@ -44,7 +49,7 @@ function splitTokenValue(
       result.push({ ...token, value: value.slice(cursor, matchIndex) });
     }
     result.push({
-      type: "mark",
+      type: DIFF_TOKEN_TYPES.MARK,
       markType: FIND_MARK_TYPE,
       value: value.slice(matchIndex, matchIndex + needle.length),
     });
@@ -73,7 +78,7 @@ function splitToken(
     ];
   }
   // Leave existing mark tokens (e.g. from other enhancers) untouched.
-  if (token.type === "mark") return [token];
+  if (token.type === DIFF_TOKEN_TYPES.MARK) return [token];
   return splitTokenValue(token, query, caseSensitive);
 }
 
@@ -115,7 +120,10 @@ function promoteActiveMarkInNode(
   start: number,
   end: number
 ): TokenNode {
-  if (token.type === "mark" && token.markType === FIND_MARK_TYPE) {
+  if (
+    token.type === DIFF_TOKEN_TYPES.MARK &&
+    token.markType === FIND_MARK_TYPE
+  ) {
     const length = getTokenTextLength(token);
     const tokenStart = cursor.pos;
     cursor.pos += length;
@@ -153,7 +161,7 @@ export function applyActiveDiffMatch(
 ): HunkTokens | null | undefined {
   if (!tokens || !location) return tokens;
 
-  const sideLines = location.side === "old" ? tokens.old : tokens.new;
+  const sideLines = location.side === DIFF_SIDES.OLD ? tokens.old : tokens.new;
   const lineIndex = location.lineNumber - 1;
   const line = sideLines[lineIndex];
   if (!line) return tokens;

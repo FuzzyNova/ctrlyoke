@@ -2228,6 +2228,92 @@ export type DiffPayloadKind =
   (typeof DIFF_PAYLOAD_KINDS)[keyof typeof DIFF_PAYLOAD_KINDS];
 
 // ============================================================================
+// DIFF FILE SOURCE KINDS - Render-source discriminants for diff file cards
+// ============================================================================
+export const DIFF_FILE_SOURCE_KINDS = {
+  HUNKS: "hunks",
+  PATCH: "patch",
+  DEFERRED: "deferred",
+} as const;
+
+export type DiffFileSourceKind =
+  (typeof DIFF_FILE_SOURCE_KINDS)[keyof typeof DIFF_FILE_SOURCE_KINDS];
+
+// ============================================================================
+// DIFF VIEW TYPES - Layout variants used by diff renderers and metrics
+// ============================================================================
+export const DIFF_VIEW_TYPES = {
+  SPLIT: "split",
+  UNIFIED: "unified",
+} as const;
+
+export type DiffViewType =
+  (typeof DIFF_VIEW_TYPES)[keyof typeof DIFF_VIEW_TYPES];
+
+// ============================================================================
+// DIFF SIDES - Old/new sides of a rendered diff
+// ============================================================================
+export const DIFF_SIDES = {
+  OLD: "old",
+  NEW: "new",
+} as const;
+
+export type DiffSide = (typeof DIFF_SIDES)[keyof typeof DIFF_SIDES];
+
+// ============================================================================
+// DIFF TOKEN TYPES - Token discriminants emitted by react-diff-view
+// ============================================================================
+export const DIFF_TOKEN_TYPES = {
+  MARK: "mark",
+} as const;
+
+export type DiffTokenType =
+  (typeof DIFF_TOKEN_TYPES)[keyof typeof DIFF_TOKEN_TYPES];
+
+/** Mark subtypes used by diff find highlighting. */
+export const DIFF_MARK_TYPES = {
+  FIND: "find",
+  FIND_ACTIVE: "find-active",
+} as const;
+
+export type DiffMarkType =
+  (typeof DIFF_MARK_TYPES)[keyof typeof DIFF_MARK_TYPES];
+
+// ============================================================================
+// DIFF FILE LIST ROW KINDS - Virtualized diff-list row discriminants
+// ============================================================================
+export const DIFF_FILE_LIST_ROW_KINDS = {
+  SELECTION_SUMMARY: "selection-summary",
+  GROUP_HEADING: "group-heading",
+} as const;
+
+export type DiffFileListRowKind =
+  (typeof DIFF_FILE_LIST_ROW_KINDS)[keyof typeof DIFF_FILE_LIST_ROW_KINDS];
+
+// ============================================================================
+// CONTENT PREVIEW LANGUAGES - Transient modal export format discriminants
+// ============================================================================
+export const CONTENT_PREVIEW_LANGUAGES = {
+  DIFF: "diff",
+  JSON: "json",
+  XML: "xml",
+} as const;
+
+export type ContentPreviewLanguage =
+  (typeof CONTENT_PREVIEW_LANGUAGES)[keyof typeof CONTENT_PREVIEW_LANGUAGES];
+
+// ============================================================================
+// UNDO DIALOG SCOPE MODES - Scope discriminants for undo/redo dialogs
+// ============================================================================
+export const UNDO_DIALOG_SCOPE_MODES = {
+  PROMPT: "prompt",
+  SINGLE_FILE: "singleFile",
+} as const;
+
+export type UndoDialogScopeMode =
+  (typeof UNDO_DIALOG_SCOPE_MODES)[keyof typeof UNDO_DIALOG_SCOPE_MODES];
+
+// ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type
 // ============================================================================
 export const STEP_TYPES = {
@@ -2816,12 +2902,18 @@ export const NONE_OPTION = "none" as const;
 export const SCRIPT_MATCH_RULE_NONE = "none" as const;
 
 // ============================================================================
-// ATOMIC REFERENCE KINDS - @-mention file/directory/symbol references
+// ATOMIC REFERENCE KINDS - Atomic file/context references across UI layers
 // ============================================================================
 export const ATOMIC_REFERENCE_KINDS = {
   FILE: "file",
   DIRECTORY: "directory",
   SYMBOL: "symbol",
+  LINE_RANGE: "lineRange",
+  GIT: "git",
+  PRIOR_CONTEXT: "priorContext",
+  SKILL: "skill",
+  MCP: "mcp",
+  SECRET: "secret",
 } as const;
 
 export type AtomicReferenceKind =
@@ -3069,8 +3161,8 @@ export const EXTENSION_IDENTIFIERS = {
 
 // Explicit ctrlyoke prompt references. Plain slash commands remain harness-native.
 export const CTRLYOKE_SLASH_TOKEN_KINDS = {
-  SKILL: "skill",
-  MCP: "mcp",
+  SKILL: ATOMIC_REFERENCE_KINDS.SKILL,
+  MCP: ATOMIC_REFERENCE_KINDS.MCP,
 } as const;
 
 export type CtrlYokeSlashTokenKind =

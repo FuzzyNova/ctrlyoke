@@ -52,6 +52,12 @@ import {
 } from "@utils/outputFind";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
+import {
+  DIFF_MARK_TYPES,
+  DIFF_TOKEN_TYPES,
+  DIFF_VIEW_TYPES,
+  type DiffViewType,
+} from "@root/types/DashboardConstants";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
@@ -133,7 +139,7 @@ interface DiffViewProps {
    * type (e.g. OutputSection's outputDiffViewType) to avoid the initial
    * wrong-viewType render that causes large height changes on first mount.
    */
-  viewType?: "split" | "unified";
+  viewType?: DiffViewType;
   className?: string;
   /** Outer vertical margin. The default is part of virtualized row geometry. */
   outerMarginClassName?: string;
@@ -229,7 +235,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
     SIDE_BY_SIDE_THRESHOLD
   );
   const isWide = !isNarrow;
-  const viewType = viewTypeProp ?? (isWide ? "split" : "unified");
+  const viewType =
+    viewTypeProp ?? (isWide ? DIFF_VIEW_TYPES.SPLIT : DIFF_VIEW_TYPES.UNIFIED);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const setWrapperRef = useCallback(
@@ -491,7 +498,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
   );
   const renderDiffToken = useCallback<RenderToken>(
     (token, renderDefault, index) => {
-      if (token.type === "mark" && token.markType === "find-active") {
+      if (
+        token.type === DIFF_TOKEN_TYPES.MARK &&
+        token.markType === DIFF_MARK_TYPES.FIND_ACTIVE
+      ) {
         return (
           <mark
             key={index}
@@ -617,7 +627,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             hunks={expandedHunks}
             tokens={activeHighlightedTokens}
             renderToken={renderDiffToken}
-            optimizeSelection={viewType === "split"}
+            optimizeSelection={viewType === DIFF_VIEW_TYPES.SPLIT}
           >
             {(hunks) =>
               hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {

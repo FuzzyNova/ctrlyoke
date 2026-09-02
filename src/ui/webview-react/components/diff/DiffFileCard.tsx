@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_FILE_SOURCE_KINDS,
+  DIFF_PAYLOAD_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+  type DiffViewType,
+} from "@root/types/DashboardConstants";
 import { DiffView } from "@components/output/DiffView";
 import type { HunkData, DiffType } from "react-diff-view";
 import type { UnifiedDiffHunk } from "@root/types/CliOutputTypes";
@@ -19,7 +24,6 @@ import type {
   WorkspaceFileHistoryDiffResponse,
   WorkspaceImageDiffSides,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import { ImageDiffView } from "./ImageDiffView";
 import { workspaceFileHistoryDiff } from "@utils/hostedApi";
 
@@ -33,7 +37,7 @@ export type DeferredDiffDetailFetcher = (
 ) => Promise<WorkspaceFileHistoryDiffResponse>;
 
 export interface DeferredDiffFileSource {
-  kind: "deferred";
+  kind: typeof DIFF_FILE_SOURCE_KINDS.DEFERRED;
   commit: string;
   repo?: string;
   state: DeferredDiffState;
@@ -95,9 +99,9 @@ function detailToSource(
         newContent: detail.newContent,
       };
     case DIFF_PAYLOAD_KINDS.IMAGE:
-      return { kind: "image", image: detail.image };
+      return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: detail.image };
     case DIFF_PAYLOAD_KINDS.BINARY:
-      return { kind: "binary" };
+      return { kind: DIFF_PAYLOAD_KINDS.BINARY };
   }
 }
 
@@ -109,19 +113,23 @@ export interface DiffFileCardProps {
 
   /** Exactly one diff source. */
   source:
-    | { kind: "hunks"; hunks: HunkData[]; diffType: DiffType }
+    | {
+        kind: typeof DIFF_FILE_SOURCE_KINDS.HUNKS;
+        hunks: HunkData[];
+        diffType: DiffType;
+      }
     | {
         kind: typeof WORKSPACE_ENTRY_KINDS.CONTENT;
         oldContent?: string;
         newContent?: string;
       }
     | {
-        kind: "patch";
+        kind: typeof DIFF_FILE_SOURCE_KINDS.PATCH;
         structuredPatch: UnifiedDiffHunk[];
         oldContent?: string;
       }
-    | { kind: "image"; image: WorkspaceImageDiffSides }
-    | { kind: "binary" }
+    | { kind: typeof DIFF_PAYLOAD_KINDS.IMAGE; image: WorkspaceImageDiffSides }
+    | { kind: typeof DIFF_PAYLOAD_KINDS.BINARY }
     | DeferredDiffFileSource;
 
   language?: string;
@@ -151,7 +159,7 @@ export interface DiffFileCardProps {
   ariaPosInSet?: number;
   findQuery?: string;
   findCaseSensitive?: boolean;
-  viewType?: "split" | "unified";
+  viewType?: DiffViewType;
 }
 
 export const DiffFileCard: React.FC<DiffFileCardProps> = ({
@@ -174,15 +182,15 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   viewType,
 }) => {
   const [uncontrolledCollapsed, setUncontrolledCollapsed] = useState(
-    source.kind === "deferred"
+    source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED
   );
   const [deferredState, setDeferredState] =
     useState<DeferredDiffFileSource | null>(() =>
-      source.kind === "deferred" ? source : null
+      source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED ? source : null
     );
 
   useEffect(() => {
-    if (source.kind !== "deferred") {
+    if (source.kind !== DIFF_FILE_SOURCE_KINDS.DEFERRED) {
       setDeferredState(null);
       return;
     }
@@ -282,9 +290,12 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   const renderedOldPath = resolvedDetail?.oldPath ?? oldPath;
   const renderedChangeType = resolvedDetail?.changeType ?? changeType;
   const renderedLanguage = resolvedDetail?.language ?? language;
-  const cardCollapsed = source.kind === "deferred" ? isCollapsed : collapsed;
+  const cardCollapsed =
+    source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED ? isCollapsed : collapsed;
   const cardCollapseHandler =
-    source.kind === "deferred" ? handleCollapsedChange : onCollapsedChange;
+    source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED
+      ? handleCollapsedChange
+      : onCollapsedChange;
 
   const sharedDiffViewProps = {
     language: renderedLanguage,
@@ -334,7 +345,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
       );
     }
     switch (renderedSource.kind) {
-      case "hunks":
+      case DIFF_FILE_SOURCE_KINDS.HUNKS:
         return (
           <DiffView
             hunks={renderedSource.hunks}
@@ -350,7 +361,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             {...sharedDiffViewProps}
           />
         );
-      case "patch":
+      case DIFF_FILE_SOURCE_KINDS.PATCH:
         return (
           <DiffView
             structuredPatch={renderedSource.structuredPatch}
@@ -358,7 +369,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             {...sharedDiffViewProps}
           />
         );
-      case "image":
+      case DIFF_PAYLOAD_KINDS.IMAGE:
         return (
           <ImageDiffView
             path={renderedPath}
@@ -367,7 +378,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             onCollapsedChange={cardCollapseHandler}
           />
         );
-      case "binary":
+      case DIFF_PAYLOAD_KINDS.BINARY:
         return (
           <div className="my-1 border-t border-panel-border px-2.5 py-2 text-xs text-description-fg">
             <button
@@ -383,7 +394,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
                 {isCollapsed ? "Show binary diff" : "Hide binary diff"}
               </span>
             </button>
-            {!(source.kind === "deferred"
+            {!(source.kind === DIFF_FILE_SOURCE_KINDS.DEFERRED
               ? isCollapsed
               : (collapsed ?? false)) && (
               <p className="mt-1 pl-4 italic">
@@ -392,7 +403,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             )}
           </div>
         );
-      case "deferred":
+      case DIFF_FILE_SOURCE_KINDS.DEFERRED:
         return null;
     }
   })();

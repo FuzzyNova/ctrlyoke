@@ -26,7 +26,10 @@ import type { UnifiedDiffHunk } from "../types/cliEvents";
 import {
   DIFF_CHANGE_TYPES,
   DIFF_PAYLOAD_KINDS,
+  DIFF_SIDES,
+  DIFF_VIEW_TYPES,
   type DiffChangeType,
+  type DiffSide,
   type DiffPayloadKind,
 } from "@root/types/DashboardConstants";
 import type {
@@ -305,7 +308,7 @@ function estimateRenderedVisualRows(
   let visualRows = 0;
 
   for (const hunk of hunks) {
-    if (viewType === "unified") {
+    if (viewType === DIFF_VIEW_TYPES.UNIFIED) {
       for (const change of hunk.changes) {
         visualRows += getWrappedVisualLineCount(change.content, charsPerLine);
       }
@@ -481,7 +484,7 @@ export function getRenderedDiffStats(
   };
 
   for (const hunk of hunks) {
-    if (viewType === "unified") {
+    if (viewType === DIFF_VIEW_TYPES.UNIFIED) {
       for (const change of hunk.changes) {
         if (change.type === RDV_CHANGE_TYPES.INSERT) {
           pushRow(1, 0);
@@ -635,7 +638,7 @@ export function buildDiffRenderPlan(
 
 export interface DiffActiveMatchLocation {
   /** Which react-diff-view token side (and gutter) the match's line renders on. */
-  side: "old" | "new";
+  side: DiffSide;
   /** 1-based old/new line number, matching ChangeData.lineNumber conventions. */
   lineNumber: number;
   /** Offset range within the line's content (patch prefix character excluded). */
@@ -683,10 +686,10 @@ export function locateActiveDiffMatch(
           localStart,
           Math.min(line.length - 1, matchEnd - lineStart - 1)
         );
-        const side: "old" | "new" = prefix === "-" ? "old" : "new";
+        const side: DiffSide = prefix === "-" ? DIFF_SIDES.OLD : DIFF_SIDES.NEW;
         return {
           side,
-          lineNumber: side === "old" ? oldLineNumber : newLineNumber,
+          lineNumber: side === DIFF_SIDES.OLD ? oldLineNumber : newLineNumber,
           start: localStart,
           end: localEnd,
         };

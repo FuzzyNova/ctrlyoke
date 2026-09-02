@@ -2,6 +2,7 @@ import {
   ExecutionState,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  UNDO_DIALOG_SCOPE_MODES,
   type ExecutionPhase,
   type FileOperationKind,
   type SnapshotBaseSource,
@@ -134,9 +135,12 @@ export interface UndoRecord {
 }
 
 export type UndoDialogScope =
-  | { mode: "prompt"; target: UndoExecutionTarget }
   | {
-      mode: "singleFile";
+      mode: typeof UNDO_DIALOG_SCOPE_MODES.PROMPT;
+      target: UndoExecutionTarget;
+    }
+  | {
+      mode: typeof UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE;
       target: UndoExecutionTarget;
       attemptIndex: number;
       path: string;

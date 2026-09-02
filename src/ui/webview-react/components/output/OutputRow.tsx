@@ -91,7 +91,10 @@ import {
   type AtomicReferenceChip as AtomicReferenceDescriptor,
   type ContextReferenceMatch,
 } from "@utils/atomicReferences";
-import { openContextReference } from "@utils/contextReferenceActions";
+import {
+  asAtomicReferenceKind,
+  openContextReference,
+} from "@utils/contextReferenceActions";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
@@ -1329,21 +1332,21 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
 /** Human-readable tooltip for a decorated prompt reference. */
 function promptReferenceTooltip(ref: ContextReferenceMatch): string {
   switch (ref.type) {
-    case "git":
+    case ATOMIC_REFERENCE_KINDS.GIT:
       return `Open git ${ref.gitRef ?? ""}`;
     case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       return `Reveal ${ref.path ?? ""}`;
-    case "lineRange":
+    case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
       return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case ATOMIC_REFERENCE_KINDS.SYMBOL:
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
-    case "priorContext":
+    case ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT:
       return `Open ${ref.ref ?? "context"}`;
-    case "skill":
+    case ATOMIC_REFERENCE_KINDS.SKILL:
       return `Open ctrlyoke skill ${ref.skillName ?? ""}`;
-    case "mcp":
+    case ATOMIC_REFERENCE_KINDS.MCP:
       return `Open ctrlyoke MCP server ${ref.mcpServerName ?? ""} in MCP Manager`;
-    case "secret":
+    case ATOMIC_REFERENCE_KINDS.SECRET:
       return `Open ctrlyoke Secrets settings for ${ref.secretName ?? ""}`;
     default:
       return `Open ${ref.path ?? ""}`;
@@ -1485,7 +1488,7 @@ const AtomicPromptReference: React.FC<{
     onOpen={() =>
       openContextReference(
         {
-          type: descriptor.attrs["data-type"],
+          type: asAtomicReferenceKind(descriptor.attrs["data-type"]),
           path: descriptor.attrs["data-path"],
           gitRef: descriptor.attrs["data-git-ref"],
           lineStart: descriptor.attrs["data-line-start"],

@@ -33,6 +33,7 @@ import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 import {
+  ATOMIC_REFERENCE_KINDS,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceFileTreeEntryKind,
 } from "@root/types/DashboardConstants";
@@ -65,9 +66,9 @@ interface WorkspaceFileEditorProps {
 
 type WorkspaceReferenceType =
   | WorkspaceFileTreeEntryKind
-  | "lineRange"
-  | "symbol"
-  | "secret";
+  | typeof ATOMIC_REFERENCE_KINDS.LINE_RANGE
+  | typeof ATOMIC_REFERENCE_KINDS.SYMBOL
+  | typeof ATOMIC_REFERENCE_KINDS.SECRET;
 
 export interface WorkspaceFileEditorPendingSelection {
   requestId: number;
@@ -370,7 +371,7 @@ function findWorkspaceReferenceMatches(
   ).map((reference) => ({
     from: offset + reference.startOffset,
     to: offset + reference.endOffset,
-    type: "secret",
+    type: ATOMIC_REFERENCE_KINDS.SECRET,
     path: "",
     secretName: reference.name,
   }));
@@ -419,7 +420,7 @@ function findWorkspaceReferenceMatches(
       lineRangeMatches.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,
-        type: "lineRange",
+        type: ATOMIC_REFERENCE_KINDS.LINE_RANGE,
         // Group 1 is the quoted path, group 2 the bare one; exactly one is set.
         path: match[1] ?? match[2],
         lineStart: match[3],
@@ -535,7 +536,7 @@ function openWorkspaceReferenceLink(
   openSecretsSettings: () => void
 ): boolean {
   const type = target.getAttribute("data-type");
-  if (type === "secret") {
+  if (type === ATOMIC_REFERENCE_KINDS.SECRET) {
     openSecretsSettings();
     return true;
   }
@@ -547,7 +548,7 @@ function openWorkspaceReferenceLink(
     return true;
   }
 
-  if (type === "lineRange") {
+  if (type === ATOMIC_REFERENCE_KINDS.LINE_RANGE) {
     const lineStart = target.getAttribute("data-line-start");
     const lineEnd = target.getAttribute("data-line-end");
     openToFile(
@@ -558,7 +559,7 @@ function openWorkspaceReferenceLink(
     return true;
   }
 
-  if (type === "symbol") {
+  if (type === ATOMIC_REFERENCE_KINDS.SYMBOL) {
     const lineStart = target.getAttribute("data-line-start");
     const lineEnd = target.getAttribute("data-line-end");
     openToFile(

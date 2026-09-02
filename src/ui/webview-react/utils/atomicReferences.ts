@@ -14,7 +14,7 @@ import {
 } from "../../../utils/CtrlYokeSlashTokens";
 import {
   ATOMIC_REFERENCE_KINDS,
-  CTRLYOKE_SLASH_TOKEN_KINDS,
+  GIT_CHANGE_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
@@ -148,14 +148,7 @@ function isRangeCovered(
   return cursor >= to;
 }
 
-export type ContextReferenceType =
-  | AtomicReferenceKind
-  | "lineRange"
-  | "git"
-  | "priorContext"
-  | "secret"
-  | "skill"
-  | "mcp";
+export type ContextReferenceType = AtomicReferenceKind;
 
 export interface ContextReferenceMatch {
   from: number;
@@ -230,7 +223,7 @@ export function createSelectionReferenceChip(
     label: `${referenceBasename(path)}:${lineStart}-${lineEnd}`,
     title: `${path}:${lineStart}-${lineEnd}`,
     attrs: {
-      "data-type": "lineRange",
+      "data-type": ATOMIC_REFERENCE_KINDS.LINE_RANGE,
       "data-path": path,
       "data-line-start": String(lineStart),
       "data-line-end": String(lineEnd),
@@ -255,7 +248,7 @@ export function createAtomicReferencePresentation(
             referenceBasename(descriptor.attrs["data-path"] ?? "")
           )
         );
-      case "lineRange":
+      case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
         return Math.max(
           0,
           sourceText.lastIndexOf(
@@ -267,24 +260,24 @@ export function createAtomicReferencePresentation(
           0,
           sourceText.lastIndexOf(descriptor.attrs["data-symbol-name"] ?? label)
         );
-      case "git":
+      case ATOMIC_REFERENCE_KINDS.GIT:
         return Math.max(
           0,
           sourceText.lastIndexOf(descriptor.attrs["data-git-ref"] ?? label)
         );
-      case "priorContext":
+      case ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT:
         return sourceText.startsWith("$") ? 1 : 0;
-      case "secret":
+      case ATOMIC_REFERENCE_KINDS.SECRET:
         return Math.max(
           0,
           sourceText.lastIndexOf(descriptor.attrs["data-secret-name"] ?? label)
         );
-      case CTRLYOKE_SLASH_TOKEN_KINDS.SKILL:
+      case ATOMIC_REFERENCE_KINDS.SKILL:
         return Math.max(
           0,
           sourceText.lastIndexOf(descriptor.attrs["data-skill-name"] ?? label)
         );
-      case CTRLYOKE_SLASH_TOKEN_KINDS.MCP:
+      case ATOMIC_REFERENCE_KINDS.MCP:
         return Math.max(
           0,
           sourceText.lastIndexOf(
@@ -400,7 +393,9 @@ export function referenceBasename(path: string): string {
 
 // Compact label for a ~git reference; the full hash remains in the title.
 export function gitReferenceLabel(gitRef: string): string {
-  if (gitRef === "diff" || gitRef === "staged") return gitRef;
+  if (gitRef === GIT_CHANGE_KINDS.DIFF || gitRef === GIT_CHANGE_KINDS.STAGED) {
+    return gitRef;
+  }
   const stash = gitRef.match(/^stash:(\d+)$/);
   if (stash) return `stash ${stash[1]}`;
   return gitRef.slice(0, 7);
@@ -517,7 +512,7 @@ function describeContextReferenceChip(
         title,
         attrs,
       };
-    case "lineRange":
+    case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
       attrs["data-path"] = ref.path ?? "";
       if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
       if (ref.lineEnd) attrs["data-line-end"] = ref.lineEnd;
@@ -548,7 +543,7 @@ function describeContextReferenceChip(
         title,
         attrs,
       };
-    case "git":
+    case ATOMIC_REFERENCE_KINDS.GIT:
       if (ref.gitRef) attrs["data-git-ref"] = ref.gitRef;
       return {
         icon: "source-control",
@@ -556,7 +551,7 @@ function describeContextReferenceChip(
         title,
         attrs,
       };
-    case "secret":
+    case ATOMIC_REFERENCE_KINDS.SECRET:
       attrs["data-secret-name"] = ref.secretName ?? "";
       return {
         icon: "key",
@@ -593,7 +588,10 @@ export function describePriorContextChip(
     icon: "book",
     label,
     title,
-    attrs: { "data-type": "priorContext", "data-ref": dataRef },
+    attrs: {
+      "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
+      "data-ref": dataRef,
+    },
   };
 }
 
@@ -624,13 +622,13 @@ function describeConditionOutputChip(
 function describeSlashTokenChip(
   token: CtrlYokeSlashToken
 ): Omit<AtomicReferenceChip, "from" | "to"> {
-  if (token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP) {
+  if (token.kind === ATOMIC_REFERENCE_KINDS.MCP) {
     return {
       icon: "mcp",
       label: token.name,
       title: token.raw,
       attrs: {
-        "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.MCP,
+        "data-type": ATOMIC_REFERENCE_KINDS.MCP,
         "data-mcp-server-name": token.name,
       },
     };
@@ -640,7 +638,7 @@ function describeSlashTokenChip(
     label: token.name,
     title: token.raw,
     attrs: {
-      "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.SKILL,
+      "data-type": ATOMIC_REFERENCE_KINDS.SKILL,
       "data-skill-name": token.name,
     },
   };
@@ -719,7 +717,7 @@ export function findContextReferenceMatches(
   ).map((reference) => ({
     from: offset + reference.startOffset,
     to: offset + reference.endOffset,
-    type: "secret",
+    type: ATOMIC_REFERENCE_KINDS.SECRET,
     secretName: reference.name,
   }));
   const gitMatches: ContextReferenceMatch[] = [];
@@ -765,7 +763,7 @@ export function findContextReferenceMatches(
       lineRangeMatches.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,
-        type: "lineRange",
+        type: ATOMIC_REFERENCE_KINDS.LINE_RANGE,
         path: match[1] ?? match[2],
         lineStart: match[3],
         lineEnd: match[4],
@@ -807,7 +805,7 @@ export function findContextReferenceMatches(
         gitMatches.push({
           from: matchFrom,
           to: offset + match.index + match[0].length,
-          type: "git",
+          type: ATOMIC_REFERENCE_KINDS.GIT,
           gitRef: normalize(match),
         });
       }

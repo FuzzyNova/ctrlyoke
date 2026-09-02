@@ -1,6 +1,7 @@
 import { memo, useEffect } from "react";
 import type { ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
 import {
+  COMPARE_SOURCES,
   SCRIPT_MATCH_RULE_NONE,
   SCRIPT_VERDICT_OUTCOMES,
 } from "@root/types/DashboardConstants";
@@ -22,12 +23,14 @@ interface ScriptVerdictProps {
 
 function getCompareLabel(verdict: ScriptVerdictData): string {
   const actualSource =
-    verdict.actualSource === "exitCode" ? "exit code" : verdict.actualSource;
-  if (verdict.compareSource === "auto") {
+    verdict.actualSource === COMPARE_SOURCES.EXIT_CODE
+      ? "exit code"
+      : verdict.actualSource;
+  if (verdict.compareSource === COMPARE_SOURCES.AUTO) {
     return `auto → ${actualSource}`;
   }
-  return verdict.compareSource === "exitCode"
-    ? "exitCode"
+  return verdict.compareSource === COMPARE_SOURCES.EXIT_CODE
+    ? COMPARE_SOURCES.EXIT_CODE
     : verdict.compareSource;
 }
 
@@ -39,7 +42,7 @@ function getMatchedByLabel(verdict: ScriptVerdictData): string {
   switch (verdict.matchRule) {
     case "numericGte":
       return "numeric ≥";
-    case "exitCode":
+    case COMPARE_SOURCES.EXIT_CODE:
       return "exit code";
     case SCRIPT_MATCH_RULE_NONE:
       return "no match";
@@ -95,7 +98,8 @@ function formatSummaryValue(
   value: string,
   actualSource: ScriptVerdictData["actualSource"]
 ): string {
-  return actualSource === "exitCode" || /^-?\d+(\.\d+)?$/.test(value)
+  return actualSource === COMPARE_SOURCES.EXIT_CODE ||
+    /^-?\d+(\.\d+)?$/.test(value)
     ? value
     : `"${value}"`;
 }
@@ -120,7 +124,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     );
     const collapsedExpected =
       verdict.expected ??
-      (verdict.actualSource === "exitCode" ? "0" : undefined);
+      (verdict.actualSource === COMPARE_SOURCES.EXIT_CODE ? "0" : undefined);
 
     useEffect(() => {
       const activeActualMatch = actualFindMatches.find((match) => match.active);
@@ -149,7 +153,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
           <span className="text-description-fg">
             · {getCompareLabel(verdict)}
             {collapsedExpected != null &&
-              verdict.actualSource !== "exitCode" && (
+              verdict.actualSource !== COMPARE_SOURCES.EXIT_CODE && (
                 <>
                   {" ~ "}
                   <span>
@@ -166,7 +170,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             </>
           ) : (
             <>
-              {verdict.actualSource === "exitCode" && (
+              {verdict.actualSource === COMPARE_SOURCES.EXIT_CODE && (
                 <>
                   {" "}
                   <span className="text-description-fg">

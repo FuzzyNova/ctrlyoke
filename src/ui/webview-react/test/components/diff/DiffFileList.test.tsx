@@ -8,7 +8,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_VIEW_TYPES,
+  WORKSPACE_ENTRY_KINDS,
+  type DiffViewType,
+} from "@root/types/DashboardConstants";
 import {
   act,
   fireEvent,
@@ -34,7 +38,7 @@ vi.mock("@components/output/DiffView", () => ({
     expandedGaps?: Map<number, number>;
     onCollapsedChange?: (collapsed: boolean) => void;
     onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
-    viewType?: "split" | "unified";
+    viewType?: DiffViewType;
   }) => (
     <div
       data-testid="diff-view"
@@ -238,7 +242,8 @@ describe("DiffFileList responsive ownership", () => {
       screen
         .getAllByTestId("diff-view")
         .every(
-          (element) => element.getAttribute("data-view-type") === "unified"
+          (element) =>
+            element.getAttribute("data-view-type") === DIFF_VIEW_TYPES.UNIFIED
         )
     ).toBe(true);
   });
@@ -261,7 +266,10 @@ describe("DiffFileList responsive ownership", () => {
     expect(
       screen
         .getAllByTestId("diff-view")
-        .every((element) => element.getAttribute("data-view-type") === "split")
+        .every(
+          (element) =>
+            element.getAttribute("data-view-type") === DIFF_VIEW_TYPES.SPLIT
+        )
     ).toBe(true);
   });
 

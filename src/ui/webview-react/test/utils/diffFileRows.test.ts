@@ -9,6 +9,12 @@ import {
 } from "@utils/diffFileRows";
 import * as rdvAdapter from "@utils/rdvAdapter";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  DIFF_FILE_LIST_ROW_KINDS,
+  DIFF_FILE_SOURCE_KINDS,
+  DIFF_PAYLOAD_KINDS,
+  DIFF_VIEW_TYPES,
+} from "@root/types/DashboardConstants";
 
 const replacementHunk: HunkData[] = [
   {
@@ -44,7 +50,7 @@ const replacementHunk: HunkData[] = [
 function file(
   key: string,
   source: DiffFileCardProps["source"] = {
-    kind: "hunks",
+    kind: DIFF_FILE_SOURCE_KINDS.HUNKS,
     hunks: replacementHunk,
     diffType: "modify",
   }
@@ -74,13 +80,13 @@ describe("projectDiffFileListRows", () => {
     });
 
     expect(rows.map((row) => row.kind)).toEqual([
-      "selection-summary",
-      "group-heading",
+      DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY,
+      DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING,
       WORKSPACE_ENTRY_KINDS.FILE,
       WORKSPACE_ENTRY_KINDS.FILE,
     ]);
     expect(rows.map((row) => row.key)).toEqual([
-      "selection-summary",
+      DIFF_FILE_LIST_ROW_KINDS.SELECTION_SUMMARY,
       "reported\u001fheading",
       "reported\u001fsrc/one.ts",
       "other\u001fsrc/two.ts",
@@ -98,7 +104,9 @@ describe("projectDiffFileListRows", () => {
     ],
   ])("suppresses headings for %s", (_caseName, groups) => {
     const rows = projectDiffFileListRows({ groups });
-    expect(rows.some((row) => row.kind === "group-heading")).toBe(false);
+    expect(
+      rows.some((row) => row.kind === DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING)
+    ).toBe(false);
   });
 
   it("renders only headings that have text when heading mode is active", () => {
@@ -109,7 +117,9 @@ describe("projectDiffFileListRows", () => {
       ],
     });
 
-    expect(rows.filter((row) => row.kind === "group-heading")).toHaveLength(1);
+    expect(
+      rows.filter((row) => row.kind === DIFF_FILE_LIST_ROW_KINDS.GROUP_HEADING)
+    ).toHaveLength(1);
     expect(
       rows.filter((row) => row.kind === WORKSPACE_ENTRY_KINDS.FILE)
     ).toHaveLength(2);
@@ -134,13 +144,15 @@ describe("projectDiffFileListRows", () => {
 describe("diff file estimates", () => {
   it("uses bounded O(1) estimates for image and binary sources", () => {
     const imageSource: DiffFileCardProps["source"] = {
-      kind: "image",
+      kind: DIFF_PAYLOAD_KINDS.IMAGE,
       get image(): { oldImageDataUri?: string; newImageDataUri?: string } {
         throw new Error("image bytes must not be inspected by the estimator");
       },
     };
     const image = file("assets/logo.png", imageSource);
-    const binary = file("assets/data.bin", { kind: "binary" });
+    const binary = file("assets/data.bin", {
+      kind: DIFF_PAYLOAD_KINDS.BINARY,
+    });
 
     const imageExpanded = estimateDiffFileCardSize(image);
     const imageCollapsed = estimateDiffFileCardSize(image, { collapsed: true });
@@ -156,7 +168,7 @@ describe("diff file estimates", () => {
 
   it("estimates deferred history cards from collapsed chrome only", () => {
     const source: DiffFileCardProps["source"] = {
-      kind: "deferred",
+      kind: DIFF_FILE_SOURCE_KINDS.DEFERRED,
       commit: "commit-1",
       state: "not-loaded",
       get detail(): WorkspaceFileHistoryDiffResponse {
@@ -210,28 +222,28 @@ describe("diff file estimates", () => {
       },
     ];
     const card = file("src/file.ts", {
-      kind: "hunks",
+      kind: DIFF_FILE_SOURCE_KINDS.HUNKS,
       hunks: longHunk,
       diffType: "modify",
     });
 
     const unified = estimateDiffFileCardSize(card, {
-      viewType: "unified",
+      viewType: DIFF_VIEW_TYPES.UNIFIED,
       outputFontSize: 13,
       outputContentWidth: 320,
     });
     const split = estimateDiffFileCardSize(card, {
-      viewType: "split",
+      viewType: DIFF_VIEW_TYPES.SPLIT,
       outputFontSize: 13,
       outputContentWidth: 320,
     });
     const largerFont = estimateDiffFileCardSize(card, {
-      viewType: "unified",
+      viewType: DIFF_VIEW_TYPES.UNIFIED,
       outputFontSize: 16,
       outputContentWidth: 320,
     });
     const widerBucket = estimateDiffFileCardSize(card, {
-      viewType: "unified",
+      viewType: DIFF_VIEW_TYPES.UNIFIED,
       outputFontSize: 13,
       outputContentWidth: 512,
     });
@@ -245,7 +257,7 @@ describe("diff file estimates", () => {
     const toRdvFromContent = vi.spyOn(rdvAdapter, "toRdvFromContent");
     const estimate = estimateDiffFileCardSize(
       file("src/file.ts", {
-        kind: "patch",
+        kind: DIFF_FILE_SOURCE_KINDS.PATCH,
         structuredPatch: [
           {
             oldStart: 1,
