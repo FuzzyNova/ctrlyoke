@@ -12,6 +12,9 @@
    single "Run with ctrlyoke" submenu instead of four flat entries.
 3. Resolve whether `Queue`/`Queue Next` should be removed for `.ctrlyoke.{yaml,yml,json}`
    workflow files, kept only for `.prompt.md`, or kept everywhere with clearer wording.
+4. ~~Add an "Add commit to ctrlyoke" entry to the SCM Graph's per-commit right-click menu
+   (the one that already has "Add to Chat"/"Explain Changes").~~ **Blocked upstream — see
+   below.** Not currently possible; kept here as a tracked want, not an active goal.
 
 ## Audit: every ctrlyoke menu contribution today
 
@@ -102,27 +105,178 @@ Verified directly against the real, currently-published `package.json` of
   review-comment "additional actions" flyouts (`copilot/reviewComment/additionalActions/*`).
   This is the exact mechanism needed for the "Run with ctrlyoke" submenu collapse.
 
-## Decision needed: placement strategy
+### VS Code core's own "Add to Chat" group ids — empirically confirmed
 
-**Option A — Normalize everywhere to "trailing, but consistent."**
-Change the digit-prefixed groups (`editor/context`, `editor/lineNumber/context`,
-`scm/resourceState/context`, `scm/resourceFolder/context`, `timeline/item/context`) to an
-unprefixed or late-sorting name (e.g. `ctrlyoke` to match the existing `explorer/context` /
-`editor/title/context` style, or `z_ctrlyoke` to be unambiguous about intent) so every menu
-location lands after VS Code's own standard groups. Low risk, no dependency on undocumented
-VS Code internals, and matches the placement the user already said they like. `editor/title`
-would need a separate decision since it's forced into `navigation`.
+Resolved by reading the actual VS Code source at `C:\dev\vscode` (checkout at commit
+`42b84d2c`, dated 2026-09-02 — pin this if VS Code source drifts later). The "Add File/Folder/
+Selection to Chat" commands are **not** a Copilot-extension feature at all — they're
+registered by VS Code core itself, in
+`src/vs/workbench/contrib/chat/browser/actions/chatContextActions.ts`
+(`AttachFileToChatAction`, `AttachFolderToChatAction`, `AttachSelectionToChatAction`), wired up
+via `registerChatContextActions()` called from `chat.shared.contribution.ts:3247`. So this is
+now a directly-cited, current source location — not a guess — though it's still an internal
+implementation detail with no public-API stability guarantee, so still don't treat the exact
+group strings as a contract that can't change between VS Code versions.
 
-**Option B — Join the shared "chat-adjacent" section other AI extensions use.**
-Higher payoff (matches the convention users are already forming a mental model around from
-Copilot/Claude/Codex), but requires first empirically confirming the actual VS Code-core
-group id — which is not currently known and isn't part of any public contract, so it could
-change without notice.
+The naming convention core uses is literally **`<sort-prefix>_chat`**, and it picks a
+different prefix per menu depending on how prominent that menu's chat entry should be:
 
-**Recommendation:** ship Option A first — it's the mechanical fix for the actual complaint
-raised (inconsistency), costs one `package.json` pass, and has zero dependency risk. Track
-Option B as a separate, explicitly-scoped follow-up investigation (its own backlog item)
-that starts with empirically confirming the core group id before committing to it.
+| Menu location            | Group used by core   | Action(s) / order                                                                 |
+| ------------------------- | --------------------- | ----------------------------------------------------------------------------------- |
+| `editor/context`          | **`1_chat`**           | `AttachSelectionToChatAction` @1 (when there's a selection), `AttachFileToChatAction` @2 (when there isn't) |
+| `explorer/context`        | **`5_chat`**           | `AttachFileToChatAction` @1, `AttachFolderToChatAction` @1                          |
+| `editor/title/context`    | **`2_chat`**           | `AttachFileToChatAction` @1                                                         |
+| `search` result context   | `z_chat` / `z_chat`@3  | `AttachFileToChatAction` @1, `AttachSearchResultAction` @3 (not a ctrlyoke menu location) |
+| inline-chat affordances   | `0_chat`               | (not context menus ctrlyoke uses)                                                   |
+| `editor/title` (toolbar)  | **not used at all**    | None of the attach actions register a `MenuId.EditorTitle` entry — core doesn't put "Add to Chat" in the tab-row icon toolbar |
+| `editor/lineNumber/context` | **not used at all** | Confirmed via repo-wide grep for `MenuId.EditorLineNumberContext` inside `src/vs/workbench/contrib/chat/` — zero matches |
+| `scm/resourceState/context`, `scm/resourceFolder/context` | **not used at all** | Confirmed via repo-wide grep for `MenuId.SCM*` inside `src/vs/workbench/contrib/chat/` — zero matches |
+| `timeline/item/context`   | **not used at all**    | Confirmed via repo-wide grep for `MenuId.Timeline*` inside `src/vs/workbench/contrib/chat/` — zero matches |
+
+Where that actually lands relative to VS Code's own standard groups (verified against
+`fileActions.contribution.ts`, `editor.contribution.ts`, `clipboard.ts`,
+`codeActionCommands.ts`):
+
+- **`editor/context`**: standard groups are `1_modification` (rename/format/code actions) and
+  `9_cutcopypaste` (confirmed via `CLIPBOARD_CONTEXT_MENU_GROUP = '9_cutcopypaste'` in
+  `clipboard.ts`). `1_chat` sorts **before** `1_modification` (`'1_c' < '1_m'` lexicographically)
+  — so "Add Selection/File to Chat" lands right after any `navigation`-grouped items (e.g. the
+  Peek submenu), ahead of even VS Code's own rename/format actions. This is the most prominent
+  placement of the three.
+- **`explorer/context`**: standard groups include `2_workspace`, `3_compare`, `5_cutcopypaste`,
+  `6_copypath`, `7_modification`, `11_share`. `5_chat` sorts **between** `3_compare` and
+  `5_cutcopypaste` (`'5_chat' < '5_cutcopypaste'` since `'h' < 'u'`) — solidly mid-menu, not top
+  or bottom.
+- **`editor/title/context`**: standard groups include `1_close`, `1_open`, `1_cutcopypaste`,
+  `1_compare`, `3_preview`, `5_split`, `7_new_window`, `11_share`. `2_chat` sorts after all the
+  `1_*` groups and before `3_preview` onward — upper-middle.
+
+**The strongest evidence that "join the shared section" is a real, current, working
+convention** (not a hypothetical): the `1_chat` group in `editor/context` isn't exclusive to
+VS Code core. The `microsoft/vscode-copilot-chat` extension's own "Explain"/"Fix"/"Review"
+actions (see the `editor/context` research above) register into the **exact same group id**
+— `1_chat@4` / `1_chat@5` / `1_chat@6` — as core's `AttachSelectionToChatAction`@1 and
+`AttachFileToChatAction`@2. VS Code doesn't merge groups by extension identity; it merges by
+literal group-string match. So in a stock VS Code + Copilot Chat install, those five items
+render as **one continuous, interleaved section** ordered 1, 2, 4, 5, 6 — core's items and the
+extension's items sharing one menu section, sorted by `order`. That's the pattern ctrlyoke
+would be joining, not inventing.
+
+**What this resolves and what it doesn't:**
+
+- For `editor/context`, `explorer/context`, and `editor/title/context`, the exact group id to
+  join (`1_chat`, `5_chat`, `2_chat` respectively) is now known and cited to a specific file/
+  line, de-risking Option B for those three menu locations specifically.
+- For `editor/lineNumber/context`, `scm/resourceState/context`, `scm/resourceFolder/context`,
+  and `timeline/item/context`, core doesn't contribute an "Add to Chat" entry at all — there is
+  no shared section to join there. Option B is simply not applicable to those four locations;
+  they still need Option A (a deliberate, consistent ctrlyoke-owned placement) regardless of
+  which option wins elsewhere.
+- `editor/title` (the icon toolbar) is unaffected either way — core doesn't put attach actions
+  there, matching this plan's existing recommendation to keep `Run` as ctrlyoke's own icon.
+- Still unconfirmed and out of scope here: whether Claude Code's and Codex's own VS Code
+  extensions (the ones the user specifically observed joining this section) also target
+  `1_chat`/`5_chat`/`2_chat`, or contribute their own adjacent groups. That would need reading
+  those extensions' own `package.json` files, not VS Code core, and isn't needed to answer the
+  question this doc asked (VS Code core's group id) — but would be worth checking before
+  actually implementing Option B, since "joining core's group" and "joining the section other
+  AI extensions visually cluster into" are only guaranteed to be the same thing if those
+  extensions also target these same literal group strings.
+
+### Blocked: "Add commit to ctrlyoke" on the SCM Graph — not possible yet
+
+Wanted: a ctrlyoke entry on the right-click menu for a commit row in the **SCM Graph** view
+(the commit-history graph pane, distinct from `timeline/item/context`, which is per-file
+history, and from `scm/resourceState/context`, which is the changed-files list). That menu
+already shows VS Code's own "Add to Chat" and "Explain Changes" for a commit, so joining it
+looked like the same kind of "join an existing section" move as the chat-adjacent research
+above.
+
+**Where those two items come from** (verified against the same VS Code checkout, commit
+`42b84d2c`): `src/vs/workbench/contrib/scm/browser/scmHistoryChatContext.ts` registers two
+`registerAction2` actions against `MenuId.SCMHistoryItemContext`:
+
+- `workbench.scm.action.graph.addHistoryItemToChat` — "Add to Chat", group `z_chat`, order 1
+- `workbench.scm.action.graph.summarizeHistoryItem` — "Explain Changes", group `z_chat`, order 2
+
+That menu id is wired to the actual UI in `scmHistoryViewPane.ts`: `SCMHistoryViewPane`
+(the SCM Graph view pane) fires `MenuId.SCMHistoryItemContext` from its tree's
+`_onContextMenu` handler, passing the right-clicked `ISCMHistoryItem` (the commit) as the
+action context — confirming this is exactly the "right-click a commit in the graph" menu the
+ask is about.
+
+**Why ctrlyoke can't join it today:** the extension-facing manifest key for this menu is
+`scm/historyItem/context` (mapped to `MenuId.SCMHistoryItemContext` in
+`menusExtensionPoint.ts`), but it's registered there with `proposed:
+'contribSourceControlHistoryItemMenu'` — it is a **proposed (unstable) API**, not part of the
+finalized/stable extension surface:
+
+- Its `.d.ts` (`vscode.proposed.contribSourceControlHistoryItemMenu.d.ts`) is an empty
+  placeholder pointing at tracking issue `microsoft/vscode#201997`, which is **still open** as
+  of this research (checked via the GitHub issue directly) — not stabilized, no committed
+  timeline.
+- Only VS Code's own bundled `git` and `github` extensions declare
+  `contribSourceControlHistoryItemMenu` in their `enabledApiProposals`
+  (`extensions/git/package.json`, `extensions/github/package.json`).
+- `product.json`'s `extensionEnabledApiProposals` — the allowlist mechanism that would let a
+  specific *third-party* extension use a proposed API in a normal end-user install — has **no
+  entry** for this proposal at all.
+
+Proposed APIs only work when VS Code is launched with `--enable-proposed-api <extensionId>`
+(a dev/Insiders flag, not something a normal Marketplace install does) or when the extension
+id is explicitly added to that `product.json` allowlist by Microsoft — which isn't realistic
+to obtain for a third-party extension. So `contributes.menus` cannot target
+`scm/historyItem/context` in a ctrlyoke build that ships to real users; VS Code will simply
+ignore (or refuse to load) the contribution.
+
+As a side note: the *per-file-change* context menu inside an expanded commit row
+(`MenuId.SCMHistoryItemChangeContext`) isn't exposed to extensions at all — not even under a
+proposed-API name — so there's no path there either.
+
+**What would need to be true to unblock this:** `contribSourceControlHistoryItemMenu`
+stabilizes (issue `#201997` closes and the `proposed` marker is dropped from
+`menusExtensionPoint.ts`) in some future VS Code release. Until then, this idea has no
+implementation path via `contributes.menus`. Re-check `microsoft/vscode#201997` and re-grep
+`menusExtensionPoint.ts` for `scm/historyItem/context` next time this comes up — if the
+`proposed` key is gone, the menu id and existing `2_ctrlyoke`-style group-naming plan above
+apply directly.
+
+## Decision: Option A, everywhere — `z_ctrlyoke` (decided 2026-09-02)
+
+**Chosen: bottom, always, one group name — `z_ctrlyoke`.** Every menu location that currently
+uses `ctrlyoke@N` (`explorer/context`, `editor/title/context`) or `2_ctrlyoke@N`/`2_ctrlyoke`
+(`editor/context`, `editor/lineNumber/context`, `scm/resourceState/context`,
+`scm/resourceFolder/context`, `timeline/item/context`) normalizes to `z_ctrlyoke`, preserving
+existing `@N` suffixes for within-group ordering (e.g. `z_ctrlyoke@1`, `z_ctrlyoke@2`).
+`z_ctrlyoke` over the bare unprefixed `ctrlyoke` specifically to be self-documenting about
+intent ("always sorts last") and to stay robust against some future `z_`-prefixed group (from
+VS Code core or another extension) that a bare name has no defense against.
+
+Two menu locations are explicitly **out of scope** for this decision, not oversights:
+
+- `editor/title` (the icon toolbar, not a dropdown) keeps its existing `navigation`/
+  `navigation@2`/`navigation@3` groups. VS Code forces `navigation` first regardless of name,
+  and a toolbar has no "bottom of a sorted list" concept the way a context menu does — this
+  decision doesn't apply there.
+- `scm/title` (`generateCommitMessage`/`cancelCommitMessageGeneration`) keeps `navigation@-1`.
+  That's a different feature (commit-message generation, not "Add X to ctrlyoke" context
+  capture) that was deliberately placed at the top of the SCM title bar; not part of this
+  consistency question.
+
+**Rejected: joining the "Add to Chat" groups (`1_chat`/`5_chat`/`2_chat`).** The deciding
+factor wasn't speed vs. discoverability — it's that Option B cannot deliver consistency at
+all. Four of ctrlyoke's seven menu locations (`editor/lineNumber/context`, both SCM menus,
+`timeline/item/context`) have no chat-adjacent group to join in the first place — VS Code
+core never contributes one there — so picking B anywhere would leave ctrlyoke split across two
+different placements depending on menu, reintroducing the exact inconsistency this plan exists
+to fix. On top of that: bottom placement is validated by Nathan's own prior reaction ("very
+bottom, which I actually kind of like") and his stated preference for a fixed, scan-free
+position over faster day-to-day use; joining the chat groups would put ctrlyoke in a crowded,
+top-of-menu slot it doesn't control (interleaved by `order` with Copilot/Claude/Codex/whatever
+ships next) and couples placement to an undocumented VS Code internal that could shift between
+versions with no changelog entry. The "new users expect it in the chat section" concern is
+real but is better solved with a one-time discoverability nudge (README line, first-run tip)
+than by chasing another product's menu position permanently.
 
 ## Submenu collapsing for prompt/workflow file commands
 
@@ -136,7 +290,7 @@ Then, in `explorer/context`, `editor/title`, and `editor/title/context`, replace
 flat entries for `runFromContext` / `loadFromContext` / `queueFromContext` /
 `queueNextFromContext` with:
 
-- one top-level entry: `{ "submenu": "ctrlyoke.runSubmenu", "group": "<chosen group>", "when": "<existing file-pattern when>" }`
+- one top-level entry: `{ "submenu": "ctrlyoke.runSubmenu", "group": "z_ctrlyoke", "when": "<existing file-pattern when>" }`
 - the four commands re-declared as children under `"ctrlyoke.runSubmenu"` in
   `contributes.menus`, each keeping its own `when` clause (all four already share the same
   file-pattern `when`, so this is a straight move, not a behavior change)
@@ -206,14 +360,25 @@ Nathan before implementation.
 - Changing the underlying `PromptQueue.appendPrompts()` / MCP `append_queue` behavior itself.
   This plan only touches how the *file-context-menu* entry points present that capability.
 - Redesigning `WorkflowPropertiesPanel` or workflow-vs-prompt settings inheritance.
-- Matching VS Code core's undocumented "Add to Chat" group id without first empirically
-  verifying it (see Option B above) — that's a separate follow-up, not part of this plan's
-  first pass.
+- Joining VS Code core's "Add to Chat" groups (`1_chat`/`5_chat`/`2_chat`) — considered,
+  empirically de-risked, and explicitly **rejected** (see the Decision section above), not
+  merely deferred. Consistency wins: four of seven menu locations have no chat-adjacent group
+  to join at all, so this option could never be applied uniformly.
+- Adding an "Add commit to ctrlyoke" entry to the SCM Graph's commit context menu — not a
+  scope decision, it's **blocked upstream** by an unstabilized proposed API
+  (`contribSourceControlHistoryItemMenu`, tracked in `microsoft/vscode#201997`); see the
+  "Blocked: 'Add commit to ctrlyoke' on the SCM Graph" section above. Revisit only once that
+  API stabilizes.
 
 ## Open Questions
 
-- Which placement option (A or B) does Nathan want, per menu location — does "kind of like
-  being easy to find at the bottom" win out everywhere, or only for some menus?
+- ~~Confirm VS Code core's actual "Add to Chat" group id before considering Option B.~~
+  **Resolved above** — `1_chat` (`editor/context`), `5_chat` (`explorer/context`), `2_chat`
+  (`editor/title/context`); no equivalent exists for `editor/lineNumber/context`, either SCM
+  menu, or `timeline/item/context`.
+- ~~Which placement option (A or B) does Nathan want, per menu location?~~ **Decided** —
+  Option A, `z_ctrlyoke`, everywhere. See the Decision section above. Not yet implemented in
+  `package.json`.
 - For the submenu: does `Run` stay as its own `editor/title` icon, or does everything
   (including `Run`) move into the submenu for total consistency with the context-menu
   version?
