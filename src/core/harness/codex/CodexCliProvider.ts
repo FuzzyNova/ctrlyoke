@@ -1,6 +1,9 @@
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
+import {
+  HOOK_CONFIG_TYPES,
+  INotificationMonitor,
+} from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
   PermissionContext,
@@ -580,7 +583,7 @@ export class CodexCliProvider implements ICliProvider {
       userHooks,
       ctrlyokeEvents
     );
-    if (hookConfig.type !== "json") {
+    if (hookConfig.type !== HOOK_CONFIG_TYPES.JSON) {
       throw new Error("Unexpected hook config type for Codex CLI");
     }
 

@@ -1,4 +1,5 @@
 import {
+  HOOK_CONFIG_TYPES,
   HookConfig,
   INotificationMonitor,
   NotificationMonitorBase,
@@ -148,7 +149,7 @@ export class AntigravityNotificationMonitor
     }
 
     return {
-      type: "json",
+      type: HOOK_CONFIG_TYPES.JSON,
       config: { ctrlyoke: group },
     };
   }

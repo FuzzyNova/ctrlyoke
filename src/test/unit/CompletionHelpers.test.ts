@@ -35,6 +35,8 @@ import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import { outputCaptureCache } from "../../completions/OutputCaptureCache";
 
+const COMMIT_SKILL_NAME = "commit";
+
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;
   const originalAsRelativePath = vscode.workspace.asRelativePath;
@@ -677,7 +679,7 @@ suite("slash-token completions", () => {
 
   const skills: SkillInfo[] = [
     {
-      name: "commit",
+      name: COMMIT_SKILL_NAME,
       displayName: "Commit",
       path: "/skills/commit/SKILL.md",
       description: "Create a focused commit",
@@ -722,10 +724,10 @@ suite("slash-token completions", () => {
 
     assert.deepStrictEqual(
       items.map((item) => item.label),
-      ["commit", "ctrlyoke", "playwright", "review"]
+      [COMMIT_SKILL_NAME, "ctrlyoke", "playwright", "review"]
     );
     assert.strictEqual(
-      items.find((item) => item.label === "commit")?.detail,
+      items.find((item) => item.label === COMMIT_SKILL_NAME)?.detail,
       "ctrlyoke skill · workspace · Create a focused commit"
     );
     assert.strictEqual(
@@ -764,7 +766,7 @@ suite("slash-token completions", () => {
 
     assert.deepStrictEqual(
       skillItems.map((item) => item.label),
-      ["commit"]
+      [COMMIT_SKILL_NAME]
     );
     assert.deepStrictEqual(
       mcpItems.map((item) => item.label),

@@ -2,7 +2,12 @@
  * Panel sizing constants for consistent layout management across mobile and desktop
  */
 
-import { WORKFLOW_ROW_TIERS } from "@root/types/DashboardConstants";
+import {
+  WORKFLOW_ROW_KINDS,
+  WORKFLOW_ROW_TIERS,
+} from "@root/types/DashboardConstants";
+
+export { WORKFLOW_ROW_KINDS, WORKFLOW_ROW_TIERS };
 
 /** Collapsed panel size - fixed height/width bar when panel is minimized */
 export const PANEL_COLLAPSED_SIZE_DEFAULT = "30px";

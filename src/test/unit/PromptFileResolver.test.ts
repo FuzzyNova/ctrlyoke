@@ -11,6 +11,8 @@ import {
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import { PROMPT_FILE_RESOLUTION_STATUSES } from "../../types/DashboardConstants";
 
+const GIT_COMMIT_SUBCOMMAND = "commit";
+
 suite("PromptFileResolver", () => {
   let workspaceRoot: string;
   let sourceDirectory: string;
@@ -475,7 +477,7 @@ suite("PromptFileResolver", () => {
 
   function git(repositoryRoot: string, ...args: string[]): void {
     const gitArgs =
-      args[0] === "commit"
+      args[0] === GIT_COMMIT_SUBCOMMAND
         ? [
             "-c",
             "user.name=ctrlyoke-test",

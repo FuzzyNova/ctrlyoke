@@ -39,6 +39,11 @@ import {
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { hasRenderableDiff } from "@utils/diffUtils";
 
+export const UNDO_FILE_CANDIDATE_TIERS = {
+  TIER1: "tier1",
+  TIER2: "tier2",
+} as const;
+
 export interface UndoDialogInput {
   scope: UndoDialogScope;
   /** Tier 1 candidates: attributed to structured CLI events (high confidence) */
@@ -322,7 +327,7 @@ export function buildUndoCandidatesForOutputs(
       // to "created" by eventTypeToChangeType, but the AI may FILE_WRITE an existing
       // file (which the snapshot correctly records as "modified").
       changeType: snapEntry?.changeType ?? accum.changeType,
-      tier: "tier1",
+      tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
       instruction,
       oldContent: snapshotPatch
         ? snapEntry?.beforeContent
@@ -347,7 +352,7 @@ export function buildUndoCandidatesForOutputs(
     .map((snap) => ({
       path: snap.path,
       changeType: snap.changeType,
-      tier: "tier2",
+      tier: UNDO_FILE_CANDIDATE_TIERS.TIER2,
       instruction: resolveSnapshotUndoInstruction(snap),
       contentCaptureSkipped: snap.contentCaptureSkipped,
       oldContent: snap.beforeContent,
@@ -813,7 +818,7 @@ export function buildPromptUndoDialogModel(options: {
           buildCandidateRow({
             path: snapshotFile.path,
             changeType: snapshotFile.changeType,
-            tier: "tier2",
+            tier: UNDO_FILE_CANDIDATE_TIERS.TIER2,
             instruction: resolveSnapshotUndoInstruction(snapshotFile),
             contentCaptureSkipped: snapshotFile.contentCaptureSkipped,
             oldContent: snapshotFile.beforeContent,
@@ -862,7 +867,9 @@ export function getPromptUndoSummary(candidates: UndoFileCandidate[]): {
 } {
   return {
     undoableCount: candidates.filter((c) => c.instruction !== null).length,
-    hasTier2: candidates.some((c) => c.tier === "tier2"),
+    hasTier2: candidates.some(
+      (c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER2
+    ),
     hasNonUndoable: candidates.some((c) => c.instruction === null),
   };
 }
@@ -896,11 +903,15 @@ export function buildUndoDialogInputForPrompt(
       : allCandidates;
 
   const tier2Paths = new Set(
-    candidates.filter((c) => c.tier === "tier2").map((c) => c.path)
+    candidates
+      .filter((c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER2)
+      .map((c) => c.path)
   );
   return {
     scope,
-    eventAttributedFiles: candidates.filter((c) => c.tier === "tier1"),
+    eventAttributedFiles: candidates.filter(
+      (c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER1
+    ),
     snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter(
       (s) =>
         tier2Paths.has(s.path) &&
@@ -990,7 +1001,7 @@ export function buildUndoDialogInputForSpecificEvent(
   const candidate: UndoFileCandidate = {
     path,
     changeType,
-    tier: "tier1",
+    tier: UNDO_FILE_CANDIDATE_TIERS.TIER1,
     instruction,
     oldContent,
     newContent,

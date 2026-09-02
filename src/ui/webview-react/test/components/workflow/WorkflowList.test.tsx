@@ -6,7 +6,11 @@ import {
 } from "@components/workflow/WorkflowList";
 import { EXECUTION_STATES, HARNESS_IDS } from "@/types/messages";
 import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
-import type { WorkflowRowTier } from "@/constants";
+import {
+  WORKFLOW_ROW_KINDS,
+  WORKFLOW_ROW_TIERS,
+  type WorkflowRowTier,
+} from "@/constants";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const totalsBase: WorkflowTokenTotals = {
@@ -31,11 +35,11 @@ function makeTotals(
 
 function renderWorkflowList(
   tier: WorkflowRowTier,
-  kind: "recent" | "running",
+  kind: (typeof WORKFLOW_ROW_KINDS)[keyof typeof WORKFLOW_ROW_KINDS],
   totals?: WorkflowTokenTotals
 ) {
   const row: UnifiedWorkflowRow =
-    kind === "recent"
+    kind === WORKFLOW_ROW_KINDS.RECENT
       ? {
           kind,
           key: "recent:wf",
@@ -71,7 +75,9 @@ function renderWorkflowList(
     <WorkflowList
       rows={[row]}
       currentAddress={null}
-      activeWorkflowId={kind === "running" ? "workflow-id" : null}
+      activeWorkflowId={
+        kind === WORKFLOW_ROW_KINDS.RUNNING ? "workflow-id" : null
+      }
       runningHasActiveTerminal={() => false}
       onSelectRecent={() => undefined}
       onSwitchRunning={() => undefined}
@@ -88,15 +94,19 @@ function renderWorkflowList(
 describe("WorkflowList token totals", () => {
   afterEach(() => cleanup());
 
-  it.each(["stacked", "compact"] as const)(
+  it.each([WORKFLOW_ROW_TIERS.STACKED, WORKFLOW_ROW_TIERS.COMPACT] as const)(
     "renders complete totals and the full accessible phrase at the %s tier",
     (tier) => {
-      renderWorkflowList(tier, "recent", makeTotals("complete"));
+      renderWorkflowList(
+        tier,
+        WORKFLOW_ROW_KINDS.RECENT,
+        makeTotals("complete")
+      );
 
       expect(
         screen.getByRole("button", { name: /410,000 total tokens/ })
       ).toBeInTheDocument();
-      if (tier === "compact") {
+      if (tier === WORKFLOW_ROW_TIERS.COMPACT) {
         expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
       } else {
         expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
@@ -106,15 +116,19 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["stacked", "compact"] as const)(
+  it.each([WORKFLOW_ROW_TIERS.STACKED, WORKFLOW_ROW_TIERS.COMPACT] as const)(
     "renders partial totals as lower bounds at the %s tier",
     (tier) => {
-      renderWorkflowList(tier, "recent", makeTotals("partial"));
+      renderWorkflowList(
+        tier,
+        WORKFLOW_ROW_KINDS.RECENT,
+        makeTotals("partial")
+      );
 
       expect(
         screen.getByRole("button", { name: /at least 410,000 observed tokens/ })
       ).toBeInTheDocument();
-      if (tier !== "compact") {
+      if (tier !== WORKFLOW_ROW_TIERS.COMPACT) {
         expect(screen.getByTestId("workflow-token-usage")).toHaveTextContent(
           "≥410k"
         );
@@ -122,16 +136,20 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["stacked", "compact"] as const)(
+  it.each([WORKFLOW_ROW_TIERS.STACKED, WORKFLOW_ROW_TIERS.COMPACT] as const)(
     "shows the live observed-so-far total at the %s tier",
     (tier) => {
-      renderWorkflowList(tier, "running", makeTotals("running"));
+      renderWorkflowList(
+        tier,
+        WORKFLOW_ROW_KINDS.RUNNING,
+        makeTotals("running")
+      );
 
       const usage = screen.queryByTestId("workflow-token-usage");
       expect(
         screen.getByRole("button", { name: /410,000 total tokens/ })
       ).toBeInTheDocument();
-      if (tier === "compact") {
+      if (tier === WORKFLOW_ROW_TIERS.COMPACT) {
         expect(usage).toBeNull();
       } else {
         expect(usage).toHaveAttribute(
@@ -142,10 +160,10 @@ describe("WorkflowList token totals", () => {
     }
   );
 
-  it.each(["stacked", "compact"] as const)(
+  it.each([WORKFLOW_ROW_TIERS.STACKED, WORKFLOW_ROW_TIERS.COMPACT] as const)(
     "renders no usage slot for unavailable totals at the %s tier",
     (tier) => {
-      renderWorkflowList(tier, "recent");
+      renderWorkflowList(tier, WORKFLOW_ROW_KINDS.RECENT);
 
       expect(screen.queryByTestId("workflow-token-usage")).toBeNull();
       expect(
@@ -163,7 +181,7 @@ describe("WorkflowList recent row worktree", () => {
       <WorkflowList
         rows={[
           {
-            kind: "recent",
+            kind: WORKFLOW_ROW_KINDS.RECENT,
             key: "recent:wf",
             workflow: {
               address: {
@@ -211,7 +229,7 @@ describe("WorkflowList context targets", () => {
       <WorkflowList
         rows={[
           {
-            kind: "recent",
+            kind: WORKFLOW_ROW_KINDS.RECENT,
             key: "recent:wf",
             workflow: {
               address: {

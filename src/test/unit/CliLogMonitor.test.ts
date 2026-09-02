@@ -15,6 +15,8 @@ import { AntigravityLogParser } from "../../core/harness/antigravity/Antigravity
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
 
+const USER_EVENT_TYPE = "user";
+
 /** Minimal ILogParser fake — override only what a given test needs to exercise. */
 function createParser(overrides: Partial<ILogParser> = {}): ILogParser {
   return {
@@ -64,7 +66,7 @@ suite("CliLogMonitor", () => {
   test("persists streamed user steers in chronological final output", async () => {
     const rawEvents: BaseCliEvent[] = [
       {
-        type: "user",
+        type: USER_EVENT_TYPE,
         timestamp: "2026-07-19T21:51:50.000Z",
         text: "Also update the tests",
       } as unknown as BaseCliEvent,
@@ -113,9 +115,9 @@ suite("CliLogMonitor", () => {
       formatStatistics: () => "",
       getFinalEventsOnCompletion: async () => [],
       classifyUserEvent: (event: BaseCliEvent) =>
-        event.type === "user" ? "human-steer" : "other",
+        event.type === USER_EVENT_TYPE ? "human-steer" : "other",
       extractUserSteerText: (event: BaseCliEvent) =>
-        event.type === "user" ? (event.text as string) : undefined,
+        event.type === USER_EVENT_TYPE ? (event.text as string) : undefined,
       extractTimestamp: (event: BaseCliEvent) =>
         event.timestamp === undefined
           ? null
@@ -394,7 +396,7 @@ suite("CliLogMonitor", () => {
             message: { content: [], stop_reason: "end_turn" },
           },
           {
-            type: "user",
+            type: USER_EVENT_TYPE,
             timestamp: 3,
             message: { content: notification },
           },

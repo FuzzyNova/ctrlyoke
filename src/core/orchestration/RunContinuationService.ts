@@ -24,6 +24,10 @@ import {
 } from "../WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
+const RUN_CONTINUATION_ACTIONS = {
+  EDIT: "edit",
+} as const;
+
 export interface RunContinuationTarget {
   definitionRevision: number;
   descriptorRevision: number;
@@ -80,7 +84,7 @@ export class RunContinuationService {
     if (
       lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE &&
       lockInspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF &&
-      (action !== "edit" || lockNamesTarget)
+      (action !== RUN_CONTINUATION_ACTIONS.EDIT || lockNamesTarget)
     ) {
       const diagnostic: SelfOwnedUntrackedDiagnostic = {
         event: "workflow-ownership-invariant",
@@ -111,7 +115,7 @@ export class RunContinuationService {
       // edit here: the live-executing-run edit path is handled in-place by the
       // orchestrator before it ever reaches this validator, so reaching here with
       // the lock on this run means a non-resident (e.g. CLI) owner.
-      if (action !== "edit" || lockNamesTarget) {
+      if (action !== RUN_CONTINUATION_ACTIONS.EDIT || lockNamesTarget) {
         if (
           lockInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
         ) {
@@ -127,7 +131,7 @@ export class RunContinuationService {
       descriptor.pendingEdit.runRef === runRef;
     if (
       descriptor.pendingEdit &&
-      !(action === "edit" && pendingRewindOnThisRun)
+      !(action === RUN_CONTINUATION_ACTIONS.EDIT && pendingRewindOnThisRun)
     ) {
       throw new Error("This workflow has a draft or pending continuation");
     }
