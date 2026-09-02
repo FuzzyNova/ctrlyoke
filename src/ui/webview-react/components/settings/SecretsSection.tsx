@@ -128,6 +128,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
+              className="border border-btn-border"
               onClick={() => onReplace(entry.name)}
             >
               Replace
@@ -149,6 +150,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
+              className="border border-btn-border"
               onClick={() => onSet(entry.name)}
             >
               Convert to managed
@@ -157,6 +159,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
+              className="border border-btn-border"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -170,6 +173,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
+              className="border border-btn-border"
               onClick={() => onSet(entry.name)}
             >
               Set value
@@ -178,6 +182,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
               type="button"
               variant="secondary"
               size="sm"
+              className="border border-btn-border"
               onClick={() => onDelete(entry.name)}
             >
               Remove declaration
@@ -433,19 +438,44 @@ export function SecretsSection({ activeScope }: SecretsSectionProps) {
     <>
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
               Secrets
             </h3>
             <p className="mt-1 text-xs text-description-fg">
-              Managed values are write-only. This tab shows names, state,
-              metadata, and usage — never secret contents.
+              Secrets let a workflow reference a credential by name instead of
+              embedding it. Reference one inline in a prompt with{" "}
+              <code className="text-foreground">!NAME</code> (for example{" "}
+              <code className="text-foreground">!SUPABASE_PAT</code>), or grant
+              it to a step explicitly with a <code className="text-foreground">
+                secrets:
+              </code>{" "}
+              list — either way the harness is told only the name, never the
+              value, alongside a short instruction on how to read it from its
+              own environment.
+            </p>
+            <p className="mt-2 text-xs text-description-fg">
+              Two entry kinds share that same reference. If a name is already
+              exported in your shell, ctrlyoke reads it there and stores
+              nothing — the common case. If it isn&apos;t, you can set a
+              managed value below; ctrlyoke encrypts it in OS-backed storage
+              and injects it as an environment variable into the harness&apos;s
+              child process, and only for a step that actually grants that
+              name.
+            </p>
+            <p className="mt-2 text-xs text-description-fg">
+              Granted names can be used in prompts, MCP server env and
+              headers, and hook or script commands. Values are resolved only
+              when the process spawns and are redacted from logs, run
+              history, previews, and exports — this tab itself only ever
+              shows names, state, metadata, and usage, never secret contents.
             </p>
           </div>
           <Button
             type="button"
             variant="primary"
             size="sm"
+            className="shrink-0 whitespace-nowrap"
             onClick={() => openSetDialog()}
           >
             <i className="codicon codicon-add mr-1" aria-hidden="true" />
