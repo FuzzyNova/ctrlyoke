@@ -409,9 +409,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     if (
-          event.type === ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_TEXT ||
-          event.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_ERROR
-        ) {
+      event.type === ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_TEXT ||
+      event.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_ERROR
+    ) {
       return String((event as AntigravityLogEvent).line ?? "");
     }
     return undefined;
@@ -421,7 +421,9 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     const antigravityEvent = event as AntigravityLogEvent;
     const timestamp = antigravityEvent.timestamp ?? Date.now();
 
-    if (antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_PLANNER) {
+    if (
+      antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_PLANNER
+    ) {
       const structuredEvents: CliEvent[] = [];
       if (antigravityEvent.line) {
         structuredEvents.push({
@@ -473,7 +475,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       });
     }
 
-    if (antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_CHECKPOINT) {
+    if (
+      antigravityEvent.type ===
+      ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_CHECKPOINT
+    ) {
       return [
         {
           type: CLI_EVENT_TYPES.COMPACTION,
@@ -615,7 +620,13 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       }
       const text = this.unwrapUserRequest(entry.content);
       return text
-        ? [{ type: ANTIGRAVITY_LOG_EVENT_TYPES.USER_INPUT, line: text, ...base }]
+        ? [
+            {
+              type: ANTIGRAVITY_LOG_EVENT_TYPES.USER_INPUT,
+              line: text,
+              ...base,
+            },
+          ]
         : [];
     }
 

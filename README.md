@@ -274,26 +274,26 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 
 ## Commands
 
-| Command                                 | Description                                           |
-| --------------------------------------- | ----------------------------------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel`         | Open the dashboard in the bottom panel                |
-| `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
-| `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
-| Editor convert button                   | Write a step prompt to `.ctrlyoke/prompts/`           |
-| `ctrlyoke: Run with ctrlyoke`           | Run a prompt file from the Run with ctrlyoke submenu  |
-| `ctrlyoke: Load in ctrlyoke`            | Load a prompt file from the Run with ctrlyoke submenu |
-| `ctrlyoke: Queue Steps with ctrlyoke`   | Append prompts to the end of the active queue (shown once it has steps) |
+| Command                                    | Description                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `ctrlyoke: Open ctrlyoke Panel`            | Open the dashboard in the bottom panel                                                        |
+| `ctrlyoke: New Workflow from Template`     | Create a workflow from a built-in or custom template                                          |
+| `ctrlyoke: New Blank Workflow`             | Clear the dashboard and start with an empty workflow                                          |
+| Editor convert button                      | Write a step prompt to `.ctrlyoke/prompts/`                                                   |
+| `ctrlyoke: Run with ctrlyoke`              | Run a prompt file from the Run with ctrlyoke submenu                                          |
+| `ctrlyoke: Load in ctrlyoke`               | Load a prompt file from the Run with ctrlyoke submenu                                         |
+| `ctrlyoke: Queue Steps with ctrlyoke`      | Append prompts to the end of the active queue (shown once it has steps)                       |
 | `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert prompts immediately after the current position (shown once the active queue has steps) |
-| `ctrlyoke: Pause Execution`             | Pause a running workflow                              |
-| `ctrlyoke: Resume Execution`            | Resume a paused workflow                              |
-| `ctrlyoke: Stop Execution`              | Stop and reset the workflow                           |
-| `ctrlyoke: Resume Session`              | Resume from a saved session                           |
-| `ctrlyoke: Initialize Workspace`        | Set up `.ctrlyoke/` directory structure               |
-| `ctrlyoke: Import ctrlyoke Agents`      | Import agent files into the workspace                 |
-| `ctrlyoke: Import Workflow Templates`   | Import example workflow templates                     |
-| `ctrlyoke: Create End Condition Script` | Scaffold a validation script                          |
-| `ctrlyoke: Create New Custom Template`  | Save the current workflow as a reusable template      |
-| `ctrlyoke: Show Output Panel`           | Show the CLI output panel                             |
+| `ctrlyoke: Pause Execution`                | Pause a running workflow                                                                      |
+| `ctrlyoke: Resume Execution`               | Resume a paused workflow                                                                      |
+| `ctrlyoke: Stop Execution`                 | Stop and reset the workflow                                                                   |
+| `ctrlyoke: Resume Session`                 | Resume from a saved session                                                                   |
+| `ctrlyoke: Initialize Workspace`           | Set up `.ctrlyoke/` directory structure                                                       |
+| `ctrlyoke: Import ctrlyoke Agents`         | Import agent files into the workspace                                                         |
+| `ctrlyoke: Import Workflow Templates`      | Import example workflow templates                                                             |
+| `ctrlyoke: Create End Condition Script`    | Scaffold a validation script                                                                  |
+| `ctrlyoke: Create New Custom Template`     | Save the current workflow as a reusable template                                              |
+| `ctrlyoke: Show Output Panel`              | Show the CLI output panel                                                                     |
 
 ---
 

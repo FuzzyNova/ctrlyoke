@@ -35,7 +35,7 @@ for `CONTEXT_MENU_PLACEMENT_PLAN.md`'s research).
   (`src/vs/workbench/contrib/output/browser/output.contribution.ts:326`), where
   `CONTEXT_IN_OUTPUT = new RawContextKey<boolean>('inOutput', false)`
   (`src/vs/workbench/services/output/common/output.ts:40`). The manifest-facing key string is
-  `inOutput`. ctrlyoke's *existing* `editor/context` entries
+  `inOutput`. ctrlyoke's _existing_ `editor/context` entries
   (`addSelectionToPromptEditor`/`addSymbolToPromptEditor`) are gated
   `"resourceScheme == file"`, which is why they correctly don't show up in the Output panel
   today — this plan adds new, separate entries gated on `inOutput` instead, it does not touch
@@ -77,7 +77,7 @@ these are new entries in the exact `editor/context` location that doc is already
 placement convention for (`2_ctrlyoke@N` today). Land that decision first, or land both
 together; don't invent a fourth, one-off group naming style here.
 
-## Design: reuse the attachment-writing backend, but *not* the completion-resolve plumbing
+## Design: reuse the attachment-writing backend, but _not_ the completion-resolve plumbing
 
 The user's ask was to route through "the current backend that exports the text to a file in
 attachments and inserts the attachment file in `CodeMirrorEditor.tsx`." Read literally, ctrlyoke
@@ -88,7 +88,7 @@ actually has **two** separate mechanisms today, and this feature only needs one 
    `buildFileReference`/`buildFileReferenceValue` (`src/completions/ContextReferenceBuilder.ts`)
    turn the resulting relative path into an `@path` reference string. This part is a clean,
    direct reuse.
-2. **The completion placeholder-resolve plumbing** (what *not* to reuse): `OutputCaptureCache`,
+2. **The completion placeholder-resolve plumbing** (what _not_ to reuse): `OutputCaptureCache`,
    the `CAPTURING_OUTPUT_PLACEHOLDER` insert-then-resolve dance in `CodeMirrorEditor.tsx`, and
    `NativeOutputCaptureCommand`/`executeNativeOutputCaptureCommand` all exist to solve one
    specific problem — a completion **list** is built once, but the user's **pick** happens
@@ -113,7 +113,7 @@ ContextMenuReferenceCommands.insertReferences(references)
   → CodeMirrorEditor.tsx consumes `pendingInsertRequest` and inserts at the cursor
 ```
 
-This is *also* implemented in `CodeMirrorEditor.tsx` — just a different, already-generic queue
+This is _also_ implemented in `CodeMirrorEditor.tsx` — just a different, already-generic queue
 than the completion-pick placeholder logic, and it's the one every existing "right-click
 somewhere else in VS Code, insert a reference into the ctrlyoke prompt editor" command already
 uses. The new output commands should be one more caller of this same path, exactly like
@@ -132,11 +132,14 @@ cache/placeholder flow.
    callers share it** (single-source, per this repo's DRY convention — see root `CLAUDE.md`).
    Today `savePendingOutputSnapshot` does: take-from-cache → `TempFileManager.createOutputSnapshotFile`
    → `buildFileReferenceValue`. Split out the write+build half:
+
    ```ts
    export async function writeOutputSnapshotAttachment(
      getWorkspaceRoot: () => string,
      entry: OutputCaptureEntry
-   ): Promise<string> { /* the last two steps of today's savePendingOutputSnapshot */ }
+   ): Promise<string> {
+     /* the last two steps of today's savePendingOutputSnapshot */
+   }
 
    export async function savePendingOutputSnapshot(
      getWorkspaceRoot: () => string,
@@ -147,10 +150,13 @@ cache/placeholder flow.
      return writeOutputSnapshotAttachment(getWorkspaceRoot, entry);
    }
    ```
+
    The new context-menu commands call `writeOutputSnapshotAttachment` directly with a
    synchronously-built `OutputCaptureEntry` — no cache round trip.
+
 3. **New methods on `ContextMenuReferenceCommands`** (`src/completions/ContextMenuReferenceCommands.ts`),
    alongside the existing `addFileToPromptEditor` etc.:
+
    ```ts
    async addOutputSelectionToPromptEditor(uri: vscode.Uri): Promise<void> {
      const editor = this.activeOutputEditor(uri);
@@ -167,6 +173,7 @@ cache/placeholder flow.
      await this.captureOutputToPromptEditor(editor, editor.document.getText(), undefined);
    }
    ```
+
    where `captureOutputToPromptEditor` calls `getOutputChannelSlug`, then
    `writeOutputSnapshotAttachment(this.getWorkspaceRoot, { text, channel, range })`, then
    `buildFileReference(relativePath)`, then the existing private `insertReferences([reference])`.
@@ -178,6 +185,7 @@ cache/placeholder flow.
    `vscode.window.activeTextEditor` directly when `uri` is undefined (only reachable when its
    document is already the focused output channel, since the command's `when` already requires
    `view == workbench.panel.output`).
+
 4. **Constructor change:** `ContextMenuReferenceCommands` currently takes only
    `webviewProvider`. It needs a `getWorkspaceRoot: () => string` callback added to its
    constructor — the exact same callback already passed to `registerNativeOutputCaptureCommand`
@@ -196,17 +204,17 @@ queue rather than the completion-specific placeholder/cache path.
 
 ## Affected files
 
-| File | Role |
-| --- | --- |
-| `package.json` | New commands + `editor/context`/`view/title` menu entries |
-| `src/extension.ts` | Register the two new commands; thread `getWorkspaceRoot` into `ContextMenuReferenceCommands` |
-| `src/completions/ContextMenuReferenceCommands.ts` | New `addOutputSelectionToPromptEditor`/`addOutputChannelToPromptEditor` methods, constructor change |
-| `src/ui/OutputSnapshotService.ts` | Split out `writeOutputSnapshotAttachment` so both the completion path and the new command path share it |
-| `src/completions/CompletionHelpers.ts` | Export `getOutputChannelSlug` instead of leaving it module-private |
+| File                                              | Role                                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `package.json`                                    | New commands + `editor/context`/`view/title` menu entries                                               |
+| `src/extension.ts`                                | Register the two new commands; thread `getWorkspaceRoot` into `ContextMenuReferenceCommands`            |
+| `src/completions/ContextMenuReferenceCommands.ts` | New `addOutputSelectionToPromptEditor`/`addOutputChannelToPromptEditor` methods, constructor change     |
+| `src/ui/OutputSnapshotService.ts`                 | Split out `writeOutputSnapshotAttachment` so both the completion path and the new command path share it |
+| `src/completions/CompletionHelpers.ts`            | Export `getOutputChannelSlug` instead of leaving it module-private                                      |
 
 ## Non-Goals
 
-- Adding a right-click entry to the *detached* Output editor tab (`editor/title`/
+- Adding a right-click entry to the _detached_ Output editor tab (`editor/title`/
   `editor/title/context`) reachable via "Open Output in Editor" — same mechanism would apply
   (it's a real editor input by then), but that's a secondary, rarely-used path; not part of
   this pass unless it turns out to be free.

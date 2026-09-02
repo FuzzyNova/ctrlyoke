@@ -255,11 +255,11 @@ references are available in both the step and retry prompts.
 
 Right-click context menu on workflow files — open the **Run with ctrlyoke** submenu:
 
-| Action                   | Effect                                  |
-| ------------------------ | --------------------------------------- |
-| Run with ctrlyoke        | Load and immediately run the file       |
-| Load in ctrlyoke         | Load without running (edit first)       |
-| Queue Steps with ctrlyoke      | Append to the current workflow queue (shown once it has steps) |
+| Action                         | Effect                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| Run with ctrlyoke              | Load and immediately run the file                                        |
+| Load in ctrlyoke               | Load without running (edit first)                                        |
+| Queue Steps with ctrlyoke      | Append to the current workflow queue (shown once it has steps)           |
 | Queue Steps Next with ctrlyoke | Insert after the currently running step (shown once the queue has steps) |
 
 ---

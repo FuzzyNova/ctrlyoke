@@ -396,9 +396,7 @@ export class WorkflowOrchestrator {
   >();
 
   /** Emits the queue state of the instance currently viewed by the panel. */
-  private activeQueueStateChangedEmitter?: TypedEmitter<
-    QueueState | undefined
-  >;
+  private activeQueueStateChangedEmitter?: TypedEmitter<QueueState | undefined>;
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -5513,8 +5511,9 @@ export class WorkflowOrchestrator {
   private getActiveQueueStateChangedEmitter(): TypedEmitter<
     QueueState | undefined
   > {
-    return (this.activeQueueStateChangedEmitter ??=
-      new TypedEmitter<QueueState | undefined>());
+    return (this.activeQueueStateChangedEmitter ??= new TypedEmitter<
+      QueueState | undefined
+    >());
   }
 
   private setHasQueuedStepsContext(state: QueueState | undefined): void {
