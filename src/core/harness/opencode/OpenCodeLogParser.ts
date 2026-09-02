@@ -21,9 +21,6 @@ import {
 import {
   mapOpenCodeToolPartToCliEvent,
   accumulateOpenCodeStepTokens,
-  mapOpenCodeDurableEventsToBaseCliEvents,
-  type OpenCodeToolContext,
-  type OpenCodeDurableEvent,
 } from "./OpenCodeEventMapper";
 import {
   OPENCODE_EVENT_TYPES,
@@ -35,7 +32,7 @@ import { PollingFsWatcher } from "../shared/FsWatcherHandles";
 
 const execFileAsync = promisify(execFile);
 
-/** Polling interval (ms) for interactive OpenCode event reads */
+/** Polling interval (ms) between `opencode export` calls in interactive mode */
 const EXPORT_POLL_INTERVAL_MS = 1000;
 
 /**
@@ -52,29 +49,7 @@ const EXPORT_POLL_INTERVAL_MS = 1000;
  */
 const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
 
-/**
- * If the interactive history endpoint has been polling successfully (HTTP 200,
- * no thrown error) for this long since the session started without ever
- * returning a single durable event, treat it as silently starved rather than
- * genuinely idle and permanently switch to `opencode export` for the rest of
- * the session. A real turn's first durable event (`session.next.step.started`)
- * lands within milliseconds of prompt submission in every captured live
- * payload, so an extended run of empty-but-successful pages this early is a
- * strong signal the endpoint isn't wired up for this session/CLI version —
- * not a legitimately quiet model. This guards against the failure mode where
- * `historyFallback` never trips because the endpoint never *errors*, it just
- * never has anything to report (see the OpenCode interactive event stream
- * missing-output investigation, 2026-09-01).
- */
-const OPENCODE_HISTORY_EMPTY_GRACE_MS = 15_000;
-
 type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
-type OpenCodeHistoryResponse = {
-  readonly ok: boolean;
-  readonly status: number;
-  json(): Promise<unknown>;
-};
-type OpenCodeHistoryFetcher = (url: string) => Promise<OpenCodeHistoryResponse>;
 
 /**
  * Run OpenCode's export command through the same platform-aware launcher used
@@ -120,51 +95,13 @@ interface OpenCodeExportPart {
   [key: string]: unknown;
 }
 
-interface OpenCodeHistoryPage {
-  readonly data: OpenCodeDurableEvent[];
-  readonly hasMore: boolean;
-}
-
-function isOpenCodeHistoryPage(value: unknown): value is OpenCodeHistoryPage {
-  if (value === null || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  if (
-    !Array.isArray(candidate.data) ||
-    typeof candidate.hasMore !== "boolean"
-  ) {
-    return false;
-  }
-
-  return candidate.data.every((event) => {
-    if (event === null || typeof event !== "object") {
-      return false;
-    }
-    const record = event as Record<string, unknown>;
-    const durable = record.durable;
-    return (
-      typeof record.type === "string" &&
-      record.data !== null &&
-      typeof record.data === "object" &&
-      durable !== null &&
-      typeof durable === "object" &&
-      Number.isSafeInteger((durable as Record<string, unknown>).seq) &&
-      ((durable as Record<string, unknown>).seq as number) >= 0
-    );
-  });
-}
-
 /**
  * OpenCode CLI Log Parser
  *
  * OpenCode does not write session log files like Copilot or Claude.
- * Instead, this parser polls the interactive session history endpoint on a
- * fixed interval and converts durable events into JSONL-style BaseCliEvents —
- * matching the same event shape produced by `opencode run --format json`.
- * Older or unavailable servers use `opencode export <sessionId>` as a sticky
- * per-session fallback.
+ * Instead, this parser polls `opencode export <sessionId>` on a fixed interval
+ * and converts the returned JSON into JSONL-style BaseCliEvents — matching the
+ * same event shape produced by `opencode run --format json`.
  *
  * The "log path" passed through CliIntegration and CliLogMonitor is the session
  * ID itself (e.g. `ses_340325359ffejJqLbgD9CkEEq3`), obtained from the
@@ -172,32 +109,14 @@ function isOpenCodeHistoryPage(value: unknown): value is OpenCodeHistoryPage {
  *
  * Flow:
  *   discoverSessionLog(...)       → returns sessionId (or null if unknown)
- *   watchLogFile(sessionId, ...)  → polls history/export, emits new events
- *   readNewLines(sessionId)       → single history/export read
+ *   watchLogFile(sessionId, ...)  → polls opencode export, emits new events
+ *   readNewLines(sessionId)       → single export call, returns new events
  *   isComplete(event)             → detects step_finish with reason === "stop"
  *   extractResponse(events)       → assembles UniversalCliOutput from events
  */
 export class OpenCodeLogParser extends BaseLogParser {
   /** Part IDs already emitted — prevents re-emitting on re-poll */
   private readonly seenPartIds = new Set<string>();
-
-  /** Cursor for the interactive history endpoint. */
-  private lastSeq = 0;
-
-  /** Session associated with the cursor and fallback state. */
-  private historySessionId: string | undefined;
-
-  /** Once history fails (or is diagnosed as starved), use export for the remainder of this session. */
-  private historyFallback = false;
-
-  /** Wall-clock time of the first history poll for the current session — anchors the empty-history grace period. */
-  private historyFirstPollAt: number | undefined;
-
-  /** Whether the history endpoint has ever returned a durable event for the current session. */
-  private historyEverReceivedEvent = false;
-
-  /** Tool call context can span multiple history poll ticks. */
-  private readonly historyToolContext = new Map<string, OpenCodeToolContext>();
 
   /**
    * Returns the context window size (in tokens) for the current model.
@@ -207,9 +126,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
   constructor(
     contextWindowSizeFn: () => number | undefined = () => undefined,
-    readonly getServerBaseUrl: () => string | undefined = () => undefined,
-    private readonly runExport: OpenCodeExportRunner = runOpenCodeExport,
-    private readonly fetchHistory: OpenCodeHistoryFetcher = (url) => fetch(url)
+    private readonly runExport: OpenCodeExportRunner = runOpenCodeExport
   ) {
     super();
     this.contextWindowSizeFn = contextWindowSizeFn;
@@ -234,8 +151,8 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   /**
-   * Override: instead of reading a file, poll the interactive history endpoint
-   * and return durable events newer than the current sequence cursor.
+   * Override: instead of reading a file, call `opencode export <sessionId>`
+   * and return any parts not yet emitted.
    *
    * @param sessionId The "log path" — actually the session ID for this harness
    */
@@ -244,8 +161,8 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   /**
-   * Override: set up a polling interval that calls the history endpoint instead
-   * of watching a file with fs.watch.
+   * Override: set up a polling interval that calls `opencode export <sessionId>`
+   * instead of watching a file with fs.watch.
    *
    * @param sessionId The "log path" — actually the session ID for this harness
    * @param callback  Called for each new BaseCliEvent
@@ -268,7 +185,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           callback(event);
         }
       } catch (error) {
-        Log.trace(`[OpenCodeLogParser] event poll error: ${error}`);
+        Log.trace(`[OpenCodeLogParser] Export poll error: ${error}`);
       }
     }, EXPORT_POLL_INTERVAL_MS);
 
@@ -280,12 +197,11 @@ export class OpenCodeLogParser extends BaseLogParser {
 
   /**
    * A session is complete when a step_finish event carries reason === "stop".
-   * The history mapper derives this from session.next.step.ended.finish, while
-   * the export fallback preserves the existing step-finish shape.
+   * This mirrors the final event emitted by `opencode run --format json`.
    */
   isComplete(event: BaseCliEvent): boolean {
     return (
-      event.type === OPENCODE_EVENT_TYPES.STEP_FINISH &&
+      event.type === "step_finish" &&
       (event as Record<string, any>).part?.reason === "stop"
     );
   }
@@ -294,7 +210,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     event: BaseCliEvent,
     _modelId: string
   ): { used: number; size: number } | null {
-    if (event.type === OPENCODE_EVENT_TYPES.STEP_FINISH) {
+    if (event.type === "step_finish") {
       const tokens = (event as Record<string, any>).part?.tokens as
         | Record<string, any>
         | undefined;
@@ -590,7 +506,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           });
           break;
         }
-        case OPENCODE_EVENT_TYPES.STEP_FINISH: {
+        case "step_finish": {
           const tokens = e.part?.tokens as Record<string, any> | undefined;
           if (tokens) {
             sawStepUsage = true;
@@ -644,129 +560,14 @@ export class OpenCodeLogParser extends BaseLogParser {
   // ──────────────────────────────────────────────────────────────────
 
   /**
-   * Poll the history endpoint with an exclusive sequence cursor. If the
-   * endpoint is unavailable, permanently switch this session to export
-   * polling so an older CLI does not fail once per tick forever.
+   * Run `opencode export <sessionId>` and return only parts not yet seen.
+   * Updates seenPartIds so repeated calls are incremental.
    */
   private async fetchNewEvents(sessionId: string): Promise<BaseCliEvent[]> {
-    this.resetSessionStateIfNeeded(sessionId);
-
-    if (this.historyFallback) {
-      return this.fetchNewEventsFromExport(sessionId);
-    }
-
-    try {
-      const baseUrl = this.getServerBaseUrl();
-      if (baseUrl === undefined) {
-        this.historyFallback = true;
-        Log.trace(
-          "[OpenCodeLogParser] no interactive server base URL available; using opencode export for this session"
-        );
-        return this.fetchNewEventsFromExport(sessionId);
-      }
-
-      const durableEvents: OpenCodeDurableEvent[] = [];
-      let after = this.lastSeq;
-      let hasMore = true;
-
-      while (hasMore) {
-        const historyUrl =
-          `${baseUrl.replace(/\/+$/, "")}/api/session/` +
-          `${encodeURIComponent(sessionId)}/history?after=${after}`;
-        const response = await this.fetchHistory(historyUrl);
-        if (!response.ok) {
-          throw new Error(`history request returned HTTP ${response.status}`);
-        }
-
-        const payload = await response.json();
-        if (!isOpenCodeHistoryPage(payload)) {
-          throw new Error("history response had an invalid shape");
-        }
-
-        let latestSeq = after;
-        for (const event of payload.data) {
-          const seq = event.durable?.seq;
-          if (seq !== undefined && seq > latestSeq) {
-            latestSeq = seq;
-          }
-          durableEvents.push(event);
-        }
-
-        if (payload.hasMore && latestSeq === after) {
-          throw new Error("history response made no cursor progress");
-        }
-
-        this.lastSeq = latestSeq;
-        after = latestSeq;
-        hasMore = payload.hasMore;
-      }
-
-      Log.trace(
-        `[OpenCodeLogParser] history poll ok: ${durableEvents.length} durable event(s), lastSeq=${this.lastSeq}`
-      );
-
-      if (durableEvents.length > 0) {
-        this.historyEverReceivedEvent = true;
-      } else if (
-        !this.historyEverReceivedEvent &&
-        this.historyFirstPollAt !== undefined &&
-        Date.now() - this.historyFirstPollAt >= OPENCODE_HISTORY_EMPTY_GRACE_MS
-      ) {
-        // The endpoint has responded successfully on every poll but never once
-        // reported a durable event this long after the session started — the
-        // first event of any real turn lands within milliseconds of prompt
-        // submission, so this isn't a quiet model, it's a starved endpoint.
-        this.historyFallback = true;
-        Log.warn(
-          `[OpenCodeLogParser] history endpoint returned zero durable events ` +
-            `${OPENCODE_HISTORY_EMPTY_GRACE_MS}ms after session start despite ` +
-            `successful polling; switching to opencode export for the rest of this session`
-        );
-        return this.fetchNewEventsFromExport(sessionId);
-      }
-
-      return mapOpenCodeDurableEventsToBaseCliEvents(
-        durableEvents,
-        this.historyToolContext
-      );
-    } catch (error) {
-      this.historyFallback = true;
-      Log.warn(
-        `[OpenCodeLogParser] history polling failed; falling back to opencode export: ${error}`
-      );
-      return this.fetchNewEventsFromExport(sessionId);
-    }
-  }
-
-  /** Keep cursors, deduplication, and capability fallback scoped to a session. */
-  private resetSessionStateIfNeeded(sessionId: string): void {
-    if (this.historySessionId === sessionId) {
-      return;
-    }
-
-    this.historySessionId = sessionId;
-    this.lastSeq = 0;
-    this.historyFallback = false;
-    this.historyFirstPollAt = Date.now();
-    this.historyEverReceivedEvent = false;
-    this.seenPartIds.clear();
-    this.historyToolContext.clear();
-    this.liveLastStepTotal = undefined;
-  }
-
-  /** Preserve the interim export implementation for unsupported/broken CLIs. */
-  private async fetchNewEventsFromExport(
-    sessionId: string
-  ): Promise<BaseCliEvent[]> {
     try {
       const stdout = await this.runExport(sessionId);
       const exportData = JSON.parse(stdout) as OpenCodeExport;
-      const newEvents = this.extractNewEventsFromExport(exportData);
-      Log.trace(
-        `[OpenCodeLogParser] export poll ok: ${newEvents.length} new event(s) ` +
-          `(${exportData.messages?.length ?? 0} total message(s) in transcript)`
-      );
-      return newEvents;
+      return this.extractNewEventsFromExport(exportData);
     } catch (error) {
       // Every failed poll here means the session's events since the last
       // successful export are silently dropped (the next successful export
