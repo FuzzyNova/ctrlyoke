@@ -352,7 +352,13 @@ export function parseInlinePriorContextRefs(
     }
     if (body.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
       const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
-      const rangeText = body.slice(stepPrefix.length);
+      // A trailing comma is ordinary sentence punctuation, not an empty range
+      // entry — e.g. "review $step:1,3, then tell me..." — so it's trimmed
+      // before parsing and off the reported token, the same way parseAtReferences
+      // strips trailing prose punctuation from unquoted @ paths.
+      const rawRangeText = body.slice(stepPrefix.length);
+      const rangeText = rawRangeText.replace(/,+$/, "");
+      const trimmedLength = rawRangeText.length - rangeText.length;
       const indices = parseRangeNotation(rangeText);
       if (!indices) {
         console.warn(`Invalid inline prior context range "${token}" skipped`);
@@ -360,7 +366,7 @@ export function parseInlinePriorContextRefs(
       }
       matches.push({
         ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices },
-        token,
+        token: trimmedLength > 0 ? token.slice(0, -trimmedLength) : token,
       });
     }
   }
