@@ -32,6 +32,7 @@ import {
   SETTING_SCOPES,
   MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
+  getMcpLocalSource,
   type AnyTargetId,
   type HarnessId,
   type SettingWriteScope,
@@ -79,43 +80,35 @@ const EXPORT_TARGET_IDS = [
   HARNESS_IDS.ANTIGRAVITY_CLI,
 ] as const;
 
+const LOCAL_MCP_TARGET_IDS = EXPORT_TARGET_IDS;
+
+const LOCAL_MCP_SOURCE_LOCATIONS = LOCAL_MCP_TARGET_IDS.flatMap((targetId) =>
+  [SETTING_SCOPES.WORKSPACE, SETTING_SCOPES.USER].map((scope) => ({
+    source: getMcpLocalSource(targetId, scope),
+    targetId,
+    scope,
+  }))
+);
+
+const LOCAL_MCP_SOURCE_LOCATION_BY_SOURCE = new Map(
+  LOCAL_MCP_SOURCE_LOCATIONS.map((location) => [location.source, location])
+);
+
 function formatScopeLabel(scope: SettingWriteScope): string {
   return scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
 }
 
 function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
-  switch (source) {
-    case "vscode-workspace":
-      return "VS Code Workspace";
-    case "vscode-user":
-      return "VS Code User";
-    case "claude-workspace":
-      return "Claude Code Workspace";
-    case "claude-user":
-      return "Claude Code User";
-    case "copilot-workspace":
-      return "Copilot CLI Workspace";
-    case "copilot-user":
-      return "Copilot CLI User";
-    case "codex-workspace":
-      return "Codex Workspace";
-    case "codex-user":
-      return "Codex User";
-    case "opencode-workspace":
-      return "OpenCode Workspace";
-    case "opencode-user":
-      return "OpenCode User";
-    case "qwen-workspace":
-      return "Qwen Code Workspace";
-    case "qwen-user":
-      return "Qwen Code User";
-    case "antigravity-workspace":
-      return "Antigravity Workspace";
-    case "antigravity-user":
-      return "Antigravity User";
+  const location = LOCAL_MCP_SOURCE_LOCATION_BY_SOURCE.get(source);
+  if (!location) {
+    return source;
   }
 
-  return source;
+  const targetLabel =
+    location.targetId === SPECIAL_TARGET_IDS.VSCODE
+      ? "VS Code"
+      : HARNESS_INFO[location.targetId].shortName;
+  return `${targetLabel} ${formatScopeLabel(location.scope)}`;
 }
 
 function formatPathForDisplay(filePath: string): string {
@@ -383,65 +376,7 @@ function buildExportGroups(
 function getTargetForLocalSource(
   source: LocalMcpServerEntry["source"]
 ): { targetId: AnyTargetId; scope: SettingWriteScope } | null {
-  switch (source) {
-    case "vscode-workspace":
-      return {
-        targetId: SPECIAL_TARGET_IDS.VSCODE,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "vscode-user":
-      return {
-        targetId: SPECIAL_TARGET_IDS.VSCODE,
-        scope: SETTING_SCOPES.USER,
-      };
-    case "claude-workspace":
-      return {
-        targetId: HARNESS_IDS.CLAUDE_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "claude-user":
-      return { targetId: HARNESS_IDS.CLAUDE_CLI, scope: SETTING_SCOPES.USER };
-    case "copilot-workspace":
-      return {
-        targetId: HARNESS_IDS.COPILOT_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "copilot-user":
-      return { targetId: HARNESS_IDS.COPILOT_CLI, scope: SETTING_SCOPES.USER };
-    case "codex-workspace":
-      return {
-        targetId: HARNESS_IDS.CODEX_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "codex-user":
-      return { targetId: HARNESS_IDS.CODEX_CLI, scope: SETTING_SCOPES.USER };
-    case "opencode-workspace":
-      return {
-        targetId: HARNESS_IDS.OPENCODE_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "opencode-user":
-      return { targetId: HARNESS_IDS.OPENCODE_CLI, scope: SETTING_SCOPES.USER };
-    case "qwen-workspace":
-      return {
-        targetId: HARNESS_IDS.QWEN_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "qwen-user":
-      return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.USER };
-    case "antigravity-workspace":
-      return {
-        targetId: HARNESS_IDS.ANTIGRAVITY_CLI,
-        scope: SETTING_SCOPES.WORKSPACE,
-      };
-    case "antigravity-user":
-      return {
-        targetId: HARNESS_IDS.ANTIGRAVITY_CLI,
-        scope: SETTING_SCOPES.USER,
-      };
-  }
-
-  return null;
+  return LOCAL_MCP_SOURCE_LOCATION_BY_SOURCE.get(source) ?? null;
 }
 
 function encodeLocationValue(location: ResolvedServerLocation): string {
@@ -685,21 +620,13 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       groups.set(entry.source, current);
     }
     const orderedSources = [
-      "vscode-workspace",
-      "claude-workspace",
-      "copilot-workspace",
-      "codex-workspace",
-      "opencode-workspace",
-      "qwen-workspace",
-      "antigravity-workspace",
-      "vscode-user",
-      "claude-user",
-      "copilot-user",
-      "codex-user",
-      "opencode-user",
-      "qwen-user",
-      "antigravity-user",
-    ] as LocalMcpServerEntry["source"][];
+      ...LOCAL_MCP_TARGET_IDS.map((targetId) =>
+        getMcpLocalSource(targetId, SETTING_SCOPES.WORKSPACE)
+      ),
+      ...LOCAL_MCP_TARGET_IDS.map((targetId) =>
+        getMcpLocalSource(targetId, SETTING_SCOPES.USER)
+      ),
+    ];
     const orderedGroups = orderedSources.flatMap((source) => {
       const entries = groups.get(source);
       return entries ? [{ source, entries }] : [];

@@ -18,6 +18,10 @@ import {
   MCP_CONFIG_KEYS,
   MCP_REGISTRY_PACKAGE_TYPES,
   MCP_TRANSPORTS,
+  getMcpLocalSource,
+  HARNESS_IDS,
+  SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
   type McpTransport,
 } from "../types/DashboardConstants";
 import { stripJsonComments } from "./JsoncUtils";
@@ -680,72 +684,93 @@ function getLocalConfigDescriptors(
   return [
     {
       path: getVscodeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "vscode-workspace",
+      source: getMcpLocalSource(
+        SPECIAL_TARGET_IDS.VSCODE,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "vscode-json",
     },
     {
       path: getClaudeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "claude-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.CLAUDE_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "claude-json",
     },
     ...getCopilotWorkspaceMcpConfigPaths(workspaceRoot).map((filePath) => ({
       path: filePath,
-      source: "copilot-workspace" as const,
+      source: getMcpLocalSource(
+        HARNESS_IDS.COPILOT_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "copilot-json" as const,
     })),
     {
       path: getCodexWorkspaceMcpConfigPath(workspaceRoot),
-      source: "codex-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.CODEX_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "codex-toml",
     },
     {
       path: getOpenCodeWorkspaceMcpConfigPath(workspaceRoot),
-      source: "opencode-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.OPENCODE_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "opencode-json",
     },
     {
       path: getQwenWorkspaceMcpConfigPath(workspaceRoot),
-      source: "qwen-workspace",
+      source: getMcpLocalSource(HARNESS_IDS.QWEN_CLI, SETTING_SCOPES.WORKSPACE),
       format: "qwen-json",
     },
     {
       path: getAntigravityWorkspaceMcpConfigPath(workspaceRoot),
-      source: "antigravity-workspace",
+      source: getMcpLocalSource(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       format: "antigravity-json",
     },
     {
       path: getVscodeUserMcpConfigPath(),
-      source: "vscode-user",
+      source: getMcpLocalSource(SPECIAL_TARGET_IDS.VSCODE, SETTING_SCOPES.USER),
       format: "vscode-json",
     },
     {
       path: getClaudeUserConfigPath(),
-      source: "claude-user",
+      source: getMcpLocalSource(HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.USER),
       format: "claude-json",
     },
     {
       path: getCopilotUserMcpConfigPath(),
-      source: "copilot-user",
+      source: getMcpLocalSource(HARNESS_IDS.COPILOT_CLI, SETTING_SCOPES.USER),
       format: "copilot-json",
     },
     {
       path: getCodexUserMcpConfigPath(),
-      source: "codex-user",
+      source: getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.USER),
       format: "codex-toml",
     },
     {
       path: getOpenCodeUserMcpConfigPath(),
-      source: "opencode-user",
+      source: getMcpLocalSource(HARNESS_IDS.OPENCODE_CLI, SETTING_SCOPES.USER),
       format: "opencode-json",
     },
     {
       path: getQwenUserMcpConfigPath(),
-      source: "qwen-user",
+      source: getMcpLocalSource(HARNESS_IDS.QWEN_CLI, SETTING_SCOPES.USER),
       format: "qwen-json",
     },
     {
       path: getAntigravityUserMcpConfigPath(),
-      source: "antigravity-user",
+      source: getMcpLocalSource(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        SETTING_SCOPES.USER
+      ),
       format: "antigravity-json",
     },
   ];

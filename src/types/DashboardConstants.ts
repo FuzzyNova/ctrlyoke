@@ -3261,6 +3261,25 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+type HarnessMcpSourcePrefix<T extends string> = T extends `${infer Prefix}-cli`
+  ? Prefix
+  : never;
+export type McpLocalSource =
+  | `${typeof SPECIAL_TARGET_IDS.VSCODE}-${SettingWriteScope}`
+  | `${HarnessMcpSourcePrefix<HarnessId>}-${SettingWriteScope}`;
+
+/** Build the stable source key used for a local MCP discovery result. */
+export function getMcpLocalSource(
+  targetId: HarnessId | typeof SPECIAL_TARGET_IDS.VSCODE,
+  scope: SettingWriteScope
+): McpLocalSource {
+  const sourcePrefix =
+    targetId === SPECIAL_TARGET_IDS.VSCODE
+      ? targetId
+      : targetId.replace(/-cli$/, "");
+  return `${sourcePrefix}-${scope}` as McpLocalSource;
+}
+
 export type ClaudeToolName =
   (typeof CLAUDE_TOOL_NAMES)[keyof typeof CLAUDE_TOOL_NAMES];
 export type HarnessShareMetric =

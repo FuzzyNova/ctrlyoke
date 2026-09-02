@@ -3,7 +3,14 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
+import {
+  getMcpLocalSource,
+  HARNESS_IDS,
+  SETTING_SCOPES,
+} from "../../types/DashboardConstants";
 import { safeDiscoverLocalMcpServers } from "../../utils/McpDiscoveryUtils";
+
+const REMOTE_SERVER_ID = "remote";
 
 suite("McpDiscoveryUtils", () => {
   let tempRoot: string;
@@ -185,31 +192,37 @@ suite("McpDiscoveryUtils", () => {
 
     assert.deepStrictEqual(cclspEntries, [
       {
-        source: "antigravity-user",
+        source: getMcpLocalSource(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          SETTING_SCOPES.USER
+        ),
         path: path.join(userHome, ".gemini", "config", "mcp_config.json"),
         command: "node",
         args: ["antigravity-server.js"],
       },
       {
-        source: "claude-user",
+        source: getMcpLocalSource(HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.USER),
         path: path.join(userHome, ".claude.json"),
         command: "node",
         args: ["claude-server.js"],
       },
       {
-        source: "codex-user",
+        source: getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.USER),
         path: path.join(userHome, ".codex", "config.toml"),
         command: "node",
         args: ["codex-server.js"],
       },
       {
-        source: "copilot-user",
+        source: getMcpLocalSource(HARNESS_IDS.COPILOT_CLI, SETTING_SCOPES.USER),
         path: path.join(userHome, ".copilot", "mcp-config.json"),
         command: "node",
         args: ["copilot-server.js"],
       },
       {
-        source: "opencode-user",
+        source: getMcpLocalSource(
+          HARNESS_IDS.OPENCODE_CLI,
+          SETTING_SCOPES.USER
+        ),
         path: path.join(userHome, ".config", "opencode", "opencode.json"),
         command: "node",
         args: ["opencode-server.js"],
@@ -246,11 +259,18 @@ suite("McpDiscoveryUtils", () => {
 
     const entry = result.servers.find(
       (server) =>
-        server.source === "antigravity-workspace" && server.id === "remote"
+        server.source ===
+          getMcpLocalSource(
+            HARNESS_IDS.ANTIGRAVITY_CLI,
+            SETTING_SCOPES.WORKSPACE
+          ) && server.id === REMOTE_SERVER_ID
     );
     assert.deepStrictEqual(entry, {
-      id: "remote",
-      source: "antigravity-workspace",
+      id: REMOTE_SERVER_ID,
+      source: getMcpLocalSource(
+        HARNESS_IDS.ANTIGRAVITY_CLI,
+        SETTING_SCOPES.WORKSPACE
+      ),
       path: antigravityConfigPath,
       url: "https://example.test/mcp",
       transport: "streamable-http",
