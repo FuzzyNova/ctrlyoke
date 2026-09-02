@@ -23,6 +23,20 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Completion trigger discriminants shared by the extension host and webview. */
+export const COMPLETION_TRIGGERS = {
+  SLASH: "/",
+  AT: "@",
+  HASH: "#",
+  TILDE: "~",
+  DOLLAR: "$",
+  BANG: "!",
+  PATH: "path",
+} as const;
+
+export type CompletionTrigger =
+  (typeof COMPLETION_TRIGGERS)[keyof typeof COMPLETION_TRIGGERS];
+
 /** Build modes consumed by the Vite webview configuration. */
 export const BUILD_MODES = {
   PRODUCTION: "production",

@@ -21,6 +21,7 @@ import {
   type SettingWriteScope,
   PROMPT_FILE_RESOLUTION_STATUSES,
   REFERENCE_PATH_BASES,
+  COMPLETION_TRIGGERS,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
@@ -459,7 +460,7 @@ export class PromptEditorSupportService {
       }
       const names = await this.secretRegistry.getCompletionNames();
       return getSecretCompletions(names, prefix.substring(1));
-    } else if (trigger === "path") {
+    } else if (trigger === COMPLETION_TRIGGERS.PATH) {
       return await getPromptFileCompletions(prefix);
     }
 

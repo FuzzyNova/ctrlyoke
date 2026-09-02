@@ -63,7 +63,9 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   CAPTURING_OUTPUT_PLACEHOLDER,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
+  COMPLETION_TRIGGERS,
   type CodeMirrorEditorMode,
+  type CompletionTrigger,
 } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
@@ -155,8 +157,6 @@ export interface ContextReferenceValidationResult {
    */
   suggestions?: string[];
 }
-
-export type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "!" | "path";
 
 interface ExtensionCompletionItem {
   label: string;
@@ -252,7 +252,7 @@ function shouldBypassCodeMirrorFiltering(
 
   return (
     request.trigger === "/" ||
-    request.trigger === "path" ||
+    request.trigger === COMPLETION_TRIGGERS.PATH ||
     (request.trigger === "@" &&
       (request.query.startsWith('"') ||
         request.query.includes("/") ||
@@ -302,7 +302,7 @@ function withReferenceBoundarySpace(
 ): string {
   if (
     trigger === "/" ||
-    trigger === "path" ||
+    trigger === COMPLETION_TRIGGERS.PATH ||
     applyText.length === 0 ||
     /\s$/.test(applyText)
   ) {
@@ -379,7 +379,7 @@ export function buildCodeMirrorCompletionResult(
     // seed silently no-ops (the chip flashes the misc icon until the async pass
     // resolves it). `path` is a pseudo-trigger with no document char.
     const referenceText =
-      request && request.trigger !== "path"
+      request && request.trigger !== COMPLETION_TRIGGERS.PATH
         ? `${request.trigger}${applyText}`
         : applyText;
     const symbolRef =
@@ -461,7 +461,7 @@ export function buildCodeMirrorCompletionResult(
   });
 
   const result: CompletionResult = {
-    from: from + (request?.trigger === "path" ? 0 : 1),
+    from: from + (request?.trigger === COMPLETION_TRIGGERS.PATH ? 0 : 1),
     options: completions,
   };
 
