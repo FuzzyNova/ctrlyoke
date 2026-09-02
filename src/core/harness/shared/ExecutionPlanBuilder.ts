@@ -10,6 +10,8 @@ import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  EXECUTION_MODES,
+  type ExecutionMode,
 } from "../../../types/DashboardConstants";
 import {
   resolveCliCommand,
@@ -36,7 +38,7 @@ export interface ExecutionPlanBuilderDeps {
   readonly getApprovedExternalRoots?: () => readonly string[];
   readonly getStateRoot?: () => string;
   readonly getExtensionPath: () => string;
-  readonly getExecutionMode: () => "interactive" | "headless";
+  readonly getExecutionMode: () => ExecutionMode;
   readonly getEnabledHookNotificationEvents: () => import("../../../types/CtrlYokeTypes").HookEvent[];
   readonly resolveCliCommand?: typeof resolveCliCommand;
 }
@@ -89,7 +91,7 @@ export class ExecutionPlanBuilder {
   async plan(session: CliExecutionSession): Promise<ExecutionPlan> {
     const isInteractive =
       (session.resolvedProperties?.executionMode ??
-        this.deps.getExecutionMode()) === "interactive";
+        this.deps.getExecutionMode()) === EXECUTION_MODES.INTERACTIVE;
     const workspaceRoot = this.deps.getWorkspaceRoot();
     const extensionPath = this.deps.getExtensionPath();
     const workflowContext = asProviderWorkflowContext(

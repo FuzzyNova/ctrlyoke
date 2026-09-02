@@ -1,5 +1,7 @@
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
+  EXECUTION_MODES,
+  HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
 } from "../../../types/DashboardConstants";
@@ -228,7 +230,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         this.deps.runtimeState.getWorkflowName?.() ??
         "unknown";
       const stepMetadata = this.getWorkflowStepMetadata(workflowContext) ?? {
-        stepName: "interactive",
+        stepName: EXECUTION_MODES.INTERACTIVE,
         promptNumber: undefined,
       };
       const { stepName, promptNumber } = stepMetadata;
@@ -408,7 +410,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       const shouldStream =
         this.deps.provider.config.shouldStreamHeadlessOutput || !!source;
       const stdoutEventPump =
-        source?.mode === "stdout"
+        source?.mode === HEADLESS_SOURCE_MODES.STDOUT
           ? new CliLogEventPump({
               parser: source.parser,
               model: source.model ?? "",
@@ -433,9 +435,15 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 );
               }
 
-              if (source?.mode === "log" && source.logTail) {
+              if (
+                source?.mode === HEADLESS_SOURCE_MODES.LOG &&
+                source.logTail
+              ) {
                 source.logTail.onStdoutChunk(chunk);
-              } else if (source?.mode === "stdout" && stdoutEventPump) {
+              } else if (
+                source?.mode === HEADLESS_SOURCE_MODES.STDOUT &&
+                stdoutEventPump
+              ) {
                 const events = source.parseStdout?.(chunk) ?? [];
                 for (const event of events) {
                   stdoutEventPump.processEvent(event);

@@ -22,6 +22,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
@@ -201,7 +202,7 @@ export class CodexCliProvider implements ICliProvider {
       promptInputs: { images: CODEX_IMAGE_INPUT_CAPABILITY },
     };
   }
-  readonly headlessSource = "log" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
 
   /** Extract Codex's session ID from the headless JSONL clock stream. */
   extractSessionIdFromStdout(chunk: string): string | undefined {

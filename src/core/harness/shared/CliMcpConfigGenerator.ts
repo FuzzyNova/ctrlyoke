@@ -4,6 +4,7 @@ import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { isValidSecretName } from "../../../platform/SecretKey";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
+import { MCP_SECRET_CONFIG_MODES } from "../../../types/DashboardConstants";
 
 /**
  * MCP configuration format
@@ -68,7 +69,7 @@ export interface McpConfigResult {
  */
 export type McpSecretConfigOptions =
   | {
-      mode: "reference";
+      mode: typeof MCP_SECRET_CONFIG_MODES.REFERENCE;
       referenceToken: (name: string) => string;
     }
   | {
@@ -90,7 +91,7 @@ export function transformMcpSecretMap(
         if (!isValidSecretName(name)) {
           throw new Error(`Invalid secret interpolation name "${name}"`);
         }
-        if (options.mode === "reference") {
+        if (options.mode === MCP_SECRET_CONFIG_MODES.REFERENCE) {
           return options.referenceToken(name);
         }
         const resolved = options.resolvedValues[name];

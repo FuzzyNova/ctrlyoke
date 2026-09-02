@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
   STATUS_LINE_TRACKING_PROVIDERS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -139,7 +140,7 @@ export class CopilotCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new CopilotLogParser();
-  readonly headlessSource = "stdout" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /** Convert Copilot's JSONL stdout into the event vocabulary of CopilotLogParser. */
   parseHeadlessStdout(stdout: string): BaseCliEvent[] {

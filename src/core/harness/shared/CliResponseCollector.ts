@@ -2,7 +2,10 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import { FAILURE_KINDS } from "../../../types/DashboardConstants";
+import {
+  FAILURE_KINDS,
+  HEADLESS_SOURCE_MODES,
+} from "../../../types/DashboardConstants";
 import type { FailureKind } from "../../../types/CtrlYokeTypes";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
@@ -171,16 +174,19 @@ export class CliResponseCollector {
     // declared mode. Never infer stdout mode from parseHeadlessStdout alone —
     // a provider may implement it while pinning headlessSource to "log".
     const mode = params.headlessLogTail
-      ? "log"
+      ? HEADLESS_SOURCE_MODES.LOG
       : resolveHeadlessSourceMode(this.deps.provider);
 
-    if (mode === "log") {
+    if (mode === HEADLESS_SOURCE_MODES.LOG) {
       return logParser.extractResponse(
         params.headlessLogTail?.getEvents() ?? []
       );
     }
 
-    if (mode === "stdout" && this.deps.provider.parseHeadlessStdout) {
+    if (
+      mode === HEADLESS_SOURCE_MODES.STDOUT &&
+      this.deps.provider.parseHeadlessStdout
+    ) {
       const events: BaseCliEvent[] = this.deps.provider.parseHeadlessStdout(
         params.stdout
       );

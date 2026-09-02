@@ -1137,6 +1137,13 @@ export const MCP_SECRET_CONFIG_MODES = {
 } as const;
 
 // ============================================================================
+// HARNESS CONFIG KEYS - Shared keys in harness-owned JSON configuration
+// ============================================================================
+export const HARNESS_CONFIG_KEYS = {
+  PERMISSION: "permission",
+} as const;
+
+// ============================================================================
 // MCP TRANSPORTS - Remote MCP protocol values
 // ============================================================================
 export const MCP_TRANSPORTS = {
@@ -1311,6 +1318,11 @@ export const HOOK_EVENT_NAMES = {
   PERMISSION_REQUEST: "permissionRequest",
   NOTIFICATION: "notification",
   ERROR: "error",
+} as const;
+
+/** Exact provider payload event names used by notification monitors. */
+export const NOTIFICATION_HOOK_EVENTS = {
+  STOP: "Stop",
 } as const;
 
 /**
@@ -1519,6 +1531,14 @@ export const EXECUTION_MODES = {
   INTERACTIVE: "interactive",
   HEADLESS: "headless",
 } as const;
+
+export const HEADLESS_SOURCE_MODES = {
+  STDOUT: "stdout",
+  LOG: "log",
+} as const;
+
+export type HeadlessSourceMode =
+  (typeof HEADLESS_SOURCE_MODES)[keyof typeof HEADLESS_SOURCE_MODES];
 
 export const CONTEXT_RESOLUTION_FAILURE_MODES = {
   WARN: "warn",
@@ -1856,6 +1876,22 @@ export const SESSION_KINDS = {
 } as const;
 
 // ============================================================================
+// SHELL TYPES - Executable names recognized when inferring a shell kind
+// ============================================================================
+export const SHELL_TYPES = {
+  BASH: "bash",
+  ZSH: "zsh",
+  FISH: "fish",
+  WSL: "wsl",
+  NU: "nu",
+  NUSHELL: "nushell",
+  SH: "sh",
+  DASH: "dash",
+  KSH: "ksh",
+  CMD: "cmd",
+} as const;
+
+// ============================================================================
 // SHELL KINDS - Specific shell variant for SHELL sessions
 // ============================================================================
 export const SHELL_KINDS = {
@@ -1864,19 +1900,19 @@ export const SHELL_KINDS = {
   /** Windows PowerShell 5.1 fallback (powershell.exe) */
   POWERSHELL: "powershell",
   /** zsh */
-  ZSH: "zsh",
+  ZSH: SHELL_TYPES.ZSH,
   /** bash */
-  BASH: "bash",
+  BASH: SHELL_TYPES.BASH,
   /** POSIX sh / dash / ksh-style shells */
-  SH: "sh",
+  SH: SHELL_TYPES.SH,
   /** fish shell */
-  FISH: "fish",
+  FISH: SHELL_TYPES.FISH,
   /** Windows Command Prompt */
-  CMD: "cmd",
+  CMD: SHELL_TYPES.CMD,
   /** WSL launcher */
-  WSL: "wsl",
+  WSL: SHELL_TYPES.WSL,
   /** Nushell */
-  NUSHELL: "nu",
+  NUSHELL: SHELL_TYPES.NU,
 } as const;
 
 export type ShellKind = (typeof SHELL_KINDS)[keyof typeof SHELL_KINDS];

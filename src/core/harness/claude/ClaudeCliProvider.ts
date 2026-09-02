@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   STATUS_LINE_TRACKING_PROVIDERS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -164,7 +165,7 @@ export class ClaudeCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new ClaudeLogParser();
-  readonly headlessSource = "stdout" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.STDOUT;
 
   /**
    * Adapt Claude's stream-json stdout to the event vocabulary consumed by

@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { PROMPT_PROPERTIES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { AsyncMutex } from "./AsyncMutex";
 
@@ -228,7 +229,7 @@ export class SettingsJsonHooksTracker {
             : value !== null && value !== undefined
       );
       const hasOtherSettings = Object.keys(settings).some(
-        (key) => key !== "hooks"
+        (key) => key !== PROMPT_PROPERTIES.HOOKS
       );
       const containedOnlyDiscardedGroups =
         discardedGroup && !hasRetainedHookData && !hasOtherSettings;

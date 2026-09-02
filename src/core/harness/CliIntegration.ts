@@ -267,7 +267,10 @@ export class CliIntegration extends HarnessIntegration {
   protected getExecutionMode(): CliExecutionMode {
     if (this.platform.getConfig) {
       const mode = this.platform.getConfig("cliExecutionMode", "");
-      if (mode === "headless" || mode === "interactive") {
+      if (
+        mode === EXECUTION_MODES.HEADLESS ||
+        mode === EXECUTION_MODES.INTERACTIVE
+      ) {
         return mode as CliExecutionMode;
       }
     }

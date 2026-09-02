@@ -3,7 +3,9 @@ import * as path from "path";
 import { Log } from "../../../../utils/Log";
 import {
   HOOK_EVENT_NAMES,
+  NOTIFICATION_HOOK_EVENTS,
   NOTIFICATION_OUTCOME_KINDS,
+  STEP_STATUS,
   type NotificationOutcomeKind,
 } from "../../../../types/DashboardConstants";
 import type {
@@ -299,7 +301,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           if (await this.isFileNewerThan(stopFile, startTime)) {
             const data = await this.readNotificationFile(stopFile);
 
-            if (data?.hookEvent === "Stop" && data?.status === "completed") {
+            if (
+              data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
+              data?.status === STEP_STATUS.COMPLETED
+            ) {
               Log.info(
                 `✅ Completion detected via Stop hook (session: ${sessionId})`
               );
@@ -351,7 +356,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             if (await this.isFileNewerThan(file, startTime)) {
               const data = await this.readNotificationFile(file);
 
-              if (data?.hookEvent === "Stop" && data?.status === "completed") {
+              if (
+                data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
+                data?.status === STEP_STATUS.COMPLETED
+              ) {
                 Log.info(
                   `✅ Completion detected via Stop hook (file: ${file})`
                 );

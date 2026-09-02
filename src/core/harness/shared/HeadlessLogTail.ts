@@ -1,4 +1,8 @@
 import type { CliEvent } from "../../../types/CliOutputTypes";
+import {
+  HEADLESS_SOURCE_MODES,
+  type HeadlessSourceMode,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { DRAIN_DEADLINE_MS, DRAIN_POLL_INTERVAL_MS } from "../CliLogMonitor";
 import { CliLogEventPump } from "./CliLogEventPump";
@@ -42,7 +46,7 @@ export interface HeadlessLogTailResult {
 /** Source selected by the runner for a migrated headless harness. */
 export interface HeadlessStreamingSource {
   parser: ILogParser;
-  mode: "stdout" | "log";
+  mode: HeadlessSourceMode;
   parseStdout?: (chunk: string) => BaseCliEvent[];
   logTail?: HeadlessLogTail;
   model?: string;
@@ -64,14 +68,16 @@ export type HeadlessSourceModeProvider = Pick<
  */
 export function resolveHeadlessSourceMode(
   provider: HeadlessSourceModeProvider
-): "stdout" | "log" | undefined {
+): HeadlessSourceMode | undefined {
   if (provider.headlessSource) {
     return provider.headlessSource;
   }
   if (provider.parseHeadlessStdout) {
-    return "stdout";
+    return HEADLESS_SOURCE_MODES.STDOUT;
   }
-  return provider.extractSessionIdFromStdout ? "log" : undefined;
+  return provider.extractSessionIdFromStdout
+    ? HEADLESS_SOURCE_MODES.LOG
+    : undefined;
 }
 
 /**
@@ -151,7 +157,7 @@ export class HeadlessLogTail {
       Log.trace(`[HeadlessLogTail] stdout observer failed: ${String(error)}`);
     }
 
-    void this.enqueueTick("stdout", chunk);
+    void this.enqueueTick(HEADLESS_SOURCE_MODES.STDOUT, chunk);
   }
 
   /** Stop polling, drain the log, and return the accumulated raw log events. */

@@ -16,6 +16,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   STATUS_LINE_TRACKING_PROVIDERS,
   type HookEvent,
 } from "../../../types/DashboardConstants";
@@ -143,7 +144,7 @@ export class AntigravityCliProvider implements ICliProvider {
     };
   }
   readonly logParser = new AntigravityLogParser();
-  readonly headlessSource = "log" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
   private readonly streamJsonUsage =
     new AntigravityStreamJsonUsageAccumulator();
 

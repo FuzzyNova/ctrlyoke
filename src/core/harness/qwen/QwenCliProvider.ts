@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
   MODEL_OPTION_VALUES,
   STATUS_LINE_TRACKING_PROVIDERS,
@@ -144,7 +145,7 @@ export class QwenCliProvider implements ICliProvider {
   };
 
   /** Qwen's session log is richer than its Claude-shaped headless stdout. */
-  readonly headlessSource = "log" as const;
+  readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
   readonly notificationMonitor: INotificationMonitor =
     new QwenNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
