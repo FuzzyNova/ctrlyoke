@@ -52,6 +52,22 @@ const EXPORT_POLL_INTERVAL_MS = 1000;
  */
 const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
 
+/**
+ * If the interactive history endpoint has been polling successfully (HTTP 200,
+ * no thrown error) for this long since the session started without ever
+ * returning a single durable event, treat it as silently starved rather than
+ * genuinely idle and permanently switch to `opencode export` for the rest of
+ * the session. A real turn's first durable event (`session.next.step.started`)
+ * lands within milliseconds of prompt submission in every captured live
+ * payload, so an extended run of empty-but-successful pages this early is a
+ * strong signal the endpoint isn't wired up for this session/CLI version —
+ * not a legitimately quiet model. This guards against the failure mode where
+ * `historyFallback` never trips because the endpoint never *errors*, it just
+ * never has anything to report (see the OpenCode interactive event stream
+ * missing-output investigation, 2026-09-01).
+ */
+const OPENCODE_HISTORY_EMPTY_GRACE_MS = 15_000;
+
 type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
 type OpenCodeHistoryResponse = {
   readonly ok: boolean;
@@ -171,8 +187,14 @@ export class OpenCodeLogParser extends BaseLogParser {
   /** Session associated with the cursor and fallback state. */
   private historySessionId: string | undefined;
 
-  /** Once history fails, use export for the remainder of this session. */
+  /** Once history fails (or is diagnosed as starved), use export for the remainder of this session. */
   private historyFallback = false;
+
+  /** Wall-clock time of the first history poll for the current session — anchors the empty-history grace period. */
+  private historyFirstPollAt: number | undefined;
+
+  /** Whether the history endpoint has ever returned a durable event for the current session. */
+  private historyEverReceivedEvent = false;
 
   /** Tool call context can span multiple history poll ticks. */
   private readonly historyToolContext = new Map<string, OpenCodeToolContext>();
@@ -637,6 +659,9 @@ export class OpenCodeLogParser extends BaseLogParser {
       const baseUrl = this.getServerBaseUrl();
       if (baseUrl === undefined) {
         this.historyFallback = true;
+        Log.trace(
+          "[OpenCodeLogParser] no interactive server base URL available; using opencode export for this session"
+        );
         return this.fetchNewEventsFromExport(sessionId);
       }
 
@@ -676,6 +701,30 @@ export class OpenCodeLogParser extends BaseLogParser {
         hasMore = payload.hasMore;
       }
 
+      Log.trace(
+        `[OpenCodeLogParser] history poll ok: ${durableEvents.length} durable event(s), lastSeq=${this.lastSeq}`
+      );
+
+      if (durableEvents.length > 0) {
+        this.historyEverReceivedEvent = true;
+      } else if (
+        !this.historyEverReceivedEvent &&
+        this.historyFirstPollAt !== undefined &&
+        Date.now() - this.historyFirstPollAt >= OPENCODE_HISTORY_EMPTY_GRACE_MS
+      ) {
+        // The endpoint has responded successfully on every poll but never once
+        // reported a durable event this long after the session started — the
+        // first event of any real turn lands within milliseconds of prompt
+        // submission, so this isn't a quiet model, it's a starved endpoint.
+        this.historyFallback = true;
+        Log.warn(
+          `[OpenCodeLogParser] history endpoint returned zero durable events ` +
+            `${OPENCODE_HISTORY_EMPTY_GRACE_MS}ms after session start despite ` +
+            `successful polling; switching to opencode export for the rest of this session`
+        );
+        return this.fetchNewEventsFromExport(sessionId);
+      }
+
       return mapOpenCodeDurableEventsToBaseCliEvents(
         durableEvents,
         this.historyToolContext
@@ -698,6 +747,8 @@ export class OpenCodeLogParser extends BaseLogParser {
     this.historySessionId = sessionId;
     this.lastSeq = 0;
     this.historyFallback = false;
+    this.historyFirstPollAt = Date.now();
+    this.historyEverReceivedEvent = false;
     this.seenPartIds.clear();
     this.historyToolContext.clear();
     this.liveLastStepTotal = undefined;
@@ -710,7 +761,12 @@ export class OpenCodeLogParser extends BaseLogParser {
     try {
       const stdout = await this.runExport(sessionId);
       const exportData = JSON.parse(stdout) as OpenCodeExport;
-      return this.extractNewEventsFromExport(exportData);
+      const newEvents = this.extractNewEventsFromExport(exportData);
+      Log.trace(
+        `[OpenCodeLogParser] export poll ok: ${newEvents.length} new event(s) ` +
+          `(${exportData.messages?.length ?? 0} total message(s) in transcript)`
+      );
+      return newEvents;
     } catch (error) {
       // Every failed poll here means the session's events since the last
       // successful export are silently dropped (the next successful export

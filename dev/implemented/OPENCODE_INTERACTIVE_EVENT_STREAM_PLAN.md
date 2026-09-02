@@ -295,3 +295,42 @@ cover the inherent TOCTOU race of "probe-then-reuse".
       run is still needed to confirm the live
       `tool.called`/`.progress`/`.success`/`.failed` and reasoning event shapes;
       those were not exercised by the live step-3 probe.
+
+## Post-ship incident: silent zero-event sessions (2026-09-01)
+
+A real interactive OpenCode run (CLI 1.18.25, session `ses_fa0dbd48affe9MaIHz5TnhIlQV`)
+produced a completed workflow with real edits (git commit `a70f3bc0`) but an
+**empty captured output** (`structured.events: []` in the persisted
+`cliOutputRecorded` payload) and **zero warn/error log lines** for OpenCode
+polling across the whole ~6-minute session. `--port`/`--hostname` were
+confirmed present in the actual spawned command
+(`--port 55578 --hostname 127.0.0.1`), and `opencode export` on that same
+session ID afterward returned 17 completed text segments and 46 completed
+tool calls — proving the underlying data existed and the export fallback
+would have shown it, had it ever been tried.
+
+This is only possible if `GET /api/session/:id/history` was reachable and
+responding successfully on every poll (no thrown error, so `historyFallback`
+never tripped) while consistently returning an empty page. The existing
+fallback logic only reacts to explicit failures (non-2xx, malformed shape,
+stalled cursor, thrown fetch error) — a server that answers 200 with nothing,
+forever, was treated as healthy.
+
+Root cause in opencode's server internals (whether `session.next.*` durable
+events are reliably published for TUI-submitted prompts specifically, as
+opposed to the plan's own manual verification which drove sessions purely via
+direct `POST /api/session/:id/prompt`) was not conclusively established —
+this environment's PTY limitations and an unrelated `opencode serve` startup
+error in the sandbox blocked a live re-test.
+
+**Mitigation shipped** in `OpenCodeLogParser.ts`: track whether the history
+endpoint has ever returned a single durable event for the current session; if
+`OPENCODE_HISTORY_EMPTY_GRACE_MS` (15s) elapses since session start with zero
+durable events despite successful polling, permanently switch to
+`opencode export` for the rest of the session (mirroring the existing
+error-triggered fallback) and log a WARN explaining why. Also added
+`Log.trace` on every successful poll (history and export) reporting event
+counts, so a future occurrence is diagnosable from logs alone instead of
+requiring artifact archaeology. See
+`falls back to export after history responds successfully but stays empty
+past the grace period` in `src/test/suite/harness/LogParsers.test.ts`.

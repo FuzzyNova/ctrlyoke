@@ -5430,6 +5430,78 @@ suite("OpenCodeLogParser", () => {
       assert.strictEqual(exportCalls, 2);
     });
 
+    test("falls back to export after history responds successfully but stays empty past the grace period", async () => {
+      // Reproduces the real missing-output bug: the history endpoint returns
+      // HTTP 200 with an empty page on every poll (no error, so the plain
+      // 404/no-server-URL fallbacks above never trip), and events are silently
+      // lost for the whole session. See the OpenCode interactive event stream
+      // missing-output investigation, 2026-09-01.
+      let historyCalls = 0;
+      let exportCalls = 0;
+      const exportOutput = JSON.stringify({
+        info: { id: "ses_starved" },
+        messages: [
+          {
+            info: { role: "assistant", time: { created: 1000 } },
+            parts: [
+              {
+                type: OPENCODE_EVENT_TYPES.TEXT,
+                id: "part_starved_text",
+                sessionID: "ses_starved",
+                messageID: "msg_starved",
+                text: "Recovered via export",
+                time: { start: 1000, end: 1001 },
+              },
+            ],
+          },
+        ],
+      });
+      const starvedParser = new OpenCodeLogParser(
+        () => undefined,
+        () => "http://127.0.0.1:4321",
+        async () => {
+          exportCalls += 1;
+          return exportOutput;
+        },
+        async () => {
+          historyCalls += 1;
+          return { ok: true, status: 200, json: async () => ({ data: [], hasMore: false }) };
+        }
+      );
+
+      const realDateNow = Date.now;
+      try {
+        let now = 1_000_000;
+        Date.now = () => now;
+
+        const beforeGrace = await starvedParser.readNewLines("ses_starved");
+        assert.deepStrictEqual(beforeGrace, []);
+        assert.strictEqual(historyCalls, 1);
+        assert.strictEqual(
+          exportCalls,
+          0,
+          "should still be trying history before the grace period elapses"
+        );
+
+        now += 16_000; // past OPENCODE_HISTORY_EMPTY_GRACE_MS (15s)
+        const afterGrace = await starvedParser.readNewLines("ses_starved");
+        assert.strictEqual(historyCalls, 2);
+        assert.strictEqual(exportCalls, 1, "should fall back to export once starved");
+        assert.deepStrictEqual(
+          afterGrace.map((event) => event.type),
+          [OPENCODE_EVENT_TYPES.TEXT]
+        );
+
+        // Fallback is permanent for the rest of the session — no further history calls.
+        now += 1_000;
+        await starvedParser.readNewLines("ses_starved");
+        assert.strictEqual(historyCalls, 2);
+        assert.strictEqual(exportCalls, 2);
+      } finally {
+        Date.now = realDateNow;
+      }
+    });
+
     test("maps step completion and derives the history context-window total", async () => {
       const stepEnded = makeHistoryEvent(
         OPENCODE_DURABLE_EVENT_TYPES.STEP_ENDED,
