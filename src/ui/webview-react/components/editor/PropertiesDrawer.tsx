@@ -19,6 +19,9 @@ import {
 import {
   INHERIT_DEFAULT_OPTION,
   NONE_OPTION,
+  PROMPT_PROPERTIES,
+  RESUME_SESSION_SELECTIONS,
+  WORKFLOW_EXECUTION_OUTCOMES,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
@@ -133,21 +136,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const handleResetAllToInherit = useCallback(() => {
-    setProperty("harness", undefined);
-    setProperty("model", undefined);
-    setProperty("agent", undefined);
-    setProperty("skills", undefined);
-    setProperty("secrets", undefined);
-    setProperty("additionalArgs", undefined);
-    setProperty("executionMode", undefined);
-    setProperty("resumeSession", undefined);
-    setProperty("sessionId", "");
-    setProperty("priorContext", undefined);
-    setProperty("mcpServers", undefined);
-    setProperty("toolPermissions", undefined);
-    setProperty("hooks", undefined);
-    setProperty("errorBehavior", undefined);
-    setProperty("preCondition", undefined);
+    setProperty(PROMPT_PROPERTIES.HARNESS, undefined);
+    setProperty(PROMPT_PROPERTIES.MODEL, undefined);
+    setProperty(PROMPT_PROPERTIES.AGENT, undefined);
+    setProperty(PROMPT_PROPERTIES.SKILLS, undefined);
+    setProperty(PROMPT_PROPERTIES.SECRETS, undefined);
+    setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
+    setProperty(PROMPT_PROPERTIES.EXECUTION_MODE, undefined);
+    setProperty(PROMPT_PROPERTIES.RESUME_SESSION, undefined);
+    setProperty(PROMPT_PROPERTIES.SESSION_ID, "");
+    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, undefined);
+    setProperty(PROMPT_PROPERTIES.MCP_SERVERS, undefined);
+    setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, undefined);
+    setProperty(PROMPT_PROPERTIES.HOOKS, undefined);
+    setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, undefined);
+    setProperty(PROMPT_PROPERTIES.PRE_CONDITION, undefined);
     clearEndCondition();
   }, [setProperty, clearEndCondition]);
 
@@ -396,37 +399,37 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   // Handle harness change - also set model and additionalArgs to global defaults for the new harness
   const handleHarnessChange = (newHarness: string) => {
     if (newHarness === INHERIT_DEFAULT_OPTION) {
-      setProperty("harness", undefined);
-      setProperty("model", undefined);
-      setProperty("additionalArgs", undefined);
+      setProperty(PROMPT_PROPERTIES.HARNESS, undefined);
+      setProperty(PROMPT_PROPERTIES.MODEL, undefined);
+      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
     } else {
-      setProperty("harness", newHarness);
+      setProperty(PROMPT_PROPERTIES.HARNESS, newHarness);
       const defaultModel = globalSettings.harnessDefaultModels[newHarness];
-      setProperty("model", defaultModel || undefined);
+      setProperty(PROMPT_PROPERTIES.MODEL, defaultModel || undefined);
       const defaultArgs =
         globalSettings.harnessDefaultAdditionalArgs[newHarness];
-      setProperty("additionalArgs", defaultArgs || null);
+      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, defaultArgs || null);
     }
   };
 
   // ── Condition mode derivations ──────────────────────────────────────────────
   const endConditionMode =
     properties.endCondition === undefined
-      ? "inherit"
+      ? PROPERTY_EDITOR_MODES.INHERIT
       : properties.endCondition === null
         ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const preConditionMode =
     properties.preCondition === undefined
-      ? "inherit"
+      ? PROPERTY_EDITOR_MODES.INHERIT
       : properties.preCondition === null
         ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const errorBehaviorMode =
     properties.errorBehavior === undefined
-      ? "inherit"
+      ? PROPERTY_EDITOR_MODES.INHERIT
       : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const resolvedEndConditionForInherit =
@@ -468,7 +471,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     if (resolved.onError === CONDITION_ACTIONS.RETRY) {
       return `Inherit (Retry ${resolved.maxRetries ?? 1}x)`;
     }
-    return resolved.onError === "continue"
+    return resolved.onError === CONDITION_ACTIONS.CONTINUE
       ? "Inherit (Continue Workflow)"
       : "Inherit (Stop Workflow)";
   };
@@ -478,13 +481,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   );
 
   const buildConditionOptions = (inheritLabel: string) => [
-    { value: "inherit", label: inheritLabel },
+    { value: PROPERTY_EDITOR_MODES.INHERIT, label: inheritLabel },
     { value: NONE_OPTION, label: "None" },
     { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
 
   const errorBehaviorOptions = [
-    { value: "inherit", label: errorBehaviorInheritLabel },
+    {
+      value: PROPERTY_EDITOR_MODES.INHERIT,
+      label: errorBehaviorInheritLabel,
+    },
     { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
 
@@ -582,7 +588,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   value={properties.model ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
-                      "model",
+                      PROMPT_PROPERTIES.MODEL,
                       v === INHERIT_DEFAULT_OPTION ? undefined : v
                     )
                   }
@@ -634,11 +640,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
-                      setProperty("agent", undefined);
+                      setProperty(PROMPT_PROPERTIES.AGENT, undefined);
                     } else if (v === NONE_OPTION) {
-                      setProperty("agent", null);
+                      setProperty(PROMPT_PROPERTIES.AGENT, null);
                     } else {
-                      setProperty("agent", v);
+                      setProperty(PROMPT_PROPERTIES.AGENT, v);
                     }
                   }}
                   options={[
@@ -673,7 +679,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <SkillsSelect
                   value={properties.skills as string[] | null | undefined}
-                  onChange={(v) => setProperty("skills", v)}
+                  onChange={(v) => setProperty(PROMPT_PROPERTIES.SKILLS, v)}
                   availableSkills={availableSkills.map((s) => ({
                     name: s.name,
                     description: s.description || undefined,
@@ -699,12 +705,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   value={additionalArgsMode}
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
-                      setProperty("additionalArgs", undefined);
+                      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
                     } else if (v === NONE_OPTION) {
-                      setProperty("additionalArgs", null);
+                      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, null);
                     } else {
                       setProperty(
-                        "additionalArgs",
+                        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
                         typeof properties.additionalArgs === "string"
                           ? properties.additionalArgs
                           : ""
@@ -734,7 +740,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       id="prop-additional-args"
                       harnessId={currentHarness}
                       value={additionalArgsDisplayValue}
-                      onChange={(value) => setProperty("additionalArgs", value)}
+                      onChange={(value) =>
+                        setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, value)
+                      }
                       className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                   </div>
@@ -755,7 +763,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     id="prop-additional-args-wide"
                     harnessId={currentHarness}
                     value={additionalArgsDisplayValue}
-                    onChange={(value) => setProperty("additionalArgs", value)}
+                    onChange={(value) =>
+                      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, value)
+                    }
                     className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
                 </div>
@@ -777,7 +787,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
-                      "executionMode",
+                      PROMPT_PROPERTIES.EXECUTION_MODE,
                       v === INHERIT_DEFAULT_OPTION
                         ? undefined
                         : (v as ExecutionMode)
@@ -819,16 +829,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           properties.resumeSession
                         ? SESSION_ID_SENTINELS.FINAL_STEP
                         : properties.resumeSession
-                          ? "yes"
-                          : "no"
+                          ? RESUME_SESSION_SELECTIONS.YES
+                          : RESUME_SESSION_SELECTIONS.NO
                   }
                   onChange={(v) => {
                     const next = resumeSessionSelection(
                       v,
                       properties.sessionId
                     );
-                    setProperty("resumeSession", next.resumeSession);
-                    setProperty("sessionId", next.sessionId);
+                    setProperty(
+                      PROMPT_PROPERTIES.RESUME_SESSION,
+                      next.resumeSession
+                    );
+                    setProperty(PROMPT_PROPERTIES.SESSION_ID, next.sessionId);
                   }}
                   options={[
                     ...getResumeSessionOptions(defaultResumeSessionLabel),
@@ -845,7 +858,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     type="text"
                     id="prop-session-id"
                     value={sessionIdDisplayValue}
-                    onChange={(e) => setProperty("sessionId", e.target.value)}
+                    onChange={(e) =>
+                      setProperty(PROMPT_PROPERTIES.SESSION_ID, e.target.value)
+                    }
                     placeholder={
                       isSessionIdDefault
                         ? "Inherited from workflow"
@@ -872,7 +887,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <PriorContextSelect
                   id="prop-prior-context"
                   value={properties.priorContext}
-                  onChange={(v) => setProperty("priorContext", v)}
+                  onChange={(v) =>
+                    setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, v)
+                  }
                   showDefault
                   defaultLabel={defaultPriorContextLabel}
                 />
@@ -912,12 +929,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 id="prop-pre-condition-mode"
                 value={preConditionMode}
                 onChange={(v) => {
-                  if (v === "inherit") {
-                    setProperty("preCondition", undefined);
+                  if (v === PROPERTY_EDITOR_MODES.INHERIT) {
+                    setProperty(PROMPT_PROPERTIES.PRE_CONDITION, undefined);
                   } else if (v === NONE_OPTION) {
-                    setProperty("preCondition", null);
+                    setProperty(PROMPT_PROPERTIES.PRE_CONDITION, null);
                   } else {
-                    setProperty("preCondition", {
+                    setProperty(PROMPT_PROPERTIES.PRE_CONDITION, {
                       script: "",
                       onFail: CONDITION_ACTIONS.SKIP_PROMPT,
                     } as import("../../../../types/CtrlYokeTypes").PreCondition);
@@ -930,7 +947,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
-                    variant="preCondition"
+                    variant={PROMPT_PROPERTIES.PRE_CONDITION}
                     value={
                       properties.preCondition as
                         | ScriptConditionValue
@@ -939,7 +956,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                     onChange={(updated) =>
                       setProperty(
-                        "preCondition",
+                        PROMPT_PROPERTIES.PRE_CONDITION,
                         updated as import("../../../../types/CtrlYokeTypes").PreCondition
                       )
                     }
@@ -964,7 +981,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 id="prop-end-condition-mode"
                 value={endConditionMode}
                 onChange={(v) => {
-                  if (v === "inherit") {
+                  if (v === PROPERTY_EDITOR_MODES.INHERIT) {
                     clearEndCondition();
                   } else if (v === NONE_OPTION) {
                     setEndCondition(null);
@@ -979,7 +996,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
-                    variant="endCondition"
+                    variant={PROMPT_PROPERTIES.END_CONDITION}
                     hasPreCondition={hasPreCondition}
                     value={
                       properties.endCondition as
@@ -1013,11 +1030,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 id="prop-error-behavior-mode"
                 value={errorBehaviorMode}
                 onChange={(v) => {
-                  if (v === "inherit") {
-                    setProperty("errorBehavior", undefined);
+                  if (v === PROPERTY_EDITOR_MODES.INHERIT) {
+                    setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, undefined);
                   } else {
-                    setProperty("errorBehavior", {
-                      onError: "stop",
+                    setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, {
+                      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
                     } as ErrorBehavior);
                   }
                 }}
@@ -1030,7 +1047,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   <ErrorBehaviorEditor
                     value={properties.errorBehavior}
                     onChange={(updated) =>
-                      setProperty("errorBehavior", updated)
+                      setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, updated)
                     }
                     disabled={false}
                     idPrefix="prop-error"
@@ -1050,7 +1067,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <McpServersEditor
               controlId="prop-mcp-servers"
               value={properties.mcpServers as McpServersValue}
-              onChange={(v) => setProperty("mcpServers", v)}
+              onChange={(v) => setProperty(PROMPT_PROPERTIES.MCP_SERVERS, v)}
               defaultLabel={defaultMcpServersLabel}
               inheritedValue={resolvedMcpServers as McpServersValue}
               diagnostics={mcpDiagnostics}
@@ -1083,13 +1100,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
-                      setProperty("toolPermissions", undefined);
+                      setProperty(
+                        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+                        undefined
+                      );
                     } else {
                       const current =
                         (properties.toolPermissions as
                           | ToolPermissionsOverride
                           | undefined) || {};
-                      setProperty("toolPermissions", {
+                      setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                         ...current,
                         mode: v as ToolPermissionMode,
                       });
@@ -1113,7 +1133,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   value={properties.secrets}
                   inheritedValue={resolvedSecrets}
                   inlineSecretNames={inlineSecretNames}
-                  onChange={(secrets) => setProperty("secrets", secrets)}
+                  onChange={(secrets) =>
+                    setProperty(PROMPT_PROPERTIES.SECRETS, secrets)
+                  }
                   idPrefix="prop-secrets"
                   title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
                 />
@@ -1159,7 +1181,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                               (properties.toolPermissions as
                                 | ToolPermissionsOverride
                                 | undefined) || {};
-                            setProperty("toolPermissions", {
+                            setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
                               allowedTools: e.target.value.split("\n"),
                             });
@@ -1211,7 +1233,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                               (properties.toolPermissions as
                                 | ToolPermissionsOverride
                                 | undefined) || {};
-                            setProperty("toolPermissions", {
+                            setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
                               deniedTools: e.target.value.split("\n"),
                             });
@@ -1255,7 +1277,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             </p>
             <HooksEditor
               value={properties.hooks}
-              onChange={(v) => setProperty("hooks", v)}
+              onChange={(v) => setProperty(PROMPT_PROPERTIES.HOOKS, v)}
               inheritedValue={resolvedHooks}
               diagnostics={hookDiagnostics}
             />

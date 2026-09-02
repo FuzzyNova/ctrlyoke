@@ -2159,6 +2159,36 @@ export const PROPERTY_EDITOR_MODES = {
 export type PropertyEditorMode =
   (typeof PROPERTY_EDITOR_MODES)[keyof typeof PROPERTY_EDITOR_MODES];
 
+/** Tabs exposed by the global settings drawer. */
+export const GLOBAL_SETTINGS_TABS = {
+  GENERAL: "general",
+  WORKFLOW: "workflow",
+  EXECUTION: "execution",
+  QUEUE: "queue",
+  WORKTREES: "worktrees",
+  TERMINAL: "terminal",
+  STATUS_LINE: "statusline",
+  COMMIT: "commit",
+  PERMISSIONS: "permissions",
+  SECRETS: "secrets",
+  SERVER: "server",
+  AGENT_SKILLS_MANAGER: "agentskillsmanager",
+  MCP_MANAGER: "mcpmanager",
+  NOTIFICATIONS: "notifications",
+  STATS: "stats",
+  LICENSE: "license",
+  DEVELOPER: "developer",
+} as const;
+
+export type GlobalSettingsTab =
+  (typeof GLOBAL_SETTINGS_TABS)[keyof typeof GLOBAL_SETTINGS_TABS];
+
+/** Text values used by the Resume Session dropdown. */
+export const RESUME_SESSION_SELECTIONS = {
+  YES: "yes",
+  NO: "no",
+} as const;
+
 // ============================================================================
 // CODEMIRROR EDITOR MODES - Context modes for the prompt editor
 // ============================================================================
@@ -2544,6 +2574,13 @@ export const PROMPT_PROPERTIES = {
   EXECUTION_MODE: "executionMode",
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
+} as const;
+
+/** Rendering variants supported by the shared script condition editor. */
+export const SCRIPT_CONDITION_VARIANTS = {
+  END_CONDITION: PROMPT_PROPERTIES.END_CONDITION,
+  PRE_CONDITION: PROMPT_PROPERTIES.PRE_CONDITION,
+  SCRIPT_STEP: "scriptStep",
 } as const;
 
 /**
