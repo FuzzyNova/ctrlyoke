@@ -39,7 +39,8 @@ Use one of these entry points:
   start in one step
 
 The **Run with ctrlyoke** submenu groups Run, Load, Queue Steps, and Queue Steps Next in file
-context menus and the editor title toolbar.
+context menus and the editor title toolbar. Queue Steps and Queue Steps Next are hidden until
+the active queue already contains at least one step.
 
 ## Make a workflow durable
 

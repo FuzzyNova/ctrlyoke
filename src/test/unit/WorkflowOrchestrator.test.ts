@@ -3,7 +3,9 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import * as vscode from "vscode";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
+import type { QueueState } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
@@ -11,6 +13,7 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
+import { TypedEmitter } from "../../utils/TypedEmitter";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -18,6 +21,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   RUNNER_IDS,
+  VSCODE_CONTEXT_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   type ExecutionState,
 } from "../../types/DashboardConstants";
@@ -190,6 +194,95 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
     await orchestrator.setDashboardReady();
 
     assert.strictEqual(internal.startupPanelViewedId, "startup-hydrated");
+  });
+});
+
+suite("WorkflowOrchestrator active queue context key", () => {
+  test("sets and clears the queue context key as the active queue changes", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const queueState = (stepCount: number): QueueState => ({
+      status: EXECUTION_STATES.IDLE,
+      stopped: false,
+      totalPausedDuration: 0,
+      currentIndex: 0,
+      steps: Array.from({ length: stepCount }, (_, index) => ({
+        prompt: `step ${index}`,
+      })),
+      results: [],
+      completedIndices: new Set<string>(),
+      totalExecutionTime: 0,
+      queueExtensions: 0,
+      definitionRevision: 1,
+    });
+
+    let activeState = queueState(0);
+    const activeInstance = {
+      id: "active-instance",
+      getQueueState: () => activeState,
+    };
+    const queuedInstance = {
+      id: "queued-instance",
+      getQueueState: () => queueState(1),
+    };
+    const emptyInstance = {
+      id: "empty-instance",
+      getQueueState: () => queueState(0),
+    };
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, activeInstance.id]]);
+    internal.instances = new Map([
+      [activeInstance.id, activeInstance],
+      [queuedInstance.id, queuedInstance],
+      [emptyInstance.id, emptyInstance],
+    ]);
+    internal.retiredInstances = new Map();
+    internal.activeQueueStateChangedEmitter = new TypedEmitter<
+      QueueState | undefined
+    >();
+
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    const updates: Array<{ key: string; value: boolean }> = [];
+    vscode.commands.executeCommand = (async (
+      command: string,
+      ...args: unknown[]
+    ) => {
+      if (command === "setContext") {
+        updates.push({ key: String(args[0]), value: Boolean(args[1]) });
+      }
+      return undefined;
+    }) as typeof vscode.commands.executeCommand;
+
+    try {
+      const disposable = orchestrator.registerActiveQueueContextKey();
+      assert.deepStrictEqual(updates, [
+        { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: false },
+      ]);
+
+      activeState = queueState(1);
+      internal.activeQueueStateChangedEmitter.fire(activeState);
+      activeState = queueState(0);
+      internal.activeQueueStateChangedEmitter.fire(activeState);
+      internal.setViewedWorkflowId(PANEL_CLIENT_ID, queuedInstance.id);
+      internal.setViewedWorkflowId(PANEL_CLIENT_ID, emptyInstance.id);
+
+      assert.deepStrictEqual(
+        updates.map(({ key, value }) => ({ key, value })),
+        [
+          { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: false },
+          { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: true },
+          { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: false },
+          { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: true },
+          { key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS, value: false },
+        ]
+      );
+      disposable.dispose();
+    } finally {
+      vscode.commands.executeCommand = originalExecuteCommand;
+    }
   });
 });
 

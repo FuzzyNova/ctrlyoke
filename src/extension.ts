@@ -553,6 +553,10 @@ function registerCommands(
       )
   );
 
+  context.subscriptions.push(
+    workflowOrchestrator.registerActiveQueueContextKey()
+  );
+
   // Open Panel command
   const openPanelCommand = vscode.commands.registerCommand(
     "ctrlyoke.openPanel",

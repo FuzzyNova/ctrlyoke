@@ -53,6 +53,7 @@ import {
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
+  VSCODE_CONTEXT_KEYS,
   WORKTREE_EDIT_KINDS,
   WORKTREE_MODES,
   type EndConditionScriptType,
@@ -134,6 +135,7 @@ import {
   NullUserInteractionPort,
   type UserInteractionPort,
 } from "../ui/UserInteractionPort";
+import { TypedEmitter } from "../utils/TypedEmitter";
 
 /**
  * WorkflowOrchestrator
@@ -387,6 +389,11 @@ export class WorkflowOrchestrator {
     WorkflowKey,
     LineageExecutionClaim
   >();
+
+  /** Emits the queue state of the instance currently viewed by the panel. */
+  private activeQueueStateChangedEmitter?: TypedEmitter<
+    QueueState | undefined
+  >;
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -862,6 +869,40 @@ export class WorkflowOrchestrator {
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflowId(): string | null {
     return this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+  }
+
+  /**
+   * Subscribe to queue-state changes for the panel's active workflow.
+   *
+   * The event emits both state changes from the active instance and the
+   * current state when the panel switches to another instance. Browser views
+   * do not affect this event because context-menu commands are scoped to the
+   * VS Code panel's active workflow.
+   */
+  onDidChangeActiveQueueState(
+    listener: (state: QueueState | undefined) => void
+  ): vscode.Disposable {
+    const emitter = this.getActiveQueueStateChangedEmitter();
+    const subscription = emitter.event(listener);
+    return new vscode.Disposable(() => subscription.dispose());
+  }
+
+  /** Return the current queue state for the panel's active workflow, if any. */
+  getActiveQueueState(): QueueState | undefined {
+    return this.getActiveWorkflow()?.getQueueState();
+  }
+
+  /**
+   * Register the VS Code context key used by Queue/Queue Next menu entries.
+   * The initial value is set immediately because a newly-created queue may not
+   * emit a state change before the first context menu is opened.
+   */
+  registerActiveQueueContextKey(): vscode.Disposable {
+    const subscription = this.onDidChangeActiveQueueState((state) => {
+      this.setHasQueuedStepsContext(state);
+    });
+    this.setHasQueuedStepsContext(this.getActiveQueueState());
+    return new vscode.Disposable(() => subscription.dispose());
   }
 
   /**
@@ -5293,6 +5334,9 @@ export class WorkflowOrchestrator {
   }
 
   dispose(): void {
+    this.activeQueueStateChangedEmitter?.dispose();
+    this.activeQueueStateChangedEmitter = undefined;
+
     // Dispose all retired instances (completed/stopped, not in main map)
     for (const instance of this.retiredInstances.values()) {
       instance.dispose();
@@ -5366,8 +5410,8 @@ export class WorkflowOrchestrator {
 
     // Lazily create the initial viewed instance
     const instance = this.buildWorkflowInstance();
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     this.instances.set(instance.id, instance);
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     return instance;
   }
 
@@ -5435,7 +5479,28 @@ export class WorkflowOrchestrator {
           `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
           `→ inst:${workflowId?.slice(0, 8) ?? "null"}`
       );
+
+      if (clientId === this.PANEL_CLIENT_ID) {
+        this.getActiveQueueStateChangedEmitter().fire(
+          this.getActiveQueueState()
+        );
+      }
     }
+  }
+
+  private getActiveQueueStateChangedEmitter(): TypedEmitter<
+    QueueState | undefined
+  > {
+    return (this.activeQueueStateChangedEmitter ??=
+      new TypedEmitter<QueueState | undefined>());
+  }
+
+  private setHasQueuedStepsContext(state: QueueState | undefined): void {
+    void vscode.commands.executeCommand(
+      "setContext",
+      VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
+      (state?.steps.length ?? 0) > 0
+    );
   }
 
   private isWorkflowViewedByAnyClient(workflowId: string): boolean {
@@ -5579,6 +5644,10 @@ export class WorkflowOrchestrator {
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
     instance.promptQueue.onDidChangeState((state) => {
+      if (this.getActiveWorkflowId() === instance.id) {
+        this.getActiveQueueStateChangedEmitter().fire(state);
+      }
+
       const summary = instance.getSummary();
       const inRegistry = this.instances.has(instance.id);
 

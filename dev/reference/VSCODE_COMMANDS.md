@@ -3161,3 +3161,6 @@
 - `~remote.forwardedPorts.toggleVisibility`
 - `~remote.forwardedPortsContainer`
 - `~remote.forwardedPortsContainer.resetViewContainerLocation`
+
+The Queue Steps and Queue Steps Next commands are available from the Run with ctrlyoke submenu
+only when the active queue already contains at least one step.

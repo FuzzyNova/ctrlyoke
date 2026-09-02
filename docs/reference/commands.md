@@ -45,7 +45,8 @@ references remain dependencies of the surrounding repository by design.
 | `ctrlyoke: Resume Session`           | Resume a prior session                      |
 
 The Run, Load, Queue Steps, and Queue Steps Next file actions are grouped under the **Run with
-ctrlyoke** submenu in file context menus and the editor title toolbar.
+ctrlyoke** submenu in file context menus and the editor title toolbar. Queue Steps and Queue
+Steps Next are hidden until the active queue already contains at least one step.
 
 ## Workspace and helper commands
 

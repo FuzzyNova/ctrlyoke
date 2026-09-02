@@ -384,11 +384,11 @@
         },
         {
           "command": "ctrlyoke.queueFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file && ctrlyoke.hasQueuedSteps"
         },
         {
           "command": "ctrlyoke.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file"
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file && ctrlyoke.hasQueuedSteps"
         }
       ],
       "explorer/context": [

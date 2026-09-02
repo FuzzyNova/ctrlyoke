@@ -77,8 +77,9 @@ Focus on input validation and authentication logic.
 - **Panel** — load a workflow file and click Run
 - **Run with ctrlyoke submenu** — right-click any prompt file in the Explorer or editor, or
   use the editor title toolbar, then choose **Run with ctrlyoke**
-- **Run with ctrlyoke submenu** — choose **Queue Steps with ctrlyoke** to append to a running
-  workflow
+- **Run with ctrlyoke submenu** — choose **Queue Steps with ctrlyoke** or **Queue Steps Next with
+  ctrlyoke** to append to an active queue; these actions appear only once the active queue
+  already contains steps
 
 ---
 
@@ -281,8 +282,8 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 | Editor convert button                   | Write a step prompt to `.ctrlyoke/prompts/`           |
 | `ctrlyoke: Run with ctrlyoke`           | Run a prompt file from the Run with ctrlyoke submenu  |
 | `ctrlyoke: Load in ctrlyoke`            | Load a prompt file from the Run with ctrlyoke submenu |
-| `ctrlyoke: Queue Steps with ctrlyoke`   | Append prompts to the end of the active queue         |
-| `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert prompts immediately after the current position |
+| `ctrlyoke: Queue Steps with ctrlyoke`   | Append prompts to the end of the active queue (shown once it has steps) |
+| `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert prompts immediately after the current position (shown once the active queue has steps) |
 | `ctrlyoke: Pause Execution`             | Pause a running workflow                              |
 | `ctrlyoke: Resume Execution`            | Resume a paused workflow                              |
 | `ctrlyoke: Stop Execution`              | Stop and reset the workflow                           |

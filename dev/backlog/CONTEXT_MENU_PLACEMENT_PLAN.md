@@ -1,8 +1,8 @@
 # Context Menu Placement & Consistency Plan
 
-> **Status:** The `package.json` group rename, Run with ctrlyoke submenu collapse, and Queue
-> title rewording have landed, along with documentation updates. Queue/Queue Next context-key
-> gating and the SCM Graph item remain later or blocked work.
+> **Status:** The `package.json` group rename, Run with ctrlyoke submenu collapse, Queue title
+> rewording, and Queue/Queue Next context-key gating have landed, along with documentation
+> updates. The SCM Graph item remains blocked upstream.
 
 ## Goal
 
@@ -473,9 +473,9 @@ in Affected Files below.
 
 | File | Role |
 | --- | --- |
-| `package.json` | **Landed:** `contributes.menus` group renames to `z_ctrlyoke`, the `ctrlyoke.runSubmenu` definition and its `explorer/context`/`editor/title/context`/`editor/title` placements, shared submenu children, and reworded Queue/Queue Next titles. **Pending later step:** add `&& ctrlyoke.hasQueuedSteps` to Queue/Queue Next `when` clauses. |
-| `src/extension.ts` (or wherever the active `WorkflowInstance`/`PromptQueue` is already wired to the extension host) | **Pending later step:** subscribe to `PromptQueue.onDidChangeState` (`src/core/PromptQueue.ts:127`) on the active instance and call `vscode.commands.executeCommand('setContext', 'ctrlyoke.hasQueuedSteps', steps.length > 0)` on change and on instance-switch/activation. |
-| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/guide/quick-start.md`, `docs/reference/commands.md` | **Landed:** reference the current command titles and Run with ctrlyoke submenu locations. `dev/reference/VSCODE_COMMANDS.md` only lists unchanged command IDs, so it required no content change. |
+| `package.json` | **Done:** `contributes.menus` group renames to `z_ctrlyoke`, the `ctrlyoke.runSubmenu` definition and its `explorer/context`/`editor/title/context`/`editor/title` placements, shared submenu children, reworded Queue/Queue Next titles, and `ctrlyoke.hasQueuedSteps` gating for Queue/Queue Next. |
+| `src/types/DashboardConstants.ts`, `src/core/WorkflowOrchestrator.ts`, `src/extension.ts` | **Done:** expose the active queue-state event, update it on active-instance and queue-state changes, initialize `ctrlyoke.hasQueuedSteps`, and register its disposable during extension activation. |
+| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/guide/quick-start.md`, `docs/reference/commands.md` | **Done:** reference the current command titles and Run with ctrlyoke submenu locations, including that Queue Steps/Queue Steps Next are hidden until the active queue already has steps. |
 
 ## Non-Goals
 
@@ -517,6 +517,5 @@ in Affected Files below.
   instead of behaving like Load — see "Decided: gate Queue/Queue Next on an active, non-empty
   queue" above).
 
-All open questions in this doc are now resolved. The `package.json` group rename, submenu
-collapse, and title rewording are landed; the `ctrlyoke.hasQueuedSteps` implementation in
-`src/` remains the next queued step.
+All open questions in this doc are now resolved. The package group rename, submenu collapse,
+title rewording, and `ctrlyoke.hasQueuedSteps` implementation are landed.

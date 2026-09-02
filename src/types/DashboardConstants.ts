@@ -2938,4 +2938,5 @@ export const VSCODE_GIT_COMMANDS = {
 // VS Code context keys set by the extension (used in package.json `when` clauses)
 export const VSCODE_CONTEXT_KEYS = {
   GENERATING_COMMIT_MESSAGE: "ctrlyoke.generatingCommitMessage",
+  HAS_QUEUED_STEPS: "ctrlyoke.hasQueuedSteps",
 } as const;

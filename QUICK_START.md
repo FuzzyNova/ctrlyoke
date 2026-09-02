@@ -208,6 +208,8 @@ You can extend a workflow while it is running, paused, or after it completes wit
 2. Select **Queue Steps with ctrlyoke** (appends to the end of the current queue)
 3. Or select **Queue Steps Next with ctrlyoke** (inserts immediately after the current step)
 
+These two actions are shown only when the active queue already contains at least one step.
+
 The dashboard shows all output continuously regardless of how many files were queued.
 
 ---
@@ -257,8 +259,8 @@ Right-click context menu on workflow files — open the **Run with ctrlyoke** su
 | ------------------------ | --------------------------------------- |
 | Run with ctrlyoke        | Load and immediately run the file       |
 | Load in ctrlyoke         | Load without running (edit first)       |
-| Queue Steps with ctrlyoke      | Append to the current workflow queue    |
-| Queue Steps Next with ctrlyoke | Insert after the currently running step |
+| Queue Steps with ctrlyoke      | Append to the current workflow queue (shown once it has steps) |
+| Queue Steps Next with ctrlyoke | Insert after the currently running step (shown once the queue has steps) |
 
 ---
 
