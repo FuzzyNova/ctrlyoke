@@ -1,6 +1,6 @@
 # OpenCode Interactive Event Stream Plan
 
-**Status:** Implemented
+**Status:** Reverted — see [Reverted](#reverted-2026-09-02) below
 **Priority:** P2
 
 ## Background
@@ -334,3 +334,54 @@ counts, so a future occurrence is diagnosable from logs alone instead of
 requiring artifact archaeology. See
 `falls back to export after history responds successfully but stays empty
 past the grace period` in `src/test/suite/harness/LogParsers.test.ts`.
+
+## Reverted (2026-09-02)
+
+A live A/B test resolved the "root cause not conclusively established" open
+question above: **`GET /api/session/:id/history` never publishes durable
+events for TUI-submitted prompts at all, regardless of wait time.** Two
+sessions were driven against the same running `opencode serve` instance:
+
+- A TUI-launched session (`opencode --prompt "..." --port ... --hostname ...`
+  — the exact invocation ctrlyoke uses) produced a correct model response,
+  real token/cost accounting, and a full transcript via `opencode export` —
+  but `history` returned `{"data":[],"hasMore":false}` for the entire
+  session, even 20+ seconds after completion.
+- The same server, given a session created and prompted via direct
+  `POST /api/session/:id/prompt` (the method this plan's own verification
+  steps used throughout, see "Update (2026-08-31)" above), populated
+  `history` correctly within ~2 seconds.
+
+Same server, same code, same model — the only variable was how the prompt
+was submitted. opencode's TUI-native prompt path (`--prompt` at launch, or
+keystrokes typed into a running TUI) simply never emits `session.next.*`
+durable events; only prompts driven through its own HTTP API do. This is a
+structural property of opencode's TUI, not a timing issue, a wrong-endpoint
+call, or something a longer grace period / retry could fix — so the
+post-ship mitigations above (grace period, per-step force-fallback) were
+permanent workarounds for dead code, not stopgaps for a real race.
+
+Combined with the plan's own "Headless mode is unaffected" finding: headless
+(`opencode run`) never used this path anyway, so every interactive session
+ctrlyoke actually drives was already falling through to `opencode export` on
+every run — the history-endpoint path never fired in production.
+
+**Action taken:** reverted commits `3f89ff70`..`2db3905d`
+(`feat: add loopback free-port allocator` through
+`fix: fall back to opencode export when history polling goes silently
+empty`), which cleanly covered the entire feature — no unrelated commits
+touched these files in that range. `OpenCodeLogParser.ts` is back to
+`opencode export`-only polling (retaining the pre-plan interim fix: a 100 MiB
+`maxBuffer` and `warn`-level logging on swallowed export failures, from the
+original Background section above — still the right permanent mitigation for
+the buffer-size problem, since that failure mode is real and export-only is
+now the only path). `OpenCodeCliProvider.ts` no longer allocates a port or
+passes `--port`/`--hostname`; `FreePortAllocator.ts` and
+`OpenCodeEventMapper.ts`'s durable-event mapping were removed as dead code
+with no other path exercising them.
+
+If this is revisited later, the fix has to live on opencode's side (get the
+TUI to actually emit `session.next.*` for its own prompt submissions, or
+expose an equivalent event source that does) — no client-side polling
+strategy against `history` can work around a server that never publishes the
+events being polled for.
