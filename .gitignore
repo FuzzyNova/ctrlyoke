@@ -39,5 +39,8 @@ docs/.vitepress/cache
 /NUL
 .DS_Store
 
+# Personal/local Claude Code settings (not for sharing)
+.claude/settings.local.json
+
 # Real Keygen test license keys (embed buyer email in cleartext, base64-encoded)
 dev/test_keys.md
