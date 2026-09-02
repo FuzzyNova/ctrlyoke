@@ -1661,6 +1661,61 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
       EXECUTION_STATES.RUNNING
     );
   });
+
+  // A stricter variant of the above: a brand-new workflow (New Workflow ->
+  // type a prompt -> Run) whose draft never received its own RUN_VIEW_LOADED
+  // before being promoted. appliedViewAddress is therefore null (or unrelated)
+  // rather than naming the draft, so neither an exact address match nor a
+  // same-lineage (workflowKey) match against it can ever succeed — the guard
+  // must not depend on appliedViewAddress at all to catch this race, since
+  // the promoted run's first-ever RUN_VIEW_LOADED is exactly this case.
+  it("keeps RUNNING when a first-ever run snapshot arrives with a stale idle state and no prior applied view", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    const runAddress = {
+      workflowKey: "wf-brand-new" as never,
+      kind: "run" as const,
+      runRef: "run-2026-09-02T01-14-06-645Z" as never,
+    };
+    useUiStore.setState({
+      appliedViewAddress: null,
+      pendingRunViewRequestId: null,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf-brand-new.yaml",
+        totalSteps: 1,
+      });
+    });
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: runAddress,
+        workingFile: {
+          workflowName: "test first",
+          definitionRevision: 1,
+          steps: [makePrompt("just say hi")],
+          _runtime: {
+            executionState: EXECUTION_STATES.IDLE,
+            currentIndex: 0,
+          },
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+      });
+    });
+
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+  });
 });
 
 describe("run view revision snapshots", () => {

@@ -2355,20 +2355,21 @@ export function createMessageHandlers(
     // reverting the header's badge back to idle. A message carrying a
     // requestId is a client-initiated request and is always trusted as-is.
     //
-    // `isCurrentAddress` alone misses the very transition this guard exists
-    // for: `syncExecutingRunViews` fires this snapshot to a client that was
-    // still addressed at the *draft* the instant its run got promoted, so
-    // this is that client's first-ever RUN_VIEW_LOADED for the new run
-    // address — `appliedViewAddress` still names the draft, and the exact
-    // address match can never be true. Falling back to a same-lineage
-    // (workflowKey) match covers that promotion without weakening the check
-    // for a genuinely different lineage.
+    // Deliberately NOT gated on isCurrentAddress or a same-lineage
+    // (workflowKey) match against `appliedViewAddress`: that address is only
+    // ever set by this same handler (`ui.markViewAddressApplied` below), so a
+    // lineage's very first-ever RUN_VIEW_LOADED — e.g. a brand-new workflow
+    // whose draft never got its own applied view before "Run" promoted it —
+    // has no prior appliedViewAddress to match against, and the guard would
+    // silently never engage for exactly the promotion race it exists to
+    // catch. The backend only ever pushes a requestless RUN_VIEW_LOADED to
+    // the client that owns the executing instance in the first place
+    // (`readAddressedRunView`/`deliverRunView` target a specific client), so
+    // by the time one reaches here it is already known to be for this
+    // client's own workflow — no extra address check is needed to trust it.
     const currentExecutionState = useWorkflowStore.getState().executionState;
-    const isSameLineageAsApplied =
-      address.workflowKey === uiStore.appliedViewAddress?.workflowKey;
     const isStaleExecutionStateRegression =
       !message.requestId &&
-      (isCurrentAddress || isSameLineageAsApplied) &&
       isWorkflowActive(currentExecutionState) &&
       !isWorkflowActive(runtime?.executionState ?? EXECUTION_STATES.IDLE);
     const resolvedExecutionState = isStaleExecutionStateRegression
