@@ -1,6 +1,6 @@
 # Output Panel Context Menu Plan
 
-> **Status:** Research only — no code changes yet. Captures where to hook menu entries into
+> **Status:** Implemented. Captures where to hook menu entries into
 > the VS Code Output panel, and how to route them through the capture backend
 > [`OUTPUT_PANEL_CONTEXT_CAPTURE_PLAN.md`](../implemented/OUTPUT_PANEL_CONTEXT_CAPTURE_PLAN.md)
 > already implemented for `@`/`#` completions.
@@ -218,9 +218,9 @@ queue rather than the completion-specific placeholder/cache path.
 
 ## Open Questions
 
-- Command titles/wording — "Add Output Selection to ctrlyoke" vs. something shorter given the
-  existing `#`-completion label is just "selection: Agent Host (lines 17–28)"?
-- Should the `view/title` toolbar entry be `isHiddenByDefault: true` (like VS Code's own "Open
-  Output in Editor"/"Open Output in New Window" buttons) so it doesn't clutter the panel
-  toolbar by default, discoverable via the `...` overflow menu instead?
-- Icon choice for the `view/title` entry, if any (VS Code's toolbar buttons here all have one).
+Resolved for this implementation:
+
+- The command titles are "Add Output Selection to ctrlyoke" and "Add Output Channel to
+  ctrlyoke", matching the existing `addFileToPromptEditor` naming pattern.
+- The `view/title` toolbar entry is visible by default; it does not set `isHiddenByDefault`.
+- The `view/title` entry has no icon and uses the standard `navigation` group.

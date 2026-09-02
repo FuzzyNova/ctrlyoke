@@ -619,7 +619,7 @@ function collectWorkspaceDirectories(
   }
 }
 
-function getOutputChannelSlug(document: vscode.TextDocument): string {
+export function getOutputChannelSlug(document: vscode.TextDocument): string {
   return vscode.workspace.asRelativePath(
     document.uri,
     isMultiRootWorkspace()

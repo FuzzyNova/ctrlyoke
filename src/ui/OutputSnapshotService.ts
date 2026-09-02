@@ -1,6 +1,29 @@
-import { outputCaptureCache } from "../completions/OutputCaptureCache";
+import {
+  outputCaptureCache,
+  type OutputCaptureEntry,
+} from "../completions/OutputCaptureCache";
 import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
 import { TempFileManager } from "../utils/TempFileManager";
+
+/** Write an output capture to the workspace attachment store. */
+export async function writeOutputSnapshotAttachment(
+  getWorkspaceRoot: () => string,
+  entry: OutputCaptureEntry
+): Promise<string> {
+  const workspaceRoot = getWorkspaceRoot();
+  if (!workspaceRoot) {
+    throw new Error("No workspace folder open");
+  }
+
+  const tempFileManager = new TempFileManager(workspaceRoot);
+  const absolutePath = await tempFileManager.createOutputSnapshotFile(
+    entry.text,
+    entry.channel,
+    entry.range,
+    tempFileManager.getAttachmentsDir()
+  );
+  return buildFileReferenceValue(tempFileManager.getRelativePath(absolutePath));
+}
 
 /**
  * Persist a pending output completion capture and return the workspace-
@@ -14,22 +37,9 @@ export async function savePendingOutputSnapshot(
   getWorkspaceRoot: () => string,
   captureId: string
 ): Promise<string> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    throw new Error("No workspace folder open");
-  }
-
   const entry = outputCaptureCache.take(captureId);
   if (!entry) {
     throw new Error("Output capture expired — try again");
   }
-
-  const tempFileManager = new TempFileManager(workspaceRoot);
-  const absolutePath = await tempFileManager.createOutputSnapshotFile(
-    entry.text,
-    entry.channel,
-    entry.range,
-    tempFileManager.getAttachmentsDir()
-  );
-  return buildFileReferenceValue(tempFileManager.getRelativePath(absolutePath));
+  return writeOutputSnapshotAttachment(getWorkspaceRoot, entry);
 }

@@ -538,13 +538,15 @@ function registerCommands(
       message
     );
   };
+  const getWorkspaceRoot = () =>
+    vscode.workspace.workspaceFolders?.length ? getVsCodeWorkspaceRoot() : "";
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
-    webviewProvider
+    webviewProvider,
+    getWorkspaceRoot
   );
 
   const resolveOutputCaptureCommand = registerNativeOutputCaptureCommand(
-    () =>
-      vscode.workspace.workspaceFolders?.length ? getVsCodeWorkspaceRoot() : "",
+    getWorkspaceRoot,
     (message) =>
       notifyUserFeedback(
         workflowOrchestrator.getUserFeedbackSink(),
@@ -1252,6 +1254,23 @@ function registerCommands(
     }
   );
 
+  const addOutputSelectionToPromptEditorCommand =
+    vscode.commands.registerCommand(
+      "ctrlyoke.addOutputSelectionToPromptEditor",
+      async (uri?: vscode.Uri) => {
+        await contextMenuReferenceCommands.addOutputSelectionToPromptEditor(
+          uri
+        );
+      }
+    );
+
+  const addOutputChannelToPromptEditorCommand = vscode.commands.registerCommand(
+    "ctrlyoke.addOutputChannelToPromptEditor",
+    async (uri?: vscode.Uri) => {
+      await contextMenuReferenceCommands.addOutputChannelToPromptEditor(uri);
+    }
+  );
+
   const addScmResourcesToPromptEditorCommand = vscode.commands.registerCommand(
     "ctrlyoke.addScmResourcesToPromptEditor",
     async (...args: unknown[]) => {
@@ -1536,6 +1555,8 @@ function registerCommands(
     addDirectoryToPromptEditorCommand,
     addSelectionToPromptEditorCommand,
     addSymbolToPromptEditorCommand,
+    addOutputSelectionToPromptEditorCommand,
+    addOutputChannelToPromptEditorCommand,
     addScmResourcesToPromptEditorCommand,
     addTimelineCommitToPromptEditorCommand,
     searchHistoryCommand,

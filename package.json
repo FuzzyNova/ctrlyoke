@@ -246,6 +246,16 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.addOutputSelectionToPromptEditor",
+        "title": "Add Output Selection to ctrlyoke",
+        "category": "ctrlyoke"
+      },
+      {
+        "command": "ctrlyoke.addOutputChannelToPromptEditor",
+        "title": "Add Output Channel to ctrlyoke",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.addScmResourcesToPromptEditor",
         "title": "Add File to ctrlyoke",
         "category": "ctrlyoke"
@@ -357,6 +367,14 @@
           "when": "false"
         },
         {
+          "command": "ctrlyoke.addOutputSelectionToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "ctrlyoke.addOutputChannelToPromptEditor",
+          "when": "false"
+        },
+        {
           "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "false"
         },
@@ -437,6 +455,23 @@
           "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "!editorHasSelection && resourceScheme == file",
           "group": "z_ctrlyoke@2"
+        },
+        {
+          "command": "ctrlyoke.addOutputSelectionToPromptEditor",
+          "when": "inOutput && editorHasSelection",
+          "group": "z_ctrlyoke@3"
+        },
+        {
+          "command": "ctrlyoke.addOutputChannelToPromptEditor",
+          "when": "inOutput && !editorHasSelection",
+          "group": "z_ctrlyoke@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "ctrlyoke.addOutputChannelToPromptEditor",
+          "when": "view == workbench.panel.output",
+          "group": "navigation"
         }
       ],
       "editor/lineNumber/context": [

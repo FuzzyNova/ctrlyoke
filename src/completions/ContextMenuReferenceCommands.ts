@@ -7,11 +7,15 @@ import {
   buildSymbolReference,
 } from "./ContextReferenceBuilder";
 import { toWorkspaceRelativeReferencePath } from "./WorkspaceReferencePaths";
-import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
-import { mapSymbolKindToReferenceKind } from "./CompletionHelpers";
+import {
+  getOutputChannelSlug,
+  mapSymbolKindToReferenceKind,
+} from "./CompletionHelpers";
+import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
+import type { OutputCaptureEntry } from "./OutputCaptureCache";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -23,8 +27,15 @@ interface TimelineItemLike {
   command?: { arguments?: unknown[] };
 }
 
+export interface ContextMenuPromptEditorInsertSink {
+  enqueuePromptEditorInsert(request: PromptEditorInsertRequest): Promise<void>;
+}
+
 export class ContextMenuReferenceCommands {
-  constructor(private readonly webviewProvider: CtrlYokeWebviewProvider) {}
+  constructor(
+    private readonly webviewProvider: ContextMenuPromptEditorInsertSink,
+    private readonly getWorkspaceRoot: () => string
+  ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
     if (!uri) {
@@ -122,6 +133,35 @@ export class ContextMenuReferenceCommands {
     ]);
   }
 
+  async addOutputSelectionToPromptEditor(uri?: vscode.Uri): Promise<void> {
+    const editor = this.activeOutputEditor(uri);
+    if (!editor || editor.selection.isEmpty) {
+      return;
+    }
+
+    await this.captureOutputToPromptEditor(
+      editor,
+      editor.document.getText(editor.selection),
+      {
+        startLine: editor.selection.start.line + 1,
+        endLine: editor.selection.end.line + 1,
+      }
+    );
+  }
+
+  async addOutputChannelToPromptEditor(uri?: vscode.Uri): Promise<void> {
+    const editor = this.activeOutputEditor(uri);
+    if (!editor) {
+      return;
+    }
+
+    await this.captureOutputToPromptEditor(
+      editor,
+      editor.document.getText(),
+      undefined
+    );
+  }
+
   async addScmResourcesToPromptEditor(...args: unknown[]): Promise<void> {
     const resources = this.extractScmResourceUris(args);
     if (resources.length === 0) {
@@ -169,6 +209,36 @@ export class ContextMenuReferenceCommands {
     };
 
     await this.webviewProvider.enqueuePromptEditorInsert(request);
+  }
+
+  private activeOutputEditor(uri?: vscode.Uri): vscode.TextEditor | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return undefined;
+    }
+
+    if (uri && editor.document.uri.toString() !== uri.toString()) {
+      return undefined;
+    }
+
+    return editor;
+  }
+
+  private async captureOutputToPromptEditor(
+    editor: vscode.TextEditor,
+    text: string,
+    range: OutputCaptureEntry["range"]
+  ): Promise<void> {
+    const entry: OutputCaptureEntry = {
+      text,
+      channel: getOutputChannelSlug(editor.document),
+      range,
+    };
+    const relativePath = await writeOutputSnapshotAttachment(
+      this.getWorkspaceRoot,
+      entry
+    );
+    await this.insertReferences([buildFileReference(relativePath)]);
   }
 
   private async tryBuildSymbolReference(
