@@ -7,6 +7,7 @@ import {
   type WorkspaceGitRefDiffPageResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
+import { ERROR_NAMES } from "@root/types/DashboardConstants";
 
 export interface PagedGitRefDiffPageRequest {
   ref: string;
@@ -130,7 +131,7 @@ function errorFrom(value: unknown): Error {
 }
 
 function isAbortError(value: unknown): boolean {
-  return value instanceof Error && value.name === "AbortError";
+  return value instanceof Error && value.name === ERROR_NAMES.ABORT;
 }
 
 function responseIsUsable(

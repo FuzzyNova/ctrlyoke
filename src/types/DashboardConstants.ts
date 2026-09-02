@@ -23,6 +23,16 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Build modes consumed by the Vite webview configuration. */
+export const BUILD_MODES = {
+  PRODUCTION: "production",
+} as const;
+
+/** Standard JavaScript error names used by browser-facing async flows. */
+export const ERROR_NAMES = {
+  ABORT: "AbortError",
+} as const;
+
 /** Language IDs recognized by prompt-file completion and navigation providers. */
 export const PROMPT_FILE_LANGUAGE_IDS = {
   JSON: WORKFLOW_FILE_FORMATS.JSON,
@@ -3151,6 +3161,36 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+/** Git ref labels rendered by the workspace commit graph. */
+export const GIT_REF_LABEL_TYPES = {
+  LOCAL_BRANCH: "localBranch",
+  REMOTE_BRANCH: "remoteBranch",
+  TAG: "tag",
+  HEAD: "head",
+} as const;
+
+export type GitRefLabelType =
+  (typeof GIT_REF_LABEL_TYPES)[keyof typeof GIT_REF_LABEL_TYPES];
+
+/** Relative positions used when comparing commits with the checked-out HEAD. */
+export const GIT_HEAD_RELATIONS = {
+  AHEAD: "ahead",
+  AT: "at",
+  BEHIND: "behind",
+} as const;
+
+/** Clipboard operations supported by the workspace explorer. */
+export const CLIPBOARD_OPERATIONS = {
+  COPY: "copy",
+  CUT: "cut",
+} as const;
+
+/** Directions supported by the run-history adjacent navigation controls. */
+export const RUN_NAVIGATION_DIRECTIONS = {
+  NEWER: "newer",
+  OLDER: "older",
+} as const;
 
 // ============================================================================
 // TEMPLATE VARIABLE TYPES - Input control types for template variables

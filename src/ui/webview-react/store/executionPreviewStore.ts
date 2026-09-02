@@ -10,10 +10,12 @@ import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes
 import { sendMessage } from "../hooks/useMessageHandler";
 import {
   PREVIEW_SCOPES,
+  PREVIEW_STATUSES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
-export type ExecutionPreviewStatus = "checking" | "ready";
+export type ExecutionPreviewStatus =
+  (typeof PREVIEW_STATUSES)[keyof typeof PREVIEW_STATUSES];
 
 interface ExecutionPreviewState {
   preview: WorkflowExecutionPreview | null;
@@ -64,7 +66,7 @@ function sameScope(
 
 const initialState: ExecutionPreviewState = {
   preview: null,
-  status: "checking",
+  status: PREVIEW_STATUSES.CHECKING,
   scope: null,
   requestToken: null,
   displayedDefinitionRevision: null,
@@ -83,7 +85,7 @@ export const useExecutionPreviewStore = create<
     const requestToken = requestSequence;
     set({
       preview: null,
-      status: "checking",
+      status: PREVIEW_STATUSES.CHECKING,
       scope,
       requestToken,
       displayedDefinitionRevision: null,
@@ -101,7 +103,7 @@ export const useExecutionPreviewStore = create<
   resolve: (message) => {
     const state = get();
     if (
-      state.status !== "checking" ||
+      state.status !== PREVIEW_STATUSES.CHECKING ||
       state.requestToken !== message.requestToken ||
       !state.scope ||
       !sameScope(state.scope, message.scope)
@@ -115,7 +117,7 @@ export const useExecutionPreviewStore = create<
     );
     set({
       preview: message.preview,
-      status: "ready",
+      status: PREVIEW_STATUSES.READY,
       displayedDefinitionRevision: message.displayedDefinitionRevision,
       displayedAddress: message.address,
       definitionRevisionHeads: {
@@ -151,7 +153,7 @@ export const useExecutionPreviewStore = create<
     requestSequence += 1;
     set({
       preview: null,
-      status: "checking",
+      status: PREVIEW_STATUSES.CHECKING,
       scope: null,
       requestToken: null,
       displayedDefinitionRevision: null,

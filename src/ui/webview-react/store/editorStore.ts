@@ -14,6 +14,7 @@ import {
   EDITOR_TARGET_KINDS,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  PROMPT_PROPERTIES,
 } from "../types/messages";
 import { STEP_TYPES, type ExecutionMode } from "@root/types/DashboardConstants";
 import type {
@@ -904,7 +905,7 @@ export const useEditorStore = create<
       properties: {
         ...state.properties,
         [key]:
-          key === "errorBehavior"
+          key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
             ? normalizePromptErrorBehavior(
                 value as PropertyValues["errorBehavior"]
               )

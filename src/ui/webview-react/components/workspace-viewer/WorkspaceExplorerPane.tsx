@@ -54,6 +54,7 @@ import {
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import {
+  CLIPBOARD_OPERATIONS,
   SCM_FILE_KINDS,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
@@ -626,7 +627,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
                   selectedFilePath === entry.path;
                 const isCut =
-                  clipboard?.operation === "cut" &&
+                  clipboard?.operation === CLIPBOARD_OPERATIONS.CUT &&
                   clipboard.path === entry.path;
                 const statusColorClass = getEntryStatusColorClass(
                   entry,

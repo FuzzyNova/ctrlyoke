@@ -1,5 +1,6 @@
 import {
   DIFF_PAYLOAD_KINDS,
+  GIT_REF_LABEL_TYPES,
   WORKSPACE_ENTRY_KINDS,
   type WorkspaceSearchScope,
   type DiffChangeType,
@@ -303,7 +304,8 @@ export interface WorkspaceMoveRequest {
 // ── Commit history ────────────────────────────────────────────────────────────
 
 /** Kind of git ref that decorates a commit (for git-graph ref pills). */
-export type GitRefLabelType = "localBranch" | "remoteBranch" | "tag" | "head";
+export type GitRefLabelType =
+  (typeof GIT_REF_LABEL_TYPES)[keyof typeof GIT_REF_LABEL_TYPES];
 
 /** A single ref pointing at a commit, parsed from `git log` decorations. */
 export interface GitRefLabel {

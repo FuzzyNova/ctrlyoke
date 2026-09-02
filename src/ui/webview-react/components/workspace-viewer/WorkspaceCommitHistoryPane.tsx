@@ -23,6 +23,10 @@ import {
   computeCommitGraphLayout,
   TRUNK_COLOR_INDEX,
 } from "@utils/commitGraphLayout";
+import {
+  GIT_HEAD_RELATIONS,
+  GIT_REF_LABEL_TYPES,
+} from "@root/types/DashboardConstants";
 
 export interface WorkspaceCommitHistoryPaneProps {
   onRefresh: () => void;
@@ -34,7 +38,8 @@ export interface WorkspaceCommitHistoryPaneProps {
   controller?: PagedCommitHistoryController;
 }
 
-type HeadRelation = "ahead" | "at" | "behind";
+type HeadRelation =
+  (typeof GIT_HEAD_RELATIONS)[keyof typeof GIT_HEAD_RELATIONS];
 
 const ROW_HEIGHT = 24;
 const GRAPH_LANE_WIDTH = 14;
@@ -227,7 +232,7 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
       lane,
     };
   });
-  const ahead = relation === "ahead";
+  const ahead = relation === GIT_HEAD_RELATIONS.AHEAD;
   const rowClass = `transition-colors ${
     isSelected
       ? "bg-list-active-bg"
@@ -324,7 +329,7 @@ const CommitGraphHitArea: React.FC<CommitGraphHitAreaProps> = ({
     isSelected
       ? "bg-list-active-bg"
       : `hover:bg-list-hover-bg${commit.isHead ? " bg-list-active-bg/40" : ""}`
-  }${relation === "ahead" ? " opacity-60" : ""}`;
+  }${relation === GIT_HEAD_RELATIONS.AHEAD ? " opacity-60" : ""}`;
 
   return (
     <div
@@ -551,8 +556,10 @@ function relationForIndex(
   index: number
 ): HeadRelation {
   const headIndex = commits.findIndex((commit) => commit.isHead);
-  if (headIndex < 0 || index === headIndex) return "at";
-  return index < headIndex ? "ahead" : "behind";
+  if (headIndex < 0 || index === headIndex) return GIT_HEAD_RELATIONS.AT;
+  return index < headIndex
+    ? GIT_HEAD_RELATIONS.AHEAD
+    : GIT_HEAD_RELATIONS.BEHIND;
 }
 
 const REF_PILL_BORDER_CLASS: Record<string, string> = {
@@ -575,11 +582,11 @@ const RefPill: React.FC<RefPillProps> = ({ label, colorClass, iconOnly }) => {
   const borderColorClass =
     REF_PILL_BORDER_CLASS[colorClass] ?? "border-scm-graph-local";
   const icon =
-    label.type === "remoteBranch"
+    label.type === GIT_REF_LABEL_TYPES.REMOTE_BRANCH
       ? "codicon-cloud"
-      : label.type === "tag"
+      : label.type === GIT_REF_LABEL_TYPES.TAG
         ? "codicon-tag"
-        : label.type === "head"
+        : label.type === GIT_REF_LABEL_TYPES.HEAD
           ? "codicon-target"
           : "codicon-git-branch";
   return (
@@ -654,8 +661,10 @@ const CommitRow: React.FC<CommitRowProps> = ({
               label={ref}
               colorClass={colorClass}
               iconOnly={
-                ref.type === "remoteBranch" &&
-                commit.refs.some((r) => r.type === "localBranch")
+                ref.type === GIT_REF_LABEL_TYPES.REMOTE_BRANCH &&
+                commit.refs.some(
+                  (r) => r.type === GIT_REF_LABEL_TYPES.LOCAL_BRANCH
+                )
               }
             />
           ))}

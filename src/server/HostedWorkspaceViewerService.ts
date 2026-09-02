@@ -49,6 +49,7 @@ import {
   LINE_ENDINGS,
   PROMISE_SETTLED_STATUSES,
   WORKSPACE_FILE_LANGUAGE_IDS,
+  GIT_REF_LABEL_TYPES,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -336,9 +337,9 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
       continue;
     } else if (name.includes("/")) {
       // Anything with a slash is a remote-tracking ref (e.g. origin/main).
-      labels.push({ name, type: "remoteBranch" });
+      labels.push({ name, type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH });
     } else {
-      labels.push({ name, type: "localBranch" });
+      labels.push({ name, type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH });
     }
   }
   return labels;

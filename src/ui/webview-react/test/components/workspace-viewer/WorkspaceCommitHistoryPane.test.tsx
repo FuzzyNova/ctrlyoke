@@ -15,6 +15,7 @@ import {
 } from "@utils/hostedApi";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import type { PagedCommitHistoryController } from "@hooks/usePagedCommitHistory";
+import { GIT_REF_LABEL_TYPES } from "@root/types/DashboardConstants";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceCheckoutBranch: vi.fn(),
@@ -30,7 +31,7 @@ const commit: WorkspaceCommitLogEntry = {
   relativeDate: "1 hour ago",
   isHead: true,
   pushed: true,
-  refs: [{ name: "main", type: "localBranch" }],
+  refs: [{ name: "main", type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH }],
   isMerge: false,
   parentHashes: [],
 };
@@ -232,8 +233,11 @@ describe("WorkspaceCommitHistoryPane", () => {
       {
         ...commit,
         refs: [
-          { name: "main", type: "localBranch" },
-          { name: "origin/main", type: "remoteBranch" },
+          { name: "main", type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH },
+          {
+            name: "origin/main",
+            type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH,
+          },
         ],
       },
     ]);
@@ -250,7 +254,9 @@ describe("WorkspaceCommitHistoryPane", () => {
     renderPane([
       {
         ...commit,
-        refs: [{ name: "origin/main", type: "remoteBranch" }],
+        refs: [
+          { name: "origin/main", type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH },
+        ],
       },
     ]);
 
