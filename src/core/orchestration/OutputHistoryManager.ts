@@ -1401,9 +1401,7 @@ export class OutputHistoryManager {
         redoneAt,
       };
 
-      if (
-        JSON.stringify(undoRecord) === JSON.stringify(updatedUndoRecord)
-      ) {
+      if (JSON.stringify(undoRecord) === JSON.stringify(updatedUndoRecord)) {
         return;
       }
 

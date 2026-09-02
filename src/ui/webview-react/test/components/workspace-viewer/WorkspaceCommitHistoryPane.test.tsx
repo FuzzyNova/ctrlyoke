@@ -407,9 +407,7 @@ describe("WorkspaceCommitHistoryPane", () => {
       // the percentage rule — not the old lane cap — is now in control.
       stubPaneWidth(40);
       const narrow = renderPane(commits);
-      expect(
-        screen.getByTestId("commit-graph-rail").style.width
-      ).toBe("14px");
+      expect(screen.getByTestId("commit-graph-rail").style.width).toBe("14px");
       const surfaceWidthWhenNarrow = Number(
         screen.getByTestId("commit-graph-surface").getAttribute("width")
       );

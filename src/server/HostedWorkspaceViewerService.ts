@@ -345,10 +345,7 @@ export class HostedWorkspaceViewerService {
     FileHistorySnapshot
   >();
   private readonly commitLogSnapshots = new Map<string, CommitLogSnapshot>();
-  private readonly gitRefDiffSnapshots = new Map<
-    string,
-    GitRefDiffSnapshot
-  >();
+  private readonly gitRefDiffSnapshots = new Map<string, GitRefDiffSnapshot>();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -2211,9 +2208,7 @@ export class HostedWorkspaceViewerService {
   }
 
   private trimGitRefDiffSnapshots(): void {
-    while (
-      this.gitRefDiffSnapshots.size > GIT_REF_DIFF_SNAPSHOT_MAX_COUNT
-    ) {
+    while (this.gitRefDiffSnapshots.size > GIT_REF_DIFF_SNAPSHOT_MAX_COUNT) {
       const oldest = this.gitRefDiffSnapshots.keys().next().value;
       if (oldest === undefined) return;
       this.gitRefDiffSnapshots.delete(oldest);
@@ -2298,7 +2293,9 @@ export class HostedWorkspaceViewerService {
       );
     }
     if (!Number.isSafeInteger(limit) || limit < 1) {
-      throw new WorkspaceTreeBadRequestError("limit must be a positive integer");
+      throw new WorkspaceTreeBadRequestError(
+        "limit must be a positive integer"
+      );
     }
 
     const repoRoot = await this.resolveRepoRoot(repoId);
@@ -2658,10 +2655,7 @@ export class HostedWorkspaceViewerService {
     file: GitChangedFile
   ): boolean {
     const newAbsolutePath = path.resolve(repoRoot, file.path);
-    const oldAbsolutePath = path.resolve(
-      repoRoot,
-      file.oldPath ?? file.path
-    );
+    const oldAbsolutePath = path.resolve(repoRoot, file.oldPath ?? file.path);
     return (
       isPathWithinAnyDirectory(newAbsolutePath, this.trustedRoots) &&
       isPathWithinAnyDirectory(oldAbsolutePath, this.trustedRoots)
@@ -2742,9 +2736,7 @@ export class HostedWorkspaceViewerService {
         pageSize: resolvedPageSize,
         sources: Object.freeze({ ...resolution.sources }),
         changedFiles: Object.freeze(visibleChangedFiles),
-        commitInfo: commitInfo
-          ? Object.freeze({ ...commitInfo })
-          : undefined,
+        commitInfo: commitInfo ? Object.freeze({ ...commitInfo }) : undefined,
         lastAccessedAt: Date.now(),
       });
       this.gitRefDiffSnapshots.set(snapshot.diffId, snapshot);
@@ -2772,9 +2764,7 @@ export class HostedWorkspaceViewerService {
           this.buildGitRefDiffPageEntry(repoRoot, file, snapshot.sources)
         )
       )
-    ).filter(
-      (entry): entry is WorkspaceGitRefDiffEntry => entry !== null
-    );
+    ).filter((entry): entry is WorkspaceGitRefDiffEntry => entry !== null);
     return {
       diffId: snapshot.diffId,
       pageSize: snapshot.pageSize,

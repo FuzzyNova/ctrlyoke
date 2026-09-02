@@ -75,7 +75,7 @@ other over the same `.ctrlyoke` state.
 - **Production builds read the ctrlyoke output channel's own log level**
   (`Log.fromVSCodeLogLevel(this.outputChannel.logLevel)`, `Log.ts:87`,
   live-updated via `this.outputChannel.onDidChangeLogLevel`, `Log.ts:88-92`)
-  — deliberately *not* `vscode.env.logLevel`, which only reflects VS Code's
+  — deliberately _not_ `vscode.env.logLevel`, which only reflects VS Code's
   global default and would silently ignore a ctrlyoke-specific override.
   File writes are separately gated by `ctrlyoke.enableDiagnosticLogs`
   (`Log.ts:95-113`; schema at `schemas/settings-schema.json:916-919`).
@@ -102,16 +102,19 @@ To get dev-parity trace file logging out of the production install, set
    **Reliable, restart-proof alternative**: Command Palette →
    **"Preferences: Configure Runtime Arguments"** (opens your user-level
    `argv.json`) and add:
+
    ```jsonc
    {
-     "log-level": "fuzzynova.ctrlyoke:trace"
+     "log-level": "fuzzynova.ctrlyoke:trace",
    }
    ```
+
    VS Code re-applies this as `--log fuzzynova.ctrlyoke:trace` on every
    launch — its own CLI syntax for a per-extension level,
    `${publisher}.${name}:${logLevel}` — so it's immune to the session-state
    bug above. Requires a full VS Code restart to take effect, like any
    `argv.json` change, but from then on it's a genuine one-time setup step.
+
 2. `"ctrlyoke.enableDiagnosticLogs": true` — put this in your **user**
    settings (`~/.ctrlyoke/settings.json` via ctrlyoke's own settings UI, or
    wherever you keep user-scope ctrlyoke settings) so it applies globally

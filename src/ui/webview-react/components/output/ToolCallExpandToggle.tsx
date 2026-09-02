@@ -18,10 +18,7 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
   title,
   "aria-label": ariaLabel,
 }) => {
-  const resolvedLabel = label?.replace(
-    /^show\b/i,
-    expanded ? "Hide" : "Show"
-  );
+  const resolvedLabel = label?.replace(/^show\b/i, expanded ? "Hide" : "Show");
 
   return (
     <button

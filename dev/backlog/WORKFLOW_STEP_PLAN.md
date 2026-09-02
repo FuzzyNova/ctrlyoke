@@ -10,12 +10,12 @@ respected, not flattened into the parent's queue. The parent step blocks until t
 a terminal state before the parent advances.
 
 This directly solves a gap the original design (v1, superseded by this doc) didn't cover:
-queuing a workflow to run after one that's *already running* and wasn't authored with the
+queuing a workflow to run after one that's _already running_ and wasn't authored with the
 sub-workflow ahead of time. Because a `subWorkflowStep` is just a step, and ctrlyoke already
 supports appending steps to a running instance's queue (`WorkflowOrchestrator.appendFromFileForClient`,
 `ctrlyoke.queueFromContext`), "queue workflow B to start after workflow A finishes" is just
 "append a single `type: workflow` step referencing B to A's already-running queue" — no separate
-"workflow queue" concept needed. ctrlyoke's queue already *is* the composition primitive; this
+"workflow queue" concept needed. ctrlyoke's queue already _is_ the composition primitive; this
 plan gives it one more step type.
 
 This version deliberately does **not** introduce a webview navigation stack, breadcrumb bar, or
@@ -207,7 +207,7 @@ if (isSubWorkflowStep(step)) {
 3. **Circular reference check** — `context.ancestorPaths` (absolute paths of every workflow file
    currently active in this run's chain, root to here) is checked for the resolved child path.
    A match fails the step immediately with an error naming the cycle (e.g. `a.yaml → b.yaml →
-   a.yaml`). **No depth limit.** A non-circular chain is just N independent instances, same as N
+a.yaml`). **No depth limit.** A non-circular chain is just N independent instances, same as N
    steps in one file — nothing about depth alone is unsafe once cycles are ruled out.
 4. Parse the sub-workflow file the same way ctrlyoke parses any workflow file being started (not
    just its `steps` — the whole file, so its workflow-level `harness`/`worktree`/`vars`/etc. are
@@ -241,7 +241,7 @@ always terminates. Two directions, and they're not symmetric in cost:
   the await, but the parent's live-state mirror (step 7 above) reflects the pause onto the parent
   instance's own `executionState` so the dashboard is accurate; resuming the child un-mirrors it
   the same way.
-- **Parent → child (needs explicit forwarding):** stopping or pausing the *parent* instance while
+- **Parent → child (needs explicit forwarding):** stopping or pausing the _parent_ instance while
   it's blocked on a `subWorkflowStep` must actively forward the same action to the active child
   instance (recursively, if the child is itself waiting on its own child). `WorkflowOrchestrator`
   needs a parent↔child registry (`instanceId → parentInstanceId`, `instanceId → activeChildInstanceId`)
@@ -282,11 +282,11 @@ parent.
 ## Queuing a workflow after one that's already running
 
 This is the case that motivated the whole plan and needs no new execution concept — only a new
-way to *append* a `subWorkflowStep`.
+way to _append_ a `subWorkflowStep`.
 
 `WorkflowOrchestrator.appendFromFileForClient` (and the `ctrlyoke.queueFromContext` command it
 backs) already appends to a running instance's queue at a given `QueuePosition`. Today it splices
-the target file's raw `steps` in — that's the *wrong* behavior for this feature (it drops the
+the target file's raw `steps` in — that's the _wrong_ behavior for this feature (it drops the
 target file's workflow-level properties and merges it into the running instance, exactly what the
 "I don't want encapsulation loss" requirement rules out). Both mechanisms stay as-is for their
 existing use case (pulling in steps to run inline, sharing the current session/worktree).
@@ -382,40 +382,40 @@ finalStep:
 
 ## Edge Cases
 
-| Scenario                                                | Handling                                                                                                     |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Circular reference (A → B → A)                          | Detected via `ancestorPaths` before child starts; step fails immediately, naming the cycle                    |
-| Very deep chain, no cycle (e.g. 1000 workflows deep)     | Allowed — no depth limit. No different from a 1000-step single workflow.                                       |
-| Sub-workflow file not found                              | Step fails with error; `onFail` applies                                                                        |
-| Sub-workflow schema validation error                     | Step fails with validation message; `onFail` applies                                                           |
-| Sub-workflow ends failed/error                           | `onFail: stopWorkflow` (default) stops parent; `onFail: continue` warns and advances                          |
-| Sub-workflow explicitly stopped (by user, either level)  | Always cancels the parent too, regardless of `onFail` — propagates through the whole active chain              |
-| User pauses the parent while child is running            | Forwarded down to the active child (and its active child, recursively)                                        |
-| User pauses/stops the child directly while viewing it    | Stop resolves the parent's await → parent cancels. Pause mirrors onto the parent's `executionState`.           |
-| Workflow step as only queue item                         | Works; no special handling required                                                                            |
-| Sub-workflow has its own `finalStep`                     | Executes normally as part of the child run                                                                     |
-| Variable substitution (`{{vars}}`)                       | Parent's resolved vars are NOT passed to child. Child uses its own `vars` + CLI `--var` flags                  |
-| `worktree` on a `subWorkflowStep`                        | Schema error — `additionalProperties: false` rejects it (worktree is workflow-level only, on the child file)   |
+| Scenario                                                   | Handling                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Circular reference (A → B → A)                             | Detected via `ancestorPaths` before child starts; step fails immediately, naming the cycle                   |
+| Very deep chain, no cycle (e.g. 1000 workflows deep)       | Allowed — no depth limit. No different from a 1000-step single workflow.                                     |
+| Sub-workflow file not found                                | Step fails with error; `onFail` applies                                                                      |
+| Sub-workflow schema validation error                       | Step fails with validation message; `onFail` applies                                                         |
+| Sub-workflow ends failed/error                             | `onFail: stopWorkflow` (default) stops parent; `onFail: continue` warns and advances                         |
+| Sub-workflow explicitly stopped (by user, either level)    | Always cancels the parent too, regardless of `onFail` — propagates through the whole active chain            |
+| User pauses the parent while child is running              | Forwarded down to the active child (and its active child, recursively)                                       |
+| User pauses/stops the child directly while viewing it      | Stop resolves the parent's await → parent cancels. Pause mirrors onto the parent's `executionState`.         |
+| Workflow step as only queue item                           | Works; no special handling required                                                                          |
+| Sub-workflow has its own `finalStep`                       | Executes normally as part of the child run                                                                   |
+| Variable substitution (`{{vars}}`)                         | Parent's resolved vars are NOT passed to child. Child uses its own `vars` + CLI `--var` flags                |
+| `worktree` on a `subWorkflowStep`                          | Schema error — `additionalProperties: false` rejects it (worktree is workflow-level only, on the child file) |
 | Queue-after-running-workflow, target already the same file | Not blocked — only an actual cycle in the active ancestor chain is rejected                                  |
 
 ---
 
 ## File Change Summary
 
-| File                                                              | Change                                                                                                                  |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `schemas/workflow-schema.json`                                    | Add `subWorkflowStep` and `subWorkflowRuntimeMetadata` definitions; `workflowStep` oneOf gains a third arm             |
-| `src/types/CtrlYokeTypes.ts`                                      | Add `SubWorkflowStep`, `SubWorkflowRuntimeMetadata`, expand queue-item union, add `isSubWorkflowStep()` guard          |
-| `src/types/DashboardConstants.ts`                                 | Add `WORKFLOW` to `STEP_TYPES`; add `WORKFLOW_PATH` to `PROMPT_PROPERTIES`                                              |
-| `src/core/WorkflowExecutor.ts`                                    | Route `isSubWorkflowStep` to `executeSubWorkflowStep()`; add `ancestorPaths` to context; circular-ref check             |
-| `src/core/WorkflowOrchestrator.ts`                                | Start child instances tagged with parent metadata; parent↔child registry; pause/stop/resume forwarding; await-terminal-state plumbing |
-| `src/core/WorkflowInstance.ts`                                    | Add `parentInstanceId?`, `activeChildInstanceId?` fields                                                                |
-| `src/core/PromptFileParser.ts`                                    | Validate `subWorkflowStep` via AJV; type narrowing after parse                                                         |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx`          | Render sub-workflow step variant (icon, badge, filename, live-mirrored status, "View live output" link)                |
-| `src/ui/webview-react/components/prompts/PromptEditor.tsx`        | Add `type: workflow` to Step Type selector; workflow-file field (reuse existing file-picker pattern); `onFail` control; hide AI-only settings |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`     | Add "Queue workflow to run next" context-menu action on running workflow rows → file picker → append `subWorkflowStep` |
-| `src/ui/CtrlYokeWebviewProvider.ts`                                | Handle the new append-subworkflow-step message                                                                          |
-| `src/completions/`                                                | Offer `workflow` step type; suppress AI completions when `type: workflow`; offer `workflow` path field with file picker; offer `onFail` values |
+| File                                                          | Change                                                                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/workflow-schema.json`                                | Add `subWorkflowStep` and `subWorkflowRuntimeMetadata` definitions; `workflowStep` oneOf gains a third arm                                     |
+| `src/types/CtrlYokeTypes.ts`                                  | Add `SubWorkflowStep`, `SubWorkflowRuntimeMetadata`, expand queue-item union, add `isSubWorkflowStep()` guard                                  |
+| `src/types/DashboardConstants.ts`                             | Add `WORKFLOW` to `STEP_TYPES`; add `WORKFLOW_PATH` to `PROMPT_PROPERTIES`                                                                     |
+| `src/core/WorkflowExecutor.ts`                                | Route `isSubWorkflowStep` to `executeSubWorkflowStep()`; add `ancestorPaths` to context; circular-ref check                                    |
+| `src/core/WorkflowOrchestrator.ts`                            | Start child instances tagged with parent metadata; parent↔child registry; pause/stop/resume forwarding; await-terminal-state plumbing          |
+| `src/core/WorkflowInstance.ts`                                | Add `parentInstanceId?`, `activeChildInstanceId?` fields                                                                                       |
+| `src/core/PromptFileParser.ts`                                | Validate `subWorkflowStep` via AJV; type narrowing after parse                                                                                 |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`      | Render sub-workflow step variant (icon, badge, filename, live-mirrored status, "View live output" link)                                        |
+| `src/ui/webview-react/components/prompts/PromptEditor.tsx`    | Add `type: workflow` to Step Type selector; workflow-file field (reuse existing file-picker pattern); `onFail` control; hide AI-only settings  |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` | Add "Queue workflow to run next" context-menu action on running workflow rows → file picker → append `subWorkflowStep`                         |
+| `src/ui/CtrlYokeWebviewProvider.ts`                           | Handle the new append-subworkflow-step message                                                                                                 |
+| `src/completions/`                                            | Offer `workflow` step type; suppress AI completions when `type: workflow`; offer `workflow` path field with file picker; offer `onFail` values |
 
 ---
 
@@ -441,14 +441,14 @@ finalStep:
 
 ### Why this version is cheaper than the original nested-navigation design
 
-| Area                    | Original plan (v1)                                              | This version                                                                 |
-| ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Child execution          | New child `WorkflowInstance`, same in both versions               | Same                                                                              |
-| Dropdown entry            | New — child had to be represented specially                       | **Free** — child is an ordinary instance, existing dropdown code already lists it |
-| Navigating to the child   | New navigation stack + breadcrumb bar + auto-navigate both ways    | One "View live output" link reusing existing address-based navigation             |
-| Depth limiting            | New setting + enforcement                                          | **Removed** — only cycle detection is needed                                      |
-| Pause/stop while child runs | One-directional only (parent waits; no mention of child→parent)  | Bidirectional: child→parent mostly falls out of the existing await; parent→child needs a small registry |
-| Queuing after an already-running workflow | Not really solvable — the plan assumed pre-authored nesting only | Directly solvable by reusing existing append-to-running-queue plumbing with a different payload |
+| Area                                      | Original plan (v1)                                               | This version                                                                                            |
+| ----------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Child execution                           | New child `WorkflowInstance`, same in both versions              | Same                                                                                                    |
+| Dropdown entry                            | New — child had to be represented specially                      | **Free** — child is an ordinary instance, existing dropdown code already lists it                       |
+| Navigating to the child                   | New navigation stack + breadcrumb bar + auto-navigate both ways  | One "View live output" link reusing existing address-based navigation                                   |
+| Depth limiting                            | New setting + enforcement                                        | **Removed** — only cycle detection is needed                                                            |
+| Pause/stop while child runs               | One-directional only (parent waits; no mention of child→parent)  | Bidirectional: child→parent mostly falls out of the existing await; parent→child needs a small registry |
+| Queuing after an already-running workflow | Not really solvable — the plan assumed pre-authored nesting only | Directly solvable by reusing existing append-to-running-queue plumbing with a different payload         |
 
 ### Rough effort estimate
 

@@ -32,7 +32,7 @@
 > [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output)
 > section below.
 > **Revised again:** August 31, 2026 — live-probed OpenCode CLI directly (`opencode run --model
-> opencode/big-pickle --format json ...`, CLI `1.18.25`, model "Big Pickle" — opencode's own
+opencode/big-pickle --format json ...`, CLI `1.18.25`, model "Big Pickle" — opencode's own
 > free zen-router model). This resolves the other half of the Phase 2 open question:
 > OpenCode's `reasoningRelationship` is now confirmed `INCLUDED_IN_OUTPUT` via the same
 > decisive one-token-final-answer methodology used for Qwen (Antigravity alone remains
@@ -47,7 +47,7 @@
 > `session.next.step.ended`'s `data.finish` terminal value is confirmed literally `"stop"` on
 > a live payload, matching that plan's assumption — see the deep dive's closing note.
 > **Revised again:** August 31, 2026 — live-probed Antigravity CLI directly (`agy --print ...
-> --output-format stream-json`, CLI `1.1.22`, models `gemini-3.1-pro-high` and
+--output-format stream-json`, CLI `1.1.22`, models `gemini-3.1-pro-high` and
 > `gemini-3.7-flash-high`). This resolves the last open `reasoningRelationship` gap in the
 > plan: `thinking_tokens` is confirmed `INCLUDED_IN_OUTPUT` via the same decisive
 > one-token-final-answer methodology used for Qwen and OpenCode. Phase 2 (previously
@@ -119,7 +119,7 @@ Compactions: 0
 
 The user's mental model was:
 `current-context-window + (compactions × context-window-size) == tokens-in + tokens-out`,
-with cached tokens excluded because they're cache *hits*, not new context. That formula does
+with cached tokens excluded because they're cache _hits_, not new context. That formula does
 not hold for any of the six examples, and the "Attempt total" numbers look wildly
 inconsistent across harnesses (100k-scale for Claude/Antigravity/OpenCode, multi-million for
 Codex, low-hundred-thousand-but-still-inflated for Qwen) for runs of plausibly similar shape.
@@ -156,25 +156,25 @@ documented token semantics (Anthropic, Gemini/Qwen, OpenAI Codex — see Referen
 Antigravity/Qwen/OpenCode/Copilot, real captures from actual ctrlyoke runs (Copilot's captured
 live in this session — see below):
 
-| Harness | `input_tokens` semantics | Verified via |
-| --- | --- | --- |
-| `claude-cli` | **Excludes** cached tokens — "the number of input tokens which were not read from or used to create a cache (tokens after the last cache breakpoint)" | [Anthropic prompt-caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching); `ClaudeLogParser.ts:349-354` sums `usage.input_tokens` per turn |
-| `codex-cli` | **Includes** cached tokens — "all content sent to the API," with `cached_input_tokens` reported as a breakdown subset, not a deduction | Codex rollout format research (openai/codex PR #1583 discussion); `CodexLogParser.ts:256-266` takes `total_token_usage.input_tokens` (Codex's own already-cumulative session counter) as-is |
-| `qwen-cli` | **Includes** cached tokens (`SUBSET`) — confirmed, not just inferred | Three independent sources agree: (1) the parser's own doc comment, `QwenLogParser.ts:61`: `` `promptTokenCount` - Input tokens (includes cached)``; (2) Google's own Gemini API docs — `cachedContentTokenCount` is a subset of `promptTokenCount`, non-cached = `promptTokenCount − cachedContentTokenCount` ([Counting tokens, Gemini API docs](https://ai.google.dev/api/tokens)); (3) the real capture above is numerically consistent (`82.7k cached ≤ 124.7k in`) |
-| `copilot-cli` | **Excludes** cached tokens (`DISJOINT`) — confirmed live on CLI `1.0.82`, reversing the earlier "no cache field" finding | See [Copilot deep dive](#copilot-deep-dive-cache-signal-confirmed-on-cli-1082) below |
-| `antigravity-cli` | **Excludes** cached tokens (`DISJOINT`) — confirmed | The real capture above proves it mathematically: `16.3k cached > 3.8k in`, which is only possible if the two fields don't overlap. Antigravity's `result.usage` reports `input_tokens`/`cache_read_tokens`/`output_tokens` as separate fields (same shape as Claude), not a breakdown of one field into another |
-| `opencode-cli` | **Excludes** cached tokens (`DISJOINT`) — confirmed | The real capture above proves it the same way: `138.7k cached > 30.5k in`. OpenCode persists `tokens.input`, `tokens.cache.read`, and `tokens.cache.write` as separate JSON fields per step, and the project's own cache-read/context-overflow handling treats `cache.read` as distinct from current prompt/context tokens, not folded into `tokens.input` |
+| Harness           | `input_tokens` semantics                                                                                                                              | Verified via                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude-cli`      | **Excludes** cached tokens — "the number of input tokens which were not read from or used to create a cache (tokens after the last cache breakpoint)" | [Anthropic prompt-caching docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching); `ClaudeLogParser.ts:349-354` sums `usage.input_tokens` per turn                                                                                                                                                                                                                                                                                                  |
+| `codex-cli`       | **Includes** cached tokens — "all content sent to the API," with `cached_input_tokens` reported as a breakdown subset, not a deduction                | Codex rollout format research (openai/codex PR #1583 discussion); `CodexLogParser.ts:256-266` takes `total_token_usage.input_tokens` (Codex's own already-cumulative session counter) as-is                                                                                                                                                                                                                                                                             |
+| `qwen-cli`        | **Includes** cached tokens (`SUBSET`) — confirmed, not just inferred                                                                                  | Three independent sources agree: (1) the parser's own doc comment, `QwenLogParser.ts:61`: `` `promptTokenCount` - Input tokens (includes cached)``; (2) Google's own Gemini API docs — `cachedContentTokenCount` is a subset of `promptTokenCount`, non-cached = `promptTokenCount − cachedContentTokenCount` ([Counting tokens, Gemini API docs](https://ai.google.dev/api/tokens)); (3) the real capture above is numerically consistent (`82.7k cached ≤ 124.7k in`) |
+| `copilot-cli`     | **Excludes** cached tokens (`DISJOINT`) — confirmed live on CLI `1.0.82`, reversing the earlier "no cache field" finding                              | See [Copilot deep dive](#copilot-deep-dive-cache-signal-confirmed-on-cli-1082) below                                                                                                                                                                                                                                                                                                                                                                                    |
+| `antigravity-cli` | **Excludes** cached tokens (`DISJOINT`) — confirmed                                                                                                   | The real capture above proves it mathematically: `16.3k cached > 3.8k in`, which is only possible if the two fields don't overlap. Antigravity's `result.usage` reports `input_tokens`/`cache_read_tokens`/`output_tokens` as separate fields (same shape as Claude), not a breakdown of one field into another                                                                                                                                                         |
+| `opencode-cli`    | **Excludes** cached tokens (`DISJOINT`) — confirmed                                                                                                   | The real capture above proves it the same way: `138.7k cached > 30.5k in`. OpenCode persists `tokens.input`, `tokens.cache.read`, and `tokens.cache.write` as separate JSON fields per step, and the project's own cache-read/context-overflow handling treats `cache.read` as distinct from current prompt/context tokens, not folded into `tokens.input`                                                                                                              |
 
 Antigravity and OpenCode were previously `UNKNOWN` in `HARNESS_TOKEN_SEMANTICS`
 (`ModelPricing.ts:94-97, 90-93`) pending a live run, per the standing rule in
 `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md` Phase 4 that a parser comment alone isn't enough. The
 real captures above satisfy that bar for **cache relationship** specifically. Their
 **reasoning relationship** is a separate dimension (`calculateTokenCost`
-in `ModelPricing.ts:151-159` requires *both* to be non-`UNKNOWN` before it will price an
+in `ModelPricing.ts:151-159` requires _both_ to be non-`UNKNOWN` before it will price an
 attempt from the table); none of the three new captures shown here carried a reasoning
 figure, so this round of evidence does not by itself unblock table pricing for Antigravity
 or OpenCode — see [Open questions](#open-questions). Qwen's and OpenCode's reasoning
-relationships *are* now resolved, but by separate, later probes — see the
+relationships _are_ now resolved, but by separate, later probes — see the
 [Qwen reasoning deep dive](#qwen-reasoning-deep-dive-thinking-tokens-confirmed-as-a-subset-of-output)
 and the
 [OpenCode deep dive](#opencode-deep-dive-reasoning-tokens-confirmed-as-included-in-output)
@@ -210,7 +210,7 @@ model `gpt-5.6-luna`, two turns in one resumed session):
   Codex/Qwen.
 - Two new attribute names exist beyond the four already read via the
   `COPILOT_OTEL_*_ATTRIBUTE` constants: `gen_ai.usage.cache_read.input_tokens` and
-  `gen_ai.usage.cache_write.input_tokens`. (The `gen_ai.client.token.usage` *metric*, by
+  `gen_ai.usage.cache_write.input_tokens`. (The `gen_ai.client.token.usage` _metric_, by
   contrast, only carries `gen_ai.token.type` values `"input"`/`"output"` — no cache
   dimension. The cache breakdown lives on the span attributes only.)
 - The same span also carried `gen_ai.usage.reasoning.output_tokens: 9` on turn 2, a
@@ -260,7 +260,7 @@ event to read at all. The two-signal split above isn't a choice; it's forced by 
   `chat gpt-5.6-luna` span for turn 2 carried `gen_ai.usage.cache_read.input_tokens: 31649` and
   `gen_ai.usage.cache_write.input_tokens: 72` alongside `gen_ai.usage.input_tokens: 31724`,
   matching the CLI's own on-screen summary for that turn (`Tokens ↑ 63.4k (31.6k cached, 31.7k
-  written)`, `31724 + 31649 = 63373 ≈ 63.4k`) — the identical `DISJOINT` shape confirmed
+written)`, `31724 + 31649 = 63373 ≈ 63.4k`) — the identical `DISJOINT` shape confirmed
   headless. (Caveat: `stdin` was `/dev/null`, not a real human-attached terminal — a live
   human-driven TTY session remains outside what this environment can script — but the CLI ran
   the genuine interactive code path end-to-end and exited cleanly.) See
@@ -282,7 +282,7 @@ different meanings:
 
 - **Claude's cumulative "in"** ≈ genuinely new tokens the model had to newly process across
   the whole attempt (small — 242, 24 in the examples).
-- **Codex's/Qwen's cumulative "in"** ≈ sum of the *entire resent prompt* on every single
+- **Codex's/Qwen's cumulative "in"** ≈ sum of the _entire resent prompt_ on every single
   turn, repeated in full each time (huge — 8.5M), because their raw `input_tokens` never
   excludes what was cache-hit that turn.
 
@@ -310,7 +310,7 @@ in / 11 out / 3.9k total`, cache tracked separately at `16.3k`; OpenCode: `30.5k
 `21910 in + 16 out` total already excludes the `21833` cache-read tokens it also carries.) The
 inflation problem is specific to the two harnesses whose provider API folds cache into the
 input count: Codex and Qwen. Copilot differs from Antigravity/OpenCode in one way, though:
-its total is already correct, but its cache figures aren't captured or displayed *at all*
+its total is already correct, but its cache figures aren't captured or displayed _at all_
 today (no breakdown line, and a cost-estimate bug — see the Copilot deep dive above and
 Phase 3 below), where Antigravity/OpenCode's parsers already surface theirs correctly.
 
@@ -318,7 +318,7 @@ Phase 3 below), where Antigravity/OpenCode's parsers already surface theirs corr
 
 Qwen's `reasoningRelationship` (`HARNESS_TOKEN_SEMANTICS[QWEN_CLI]`, `ModelPricing.ts:87-88`)
 was `UNKNOWN`, gating table-priced cost estimates for every Qwen attempt regardless of the
-cache-relationship promotion in Phase 1 (`calculateTokenCost` requires *both* dimensions
+cache-relationship promotion in Phase 1 (`calculateTokenCost` requires _both_ dimensions
 non-`UNKNOWN`). Three live `qwen -p ... -o json` runs (CLI `0.22.3`, models `qwen3.5-plus` and
 `qwen3.8-max`, real DashScope OpenAI-compatible-endpoint traffic — see `.qwen/settings.json`'s
 `baseUrl: https://dashscope-us.aliyuncs.com/compatible-mode/v1`) now resolve it: **thinking
@@ -343,7 +343,7 @@ either hypothesis fit the numbers).
 
 **Run 3 was designed to be decisive**: a prompt demanding "at least 15 sentences" of visible
 internal reasoning followed by a **one-token final answer** ("just the raw number, no words").
-If `candidatesTokenCount` only ever counted the *visible* answer, it should have stayed in the
+If `candidatesTokenCount` only ever counted the _visible_ answer, it should have stayed in the
 single digits regardless of how much thinking happened. It didn't. Raw log
 (`~/.qwen/projects/c--dev-ctrlyoke/chats/54f71575-4441-4c88-9b31-8694a9eae04e.jsonl`):
 
@@ -354,7 +354,7 @@ usageMetadata: { promptTokenCount: 29082, candidatesTokenCount: 614,
                  thoughtsTokenCount: 605, totalTokenCount: 29696 }
 ```
 
-`candidatesTokenCount` (614) tracks the *thinking* text's length (605), not the 4-character
+`candidatesTokenCount` (614) tracks the _thinking_ text's length (605), not the 4-character
 visible answer — `614 − 605 = 9`, matching a few tokens for `"4183"` plus small formatting
 overhead. If thoughts were disjoint from candidates, `candidatesTokenCount` would have stayed
 near single digits (just `"4183"`) no matter how long the reasoning ran; instead it scaled
@@ -400,7 +400,7 @@ from an inequality into an exact identity.
 `tokens.total === tokens.input + tokens.output + tokens.reasoning + tokens.cache.read +
 tokens.cache.write`, always exactly, e.g. `10392 = 8575 + 25 + 0 + 1792 + 0` and
 `10748 = 134 + 310 + 0 + 10304 + 0`. Since `tokens.input` never has `cache.read` subtracted out
-of it to make the sum work (the sum only balances when `cache.read` is added as a *separate*
+of it to make the sum work (the sum only balances when `cache.read` is added as a _separate_
 term), this confirms `DISJOINT` cache more rigorously than the original report's single
 `cached > in` inequality (Antigravity/OpenCode section of the summary table above) — it's now
 a proven arithmetic decomposition from five independent captures, not one data point.
@@ -415,8 +415,8 @@ forced to be a single token — the same methodology used for the
 above.
 
 **The decisive run** (`--thinking --variant high`, a word problem demanding careful multi-step
-arithmetic, closing instruction: *"Your final visible reply must be ONLY the raw final number
-of loaves left, nothing else — no words, no punctuation, no markdown, no explanation"*)
+arithmetic, closing instruction: _"Your final visible reply must be ONLY the raw final number
+of loaves left, nothing else — no words, no punctuation, no markdown, no explanation"_)
 produced a real `type: "reasoning"` part with ~90 words of genuine chain-of-thought
 ("Let me work through this step by step. 1. Baker has 40 loaves. ... The answer is 16."),
 followed by a `type: "text"` part whose entire content was the two characters `"16"`. The
@@ -429,7 +429,7 @@ reasoning text almost exactly (a GPT-style tokenizer puts that text in the same 
 range), with the two-character final answer contributing only a handful of tokens on top. This
 rules out a disjoint pool: **the real reasoning tokens are already inside `tokens.output`, and
 the dedicated `tokens.reasoning` field is simply never populated by this model/provider** — an
-`UNREPORTED`-shaped gap in the *field*, but an `INCLUDED_IN_OUTPUT`-shaped reality for where
+`UNREPORTED`-shaped gap in the _field_, but an `INCLUDED_IN_OUTPUT`-shaped reality for where
 the tokens actually landed, matching the classification that already governs
 `calculateTokenCost`'s treatment (`INCLUDED_IN_OUTPUT` zeroes out `separatelyPricedReasoning`
 just like `UNREPORTED` would — see `ModelPricing.ts:170-174` — so this promotion is safe
@@ -453,7 +453,7 @@ field being unpopulated by the provider, not a bug to fix.
 **Caveat — model-specific, not exhaustively generalized.** This is confirmed for
 `opencode/big-pickle` specifically (opencode's own hosted free model on an OpenAI-compatible
 `@ai-sdk/openai-compatible` backend). A side-probe through the interactive server API (see
-below) against a *different* default-selected free model, `ling-3.0-flash-fin-free`, returned
+below) against a _different_ default-selected free model, `ling-3.0-flash-fin-free`, returned
 a `step.ended` event with `reasoning: 138` (non-zero) alongside `output: 76` for a
 two-character visible answer (`"16"`) with no accompanying `reasoning` part in the durable
 event log — a data point this session did not control for rigorously enough to classify (no
@@ -501,12 +501,12 @@ fresh conversation and a resumed one — this is the shape `AntigravityLogParser
 already assumes when it falls back to `inputTokens + outputTokens` for `totalTokens`
 (`AntigravityLogParser.ts:1028-1030`), now backed by direct evidence rather than inference:
 
-| Prompt | `input` | `output` | `thinking` | `total` | `input+output` |
-| --- | --- | --- | --- | --- | --- |
-| "Say 'hello'" (`gemini-3.1-pro-high`) | 13,979 | 295 | 294 | 14,274 | 14,274 ✓ |
-| "Say 'hello'" (`gemini-3.7-flash-high`) | 13,704 | 47 | 46 | 13,751 | 13,751 ✓ |
-| Forced one-token answer, visible CoT (`gemini-3.1-pro-high`) | 5,977 | 3,653 | 3,191 | 9,630 | 9,630 ✓ |
-| Forced one-token answer, hidden CoT (`gemini-3.7-flash-high`) | 13,813 | 951 | 947 | 14,764 | 14,764 ✓ |
+| Prompt                                                        | `input` | `output` | `thinking` | `total` | `input+output` |
+| ------------------------------------------------------------- | ------- | -------- | ---------- | ------- | -------------- |
+| "Say 'hello'" (`gemini-3.1-pro-high`)                         | 13,979  | 295      | 294        | 14,274  | 14,274 ✓       |
+| "Say 'hello'" (`gemini-3.7-flash-high`)                       | 13,704  | 47       | 46         | 13,751  | 13,751 ✓       |
+| Forced one-token answer, visible CoT (`gemini-3.1-pro-high`)  | 5,977   | 3,653    | 3,191      | 9,630   | 9,630 ✓        |
+| Forced one-token answer, hidden CoT (`gemini-3.7-flash-high`) | 13,813  | 951      | 947        | 14,764  | 14,764 ✓       |
 
 The first two rows alone are suggestive: a one-word visible reply ("hello\n") still costs
 dozens to hundreds of `output_tokens`, nearly all of which `thinking_tokens` accounts for
@@ -530,7 +530,7 @@ purely as an informational breakdown of that total, the same relationship alread
 Codex, Qwen, and OpenCode.
 
 **A companion run on `gemini-3.1-pro-high` corroborates from the other direction.** That model
-did *not* comply with the "hide your reasoning" instruction — every sentence of its 15-sentence
+did _not_ comply with the "hide your reasoning" instruction — every sentence of its 15-sentence
 walkthrough streamed as ordinary visible `text_delta` content, with the raw number appended on
 its own line at the end (`response` field contains the full paragraph plus `"26.5\n"`). Even so,
 the identity holds: `output_tokens: 3653`, `thinking_tokens: 3191`, leaving `3653 − 3191 = 462`
@@ -557,7 +557,7 @@ turn's `input_tokens: 15184` was not netted down at all relative to the first tu
 This doesn't contradict the plan's existing `DISJOINT` cache-relationship finding for
 Antigravity (the original real ctrlyoke capture proved that mathematically via `16.3k cached >
 3.8k in`, which this probe cannot un-prove — it simply didn't happen to exercise a cache hit).
-It's flagged here only as a data point for whoever next investigates *when* agy's headless
+It's flagged here only as a data point for whoever next investigates _when_ agy's headless
 `--print`/`--conversation` resume path does vs. doesn't hit its prompt cache — worth knowing
 before relying on a quick headless probe to reproduce cache behavior in the future.
 
@@ -614,8 +614,8 @@ depend on — worth a reviewed, staged change, not an in-session patch.
   window is the last turn only; attempt total sums every turn." This is copy-only and
   unblocks confusion immediately regardless of Phase 1's timeline.
 - Also implemented: clarify the breakdown line's cache semantics per harness so `X in | Y cached` doesn't read
-  identically for Claude (additive — cached is *on top of* in) and Codex (overlapping —
-  cached is *inside* in). Something like `8.5M in (8.1M cached)` for subset harnesses vs.
+  identically for Claude (additive — cached is _on top of_ in) and Codex (overlapping —
+  cached is _inside_ in). Something like `8.5M in (8.1M cached)` for subset harnesses vs.
   `242 in | 21.4M cached` (unchanged) for disjoint ones communicates the difference without
   needing the Phase 1 data change.
 
@@ -630,7 +630,7 @@ fields for cost calculation.
 - First, promote `HARNESS_TOKEN_SEMANTICS` (`ModelPricing.ts:75-102`) `cacheInputRelationship`
   from `UNKNOWN` to the values confirmed above: `QWEN_CLI → SUBSET`,
   `ANTIGRAVITY_CLI → DISJOINT`, `OPENCODE_CLI → DISJOINT`. This is a one-line-per-harness,
-  low-risk change on its own (it only ever *enables* cache-aware cost math where it was
+  low-risk change on its own (it only ever _enables_ cache-aware cost math where it was
   previously suppressed) and can land ahead of the rest of Phase 1. **All three of Qwen,
   OpenCode, and Antigravity also get `reasoningRelationship` promoted** from `UNKNOWN` to
   `INCLUDED_IN_OUTPUT` in the same change — all three confirmed by live probe, see the
@@ -651,7 +651,7 @@ fields for cost calculation.
   `outputTokens`/`TokenStats.total` for every Qwen attempt with extended thinking. This is a
   correctness bug independent of the cache-netting work below and worth its own test fixture
   (a captured turn with a non-trivial `thoughtsTokenCount` asserting `outputTokens ===
-  candidatesTokenCount`, not `candidatesTokenCount + thoughtsTokenCount`).
+candidatesTokenCount`, not `candidatesTokenCount + thoughtsTokenCount`).
 - Add a `total` computation at the `resolveTokenCounts` boundary
   (`WorkflowExecutor.ts:1740-1782`) that, when
   `HARNESS_TOKEN_SEMANTICS[harness].cacheInputRelationship === SUBSET`, computes
@@ -821,7 +821,7 @@ Copilot attempt:
   `DISJOINT`/`DISJOINT` (cache) and `QWEN_CLI`/`OPENCODE_CLI`/`ANTIGRAVITY_CLI` asserting
   `INCLUDED_IN_OUTPUT` (reasoning) respectively, a `QwenLogParser` fixture with a non-zero
   `thoughtsTokenCount` asserting `outputTokens === candidatesTokenCount` (not `+
-  thoughtsTokenCount`), and a regression test that `DISJOINT`-harness totals are byte-for-byte
+thoughtsTokenCount`), and a regression test that `DISJOINT`-harness totals are byte-for-byte
   unchanged by this plan (Claude, Antigravity, OpenCode).
 
 ## Open questions
@@ -858,9 +858,9 @@ Copilot attempt:
     headless), resuming a session across two turns with `COPILOT_OTEL_ENABLED=true`. The
     resulting exported span for turn 2 (`chat gpt-5.6-luna`) carries both
     `gen_ai.usage.cache_read.input_tokens: 31649` and `gen_ai.usage.cache_write.input_tokens:
-    72` alongside `gen_ai.usage.input_tokens: 31724` — matching the CLI's own on-screen summary
+72` alongside `gen_ai.usage.input_tokens: 31724` — matching the CLI's own on-screen summary
     for that turn (`Tokens ↑ 63.4k (31.6k cached, 31.7k written)`, `31724 + 31649 = 63373 ≈
-    63.4k`), the identical `DISJOINT` shape already confirmed headless. The interactive-mode
+63.4k`), the identical `DISJOINT` shape already confirmed headless. The interactive-mode
     half of Phase 3 can proceed without further verification.
   - ~~Should the now-confirmed cost-accuracy bug (Copilot cache-read tokens billed at the full
     input rate today, a 10× overpricing per the model's own billing table) be split into its
@@ -884,7 +884,7 @@ Copilot attempt:
   Codex/Qwen totals (its existing doc comment, "summed from provider per-turn usage by a
   ctrlyoke parser," already fits — the netting happens per-turn before the sum, same as any
   other accumulation) and just extend that comment to say so explicitly. If a future UI surface
-  wants to *show* "ctrlyoke-adjusted for cache" as a distinct badge, that's an additive change
+  wants to _show_ "ctrlyoke-adjusted for cache" as a distinct badge, that's an additive change
   to make when that surface exists, not now.
 - ~~`reasoningRelationship` remains `UNKNOWN` for Qwen, OpenCode, and Antigravity even after
   this revision's cache-relationship evidence — a live run showing whether each harness's
@@ -903,7 +903,7 @@ Copilot attempt:
   returned a non-zero `reasoning` figure this session didn't rigorously classify — so treat the
   `INCLUDED_IN_OUTPUT` promotion as a harness-level default, not a guarantee for every
   OpenCode-routable model. **Resolved this revision for Antigravity too:** four live `agy
-  --print --output-format stream-json` probes (CLI `1.1.22`, `gemini-3.1-pro-high` and
+--print --output-format stream-json` probes (CLI `1.1.22`, `gemini-3.1-pro-high` and
   `gemini-3.7-flash-high`, including a decisive forced-one-token-final-answer test on each
   model) confirm `INCLUDED_IN_OUTPUT` — see the
   [Antigravity deep dive](#antigravity-deep-dive-reasoning-tokens-confirmed-as-included-in-output).
@@ -939,11 +939,11 @@ Copilot attempt:
   - **Copilot cache** (`DISJOINT`) and **reasoning** (`INCLUDED_IN_OUTPUT`): confirmed via two
     independent live signal sources (OTel spans and headless JSON stdout) across two turns of
     one session, now including both headless and interactive-mode (`-i`) invocations.
-  No promotion in this plan rests on unsupported inference; the ones without a mathematical
-  proof or a decisive isolation test all carry an explicit model/harness-scope caveat in their
-  own deep-dive section rather than being asserted as universal. That's judged sufficient to
-  proceed with every promotion as written — no further probing is planned before
-  implementation.
+    No promotion in this plan rests on unsupported inference; the ones without a mathematical
+    proof or a decisive isolation test all carry an explicit model/harness-scope caveat in their
+    own deep-dive section rather than being asserted as universal. That's judged sufficient to
+    proceed with every promotion as written — no further probing is planned before
+    implementation.
 
 ## References
 

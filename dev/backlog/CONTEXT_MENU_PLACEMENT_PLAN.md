@@ -17,17 +17,17 @@
 
 All from `package.json` `contributes.menus`:
 
-| Menu location                  | Commands                                                                                | Group used                          |
-| ------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------ |
-| `explorer/context`              | `runFromContext`, `loadFromContext`, `queueFromContext`, `queueNextFromContext`, `addFileToPromptEditor`/`addDirectoryToPromptEditor` | `ctrlyoke@1`…`ctrlyoke@5` (unprefixed) |
-| `editor/title`                  | `runFromContext`, `queueFromContext`, `queueNextFromContext`                              | `navigation`, `navigation@2`, `navigation@3` |
-| `editor/title/context`          | `runFromContext`, `loadFromContext`, `queueFromContext`, `queueNextFromContext`, `addFileToPromptEditor` | `ctrlyoke@1`…`ctrlyoke@5` (unprefixed) |
-| `editor/context`                | `addSelectionToPromptEditor`, `addSymbolToPromptEditor`                                   | `2_ctrlyoke@1`, `2_ctrlyoke@2`       |
-| `editor/lineNumber/context`     | `addSelectionToPromptEditor`, `addSymbolToPromptEditor`                                   | `2_ctrlyoke@1`, `2_ctrlyoke@2`       |
-| `scm/resourceState/context`     | `addScmResourcesToPromptEditor`                                                           | `2_ctrlyoke`                        |
-| `scm/resourceFolder/context`    | `addScmResourcesToPromptEditor`                                                           | `2_ctrlyoke`                        |
-| `timeline/item/context`         | `addTimelineCommitToPromptEditor`                                                          | `2_ctrlyoke`                        |
-| `scm/title`                     | `generateCommitMessage`, `cancelCommitMessageGeneration`                                   | `navigation@-1`                     |
+| Menu location                | Commands                                                                                                                              | Group used                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `explorer/context`           | `runFromContext`, `loadFromContext`, `queueFromContext`, `queueNextFromContext`, `addFileToPromptEditor`/`addDirectoryToPromptEditor` | `ctrlyoke@1`…`ctrlyoke@5` (unprefixed)       |
+| `editor/title`               | `runFromContext`, `queueFromContext`, `queueNextFromContext`                                                                          | `navigation`, `navigation@2`, `navigation@3` |
+| `editor/title/context`       | `runFromContext`, `loadFromContext`, `queueFromContext`, `queueNextFromContext`, `addFileToPromptEditor`                              | `ctrlyoke@1`…`ctrlyoke@5` (unprefixed)       |
+| `editor/context`             | `addSelectionToPromptEditor`, `addSymbolToPromptEditor`                                                                               | `2_ctrlyoke@1`, `2_ctrlyoke@2`               |
+| `editor/lineNumber/context`  | `addSelectionToPromptEditor`, `addSymbolToPromptEditor`                                                                               | `2_ctrlyoke@1`, `2_ctrlyoke@2`               |
+| `scm/resourceState/context`  | `addScmResourcesToPromptEditor`                                                                                                       | `2_ctrlyoke`                                 |
+| `scm/resourceFolder/context` | `addScmResourcesToPromptEditor`                                                                                                       | `2_ctrlyoke`                                 |
+| `timeline/item/context`      | `addTimelineCommitToPromptEditor`                                                                                                     | `2_ctrlyoke`                                 |
+| `scm/title`                  | `generateCommitMessage`, `cancelCommitMessageGeneration`                                                                              | `navigation@-1`                              |
 
 ## Why placement is inconsistent — the actual mechanism
 
@@ -42,7 +42,7 @@ VS Code sorts a context menu by group, not by extension. Per the
   `3_compare`, `4_search`, `5_cutcopypaste`, `6_copypath`, `7_modification` for
   `explorer/context`; `1_modification`, `9_cutcopypaste`, `z_commands` for `editor/context`)
   sorts before any unprefixed or letter-prefixed group name.
-- `@<number>` after the group name only orders items *within* that same group; it has no
+- `@<number>` after the group name only orders items _within_ that same group; it has no
   effect on where the group itself falls relative to other groups.
 
 ctrlyoke currently mixes two different naming styles across menu locations, and that's the
@@ -50,11 +50,11 @@ entire root cause of the inconsistency the user is seeing — nothing else about
 differs:
 
 - **`ctrlyoke@N`** (no digit prefix) in `explorer/context` and `editor/title/context` — this
-  always sorts *after* every one of VS Code's standard numbered groups, landing at the very
+  always sorts _after_ every one of VS Code's standard numbered groups, landing at the very
   bottom. This matches the "very bottom, which I actually kind of like" observation.
 - **`2_ctrlyoke@N`** / **`2_ctrlyoke`** (digit-prefixed) in `editor/context`,
   `editor/lineNumber/context`, `scm/resourceState/context`, `scm/resourceFolder/context`, and
-  `timeline/item/context` — this sorts *between* the early standard groups (`1_modification`
+  `timeline/item/context` — this sorts _between_ the early standard groups (`1_modification`
   / `1_actions`) and the late ones (`5_copy`, `9_cutcopypaste`, `z_commands`), landing in the
   upper-middle. This matches "timeline shows up in the middle" and "selection menu is 3/4 to
   the bottom" (other extensions likely add their own groups between `2_` and `9_`/`z_`,
@@ -63,7 +63,7 @@ differs:
   toolbar icons there appear at the very front, a placement style that was never
   reconciled with the other two.
 
-Fixing the *inconsistency* itself is a small, mechanical `package.json` change: pick one
+Fixing the _inconsistency_ itself is a small, mechanical `package.json` change: pick one
 group-naming convention and apply it everywhere. The interesting decision is which
 convention to pick (see below).
 
@@ -76,7 +76,7 @@ Verified directly against the real, currently-published `package.json` of
 - Copilot's own **"Explain"/"Fix"/"Review"** actions (the chat-adjacent code actions, closest
   analogue to "Add X to ctrlyoke") use an explicit **`1_chat@4`/`1_chat@5`/`1_chat@6`** group
   in `editor/context` — deliberately placed right after VS Code's built-in `1_modification`
-  group, near the *top* of the menu, not the bottom. This is a real, working example of an
+  group, near the _top_ of the menu, not the bottom. This is a real, working example of an
   extension intentionally choosing a specific, purpose-named group rather than defaulting to
   the bottom.
 - Copilot's own **"Add file/selection to [Copilot CLI] session"** commands
@@ -162,13 +162,13 @@ Confirmed by reading the implementation (`WorkflowInstance.appendFromFile`,
 result. Every workflow-level property in the source file — harness, model, agent,
 end-condition defaults, retry/timeout overrides, everything in `WorkflowPropertiesPanel`'s
 scope — is silently discarded. Only the step list is appended to whichever workflow is
-currently loaded, and it runs under *that* workflow's settings. This matches the user's
+currently loaded, and it runs under _that_ workflow's settings. This matches the user's
 description exactly and is not a bug — `dev/implemented/QUEUE_APPEND_FEATURE.md` confirms it
 was designed this way on purpose (steps-only, so the same primitive
 (`PromptQueue.appendPrompts()`) backs both the manual context-menu action and the MCP
 `append_queue`/`flightpath_append_queue` tool AI agents use to dynamically extend a running
 queue). The MCP-facing capability is intentional and out of scope here; the concern is
-specifically whether right-clicking a *whole workflow file* and offering "Queue"/"Queue Next"
+specifically whether right-clicking a _whole workflow file_ and offering "Queue"/"Queue Next"
 is the right UX, given that a `.ctrlyoke.yaml/.json` file reads as "a workflow" to a user, not
 "a list of steps."
 
@@ -195,16 +195,16 @@ Nathan before implementation.
 
 ## Affected files (once a direction is picked)
 
-| File | Role |
-| --- | --- |
-| `package.json` | `contributes.menus` group renames, new `contributes.submenus` entry, submenu children, possibly reworded command titles/tooltips, possibly narrowed `when` clauses for Queue/Queue Next |
-| `src/extension.ts` | Likely unchanged — command registrations stay the same; only menu wiring moves. Only touched if Queue/Queue Next options end up gated behind a new context key (e.g. "workflow currently loaded") rather than just a file-pattern `when`. |
-| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/reference/commands.md` | Reference the current command titles/menu locations; need updates to match whatever titles/placement land (found via grep for `queueFromContext`/`queueNextFromContext`/their current titles — not yet read in detail). |
+| File                                                                                            | Role                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                                                                  | `contributes.menus` group renames, new `contributes.submenus` entry, submenu children, possibly reworded command titles/tooltips, possibly narrowed `when` clauses for Queue/Queue Next                                                   |
+| `src/extension.ts`                                                                              | Likely unchanged — command registrations stay the same; only menu wiring moves. Only touched if Queue/Queue Next options end up gated behind a new context key (e.g. "workflow currently loaded") rather than just a file-pattern `when`. |
+| `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/reference/commands.md` | Reference the current command titles/menu locations; need updates to match whatever titles/placement land (found via grep for `queueFromContext`/`queueNextFromContext`/their current titles — not yet read in detail).                   |
 
 ## Non-Goals
 
 - Changing the underlying `PromptQueue.appendPrompts()` / MCP `append_queue` behavior itself.
-  This plan only touches how the *file-context-menu* entry points present that capability.
+  This plan only touches how the _file-context-menu_ entry points present that capability.
 - Redesigning `WorkflowPropertiesPanel` or workflow-vs-prompt settings inheritance.
 - Matching VS Code core's undocumented "Add to Chat" group id without first empirically
   verifying it (see Option B above) — that's a separate follow-up, not part of this plan's

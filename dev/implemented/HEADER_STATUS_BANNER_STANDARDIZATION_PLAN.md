@@ -18,12 +18,12 @@ The dashboard currently has **four** distinct reasons a loaded workflow can be
 locked into read-only mode, and they are surfaced with three different (and
 inconsistent) levels of visibility:
 
-| Lockdown reason                                    | Where it's decided                                                                        | Where it's shown today                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Workflow deleted                                     | `useIsViewingDeletedWorkflow()`                                                             | Full-width banner, `Header.tsx:920-939`                                                                          |
-| Owned by the ctrlyoke CLI                            | `WorkflowSummary.managedBy === RUNNER_IDS.CLI`                                              | Tiny uppercase chip crammed into the workflow status row, `WorkflowStatus.tsx:1610-1622`                        |
-| Owned by a sibling ctrlyoke VS Code window            | `WorkflowSummary.managedBy === RUNNER_IDS.VSCODE`                                           | Same chip as above, text "VS Code" instead of "CLI"                                                              |
-| System-generated (e.g. commit-message generation)    | `useIsSystemGeneratedWorkflow()` → `isLineageReadOnly` in `Header.tsx:186-188`               | **Nothing visible.** Only surfaces as a button tooltip ("Managed automatically by commit message generation") when the user hovers a disabled control — `Header.tsx:275-276,551,578,613` |
+| Lockdown reason                                   | Where it's decided                                                             | Where it's shown today                                                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflow deleted                                  | `useIsViewingDeletedWorkflow()`                                                | Full-width banner, `Header.tsx:920-939`                                                                                                                                                  |
+| Owned by the ctrlyoke CLI                         | `WorkflowSummary.managedBy === RUNNER_IDS.CLI`                                 | Tiny uppercase chip crammed into the workflow status row, `WorkflowStatus.tsx:1610-1622`                                                                                                 |
+| Owned by a sibling ctrlyoke VS Code window        | `WorkflowSummary.managedBy === RUNNER_IDS.VSCODE`                              | Same chip as above, text "VS Code" instead of "CLI"                                                                                                                                      |
+| System-generated (e.g. commit-message generation) | `useIsSystemGeneratedWorkflow()` → `isLineageReadOnly` in `Header.tsx:186-188` | **Nothing visible.** Only surfaces as a button tooltip ("Managed automatically by commit message generation") when the user hovers a disabled control — `Header.tsx:275-276,551,578,613` |
 
 Three problems fall out of this:
 
@@ -64,9 +64,9 @@ Three problems fall out of this:
 - A structurally similar "read-only ownership" banner already exists for a
   **different** case — a window opened directly on a managed/named worktree —
   rendered by `RunSummaryBanner.tsx` (`src/ui/webview-react/components/output/
-  RunSummaryBanner.tsx`), per Phase 2 item 1 of the coordination plan. That
+RunSummaryBanner.tsx`), per Phase 2 item 1 of the coordination plan. That
   banner lives in the output/run-summary area, not under the header, and is
-  about the *window's own root* rather than *the currently viewed workflow* —
+  about the _window's own root_ rather than _the currently viewed workflow_ —
   it is out of scope for this plan (see Non-Goals), but is worth knowing about
   so the two aren't accidentally built as competing patterns later.
 
@@ -84,7 +84,7 @@ Three problems fall out of this:
 
 ## Non-Goals
 
-- Do not change *what* triggers each lockdown condition (the CLI/VS-Code/
+- Do not change _what_ triggers each lockdown condition (the CLI/VS-Code/
   system-generated/deleted booleans themselves) — this is a presentation
   consolidation, not a behavior change to read-only rules.
 - Do not touch `RunSummaryBanner.tsx`'s worktree-root ownership banner. It
@@ -100,7 +100,7 @@ Three problems fall out of this:
 - Do not add a dismiss/close affordance to the externally-managed or
   system-generated banners — unlike the deleted banner (which offers "Close"
   to drop a cached view) or the pausing/rewind banners (which offer
-  cancel/discard actions on state *this* window owns), these two banners
+  cancel/discard actions on state _this_ window owns), these two banners
   describe real, live state this window doesn't control. There is nothing
   correct for a dismiss action to do.
 
@@ -136,6 +136,7 @@ this plan:
    also be externally owned, prefer `managedBy` over `isSystemGeneratedWorkflow`
    when choosing which single message to show, since "who is driving this run"
    is more actionable information than "why this lineage is locked."
+
 3. **Own-workflow transient state.** Only reached when neither 1 nor 2 applies
    (i.e. we own this workflow and it isn't deleted): today's `isPausing`
    (908-919) and `pendingRewind` (940-967) banners, unchanged. Preserve their
@@ -239,11 +240,11 @@ check at implementation time).
 
 ## Phasing
 
-| Phase | Content                                                                                                  |
-| ----- | --------------------------------------------------------------------------------------------------------- |
-| 1 (done) | Add `useActiveWorkflowManagedBy()`; migrate the four existing inline derivations to it. No visible change. |
+| Phase    | Content                                                                                                                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 (done) | Add `useActiveWorkflowManagedBy()`; migrate the four existing inline derivations to it. No visible change.                                                                                                          |
 | 2 (done) | Extract `HeaderStatusBanner.tsx` from `Header.tsx:907-966` with identical behavior/precedence (deleted → pausing/rewind, since those are the only two that exist pre-extraction). Pure refactor, no visible change. |
-| 3 (done) | Add the externally-managed and system-generated banner tiers with the precedence rules in §"Precedence order"; remove the `WorkflowStatus.tsx` chip. This is the user-visible change. |
+| 3 (done) | Add the externally-managed and system-generated banner tiers with the precedence rules in §"Precedence order"; remove the `WorkflowStatus.tsx` chip. This is the user-visible change.                               |
 
 Phase 1-2 can land independently as low-risk refactors; phase 3 is the actual
 redesign and depends on both.

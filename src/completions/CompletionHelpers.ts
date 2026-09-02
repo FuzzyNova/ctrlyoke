@@ -620,10 +620,7 @@ function collectWorkspaceDirectories(
 }
 
 function getOutputChannelSlug(document: vscode.TextDocument): string {
-  return vscode.workspace.asRelativePath(
-    document.uri,
-    isMultiRootWorkspace()
-  );
+  return vscode.workspace.asRelativePath(document.uri, isMultiRootWorkspace());
 }
 
 function cacheOutputCapture(
@@ -1253,7 +1250,9 @@ export function getPriorContextCompletions(
             : "End-condition"
         } script ${field}`,
         icon:
-          phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION ? "shield" : "checklist",
+          phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+            ? "shield"
+            : "checklist",
       }))
     ),
   ];

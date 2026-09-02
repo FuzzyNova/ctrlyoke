@@ -129,7 +129,10 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
   const nodeY = ROW_HEIGHT / 2;
   const nodeSource =
     layout.inputLanes[circleIndex] ??
-    ({ id: commit.hash, colorIndex: TRUNK_COLOR_INDEX } satisfies CommitGraphLane);
+    ({
+      id: commit.hash,
+      colorIndex: TRUNK_COLOR_INDEX,
+    } satisfies CommitGraphLane);
 
   // Ports VS Code's `renderSCMHistoryItemGraph` (scmHistory.ts) matching
   // strategy: walk input lanes in order against a single

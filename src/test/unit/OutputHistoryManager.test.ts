@@ -2487,7 +2487,11 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
   });
 
   test("findNextRunIndexByTarget ignores targets outside the requested key set", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-runidx-scope");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-runidx-scope"
+    );
     const target0 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const target1 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
 

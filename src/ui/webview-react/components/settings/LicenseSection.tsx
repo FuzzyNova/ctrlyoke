@@ -182,8 +182,8 @@ export function LicenseSection() {
             License
           </h3>
           <p className="text-xs text-description-fg">
-            Manage the Pro license for ctrlyoke and the machine it is
-            activated on.
+            Manage the Pro license for ctrlyoke and the machine it is activated
+            on.
           </p>
         </div>
         {!licenseAccess.isPro && (

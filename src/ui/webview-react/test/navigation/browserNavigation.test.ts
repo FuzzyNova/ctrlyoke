@@ -76,16 +76,14 @@ describe("setupBrowserNavigation", () => {
     cleanup = setupBrowserNavigation();
 
     // Server restores the most-recent workflow after a token-only load.
-    useUiStore
-      .getState()
-      .setDisplayedRunView(
-        {
-          workflowKey: "recent" as never,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-        },
-        [],
-        undefined
-      );
+    useUiStore.getState().setDisplayedRunView(
+      {
+        workflowKey: "recent" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      [],
+      undefined
+    );
 
     expect(useBrowserHistoryStore.getState().idx).toBe(0);
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
@@ -115,16 +113,14 @@ describe("setupBrowserNavigation", () => {
     window.history.replaceState({}, "", "/?token=t");
     cleanup = setupBrowserNavigation();
 
-    useUiStore
-      .getState()
-      .setDisplayedRunView(
-        {
-          workflowKey: "recent" as never,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-        },
-        [],
-        undefined
-      );
+    useUiStore.getState().setDisplayedRunView(
+      {
+        workflowKey: "recent" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      [],
+      undefined
+    );
     expect(new URLSearchParams(window.location.search).get("workflowKey")).toBe(
       null
     );

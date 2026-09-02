@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { isStandalone, panelPageLoadId, useVsCodeApi } from "@hooks/useVsCodeApi";
+import {
+  isStandalone,
+  panelPageLoadId,
+  useVsCodeApi,
+} from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";

@@ -141,9 +141,7 @@ describe("HeaderStatusBanner", () => {
     setLockedLineage({ isSystemGenerated: true });
     renderBanner();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Edit in settings" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit in settings" }));
 
     expect(useUiStore.getState().globalSettingsActiveTab).toBe("commit");
     expect(useUiStore.getState().globalSettingsOpen).toBe(true);

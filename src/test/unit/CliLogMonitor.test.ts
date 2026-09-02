@@ -477,14 +477,18 @@ suite("CliLogMonitor", () => {
         const writeLine = (event: Record<string, unknown>) =>
           fs.appendFileSync(logPath, JSON.stringify(event) + "\n", "utf8");
 
-        writeLine({ type: "session.start", data: { sessionId: "copilot-session" } });
+        writeLine({
+          type: "session.start",
+          data: { sessionId: "copilot-session" },
+        });
         writeLine({
           type: "tool.execution_complete",
           data: {
             toolCallId: "call-0",
             toolTelemetry: { properties: { executionMode: "async" } },
             result: {
-              content: "<command started in detached background with shellId: 0>",
+              content:
+                "<command started in detached background with shellId: 0>",
             },
           },
         });
@@ -494,7 +498,8 @@ suite("CliLogMonitor", () => {
             toolCallId: "call-1",
             toolTelemetry: { properties: { executionMode: "async" } },
             result: {
-              content: "<command started in detached background with shellId: 1>",
+              content:
+                "<command started in detached background with shellId: 1>",
             },
           },
         });
@@ -563,14 +568,22 @@ suite("CliLogMonitor", () => {
         writeLine({
           type: "system.notification",
           data: {
-            kind: { type: "shell_detached_completed", shellId: "0", exitCode: 0 },
+            kind: {
+              type: "shell_detached_completed",
+              shellId: "0",
+              exitCode: 0,
+            },
           },
         });
         writeLine({ type: "assistant.turn_start" });
         writeLine({
           type: "system.notification",
           data: {
-            kind: { type: "shell_detached_completed", shellId: "1", exitCode: 0 },
+            kind: {
+              type: "shell_detached_completed",
+              shellId: "1",
+              exitCode: 0,
+            },
           },
         });
         writeLine({

@@ -107,9 +107,7 @@ describe("usePagedGitRefDiff", () => {
     const fetchPage = vi
       .fn<PagedGitRefDiffFetcher>()
       .mockResolvedValue(response(DIFF_A, 0, []));
-    const { result } = renderHook(() =>
-      usePagedGitRefDiff({ ref, fetchPage })
-    );
+    const { result } = renderHook(() => usePagedGitRefDiff({ ref, fetchPage }));
 
     expect(result.current.refLabel).toBe(label);
   });
@@ -117,9 +115,15 @@ describe("usePagedGitRefDiff", () => {
   it("requests older pages when scrolling upward", async () => {
     const fetchPage = vi
       .fn<PagedGitRefDiffFetcher>()
-      .mockResolvedValueOnce(response(DIFF_A, 0, [entry(0), entry(1), entry(2)]))
-      .mockResolvedValueOnce(response(DIFF_A, 6, [entry(6), entry(7), entry(8)]))
-      .mockResolvedValueOnce(response(DIFF_A, 3, [entry(3), entry(4), entry(5)]));
+      .mockResolvedValueOnce(
+        response(DIFF_A, 0, [entry(0), entry(1), entry(2)])
+      )
+      .mockResolvedValueOnce(
+        response(DIFF_A, 6, [entry(6), entry(7), entry(8)])
+      )
+      .mockResolvedValueOnce(
+        response(DIFF_A, 3, [entry(3), entry(4), entry(5)])
+      );
     const { result } = renderDiff(fetchPage);
     await waitFor(() => expect(result.current.listingId).toBe(DIFF_A));
 
@@ -133,7 +137,9 @@ describe("usePagedGitRefDiff", () => {
         endIndex: 8,
       })
     );
-    await waitFor(() => expect(result.current.getEntry(6)?.path).toBe("src/file-6.ts"));
+    await waitFor(() =>
+      expect(result.current.getEntry(6)?.path).toBe("src/file-6.ts")
+    );
 
     act(() =>
       result.current.onRangeChange({
@@ -145,7 +151,9 @@ describe("usePagedGitRefDiff", () => {
         endIndex: 5,
       })
     );
-    await waitFor(() => expect(result.current.getEntry(3)?.path).toBe("src/file-3.ts"));
+    await waitFor(() =>
+      expect(result.current.getEntry(3)?.path).toBe("src/file-3.ts")
+    );
     expect(fetchPage.mock.calls.map(([request]) => request.offset)).toEqual([
       0, 6, 3,
     ]);
@@ -179,9 +187,13 @@ describe("usePagedGitRefDiff", () => {
   it("keeps a failed page retryable without clearing loaded pages", async () => {
     const fetchPage = vi
       .fn<PagedGitRefDiffFetcher>()
-      .mockResolvedValueOnce(response(DIFF_A, 0, [entry(0), entry(1), entry(2)]))
+      .mockResolvedValueOnce(
+        response(DIFF_A, 0, [entry(0), entry(1), entry(2)])
+      )
       .mockRejectedValueOnce(new Error("page failed"))
-      .mockResolvedValueOnce(response(DIFF_A, 3, [entry(3), entry(4), entry(5)]));
+      .mockResolvedValueOnce(
+        response(DIFF_A, 3, [entry(3), entry(4), entry(5)])
+      );
     const { result } = renderDiff(fetchPage);
     await waitFor(() => expect(result.current.listingId).toBe(DIFF_A));
 

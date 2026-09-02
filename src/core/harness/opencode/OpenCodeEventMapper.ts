@@ -196,11 +196,7 @@ function readLineRange(display: unknown): {
   const d = display as
     | { lineStart?: number; lineEnd?: number; totalLines?: number }
     | undefined;
-  if (
-    !d ||
-    typeof d.lineStart !== "number" ||
-    typeof d.lineEnd !== "number"
-  ) {
+  if (!d || typeof d.lineStart !== "number" || typeof d.lineEnd !== "number") {
     return {};
   }
   const isSegmentRead =

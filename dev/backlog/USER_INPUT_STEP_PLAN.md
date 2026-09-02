@@ -43,7 +43,7 @@ So the mechanism the user speculated about — "maybe just making the script int
 and calling the OS-variant of read" — is not a new feature. It is already wired end to
 end. What's missing is polish and reach, covered next.
 
-### 2. Why that's not sufficient as *the* answer
+### 2. Why that's not sufficient as _the_ answer
 
 - **PTY works in both the VS Code webview and the hosted browser dashboard — it only
   disappears for the standalone `ctrlyoke` CLI binary.** `CtrlYokeHostedServer` (the
@@ -84,13 +84,13 @@ end. What's missing is polish and reach, covered next.
 
 `AskUserQuestionOutput.tsx` / `askUserQuestionLayout.ts` / `AskUserQuestionData` in
 `src/ui/webview-react/types/cliEvents.ts` render a harness-agnostic **read-only replay**
-of a question the *AI itself* asked mid-turn through its own tool-call mechanism (e.g.
+of a question the _AI itself_ asked mid-turn through its own tool-call mechanism (e.g.
 Claude's `AskUserQuestion` tool). The actual back-and-forth happens inside the harness's
 own interactive terminal session — ctrlyoke only displays what already happened
 afterward, via the CLI's log/event stream. There is no path from this component back into
 workflow control (no onPass/onFail, no "stop the workflow"), and it only fires when the
 AI decides to ask — not something a workflow author can force at a specific point. It's
-useful prior art for the *visual layout* of a question+options block, but not a mechanism
+useful prior art for the _visual layout_ of a question+options block, but not a mechanism
 this feature can be built on.
 
 ---
@@ -179,7 +179,7 @@ userInputStep:
         type: string
         enum: [continue, stopWorkflow]
     _runtime:
-      $ref: '#/definitions/promptRuntimeMetadata'
+      $ref: "#/definitions/promptRuntimeMetadata"
   required: [type, question]
   additionalProperties: false
 ```
@@ -221,7 +221,7 @@ prompt-step branch wherever the step-type union is switched on
    `executionState` enum and `promptRuntimeMetadata.terminalStatus` both have precedent
    for adding an enum member deliberately). This is what makes a reload safe: on
    `updateSessionRestored`/`updateFileSelected` the dashboard sees the persisted question
-   + status and re-renders the waiting UI instead of losing it.
+   - status and re-renders the waiting UI instead of losing it.
 3. Call a new `IDashboardSink` method, e.g.
    `updateUserInputRequested(stepIndex, { question, options, allowFreeform }, workflowId)`,
    which the webview turns into a `WebviewMessageTypes` broadcast to the React store.
@@ -270,7 +270,7 @@ but "works in the browser" is not a differentiator — the PTY approach already 
 **`ctrlyoke` CLI-only execution** (headless automation, no dashboard attached) is the one
 surface with no UI to post the question to. Options: (a) fall back to reading real stdin
 directly when the CLI has a real TTY (simpler than PTY relay since the CLI process's own
-stdin *is* the terminal — no relay needed), or (b) treat a `userInput` step as
+stdin _is_ the terminal — no relay needed), or (b) treat a `userInput` step as
 unsupported/auto-`stopWorkflow` in pure headless CLI runs with a clear diagnostic,
 mirroring how `warnAboutClampedInteractiveSteps` already warns about clamped interactive
 scriptStep. Needs a decision before implementation; leaning (a) since it's low effort and
@@ -287,7 +287,7 @@ keeps CLI runs from silently behaving differently than the dashboard.
    makes sense mid-queue; less obviously useful as a `finalStep` occupant. Default to
    allowing it anywhere `workflowStep` is valid, same as `scriptStep`.
 3. **Retry integration**: should a "No" answer be able to trigger a retry of the
-   *previous* prompt step (like `endCondition.onFail: retry`) rather than only
+   _previous_ prompt step (like `endCondition.onFail: retry`) rather than only
    `stopWorkflow`/`continue`? That would need a `retryPrompt`-style template and access to
    the prior step's output, which starts to duplicate `endCondition` machinery. Recommend
    shipping v1 with just `continue`/`stopWorkflow` and revisiting if users ask for retry.

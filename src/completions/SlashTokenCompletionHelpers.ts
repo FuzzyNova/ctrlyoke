@@ -200,11 +200,7 @@ function createMcpTokenCompletions(
   // The built-in "ctrlyoke" MCP server is a reserved sentinel, never a
   // registry entry (see CTRLYOKE_BUILTIN_MCP_SERVER_INFO), so it has to be
   // injected here rather than discovered from `managedServers`.
-  if (
-    CTRLYOKE_BUILTIN_MCP_SERVER_INFO.id
-      .toLowerCase()
-      .includes(lowerPrefix)
-  ) {
+  if (CTRLYOKE_BUILTIN_MCP_SERVER_INFO.id.toLowerCase().includes(lowerPrefix)) {
     items.push(createBuiltinCtrlYokeMcpCompletion());
   }
 

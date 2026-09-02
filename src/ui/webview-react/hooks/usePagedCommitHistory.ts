@@ -318,7 +318,10 @@ export function usePagedCommitHistory(
           // workspace opens already in detached HEAD), with nothing left to
           // ever correct it. `isCurrent` already guards against a late
           // response from a superseded context.
-          if (!isCurrent(generation, context) || !responseIsUsable(response, 0)) {
+          if (
+            !isCurrent(generation, context) ||
+            !responseIsUsable(response, 0)
+          ) {
             return;
           }
           updateState((current) => ({

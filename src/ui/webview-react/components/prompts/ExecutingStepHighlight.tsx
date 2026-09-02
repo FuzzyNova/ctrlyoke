@@ -30,8 +30,10 @@ export function ExecutingStepHighlight({
       `[ExecutingStepHighlight] mount testId=${testId} (executionState=${executionState}, currentStep=${currentStep})`
     );
     return () => {
-      const { executionState: unmountExecutionState, currentStep: unmountCurrentStep } =
-        useWorkflowStore.getState();
+      const {
+        executionState: unmountExecutionState,
+        currentStep: unmountCurrentStep,
+      } = useWorkflowStore.getState();
       WebviewLog.debug(
         `[ExecutingStepHighlight] unmount testId=${testId} (executionState=${unmountExecutionState}, currentStep=${unmountCurrentStep})`
       );

@@ -103,8 +103,8 @@ leaving it to each implementation session to reinvent:
     file under one commit.
   - `WorkspaceGitRefDiffPageResponse`: `diffId`, `pageSize`, `totalEntries`,
     `offset`, `entries: WorkspaceGitRefDiffEntry[]`, `commitInfo?:
-    WorkspaceCommitInfo` — shaped exactly like `WorkspaceFileHistoryPageResponse`
-    (`:361-370`) with `commitInfo` added. Attach `commitInfo` to *every* page
+WorkspaceCommitInfo` — shaped exactly like `WorkspaceFileHistoryPageResponse`
+    (`:361-370`) with `commitInfo` added. Attach `commitInfo` to _every_ page
     response (not just the first), sourced from the frozen snapshot — cheap,
     and it avoids the client needing to special-case which page carries
     metadata.

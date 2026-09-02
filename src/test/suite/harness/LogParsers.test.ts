@@ -1093,7 +1093,7 @@ suite("ClaudeLogParser", () => {
             {
               type: "tool_result",
               tool_use_id: "toolu_read_dedup",
-              content: "1\timport React from \"react\";\n",
+              content: '1\timport React from "react";\n',
             },
           ],
         },

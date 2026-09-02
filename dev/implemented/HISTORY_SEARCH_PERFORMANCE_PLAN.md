@@ -62,7 +62,7 @@ concrete evidence, not just a theoretical concern, that Problem 2
 **The "rebuilt twice in a row" observation, explained:** the log actually
 shows **three** rebuild passes in that window, from two different causes:
 
-1. **Pass 1** and **Pass 2** are the *same* `HistorySearchIndexService`
+1. **Pass 1** and **Pass 2** are the _same_ `HistorySearchIndexService`
    instance — the one owned by the completing workflow's
    `OutputHistoryManager`. While pass 1's scan was running, the workflow's
    own step-completion writes fired `enqueueWorkspaceRefresh` twice more;
@@ -74,10 +74,10 @@ shows **three** rebuild passes in that window, from two different causes:
    new content, not staleness. `enqueueWorkspaceRefresh`'s do-while loop
    (`HistorySearchIndexService.ts:239-260`) always runs a full pass on
    requeue with no freshness check first, so this is also a case Phase 1A's
-   recheck would touch — it just wouldn't have skipped anything *here*,
+   recheck would touch — it just wouldn't have skipped anything _here_,
    because the recheck would correctly find real changes and rebuild
    anyway.
-2. **Pass 3** (`retainDocuments=true`) is a *different* instance — the
+2. **Pass 3** (`retainDocuments=true`) is a _different_ instance — the
    search UI's own `HistorySearchIndexService` — triggered by the user's
    search 2 seconds after pass 2 finished writing a fresh index to disk.
    This one **is** exactly the case Phase 1A targets: "the instance that
@@ -120,27 +120,27 @@ sibling `OutputHistoryManager`'s own first pass, triggered by that
 workflow's own completion writes — the same legitimate, data-changed pattern
 as "Pass 1 → Pass 2" in the incident above, just one that didn't survive to
 finish. Neither Phase 1A's freshness recheck nor Phase 1B's shared instance
-would have skipped or prevented *this* pass — there was real new data to
+would have skipped or prevented _this_ pass — there was real new data to
 index and only one instance involved at the moment it started.
 
 **What's different this time: the pass started from an already-elevated
 baseline.** `[MemoryDiagnostics]` at this pass's start: `rss=3088.5MB
 heapUsed=1869.1MB heapTotal=2836.8MB` — compare to a fresh rebuild earlier in
-the *same* session starting from `heapTotal=2079.5MB`/`2081.4MB`. Nothing
+the _same_ session starting from `heapTotal=2079.5MB`/`2081.4MB`. Nothing
 this pass did was unusual (documents 72479 at 200 runs, 136052 at 400 runs —
 matching prior successful passes almost exactly); it crashed because the
 heap it was growing from was already ~750MB higher than a rebuild earlier in
 this same session tolerated fine. That's the connective tissue back to
 Problem 1: fewer total rebuild passes per session means less cumulative
 baseline creep, which buys more headroom before an otherwise-ordinary,
-necessary pass like this one tips over. Phase 1 reduces *how often* this
+necessary pass like this one tips over. Phase 1 reduces _how often_ this
 setup occurs; it doesn't prevent this specific pass.
 
 **Where the memory actually goes (checked against the current code):**
 `rebuild()` (`HistorySearchIndexService.ts:355-501`) already streams
 documents to disk per-run and, with `retainDocuments=false` as here, never
 accumulates a retained document array — this crash is not the "unbounded
-array" shape the prior fixes already addressed. It's allocation *churn*:
+array" shape the prior fixes already addressed. It's allocation _churn_:
 each of 1257 runs' manifest + full `events.jsonl` is read and parsed into
 memory, processed, and discarded, run after run, in a tight loop
 (`readManifestSafe`/`readEventsSafe` inside the `for (const source of
@@ -170,7 +170,7 @@ extension host process — a launch flag ctrlyoke's own code doesn't control
 wouldn't have prevented this crash: GC only reclaims objects nothing still
 references, it doesn't shrink `heapTotal` back down once V8 has grown it,
 and it can't run usefully mid-loop while the pass's own per-run working set
-is still live. Forcing a GC *between* rebuild passes might trim some of the
+is still live. Forcing a GC _between_ rebuild passes might trim some of the
 baseline creep at the margin, but Phase 2's worker-teardown already achieves
 a strictly stronger version of the same idea (whole-isolate release, not
 partial reclaim) as a byproduct of work already scoped. Not worth pursuing
@@ -182,7 +182,7 @@ Every live workflow's `OutputHistoryManager` owns a private
 `HistorySearchIndexService` instance (`OutputHistoryManager.ts:142`), and the
 search UI (`CtrlYokeWebviewProvider.ts:114`) owns a separate one again.
 `rebuild()`'s in-flight coalescing (`rebuildPromise`/`rebuildQueued`) only
-dedupes calls *within one instance* — it does nothing for two instances
+dedupes calls _within one instance_ — it does nothing for two instances
 racing the same on-disk index. They now serialize correctly through the
 60s-timeout file lock instead of one of them failing outright, but the
 instance that waited still performs its own full rebuild after acquiring the
@@ -199,7 +199,7 @@ documents for retained readers; contention tests cover both the fresh and
 changed-history paths.
 
 Once `rebuild()` acquires the lock, re-run the existing `isManifestFresh()`
-check against what's now on disk *before* calling `listRunSources()` and
+check against what's now on disk _before_ calling `listRunSources()` and
 starting the scan. If a sibling rebuild just finished and nothing changed in
 the interim (the common case — two workflows completing near-simultaneously
 both want to index the same recent batch), skip straight to
@@ -223,13 +223,13 @@ workspace while separate workspaces remain isolated.
 gating 1B on a few weeks of `[MemoryDiagnostics]` log data and deferring it
 if 1A alone looked sufficient. That is superseded by the "Sequencing"
 section below, added after Incident #2 — a real crash occurred during a
-rebuild pass 1A would *not* have skipped, so the wait-and-see plan for 1B is
+rebuild pass 1A would _not_ have skipped, so the wait-and-see plan for 1B is
 dropped too. Build 1A and 1B together; do not wait for production log data
 first.
 
 The deeper fix is giving `OutputHistoryManager` (all of them) and the search
 UI the same `HistorySearchIndexService` instance instead of one each. That
-gets the *existing* `rebuildPromise`/`rebuildQueued` coalescing to work
+gets the _existing_ `rebuildPromise`/`rebuildQueued` coalescing to work
 globally — not just for the "waited on the lock, recheck freshness" case
 above, but for any two refreshes that would otherwise overlap at all — and
 collapses what can currently be several duplicate warm document caches (the
@@ -274,7 +274,7 @@ Even with Problems 1A/1B fixed, a full rebuild's scan loop
 JSONL stream-out) still runs on the extension host's own V8 heap. A
 sufficiently large history, or a single unusually large run, can still push
 that heap toward the same OOM this whole investigation started from — the
-lock/dedup fixes reduce *how often* a big rebuild runs, not *how much heap*
+lock/dedup fixes reduce _how often_ a big rebuild runs, not _how much heap_
 one rebuild can consume while it runs.
 
 ### Proposal: move the rebuild scan into a `worker_threads` worker
@@ -384,7 +384,7 @@ memory diagnostics continue in the same workspace log file.
 (1A + 1B) and Phase 2 together as one effort — do not gate Phase 2 on Phase 1
 landing first anymore. The original sequencing deferred Phase 2 on the theory
 that Phase 1 might make it unnecessary; Incident #2 closes that question:
-a crash occurred during a pass that Phase 1 would *not* have skipped (a
+a crash occurred during a pass that Phase 1 would _not_ have skipped (a
 legitimate, non-redundant rebuild), so Phase 1 alone provably would not have
 prevented it. Two confirmed extension-host OOM crashes from this one service
 in the time this plan has existed is enough to stop treating Phase 2 as the
@@ -410,19 +410,19 @@ sequence gated on log data anymore — the data now says both are needed.
 ## Acceptance criteria
 
 - [x] Two `HistorySearchIndexService` instances (e.g. two workflows completing
-  near-simultaneously) no longer both run a full rebuild pass when the
-  second one's data would already be fresh after the first's completes.
+      near-simultaneously) no longer both run a full rebuild pass when the
+      second one's data would already be fresh after the first's completes.
 - [x] A full index rebuild's scan/extraction work runs off the extension host's
-  main heap, and a worker-side OOM does not crash or degrade the extension
-  host or any other live workflow.
+      main heap, and a worker-side OOM does not crash or degrade the extension
+      host or any other live workflow.
 - [x] `search()`'s synchronous rebuild-before-search path still reports progress
-  to the UI (existing `SEARCH_INDEX_REBUILD_PROGRESS` messages) when the
-  work has moved to a worker.
+      to the UI (existing `SEARCH_INDEX_REBUILD_PROGRESS` messages) when the
+      work has moved to a worker.
 - [x] No regression to existing `HistorySearchIndexService`/`HistorySearchService`
-  unit test coverage; new coverage for the freshness-recheck skip path and
-  for worker success/failure/progress relay.
+      unit test coverage; new coverage for the freshness-recheck skip path and
+      for worker success/failure/progress relay.
 - [x] Phase 1B shipped through
-  `HistorySearchIndexServiceRegistry.ts`: the registry uses a normalized,
-  resolved `workspaceFolderPath` key (including Windows case folding), so each
-  workspace gets one shared index-service instance and no index service is
-  shared across workspace folders.
+      `HistorySearchIndexServiceRegistry.ts`: the registry uses a normalized,
+      resolved `workspaceFolderPath` key (including Windows case folding), so each
+      workspace gets one shared index-service instance and no index service is
+      shared across workspace folders.

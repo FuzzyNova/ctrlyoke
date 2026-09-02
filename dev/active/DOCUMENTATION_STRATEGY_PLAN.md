@@ -879,7 +879,7 @@ Priority order:
      2. **HTTPS is not optional caveat** — self-signed cert generation, and the iOS-specific manual
         cert-trust walkthrough (`Settings → General → VPN & Device Management` → enable full trust,
         already drafted in `ServerSection.tsx`'s own copy) needs to be spelled out in full, not just
-        summarized, since it's the step users get stuck on. Explain *why*: per `PRO_LICENSE_PLAN.md`
+        summarized, since it's the step users get stuck on. Explain _why_: per `PRO_LICENSE_PLAN.md`
         §1.6, HTTPS is a no-op on localhost (already a secure context) and only starts mattering the
         moment a phone or LAN device reaches the server — frame it as "required once you leave your own
         machine," not as a generic security tip.

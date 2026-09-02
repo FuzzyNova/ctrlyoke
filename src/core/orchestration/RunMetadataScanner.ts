@@ -33,8 +33,7 @@ export class RunMetadataScanner {
     let snapshot: WorkspaceSnapshot | undefined;
     for await (const event of this.recorder.streamEvents(manifestPath)) {
       if (
-        (event.eventType ===
-          TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED ||
+        (event.eventType === TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED ||
           event.eventType ===
             TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED) &&
         getTargetKey(event.target) === targetKey

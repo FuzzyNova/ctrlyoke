@@ -90,7 +90,7 @@ absorbed by the background-work hold instead of completing.
 Copilot uses the shared state machine with **no** stale-stop guard (like
 Antigravity below, unlike an earlier version of this doc). Copilot's log
 watcher stays active during a background-work hold, so `resumedTurnClosed()`
-is normally reached via live tailing *between* two real Stop hooks, not
+is normally reached via live tailing _between_ two real Stop hooks, not
 caught up inside either one's own catch-up read — a nonzero guard assumes the
 latter shape and, when closure instead happens live between Stops, requires a
 Stop hook that never comes after the CLI genuinely finishes, hanging the step

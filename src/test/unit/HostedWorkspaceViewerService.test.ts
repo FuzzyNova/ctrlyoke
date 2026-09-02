@@ -1579,11 +1579,9 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(root, "commit", "-m", "Large commit");
       const commit = runGit(root, "rev-parse", "HEAD");
 
-      const page = await new HostedWorkspaceViewerService(root).getGitRefDiffPage(
-        commit,
-        0,
-        1
-      );
+      const page = await new HostedWorkspaceViewerService(
+        root
+      ).getGitRefDiffPage(commit, 0, 1);
       assert.strictEqual(page.totalEntries, fileNames.length);
       assert.strictEqual(page.entries.length, 1);
       assert.strictEqual(page.entries[0]?.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);

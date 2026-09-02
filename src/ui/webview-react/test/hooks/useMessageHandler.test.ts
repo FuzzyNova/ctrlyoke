@@ -1616,7 +1616,10 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   it("keeps RUNNING when a draft-promotion snapshot arrives with a stale idle state", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
-    const draftAddress = { workflowKey: "wf-fresh" as never, kind: "draft" as const };
+    const draftAddress = {
+      workflowKey: "wf-fresh" as never,
+      kind: "draft" as const,
+    };
     const runAddress = {
       workflowKey: "wf-fresh" as never,
       kind: "run" as const,
@@ -2231,15 +2234,13 @@ describe("run view revision snapshots", () => {
 
     let requestId = "";
     act(() => {
-      requestId = useUiStore
-        .getState()
-        .requestRunViewLoad(
-          {
-            workflowKey: "wf-unreachable" as never,
-            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-          },
-          []
-        );
+      requestId = useUiStore.getState().requestRunViewLoad(
+        {
+          workflowKey: "wf-unreachable" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        []
+      );
     });
     expect(useUiStore.getState().displayedViewAddress).toEqual({
       workflowKey: "wf-unreachable",

@@ -215,9 +215,7 @@ describe("WorktreesSection", () => {
       />
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sync All with main" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Sync All with main" }));
 
     // Sync All is confirmed once through the shared modal (not once per
     // branch) before the chain runs.

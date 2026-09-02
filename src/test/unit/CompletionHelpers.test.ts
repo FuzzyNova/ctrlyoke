@@ -735,7 +735,10 @@ suite("slash-token completions", () => {
   });
 
   test("always includes the built-in ctrlyoke MCP server even though it is never a registry entry", async () => {
-    const bareItems = await getCtrlYokeSlashCompletions("/workspace", "/ctrlyoke");
+    const bareItems = await getCtrlYokeSlashCompletions(
+      "/workspace",
+      "/ctrlyoke"
+    );
     assert.deepStrictEqual(
       bareItems.map((item) => item.label),
       ["ctrlyoke"]
