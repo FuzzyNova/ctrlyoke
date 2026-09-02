@@ -1131,6 +1131,11 @@ export const MCP_CAPABILITY_KEYS = {
   PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
+export const MCP_SECRET_CONFIG_MODES = {
+  REFERENCE: "reference",
+  SUBSTITUTE: "substitute",
+} as const;
+
 // ============================================================================
 // MCP TRANSPORTS - Remote MCP protocol values
 // ============================================================================
@@ -2348,6 +2353,12 @@ export const TOOL_PERMISSION_CATEGORIES = {
   EDIT: "edit",
   MCP: "mcp",
   GIT: "git",
+} as const;
+
+export const PERSISTENT_VALUE_INSTALL_RESULT_KINDS = {
+  NO_OP: "no-op",
+  WRITTEN: "written",
+  DECLINED: "declined",
 } as const;
 
 export type ToolPermissionCategory =

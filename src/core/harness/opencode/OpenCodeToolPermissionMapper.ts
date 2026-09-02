@@ -10,6 +10,7 @@ import { Log } from "../../../utils/Log";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
+  TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
 import type {
   SettingsJsonPermissionDecision,
@@ -48,17 +49,17 @@ const OPENCODE_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
 };
 
 const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
-  shell: "bash",
-  bash: "bash",
-  run_shell_command: "bash",
-  write: "edit",
-  create: "edit",
-  edit: "edit",
-  multiedit: "edit",
-  multi_edit: "edit",
-  patch: "edit",
-  str_replace: "edit",
-  read: "read",
+  shell: TOOL_PERMISSION_CATEGORIES.BASH,
+  bash: TOOL_PERMISSION_CATEGORIES.BASH,
+  run_shell_command: TOOL_PERMISSION_CATEGORIES.BASH,
+  write: TOOL_PERMISSION_CATEGORIES.EDIT,
+  create: TOOL_PERMISSION_CATEGORIES.EDIT,
+  edit: TOOL_PERMISSION_CATEGORIES.EDIT,
+  multiedit: TOOL_PERMISSION_CATEGORIES.EDIT,
+  multi_edit: TOOL_PERMISSION_CATEGORIES.EDIT,
+  patch: TOOL_PERMISSION_CATEGORIES.EDIT,
+  str_replace: TOOL_PERMISSION_CATEGORIES.EDIT,
+  read: TOOL_PERMISSION_CATEGORIES.READ,
   glob: "glob",
   ls: "glob",
   list: "glob",
@@ -371,7 +372,7 @@ export class OpenCodeToolPermissionMapper
     if (!inner || inner === "*" || inner === "*:*") {
       return undefined;
     }
-    if (tool !== "bash") {
+    if (tool !== TOOL_PERMISSION_CATEGORIES.BASH) {
       return inner;
     }
 

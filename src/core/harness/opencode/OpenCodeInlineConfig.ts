@@ -10,6 +10,7 @@ import {
   type McpSecretConfigOptions,
 } from "../shared/CliMcpConfigGenerator";
 import { Log } from "../../../utils/Log";
+import { MCP_SECRET_CONFIG_MODES } from "../../../types/DashboardConstants";
 
 export interface OpenCodeLocalMcpServer {
   type: "local";
@@ -296,7 +297,7 @@ export function buildOpenCodeMcpEntries(
         entry.headers = sanitizeMcpStringRecord(
           server.headers,
           `MCP server ${serverId} headers`,
-          secretOptions?.mode === "reference"
+          secretOptions?.mode === MCP_SECRET_CONFIG_MODES.REFERENCE
         );
       }
       mcpEntries[serverId] = entry;
@@ -324,7 +325,7 @@ export function buildOpenCodeMcpEntries(
       entry.environment = sanitizeMcpStringRecord(
         server.env,
         `MCP server ${serverId} environment`,
-        secretOptions?.mode === "reference"
+        secretOptions?.mode === MCP_SECRET_CONFIG_MODES.REFERENCE
       );
     }
     mcpEntries[serverId] = entry;

@@ -23,6 +23,7 @@ import {
   BaseToolBuilder,
   extractFileReadRange,
 } from "../shared/BaseToolBuilder";
+import { COPILOT_TOOL_NAMES } from "./CopilotProtocolConstants";
 
 type CopilotToolArgs = Record<string, unknown> | string;
 
@@ -273,7 +274,10 @@ export class CopilotToolBuilder {
       ];
     }
 
-    if (toolName === "apply_patch" && typeof args === "string") {
+    if (
+      toolName === COPILOT_TOOL_NAMES.APPLY_PATCH &&
+      typeof args === "string"
+    ) {
       const fileEdits = ApplyPatchParser.parseFileEdits(args);
       if (fileEdits.length > 0) {
         return fileEdits.map((fileEdit) => ({
@@ -341,7 +345,7 @@ export class CopilotToolBuilder {
 
     if (
       classifiedType === CLI_EVENT_TYPES.FILE_EDIT &&
-      toolName === "apply_patch"
+      toolName === COPILOT_TOOL_NAMES.APPLY_PATCH
     ) {
       const patchText =
         completionData?.result?.detailedContent ||
