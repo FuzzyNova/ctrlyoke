@@ -31,7 +31,11 @@ import {
   AntigravityTranscriptRecord,
 } from "./AntigravityTranscriptReader";
 import { AntigravityToolEventBuilder } from "./AntigravityToolEventBuilder";
-import { ANTIGRAVITY_WIRE_VALUES } from "./AntigravityProtocolConstants";
+import {
+  ANTIGRAVITY_ENTRY_TYPES,
+  ANTIGRAVITY_TOOL_NAMES,
+  ANTIGRAVITY_WIRE_VALUES,
+} from "./AntigravityProtocolConstants";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   parseStatuslineCurrentUsage,
@@ -45,17 +49,29 @@ import type {
 import { Log } from "../../../utils/Log";
 import { CompositeFsWatcher } from "../shared/FsWatcherHandles";
 
+/**
+ * Synthetic `AntigravityLogEvent.type` tags — ctrlyoke's own internal event
+ * shape, not values from Antigravity's wire protocol (see
+ * `ANTIGRAVITY_ENTRY_TYPES`/`ANTIGRAVITY_WIRE_VALUES` in
+ * `AntigravityProtocolConstants.ts` for those).
+ */
+const ANTIGRAVITY_LOG_EVENT_TYPES = {
+  SESSION_CREATED: "session.created",
+  RESPONSE_COMPLETED: "response.completed",
+  LOG_LINE: "log.line",
+  RESPONSE_TEXT: "response.text",
+  USER_INPUT: "user_input",
+  TRANSCRIPT_PLANNER: "transcript.planner",
+  TRANSCRIPT_TOOL: "transcript.tool",
+  TRANSCRIPT_CHECKPOINT: "transcript.checkpoint",
+  TRANSCRIPT_ERROR: "transcript.error",
+} as const;
+
+type AntigravityLogEventType =
+  (typeof ANTIGRAVITY_LOG_EVENT_TYPES)[keyof typeof ANTIGRAVITY_LOG_EVENT_TYPES];
+
 interface AntigravityLogEvent extends BaseCliEvent {
-  type:
-    | "session.created"
-    | "response.completed"
-    | "log.line"
-    | "response.text"
-    | "user_input"
-    | "transcript.planner"
-    | "transcript.tool"
-    | "transcript.checkpoint"
-    | "transcript.error";
+  type: AntigravityLogEventType;
   line: string;
   sessionId?: string;
   timestamp?: number;
@@ -209,7 +225,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           line.includes("Print mode: conversation=")
         ) {
           events.push({
-            type: "session.created",
+            type: ANTIGRAVITY_LOG_EVENT_TYPES.SESSION_CREATED,
             line,
             sessionId,
           });
@@ -221,7 +237,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           line.includes("Language server shutting down")
         ) {
           events.push({
-            type: "response.completed",
+            type: ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_COMPLETED,
             line,
             sessionId,
           });
@@ -229,7 +245,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         }
 
         events.push({
-          type: "log.line",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.LOG_LINE,
           line,
           sessionId,
         });
@@ -237,10 +253,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
       const transcriptEvents = await this.readNewTranscriptEvents();
       const completionEvents = events.filter(
-        (event) => event.type === "response.completed"
+        (event) => event.type === ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_COMPLETED
       );
       const nonCompletionEvents = events.filter(
-        (event) => event.type !== "response.completed"
+        (event) => event.type !== ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_COMPLETED
       );
       return [...nonCompletionEvents, ...transcriptEvents, ...completionEvents];
     } catch {
@@ -314,7 +330,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   isComplete(event: BaseCliEvent): boolean {
-    return event.type === "response.completed";
+    return event.type === ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_COMPLETED;
   }
 
   async discoverSessionLog(
@@ -392,7 +408,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
-    if (event.type === "response.text" || event.type === "transcript.error") {
+    if (
+          event.type === ANTIGRAVITY_LOG_EVENT_TYPES.RESPONSE_TEXT ||
+          event.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_ERROR
+        ) {
       return String((event as AntigravityLogEvent).line ?? "");
     }
     return undefined;
@@ -402,7 +421,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     const antigravityEvent = event as AntigravityLogEvent;
     const timestamp = antigravityEvent.timestamp ?? Date.now();
 
-    if (antigravityEvent.type === "transcript.planner") {
+    if (antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_PLANNER) {
       const structuredEvents: CliEvent[] = [];
       if (antigravityEvent.line) {
         structuredEvents.push({
@@ -441,7 +460,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     }
 
     if (
-      antigravityEvent.type === "transcript.tool" &&
+      antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL &&
       antigravityEvent.resultEntry
     ) {
       return AntigravityToolEventBuilder.build({
@@ -454,7 +473,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       });
     }
 
-    if (antigravityEvent.type === "transcript.checkpoint") {
+    if (antigravityEvent.type === ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_CHECKPOINT) {
       return [
         {
           type: CLI_EVENT_TYPES.COMPACTION,
@@ -568,7 +587,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.status === ANTIGRAVITY_WIRE_VALUES.RUNNING;
     const isAskQuestionResult =
       entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
-      entry.type === "ASK_QUESTION";
+      entry.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION;
     if (
       entry.status !== ANTIGRAVITY_WIRE_VALUES.DONE &&
       !isBackgroundLaunch &&
@@ -587,17 +606,22 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       transcriptEntry: entry,
     };
 
-    if (entry.source === "USER_EXPLICIT" && entry.type === "USER_INPUT") {
+    if (
+      entry.source === ANTIGRAVITY_WIRE_VALUES.USER_EXPLICIT &&
+      entry.type === ANTIGRAVITY_ENTRY_TYPES.USER_INPUT
+    ) {
       if (typeof entry.content !== "string") {
         return [];
       }
       const text = this.unwrapUserRequest(entry.content);
-      return text ? [{ type: "user_input", line: text, ...base }] : [];
+      return text
+        ? [{ type: ANTIGRAVITY_LOG_EVENT_TYPES.USER_INPUT, line: text, ...base }]
+        : [];
     }
 
     if (
       entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
-      entry.type === "PLANNER_RESPONSE"
+      entry.type === ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE
     ) {
       const text =
         typeof entry.content === "string" ? entry.content.trim() : "";
@@ -619,7 +643,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       }
       return [
         {
-          type: "transcript.planner",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_PLANNER,
           line: text,
           thinking: thinking || undefined,
           plannerToolCalls,
@@ -636,7 +660,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       const call = this.takePlannerCallForResult(entry);
       return [
         {
-          type: "transcript.tool",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL,
           line: typeof entry.content === "string" ? entry.content : "",
           toolCall: call?.call,
           toolCallId: call?.toolCallId,
@@ -653,7 +677,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     ) {
       return [
         {
-          type: "transcript.tool",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_TOOL,
           line: typeof entry.content === "string" ? entry.content : "",
           resultEntry: entry,
           taskId: this.extractTaskId(entry),
@@ -664,7 +688,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
     if (
       entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
-      entry.type === "CHECKPOINT"
+      entry.type === ANTIGRAVITY_ENTRY_TYPES.CHECKPOINT
     ) {
       const line = typeof entry.content === "string" ? entry.content : "";
       if (BASELINE_CHECKPOINT_REGEX.test(line)) {
@@ -672,7 +696,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       }
       return [
         {
-          type: "transcript.checkpoint",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_CHECKPOINT,
           line,
           ...base,
         },
@@ -681,14 +705,15 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
     if (
       entry.source === ANTIGRAVITY_WIRE_VALUES.SYSTEM &&
-      (entry.type === "ERROR_MESSAGE" || entry.type.includes("CANCEL"))
+      (entry.type === ANTIGRAVITY_ENTRY_TYPES.ERROR_MESSAGE ||
+        entry.type.includes("CANCEL"))
     ) {
       if (typeof entry.content !== "string" || !entry.content.trim()) {
         return [];
       }
       return [
         {
-          type: "transcript.error",
+          type: ANTIGRAVITY_LOG_EVENT_TYPES.TRANSCRIPT_ERROR,
           line: entry.content.trim(),
           ...base,
         },
@@ -699,19 +724,20 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   }
 
   private isToolResultEntry(entry: AntigravityTranscriptEntry): boolean {
-    return [
-      "RUN_COMMAND",
-      "VIEW_FILE",
-      "CODE_ACTION",
-      "GENERIC",
-      "LIST_DIRECTORY",
-      "GREP_SEARCH",
-      "MCP_TOOL",
-      "LIST_RESOURCES",
-      "READ_RESOURCE",
-      "SEARCH_WEB",
-      "ASK_QUESTION",
-    ].includes(entry.type);
+    const toolResultEntryTypes: string[] = [
+      ANTIGRAVITY_ENTRY_TYPES.RUN_COMMAND,
+      ANTIGRAVITY_ENTRY_TYPES.VIEW_FILE,
+      ANTIGRAVITY_ENTRY_TYPES.CODE_ACTION,
+      ANTIGRAVITY_WIRE_VALUES.GENERIC,
+      ANTIGRAVITY_ENTRY_TYPES.LIST_DIRECTORY,
+      ANTIGRAVITY_ENTRY_TYPES.GREP_SEARCH,
+      ANTIGRAVITY_ENTRY_TYPES.MCP_TOOL,
+      ANTIGRAVITY_ENTRY_TYPES.LIST_RESOURCES,
+      ANTIGRAVITY_ENTRY_TYPES.READ_RESOURCE,
+      ANTIGRAVITY_ENTRY_TYPES.SEARCH_WEB,
+      ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION,
+    ];
+    return toolResultEntryTypes.includes(entry.type);
   }
 
   private takePlannerCallForResult(
@@ -732,30 +758,32 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   ): boolean {
     const name = call.name.toLowerCase();
     switch (result.type) {
-      case "RUN_COMMAND":
-        return name === ANTIGRAVITY_WIRE_VALUES.RUN_COMMAND;
-      case "VIEW_FILE":
-        return name === "view_file";
-      case "CODE_ACTION":
-        return [
-          "write_to_file",
-          "replace_file_content",
-          "multi_replace_file_content",
-        ].includes(name);
-      case "MCP_TOOL":
-        return name === "call_mcp_tool";
-      case "LIST_RESOURCES":
-        return name === "list_resources";
-      case "READ_RESOURCE":
-        return name === "read_resource";
-      case "SEARCH_WEB":
-        return name === "search_web";
-      case "ASK_QUESTION":
+      case ANTIGRAVITY_ENTRY_TYPES.RUN_COMMAND:
+        return name === ANTIGRAVITY_TOOL_NAMES.RUN_COMMAND;
+      case ANTIGRAVITY_ENTRY_TYPES.VIEW_FILE:
+        return name === ANTIGRAVITY_TOOL_NAMES.VIEW_FILE;
+      case ANTIGRAVITY_ENTRY_TYPES.CODE_ACTION: {
+        const codeActionToolNames: string[] = [
+          ANTIGRAVITY_TOOL_NAMES.WRITE_TO_FILE,
+          ANTIGRAVITY_TOOL_NAMES.REPLACE_FILE_CONTENT,
+          ANTIGRAVITY_TOOL_NAMES.MULTI_REPLACE_FILE_CONTENT,
+        ];
+        return codeActionToolNames.includes(name);
+      }
+      case ANTIGRAVITY_ENTRY_TYPES.MCP_TOOL:
+        return name === ANTIGRAVITY_TOOL_NAMES.CALL_MCP_TOOL;
+      case ANTIGRAVITY_ENTRY_TYPES.LIST_RESOURCES:
+        return name === ANTIGRAVITY_TOOL_NAMES.LIST_RESOURCES;
+      case ANTIGRAVITY_ENTRY_TYPES.READ_RESOURCE:
+        return name === ANTIGRAVITY_TOOL_NAMES.READ_RESOURCE;
+      case ANTIGRAVITY_ENTRY_TYPES.SEARCH_WEB:
+        return name === ANTIGRAVITY_TOOL_NAMES.SEARCH_WEB;
+      case ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION:
         return AntigravityToolEventBuilder.isAskUserQuestionTool(name);
-      case "LIST_DIRECTORY":
-        return name === "list_dir";
-      case "GREP_SEARCH":
-        return name === "grep_search";
+      case ANTIGRAVITY_ENTRY_TYPES.LIST_DIRECTORY:
+        return name === ANTIGRAVITY_TOOL_NAMES.LIST_DIR;
+      case ANTIGRAVITY_ENTRY_TYPES.GREP_SEARCH:
+        return name === ANTIGRAVITY_TOOL_NAMES.GREP_SEARCH;
       case ANTIGRAVITY_WIRE_VALUES.GENERIC:
         // Observed agy output (1.1.12+) types every tool result "GENERIC" —
         // run_command, view_file, write_to_file, grep_search, manage_task,
@@ -820,7 +848,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     if (
       !this.backgroundFollowUpState.isResumedTurnPending() ||
       entry.source !== ANTIGRAVITY_WIRE_VALUES.MODEL ||
-      entry.type !== "PLANNER_RESPONSE" ||
+      entry.type !== ANTIGRAVITY_ENTRY_TYPES.PLANNER_RESPONSE ||
       entry.status !== ANTIGRAVITY_WIRE_VALUES.DONE
     ) {
       return false;
@@ -884,7 +912,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as AntigravityLogEvent;
-    if (e.type !== "user_input") {
+    if (e.type !== ANTIGRAVITY_LOG_EVENT_TYPES.USER_INPUT) {
       return "other";
     }
     const text = e.line?.trim();
@@ -907,7 +935,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
 
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as AntigravityLogEvent;
-    if (e.type !== "user_input") {
+    if (e.type !== ANTIGRAVITY_LOG_EVENT_TYPES.USER_INPUT) {
       return undefined;
     }
     const text = e.line?.trim();

@@ -21,7 +21,11 @@ import {
   AntigravityTranscriptEntry,
   isRecord,
 } from "./AntigravityTranscriptTypes";
-import { ANTIGRAVITY_WIRE_VALUES } from "./AntigravityProtocolConstants";
+import {
+  ANTIGRAVITY_ENTRY_TYPES,
+  ANTIGRAVITY_TOOL_NAMES,
+  ANTIGRAVITY_WIRE_VALUES,
+} from "./AntigravityProtocolConstants";
 
 export interface AntigravityToolMapping {
   call?: AntigravityPlannerToolCall;
@@ -38,14 +42,8 @@ export interface AntigravityToolMapping {
  * call plus its adjacent result, or a result that had no matching call.
  */
 export class AntigravityToolEventBuilder {
-  private static readonly ASK_USER_QUESTION_TOOL_NAME = "ask_question";
-  private static readonly ASK_USER_QUESTION_ENTRY_TYPE = "ASK_QUESTION";
-
   static isAskUserQuestionTool(toolName: string | undefined): boolean {
-    return (
-      toolName?.toLowerCase() ===
-      AntigravityToolEventBuilder.ASK_USER_QUESTION_TOOL_NAME
-    );
+    return toolName?.toLowerCase() === ANTIGRAVITY_TOOL_NAMES.ASK_QUESTION;
   }
 
   static build(mapping: AntigravityToolMapping): CliEvent[] {
@@ -58,7 +56,7 @@ export class AntigravityToolEventBuilder {
     const resultText = this.stringContent(result);
     const id = taskId ?? eventId;
 
-    if (result.type === this.ASK_USER_QUESTION_ENTRY_TYPE) {
+    if (result.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION) {
       return [
         this.buildAskUserQuestionCompletedEvent(
           call,
@@ -88,8 +86,8 @@ export class AntigravityToolEventBuilder {
     }
 
     if (
-      result.type === "RUN_COMMAND" ||
-      normalizedName === ANTIGRAVITY_WIRE_VALUES.RUN_COMMAND
+      result.type === ANTIGRAVITY_ENTRY_TYPES.RUN_COMMAND ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.RUN_COMMAND
     ) {
       const exitCode = this.exitCode(result);
       const command = this.stringArg(args, ["CommandLine", "command", "cmd"]);
@@ -113,7 +111,10 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "VIEW_FILE" || normalizedName === "view_file") {
+    if (
+      result.type === ANTIGRAVITY_ENTRY_TYPES.VIEW_FILE ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.VIEW_FILE
+    ) {
       return [
         {
           type: CLI_EVENT_TYPES.FILE_READ,
@@ -133,24 +134,25 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
+    const codeActionToolNames: string[] = [
+      ANTIGRAVITY_TOOL_NAMES.WRITE_TO_FILE,
+      ANTIGRAVITY_TOOL_NAMES.REPLACE_FILE_CONTENT,
+      ANTIGRAVITY_TOOL_NAMES.MULTI_REPLACE_FILE_CONTENT,
+    ];
     if (
-      result.type === "CODE_ACTION" ||
-      [
-        "write_to_file",
-        "replace_file_content",
-        "multi_replace_file_content",
-      ].includes(normalizedName)
+      result.type === ANTIGRAVITY_ENTRY_TYPES.CODE_ACTION ||
+      codeActionToolNames.includes(normalizedName)
     ) {
       return this.buildCodeAction(call, result, timestamp, success, error);
     }
 
     if (
-      result.type === "MCP_TOOL" ||
-      result.type === "LIST_RESOURCES" ||
-      result.type === "READ_RESOURCE" ||
-      normalizedName === "call_mcp_tool" ||
-      normalizedName === "list_resources" ||
-      normalizedName === "read_resource"
+      result.type === ANTIGRAVITY_ENTRY_TYPES.MCP_TOOL ||
+      result.type === ANTIGRAVITY_ENTRY_TYPES.LIST_RESOURCES ||
+      result.type === ANTIGRAVITY_ENTRY_TYPES.READ_RESOURCE ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.CALL_MCP_TOOL ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.LIST_RESOURCES ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.READ_RESOURCE
     ) {
       const target = this.mcpTarget(call, result);
       return [
@@ -171,7 +173,10 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "SEARCH_WEB" || normalizedName === "search_web") {
+    if (
+      result.type === ANTIGRAVITY_ENTRY_TYPES.SEARCH_WEB ||
+      normalizedName === ANTIGRAVITY_TOOL_NAMES.SEARCH_WEB
+    ) {
       const query =
         this.stringArg(args, ["SearchQuery", "query", "Query"]) ?? "";
       return [
@@ -438,7 +443,8 @@ export class AntigravityToolEventBuilder {
     const path =
       this.pathArg(args) ?? this.pathFromText(resultText) ?? "unknown";
     const isCreate =
-      toolName === "write_to_file" || /created file/i.test(resultText);
+      toolName === ANTIGRAVITY_TOOL_NAMES.WRITE_TO_FILE ||
+      /created file/i.test(resultText);
 
     if (isCreate) {
       return [
