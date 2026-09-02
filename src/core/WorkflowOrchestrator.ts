@@ -43,6 +43,8 @@ import {
 import {
   ACTION_TYPES,
   ACTIVE_EXECUTION_STATES,
+  EXTERNAL_EXECUTION_REASONS,
+  EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   HARNESS_IDS,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
@@ -54,7 +56,10 @@ import {
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_EDIT_KINDS,
+  WORKTREE_BRANCH_STATES,
   WORKTREE_MODES,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
   type EndConditionScriptType,
   type HarnessId,
   type QueuePosition,
@@ -1288,7 +1293,10 @@ export class WorkflowOrchestrator {
       workingFilePath,
       workspaceFolderPath
     );
-    if (resolution.kind !== "external-active-run") {
+    if (
+      resolution.kind !==
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    ) {
       return false;
     }
 
@@ -1321,7 +1329,7 @@ export class WorkflowOrchestrator {
           }
           cache.set(key, signature);
           const message = `[WorkflowOrchestrator] external execution resolution: ${signature}`;
-          if (decision.locality === "indeterminate") {
+          if (decision.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE) {
             Log.warn(message);
           } else {
             Log.debug(message);
@@ -1342,9 +1350,9 @@ export class WorkflowOrchestrator {
     resolution: ExternalExecutionResolution
   ): boolean {
     if (
-      resolution.kind !== "not-external" ||
-      (resolution.reason !== "self-owned" &&
-        resolution.reason !== "indeterminate-owner")
+      resolution.kind !== EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL ||
+      (resolution.reason !== EXTERNAL_EXECUTION_REASONS.SELF_OWNED &&
+        resolution.reason !== EXTERNAL_EXECUTION_REASONS.INDETERMINATE_OWNER)
     ) {
       return false;
     }
@@ -1370,7 +1378,7 @@ export class WorkflowOrchestrator {
       workflowKey: address?.workflowKey,
       runRef: address?.runRef,
       locality:
-        resolution.reason === "self-owned"
+        resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED
           ? "self-owned-but-untracked"
           : "indeterminate-owner",
       decision: "preserve-non-mutating",
@@ -1378,7 +1386,7 @@ export class WorkflowOrchestrator {
     const message =
       `[WorkflowOrchestrator] active run ownership requires reconciliation: ` +
       JSON.stringify(diagnostic);
-    if (resolution.reason === "self-owned") {
+    if (resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED) {
       Log.error(message);
     } else {
       Log.warn(message);
@@ -1710,7 +1718,10 @@ export class WorkflowOrchestrator {
               workingFilePath,
               this.currentWorkspaceFolder!.uri.fsPath
             );
-            if (resolution.kind === "external-active-run") {
+            if (
+              resolution.kind ===
+              EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+            ) {
               Log.debug(
                 `triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
               );
@@ -2068,7 +2079,8 @@ export class WorkflowOrchestrator {
     // Intentional runner-type policy after resolver proof: SIGTERM is only the
     // CLI transport; locality comes exclusively from external resolution.
     if (
-      resolution.kind !== "external-active-run" ||
+      resolution.kind !==
+        EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN ||
       resolution.inspection.lock.runner !== RUNNER_IDS.CLI ||
       resolution.inspection.lock.ownerToken !== entry.session.getOwnerToken()
     ) {
@@ -2114,7 +2126,10 @@ export class WorkflowOrchestrator {
       entry.summary.workingFilePath ?? "",
       workspaceFolderPath
     );
-    if (resolution.kind !== "external-active-run") {
+    if (
+      resolution.kind !==
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    ) {
       return "unavailable";
     }
     const lock = resolution.inspection.lock;
@@ -3467,7 +3482,10 @@ export class WorkflowOrchestrator {
         filePath,
         workspaceFolderPath
       );
-      if (resolution.kind === "external-active-run") {
+      if (
+        resolution.kind ===
+        EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+      ) {
         const existingExternalEntry = this.externalRunSessions.get(workflowId);
         if (existingExternalEntry) {
           Log.debug(
@@ -3573,7 +3591,7 @@ export class WorkflowOrchestrator {
     if (!runtime || runtime.mode !== WORKTREE_MODES.MANAGED) {
       throw new Error("Merge is available only for managed worktree runs.");
     }
-    if (runtime.branchState !== "present") {
+    if (runtime.branchState !== WORKTREE_BRANCH_STATES.PRESENT) {
       throw new Error("The managed worktree branch is no longer present.");
     }
     const executionWorkspace = {
@@ -4629,11 +4647,13 @@ export class WorkflowOrchestrator {
     );
 
     const activeInspection =
-      lockInspection.liveness === "active" ? lockInspection : undefined;
+      lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE
+        ? lockInspection
+        : undefined;
     const activeLock = activeInspection?.lock;
     const lockNamesTarget = activeLock?.runRef === address.runRef;
     if (activeLock && !activeInstance) {
-      if (activeInspection.locality === "self") {
+      if (activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF) {
         Log.error(
           `[WorkflowOrchestrator] self-owned but untracked execution for ${address.workflowKey}/${activeLock.runRef}`
         );
@@ -4641,7 +4661,9 @@ export class WorkflowOrchestrator {
           "Self-owned execution is not tracked by this process; refusing continuation"
         );
       }
-      if (activeInspection.locality === "indeterminate") {
+      if (
+        activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
+      ) {
         throw new Error(
           "Cannot continue while execution ownership is indeterminate"
         );
@@ -4686,7 +4708,7 @@ export class WorkflowOrchestrator {
       (targetState === EXECUTION_STATES.RUNNING ||
         targetState === EXECUTION_STATES.PAUSED) &&
       !activeTarget &&
-      lockInspection.liveness !== "active";
+      lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE;
     if (
       targetState === EXECUTION_STATES.PAUSING ||
       targetState === EXECUTION_STATES.CANCELLING ||
@@ -6152,7 +6174,7 @@ export class WorkflowOrchestrator {
       workflowKey,
       this.runnerHostIdentity
     );
-    if (lockInspection.liveness !== "active") {
+    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
       return;
     }
     const lock = lockInspection.lock;
@@ -6172,7 +6194,10 @@ export class WorkflowOrchestrator {
       workingFilePath,
       workspaceFolderPath
     );
-    if (resolution.kind !== "external-active-run") {
+    if (
+      resolution.kind !==
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    ) {
       return;
     }
 
@@ -6199,7 +6224,8 @@ export class WorkflowOrchestrator {
       workingFilePath,
       workspaceFolderPath
     );
-    return resolution.kind === "external-active-run"
+    return resolution.kind ===
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
       ? this.startExternalRunWatchSession(
           workingFilePath,
           workspaceFolderPath,
@@ -6240,7 +6266,10 @@ export class WorkflowOrchestrator {
       workingFilePath,
       workspaceFolderPath
     );
-    if (currentResolution.kind !== "external-active-run") {
+    if (
+      currentResolution.kind !==
+      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
+    ) {
       return false;
     }
     const currentInspection = currentResolution.inspection;
@@ -6266,7 +6295,7 @@ export class WorkflowOrchestrator {
     }
 
     const externalOwner = {
-      locality: "external" as const,
+      locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
       runner: currentInspection.lock.runner,
     };
 
@@ -6765,7 +6794,7 @@ export class WorkflowOrchestrator {
       workflowKey,
       this.runnerHostIdentity
     );
-    if (lockInspection.liveness !== "active") {
+    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
       this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowKey);
       return;
     }

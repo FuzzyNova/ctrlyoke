@@ -10,6 +10,8 @@ import {
   EXECUTION_STATES,
   QUEUE_POSITION,
   resolveQueueInsertIndex,
+  WORKFLOW_LOCK_LIVENESS,
+  WORKFLOW_LOCK_LOCALITIES,
   WORKTREE_EDIT_KINDS,
   type QueuePosition,
 } from "../../types/DashboardConstants";
@@ -59,7 +61,9 @@ export class RunContinuationService {
     const executionState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
     const activeLock =
-      lockInspection.liveness === "active" ? lockInspection.lock : undefined;
+      lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE
+        ? lockInspection.lock
+        : undefined;
     const lockNamesTarget = activeLock?.runRef === runRef;
     const activeTargetAppend =
       allowActiveTargetAppend &&
@@ -74,8 +78,8 @@ export class RunContinuationService {
     // holds. Editing a different, idle run remains valid while another run in
     // the lineage executes.
     if (
-      lockInspection.liveness === "active" &&
-      lockInspection.locality === "self" &&
+      lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE &&
+      lockInspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF &&
       (action !== "edit" || lockNamesTarget)
     ) {
       const diagnostic: SelfOwnedUntrackedDiagnostic = {
@@ -97,7 +101,10 @@ export class RunContinuationService {
       );
     }
 
-    if (lockInspection.liveness === "active" && !activeTargetAppend) {
+    if (
+      lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE &&
+      !activeTargetAppend
+    ) {
       // Editing an idle run is allowed even while a *different* run of the same
       // lineage holds the lock — only starting work (append/continue) is gated by
       // another run executing. A lock naming *this* run still blocks a static
@@ -105,7 +112,9 @@ export class RunContinuationService {
       // orchestrator before it ever reaches this validator, so reaching here with
       // the lock on this run means a non-resident (e.g. CLI) owner.
       if (action !== "edit" || lockNamesTarget) {
-        if (lockInspection.locality === "indeterminate") {
+        if (
+          lockInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
+        ) {
           throw new Error(
             "Another run in this workflow lineage is executing and ownership is indeterminate"
           );
@@ -140,7 +149,8 @@ export class RunContinuationService {
       executionState === EXECUTION_STATES.RUNNING ||
       executionState === EXECUTION_STATES.PAUSED;
     const allowInterruptedRun =
-      isAdoptableState && lockInspection.liveness !== "active";
+      isAdoptableState &&
+      lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE;
     if (isAdoptableState && !allowInterruptedRun && !activeTargetAppend) {
       throw new Error(
         `Cannot ${action} while run is in state ${executionState}`

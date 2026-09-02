@@ -17,6 +17,7 @@ import {
   PROJECT_RUNNER_STATUSES,
   PROJECT_STATE_PATH_STATUSES,
   RUN_HISTORY_LOCATIONS,
+  WORKFLOW_LOCK_LIVENESS,
 } from "../types/DashboardConstants";
 import type { WorkflowKey } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
@@ -441,12 +442,12 @@ async function inspectRunner(
     }
 
     const lockInspection = await readWorkflowLockInspectionAtPath(runnerPath);
-    if (lockInspection.liveness === "absent") {
+    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ABSENT) {
       throw new ProjectStateLifecycleError(
         `Runner lock is invalid: ${runnerPath}`
       );
     }
-    if (lockInspection.liveness === "active") {
+    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
       return { status: PROJECT_RUNNER_STATUSES.LIVE, path: runnerPath };
     }
   }

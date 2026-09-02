@@ -1425,6 +1425,18 @@ export const WORKTREE_LIFECYCLE_OWNERS = {
 export type WorktreeLifecycleOwner =
   (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 
+export const WORKTREE_LIFECYCLE_STATES = {
+  PROVISIONING: "provisioning",
+  READY: "ready",
+  FINALIZING: "finalizing",
+  SETTLED: "settled",
+  BLOCKED: "blocked",
+  ORPHANED: "orphaned",
+} as const;
+
+export type WorktreeLifecycleState =
+  (typeof WORKTREE_LIFECYCLE_STATES)[keyof typeof WORKTREE_LIFECYCLE_STATES];
+
 // ============================================================================
 // WORKTREE EDIT KINDS - Lineage preparation and start-position edit kinds
 // ============================================================================
@@ -1457,6 +1469,15 @@ export const WORKTREE_DIRECTORY_STATES = {
 export type WorktreeDirectoryState =
   (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
 
+export const WORKTREE_DIRECTORY_OUTCOMES = {
+  REMOVED: WORKTREE_DIRECTORY_STATES.REMOVED,
+  KEPT: "kept",
+  REMOVE_FAILED: "remove-failed",
+} as const;
+
+export type WorktreeDirectoryOutcome =
+  (typeof WORKTREE_DIRECTORY_OUTCOMES)[keyof typeof WORKTREE_DIRECTORY_OUTCOMES];
+
 export const WORKTREE_BRANCH_STATES = {
   PRESENT: "present",
   DELETED: "deleted",
@@ -1484,6 +1505,15 @@ export const WORKTREE_LANDING_OUTCOMES = {
 
 export type WorktreeLandingOutcome =
   (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+
+export const WORKTREE_RECOVERY_OUTCOMES = {
+  LANDED: WORKTREE_LANDING_OUTCOMES.LANDED,
+  NO_CHANGES: WORKTREE_LANDING_OUTCOMES.NO_CHANGES,
+  ORPHANED: "orphaned",
+} as const;
+
+export type WorktreeRecoveryOutcome =
+  (typeof WORKTREE_RECOVERY_OUTCOMES)[keyof typeof WORKTREE_RECOVERY_OUTCOMES];
 
 export const WORKTREE_MERGE_OUTCOMES = {
   FAST_FORWARD: "fast-forward",
@@ -2364,6 +2394,62 @@ export const RUNNER_IDS = {
   CLI: "cli",
   SERVER: "server",
 } as const;
+
+// ============================================================================
+// WORKFLOW LOCK STATES - Runner-lock liveness and locality classifications
+// ============================================================================
+export const WORKFLOW_LOCK_LIVENESS = {
+  ABSENT: "absent",
+  STALE: "stale",
+  ACTIVE: "active",
+} as const;
+
+export type WorkflowLockLiveness =
+  (typeof WORKFLOW_LOCK_LIVENESS)[keyof typeof WORKFLOW_LOCK_LIVENESS];
+
+export const WORKFLOW_LOCK_LOCALITIES = {
+  SELF: "self",
+  EXTERNAL: "external",
+  INDETERMINATE: "indeterminate",
+} as const;
+
+export type WorkflowLockLocality =
+  (typeof WORKFLOW_LOCK_LOCALITIES)[keyof typeof WORKFLOW_LOCK_LOCALITIES];
+
+// ============================================================================
+// EXTERNAL EXECUTION - Resolver discriminants and rejection reasons
+// ============================================================================
+export const EXTERNAL_EXECUTION_RESOLUTION_KINDS = {
+  NOT_EXTERNAL: "not-external",
+  EXTERNAL_ACTIVE_RUN: "external-active-run",
+} as const;
+
+export type ExternalExecutionResolutionKind =
+  (typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS)[keyof typeof EXTERNAL_EXECUTION_RESOLUTION_KINDS];
+
+export const EXTERNAL_EXECUTION_REASONS = {
+  TERMINAL_RUN: "terminal-run",
+  NO_ACTIVE_LOCK: "no-active-lock",
+  SELF_OWNED: "self-owned",
+  INDETERMINATE_OWNER: "indeterminate-owner",
+  RUN_REF_MISMATCH: "run-ref-mismatch",
+  UNREADABLE_WORKING_FILE: "unreadable-working-file",
+} as const;
+
+export type ExternalExecutionReason =
+  (typeof EXTERNAL_EXECUTION_REASONS)[keyof typeof EXTERNAL_EXECUTION_REASONS];
+
+export const EXTERNAL_EXECUTION_DECISION_STATES = {
+  NOT_INSPECTED: "not-inspected",
+} as const;
+
+export const EXTERNAL_EXECUTION_WATCH_ACTIONS = {
+  ELIGIBLE: "eligible",
+  REJECTED: "rejected",
+} as const;
+
+export type ExternalExecutionWatchAction =
+  (typeof EXTERNAL_EXECUTION_WATCH_ACTIONS)[keyof typeof EXTERNAL_EXECUTION_WATCH_ACTIONS];
 
 // ============================================================================
 // PERMISSION MODES - Tool permission mode values

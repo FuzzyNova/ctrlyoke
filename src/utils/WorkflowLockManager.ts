@@ -11,6 +11,7 @@ import {
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
+  WORKFLOW_LOCK_LIVENESS,
 } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "./Log";
@@ -272,7 +273,7 @@ export class WorkflowLockManager {
         workflowKey
       );
 
-      if (lockInspection.liveness === "active") {
+      if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
         Log.info(
           `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} has an active lock — preserving live run`
         );

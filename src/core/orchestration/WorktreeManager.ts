@@ -43,11 +43,15 @@ import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import {
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_BRANCH_STATES,
+  WORKTREE_DIRECTORY_OUTCOMES,
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LANDING_OUTCOMES,
   WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
+  WORKTREE_RECOVERY_OUTCOMES,
   WORKTREE_SETUP_OUTCOMES,
+  WORKFLOW_LOCK_LIVENESS,
   type WorktreeManagementAction,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
@@ -93,9 +97,7 @@ export type WorktreeOrigin = "created" | "discovered" | "recovered";
 export type WorktreeLifecycleOwner =
   (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 export type ManagedWorktreeRecoveryOutcome =
-  | "landed"
-  | "no-changes"
-  | "orphaned";
+  (typeof WORKTREE_RECOVERY_OUTCOMES)[keyof typeof WORKTREE_RECOVERY_OUTCOMES];
 
 export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION = 1 as const;
 export const NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION = 1 as const;
@@ -118,13 +120,7 @@ export interface ManagedWorktreeOwnershipRecord {
   workflowKey: WorkflowKey;
   runRef: RunRef;
   createdAt: number;
-  lifecycleState:
-    | "provisioning"
-    | "ready"
-    | "finalizing"
-    | "blocked"
-    | "orphaned"
-    | "settled";
+  lifecycleState: (typeof WORKTREE_LIFECYCLE_STATES)[keyof typeof WORKTREE_LIFECYCLE_STATES];
   directoryState: (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
   branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
@@ -268,7 +264,7 @@ export interface WorktreeManagementEntry {
   ownership: "managed" | "user";
   lifecycleState?: ManagedWorktreeOwnershipRecord["lifecycleState"];
   directoryState?: ManagedWorktreeOwnershipRecord["directoryState"];
-  branchState: "present" | "missing" | "deleted";
+  branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   createdAt?: number;
   ageMs?: number;
   inUse: boolean;
@@ -675,23 +671,23 @@ export class WorktreeManager {
     const keep = options.keep === true;
     const blocked = async (
       message: string,
-      branchState: WorktreeCompletionResult["branchState"] = "present",
+      branchState: WorktreeCompletionResult["branchState"] = WORKTREE_BRANCH_STATES.PRESENT,
       mergeOutcome?: WorktreeMergeOutcome,
       conflictFiles?: string[]
     ): Promise<WorktreeCompletionResult> => {
       await this.persistManagedSettlement(info, {
-        lifecycleState: "blocked",
-        landingOutcome: "blocked",
-        directoryState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+        landingOutcome: WORKTREE_LANDING_OUTCOMES.BLOCKED,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
         branchState,
         ...(mergeOutcome ? { mergeOutcome } : {}),
         ...(conflictFiles ? { conflictFiles } : {}),
         message,
       });
       return {
-        landingOutcome: "blocked",
+        landingOutcome: WORKTREE_LANDING_OUTCOMES.BLOCKED,
         ...(mergeOutcome ? { mergeOutcome } : {}),
-        directoryOutcome: "kept",
+        directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
         branchState,
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
@@ -734,7 +730,7 @@ export class WorktreeManager {
           ) {
             return blocked(
               "Managed branch ref is missing; refusing to finalize an unowned checkout.",
-              "missing"
+              WORKTREE_BRANCH_STATES.MISSING
             );
           }
           const identity = await this.validateManagedCheckoutIdentity(
@@ -821,18 +817,18 @@ export class WorktreeManager {
           const finalTip = landedIdentity.headCommit;
           const landedRecord: ManagedWorktreeOwnershipRecord = {
             ...record,
-            lifecycleState: "settled",
-            directoryState: "present",
-            branchState: "present",
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
             lastVerifiedBranchTip: finalTip,
             finalBranchTip: finalTip,
           };
           await this.writeRecord(recordPath, landedRecord);
           await this.persistRuntime({
-            lifecycleState: "settled",
-            landingOutcome: "landed",
-            directoryState: "present",
-            branchState: "present",
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
+            directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+            branchState: WORKTREE_BRANCH_STATES.PRESENT,
             finalBranchTip: finalTip,
             ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             updatedAt: this.now(),
@@ -854,12 +850,12 @@ export class WorktreeManager {
 
           if (keep) {
             return {
-              landingOutcome: "landed",
+              landingOutcome: WORKTREE_LANDING_OUTCOMES.LANDED,
               ...(mergeResult
                 ? { mergeOutcome: mergeResult.mergeOutcome }
                 : {}),
-              directoryOutcome: "kept",
-              branchState: "present",
+              directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
+              branchState: WORKTREE_BRANCH_STATES.PRESENT,
               branchName: info.branchName,
               ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
               autoCommitted: true,
@@ -1195,25 +1191,25 @@ export class WorktreeManager {
     if (keep) {
       await this.writeRecord(recordPath, {
         ...record,
-        lifecycleState: "settled",
-        directoryState: "present",
-        branchState: "present",
-        recoveryOutcome: "no-changes",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
+        recoveryOutcome: WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES,
         finalBranchTip: getManagedWorktreeWatermark(record),
       });
       await this.persistRuntime({
-        lifecycleState: "settled",
-        landingOutcome: "no-changes",
-        directoryState: "present",
-        branchState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+        landingOutcome: WORKTREE_LANDING_OUTCOMES.NO_CHANGES,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         finalBranchTip: getManagedWorktreeWatermark(record),
         changedFileCount: 0,
         updatedAt: this.now(),
       });
       return {
-        landingOutcome: "no-changes",
-        directoryOutcome: "kept",
-        branchState: "present",
+        landingOutcome: WORKTREE_LANDING_OUTCOMES.NO_CHANGES,
+        directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.KEPT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
       };
@@ -1223,8 +1219,8 @@ export class WorktreeManager {
       recordPath,
       {
         ...record,
-        lifecycleState: "settled",
-        recoveryOutcome: "no-changes",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+        recoveryOutcome: WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES,
         finalBranchTip: getManagedWorktreeWatermark(record),
       },
       info,
@@ -1250,16 +1246,18 @@ export class WorktreeManager {
       }`;
       await this.writeRecord(recordPath, {
         ...record,
-        lifecycleState: "settled",
-        directoryState: "remove-failed",
-        branchState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+        directoryState: WORKTREE_DIRECTORY_STATES.REMOVE_FAILED,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
       });
       await this.persistRuntime({
-        lifecycleState: "settled",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
         landingOutcome:
-          record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
-        directoryState: "remove-failed",
-        branchState: "present",
+          record.recoveryOutcome === WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+            ? WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+            : WORKTREE_RECOVERY_OUTCOMES.LANDED,
+        directoryState: WORKTREE_DIRECTORY_STATES.REMOVE_FAILED,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
         ...(mergeResult?.conflictFiles
           ? { conflictFiles: mergeResult.conflictFiles }
@@ -1271,9 +1269,11 @@ export class WorktreeManager {
       });
       return {
         landingOutcome:
-          record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
-        directoryOutcome: "remove-failed",
-        branchState: "present",
+          record.recoveryOutcome === WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+            ? WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+            : WORKTREE_RECOVERY_OUTCOMES.LANDED,
+        directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.REMOVE_FAILED,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
         ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
@@ -1287,9 +1287,10 @@ export class WorktreeManager {
       };
     }
 
-    let branchState: WorktreeCompletionResult["branchState"] = "present";
+    let branchState: WorktreeCompletionResult["branchState"] =
+      WORKTREE_BRANCH_STATES.PRESENT;
     let message: string | undefined;
-    if (record.recoveryOutcome === "no-changes") {
+    if (record.recoveryOutcome === WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES) {
       const branchTip = await this.tryResolveLocalBranch(
         repositoryRoot,
         info.branchName
@@ -1297,13 +1298,15 @@ export class WorktreeManager {
       // Settlement uses the per-attempt watermark above, but deletion must
       // stay gated on the original base so a landed append's branch survives.
       if (branchTip !== record.baseCommit) {
-        branchState = branchTip ? "present" : "missing";
+        branchState = branchTip
+          ? WORKTREE_BRANCH_STATES.PRESENT
+          : WORKTREE_BRANCH_STATES.MISSING;
         message =
           "Managed no-change branch changed before deletion; it was kept.";
       } else {
         try {
           await deleteLocalBranch(repositoryRoot, info.branchName);
-          branchState = "deleted";
+          branchState = WORKTREE_BRANCH_STATES.DELETED;
         } catch (error) {
           message = `Managed no-change branch deletion failed: ${
             error instanceof Error ? error.message : String(error)
@@ -1313,18 +1316,20 @@ export class WorktreeManager {
     }
 
     const landingOutcome =
-      record.recoveryOutcome === "no-changes" ? "no-changes" : "landed";
+      record.recoveryOutcome === WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+        ? WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
+        : WORKTREE_RECOVERY_OUTCOMES.LANDED;
     const finalRecord: ManagedWorktreeOwnershipRecord = {
       ...record,
-      lifecycleState: "settled",
-      directoryState: "removed",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+      directoryState: WORKTREE_DIRECTORY_STATES.REMOVED,
       branchState,
     };
     await this.writeRecord(recordPath, finalRecord);
     await this.persistRuntime({
-      lifecycleState: "settled",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
       landingOutcome,
-      directoryState: "removed",
+      directoryState: WORKTREE_DIRECTORY_STATES.REMOVED,
       branchState,
       ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
       ...(mergeResult?.conflictFiles
@@ -1350,7 +1355,7 @@ export class WorktreeManager {
 
     return {
       landingOutcome,
-      directoryOutcome: "removed",
+      directoryOutcome: WORKTREE_DIRECTORY_OUTCOMES.REMOVED,
       branchState,
       branchName: info.branchName,
       ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
@@ -1380,9 +1385,11 @@ export class WorktreeManager {
     if (record) {
       await this.writeRecord(recordPath, {
         ...record,
-        lifecycleState: patch.lifecycleState ?? "blocked",
-        directoryState: patch.directoryState ?? "present",
-        branchState: patch.branchState ?? "present",
+        lifecycleState:
+          patch.lifecycleState ?? WORKTREE_LIFECYCLE_STATES.BLOCKED,
+        directoryState:
+          patch.directoryState ?? WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: patch.branchState ?? WORKTREE_BRANCH_STATES.PRESENT,
         ...(patch.finalBranchTip
           ? { finalBranchTip: patch.finalBranchTip }
           : {}),
@@ -1524,9 +1531,9 @@ export class WorktreeManager {
         workflowKey: identity.workflowKey,
         runRef: identity.runRef,
         createdAt: this.now(),
-        lifecycleState: "provisioning",
-        directoryState: "missing",
-        branchState: "missing",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+        directoryState: WORKTREE_DIRECTORY_STATES.MISSING,
+        branchState: WORKTREE_BRANCH_STATES.MISSING,
       };
 
       if (existingRecord) {
@@ -1573,9 +1580,9 @@ export class WorktreeManager {
       const updatedRecord: ManagedWorktreeOwnershipRecord = {
         ...record,
         worktreePath,
-        lifecycleState: "ready",
-        directoryState: "present",
-        branchState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
       };
       await this.writeRecord(recordPath, updatedRecord);
 
@@ -1650,19 +1657,21 @@ export class WorktreeManager {
       if (!directoryPresent) {
         const recoveryOutcome =
           branchTip === record.baseCommit
-            ? "no-changes"
+            ? WORKTREE_RECOVERY_OUTCOMES.NO_CHANGES
             : branchTip === record.lastVerifiedBranchTip &&
                 record.lastVerifiedBranchTip !== record.baseCommit
-              ? "landed"
-              : "orphaned";
+              ? WORKTREE_RECOVERY_OUTCOMES.LANDED
+              : WORKTREE_RECOVERY_OUTCOMES.ORPHANED;
         await this.writeRecord(recordPath, {
           ...record,
-          directoryState: "missing",
-          branchState: "present",
+          directoryState: WORKTREE_DIRECTORY_STATES.MISSING,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           recoveryOutcome,
           finalBranchTip: branchTip,
           lifecycleState:
-            recoveryOutcome === "orphaned" ? "orphaned" : "settled",
+            recoveryOutcome === WORKTREE_RECOVERY_OUTCOMES.ORPHANED
+              ? WORKTREE_LIFECYCLE_STATES.ORPHANED
+              : WORKTREE_LIFECYCLE_STATES.SETTLED,
         });
         return undefined;
       }
@@ -1678,15 +1687,15 @@ export class WorktreeManager {
         record.stateRoot,
         record.workflowKey
       );
-      if (lockInspection.liveness === "active") {
+      if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
         return undefined;
       }
       return this.acquireManagedInfo({
         record: {
           ...record,
-          directoryState: "present",
-          branchState: "present",
-          lifecycleState: "ready",
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
         },
         recordPath,
         repositoryInputs: await this.resolveExecutionInputs(
@@ -1731,7 +1740,7 @@ export class WorktreeManager {
         record.stateRoot,
         record.workflowKey
       );
-      if (lockInspection.liveness === "active") continue;
+      if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) continue;
       if (await this.hasLiveLease(record.worktreePath)) continue;
       result.push(
         await this.buildManagedInfoWithoutLease(
@@ -1861,9 +1870,9 @@ export class WorktreeManager {
       const inUse = leaseOwners.length > 0;
       const branchState = entry.branchName
         ? (await localBranchExists(sourceRoot, entry.branchName))
-          ? "present"
-          : "missing"
-        : "missing";
+          ? WORKTREE_BRANCH_STATES.PRESENT
+          : WORKTREE_BRANCH_STATES.MISSING
+        : WORKTREE_BRANCH_STATES.MISSING;
       const divergence =
         !record && entry.branchName
           ? WorktreeManager.namedDivergenceCache.get(
@@ -1936,7 +1945,7 @@ export class WorktreeManager {
         commonDirectory,
         staleRecord
       );
-      if (record.branchState !== "present") {
+      if (record.branchState !== WORKTREE_BRANCH_STATES.PRESENT) {
         // Both resources this record tracked are gone; drop the tombstone so
         // it stops appearing forever. Best-effort — a failure just leaves it
         // for the next refresh to retry.
@@ -2115,8 +2124,8 @@ export class WorktreeManager {
           this.recordPath(commonDirectory, record.branchName),
           {
             ...record,
-            lifecycleState: "settled",
-            directoryState: "removed",
+            lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+            directoryState: WORKTREE_DIRECTORY_STATES.REMOVED,
           }
         );
         return;
@@ -2128,7 +2137,7 @@ export class WorktreeManager {
           record.stateRoot,
           record.workflowKey
         );
-        if (lockInspection.liveness === "active") {
+        if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
           throw new Error("The managed run is still live or recoverable.");
         }
         const currentTip = await this.tryResolveLocalBranch(
@@ -2194,9 +2203,11 @@ export class WorktreeManager {
       record.branchName
     );
     const branchState: ManagedWorktreeOwnershipRecord["branchState"] =
-      survivingBranchTip ? "present" : "missing";
+      survivingBranchTip
+        ? WORKTREE_BRANCH_STATES.PRESENT
+        : WORKTREE_BRANCH_STATES.MISSING;
     if (
-      record.directoryState === "removed" &&
+      record.directoryState === WORKTREE_DIRECTORY_STATES.REMOVED &&
       record.branchState === branchState
     ) {
       // Already reconciled and nothing changed since — skip the redundant
@@ -2209,8 +2220,8 @@ export class WorktreeManager {
     }
     const updated: ManagedWorktreeOwnershipRecord = {
       ...record,
-      lifecycleState: "settled",
-      directoryState: "removed",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+      directoryState: WORKTREE_DIRECTORY_STATES.REMOVED,
       branchState,
     };
     await this.writeRecord(
@@ -2286,9 +2297,13 @@ export class WorktreeManager {
     await this.persistRuntime({
       ...this.buildRuntime(repositoryInputs, branchName, worktreePath!),
       origin,
-      lifecycleState: "provisioning",
-      directoryState: needsProvisioning ? "missing" : "present",
-      branchState: initialBranchCheckout ? "present" : "missing",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+      directoryState: needsProvisioning
+        ? WORKTREE_DIRECTORY_STATES.MISSING
+        : WORKTREE_DIRECTORY_STATES.PRESENT,
+      branchState: initialBranchCheckout
+        ? WORKTREE_BRANCH_STATES.PRESENT
+        : WORKTREE_BRANCH_STATES.MISSING,
       baseCommit: capturedBase,
     });
 
@@ -2463,9 +2478,9 @@ export class WorktreeManager {
         setupOutcome,
       });
       await this.persistRuntime({
-        lifecycleState: "provisioning",
-        directoryState: "present",
-        branchState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         setupOutcome,
         updatedAt: this.now(),
       });
@@ -2476,9 +2491,9 @@ export class WorktreeManager {
           setupOutcome,
         });
         await this.persistRuntime({
-          lifecycleState: "provisioning",
-          directoryState: "present",
-          branchState: "present",
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           setupOutcome,
           updatedAt: this.now(),
         });
@@ -2502,9 +2517,9 @@ export class WorktreeManager {
           setupOutcome,
         });
         await this.persistRuntime({
-          lifecycleState: "blocked",
-          directoryState: "present",
-          branchState: "present",
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           setupOutcome,
           dirty: await hasUncommittedChanges(executionCheckoutRoot).catch(
             () => undefined
@@ -2541,9 +2556,9 @@ export class WorktreeManager {
     await this.persistRuntime({
       ...this.buildRuntime(repositoryInputs, branchName, executionCheckoutRoot),
       origin,
-      lifecycleState: "ready",
-      directoryState: "present",
-      branchState: "present",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+      directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+      branchState: WORKTREE_BRANCH_STATES.PRESENT,
       baseCommit,
       dirty,
       ...(comparisonBaseLabel && comparisonBaseCommit
@@ -2825,7 +2840,7 @@ export class WorktreeManager {
     const candidates = records.filter(
       (record) =>
         pathsEqual(record.sourceCheckoutRoot, repositoryRoot) &&
-        record.lifecycleState === "blocked" &&
+        record.lifecycleState === WORKTREE_LIFECYCLE_STATES.BLOCKED &&
         record.setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
     );
     if (candidates.length === 0) return;
@@ -2875,7 +2890,7 @@ export class WorktreeManager {
         record.branchName
       );
       let branchState: ManagedWorktreeOwnershipRecord["branchState"] =
-        "missing";
+        WORKTREE_BRANCH_STATES.MISSING;
       if (branchTip) {
         // A changed watermark is evidence that ctrlyoke landed or otherwise
         // verified commits on this branch. Keep it even though setup failed.
@@ -2885,20 +2900,20 @@ export class WorktreeManager {
         if (branchIsUntouched) {
           try {
             await deleteLocalBranch(repositoryRoot, record.branchName);
-            branchState = "deleted";
+            branchState = WORKTREE_BRANCH_STATES.DELETED;
           } catch {
-            branchState = "present";
+            branchState = WORKTREE_BRANCH_STATES.PRESENT;
           }
         } else {
-          branchState = "present";
+          branchState = WORKTREE_BRANCH_STATES.PRESENT;
         }
       }
 
       const recordPath = this.recordPath(commonDirectory, record.branchName);
       const reconciledRecord: ManagedWorktreeOwnershipRecord = {
         ...record,
-        lifecycleState: "settled",
-        directoryState: "removed",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.SETTLED,
+        directoryState: WORKTREE_DIRECTORY_STATES.REMOVED,
         branchState,
       };
       await this.writeRecord(recordPath, reconciledRecord);
@@ -2994,18 +3009,18 @@ export class WorktreeManager {
     if (shouldRunSetup) {
       setupOutcome = "pending";
       await this.persistRuntime({
-        lifecycleState: "provisioning",
-        directoryState: "present",
-        branchState: "present",
+        lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+        directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+        branchState: WORKTREE_BRANCH_STATES.PRESENT,
         setupOutcome,
         updatedAt: this.now(),
       });
       try {
         setupOutcome = "running";
         await this.persistRuntime({
-          lifecycleState: "provisioning",
-          directoryState: "present",
-          branchState: "present",
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           setupOutcome,
           updatedAt: this.now(),
         });
@@ -3024,15 +3039,15 @@ export class WorktreeManager {
         setupOutcome = "failed";
         await this.writeRecord(args.recordPath, {
           ...args.record,
-          lifecycleState: "blocked",
-          directoryState: "present",
-          branchState: "present",
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           setupOutcome,
         });
         await this.persistRuntime({
-          lifecycleState: "blocked",
-          directoryState: "present",
-          branchState: "present",
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.BLOCKED,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
           setupOutcome,
           dirty: await hasUncommittedChanges(args.record.worktreePath).catch(
             () => undefined
@@ -3046,9 +3061,9 @@ export class WorktreeManager {
     }
     const readyRecord: ManagedWorktreeOwnershipRecord = {
       ...args.record,
-      lifecycleState: "ready",
-      directoryState: "present",
-      branchState: "present",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+      directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+      branchState: WORKTREE_BRANCH_STATES.PRESENT,
     };
     if (
       setupOutcome === WORKTREE_SETUP_OUTCOMES.SUCCEEDED ||
@@ -3105,9 +3120,9 @@ export class WorktreeManager {
         ? { targetBranch: args.record.targetBranch }
         : {}),
       lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
-      lifecycleState: "ready",
-      directoryState: "present",
-      branchState: "present",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.READY,
+      directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+      branchState: WORKTREE_BRANCH_STATES.PRESENT,
       dirty,
       ...(setupOutcome ? { setupOutcome } : {}),
     });
@@ -3197,7 +3212,7 @@ export class WorktreeManager {
       record.stateRoot,
       record.workflowKey
     );
-    if (lockInspection.liveness === "active") {
+    if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
       return {
         eligible: false,
         reason: "The managed run is live or recoverable.",
@@ -3335,9 +3350,9 @@ export class WorktreeManager {
       })),
       baseCommit: "",
       lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.USER,
-      lifecycleState: "provisioning",
-      directoryState: "missing",
-      branchState: "missing",
+      lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+      directoryState: WORKTREE_DIRECTORY_STATES.MISSING,
+      branchState: WORKTREE_BRANCH_STATES.MISSING,
       updatedAt: this.now(),
     };
   }

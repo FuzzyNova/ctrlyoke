@@ -4,6 +4,7 @@ import { execFileSync } from "child_process";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { RUNNER_IDS } from "../../types/DashboardConstants";
 import {
   ExecutionLeaseConflictError,
   ExecutionRootLeaseManager,
@@ -29,7 +30,7 @@ suite("ExecutionRootLeaseManager", function () {
       executionRoot,
       workflowKey: `workflow-${suffix}`,
       runRef: `run-${suffix}`,
-      runner: "vscode",
+      runner: RUNNER_IDS.VSCODE,
       instanceId: `instance-${suffix}`,
     };
   }

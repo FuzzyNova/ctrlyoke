@@ -18,6 +18,7 @@ import {
   FINAL_STEP_PHASES,
   PERMISSION_MODES,
   RUNNER_IDS,
+  WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
   HARNESS_INFO,
@@ -1272,7 +1273,7 @@ async function assertLineageAvailableForCli(
     workspaceRoot,
     workflowKey
   );
-  if (lockInspection.liveness === "active") {
+  if (lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE) {
     throw new Error("Another run in this workflow lineage is executing");
   }
 }
