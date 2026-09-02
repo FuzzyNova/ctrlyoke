@@ -22,6 +22,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  CLI_OUTPUT_METADATA_KEYS,
   HARNESS_IDS,
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -175,7 +176,10 @@ suite("ClaudeLogParser", () => {
       const normalize = (output: UniversalCliOutput) =>
         JSON.parse(
           JSON.stringify(output, (key, value) =>
-            key === "timestamp" || key === "totalConfidence" ? undefined : value
+            key === CLI_OUTPUT_METADATA_KEYS.TIMESTAMP ||
+            key === CLI_OUTPUT_METADATA_KEYS.TOTAL_CONFIDENCE
+              ? undefined
+              : value
           )
         );
 
@@ -774,7 +778,7 @@ suite("ClaudeLogParser", () => {
       const completed = response.events.find(
         (e) =>
           e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
-          (e.data as AskUserQuestionData).status === "completed"
+          (e.data as AskUserQuestionData).status === OPERATION_STATUS.COMPLETED
       )!.data as AskUserQuestionData;
 
       assert.strictEqual(
@@ -5500,7 +5504,7 @@ suite("QwenLogParser", () => {
       const stdoutSemantics = {
         sessionId: stdout.find((event) => event.session_id)?.session_id,
         thinkingCount: stdoutAssistantParts.filter(
-          (part) => part.type === "thinking"
+          (part) => part.type === QWEN_CONTENT_PART_TYPES.THINKING
         ).length,
         text: stdoutAssistantParts
           .filter((part) => part.type === QWEN_CONTENT_PART_TYPES.TEXT)
@@ -5512,7 +5516,8 @@ suite("QwenLogParser", () => {
           (event) =>
             event.type === QWEN_EVENT_TYPES.USER && event.message?.content
         ).length,
-        usage: stdout.find((event) => event.type === "result")?.usage,
+        usage: stdout.find((event) => event.type === QWEN_EVENT_TYPES.RESULT)
+          ?.usage,
       };
       const logSemantics = {
         sessionId: output.metadata.sessionId,

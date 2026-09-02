@@ -823,6 +823,8 @@ export const CLAUDE_TOOL_NAMES = {
   AGENT: "Agent",
   MONITOR: "Monitor",
   TASK_STOP: "TaskStop",
+  ASK_USER_QUESTION: "AskUserQuestion",
+  MULTI_EDIT: "multiedit",
 } as const;
 
 /** Metrics available in the workspace harness-share breakdown. */
@@ -2285,6 +2287,11 @@ export const CLI_EVENT_TYPES = {
   CONTEXT_WINDOW_SYNC: "contextWindowSync",
 } as const;
 
+export const CLI_OUTPUT_METADATA_KEYS = {
+  TIMESTAMP: "timestamp",
+  TOTAL_CONFIDENCE: "totalConfidence",
+} as const;
+
 /**
  * What triggered a context compaction event.
  * Used by CompactionData.trigger across all harnesses (Claude, OpenCode, etc.)
@@ -2329,6 +2336,22 @@ export const PERMISSION_MODES = {
 
 export type PermissionMode =
   (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
+
+// ============================================================================
+// TOOL PERMISSION CATEGORIES - Shared tool categories used by permission rules
+// ============================================================================
+export const TOOL_PERMISSION_CATEGORIES = {
+  BASH: "bash",
+  SHELL: "shell",
+  READ: "read",
+  WRITE: "write",
+  EDIT: "edit",
+  MCP: "mcp",
+  GIT: "git",
+} as const;
+
+export type ToolPermissionCategory =
+  (typeof TOOL_PERMISSION_CATEGORIES)[keyof typeof TOOL_PERMISSION_CATEGORIES];
 
 // ============================================================================
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
@@ -2831,6 +2854,8 @@ export type FileOperationStatus =
   (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
 export type CliEventType =
   (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+export type CliOutputMetadataKey =
+  (typeof CLI_OUTPUT_METADATA_KEYS)[keyof typeof CLI_OUTPUT_METADATA_KEYS];
 export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];

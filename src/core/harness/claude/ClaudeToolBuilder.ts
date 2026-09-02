@@ -10,12 +10,17 @@ import type {
   AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
+  CLAUDE_TOOL_NAMES,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  TOOL_PERMISSION_CATEGORIES,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
-import { CLAUDE_CONTENT_BLOCK_TYPES } from "./ClaudeProtocolConstants";
+import {
+  CLAUDE_CONTENT_BLOCK_TYPES,
+  CLAUDE_TOOL_RESULT_TYPES,
+} from "./ClaudeProtocolConstants";
 
 /**
  * Builds CliEvents from Claude CLI tool call payloads.
@@ -62,7 +67,7 @@ export class ClaudeToolBuilder {
     // Claude-specific: AskUserQuestion parses into the full question/option
     // set up front, so the pending question is visible while the user is
     // still answering — the answer arrives later via tryBuildAskUserQuestionEvent.
-    if (toolName === "AskUserQuestion") {
+    if (toolName === CLAUDE_TOOL_NAMES.ASK_USER_QUESTION) {
       return [
         {
           type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
@@ -80,7 +85,10 @@ export class ClaudeToolBuilder {
     }
 
     // Claude-specific: multiedit fans out to one FILE_EDIT per edited file
-    if (toolName === "multiedit" && Array.isArray(input.edits)) {
+    if (
+      toolName === CLAUDE_TOOL_NAMES.MULTI_EDIT &&
+      Array.isArray(input.edits)
+    ) {
       return (input.edits as Record<string, unknown>[]).map((edit) => ({
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp,
@@ -169,7 +177,7 @@ export class ClaudeToolBuilder {
     }
   ): void {
     for (const block of contentBlocks) {
-      if (block.type !== "tool_result") continue;
+      if (block.type !== CLAUDE_CONTENT_BLOCK_TYPES.TOOL_RESULT) continue;
 
       const askEvent = ClaudeToolBuilder.tryBuildAskUserQuestionEvent(
         context?.resolveToolName?.(block.tool_use_id),
@@ -285,7 +293,7 @@ export class ClaudeToolBuilder {
   ): CliEvent | undefined {
     const looksLikeAnswer =
       ClaudeToolBuilder.isAskUserQuestionResult(toolUseResult);
-    if (!looksLikeAnswer && toolName !== "AskUserQuestion") {
+    if (!looksLikeAnswer && toolName !== CLAUDE_TOOL_NAMES.ASK_USER_QUESTION) {
       return undefined;
     }
 
@@ -405,8 +413,8 @@ export class ClaudeToolBuilder {
     // Must have a file path to avoid matching Grep results (which also have a `content` field)
     // Check both "create" (log format) and "write" (stream format) type values
     if (
-      (toolUseResult.type === "create" ||
-        toolUseResult.type === "write" ||
+      (toolUseResult.type === CLAUDE_TOOL_RESULT_TYPES.CREATE ||
+        toolUseResult.type === TOOL_PERMISSION_CATEGORIES.WRITE ||
         toolUseResult.content) &&
       (toolUseResult.filePath || toolUseResult.path)
     ) {
@@ -461,7 +469,10 @@ export class ClaudeToolBuilder {
     }
 
     // Bash command result
-    if (toolUseResult.command || toolUseResult.type === "bash") {
+    if (
+      toolUseResult.command ||
+      toolUseResult.type === TOOL_PERMISSION_CATEGORIES.BASH
+    ) {
       const exitCode = toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
       events.push({
         type: CLI_EVENT_TYPES.BASH_COMMAND,

@@ -26,6 +26,7 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
+  TOOL_PERMISSION_CATEGORIES,
   TOOL_RESULT_STATUSES,
   TOKEN_TOTAL_CONFIDENCE,
   type ToolResultStatus,
@@ -279,7 +280,7 @@ export class QwenLogParser extends BaseLogParser {
       }
 
       // TOOL_RESULT — separate event type (not nested in user events)
-      if (event.type === "tool_result" && event.message?.parts) {
+      if (event.type === QWEN_EVENT_TYPES.TOOL_RESULT && event.message?.parts) {
         for (const part of event.message.parts) {
           if (part.functionResponse) {
             const askEvent = this.buildAskUserQuestionCompletedEvent(
@@ -318,9 +319,9 @@ export class QwenLogParser extends BaseLogParser {
           const toolName = event.message.parts[0]?.functionResponse?.name;
           const fullPath =
             callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
-          const succeeded = tcr.status === "success";
+          const succeeded = tcr.status === TOOL_RESULT_STATUSES.SUCCESS;
 
-          if (toolName === "edit" && rd.fileDiff) {
+          if (toolName === TOOL_PERMISSION_CATEGORIES.EDIT && rd.fileDiff) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.FILE_EDIT,
               timestamp,
@@ -708,7 +709,7 @@ export class QwenLogParser extends BaseLogParser {
       }
     }
 
-    if (e.type === "tool_result" && e.message?.parts) {
+    if (e.type === QWEN_EVENT_TYPES.TOOL_RESULT && e.message?.parts) {
       for (const part of e.message.parts) {
         if (part.functionResponse) {
           const askEvent = this.buildAskUserQuestionCompletedEvent(
@@ -825,7 +826,7 @@ export class QwenLogParser extends BaseLogParser {
         toolCallId: tcr.callId,
         ...(isSegmentRead ? { lineStart, lineEnd } : {}),
         status: OPERATION_STATUS.COMPLETED,
-        success: tcr.status === "success",
+        success: tcr.status === TOOL_RESULT_STATUSES.SUCCESS,
       } as FileReadData,
     };
   }

@@ -32,6 +32,11 @@ import {
   type StatuslineInstallResult,
 } from "../shared/StatuslineManager";
 import { ClaudeStatuslineSidecar } from "./ClaudeStatuslineSidecar";
+import {
+  CLAUDE_EVENT_TYPES,
+  CLAUDE_HOOK_CONFIG_TYPES,
+  CLAUDE_SYSTEM_SUBTYPES,
+} from "./ClaudeProtocolConstants";
 import type {
   CliExecutionSidecar,
   CliExecutionSidecarDeps,
@@ -187,8 +192,8 @@ export class ClaudeCliProvider implements ICliProvider {
     const { objects } = CliParseUtils.extractJsonObjectsFromStream(chunk);
     const initEvent = objects.find(
       (event) =>
-        event.type === "system" &&
-        event.subtype === "init" &&
+        event.type === CLAUDE_EVENT_TYPES.SYSTEM &&
+        event.subtype === CLAUDE_SYSTEM_SUBTYPES.INIT &&
         typeof event.session_id === "string"
     );
     return initEvent?.session_id as string | undefined;
@@ -537,7 +542,7 @@ export class ClaudeCliProvider implements ICliProvider {
         ]),
       ]
     );
-    if (hookConfig.type !== "json-string") {
+    if (hookConfig.type !== CLAUDE_HOOK_CONFIG_TYPES.JSON_STRING) {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
     const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
@@ -627,7 +632,7 @@ export class ClaudeCliProvider implements ICliProvider {
               userHooks,
               enabledNotificationHookEvents
             );
-            if (hookConfig.type !== "json-string") {
+            if (hookConfig.type !== CLAUDE_HOOK_CONFIG_TYPES.JSON_STRING) {
               throw new Error("Unexpected hook config type for Claude CLI");
             }
             return hookConfig.config;
