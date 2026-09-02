@@ -10,8 +10,10 @@
    placement strategy.
 2. Collapse the workflow/prompt-file commands (`Run`, `Load`, `Queue`, `Queue Next`) into a
    single "Run with ctrlyoke" submenu instead of four flat entries.
-3. Resolve whether `Queue`/`Queue Next` should be removed for `.ctrlyoke.{yaml,yml,json}`
-   workflow files, kept only for `.prompt.md`, or kept everywhere with clearer wording.
+3. ~~Resolve whether `Queue`/`Queue Next` should be removed for `.ctrlyoke.{yaml,yml,json}`
+   workflow files, kept only for `.prompt.md`, or kept everywhere with clearer wording.~~
+   **Decided** — kept everywhere, retitled to "Queue Steps with ctrlyoke" / "Queue Steps Next
+   with ctrlyoke". See "Queue / Queue Next: problem and options" below.
 4. ~~Add an "Add commit to ctrlyoke" entry to the SCM Graph's per-commit right-click menu
    (the one that already has "Add to Chat"/"Explain Changes").~~ **Blocked upstream — see
    below.** Not currently possible; kept here as a tracked want, not an active goal.
@@ -290,7 +292,7 @@ Then, in `explorer/context`, `editor/title`, and `editor/title/context`, replace
 flat entries for `runFromContext` / `loadFromContext` / `queueFromContext` /
 `queueNextFromContext` with:
 
-- one top-level entry: `{ "submenu": "ctrlyoke.runSubmenu", "group": "z_ctrlyoke", "when": "<existing file-pattern when>" }`
+- one top-level entry: `{ "submenu": "ctrlyoke.runSubmenu", "group": "z_ctrlyoke@1", "when": "<existing file-pattern when>" }`
 - the four commands re-declared as children under `"ctrlyoke.runSubmenu"` in
   `contributes.menus`, each keeping its own `when` clause (all four already share the same
   file-pattern `when`, so this is a straight move, not a behavior change)
@@ -300,12 +302,56 @@ ctrlyoke's footprint in the flat `explorer/context` menu from 5 entries to 2
 (`ctrlyoke.runSubmenu` + `addFileToPromptEditor`/`addDirectoryToPromptEditor`), which makes
 whichever placement option is chosen above easier to live with.
 
-`editor/title` (the icon toolbar, not a dropdown context menu) should probably keep `Run` as
-its own icon button rather than folding it into the submenu — a toolbar submenu still costs a
-click-and-hover just like today's icon does, and `Run` is the single most common action, so
-collapsing it away would add friction to the primary path. `Queue`/`Queue Next` icons in
-`editor/title` are candidates to drop from the toolbar and only offer via the submenu,
-pending the decision below.
+**Decided (2026-09-02): both remaining entries sit at the bottom, submenu directly above
+"Add."** Today, right-clicking a `.ctrlyoke.json` file shows 5 flat ctrlyoke items (Run, Load,
+Queue, Queue Next, Add). After the collapse it's 2 — the `ctrlyoke.runSubmenu` (containing
+Run/Load/Queue Steps/Queue Steps Next) and `addFileToPromptEditor`/`addDirectoryToPromptEditor`
+— both in the `z_ctrlyoke` group per the placement decision above, with the submenu ordered
+directly above "Add": `z_ctrlyoke@1` for the submenu entry, `z_ctrlyoke@2` for
+`addFileToPromptEditor`/`addDirectoryToPromptEditor` (bumped from today's `ctrlyoke@5`). Same
+ordering applies to `editor/title/context`, which has the identical 5-item pattern minus the
+directory variant.
+
+### Decided (2026-09-02): `editor/title` also collapses to one dropdown button, all 4 options
+
+**Superseded the earlier "keep `Run` as its own icon" lean below** — `editor/title` gets the
+same `ctrlyoke.runSubmenu` as a single toolbar button, containing all four: Run, **Load**,
+Queue Steps, Queue Steps Next.
+
+Confirmed possible by reading VS Code source directly (`C:\dev\vscode`, commit `42b84d2c`):
+`editor/title` supports submenu entries from extensions — checked `menusExtensionPoint.ts:50-54`,
+the `editor/title` `apiMenus` entry has no `supportsSubmenus: false` override (unlike
+`commandPalette`/`touchBar`, which explicitly disable it), so it defaults to allowing them
+(`supportsSubmenus` "defaults to true", `menusExtensionPoint.ts:34`). VS Code's own **"Run or
+Debug..."** button is the exact working precedent:
+```ts
+MenuRegistry.appendMenuItem(MenuId.EditorTitle, {
+  submenu: MenuId.EditorTitleRun, title: "Run or Debug...", icon: icons.debugRun,
+  group: 'navigation', order: -1, isSplitButton: { togglePrimaryAction: true }
+});
+```
+(`debug.contribution.ts:257`) — one toolbar icon; clicking it opens a dropdown of the
+submenu's children. Implementation is one more placement of the already-planned
+`ctrlyoke.runSubmenu`:
+```json
+{ "submenu": "ctrlyoke.runSubmenu", "group": "navigation", "when": "<existing file-pattern when>" }
+```
+replacing today's three separate `editor/title` icons (`navigation`/`navigation@2`/
+`navigation@3` for Run/Queue/Queue Next — note Load was never in the toolbar at all before this
+change, only in the dropdown menus; this is a net addition, not a like-for-like swap).
+
+**One confirmed limitation:** VS Code's `isSplitButton` (the property that lets a *single
+click* run the last-used option while a separate small chevron opens the dropdown for the
+rest) is internal-only — defined in `src/vs/platform/actions/common/actions.ts:48`, and
+absent from every property list in `menusExtensionPoint.ts`'s extension-facing schema. A
+third-party extension cannot request it. ctrlyoke's toolbar button will be a plain
+click-to-open-dropdown (every click opens the list of 4; no single-click "run last used"
+shortcut) — still exactly the outcome asked for ("one icon, four options"), just without that
+one polish detail VS Code reserves for itself.
+
+`editor/title` is unaffected by the `z_ctrlyoke` placement decision above — it keeps
+`navigation` (VS Code forces that group first regardless of name, and a toolbar has no "bottom
+of a sorted list" concept).
 
 ## Queue / Queue Next: problem and options
 
@@ -326,33 +372,108 @@ specifically whether right-clicking a *whole workflow file* and offering "Queue"
 is the right UX, given that a `.ctrlyoke.yaml/.json` file reads as "a workflow" to a user, not
 "a list of steps."
 
-Options:
+### Decided: keep everywhere, reword (2026-09-02)
+
+**Chosen: Option 2 — keep `Queue`/`Queue Next` for both `.ctrlyoke.*` and `.prompt.md`, reword
+the titles to make the "steps only" semantics explicit at the point of use.** No `when`-clause
+narrowing by file type; this is a wording fix, not a scope cut.
+
+**Tooltips are not available — checked against VS Code's actual manifest schema, not assumed.**
+Read `menusExtensionPoint.ts` directly (`C:\dev\vscode`, commit `42b84d2c`): a `contributes.commands`
+item's schema (`commandType`, line 851) allows exactly `command`, `title`, `shortTitle`,
+`category`, `enablement`, `icon` — no `description`/`markdownDescription`/`tooltip` field. A
+`contributes.menus` item's schema (`menuItem`, line 685) allows exactly `command`, `alt`,
+`when`, `group` — same story. **There is no manifest-level tooltip mechanism for either a
+command or a menu entry.** The `title` string is the only lever for a dropdown row. The one
+exception: `editor/title`'s icon-only toolbar buttons render their command's `title` as a
+native hover tooltip (there's no visible text label there to read instead) — and Queue/Queue
+Next already appear in `editor/title` per the audit table, so the reworded title improves that
+surface for free, it isn't a separate change.
+
+**New titles** (each command has one `title` in `contributes.commands`, shared across every
+menu location that references it — `explorer/context`, `editor/title`, `editor/title/context`
+all update from a single edit):
+
+| Command | Old title | New title |
+| --- | --- | --- |
+| `ctrlyoke.queueFromContext` | "Queue with ctrlyoke" | **"Queue Steps with ctrlyoke"** |
+| `ctrlyoke.queueNextFromContext` | "Queue Next with ctrlyoke" | **"Queue Steps Next with ctrlyoke"** |
+
+Matches the existing naming pattern (`Run with ctrlyoke`, `Load in ctrlyoke`) rather than
+introducing a new phrasing style. "Steps" is the one word doing the disambiguating work — it's
+the only signal available given there's nowhere to put the fuller "harness/model/end-conditions
+are not applied" explanation from the options considered below. If that fuller explanation
+turns out to matter in practice, the only manifest-level place it could go is the extension's
+own `README.md`/`CHANGELOG.md` (surfaced on the extension's Marketplace/details page, not at
+the point of use) — not a per-item tooltip, since none exists.
+
+Options considered and not chosen:
 
 1. **Remove for workflow files, keep for prompt files.** Drop `Queue`/`Queue Next` from the
-   `when` clause for `.ctrlyoke.{yaml,yml,json}`, keep them for `.prompt.md`. Rationale: a
-   `.prompt.md` file doesn't have a separate "workflow settings" object the way
-   `.ctrlyoke.*` files do (harness/model/etc. live at the top of the same file as the steps,
-   and the feature was arguably designed around this shape), so silently dropping
-   "everything but steps" is a smaller, more defensible gap for that file type.
-2. **Keep for both, reword.** Retitle to make the "steps only" semantics explicit at the
-   point of use, e.g. `Queue Steps from Workflow` / `Queue Steps Next`, with a
-   `markdownDescription`-style tooltip such as: "Appends this file's steps to the currently
-   loaded workflow. Only the step list carries over — harness, model, and other
-   workflow-level settings from this file are not applied." Keeps the capability available
-   everywhere, at the cost of two menu items competing with `Run`/`Load` for space.
-3. **Hybrid.** Keep the current wording for `.prompt.md`; apply option 2's reworded
-   titles/tooltips only for `.ctrlyoke.*` files, since that's where the "I expected the whole
-   workflow's settings to apply" surprise is most likely.
+   `when` clause for `.ctrlyoke.{yaml,yml,json}`, keep them for `.prompt.md`. Rejected —
+   Nathan is fine leaving Queue/Queue Next available for workflow files too; a wording fix
+   covers the actual confusion without cutting a capability some users may rely on.
+2. **Hybrid.** Reword only for `.ctrlyoke.*`, keep the old wording for `.prompt.md`. Rejected
+   for the same reason Option 2 was chosen outright — keeping two different titles for the same
+   command depending on invoking file type adds complexity (title becomes conditional on `when`
+   context, which `contributes.commands` doesn't support per-menu-location anyway — see the
+   schema finding above) for a distinction that doesn't need to survive.
 
-No recommendation locked in yet — this is the open brainstorming item to resolve with
-Nathan before implementation.
+### Decided (2026-09-02): gate Queue/Queue Next on an active, non-empty queue
+
+**Chosen: yes, gate both behind a new context key — only show them when there's actually
+something to append to.** This isn't just a UX nicety; it fixes a confirmed behavioral bug in
+what "Queue" currently does, not just how it's worded.
+
+Read `WorkflowInstance.appendFromFile` directly (`src/core/WorkflowInstance.ts:2493-2525`):
+```ts
+const queueState = this.promptQueue.getState();
+const currentSize = queueState.steps.length;
+
+if (currentSize === 0) {
+  // ...
+  await this.initializeNewWorkflow(parsed.steps, ..., true, ...);   // ← identical to Load
+  return;
+}
+// ... only past this point does it actually append to the existing queue
+```
+When nothing is currently queued — the common case, since the toolbar/menu is available any
+time a `.ctrlyoke.*`/`.prompt.md` file is open, regardless of dashboard state — "Queue" doesn't
+append anything; it calls the exact same `initializeNewWorkflow` path "Load" uses. It only
+behaves as a true *append* once the queue already holds at least one step. So today, "Queue"
+is functionally identical to "Load" most of the time it's actually clicked — confirmed in
+code, not just an impression from the naming.
+
+**Gating on "queue already has steps" fixes this directly**: hide Queue/Queue Next entirely
+until `currentSize > 0`, so the only time either command is visible is the only time it does
+something distinct from Load. This is the same shape as the precedent already cited in this
+doc's own research — Copilot's CLI file-reference commands gate on `hasSession` so they don't
+appear until they'd do something meaningful.
+
+**What this needs, concretely:** a new VS Code context key (working name:
+`ctrlyoke.hasQueuedSteps`), since ctrlyoke doesn't have an equivalent one today — the only
+existing `setContext` calls in the codebase are `ctrlyoke.devMode` (`src/dev/DevCommands.ts:571`)
+and the commit-message-generation key used by `scm/title` (`src/scm/ScmCommitCommand.ts`), grepped
+directly, nothing queue-related exists yet. `PromptQueue` already exposes
+`onDidChangeState` (`src/core/PromptQueue.ts:127`) as an event emitter — the natural place to
+wire this is a listener on that event (scoped to the currently *active* instance, since the
+toolbar/menu reflects whichever workflow is loaded in the dashboard, not the right-clicked
+file) that calls `vscode.commands.executeCommand('setContext', 'ctrlyoke.hasQueuedSteps',
+steps.length > 0)` on every change, plus an initial call on activation/instance-switch so the
+key isn't stale before the first queue-state event fires.
+
+Every `when` clause for `queueFromContext`/`queueNextFromContext` — `explorer/context`,
+`editor/title/context`, and the new `editor/title` submenu child — gets `&&
+ctrlyoke.hasQueuedSteps` appended to its existing file-pattern condition. This is a real
+implementation task (new context key, new listener wiring), not just a manifest edit — flagged
+in Affected Files below.
 
 ## Affected files (once a direction is picked)
 
 | File | Role |
 | --- | --- |
-| `package.json` | `contributes.menus` group renames, new `contributes.submenus` entry, submenu children, possibly reworded command titles/tooltips, possibly narrowed `when` clauses for Queue/Queue Next |
-| `src/extension.ts` | Likely unchanged — command registrations stay the same; only menu wiring moves. Only touched if Queue/Queue Next options end up gated behind a new context key (e.g. "workflow currently loaded") rather than just a file-pattern `when`. |
+| `package.json` | `contributes.menus` group renames to `z_ctrlyoke`, new `contributes.submenus` entry (`ctrlyoke.runSubmenu`) placed in `explorer/context`/`editor/title/context`/`editor/title`, submenu children, reworded Queue/Queue Next titles, `&& ctrlyoke.hasQueuedSteps` added to Queue/Queue Next `when` clauses |
+| `src/extension.ts` (or wherever the active `WorkflowInstance`/`PromptQueue` is already wired to the extension host) | New: subscribe to `PromptQueue.onDidChangeState` (`src/core/PromptQueue.ts:127`) on the active instance and call `vscode.commands.executeCommand('setContext', 'ctrlyoke.hasQueuedSteps', steps.length > 0)` on change and on instance-switch/activation |
 | `dev/reference/VSCODE_COMMANDS.md`, `README.md`, `QUICK_START.md`, `docs/reference/commands.md` | Reference the current command titles/menu locations; need updates to match whatever titles/placement land (found via grep for `queueFromContext`/`queueNextFromContext`/their current titles — not yet read in detail). |
 
 ## Non-Goals
@@ -379,11 +500,21 @@ Nathan before implementation.
 - ~~Which placement option (A or B) does Nathan want, per menu location?~~ **Decided** —
   Option A, `z_ctrlyoke`, everywhere. See the Decision section above. Not yet implemented in
   `package.json`.
-- For the submenu: does `Run` stay as its own `editor/title` icon, or does everything
-  (including `Run`) move into the submenu for total consistency with the context-menu
-  version?
-- Queue/Queue Next: option 1, 2, or 3 above — or cut entirely and rely on the MCP tool /
-  manual drag-in-dashboard for the "extend a running workflow" use case?
-- Should Queue/Queue Next (wherever they remain) be gated on "a workflow is actually loaded/
-  running" via a context key, similar to how Copilot gates its CLI file-reference commands on
-  `hasSession`, instead of showing unconditionally whenever the file pattern matches?
+- ~~For the submenu, where do the two remaining entries land in `explorer/context`/
+  `editor/title/context`?~~ **Decided** — both at the bottom (`z_ctrlyoke`), submenu directly
+  above "Add" (`z_ctrlyoke@1`/`z_ctrlyoke@2`). See "Submenu collapsing" above.
+- ~~Does `Run` stay as its own `editor/title` icon, or does everything move into the submenu
+  there too?~~ **Decided** — everything, including `Run` and (newly) `Load`. `editor/title`
+  collapses to one `ctrlyoke.runSubmenu` dropdown button containing all 4 options, confirmed
+  possible via VS Code's own "Run or Debug..." precedent. See "Decided: `editor/title` also
+  collapses to one dropdown button" above.
+- ~~Queue/Queue Next: option 1, 2, or 3 above?~~ **Decided** — kept everywhere, retitled
+  ("Queue Steps with ctrlyoke" / "Queue Steps Next with ctrlyoke").
+- ~~Should Queue/Queue Next be gated on "a workflow is actually loaded" via a context key?~~
+  **Decided** — yes. New context key `ctrlyoke.hasQueuedSteps`, gates on the active queue
+  already having at least one step (the exact condition under which Queue actually appends
+  instead of behaving like Load — see "Decided: gate Queue/Queue Next on an active, non-empty
+  queue" above).
+
+All open questions in this doc are now resolved. Nothing implemented in `package.json`/
+`src/` yet — that's the next step.
