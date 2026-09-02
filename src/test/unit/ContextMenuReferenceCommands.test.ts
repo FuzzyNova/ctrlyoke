@@ -128,6 +128,58 @@ suite("ContextMenuReferenceCommands", () => {
     assert.match(referencePath, /-full-[0-9a-f]{12}\.log$/);
   });
 
+  test("builds a single, non-double-quoted reference when the channel name has a space", async () => {
+    // Real output channels commonly have spaces in their display name (e.g.
+    // "Extension Host", "GitHub Copilot Chat"), which getOutputChannelSlug
+    // carries into the attachment filename. writeOutputSnapshotAttachment
+    // already returns a quoted reference value, so re-quoting it would
+    // produce a malformed "@""..."" token instead of a single "@"..."".
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-context-menu-")
+    );
+    workspaceRoots.push(workspaceRoot);
+    const editor = await createOutputEditor();
+    editor.selection = new vscode.Selection(
+      editor.document.positionAt(0),
+      editor.document.positionAt(0)
+    );
+    setActiveEditor(editor);
+    const sink = new RecordingPromptEditorInsertSink();
+
+    const originalAsRelativePath = vscode.workspace.asRelativePath;
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
+      configurable: true,
+      value: () => "My Channel Name",
+    });
+    try {
+      await createCommands(
+        sink,
+        workspaceRoot
+      ).addOutputChannelToPromptEditor();
+    } finally {
+      Object.defineProperty(vscode.workspace, "asRelativePath", {
+        configurable: true,
+        value: originalAsRelativePath,
+      });
+    }
+
+    assert.strictEqual(sink.requests.length, 1);
+    const reference = sink.requests[0].references[0];
+    assert.ok(
+      !reference.includes('""'),
+      `reference must not be double-quoted: ${reference}`
+    );
+    assert.match(reference, /^@"[^"]+"$/);
+    const referencePath = reference.slice(2, -1);
+    assert.strictEqual(
+      await fs.promises.readFile(
+        path.join(workspaceRoot, referencePath),
+        "utf8"
+      ),
+      "first output\nsecond output\nthird output"
+    );
+  });
+
   test("does not capture when the passed editor URI is not active", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ctrlyoke-context-menu-")

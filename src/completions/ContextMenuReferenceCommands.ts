@@ -234,11 +234,16 @@ export class ContextMenuReferenceCommands {
       channel: getOutputChannelSlug(editor.document),
       range,
     };
-    const relativePath = await writeOutputSnapshotAttachment(
+    // writeOutputSnapshotAttachment already returns a quoted/normalized
+    // reference value (same contract as savePendingOutputSnapshot, whose only
+    // other caller prepends '@' itself) — do not re-run it through
+    // buildFileReference, which would quote an already-quoted path a second
+    // time whenever the channel name contains a space.
+    const referenceValue = await writeOutputSnapshotAttachment(
       this.getWorkspaceRoot,
       entry
     );
-    await this.insertReferences([buildFileReference(relativePath)]);
+    await this.insertReferences([`@${referenceValue}`]);
   }
 
   private async tryBuildSymbolReference(
