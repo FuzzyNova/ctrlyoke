@@ -9,7 +9,10 @@ import {
   MESSAGE_TYPES,
   SETTING_SCOPES,
   WORKTREE_MODES,
+  WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_UI_STATUSES,
   WORKTREE_MANAGEMENT_ACTIONS,
+  USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
@@ -95,7 +98,12 @@ function useWorktreeActionFeedback() {
 
       setFeedback((prev) => ({
         ...prev,
-        [key]: { status: success ? "success" : "error", message },
+        [key]: {
+          status: success
+            ? USER_FEEDBACK_SEVERITY.SUCCESS
+            : USER_FEEDBACK_SEVERITY.ERROR,
+          message,
+        },
       }));
       setPending((prev) => {
         const next = { ...prev };
@@ -181,12 +189,12 @@ function isSyncEligible(
     normalizeWorktreePath(entry.worktreePath) ===
       normalizeWorktreePath(sourceCheckoutRoot);
   return (
-    entry.ownership === "user" &&
+    entry.ownership === WORKTREE_LIFECYCLE_OWNERS.USER &&
     !isSourceCheckout &&
     !entry.inUse &&
     !entry.stale &&
     !!entry.branchName &&
-    entry.branchState === "present"
+    entry.branchState === WORKTREE_UI_STATUSES.BRANCH_PRESENT
   );
 }
 
@@ -382,7 +390,12 @@ export function WorktreesSection({
         : success
           ? `Synced ${succeeded} of ${attempted} branch${attempted === 1 ? "" : "es"}.`
           : `Synced ${succeeded} of ${attempted} — ${failures.join(" ")}`;
-    setSyncAllFeedback({ status: success ? "success" : "error", message });
+    setSyncAllFeedback({
+      status: success
+        ? USER_FEEDBACK_SEVERITY.SUCCESS
+        : USER_FEEDBACK_SEVERITY.ERROR,
+      message,
+    });
     syncAllTimerRef.current = setTimeout(
       () => setSyncAllFeedback(undefined),
       success ? 4000 : 8000
@@ -568,24 +581,30 @@ export function WorktreesSection({
         }
       />
       <ResetConfirmModal
-        isOpen={pendingConfirm?.variant === "reset"}
+        isOpen={pendingConfirm?.variant === CONFIRMATION_VARIANTS.RESET}
         onCancel={() => setPendingConfirm(null)}
         onConfirm={() => {
           const request = pendingConfirm;
           setPendingConfirm(null);
           request?.onConfirm();
         }}
-        title={pendingConfirm?.variant === "reset" ? pendingConfirm.title : ""}
+        title={
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.RESET
+            ? pendingConfirm.title
+            : ""
+        }
         message={
-          pendingConfirm?.variant === "reset" ? pendingConfirm.message : ""
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.RESET
+            ? pendingConfirm.message
+            : ""
         }
         detail={
-          pendingConfirm?.variant === "reset"
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.RESET
             ? pendingConfirm.detail
             : undefined
         }
         confirmLabel={
-          pendingConfirm?.variant === "reset"
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.RESET
             ? pendingConfirm.confirmLabel
             : undefined
         }
@@ -714,7 +733,7 @@ function WorktreeRow({
       return;
     }
     requestConfirm({
-      variant: "reset",
+      variant: CONFIRMATION_VARIANTS.RESET,
       title: "Sync Worktree",
       message: `Sync "${entry.branchName}" with "${sourceCheckoutBranch ?? "the source checkout"}"?`,
       detail: `This merges "${entry.branchName}" into "${sourceCheckoutBranch ?? "the checked-out branch"}", then merges that branch back into "${entry.branchName}" — the same two commands you'd otherwise run by hand.`,
@@ -739,7 +758,7 @@ function WorktreeRow({
             ? `Prunable: ${entry.prunableReason}`
             : entry.stale
               ? "Stale admin entry"
-              : entry.directoryState === "removed"
+              : entry.directoryState === WORKTREE_UI_STATUSES.DIRECTORY_REMOVED
                 ? "Directory removed"
                 : "Git entry present"}
         </span>
@@ -800,7 +819,7 @@ function WorktreeRow({
         )}
         {entry.ownership === WORKTREE_MODES.MANAGED &&
           entry.branchName &&
-          entry.branchState === "present" &&
+          entry.branchState === WORKTREE_UI_STATUSES.BRANCH_PRESENT &&
           !entry.branchCleanupEligible &&
           !entry.inUse &&
           !entry.stale && (
@@ -813,7 +832,7 @@ function WorktreeRow({
             />
           )}
         {entry.ownership === WORKTREE_MODES.MANAGED &&
-          entry.directoryState !== "removed" && (
+          entry.directoryState !== WORKTREE_UI_STATUSES.DIRECTORY_REMOVED && (
             <ActionButton
               label="Remove"
               pendingLabel="Removing…"
@@ -824,7 +843,7 @@ function WorktreeRow({
             />
           )}
         {entry.ownership === WORKTREE_MODES.MANAGED &&
-          entry.directoryState !== "removed" && (
+          entry.directoryState !== WORKTREE_UI_STATUSES.DIRECTORY_REMOVED && (
             <ActionButton
               label="Force remove"
               pendingLabel="Force removing…"

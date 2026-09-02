@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BROWSER_NOTIFICATION_MODES,
+  BROWSER_NOTIFICATION_PERMISSION_STATES,
   LICENSE_UI,
   NOTIFICATION_EVENT_MODES,
   HOOK_EVENT_METADATA,
@@ -115,22 +116,22 @@ export function NotificationsSection({
 
   function renderPermissionLabel() {
     switch (status?.permission) {
-      case "unsupported":
+      case BROWSER_NOTIFICATION_PERMISSION_STATES.UNSUPPORTED:
         return {
           text: "Not supported in this browser",
           className: "text-description-fg",
         };
-      case "blocked":
+      case BROWSER_NOTIFICATION_PERMISSION_STATES.BLOCKED:
         return {
           text: "Blocked - allow in browser settings",
           className: "text-error-fg",
         };
-      case "needs-permission":
+      case BROWSER_NOTIFICATION_PERMISSION_STATES.NEEDS_PERMISSION:
         return {
           text: "Permission not yet granted",
           className: "text-warning-fg",
         };
-      case "granted":
+      case BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED:
         return {
           text: "Allowed",
           className: "text-indicator-success",
@@ -156,7 +157,7 @@ export function NotificationsSection({
     (notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
       hasRemoteAccess) &&
     (!status ||
-      status.permission !== "granted" ||
+      status.permission !== BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED ||
       notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
       !status.subscribed);
   const browserModeOptions = BROWSER_MODE_OPTIONS.map((option) =>

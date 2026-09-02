@@ -235,10 +235,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       : (globalSettings.secrets ?? []);
   const scriptErrorBehaviorMode =
     properties.errorBehavior === undefined
-      ? "inherit"
+      ? PROPERTY_EDITOR_MODES.INHERIT
       : PROPERTY_EDITOR_MODES.CUSTOM;
   const scriptErrorBehaviorOptions = [
-    { value: "inherit", label: "Inherit" },
+    { value: PROPERTY_EDITOR_MODES.INHERIT, label: "Inherit" },
     { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
   const isFileRef = looksLikeFilePath(promptText.trim(), {
@@ -1331,7 +1331,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                   id="script-step-error-behavior-mode"
                   value={scriptErrorBehaviorMode}
                   onChange={(value) => {
-                    if (value === "inherit") {
+                    if (value === PROPERTY_EDITOR_MODES.INHERIT) {
                       setProperty("errorBehavior", undefined);
                     } else {
                       setProperty("errorBehavior", {

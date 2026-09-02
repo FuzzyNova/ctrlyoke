@@ -1,11 +1,13 @@
 import { useId } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
+import { MCP_FORM_TABS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "./CustomSelect";
 import { KeyValueMapEditor } from "./KeyValueMapEditor";
 
 export { findLiteralCredentialEnvKeys } from "./KeyValueMapEditor";
 
-export type McpServerFormTab = "stdio" | "remote";
+export type McpServerFormTab =
+  (typeof MCP_FORM_TABS)[keyof typeof MCP_FORM_TABS];
 export type McpServerTransport = "streamable-http" | "sse";
 
 const MCP_TRANSPORT_OPTIONS = [
@@ -31,7 +33,7 @@ export interface McpServerFormState {
 export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   id: "",
   description: "",
-  activeTab: "stdio",
+  activeTab: MCP_FORM_TABS.STDIO,
   command: "",
   args: "",
   env: {},
@@ -61,7 +63,7 @@ export function serverToMcpServerFormState(
   return {
     id: server.id,
     description: server.description ?? "",
-    activeTab: server.url ? "remote" : "stdio",
+    activeTab: server.url ? MCP_FORM_TABS.REMOTE : MCP_FORM_TABS.STDIO,
     command: server.command ?? "",
     args: server.args ? server.args.join(" ") : "",
     env: server.env ? { ...server.env } : {},
@@ -124,7 +126,7 @@ export function mcpServerFormStateToServer(
 
   applyCommonMcpServerFormFields(server, form);
 
-  if (form.activeTab === "remote") {
+  if (form.activeTab === MCP_FORM_TABS.REMOTE) {
     delete server.command;
     delete server.args;
     delete server.env;
@@ -158,7 +160,7 @@ export function mcpServerFormStateToServer(
 export function isMcpServerFormValid(form: McpServerFormState): boolean {
   const id = form.id.trim();
   if (!id) return false;
-  return form.activeTab === "stdio"
+  return form.activeTab === MCP_FORM_TABS.STDIO
     ? form.command.trim().length > 0
     : form.url.trim().length > 0;
 }
@@ -228,7 +230,7 @@ export function McpServerForm({
       />
 
       <div className="flex gap-1">
-        {(["stdio", "remote"] as const).map((tab) => (
+        {Object.values(MCP_FORM_TABS).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -244,7 +246,7 @@ export function McpServerForm({
         ))}
       </div>
 
-      {value.activeTab === "stdio" ? (
+      {value.activeTab === MCP_FORM_TABS.STDIO ? (
         <>
           <input
             type="text"

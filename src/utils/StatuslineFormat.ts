@@ -16,17 +16,17 @@ export const STATUS_LINE_FIELD_IDS = {
 export type StatusLineFieldId =
   (typeof STATUS_LINE_FIELD_IDS)[keyof typeof STATUS_LINE_FIELD_IDS];
 
-const STATUS_LINE_FORMAT_SEGMENT_TYPES = {
+export const STATUS_LINE_FORMAT_SEGMENT_TYPES = {
   FIELD: "field",
   LITERAL: "literal",
 } as const;
 
-const STATUS_LINE_USAGE_DIRECTIONS = {
+export const STATUS_LINE_USAGE_DIRECTIONS = {
   USED: "used",
   REMAINING: "remaining",
 } as const;
 
-const STATUS_LINE_COLOR_NAMES = {
+export const STATUS_LINE_COLOR_NAMES = {
   DEFAULT: "default",
 } as const;
 

@@ -15,7 +15,9 @@ import {
   STATUS_LINE_COLOR_SWATCHES,
   STATUS_LINE_FIELD_IDS,
   STATUS_LINE_FIELD_REGISTRY,
+  STATUS_LINE_FORMAT_SEGMENT_TYPES,
   STATUS_LINE_FORMAT_PROVIDERS,
+  STATUS_LINE_COLOR_NAMES,
   type StatusLineColorId,
   type StatusLineFieldId,
   type StatusLineSegment,
@@ -57,7 +59,7 @@ function fieldLabel(field: StatusLineFieldId): string {
 }
 
 function colorLabel(color: StatusLineColorId): string {
-  return color === "default"
+  return color === STATUS_LINE_COLOR_NAMES.DEFAULT
     ? "Default"
     : `${color.slice(0, 1).toUpperCase()}${color.slice(1)}`;
 }
@@ -114,7 +116,7 @@ function SortableSegmentRow({
       <span className="text-xs text-description-fg w-5 shrink-0 text-center">
         {index + 1}
       </span>
-      {segment.type === "field" ? (
+      {segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD ? (
         <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground">
           <span
             className="truncate"
@@ -158,10 +160,12 @@ function SortableSegmentRow({
             type="button"
             onClick={() => onUpdateColor(index, color)}
             aria-label={`${colorLabel(color)} color for segment ${index + 1}`}
-            aria-pressed={(segment.color ?? "default") === color}
+            aria-pressed={
+              (segment.color ?? STATUS_LINE_COLOR_NAMES.DEFAULT) === color
+            }
             title={colorLabel(color)}
             className={`h-4 w-4 rounded-full border transition-transform ${
-              (segment.color ?? "default") === color
+              (segment.color ?? STATUS_LINE_COLOR_NAMES.DEFAULT) === color
                 ? "scale-125 border-2 border-focus-border ring-2 ring-focus-border ring-offset-2 ring-offset-input-bg"
                 : "border-input-border"
             }`}
@@ -226,7 +230,8 @@ export function StatusLineFormatEditor({
 
   const updateLiteral = (index: number, text: string) => {
     const nextFormat = draftFormat.map((segment, segmentIndex) =>
-      segmentIndex === index && segment.type === "literal"
+      segmentIndex === index &&
+      segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL
         ? { ...segment, text: text.slice(0, MAX_LITERAL_LENGTH) }
         : segment
     );
@@ -238,7 +243,9 @@ export function StatusLineFormatEditor({
       segmentIndex === index
         ? {
             ...segment,
-            ...(color === "default" ? { color: undefined } : { color }),
+            ...(color === STATUS_LINE_COLOR_NAMES.DEFAULT
+              ? { color: undefined }
+              : { color }),
           }
         : segment
     );
@@ -247,7 +254,8 @@ export function StatusLineFormatEditor({
 
   const updateFieldLabel = (index: number, label: string) => {
     const nextFormat = draftFormat.map((segment, segmentIndex) =>
-      segmentIndex === index && segment.type === "field"
+      segmentIndex === index &&
+      segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
         ? { ...segment, label: label.slice(0, MAX_LITERAL_LENGTH) }
         : segment
     );
@@ -270,7 +278,9 @@ export function StatusLineFormatEditor({
 
   const includedFields = new Set(
     draftFormat.flatMap((segment) =>
-      segment.type === "field" ? [segment.field] : []
+      segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
+        ? [segment.field]
+        : []
     )
   );
 

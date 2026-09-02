@@ -5,7 +5,10 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { captureUxSnapshot } from "@utils/uxSnapshot";
 import { WebviewLog } from "@utils/logger";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  UX_SNAPSHOT_STATUSES,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
 import { notifyUser } from "@utils/notifyUser";
 
 /**
@@ -33,11 +36,14 @@ export function UxSnapshotButton() {
   // Auto-reset: clear the green check / error flash after a moment, and guard
   // against a missing reply leaving the spinner stuck forever.
   useEffect(() => {
-    if (status === "idle") {
+    if (status === UX_SNAPSHOT_STATUSES.IDLE) {
       return;
     }
-    const delay = status === "capturing" ? 8000 : 1200;
-    const timer = window.setTimeout(() => setStatus("idle"), delay);
+    const delay = status === UX_SNAPSHOT_STATUSES.CAPTURING ? 8000 : 1200;
+    const timer = window.setTimeout(
+      () => setStatus(UX_SNAPSHOT_STATUSES.IDLE),
+      delay
+    );
     return () => window.clearTimeout(timer);
   }, [status, setStatus]);
 
@@ -56,12 +62,12 @@ export function UxSnapshotButton() {
   };
 
   const handleCapture = () => {
-    if (status === "capturing") {
+    if (status === UX_SNAPSHOT_STATUSES.CAPTURING) {
       return;
     }
     // Paint the spinner first, then run the blocking capture two frames later so
     // the tap gives instant feedback instead of freezing on the old icon.
-    setStatus("capturing");
+    setStatus(UX_SNAPSHOT_STATUSES.CAPTURING);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         try {
@@ -77,25 +83,25 @@ export function UxSnapshotButton() {
             "UX snapshot capture failed",
             USER_FEEDBACK_SEVERITY.ERROR
           );
-          setStatus("error");
+          setStatus(UX_SNAPSHOT_STATUSES.ERROR);
         }
       });
     });
   };
 
   const iconClass =
-    status === "capturing"
+    status === UX_SNAPSHOT_STATUSES.CAPTURING
       ? "codicon-loading codicon-modifier-spin"
-      : status === "saved"
+      : status === UX_SNAPSHOT_STATUSES.SAVED
         ? "codicon-check"
-        : status === "error"
+        : status === UX_SNAPSHOT_STATUSES.ERROR
           ? "codicon-error"
           : "codicon-device-camera";
 
   const stateTextClass =
-    status === "saved"
+    status === UX_SNAPSHOT_STATUSES.SAVED
       ? "text-indicator-success"
-      : status === "error"
+      : status === UX_SNAPSHOT_STATUSES.ERROR
         ? "text-error-fg"
         : "text-description-fg hover:text-foreground";
 
@@ -104,7 +110,7 @@ export function UxSnapshotButton() {
       type="button"
       onMouseDown={swallowMouseDown}
       onClick={handleCapture}
-      disabled={status === "capturing"}
+      disabled={status === UX_SNAPSHOT_STATUSES.CAPTURING}
       aria-label="Capture UX snapshot"
       title="Capture UX snapshot (dev)"
       className={`fixed right-0 top-1/2 -translate-y-1/2 z-popover flex items-center justify-center w-9 h-11 rounded-l-md border border-r-0 border-panel-border bg-editor-bg/90 shadow-md backdrop-blur transition-colors hover:bg-editor-bg disabled:cursor-wait ${stateTextClass}`}

@@ -21,6 +21,9 @@ import {
 import {
   KEYBOARD_KEYS,
   DEFAULT_WORKFLOW_NAME,
+  WORKFLOW_DROPDOWN_VIEWS,
+  WORKFLOW_ROW_KINDS,
+  WORKFLOW_ROW_TIERS,
   WORKTREE_MODES,
   WORKTREE_MODE_OPTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -349,9 +352,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // into a lineage swaps the workflow list for its run panel without closing
   // the dropdown; the same two views are what the badge/chevron/back triggers
   // navigate between (RUN_NAVIGATION_UX_PLAN.md).
-  const [dropdownView, setDropdownView] = useState<"workflows" | "runs">(
-    "workflows"
-  );
+  const [dropdownView, setDropdownView] = useState<
+    (typeof WORKFLOW_DROPDOWN_VIEWS)[keyof typeof WORKFLOW_DROPDOWN_VIEWS]
+  >(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
   // The run panel remains mounted while returning to the workflow list so its
   // slide-right exit is visible instead of the two views swapping abruptly.
   const [isRunPanelLeaving, setIsRunPanelLeaving] = useState(false);
@@ -424,7 +427,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [dropdownTierRef, dropdownRowTier] = useElementTier<
     WorkflowRowTier,
     HTMLDivElement
-  >(resolveWorkflowRowTier, "stacked");
+  >(resolveWorkflowRowTier, WORKFLOW_ROW_TIERS.STACKED);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -480,7 +483,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const syncWorkflowRowWidthLock = useCallback(() => {
     const dropdown = dropdownRef.current;
     const scrollContainer = dropdown?.querySelector(
-      dropdownView === "runs"
+      dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
         ? ".run-panel-items"
         : ".workflow-menu-items, .running-workflow-items"
     );
@@ -574,7 +577,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     });
     resizeObserver.observe(dropdown);
     const scrollContainer = dropdown.querySelector(
-      dropdownView === "runs"
+      dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
         ? ".run-panel-items"
         : ".workflow-menu-items, .running-workflow-items"
     );
@@ -633,7 +636,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setWorkflowSearch("");
     // Dropdown view state is per-open-session — reset so the next open
     // starts from whichever entry view its own trigger implies.
-    setDropdownView("workflows");
+    setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
     setDrilledWorkflow(null);
   }, []);
 
@@ -797,7 +800,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
     setIsRunPanelLeaving(false);
     setShouldAnimateRunPanelEntry(false);
-    setDropdownView("workflows");
+    setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
     setDrilledWorkflow(null);
   }, []);
 
@@ -805,7 +808,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // It remains mounted behind the drawer, so its filters and scroll position
   // survive the round trip without a separate restoration step.
   const handleBackToWorkflowList = useCallback(() => {
-    if (dropdownView !== "runs" || isRunPanelLeaving) {
+    if (dropdownView !== WORKFLOW_DROPDOWN_VIEWS.RUNS || isRunPanelLeaving) {
       return;
     }
     setIsRunPanelLeaving(true);
@@ -848,7 +851,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       setIsDropdownOpen(true);
       setIsRunPanelLeaving(false);
       setShouldAnimateRunPanelEntry(false);
-      setDropdownView("workflows");
+      setDropdownView(WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS);
       setDrilledWorkflow(null);
       return;
     }
@@ -861,7 +864,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // Chevron re-click while the run panel is showing switches back to the
     // workflow list instead of closing outright — matching the badge's own
     // "switch views, don't close" behavior when the other view is active.
-    if (dropdownView !== "workflows") {
+    if (dropdownView !== WORKFLOW_DROPDOWN_VIEWS.WORKFLOWS) {
       handleBackToWorkflowList();
       return;
     }
@@ -947,7 +950,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       });
       setIsRunPanelLeaving(false);
       setShouldAnimateRunPanelEntry(true);
-      setDropdownView("runs");
+      setDropdownView(WORKFLOW_DROPDOWN_VIEWS.RUNS);
       if (workflow.address.workflowKey !== displayedViewAddress?.workflowKey) {
         useRunSummaryCacheStore
           .getState()
@@ -967,7 +970,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     const alreadyShowingThisPanel =
       isDropdownOpen &&
       !isDropdownClosing &&
-      dropdownView === "runs" &&
+      dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS &&
       drilledWorkflow?.workflowKey === displayedViewAddress.workflowKey;
     if (alreadyShowingThisPanel) {
       closeDropdown();
@@ -982,7 +985,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       workflowKey: displayedViewAddress.workflowKey,
       workflowName: displayName,
     });
-    setDropdownView("runs");
+    setDropdownView(WORKFLOW_DROPDOWN_VIEWS.RUNS);
   }, [
     displayedViewAddress,
     isDropdownOpen,
@@ -1003,7 +1006,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== KEYBOARD_KEYS.ESCAPE) return;
-      if (dropdownView === "runs") {
+      if (dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS) {
         handleBackToWorkflowList();
         return;
       }
@@ -1431,7 +1434,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const workflowListRows: UnifiedWorkflowRow[] = [
     ...filteredRunningWorkflows.map(
       (workflow): UnifiedWorkflowRow => ({
-        kind: "running",
+        kind: WORKFLOW_ROW_KINDS.RUNNING,
         key: `running:${workflow.workflowKey ?? workflow.id}`,
         workflow,
         // The lineage's recent entry is excluded from the recent rows below
@@ -1445,7 +1448,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ),
     ...filteredRecentWorkflows.map(
       (workflow): UnifiedWorkflowRow => ({
-        kind: "recent",
+        kind: WORKFLOW_ROW_KINDS.RECENT,
         key: `recent:${workflow.address.workflowKey}`,
         workflow,
       })
@@ -1684,7 +1687,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 isActive={
                   isDropdownOpen &&
                   !isDropdownClosing &&
-                  dropdownView === "runs" &&
+                  dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS &&
                   drilledWorkflow?.workflowKey ===
                     displayedViewAddress.workflowKey
                 }
@@ -1769,9 +1772,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <div className="relative flex flex-1 min-h-0 flex-col overflow-clip">
           <div
             className={`flex h-full min-h-0 flex-col ${
-              dropdownView === "runs" ? "pointer-events-none" : ""
+              dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS
+                ? "pointer-events-none"
+                : ""
             }`}
-            aria-hidden={dropdownView === "runs"}
+            aria-hidden={dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS}
           >
             <WorkflowList
               rows={workflowListRows}
@@ -1808,7 +1813,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               }}
             />
           </div>
-          {dropdownView === "runs" && drilledWorkflow ? (
+          {dropdownView === WORKFLOW_DROPDOWN_VIEWS.RUNS && drilledWorkflow ? (
             <div
               className={`absolute inset-0 flex min-h-0 flex-col bg-dropdown-bg ${
                 isRunPanelLeaving

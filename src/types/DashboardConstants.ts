@@ -627,6 +627,22 @@ export const BROWSER_NOTIFICATION_MODES = {
 export type BrowserNotificationMode =
   (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
 
+/** Permission states reported by the browser Notification API. */
+export const BROWSER_NOTIFICATION_PERMISSION_STATES = {
+  UNSUPPORTED: "unsupported",
+  BLOCKED: "blocked",
+  NEEDS_PERMISSION: "needs-permission",
+  GRANTED: "granted",
+} as const;
+
+export type BrowserPermissionStatus =
+  (typeof BROWSER_NOTIFICATION_PERMISSION_STATES)[keyof typeof BROWSER_NOTIFICATION_PERMISSION_STATES];
+
+/** Browser document visibility states used by notification and badge flows. */
+export const DOCUMENT_VISIBILITY_STATES = {
+  VISIBLE: "visible",
+} as const;
+
 export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
   INCREMENT_NOTIFICATION_BADGE: "ctrlyoke:incrementNotificationBadge",
   CLEAR_NOTIFICATION_BADGE: "ctrlyoke:clearNotificationBadge",
@@ -775,6 +791,23 @@ export const WORKFLOW_RUNTIME_COMMANDS = {
   FAIL: "fail",
   REOPEN_FOR_CONTINUATION: "reopenForContinuation",
 } as const;
+
+/** Actions exposed by the workflow execution control buttons. */
+export const WORKFLOW_EXECUTION_CONTROL_ACTIONS = {
+  RUN_DRAFT: "run-draft",
+  START_RUN: "start-run",
+  RERUN: "rerun",
+  RESTART: "restart",
+  CONTINUE: "continue",
+  PAUSE: "pause",
+  CANCEL_PAUSE: "cancel-pause",
+  RESUME: "resume",
+  STOP: "stop",
+  NONE: "none",
+} as const;
+
+export type WorkflowExecutionControlAction =
+  (typeof WORKFLOW_EXECUTION_CONTROL_ACTIONS)[keyof typeof WORKFLOW_EXECUTION_CONTROL_ACTIONS];
 
 export type WorkflowRuntimeCommand =
   (typeof WORKFLOW_RUNTIME_COMMANDS)[keyof typeof WORKFLOW_RUNTIME_COMMANDS];
@@ -1115,6 +1148,11 @@ export const PREVIEW_MUTATION_SCOPES = {
 export const PREVIEW_STATUSES = {
   CHECKING: "checking",
   READY: "ready",
+} as const;
+
+/** Navigation selection used by the workflow-level execution preview. */
+export const PREVIEW_RAIL_SELECTIONS = {
+  OVERVIEW: "overview",
 } as const;
 
 export const PREVIEW_STEP_TYPES = {
@@ -1570,6 +1608,15 @@ export const WORKTREE_LIFECYCLE_STATES = {
   SETTLED: "settled",
   BLOCKED: "blocked",
   ORPHANED: "orphaned",
+} as const;
+
+/**
+ * Display-only worktree management states used by the settings UI. These are
+ * intentionally separate from the orchestration lifecycle/state contracts.
+ */
+export const WORKTREE_UI_STATUSES = {
+  BRANCH_PRESENT: "present",
+  DIRECTORY_REMOVED: "removed",
 } as const;
 
 export type WorktreeLifecycleState =
@@ -2457,6 +2504,11 @@ export const TEMPLATE_IDS = {
   BLANK: "blank",
 } as const;
 
+/** Sources reported for user-created and workspace-discovered templates. */
+export const TEMPLATE_SOURCES = {
+  USER: "user",
+} as const;
+
 /** Message discriminants exchanged with the history-index rebuild worker. */
 export const HISTORY_SEARCH_REBUILD_MESSAGE_TYPES = {
   PROGRESS: "progress",
@@ -3006,6 +3058,50 @@ export const KEYBOARD_KEYS = {
   ARROW_DOWN: "ArrowDown",
 } as const;
 
+/** Visual variants supported by shared action buttons. */
+export const BUTTON_VARIANTS = {
+  PRIMARY: "primary",
+  SECONDARY: "secondary",
+} as const;
+
+/** Workflow dropdown views shared by the status control and its panels. */
+export const WORKFLOW_DROPDOWN_VIEWS = {
+  WORKFLOWS: "workflows",
+  RUNS: "runs",
+} as const;
+
+/** File-picker modes used by workflow load and queue actions. */
+export const WORKFLOW_FILE_PICKER_MODES = {
+  LOAD: "load",
+  QUEUE: "queue",
+} as const;
+
+/** Row categories used by the unified workflow dropdown list. */
+export const WORKFLOW_ROW_KINDS = {
+  RUNNING: "running",
+  RECENT: "recent",
+} as const;
+
+/** Layout tiers used by workflow dropdown rows. */
+export const WORKFLOW_ROW_TIERS = {
+  STACKED: "stacked",
+  COMPACT: "compact",
+} as const;
+
+/** Mobile steps drawer presentation modes. */
+export const MOBILE_STEPS_MODES = {
+  SIDEBAR: "sidebar",
+  FULLWIDTH: "fullwidth",
+} as const;
+
+/** Transient feedback states for the developer UX snapshot button. */
+export const UX_SNAPSHOT_STATUSES = {
+  IDLE: "idle",
+  CAPTURING: "capturing",
+  SAVED: "saved",
+  ERROR: "error",
+} as const;
+
 // ============================================================================
 // INHERIT DEFAULT OPTION - UI sentinel for inherited settings
 // ============================================================================
@@ -3065,6 +3161,12 @@ export const TEMPLATE_VARIABLE_TYPES = {
   DIRECTORY: WORKSPACE_ENTRY_KINDS.DIRECTORY,
   SELECT: "select",
   HARNESS: "harness",
+} as const;
+
+/** Tabs for the two input shapes in the shared MCP server form. */
+export const MCP_FORM_TABS = {
+  STDIO: "stdio",
+  REMOTE: "remote",
 } as const;
 
 export type TemplateVariableType =

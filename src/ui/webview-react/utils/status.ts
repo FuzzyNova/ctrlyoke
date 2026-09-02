@@ -9,7 +9,11 @@ import {
   type StepStatus,
   type ExecutionState,
 } from "../types/messages";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  WORKFLOW_EXECUTION_CONTROL_ACTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+  type WorkflowExecutionControlAction,
+} from "@root/types/DashboardConstants";
 
 /**
  * Codicon class names for status icons
@@ -264,17 +268,7 @@ export function canStopExecution(state: ExecutionState): boolean {
   );
 }
 
-export type WorkflowExecutionControlAction =
-  | "run-draft"
-  | "start-run"
-  | "rerun"
-  | "restart"
-  | "continue"
-  | "pause"
-  | "cancel-pause"
-  | "resume"
-  | "stop"
-  | "none";
+export type { WorkflowExecutionControlAction };
 
 interface WorkflowExecutionControlSlot {
   action: WorkflowExecutionControlAction;
@@ -358,7 +352,7 @@ export function getWorkflowExecutionControls({
   const startableRun = Boolean(viewedRunUnstarted) && hasSteps;
   const targetSuffix = executionRunLabel ? ` for ${executionRunLabel}` : "";
   const disabled = (label: string, icon: string, title: string) => ({
-    action: "none" as const,
+    action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.NONE,
     label,
     icon,
     enabled: false,
@@ -392,7 +386,7 @@ export function getWorkflowExecutionControls({
               );
     const slot2 = isPaused
       ? {
-          action: "resume" as const,
+          action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.RESUME,
           label: "Resume",
           icon: "codicon-debug-continue",
           enabled: true,
@@ -400,14 +394,14 @@ export function getWorkflowExecutionControls({
         }
       : isPausing
         ? {
-            action: "cancel-pause" as const,
+            action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.CANCEL_PAUSE,
             label: "Cancel pause",
             icon: "codicon-debug-pause",
             enabled: true,
             title: `Cancel pause${targetSuffix}`,
           }
         : {
-            action: "pause" as const,
+            action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.PAUSE,
             label: "Pause",
             icon: "codicon-debug-pause",
             enabled: isRunning,
@@ -417,7 +411,7 @@ export function getWorkflowExecutionControls({
       slot1,
       slot2,
       slot3: {
-        action: "stop",
+        action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.STOP,
         label: "Stop",
         icon: "codicon-debug-stop",
         enabled: true,
@@ -460,7 +454,7 @@ export function getWorkflowExecutionControls({
   const slot1 =
     viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
       ? {
-          action: "run-draft" as const,
+          action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.RUN_DRAFT,
           label: "Run",
           icon: "codicon-debug-start",
           enabled: true,
@@ -468,7 +462,7 @@ export function getWorkflowExecutionControls({
         }
       : pendingRewind
         ? {
-            action: "restart" as const,
+            action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.RESTART,
             label: "Restart",
             icon: "codicon-debug-restart",
             enabled: true,
@@ -477,7 +471,7 @@ export function getWorkflowExecutionControls({
           }
         : startableRun
           ? {
-              action: "start-run" as const,
+              action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.START_RUN,
               label: "Run",
               icon: "codicon-debug-start",
               enabled: true,
@@ -485,7 +479,7 @@ export function getWorkflowExecutionControls({
               emphasized: true,
             }
           : {
-              action: "rerun" as const,
+              action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.RERUN,
               label: "Re-run",
               icon: "codicon-refresh",
               enabled: true,
@@ -504,7 +498,7 @@ export function getWorkflowExecutionControls({
     slot1,
     slot2: pendingRewind
       ? {
-          action: "continue",
+          action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.CONTINUE,
           label: "Continue",
           icon: "codicon-debug-continue",
           enabled: true,
@@ -513,7 +507,7 @@ export function getWorkflowExecutionControls({
         }
       : resumable
         ? {
-            action: "resume",
+            action: WORKFLOW_EXECUTION_CONTROL_ACTIONS.RESUME,
             label: "Resume",
             icon: "codicon-debug-continue",
             enabled: true,

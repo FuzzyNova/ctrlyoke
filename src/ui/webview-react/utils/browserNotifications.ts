@@ -1,10 +1,13 @@
 import {
   BROWSER_NOTIFICATION_MODES,
+  BROWSER_NOTIFICATION_PERMISSION_STATES,
+  DOCUMENT_VISIBILITY_STATES,
   COMPLETION_NOTIFICATION_SEVERITY,
   HOSTED_ICON_PATHS,
   SERVICE_WORKER_BADGE_MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   type BrowserNotificationMode,
+  type BrowserPermissionStatus,
   type ServiceWorkerBadgeMessageType,
   type UserFeedbackSeverity,
 } from "@root/types/DashboardConstants";
@@ -16,11 +19,7 @@ import { isStandalone } from "@hooks/useVsCodeApi";
 
 const PUSH_SUBSCRIPTION_ID_KEY = "ctrlyoke-push-subscription-id";
 
-export type BrowserPermissionStatus =
-  | "unsupported"
-  | "blocked"
-  | "needs-permission"
-  | "granted";
+export type { BrowserPermissionStatus };
 
 export interface BrowserNotificationStatus {
   supported: boolean;
@@ -56,7 +55,8 @@ export async function getBrowserNotificationStatus(): Promise<BrowserNotificatio
     "PushManager" in window;
 
   const status: BrowserNotificationStatus = {
-    supported: permission !== "unsupported",
+    supported:
+      permission !== BROWSER_NOTIFICATION_PERMISSION_STATES.UNSUPPORTED,
     permission,
     secureContext: window.isSecureContext,
     serviceWorkerSupported,
@@ -91,7 +91,7 @@ export async function enableBrowserNotifications(
   }
 
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
+  if (permission !== BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED) {
     return getBrowserNotificationStatus();
   }
 
@@ -167,14 +167,14 @@ export async function handleCompletionNotificationEvent(
 
   if (
     fullSettings?.settings.notifications.onlyWhenWindowUnfocused &&
-    document.visibilityState === "visible" &&
+    document.visibilityState === DOCUMENT_VISIBILITY_STATES.VISIBLE &&
     document.hasFocus()
   ) {
     return;
   }
 
   const status = await getBrowserNotificationStatus();
-  if (status.permission !== "granted") {
+  if (status.permission !== BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED) {
     return;
   }
 
@@ -325,16 +325,16 @@ async function postBadgeMessageToServiceWorker(
 
 function getPermissionStatus(): BrowserPermissionStatus {
   if (typeof Notification === "undefined") {
-    return "unsupported";
+    return BROWSER_NOTIFICATION_PERMISSION_STATES.UNSUPPORTED;
   }
 
   switch (Notification.permission) {
-    case "granted":
-      return "granted";
+    case BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED:
+      return BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED;
     case "denied":
-      return "blocked";
+      return BROWSER_NOTIFICATION_PERMISSION_STATES.BLOCKED;
     default:
-      return "needs-permission";
+      return BROWSER_NOTIFICATION_PERMISSION_STATES.NEEDS_PERMISSION;
   }
 }
 

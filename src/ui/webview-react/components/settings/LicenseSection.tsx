@@ -3,6 +3,7 @@ import {
   LICENSE_ACTIONS,
   LICENSE_UI,
   MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
 } from "@root/types/DashboardConstants";
 import { LICENSE_SOURCES } from "../../../../license/LicenseService";
@@ -84,7 +85,7 @@ export function LicenseSection() {
 
     if (actionResult.action === MESSAGE_TYPES.REQUEST_LICENSE_MACHINES) {
       setMachineListPending(false);
-      if (actionResult.status === "error")
+      if (actionResult.status === USER_FEEDBACK_SEVERITY.ERROR)
         setMachineError(actionResult.message);
       clearActionResult();
       return;
@@ -122,14 +123,14 @@ export function LicenseSection() {
     }));
     if (
       actionResult.action === MESSAGE_TYPES.ACTIVATE_LICENSE_KEY &&
-      actionResult.status === "success"
+      actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS
     ) {
       setLicenseKey("");
       setActivationLimit(false);
     }
     if (
       actionResult.action === MESSAGE_TYPES.IMPORT_LICENSE_FILE &&
-      actionResult.status === "success"
+      actionResult.status === USER_FEEDBACK_SEVERITY.SUCCESS
     ) {
       setLicenseBlob("");
     }
