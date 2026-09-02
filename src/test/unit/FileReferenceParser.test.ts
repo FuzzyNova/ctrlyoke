@@ -457,6 +457,20 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs.length, 1);
       assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
     });
+
+    test("treats a trailing comma on $step: as sentence punctuation", () => {
+      const refs = parseInlinePriorContextRefs(
+        "First review $step:1,4, then tell me which design you think is better"
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [1, 4] });
+      assert.strictEqual(refs[0].token, "$step:1,4");
+    });
+
+    test("still rejects an interior empty range entry", () => {
+      const refs = parseInlinePriorContextRefs("Use $step:1,,3 please");
+      assert.strictEqual(refs.length, 0);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

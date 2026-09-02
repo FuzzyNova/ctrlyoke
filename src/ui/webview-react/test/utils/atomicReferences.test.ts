@@ -373,6 +373,18 @@ describe("atomic reference presentation", () => {
     });
   });
 
+  it("treats a trailing comma on $step: as sentence punctuation", () => {
+    const text = "First review $step:1,4, then tell me which design is better";
+    const chips = findAtomicReferences(text);
+    expect(chips[0]).toMatchObject({
+      label: "step 1,4",
+      title: "$step:1,4",
+      attrs: { "data-type": "priorContext", "data-ref": "step:1,4" },
+    });
+    // The trailing comma itself must stay out of the chip's matched range.
+    expect(text.slice(chips[0].from, chips[0].to)).toBe("$step:1,4");
+  });
+
   it("labels a /skill: reference with its name and the tools icon", () => {
     const chips = findAtomicReferences("using /skill:commit here");
     expect(chips).toEqual([
