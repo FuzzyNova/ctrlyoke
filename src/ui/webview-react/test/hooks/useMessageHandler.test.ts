@@ -2626,6 +2626,43 @@ describe("active workflow summaries", () => {
       EXECUTION_STATES.PAUSING
     );
   });
+
+  it("patches the matching recent-workflow row's state in place so the dropdown doesn't need a reopen", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setRecentWorkflows([
+        {
+          address: {
+            workflowKey: "wf-recent" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: "run-2026-07-20T10-30-00-000Z" as never,
+          },
+          workflowName: "Recent workflow",
+          executionState: EXECUTION_STATES.RUNNING,
+          totalSteps: 3,
+        },
+      ]);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, {
+        summary: {
+          id: "instance-recent",
+          workflowKey: "wf-recent",
+          workflowName: "Recent workflow",
+          filePath: "C:\\wf-recent.ctrlyoke.json",
+          executionState: EXECUTION_STATES.COMPLETED,
+          currentStep: 3,
+          totalSteps: 3,
+        },
+      });
+    });
+
+    expect(useUiStore.getState().recentWorkflows[0]?.executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -2729,6 +2729,13 @@ export function createMessageHandlers(
     }
     // IDLE: do nothing — transient state during load/clear, not a terminal state
 
+    // The recent-workflows dropdown list otherwise only refreshes on an
+    // explicit GET_RECENT_WORKFLOWS round trip (e.g. opening the dropdown),
+    // so its row for this lineage would keep showing a stale badge/step count
+    // until then. Patch it in place on every transition, not just terminal
+    // ones — a run entering PAUSED should update the row just as promptly.
+    uiStore.updateRecentWorkflowFromSummary(summary);
+
     // If this is the currently active workflow, sync workflowStore so the
     // WorkflowStepsPanel stays in sync during CLI watch mode step advances.
     // WorkflowSummary.currentStep is 0-indexed (matches workflowStore.currentStep).

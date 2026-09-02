@@ -839,6 +839,14 @@ interface UiActions {
 
   // Recent workflows
   setRecentWorkflows: (workflows: RecentWorkflow[]) => void;
+  /**
+   * Patches the recent-workflow entry sharing this summary's lineage
+   * (execution state, step count, token totals, worktree) in place. Recent
+   * entries only otherwise refresh via a full `RECENT_WORKFLOWS` re-fetch, so
+   * without this a lineage's dropdown row keeps showing whatever state it had
+   * when the list was last requested — stale until the dropdown is reopened.
+   */
+  updateRecentWorkflowFromSummary: (summary: WorkflowSummary) => void;
   toggleRecentWorkflowsDropdown: () => void;
   closeRecentWorkflowsDropdown: () => void;
 
@@ -1469,6 +1477,30 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       setRecentWorkflows: (workflows) => set({ recentWorkflows: workflows }),
+
+      updateRecentWorkflowFromSummary: (summary) =>
+        set((state) => {
+          if (!summary.workflowKey) return state;
+          let changed = false;
+          const recentWorkflows = state.recentWorkflows.map((workflow) => {
+            if (workflow.address.workflowKey !== summary.workflowKey) {
+              return workflow;
+            }
+            changed = true;
+            return {
+              ...workflow,
+              executionState: summary.executionState,
+              totalSteps: summary.totalSteps,
+              tokenTotals: summary.tokenTotals ?? workflow.tokenTotals,
+              worktree: summary.worktree ?? workflow.worktree,
+              lastModifiedAt:
+                summary.completedAt ??
+                summary.startedAt ??
+                workflow.lastModifiedAt,
+            };
+          });
+          return changed ? { recentWorkflows } : state;
+        }),
 
       toggleRecentWorkflowsDropdown: () =>
         set((state) => ({

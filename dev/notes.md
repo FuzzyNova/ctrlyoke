@@ -33,9 +33,9 @@ in "more run dropdown" step 6 context didnt get read by claude automatically bec
 
 ☑️ opencode.json gitignore
 
-fix where ctrlyoke right click menu shortcuts show up in vs code (currently doesn't show up in scm)
+☑️ fix where ctrlyoke right click menu shortcuts show up in vs code (currently doesn't show up in scm)
 
-Add more context menus to the app, specifically workspace explorer (copy/move files), we have cut and paste already though
+☑️ Add more context menus to the app, specifically workspace explorer (copy/move files), we have cut and paste already though
 
 ☑️ Add file link to diff views so it opens the full file
 
@@ -65,16 +65,16 @@ fix tab navigation and keyboard shortcuts
 
 hooks don't warn when empty
 
-switching away from the commit-message-generation to a new workflow made the workflow's panel disabled
+☑️ switching away from the commit-message-generation to a new workflow made the workflow's panel disabled
 
-commit-message-generation workflow should overlay why the panels are disabled (ie and overlay of workflow prop panel saying "disabled due to system workflow" or "disabled: workflow deleted"), not allow the send or queue buttons in the editor, and show the actual value in the workflow props panel, even if they are grayed out it, it should still show the right harness/model/etc
+☑️ commit-message-generation workflow should overlay why the panels are disabled (ie and overlay of workflow prop panel saying "disabled due to system workflow" or "disabled: workflow deleted"), not allow the send or queue buttons in the editor, and show the actual value in the workflow props panel, even if they are grayed out it, it should still show the right harness/model/etc
 
 mcp sometimes does not get attached, or harness bugs where the don't pick up the mcp. Claude suggested changing our mcp format to http instead of stdio might fix this, but not sure.
 
-token count uses cached tokens and inflates the actual totals and makes it hard to read, context bar should switch to using "2x or 3x" instead of the raw token value too
+☑️ token count uses cached tokens and inflates the actual totals and makes it hard to read, context bar should switch to using "2x or 3x" instead of the raw token value too
 
 fix default location of ctrlyoke panel in vs code, bottom panel feels wrong now.
 
-find the right way to force a specific aspect ratio and resolution (maybe in the developer section, or just using playwright), ideally it takes an automatic screenshot too
+☑️ find the right way to force a specific aspect ratio and resolution (maybe in the developer section, or just using playwright), ideally it takes an automatic screenshot too
 
-fix externally controlled banners, use the same banner as pause and continue instead of overloading the chips in the workflow summary table.
+☑️ fix externally controlled banners, use the same banner as pause and continue instead of overloading the chips in the workflow summary table.
