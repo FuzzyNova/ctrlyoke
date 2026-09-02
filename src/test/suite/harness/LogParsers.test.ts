@@ -31,6 +31,7 @@ import {
   ILogParser,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
+import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodeProtocolConstants";
 import {
   QWEN_CONTENT_PART_TYPES,
@@ -1067,6 +1068,68 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(fileReadEvents.length, 1);
       assert.strictEqual((fileReadEvents[0].data as any).lineStart, 12);
       assert.strictEqual((fileReadEvents[0].data as any).lineEnd, 24);
+    });
+
+    test("should tag the completed FILE_READ with the originating tool_use id so it merges with its INITIATED event instead of duplicating", () => {
+      const initiatedEvents = parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_read_dedup",
+              name: "Read",
+              input: { file_path: "src/example.ts" },
+            },
+          ],
+        },
+        timestamp: "2026-07-26T12:00:01.000Z",
+      } as unknown as BaseCliEvent);
+
+      const completedEvents = parser.extractStructuredEventsFromEvent({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_read_dedup",
+              content: "1\timport React from \"react\";\n",
+            },
+          ],
+        },
+        toolUseResult: {
+          type: "text",
+          file: {
+            filePath: "src/example.ts",
+            content: 'import React from "react";\n',
+            startLine: 1,
+            numLines: 1,
+            totalLines: 1,
+          },
+        },
+        timestamp: "2026-07-26T12:00:02.000Z",
+      } as unknown as BaseCliEvent);
+
+      const completedFileRead = completedEvents.find(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(
+        (completedFileRead?.data as any).toolCallId,
+        "toolu_read_dedup"
+      );
+
+      const normalized = normalizeCliEvents([
+        ...initiatedEvents,
+        ...completedEvents,
+      ]);
+      const fileReadRows = normalized.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_READ
+      );
+      assert.strictEqual(
+        fileReadRows.length,
+        1,
+        "expected the initiated and completed reads to merge into a single row"
+      );
     });
 
     test("should not surface a line range for a whole-file read", () => {

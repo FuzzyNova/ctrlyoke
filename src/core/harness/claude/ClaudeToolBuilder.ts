@@ -359,11 +359,17 @@ export class ClaudeToolBuilder {
    * @param toolUseResult - Structured tool execution metadata from Claude CLI
    * @param timestamp - Timestamp to use for created events
    * @param events - Array to append events to
+   * @param toolCallId - The originating tool_use id (from the paired
+   * tool_result block's `tool_use_id`). Required to correlate a FILE_READ
+   * completion back to its INITIATED event in `CliEventNormalizer` — without
+   * it, the two key off different values (call id vs. path) and never merge,
+   * surfacing as a duplicated read in the output pane.
    */
   static processToolUseResultMetadata(
     toolUseResult: Record<string, any>,
     timestamp: number,
-    events: CliEvent[]
+    events: CliEvent[],
+    toolCallId?: string
   ): void {
     // File edit result (Edit tool) - check both camelCase and snake_case
     // Headless mode uses camelCase (oldString/newString)
@@ -440,6 +446,7 @@ export class ClaudeToolBuilder {
         data: {
           path: file.filePath || "unknown",
           content: file.content || "",
+          toolCallId,
           ...(isSegmentRead
             ? {
                 lineStart: file.startLine,

@@ -385,10 +385,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         // operations. toolUseResult is a plain string for a rejected tool_use
         // (handled above), so only objects reach the field-based matching here.
         if (event.toolUseResult && typeof event.toolUseResult === "object") {
+          const toolResultBlock = (
+            event.message.content as Array<Record<string, any>>
+          ).find((block) => block.type === "tool_result");
           ClaudeToolBuilder.processToolUseResultMetadata(
             event.toolUseResult as Record<string, any>,
             timestamp,
-            outputEvents
+            outputEvents,
+            toolResultBlock?.tool_use_id
           );
         }
       }
@@ -1212,8 +1216,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       e.type === CLAUDE_EVENT_TYPES.USER &&
       Array.isArray(e.message?.content)
     ) {
+      let toolResultId: string | undefined;
       for (const block of e.message.content) {
         if (block.type === "tool_result") {
+          toolResultId = block.tool_use_id;
           const toolName = block.tool_use_id
             ? this.pendingStreamingToolUses.get(block.tool_use_id)
             : undefined;
@@ -1261,7 +1267,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         ClaudeToolBuilder.processToolUseResultMetadata(
           e.toolUseResult as Record<string, any>,
           timestamp,
-          events
+          events,
+          toolResultId
         );
       }
     }
