@@ -66,7 +66,10 @@ import { RunContinuationService } from "./core/orchestration/RunContinuationServ
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
 import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
-import { PromptFileParser } from "./core/PromptFileParser";
+import {
+  getAuthoredSourcePath,
+  PromptFileParser,
+} from "./core/PromptFileParser";
 import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
@@ -262,6 +265,19 @@ program
   .action(async (options: TrustExternalRootsOptions) => {
     await trustExternalRootsCommand(options);
   });
+
+program
+  .command("trust-workflow-external-roots <file>")
+  .description(
+    "Review and approve a workflow's requested trustedExternalRoots"
+  )
+  .option("-d, --cwd <path>", "Working directory (default: current directory)")
+  .option("-y, --yes", "Approve all pending roots without prompting")
+  .action(
+    async (file: string, options: TrustWorkflowExternalRootsOptions) => {
+      await trustWorkflowExternalRootsCommand(file, options);
+    }
+  );
 
 program
   .command("commit")
@@ -716,6 +732,11 @@ async function runCommand(
         if (!loaded) {
           throw new Error(`Failed to load workflow file: ${resolvedFile}`);
         }
+        assertWorkflowExternalRootsApproved(
+          instance.promptQueue.getWorkflowFile(),
+          workingDir,
+          getAuthoredSourcePath(resolvedFile!)
+        );
       }
 
       warnAboutClampedInteractiveSteps(
@@ -896,6 +917,48 @@ function assertSecretGrantsApproved(
   process.exit(2);
 }
 
+function assertWorkflowExternalRootsApproved(
+  workflow: PromptFile,
+  workingDir: string,
+  authoredSourcePath: string
+): void {
+  if (
+    workflow.trustedExternalRoots === undefined ||
+    workflow.trustedExternalRoots === null
+  ) {
+    return;
+  }
+
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+    workingDir,
+    authoredSourcePath
+  );
+  const pendingRoots =
+    ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+      workspaceIdentity,
+      workflowIdentity,
+      workflow.trustedExternalRoots
+    );
+  if (pendingRoots.length === 0) {
+    return;
+  }
+
+  console.error(
+    chalk.red(
+      "Error: This workflow requests external file roots that have not been approved yet:"
+    )
+  );
+  pendingRoots.forEach((root) => console.error(chalk.red(`  - ${root}`)));
+  console.error(
+    chalk.yellow(
+      "Run `ctrlyoke trust-workflow-external-roots <file>` to review and approve them."
+    )
+  );
+  process.exit(2);
+}
+
 async function dryRunCommand(
   resolvedFile: string | undefined,
   options: RunOptions,
@@ -915,6 +978,14 @@ async function dryRunCommand(
       : await parser.parsePromptFile(resolvedFile!);
     if (!workflow) {
       throw new Error(`Failed to load workflow file: ${resolvedFile}`);
+    }
+
+    if (resolvedFile) {
+      assertWorkflowExternalRootsApproved(
+        workflow,
+        workingDir,
+        getAuthoredSourcePath(resolvedFile)
+      );
     }
 
     mergeCliVarsIntoWorkflow(workflow, config.vars);
@@ -1631,6 +1702,11 @@ interface TrustExternalRootsOptions {
   yes?: boolean;
 }
 
+interface TrustWorkflowExternalRootsOptions {
+  cwd?: string;
+  yes?: boolean;
+}
+
 /**
  * Review and approve this workspace's requested external file roots
  * (`permissions.allowedExternalFileRoots` at workspace scope). Ordinary
@@ -1698,6 +1774,100 @@ async function trustExternalRootsCommand(
   console.log(
     chalk.green(
       `✓ Approved ${pendingRoots.length} external file root(s) for this workspace.`
+    )
+  );
+  process.exit(0);
+}
+
+/**
+ * Review and approve a workflow's requested `trustedExternalRoots`. Ordinary
+ * `ctrlyoke run` fails closed while any workflow-scope root is still pending.
+ */
+async function trustWorkflowExternalRootsCommand(
+  file: string,
+  options: TrustWorkflowExternalRootsOptions
+): Promise<void> {
+  const workingDir = path.resolve(options.cwd ?? process.cwd());
+  const resolvedFile = path.resolve(workingDir, file);
+  Log.initializeCli(workingDir, false);
+
+  const userBackend = createUserConfigBackend();
+  const workspaceBackend = createWorkspaceConfigBackend(workingDir);
+  configService.setUserBackend(userBackend);
+  configService.setWorkspaceBackend(workspaceBackend);
+
+  const workflow = await new PromptFileParser().parsePromptFile(resolvedFile);
+  if (!workflow) {
+    console.error(
+      chalk.red(`Error: Failed to load workflow file: ${resolvedFile}`)
+    );
+    process.exit(2);
+  }
+
+  if (
+    workflow.trustedExternalRoots === undefined ||
+    workflow.trustedExternalRoots === null
+  ) {
+    console.log(
+      chalk.green(
+        "No pending workflow external file roots to approve for this workflow."
+      )
+    );
+    process.exit(0);
+  }
+
+  const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+    workingDir,
+    getAuthoredSourcePath(resolvedFile)
+  );
+  const pendingRoots =
+    ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+      ExternalRootsTrustStore.canonicalizeRoot(workingDir),
+      workflowIdentity,
+      workflow.trustedExternalRoots
+    );
+
+  if (pendingRoots.length === 0) {
+    console.log(
+      chalk.green(
+        "No pending workflow external file roots to approve for this workflow."
+      )
+    );
+    process.exit(0);
+  }
+
+  console.log(
+    chalk.bold(
+      `This workflow requests ${pendingRoots.length} external file root(s):`
+    )
+  );
+  pendingRoots.forEach((root) => console.log(`  - ${root}`));
+  console.log();
+
+  const approved =
+    options.yes ||
+    (await promptYesNo(
+      `Trust all ${pendingRoots.length} listed folder(s)? [y/N] `
+    ));
+  const decision = approved ? "allow" : "deny";
+  await externalRootsTrustStore.setDecisions(
+    workflowIdentity,
+    pendingRoots,
+    decision
+  );
+
+  if (!approved) {
+    console.log(
+      chalk.yellow(
+        "No roots were approved. They remain blocked — change this in Settings if needed."
+      )
+    );
+    process.exit(0);
+  }
+
+  console.log(
+    chalk.green(
+      `✓ Approved ${pendingRoots.length} external file root(s) for this workflow.`
     )
   );
   process.exit(0);

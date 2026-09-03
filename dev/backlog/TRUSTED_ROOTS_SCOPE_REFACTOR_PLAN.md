@@ -1,6 +1,6 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-02):** Proposed.
+**Status (2026-09-03):** Phase 2 complete; Phases 3-5 remain proposed.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -687,10 +687,10 @@ browser gap that no longer exists once this section's design ships.
 
 ### Phase 2: CLI
 
-1. Add the `cli.ts` fail-closed check for workflow-scope pending roots.
-2. Add `trust-workflow-external-roots` command and its help text.
-3. Tests: pending roots block `ctrlyoke run`; the trust command clears them;
-   `--yes` automation path.
+1. ~~Add the `cli.ts` fail-closed check for workflow-scope pending roots.~~
+2. ~~Add `trust-workflow-external-roots` command and its help text.~~
+3. ~~Tests: pending roots block `ctrlyoke run`; the trust command clears them;
+   `--yes` automation path.~~
 
 ### Phase 3: Approval UI (VS Code panel + browser, one implementation)
 

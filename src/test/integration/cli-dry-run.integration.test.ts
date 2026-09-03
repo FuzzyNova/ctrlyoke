@@ -143,6 +143,107 @@ suite("CLI dry-run process", () => {
       /Run `ctrlyoke trust-secret-grants <file>` to review and approve them\./
     );
   });
+
+  test("fails closed on pending workflow roots, then allows a trusted workflow to run", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-roots-")
+    );
+    const externalRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-external-")
+    );
+    temporaryRoots.push(root, externalRoot);
+    const workflow = path.join(root, "workflow.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        trustedExternalRoots: [externalRoot],
+        steps: [{ prompt: "This must not execute" }],
+      }),
+      "utf8"
+    );
+
+    const blocked = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(blocked.code, 2, blocked.stderr);
+    assert.match(
+      blocked.stderr,
+      new RegExp(
+        externalRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      )
+    );
+    assert.match(
+      blocked.stderr,
+      /Run `ctrlyoke trust-workflow-external-roots <file>` to review and approve them\./
+    );
+
+    const trusted = await runCli(
+      ["trust-workflow-external-roots", workflow, "--cwd", root, "--yes"],
+      root
+    );
+    assert.strictEqual(trusted.code, 0, trusted.stderr);
+    assert.doesNotMatch(trusted.stdout, /\[y\/N\]/u);
+
+    const allowed = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(allowed.code, 0, allowed.stderr);
+  });
+
+  test("does not gate workflows with null or omitted trustedExternalRoots", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workflow-roots-")
+    );
+    const externalRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-external-")
+    );
+    temporaryRoots.push(root, externalRoot);
+    await fs.mkdir(path.join(root, ".ctrlyoke"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".ctrlyoke", "settings.json"),
+      JSON.stringify({
+        permissions: { allowedExternalFileRoots: [externalRoot] },
+      }),
+      "utf8"
+    );
+
+    const workspaceTrust = await runCli(
+      ["trust-external-roots", "--cwd", root, "--yes"],
+      root
+    );
+    assert.strictEqual(workspaceTrust.code, 0, workspaceTrust.stderr);
+
+    const nullWorkflow = path.join(root, "null.ctrlyoke.json");
+    await fs.writeFile(
+      nullWorkflow,
+      JSON.stringify({
+        trustedExternalRoots: null,
+        steps: [{ prompt: "Null disables external roots" }],
+      }),
+      "utf8"
+    );
+    const nullResult = await runCli(
+      ["run", nullWorkflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(nullResult.code, 0, nullResult.stderr);
+
+    const inheritedWorkflow = path.join(root, "inherited.ctrlyoke.json");
+    await fs.writeFile(
+      inheritedWorkflow,
+      JSON.stringify({ steps: [{ prompt: "Omitted inherits defaults" }] }),
+      "utf8"
+    );
+    const inheritedResult = await runCli(
+      ["run", inheritedWorkflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(inheritedResult.code, 0, inheritedResult.stderr);
+  });
 });
 
 async function pathExists(filePath: string): Promise<boolean> {
