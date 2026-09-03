@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import {
   CliEvent,
   BashCommandData,
@@ -11,6 +12,7 @@ import {
   AskUserQuestionOption,
   TextData,
   McpToolCallData,
+  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import {
   APPLY_PATCH_FILE_EDIT_KINDS,
@@ -691,6 +693,15 @@ export class CodexToolBuilder {
           | undefined;
         if (initiatedEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
           const data = initiatedData as FileEditData | undefined;
+          // Mutate the shared data object in place (like
+          // applyPatchApplyEndPositions) so the already-pushed INITIATED
+          // event — which references this same object — picks up the fix too.
+          if (data?.path) {
+            data.structuredPatch = this.correctUncorrectedHunkPositions(
+              data.path,
+              data.structuredPatch
+            );
+          }
           return {
             type: CLI_EVENT_TYPES.FILE_EDIT,
             timestamp,
@@ -1111,4 +1122,92 @@ export class CodexToolBuilder {
    * @param patchInput - The patch input string from apply_patch tool arguments
    * @returns Array of UnifiedDiffHunk objects, or undefined if parsing fails
    */
+
+  /**
+   * Fill in real line offsets for a FILE_EDIT hunk list that is still at its
+   * bare-marker default of oldStart/newStart === 1, by locating each hunk's
+   * post-image content in the file's current on-disk contents.
+   *
+   * Newer Codex builds (gpt-5.x) execute `apply_patch` from inside the `exec`
+   * sandbox wrapper (`text(await tools.apply_patch(patch))`) instead of the
+   * discrete `apply_patch` tool, and this call shape never emits a
+   * `patch_apply_end` event — the only other source of corrected offsets (see
+   * `applyPatchApplyEndPositions` in CodexLogParser). Without it every hunk
+   * stays at line 1 forever, in both the live view and the final reparse.
+   *
+   * By the time the tool's COMPLETED event arrives the edit is already
+   * written to disk, so each hunk's context + added lines (its "post-image")
+   * can be searched for verbatim in the current file content: that block's
+   * position IS the hunk's real `newStart`. `oldStart` then follows from
+   * `newStart` minus the cumulative line-count delta of every earlier hunk in
+   * the same file, since the untouched text between hunks is identical in the
+   * old and new file.
+   *
+   * A hunk whose oldStart/newStart is already something other than the
+   * default 1 has already been corrected (by `patch_apply_end`, when it does
+   * fire) and is left untouched. A hunk search that finds no match — the file
+   * no longer exists, or later edits already changed this exact region again
+   * — is also left untouched rather than guessed at.
+   */
+  private static correctUncorrectedHunkPositions(
+    path: string,
+    structuredPatch: UnifiedDiffHunk[] | undefined
+  ): UnifiedDiffHunk[] | undefined {
+    if (
+      !structuredPatch?.length ||
+      structuredPatch[0].oldStart !== 1 ||
+      structuredPatch[0].newStart !== 1
+    ) {
+      return structuredPatch;
+    }
+
+    let fileLines: string[];
+    try {
+      fileLines = fs.readFileSync(path, "utf8").split(/\r\n|\r|\n/);
+    } catch {
+      return structuredPatch;
+    }
+
+    let cumulativeLineDelta = 0;
+    return structuredPatch.map((hunk) => {
+      const postImageLines = hunk.lines
+        .filter((line) => line.startsWith(" ") || line.startsWith("+"))
+        .map((line) => line.slice(1));
+
+      const matchIndex = this.findLineSequence(fileLines, postImageLines);
+      const lineDelta = hunk.newLines - hunk.oldLines;
+      if (matchIndex === -1) {
+        cumulativeLineDelta += lineDelta;
+        return hunk;
+      }
+
+      const newStart = matchIndex + 1;
+      const corrected: UnifiedDiffHunk = {
+        ...hunk,
+        oldStart: newStart - cumulativeLineDelta,
+        newStart,
+      };
+      cumulativeLineDelta += lineDelta;
+      return corrected;
+    });
+  }
+
+  /** Finds the first index in `haystack` where `needle` occurs as a contiguous run, or -1. */
+  private static findLineSequence(
+    haystack: string[],
+    needle: string[]
+  ): number {
+    if (needle.length === 0 || needle.length > haystack.length) {
+      return -1;
+    }
+    outer: for (let i = 0; i <= haystack.length - needle.length; i++) {
+      for (let j = 0; j < needle.length; j++) {
+        if (haystack[i + j] !== needle[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
 }
