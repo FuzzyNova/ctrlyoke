@@ -5,6 +5,8 @@ The standalone CLI currently exposes these commands:
 ```text
 ctrlyoke run [file]
 ctrlyoke validate <file>
+ctrlyoke trust-external-roots
+ctrlyoke trust-workflow-external-roots <file>
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace]
@@ -31,6 +33,25 @@ ctrlyoke run deploy.ctrlyoke.yaml --headless
 `secret check` performs the same declared-secret preflight as `run` without
 starting a harness. It exits non-zero when a declared name cannot resolve and
 reports the name and resolution scope.
+
+## `ctrlyoke trust-workflow-external-roots`
+
+Review and approve the external directories requested by a workflow's
+`trustedExternalRoots` field:
+
+```bash
+ctrlyoke trust-workflow-external-roots my-workflow.ctrlyoke.yaml
+```
+
+The command lists pending roots and asks for confirmation before recording an
+allow or deny decision for that workflow on the local machine. Use
+`--yes` to approve all pending roots in automation. A workflow with pending
+roots cannot run; `ctrlyoke run` exits with code `2` and prints this command as
+the remediation.
+
+`ctrlyoke trust-external-roots` is the corresponding command for
+workspace-scope `permissions.allowedExternalFileRoots` requests. User-scope
+roots are trusted immediately when added to the user's settings.
 
 ## `ctrlyoke run`
 

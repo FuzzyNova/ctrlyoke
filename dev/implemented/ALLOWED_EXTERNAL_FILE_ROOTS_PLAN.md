@@ -51,7 +51,7 @@
 > trust a root for a single workflow without touching
 > `permissions.allowedExternalFileRoots` at all. Both are addressed by adding
 > a third, workflow-scoped trust tier and a scope choice on that dialog — see
-> `dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`.
+> `dev/implemented/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`.
 
 ## Problem
 

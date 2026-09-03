@@ -1,6 +1,16 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-03):** Phases 1-4 complete; Phase 5 remains proposed.
+**Status (2026-09-03):** Implemented — Phases 1-5 complete and verified.
+
+**Final implementation record (2026-09-03):** Stages 1-5 in
+`TRUSTED_ROOTS_STAGING_PLAN.md` shipped across commits `416924b7`,
+`8565620a`, `b79bc8f5`, `d7cd96c4`, `8384c6a7`, `40e38aa2`, and
+`a310b9b4`. Stage 4 was delivered in its planned 4a-4c sub-stages, using the
+host-neutral `UserInteractionPort` flow and `ChoiceModal`; the native OS
+folder picker remains the deliberate exception described below. No work from
+Phases 1-5 was deferred or skipped. The remaining standalone WebSocket
+refactor in `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` is unrelated to this plan
+and is not part of its completion.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -9,11 +19,11 @@ Phase 1 adds the `trustedExternalRoots` denial alongside both.
 
 **Related plans:**
 
-- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](../implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
+- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
   the user- and workspace-scope trust model this plan adds a third tier to.
   Read that plan first; this doc does not repeat its security model, only
   extends it.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
   owns the general native-vs-built-in-modal policy (decided 2026-09-02): this
   plan's approval UI is built **once**, host-neutral, from the start — there
   is no VS Code-native interim state and no separate browser-only dialog to
@@ -349,7 +359,7 @@ Add to the `workflowOnlyProperties` definition (alongside `worktree`, `vars`)
       "description": "Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all."
     }
   ],
-  "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
+  "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/implemented/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
 }
 ```
 
@@ -756,7 +766,16 @@ browser gap that no longer exists once this section's design ships.
 
 Document the three-tier model, the workflow-file abuse case and why it's
 mitigated, and the new CLI command, alongside the existing
-`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` documentation obligations.
+`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` documentation obligations. This is
+complete in the VitePress user documentation:
+
+- [`docs/reference/settings.md`](../../docs/reference/settings.md) documents
+  user/workspace roots and the link-trust setting.
+- [`docs/workflows/yaml-format.md`](../../docs/workflows/yaml-format.md)
+  documents `trustedExternalRoots`, its inherit/replace/disable semantics, and
+  the separate approval required for shared workflow files.
+- [`docs/cli/ctrlyoke.md`](../../docs/cli/ctrlyoke.md) documents
+  `ctrlyoke trust-workflow-external-roots <file>` and its `--yes` option.
 
 ## Files Likely Changed
 

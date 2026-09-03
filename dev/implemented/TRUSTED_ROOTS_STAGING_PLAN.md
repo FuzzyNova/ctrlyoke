@@ -1,18 +1,26 @@
 # Trusted Roots Staging Plan
 
-**Status (2026-09-03):** Stages 1-5 complete; Stage 6 remains proposed. This is a sequencing doc only — it carries
+**Status (2026-09-03):** Implemented — Stages 1-6 complete and verified. This is a sequencing doc only — it carries
 no new design content. All substance lives in the three plans below; this
 file just orders their trusted-roots-related work into shippable stages and
 records the one cross-plan dependency question that came up while staging it.
 
+**Final implementation record (2026-09-03):** Stages 1-5 shipped as recorded
+in the implementation commits listed in
+`TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`; Stage 6 is complete in the VitePress
+settings, workflow YAML, and CLI reference pages. No Stage 1-5 work was
+deferred or skipped. Stage 4 intentionally uses one host-neutral built-in
+modal implementation, with only the native OS folder picker retained as a
+platform-specific exception.
+
 **Related plans (own all the actual content):**
 
-- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](../implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
+- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
   the shipped user/workspace trust model, plus its 2026-09-02 update noting
   the context-menu gap staged here.
 - [`TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`](TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md) —
   the new workflow-scoped trust tier (all of Stages 2-6 below).
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
   owns the `ExternalFileTrustPrompt.ts`/`WebviewSettingsSync.ts` browser-parity
   rows folded into Stage 4 below.
 
@@ -56,7 +64,7 @@ staged sequence. Nothing here needs to wait.
 | 3 | CLI: `ctrlyoke trust-workflow-external-roots <file>`; extend the `cli.ts` fail-closed gate to check the target workflow's pending roots before `ctrlyoke run` proceeds | `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` Phase 2 | Stage 2 | A workflow file declaring an unapproved `trustedExternalRoots` entry exits `ctrlyoke run` with code 2 and correct guidance; the trust command clears it |
 | 4 | One host-neutral UI, not "VS Code + browser": workflow batch-approval prompt gating Run, and the "Trust Parent Folder" scope choice (user / workspace / workflow), both built on the `UserInteractionPort`/`BatchApprovalModal` pattern already shipped for `SecretGrantsTrustPrompt.ts` — no native `showQuickPick`/`showWarningMessage` implementation is written at all, per the 2026-09-02 native-vs-built-in-modal policy decision (see Notes). The two non-dashboard call sites (`ctrlyoke.confirmExternalFileTrust`, and Stage 1's context-menu commands) reveal the panel and await READY before prompting, since there is no native fallback to show if the panel is closed. `WebviewSettingsSync.handleBrowseAndAddExternalRoot`'s native `showOpenDialog` is the one deliberate exception (OS file/folder picker) and is not touched by this stage. | `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` "Approval Flow"/"Trust Parent Folder Dialog" (Phase 3), folding in the corrected `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` `ExternalFileTrustPrompt.ts` row | Stage 2 (needs the store/helpers); Stage 3 only for accurate CLI-command copy in the dialog, not a code dependency | Run is blocked on pending workflow roots in both the VS Code panel and a browser-connected hosted-dashboard client; no native `vscode.window.show*` call remains anywhere in `ExternalFileTrustPrompt.ts`'s trust-decision logic (its native `openResolvedTarget` document-opening calls are unaffected — see the corrected inventory row); `WebviewSettingsSync.handleBrowseAndAddExternalRoot`'s native `showOpenDialog` remains, by design |
 | 5 | Harness plumbing: thread approved workflow roots into `ContextExpander` and `CliProviderUtils.getWorkspaceDirs()`'s `--add-dir` assembly | `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` Phase 4 | Stage 2 for the code; Stage 3 or 4 to have anything real to approve against in manual testing | **Completed 2026-09-03:** an approved workflow-scope root is readable via `@`-reference and reaches `--add-dir` for Claude/Codex/Copilot/Antigravity; pending/denied roots are excluded, explicit arrays replace inherited roots, and `null` disables external `--add-dir` arguments |
-| 6 | Documentation | `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` Phase 5 | Stages 2-5 | Three-tier model, the workflow-file abuse case and its mitigation, and the new CLI command are documented |
+| 6 | Documentation | `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` Phase 5 | Stages 2-5 | **Completed 2026-09-03:** the three-tier model, workflow-file abuse case and mitigation, and the new CLI command are documented in `docs/reference/settings.md`, `docs/workflows/yaml-format.md`, and `docs/cli/ctrlyoke.md` |
 
 ## Notes
 
