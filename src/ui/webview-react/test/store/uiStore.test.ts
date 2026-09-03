@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
@@ -229,6 +230,19 @@ describe("hidden output targets", () => {
 
     expect(persisted).not.toHaveProperty("hiddenOutputTargets");
     expect(persisted).not.toHaveProperty("outputStepFilterVersion");
+  });
+
+  it("does not change workflow status or progress state", () => {
+    const workflowBefore = useWorkflowStore.getState();
+    const entriesBefore = workflowBefore.liveOrderedEntries;
+
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+
+    const workflowAfter = useWorkflowStore.getState();
+    expect(workflowAfter.currentStep).toBe(workflowBefore.currentStep);
+    expect(workflowAfter.totalSteps).toBe(workflowBefore.totalSteps);
+    expect(workflowAfter.steps).toBe(workflowBefore.steps);
+    expect(workflowAfter.liveOrderedEntries).toBe(entriesBefore);
   });
 });
 

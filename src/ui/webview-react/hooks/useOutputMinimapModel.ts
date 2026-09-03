@@ -55,6 +55,8 @@ interface UseOutputMinimapModelInput {
   outputFontSize: number;
   rowLayout: OutputRowLayoutModel;
   rows: OutputRenderRow[];
+  hiddenTargetKeys: readonly string[];
+  hiddenAtMs: Readonly<Record<string, number>>;
   stepOutputsMap: Map<string, CliOutputType[]>;
   steps: WorkflowStep[];
   undoRecords: Record<string, UndoRecord>;
@@ -121,6 +123,8 @@ export function useOutputMinimapModel({
   outputFontSize,
   rowLayout,
   rows,
+  hiddenTargetKeys,
+  hiddenAtMs,
   stepOutputsMap,
   steps,
   undoRecords,
@@ -150,6 +154,14 @@ export function useOutputMinimapModel({
       },
       () => {
         const totalSize = Math.max(1, rowLayout.totalSize);
+        const newestTimestampByTarget = new Map<string, number>();
+        for (const message of allMessages) {
+          const key = `${message.target.kind}:${message.target.index}`;
+          const previous = newestTimestampByTarget.get(key);
+          if (previous === undefined || message.timestamp > previous) {
+            newestTimestampByTarget.set(key, message.timestamp);
+          }
+        }
 
         return uniqueStepTargets.flatMap((msgTarget) => {
           const key = `${msgTarget.kind}:${msgTarget.index}`;
@@ -169,6 +181,12 @@ export function useOutputMinimapModel({
           const scrollFraction =
             stepScrollFractions.get(key) ??
             rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
+          const hidden = hiddenTargetKeys.includes(key);
+          const hiddenTimestamp = hiddenAtMs[key];
+          const hasHiddenActivity =
+            hidden &&
+            hiddenTimestamp !== undefined &&
+            (newestTimestampByTarget.get(key) ?? 0) > hiddenTimestamp;
           const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
             if (
               row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
@@ -211,6 +229,8 @@ export function useOutputMinimapModel({
                 firstMessageIndex: firstRowIndex,
                 scrollFraction,
                 label,
+                hidden,
+                hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -227,6 +247,8 @@ export function useOutputMinimapModel({
                 firstMessageIndex: firstRowIndex,
                 scrollFraction,
                 label,
+                hidden,
+                hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -244,6 +266,8 @@ export function useOutputMinimapModel({
                 firstMessageIndex: firstRowIndex,
                 scrollFraction,
                 label,
+                hidden,
+                hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -328,6 +352,8 @@ export function useOutputMinimapModel({
               firstMessageIndex: firstRowIndex,
               scrollFraction,
               label,
+              hidden,
+              hasHiddenActivity,
               undoActions,
               diffBlocks,
             },
@@ -341,6 +367,8 @@ export function useOutputMinimapModel({
     finalStep,
     finalStepWorkspaceSnapshots,
     firstRowIndexByTarget,
+    hiddenAtMs,
+    hiddenTargetKeys,
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,

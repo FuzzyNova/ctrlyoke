@@ -2,8 +2,9 @@
 
 > **Last Updated:** September 3, 2026
 >
-> **Status:** Ready to implement. Audited against `main` on this date; every symbol named
-> below was verified to exist. The questions the previous revision deferred are decided
+> **Status:** Step 4 (minimap + header controls) is implemented. Steps 5–7 remain pending.
+> Audited against `main` on this date; every symbol named below was verified to exist.
+> The questions the previous revision deferred are decided
 > here. **Correction in this revision:** Decision 3 previously keyed the hidden set by
 > workflow instance id and claimed existing `loadWorkflow`/`RUN_VIEW_LOADED` transitions
 > clear `outputScrollTargets` per address. They do not — `resetUi` is its only reset — so a

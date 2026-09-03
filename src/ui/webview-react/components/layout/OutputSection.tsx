@@ -78,10 +78,13 @@ import {
   KEYBOARD_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
 const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
+const EMPTY_HIDDEN_TARGET_KEYS: readonly string[] = [];
+const EMPTY_HIDDEN_AT_MS: Readonly<Record<string, number>> = {};
 
 // Stable workflowId used for standalone user shell sessions (no active workflow).
 const SHELL_WORKFLOW_ID = "_shell";
@@ -137,6 +140,14 @@ const OutputSectionInner: React.FC = () => {
 
   const outputCollapsed = useUiStore((s) => s.outputCollapsed);
   const outputStepFilterVersion = useUiStore((s) => s.outputStepFilterVersion);
+  const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
+  const toggleHiddenOutputTarget = useUiStore(
+    (s) => s.toggleHiddenOutputTarget
+  );
+  const soloOutputTarget = useUiStore((s) => s.soloOutputTarget);
+  const clearHiddenOutputTargets = useUiStore(
+    (s) => s.clearHiddenOutputTargets
+  );
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const toggleOutputCollapse = useUiStore((s) => s.toggleOutputCollapse);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
@@ -188,6 +199,10 @@ const OutputSectionInner: React.FC = () => {
     );
   });
   const displayedAddress = useUiStore((s) => s.displayedViewAddress);
+  const outputFilterAddressKey = displayedAddress
+    ? workflowViewAddressKey(displayedAddress)
+    : SHELL_WORKFLOW_ID;
+  const hiddenOutputEntry = hiddenOutputTargets[outputFilterAddressKey];
   const liveWorkflowSummary = useUiStore((s) =>
     s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
   );
@@ -1190,6 +1205,8 @@ const OutputSectionInner: React.FC = () => {
     finalStep,
     finalStepWorkspaceSnapshots,
     firstRowIndexByTarget,
+    hiddenAtMs: hiddenOutputEntry?.hiddenAtMs ?? EMPTY_HIDDEN_AT_MS,
+    hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
@@ -1204,6 +1221,27 @@ const OutputSectionInner: React.FC = () => {
     uniqueStepTargets,
     workspaceSnapshots,
   });
+
+  const hiddenOutputCount = minimapSteps.filter((step) => step.hidden).length;
+  const handleMinimapStepToggle = useCallback(
+    (step: MinimapStep) => {
+      toggleHiddenOutputTarget(outputFilterAddressKey, step.key);
+    },
+    [outputFilterAddressKey, toggleHiddenOutputTarget]
+  );
+  const handleMinimapStepSolo = useCallback(
+    (step: MinimapStep) => {
+      soloOutputTarget(
+        outputFilterAddressKey,
+        step.key,
+        minimapSteps.map((minimapStep) => minimapStep.key)
+      );
+    },
+    [minimapSteps, outputFilterAddressKey, soloOutputTarget]
+  );
+  const handleClearHiddenOutputTargets = useCallback(() => {
+    clearHiddenOutputTargets(outputFilterAddressKey);
+  }, [clearHiddenOutputTargets, outputFilterAddressKey]);
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
     allMessages,
@@ -1444,6 +1482,7 @@ const OutputSectionInner: React.FC = () => {
           activeTerminalSession={activeTerminalSession}
           anyDiffCollapsed={anyDiffCollapsed}
           hasOutput={hasOutput}
+          hiddenOutputCount={hiddenOutputCount}
           isFindOpen={findState.isOpen}
           isExecutionActive={isExecutionActive}
           isFullscreen={isFullscreen}
@@ -1463,6 +1502,7 @@ const OutputSectionInner: React.FC = () => {
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
           onToggleFind={handleToggleFind}
+          onClearHiddenOutputTargets={handleClearHiddenOutputTargets}
           onNewTerminal={handleSpawnTerminal}
           onOutputFontSizeChange={setOutputFontSize}
           onSelectOutputTab={handleSelectOutputTab}
@@ -1536,6 +1576,8 @@ const OutputSectionInner: React.FC = () => {
           onDiffGapExpand={handleDiffGapExpandWithScrollPin}
           onFileUndo={handleFileUndo}
           onMinimapStepClick={handleMinimapStepClick}
+          onMinimapStepToggle={handleMinimapStepToggle}
+          onMinimapStepSolo={handleMinimapStepSolo}
           onOutputProfilerRender={handleOutputProfilerRender}
           onPromptRedo={handlePromptRedo}
           onPromptUndo={handlePromptUndo}

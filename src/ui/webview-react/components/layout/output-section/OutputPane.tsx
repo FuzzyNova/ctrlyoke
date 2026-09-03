@@ -97,6 +97,8 @@ interface OutputPaneProps {
     request: OutputRowFileUndoRequest
   ) => void;
   onMinimapStepClick: (step: MinimapStep) => void;
+  onMinimapStepToggle: (step: MinimapStep) => void;
+  onMinimapStepSolo: (step: MinimapStep) => void;
   onOutputProfilerRender: React.ProfilerOnRenderCallback;
   onPromptRedo: (row: CliHeaderRow) => void;
   onPromptUndo: (row: CliHeaderRow) => void;
@@ -195,6 +197,8 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     onBackToLive,
     onContextMenuOpen,
     onMinimapStepClick,
+    onMinimapStepToggle,
+    onMinimapStepSolo,
     onOutputProfilerRender,
     onScroll,
     onTouchCancel,
@@ -386,6 +390,8 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             scrollContainerRef={outputRef}
             contentHeight={contentHeight}
             onStepClick={onMinimapStepClick}
+            onStepToggle={onMinimapStepToggle}
+            onStepSolo={onMinimapStepSolo}
           />
         </Profiler>
       )}
