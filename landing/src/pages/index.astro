@@ -3,6 +3,9 @@ import Layout from "../layouts/Layout.astro";
 import Cta from "../components/Cta.astro";
 import HarnessDeck from "../components/HarnessDeck.astro";
 import { LAUNCHED, MARKETPLACE_URL } from "../config";
+// Canonical screenshots live at repo-root images/screenshots/, not duplicated into
+// landing/public/ — see "Screenshot assets" in .github/copilot-instructions.md.
+import heroGif from "../../../images/screenshots/hero-gif-1350x900.gif";
 
 const harnesses = [
   { name: "Copilot CLI", icon: "/icons/harnesses/copilot-cli.svg" },
@@ -86,20 +89,40 @@ const steps = [
 >
 
   <!-- Hero -->
-  <section class="relative overflow-hidden border-b border-white/5 bg-brand-950 px-6 py-24 md:py-36">
+  <section class="relative overflow-hidden border-b border-white/5 bg-brand-950 px-6 pb-16 pt-8 md:pb-24 md:pt-10">
     <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(14,83,128,0.3),transparent)]"></div>
     <div class="relative mx-auto max-w-4xl text-center">
+      <img
+        src="/ctrlyoke-icon.svg"
+        alt=""
+        class="mx-auto mb-3 h-24 w-24 drop-shadow-[0_8px_24px_rgba(57,148,188,0.35)] md:h-32 md:w-32"
+      />
+      <h1 class="text-5xl font-bold leading-tight tracking-tight text-white md:text-6xl">
+        One interface for<br />every AI coding harness
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-400 md:text-xl">
+        The better way to prompt, steer, automate, and revisit work across Claude Code,
+        Codex, Copilot CLI, and more.
+      </p>
+    </div>
+    <div class="relative mx-auto mt-10 max-w-6xl">
+      <div class="overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/50">
+        <img
+          src={heroGif.src}
+          width={1350}
+          height={900}
+          alt="ctrlyoke running a multi-step workflow across several AI harnesses, with live output and the output minimap"
+          loading="eager"
+          decoding="async"
+          class="w-full"
+        />
+      </div>
+    </div>
+    <div class="relative mx-auto mt-10 max-w-4xl text-center">
       <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/5 px-4 py-1.5 text-sm text-sky-400">
         <span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
         Free to install · Pro for power users
       </div>
-      <h1 class="mb-6 text-5xl font-bold leading-tight tracking-tight text-white md:text-6xl">
-        One interface for<br />every AI coding harness
-      </h1>
-      <p class="mx-auto mb-10 max-w-2xl text-lg text-slate-400 md:text-xl">
-        The better way to prompt, steer, automate, and revisit work across Claude Code,
-        Codex, Copilot CLI, and more.
-      </p>
       <div class="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
         <Cta
           href={MARKETPLACE_URL}
