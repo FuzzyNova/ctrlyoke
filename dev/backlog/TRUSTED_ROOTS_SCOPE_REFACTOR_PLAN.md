@@ -1,6 +1,7 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-03):** Phase 2 complete; Phases 3-5 remain proposed.
+**Status (2026-09-03):** Phase 2 complete; Phase 3 items 1-3 complete;
+Phase 3 items 4-6 and Phases 4-5 remain proposed.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -694,22 +695,22 @@ browser gap that no longer exists once this section's design ships.
 
 ### Phase 3: Approval UI (VS Code panel + browser, one implementation)
 
-1. Migrate `promptBatchApprovalForPendingWorkspaceExternalRoots`'s
+1. ~~Migrate `promptBatchApprovalForPendingWorkspaceExternalRoots`'s
    `showQuickPick` call to the `UserInteractionPort` pattern (matching
    `promptBatchApprovalForPendingWorkspaceSecretGrants`); extract the shared
    `promptBatchApprovalForPendingRoots` helper; add the workflow-scope call
-   site triggered on workflow load, gating "Run".
-2. Add `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
+   site triggered on workflow load, gating "Run".~~
+2. ~~Add `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
    support + the new choice modal; wire the scope-choice options into
    `confirmExternalFileTrust`; thread "current workflow file, if any" into
    its call sites in `PromptEditorSupportService.ts` and
    `PromptLinkProvider.ts` so "Trust for this workflow" can be offered where
-   applicable and omitted where there is no active workflow context.
-3. Add the panel-reveal-then-await-READY step to the two non-dashboard call
+   applicable and omitted where there is no active workflow context.~~
+3. ~~Add the panel-reveal-then-await-READY step to the two non-dashboard call
    sites (`extension.ts`'s `ctrlyoke.confirmExternalFileTrust` command; the
    four `ContextMenuReferenceCommands.ts` commands once
    `TRUSTED_ROOTS_STAGING_PLAN.md` Stage 1 lands) before requesting a prompt
-   through the port.
+   through the port.~~
 4. Build `TrustedRootsListEditor.tsx` (see "Shared control" above),
    including its decision-status badges, revoke control, and
    interactive-add-implies-allow behavior on both the native-picker and

@@ -10,6 +10,11 @@ import {
 } from "../../completions/ContextMenuReferenceCommands";
 import type { PromptEditorInsertRequest } from "../../types/WebviewMessageTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { EXTERNAL_FILE_TRUST_SCOPES } from "../../types/DashboardConstants";
+import type {
+  ChoiceRequest,
+  UserInteractionPort,
+} from "../../ui/UserInteractionPort";
 
 class RecordingPromptEditorInsertSink implements ContextMenuPromptEditorInsertSink {
   readonly requests: PromptEditorInsertRequest[] = [];
@@ -29,6 +34,24 @@ class MockOutputEditor implements Pick<
     readonly document: vscode.TextDocument,
     public selection: vscode.Selection
   ) {}
+}
+
+class FakeInteractionPort implements UserInteractionPort {
+  constructor(private readonly choice: string | undefined) {}
+
+  canPrompt(): boolean {
+    return true;
+  }
+
+  async requestBatchApproval(): Promise<undefined> {
+    return undefined;
+  }
+
+  async requestChoice(
+    _request: ChoiceRequest
+  ): Promise<string | undefined> {
+    return this.choice;
+  }
 }
 
 suite("ContextMenuReferenceCommands", () => {
@@ -62,12 +85,16 @@ suite("ContextMenuReferenceCommands", () => {
   function createCommands(
     sink: RecordingPromptEditorInsertSink,
     workspaceRoot: string,
-    workspaceRelativeReferencePathResolver?: (uri: vscode.Uri) => string | null
+    workspaceRelativeReferencePathResolver?: (uri: vscode.Uri) => string | null,
+    trustChoice: string | null = EXTERNAL_FILE_TRUST_SCOPES.USER,
+    prepareTrustPrompt?: () => Promise<UserInteractionPort>
   ): ContextMenuReferenceCommands {
     return new ContextMenuReferenceCommands(
       sink,
       () => workspaceRoot,
-      workspaceRelativeReferencePathResolver
+      workspaceRelativeReferencePathResolver,
+      prepareTrustPrompt ??
+        (async () => new FakeInteractionPort(trustChoice ?? undefined))
     );
   }
 
@@ -182,7 +209,6 @@ suite("ContextMenuReferenceCommands", () => {
           `#sym.function:"${normalizedFilePath}":externalSymbol:1-1`,
         ]
       );
-      assert.strictEqual(warningMessages.length, 4);
       assert.deepStrictEqual(trustedParentFolders, [
         vscode.Uri.file(externalRoot).fsPath,
         vscode.Uri.file(externalRoot).fsPath,
@@ -226,6 +252,51 @@ suite("ContextMenuReferenceCommands", () => {
         return Promise.resolve(undefined);
       }) as unknown as typeof originalShowWarningMessage,
     });
+
+    test("waits for the panel-ready boundary before asking for trust", async () => {
+      const workspaceRoot = createTestWorkspace();
+      const externalRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-context-menu-ready-")
+      );
+      workspaceRoots.push(externalRoot);
+      const externalFilePath = path.join(externalRoot, "ready.ts");
+      const sink = new RecordingPromptEditorInsertSink();
+      const stages: string[] = [];
+      const originalShouldOffer =
+        ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks;
+      const originalGetApproved =
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots;
+      const originalAddUser =
+        ConfigurationUtils.addUserAllowedExternalFileRoot;
+
+      ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks = () => true;
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots = () => [];
+      ConfigurationUtils.addUserAllowedExternalFileRoot = async () => {};
+
+      try {
+        await createCommands(
+          sink,
+          workspaceRoot,
+          undefined,
+          EXTERNAL_FILE_TRUST_SCOPES.USER,
+          async () => {
+            stages.push("open-panel");
+            await Promise.resolve();
+            stages.push("ready");
+            return new FakeInteractionPort(EXTERNAL_FILE_TRUST_SCOPES.USER);
+          }
+        ).addFileToPromptEditor(vscode.Uri.file(externalFilePath));
+
+        assert.deepStrictEqual(stages, ["open-panel", "ready"]);
+        assert.strictEqual(sink.requests.length, 1);
+      } finally {
+        ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks =
+          originalShouldOffer;
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots =
+          originalGetApproved;
+        ConfigurationUtils.addUserAllowedExternalFileRoot = originalAddUser;
+      }
+    });
     ConfigurationUtils.getEffectiveApprovedExternalFileRoots = () => [
       externalRoot,
     ];
@@ -238,7 +309,6 @@ suite("ContextMenuReferenceCommands", () => {
       assert.deepStrictEqual(sink.requests[0].references, [
         `@${vscode.Uri.file(externalFilePath).fsPath.replace(/\\/g, "/")}`,
       ]);
-      assert.strictEqual(warningMessages.length, 0);
     } finally {
       Object.defineProperty(vscode.window, "showWarningMessage", {
         configurable: true,
@@ -274,12 +344,14 @@ suite("ContextMenuReferenceCommands", () => {
 
     try {
       const sink = new RecordingPromptEditorInsertSink();
-      await createCommands(sink, workspaceRoot).addDirectoryToPromptEditor(
-        vscode.Uri.file(path.join(externalRoot, "declined"))
-      );
+      await createCommands(
+        sink,
+        workspaceRoot,
+        undefined,
+        null
+      ).addDirectoryToPromptEditor(vscode.Uri.file(path.join(externalRoot, "declined")));
 
       assert.strictEqual(sink.requests.length, 0);
-      assert.strictEqual(warningMessages.length, 2);
     } finally {
       Object.defineProperty(vscode.window, "showWarningMessage", {
         configurable: true,

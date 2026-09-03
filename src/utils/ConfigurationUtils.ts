@@ -673,6 +673,19 @@ export const ConfigurationUtils = {
     );
   },
 
+  async addWorkspaceAllowedExternalFileRoot(root: string): Promise<void> {
+    const { workspace: current } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    if (current.includes(root)) {
+      return;
+    }
+    await configService.set(
+      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      [...current, root],
+      CONFIG_SCOPE.WORKSPACE
+    );
+  },
+
   /**
    * Check whether an AI-generated file link outside trusted roots may offer
    * a "Trust Parent Folder" action. When false, untrusted links are still

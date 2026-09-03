@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -169,6 +170,9 @@ export const Header: React.FC<{
     suffixEditConfirmation,
     setSuffixEditConfirmation,
   } = useUiStore();
+  const workflowExternalRootsApprovalRequired = useSettingsStore(
+    (state) => state.workflowExternalRootsApprovalRequired
+  );
 
   const activeWorkflow = loadedWorkflows.find(
     (workflow) => workflow.id === activeWorkflowId
@@ -510,7 +514,10 @@ export const Header: React.FC<{
   // actionable, retain the disabled Run slot so the primary affordance never
   // disappears completely. From xs upward all three fixed slots remain visible.
   const slot1Enabled =
-    slot1.enabled && !isExternallyManaged && !isLineageReadOnly;
+    slot1.enabled &&
+    !isExternallyManaged &&
+    !isLineageReadOnly &&
+    !workflowExternalRootsApprovalRequired;
   const slot2Enabled =
     slot2.enabled && !isExternallyManaged && !isLineageReadOnly;
   const slot3Enabled =
@@ -549,7 +556,12 @@ export const Header: React.FC<{
             openRunDryRunMenu(event.clientX, event.clientY);
           }}
           {...runSlotLongPressHandlers}
-          disabled={!slot1.enabled || isExternallyManaged || isLineageReadOnly}
+          disabled={
+            !slot1.enabled ||
+            isExternallyManaged ||
+            isLineageReadOnly ||
+            workflowExternalRootsApprovalRequired
+          }
           title={
             externalManagementLabel
               ? `Workflow is running via ${externalManagementLabel}`
@@ -557,7 +569,9 @@ export const Header: React.FC<{
                 ? "This workflow has been deleted"
                 : isSystemGeneratedWorkflow
                   ? "Managed automatically by commit message generation"
-                  : slot1.title
+                  : workflowExternalRootsApprovalRequired
+                    ? "Approve requested external file roots before running"
+                    : slot1.title
           }
           aria-label={slot1.label}
         >

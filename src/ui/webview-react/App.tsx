@@ -62,6 +62,7 @@ import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 import { ToastViewport } from "@components/shared/ToastViewport";
 import { BatchApprovalModal } from "@components/shared/BatchApprovalModal";
+import { ChoiceModal } from "@components/shared/ChoiceModal";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -744,6 +745,7 @@ function App() {
         <ToastViewport />
 
         <BatchApprovalModal />
+        <ChoiceModal />
 
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
@@ -997,6 +999,7 @@ function App() {
       <ToastViewport />
 
       <BatchApprovalModal />
+      <ChoiceModal />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

@@ -2370,6 +2370,30 @@ export interface BatchApprovalResponseMessage {
   result: { approvedValues: string[]; deniedValues: string[] } | null;
 }
 
+/** Extension -> Webview: ask the connected client to choose one option. */
+export interface ShowChoiceRequestMessage {
+  type: typeof MESSAGE_TYPES.SHOW_CHOICE_REQUEST;
+  request: {
+    id: string;
+    title: string;
+    detail: string;
+    choices: { value: string; label: string }[];
+  };
+}
+
+/** Webview -> Extension: the selected option, or null when dismissed. */
+export interface ChoiceResponseMessage {
+  type: typeof MESSAGE_TYPES.CHOICE_RESPONSE;
+  id: string;
+  value: string | null;
+}
+
+export interface WorkflowExternalRootsApprovalRequiredMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED;
+  workflowId: string;
+  pendingRoots: string[];
+}
+
 // ============================================================================
 // HARNESS FILE MANAGER TYPES
 // ============================================================================
@@ -2586,6 +2610,8 @@ export type IncomingMessage =
   | SecretSetMessage
   | SecretDeletedMessage
   | ShowBatchApprovalRequestMessage
+  | ShowChoiceRequestMessage
+  | WorkflowExternalRootsApprovalRequiredMessage
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage

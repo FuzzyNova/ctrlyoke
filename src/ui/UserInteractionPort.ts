@@ -16,6 +16,13 @@ export interface BatchApprovalResult {
   deniedValues: string[];
 }
 
+export interface ChoiceRequest {
+  id: string;
+  title: string;
+  detail: string;
+  choices: { value: string; label: string }[];
+}
+
 /**
  * Minimal, reusable capability for asking a connected interactive client to
  * approve/deny a batch of named items via checklist. First caller is
@@ -36,6 +43,7 @@ export interface UserInteractionPort {
   requestBatchApproval(
     request: BatchApprovalRequest
   ): Promise<BatchApprovalResult | undefined>;
+  requestChoice(request: ChoiceRequest): Promise<string | undefined>;
 }
 
 /** Always reports "cannot prompt" — the headless/no-client default. */
@@ -45,6 +53,10 @@ export class NullUserInteractionPort implements UserInteractionPort {
   }
 
   async requestBatchApproval(): Promise<BatchApprovalResult | undefined> {
+    return undefined;
+  }
+
+  async requestChoice(): Promise<string | undefined> {
     return undefined;
   }
 }

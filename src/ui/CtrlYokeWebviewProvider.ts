@@ -101,6 +101,7 @@ export class CtrlYokeWebviewProvider
   private runningServerPortFallback?: ServerPortFallbackInfo;
   private runningServerBindAddressFallback?: BindAddressFallbackInfo;
   private panelReady = false;
+  private panelReadyWaiters: Array<() => void> = [];
   // The pageLoadId of the panel page whose READY was last accepted. Compared
   // (not just latched as a boolean) so that a READY from a *different* page
   // load — e.g. after the webview's own window.location.reload() — is never
@@ -230,6 +231,8 @@ export class CtrlYokeWebviewProvider
         onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
         handleBatchApprovalResponse: (id, result) =>
           this.interactionPort.handleResponse(id, result ?? undefined),
+        handleChoiceResponse: (id, value) =>
+          this.interactionPort.handleChoiceResponse(id, value),
       },
       this.secretRegistry,
       licenseService
@@ -325,6 +328,8 @@ export class CtrlYokeWebviewProvider
         this.readyPageLoadId = undefined;
         this.view = undefined;
       }
+      this.router.disposeClient(PANEL_CLIENT_ID);
+      this.resolvePanelReadyWaiters();
       this.cancelReconnectRetry();
       this.interactionPort.disposeAllPending();
     });
@@ -932,6 +937,7 @@ export class CtrlYokeWebviewProvider
    * Once a new controller is established, everyone else must use "Take Control."
    */
   public unregisterBrowserClient(clientId: string): void {
+    this.router.disposeClient(clientId);
     this.workflowOrchestrator?.unregisterClient(clientId);
     const ptyManager = getPtyProcessManager();
     if (!ptyManager) return;
@@ -1143,6 +1149,8 @@ export class CtrlYokeWebviewProvider
     this.commitMessageGenerationUnsubscribe?.();
     this.licenseEntitlementSubscription?.dispose();
     this.cancelReconnectRetry();
+    this.router.disposeClient(PANEL_CLIENT_ID);
+    this.resolvePanelReadyWaiters();
     this.interactionPort.disposeAllPending();
   }
 
@@ -1171,8 +1179,16 @@ export class CtrlYokeWebviewProvider
     }
     this.panelReady = true;
     this.readyPageLoadId = pageLoadId;
+    this.resolvePanelReadyWaiters();
     this.flushPendingPromptEditorInserts();
     return true;
+  }
+
+  private resolvePanelReadyWaiters(): void {
+    const waiters = this.panelReadyWaiters.splice(0);
+    for (const resolve of waiters) {
+      resolve();
+    }
   }
 
   private flushPendingPromptEditorInserts(): void {
@@ -1335,6 +1351,15 @@ export class CtrlYokeWebviewProvider
 
   public getUserInteractionPort(): UserInteractionPort {
     return this.interactionPort;
+  }
+
+  public async awaitPanelReady(): Promise<void> {
+    if (this.panelReady && this.view) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      this.panelReadyWaiters.push(resolve);
+    });
   }
 
   public openGlobalSettingsTab(tab: "secrets" | "license"): void {

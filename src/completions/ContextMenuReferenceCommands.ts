@@ -20,6 +20,8 @@ import {
 import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
 import { confirmExternalFileTrust } from "../ui/ExternalFileTrustPrompt";
+import type { UserInteractionPort } from "../ui/UserInteractionPort";
+import { NullUserInteractionPort } from "../ui/UserInteractionPort";
 import { getVsCodeTrustedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -47,7 +49,9 @@ export class ContextMenuReferenceCommands {
   constructor(
     private readonly webviewProvider: ContextMenuPromptEditorInsertSink,
     private readonly getWorkspaceRoot: () => string,
-    private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath
+    private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath,
+    private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> =
+      async () => new NullUserInteractionPort()
   ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
@@ -187,7 +191,11 @@ export class ContextMenuReferenceCommands {
       return uri.fsPath;
     }
 
-    return (await confirmExternalFileTrust(uri.fsPath))
+    const port = await this.prepareTrustPrompt();
+    return (await confirmExternalFileTrust(uri.fsPath, {
+      port,
+      workspaceRoot,
+    }))
       ? uri.fsPath
       : undefined;
   }

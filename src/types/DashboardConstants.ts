@@ -301,6 +301,10 @@ export const MESSAGE_TYPES = {
   // extension awaits BATCH_APPROVAL_RESPONSE before continuing.
   SHOW_BATCH_APPROVAL_REQUEST: "showBatchApprovalRequest",
   BATCH_APPROVAL_RESPONSE: "batchApprovalResponse",
+  SHOW_CHOICE_REQUEST: "showChoiceRequest",
+  CHOICE_RESPONSE: "choiceResponse",
+  WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED:
+    "workflowExternalRootsApprovalRequired",
 
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
@@ -1194,6 +1198,12 @@ export const PREVIEW_PERMISSION_ACTIONS = {
 export const TRUST_DECISIONS = {
   ALLOW: "allow",
   DENY: "deny",
+} as const;
+
+export const EXTERNAL_FILE_TRUST_SCOPES = {
+  USER: "user",
+  WORKSPACE: "workspace",
+  WORKFLOW: "workflow",
 } as const;
 
 export const PREVIEW_PERMISSION_RULE_STATUSES = {

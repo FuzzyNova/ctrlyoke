@@ -201,6 +201,7 @@ interface SettingsState {
 
   // Whether workflow is loaded (enables settings panel)
   workflowLoaded: boolean;
+  workflowExternalRootsApprovalRequired: boolean;
 
   // Full global settings (from configService, loaded on demand)
   fullGlobalSettings: FullGlobalSettings | null;
@@ -307,6 +308,7 @@ interface SettingsActions {
 
   // Workflow loaded state
   setWorkflowLoaded: (loaded: boolean) => void;
+  setWorkflowExternalRootsApprovalRequired: (required: boolean) => void;
 
   // Full global settings
   setFullGlobalSettings: (settings: FullGlobalSettings) => void;
@@ -483,6 +485,7 @@ const initialState: SettingsState = {
   globalSettings: initialGlobalSettings,
   workflowProperties: {},
   workflowLoaded: false,
+  workflowExternalRootsApprovalRequired: false,
   fullGlobalSettings: null,
   serverRunning: false,
   licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
@@ -614,6 +617,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     // ============================================================================
 
     setWorkflowLoaded: (loaded) => set({ workflowLoaded: loaded }),
+
+    setWorkflowExternalRootsApprovalRequired: (required) =>
+      set({ workflowExternalRootsApprovalRequired: required }),
 
     setFullGlobalSettings: (settings) => set({ fullGlobalSettings: settings }),
 

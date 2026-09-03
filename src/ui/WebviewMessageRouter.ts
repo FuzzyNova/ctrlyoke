@@ -62,6 +62,7 @@ import type {
   DeleteSecretMessage,
   SetSecretMessage,
   BatchApprovalResponseMessage,
+  ChoiceResponseMessage,
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
 } from "../types/WebviewMessageTypes";
@@ -88,6 +89,7 @@ import {
   LicenseSettingsHandlers,
   type LicenseActionService,
 } from "./LicenseSettingsHandlers";
+import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -160,6 +162,10 @@ function describeWorktreeActionSuccess(
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
+  private readonly clientInteractionPorts = new Map<
+    string,
+    WebviewUserInteractionPort
+  >();
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
   private readonly handlers: DispatchTable;
@@ -224,15 +230,45 @@ export class WebviewMessageRouter {
    * {@link WebviewClientContext} for why holding it as router state was unsafe.
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
-    const ctx = createWebviewClientContext(
-      options?.clientTag ?? PANEL_CLIENT_ID,
+    const clientId = options?.clientTag ?? PANEL_CLIENT_ID;
+    const interactionPort = this.getClientInteractionPort(
+      clientId,
       options?.postMessage ?? this.defaultPostMessage
     );
+    const ctx = createWebviewClientContext(
+      clientId,
+      options?.postMessage ?? this.defaultPostMessage,
+      interactionPort
+    );
+    if (
+      message?.type === MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE ||
+      message?.type === MESSAGE_TYPES.CHOICE_RESPONSE
+    ) {
+      await this.routeSingleMessage(message, ctx);
+      return;
+    }
     this.routeQueue = this.routeQueue.then(() =>
       this.routeSingleMessage(message, ctx)
     );
 
     await this.routeQueue;
+  }
+
+  disposeClient(clientId: string): void {
+    this.clientInteractionPorts.get(clientId)?.disposeAllPending();
+    this.clientInteractionPorts.delete(clientId);
+  }
+
+  private getClientInteractionPort(
+    clientId: string,
+    postMessage: PostMessageFn
+  ): WebviewUserInteractionPort {
+    const existing = this.clientInteractionPorts.get(clientId);
+    if (existing) return existing;
+
+    const port = new WebviewUserInteractionPort(postMessage, () => true);
+    this.clientInteractionPorts.set(clientId, port);
+    return port;
   }
 
   private async completeBrowserReadyAfterStartup(
@@ -341,13 +377,26 @@ export class WebviewMessageRouter {
     );
   }
 
-  /** Webview's reply to a UserInteractionPort SHOW_BATCH_APPROVAL_REQUEST. */
+  /** Webview replies to UserInteractionPort batch and choice requests. */
   private registerUserInteraction(table: DispatchTable): void {
-    table.set(MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE, (message) => {
+    table.set(MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE, (message, ctx) => {
       const request = message as BatchApprovalResponseMessage;
+      this.clientInteractionPorts
+        .get(ctx.clientId)
+        ?.handleResponse(request.id, request.result ?? undefined);
       this.callbacks.handleBatchApprovalResponse?.(
         request.id,
         request.result ?? undefined
+      );
+    });
+    table.set(MESSAGE_TYPES.CHOICE_RESPONSE, (message, ctx) => {
+      const request = message as ChoiceResponseMessage;
+      this.clientInteractionPorts
+        .get(ctx.clientId)
+        ?.handleChoiceResponse(request.id, request.value ?? undefined);
+      this.callbacks.handleChoiceResponse?.(
+        request.id,
+        request.value ?? undefined
       );
     });
   }
@@ -413,6 +462,7 @@ export class WebviewMessageRouter {
                 typeof message.preferredViewAddress.runRef === "string"))
               ? message.preferredViewAddress
               : undefined,
+          interactionPort: ctx.interactionPort,
         });
         const worktreeOwnership = orchestrator.getActivationWorktreeOwnership();
         if (worktreeOwnership) {
@@ -1543,7 +1593,8 @@ export class WebviewMessageRouter {
           await orchestrator.loadPromptFileForClient(
             this.resolveClientWorkflowFilePath(message.filePath),
             ctx.postMessage,
-            ctx.clientId
+            ctx.clientId,
+            ctx.interactionPort
           );
         } else {
           return;
@@ -2351,6 +2402,10 @@ export interface WebviewRouterCallbacks {
   handleBatchApprovalResponse?: (
     id: string,
     result: { approvedValues: string[]; deniedValues: string[] } | undefined
+  ) => void;
+  handleChoiceResponse?: (
+    id: string,
+    value: string | undefined
   ) => void;
 }
 

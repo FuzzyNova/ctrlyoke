@@ -63,6 +63,7 @@ import { useHarnessUsageStore } from "../store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
 import { useSecretRegistryStore } from "../store/secretRegistryStore";
 import { useBatchApprovalStore } from "../store/batchApprovalStore";
+import { useChoiceStore } from "../store/choiceStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -394,6 +395,9 @@ function applyWorkflowChange(options?: {
   // arrive. The property message path replaces the whole object, so unset fields still
   // fall through to global defaults without an intermediate blank render.
   useSettingsStore.getState().setWorkflowLoaded(true);
+  useSettingsStore
+    .getState()
+    .setWorkflowExternalRootsApprovalRequired(false);
 }
 
 function persistViewedWorkingFilePath(path: unknown): void {
@@ -1788,6 +1792,26 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.SHOW_BATCH_APPROVAL_REQUEST] = (message) => {
     if (message.request) {
       useBatchApprovalStore.getState().setPendingRequest(message.request);
+    }
+  };
+
+  // SHOW_CHOICE_REQUEST - UserInteractionPort single-choice prompt
+  handlers[MESSAGE_TYPES.SHOW_CHOICE_REQUEST] = (message) => {
+    if (message.request) {
+      useChoiceStore.getState().setPendingRequest(message.request);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED] = (
+    message
+  ) => {
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    if (message.workflowId === activeWorkflowId) {
+      useSettingsStore
+        .getState()
+        .setWorkflowExternalRootsApprovalRequired(
+          message.pendingRoots.length > 0
+        );
     }
   };
 

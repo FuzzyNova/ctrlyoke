@@ -60,6 +60,33 @@ staged sequence. Nothing here needs to wait.
 
 ## Notes
 
+- **2026-09-03: Stage 4 is split into three session-sized sub-stages** for
+  orchestration purposes — it was too large for one agent session to finish,
+  verify, and commit in one sitting. This is a scheduling split only; the
+  scope and "Done when" bar for Stage 4 as a whole is unchanged.
+  - **4a — Approval-flow plumbing.** Migrate
+    `promptBatchApprovalForPendingWorkspaceExternalRoots`'s `showQuickPick`
+    call to `UserInteractionPort`; extract the shared
+    `promptBatchApprovalForPendingRoots` helper; add the workflow-scope call
+    site (triggered on workflow load, gating Run); add
+    `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
+    support + the new choice modal; wire the scope choice into
+    `confirmExternalFileTrust`; add the panel-reveal-then-await-READY step to
+    the two non-dashboard call sites. Corresponds to
+    `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` Phase 3 items 1-3.
+    **Completed 2026-09-03:** implemented with a dedicated single-choice
+    `ChoiceModal` alongside the existing `BatchApprovalModal`; response
+    messages bypass the serialized router queue so load-triggered prompts
+    cannot deadlock while awaiting the client's decision.
+  - **4b — `TrustedRootsListEditor` + `AdvancedPermissionsSection`.** Build
+    the shared row-list component and replace the raw textarea it retires.
+    Corresponds to Phase 3 item 4.
+  - **4c — `WorkflowPropertiesPanel` field + schema/UI parity test.** Add the
+    Inherit/None/Custom `trustedExternalRoots` field, extend
+    `WebviewSettingsSync.handleBrowseAndAddExternalRoot` for the
+    workflow-scope add path, and add the new field to
+    `schemaUiPropertyRoundTrip.integration.test.ts`. Depends on 4b for the
+    shared component. Corresponds to Phase 3 items 5-6.
 - **Stage 1 is independent and small** — ship it whenever, including before
   or in parallel with everything else.
 - **Stages 2 and 1 are independent of each other.**

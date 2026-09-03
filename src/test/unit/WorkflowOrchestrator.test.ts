@@ -14,6 +14,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import { TypedEmitter } from "../../utils/TypedEmitter";
+import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -127,6 +128,106 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
     assert.strictEqual(getAutoLoadCalls(), 1);
     assert.strictEqual(internal.dashboardReady, true);
     assert.strictEqual(internal.startupAutoLoadTriggered, true);
+  });
+
+  suite("WorkflowOrchestrator workflow-root approval", () => {
+    const originalPending =
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots;
+    const originalTrusted = vscode.workspace.isTrusted;
+
+    teardown(() => {
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots = originalPending;
+      Object.defineProperty(vscode.workspace, "isTrusted", {
+        configurable: true,
+        value: originalTrusted,
+      });
+    });
+
+    function createApprovalHarness() {
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const sent: unknown[] = [];
+      const requests: unknown[] = [];
+      const port = new WebviewUserInteractionPort(
+        (message) => requests.push(message),
+        () => true
+      );
+      const instance = {
+        id: "workflow-instance",
+        promptQueue: {
+          getWorkflowFile: () => ({
+            trustedExternalRoots: ["C:\\external"],
+          }),
+        },
+        getCurrentPromptFilePath: () => "C:\\workspace\\workflow.ctrlyoke.json",
+        getQueueState: () => ({ status: "idle" }),
+      };
+      internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+      internal.currentWorkspaceFolder = {
+        uri: { fsPath: "C:\\workspace" },
+      };
+      internal.viewerRegistry = new Map([["browser:1", "workflow-instance"]]);
+      internal.instances = new Map([["workflow-instance", instance]]);
+      internal.retiredInstances = new Map();
+      return { orchestrator, internal, port, sent, requests };
+    }
+
+    test("prompts only the active workflow client and publishes its pending state", async () => {
+      const { orchestrator, port, sent, requests } = createApprovalHarness();
+      Object.defineProperty(vscode.workspace, "isTrusted", {
+        configurable: true,
+        value: true,
+      });
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
+        "C:\\external",
+      ];
+
+      const pendingPromise =
+        orchestrator.approvePendingWorkflowExternalRootsForClient(
+          "browser:1",
+          (message) => sent.push(message),
+          port
+        );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const request = requests[0] as { request: { id: string } };
+      port.handleResponse(request.request.id, undefined);
+      const pending = await pendingPromise;
+
+      assert.deepStrictEqual(pending, ["C:\\external"]);
+      assert.strictEqual(requests.length, 1);
+      assert.deepStrictEqual(sent, [
+        {
+          type: MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED,
+          workflowId: "workflow-instance",
+          pendingRoots: ["C:\\external"],
+        },
+      ]);
+    });
+
+    test("blocks the panel Run path while workflow roots remain pending", async () => {
+      const { orchestrator, internal } = createApprovalHarness();
+      const feedback: string[] = [];
+      let executed = false;
+      internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "workflow-instance"]]);
+      internal.userFeedbackSink = {
+        notify: ({ message }: { message: string }) => feedback.push(message),
+      };
+      internal.instances.get("workflow-instance").executeLoadedPromptFile =
+        async () => {
+          executed = true;
+        };
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
+        "C:\\external",
+      ];
+
+      await orchestrator.executeWorkflow();
+
+      assert.strictEqual(executed, false);
+      assert.strictEqual(feedback.length, 1);
+      assert.match(feedback[0], /require approval before running/);
+    });
   });
 
   test("defers startup auto-load until init completes if dashboard becomes ready first", async () => {
