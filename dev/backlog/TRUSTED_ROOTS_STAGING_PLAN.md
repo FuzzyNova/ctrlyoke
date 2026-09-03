@@ -81,12 +81,13 @@ staged sequence. Nothing here needs to wait.
   - **4b — `TrustedRootsListEditor` + `AdvancedPermissionsSection`.** Build
     the shared row-list component and replace the raw textarea it retires.
     Corresponds to Phase 3 item 4.
-  - **4c — `WorkflowPropertiesPanel` field + schema/UI parity test.** Add the
+  - **4c — `WorkflowPropertiesPanel` field + schema/UI parity test.** ~~Add the
     Inherit/None/Custom `trustedExternalRoots` field, extend
     `WebviewSettingsSync.handleBrowseAndAddExternalRoot` for the
     workflow-scope add path, and add the new field to
     `schemaUiPropertyRoundTrip.integration.test.ts`. Depends on 4b for the
-    shared component. Corresponds to Phase 3 items 5-6.
+    shared component. Corresponds to Phase 3 items 5-6.~~ **Completed
+    2026-09-03.**
 - **Stage 1 is independent and small** — ship it whenever, including before
   or in parallel with everything else.
 - **Stages 2 and 1 are independent of each other.**

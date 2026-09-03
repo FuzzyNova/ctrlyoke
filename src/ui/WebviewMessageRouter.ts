@@ -1993,9 +1993,11 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT, (message, ctx) => {
-      this.settingsSync.handleBrowseAndAddExternalRoot(
+      return this.settingsSync.handleBrowseAndAddExternalRoot(
         message.scope,
-        ctx.postMessage
+        ctx.postMessage,
+        message.workflowIdentity,
+        ctx.clientId
       );
     });
 

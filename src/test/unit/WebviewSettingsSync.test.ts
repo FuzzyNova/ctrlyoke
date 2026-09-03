@@ -2198,6 +2198,78 @@ suite("WebviewSettingsSync external root decisions", () => {
     }
   });
 
+  test("adds and approves a browsed workflow root without changing global settings", async () => {
+    const originalShowOpenDialog = vscode.window.showOpenDialog;
+    const originalGetRoots =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope;
+    const originalSetDecisions = externalRootsTrustStore.setDecisions;
+    const workspaceRoot = externalRootTestPath("workflow-workspace");
+    const inheritedRoot = externalRootTestPath("workflow-inherited");
+    const newRoot = externalRootTestPath("workflow-new");
+    const decisions: unknown[] = [];
+    let updatedRoots: string[] | undefined;
+
+    try {
+      Object.defineProperty(vscode.window, "showOpenDialog", {
+        value: async () => [vscode.Uri.file(newRoot)],
+        configurable: true,
+      });
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = () => ({
+        user: [inheritedRoot],
+        workspace: [],
+      });
+      externalRootsTrustStore.setDecisions = (async (...args: unknown[]) => {
+        decisions.push(args);
+      }) as typeof externalRootsTrustStore.setDecisions;
+
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () =>
+          ({
+            getActivePromptQueue: () => ({
+              getWorkflowFile: () => ({ trustedExternalRoots: undefined }),
+            }),
+            updateWorkflowTrustedExternalRootsForClient: async (
+              _clientId: string,
+              roots: readonly string[]
+            ) => {
+              updatedRoots = [...roots];
+            },
+          }) as any
+      );
+      sync.sendWorkflowPropertiesToSettings = async () => {};
+
+      await sync.handleBrowseAndAddExternalRoot(
+        "workspace",
+        undefined,
+        { workspaceRoot, workflowSourcePath: `${workspaceRoot}\\workflow.json` },
+        "panel"
+      );
+
+      assert.deepStrictEqual(updatedRoots, [
+        inheritedRoot,
+        vscode.Uri.file(newRoot).fsPath,
+      ]);
+      assert.deepStrictEqual(decisions, [
+        [
+          ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+            workspaceRoot,
+            `${workspaceRoot}\\workflow.json`
+          ),
+          [vscode.Uri.file(newRoot).fsPath],
+          TRUST_DECISIONS.ALLOW,
+        ],
+      ]);
+    } finally {
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = originalGetRoots;
+      externalRootsTrustStore.setDecisions = originalSetDecisions;
+      Object.defineProperty(vscode.window, "showOpenDialog", {
+        value: originalShowOpenDialog,
+        configurable: true,
+      });
+    }
+  });
+
   test("approves newly added workspace roots through the setting update path", async () => {
     const originalSet = configService.set;
     const originalGetRoots =

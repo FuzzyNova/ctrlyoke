@@ -367,6 +367,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["skills", ["settings-skills"]],
   ["timeout", ["${idPrefix}-timeout"]],
   ["toolPermissions", ["settings-permission-mode"]],
+  ["trustedExternalRoots", ["settings-trusted-external-roots-mode"]],
   ["vars", ["settings-vars"]],
   ["worktree", ["settings-worktree-mode"]],
 ]);
@@ -377,12 +378,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
  * dashboard control. A future opt-out must explain why it is safe to leave a
  * schema property unreachable from the UI.
  */
-const UI_CONTROL_OPTOUTS = new Map<string, string>([
-  [
-    "trustedExternalRoots",
-    "Workflow-scoped trust control is staged for the later approval-UI phase.",
-  ],
-]);
+const UI_CONTROL_OPTOUTS = new Map<string, string>();
 
 const WEBVIEW_SOURCE_ROOT = path.resolve(
   __dirname,

@@ -224,7 +224,7 @@ to the separate template-authoring surface.
 `executionMode`, `worktree` (mode / branch / base / setup / keep / merge),
 `resumeSession`, `sessionId`, `priorContext`, `preCondition`, `endCondition`,
 `errorBehavior`, `mcpServers`, `toolPermissions` (mode / allowed / denied),
-`secrets`, `vars`.
+`secrets`, `trustedExternalRoots` (mode / custom roots), `vars`.
 
 **Missing:** None.
 

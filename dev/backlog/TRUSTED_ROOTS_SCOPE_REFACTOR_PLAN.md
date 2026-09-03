@@ -1,7 +1,6 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-03):** Phase 2 complete; Phase 3 items 1-4 complete;
-Phase 3 items 5-6 and Phases 4-5 remain proposed.
+**Status (2026-09-03):** Phases 1-3 complete; Phases 4-5 remain proposed.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -719,20 +718,20 @@ browser gap that no longer exists once this section's design ships.
    false at user scope) — this also fixes the existing workspace-scope gap
    where adding via "Add folder…" or the old textarea didn't record an
    immediate decision (see "Declared vs. approved" above).~~
-5. Add the Inherit/None/Custom-wrapped `trustedExternalRoots` field to
+5. ~~Add the Inherit/None/Custom-wrapped `trustedExternalRoots` field to
    `WorkflowPropertiesPanel.tsx` (below Secrets, above Allowed Tools — see
    "UI surfaces" above), rendering `TrustedRootsListEditor` in Custom mode
    with the seed-on-switch behavior. Extend
    `WebviewSettingsSync.handleBrowseAndAddExternalRoot` with the optional
    workflow-identity parameter needed for the workflow-scope "Add folder…"
-   path.
-6. Add `trustedExternalRoots` to `schemaUiPropertyRoundTrip.integration.test.ts`'s
+   path.~~
+6. ~~Add `trustedExternalRoots` to `schemaUiPropertyRoundTrip.integration.test.ts`'s
    `workflowOnlyProperties` matrix (mapping it to the new field's element id,
    alongside the existing `worktree`/`vars` entries) and to
    `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md` — this suite enumerates
    every `workflowOnlyProperties` schema key and fails closed if a new one
    has no mapped UI element and persistence round-trip, so this is not
-   optional cleanup.
+   optional cleanup.~~
 
 ### Phase 4: Harness plumbing
 

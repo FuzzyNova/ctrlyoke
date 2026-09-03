@@ -503,6 +503,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
     terminal?: TerminalSettings;
@@ -1482,6 +1483,7 @@ export interface GlobalSettingsUpdatedMessage {
     hideGitIgnoredFiles?: boolean;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
+    externalFileRootsByScope?: ExternalFileRootsByScope;
     terminal?: TerminalSettings;
   };
   licenseAccess?: LicenseAccessState;

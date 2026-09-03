@@ -224,6 +224,56 @@ describe("WorkflowPropertiesPanel permissions", () => {
       "shell(rm:*)"
     );
   });
+
+  it("seeds all inherited roots when switching trusted roots to Custom", async () => {
+    const userRoot = "/home/user/library";
+    const workspaceRoot = "/workspace/shared";
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      externalFileRootsByScope: {
+        user: [userRoot],
+        workspace: [{ path: workspaceRoot, decision: "allow" }],
+      },
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Trusted External Roots" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+
+    expect(
+      screen.getByTestId(`trusted-root-row-${userRoot}`)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`trusted-root-row-${workspaceRoot}`)
+    ).toBeInTheDocument();
+
+    const pathInput = screen.getByRole("textbox", {
+      name: "External directory path",
+    });
+    fireEvent.change(pathInput, { target: { value: "/workflow/only" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    const messages = postMessage.mock.calls
+      .map(
+        ([message]) =>
+          message as {
+            properties?: { trustedExternalRoots?: unknown };
+          }
+      )
+      .filter((message) =>
+        Object.prototype.hasOwnProperty.call(
+          message.properties ?? {},
+          "trustedExternalRoots"
+        )
+      );
+    expect(
+      messages[messages.length - 1]?.properties?.trustedExternalRoots
+    ).toEqual([userRoot, workspaceRoot, "/workflow/only"]);
+  });
 });
 
 describe("WorkflowPropertiesPanel variables", () => {
