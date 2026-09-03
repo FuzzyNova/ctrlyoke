@@ -4,6 +4,7 @@ import { useStepContextMenu } from "@hooks/useStepContextMenu";
 import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { useUiStore } from "@store/uiStore";
 
 function TestHarness({
   step,
@@ -58,6 +59,7 @@ describe("useStepContextMenu", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
+    useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
     readText.mockReset();
     writeText.mockClear();
@@ -92,6 +94,8 @@ describe("useStepContextMenu", () => {
       "Copy Prompt",
       "Copy Output",
       "Copy Metadata",
+      "Hide output",
+      "Show only this step's output",
       "Dry Run Step",
       "Paste Step",
       "Set Start Position",
@@ -100,7 +104,24 @@ describe("useStepContextMenu", () => {
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(3);
+    expect(screen.getAllByRole("separator")).toHaveLength(4);
+  });
+
+  it("switches the output action to Show output when the step is hidden", () => {
+    useUiStore.getState().toggleHiddenOutputTarget("_shell", "queue:0");
+
+    render(<TestHarness step={{ prompt: "Original prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Hide output" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show output" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show only this step's output" })
+    ).toBeInTheDocument();
   });
 
   it("disables Move Up at the front of the queue and omits both for a done step", () => {

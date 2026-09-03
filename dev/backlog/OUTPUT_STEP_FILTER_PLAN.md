@@ -2,7 +2,7 @@
 
 > **Last Updated:** September 3, 2026
 >
-> **Status:** Step 4 (minimap + header controls) is implemented. Steps 5–7 remain pending.
+> **Status:** Step 5 (step context menus + navigation) is implemented. Steps 6–7 remain pending.
 > Audited against `main` on this date; every symbol named below was verified to exist.
 > The questions the previous revision deferred are decided
 > here. **Correction in this revision:** Decision 3 previously keyed the hidden set by

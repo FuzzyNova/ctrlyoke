@@ -2,6 +2,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFinalStepContextMenu } from "@hooks/useFinalStepContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
 
 function TestHarness({
   finalStep,
@@ -40,6 +41,7 @@ describe("useFinalStepContextMenu", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
+    useUiStore.getState().resetUi();
     writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -65,9 +67,11 @@ describe("useFinalStepContextMenu", () => {
       "Copy Prompt",
       "Copy Output",
       "Copy Metadata",
+      "Hide output",
+      "Show only this step's output",
       "Disable final step",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(1);
+    expect(screen.getAllByRole("separator")).toHaveLength(2);
 
     for (const missing of [
       "Move Up",
@@ -78,6 +82,23 @@ describe("useFinalStepContextMenu", () => {
     ]) {
       expect(screen.queryByRole("button", { name: missing })).toBeNull();
     }
+  });
+
+  it("switches the output action to Show output when the final step is hidden", () => {
+    useUiStore.getState().toggleHiddenOutputTarget("_shell", "finalStep:0");
+
+    render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Hide output" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show output" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show only this step's output" })
+    ).toBeInTheDocument();
   });
 
   it("switches the content label for a script final step", () => {

@@ -92,7 +92,11 @@ import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
-import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import {
+  areWorkflowAddressesEqual,
+  workflowViewAddressKey,
+} from "@utils/viewAddress";
+import { getTargetKey, toOutputMessageTarget } from "@utils/outputProjection";
 import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { serializeRoute } from "@/navigation/route";
 import { notifyUser } from "@utils/notifyUser";
@@ -395,9 +399,7 @@ function applyWorkflowChange(options?: {
   // arrive. The property message path replaces the whole object, so unset fields still
   // fall through to global defaults without an intermediate blank render.
   useSettingsStore.getState().setWorkflowLoaded(true);
-  useSettingsStore
-    .getState()
-    .setWorkflowExternalRootsApprovalRequired(false);
+  useSettingsStore.getState().setWorkflowExternalRootsApprovalRequired(false);
 }
 
 function persistViewedWorkingFilePath(path: unknown): void {
@@ -2473,6 +2475,15 @@ export function createMessageHandlers(
     }
     const pendingNavigation = ui.pendingHistorySearchNavigation;
     if (pendingNavigation?.findQuery) {
+      const filterWorkflowKey = workflowViewAddressKey(address);
+      const targetKey = getTargetKey(
+        toOutputMessageTarget(pendingNavigation.target)
+      );
+      if (ui.hiddenOutputTargets[filterWorkflowKey]?.keys.includes(targetKey)) {
+        // History search is explicit navigation intent. Restore the target
+        // before arming find so the preferred match is present in the rows.
+        ui.toggleHiddenOutputTarget(filterWorkflowKey, targetKey);
+      }
       ui.setPendingFindRequest({
         query: pendingNavigation.findQuery,
         preferredTarget: pendingNavigation.target,

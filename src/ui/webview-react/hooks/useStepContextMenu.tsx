@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   StepContextMenu,
   type StepContextMenuState,
@@ -11,7 +11,7 @@ import {
   MESSAGE_TYPES,
   type ExecutionState,
 } from "../types/messages";
-import type { WorkflowStep } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { isExecutionBusy } from "@utils/status";
 import {
@@ -19,7 +19,11 @@ import {
   readWorkflowStepFromClipboard,
 } from "@utils/stepClipboard";
 import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
-import { buildStepCopyMenuItems } from "@utils/stepContextMenuItems";
+import {
+  buildStepCopyMenuItems,
+  buildStepOutputFilterMenuItems,
+  getPresentOutputTargetKeys,
+} from "@utils/stepContextMenuItems";
 import type { CliOutput } from "@store/workflowStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import {
@@ -30,6 +34,14 @@ import {
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { notifyUser } from "@utils/notifyUser";
+import { useUiStore } from "@store/uiStore";
+import { workflowViewAddressKey } from "@utils/viewAddress";
+import { getTargetKey } from "@utils/outputProjection";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+
+const SHELL_WORKFLOW_ID = "_shell";
+const EMPTY_TARGET_KEYS: readonly string[] = [];
+const EMPTY_ORDERED_ENTRIES: readonly OrderedHistoryEntry[] = [];
 
 interface UseStepContextMenuOptions {
   isExternallyManaged: boolean;
@@ -94,6 +106,27 @@ export function useStepContextMenu({
   currentStep,
   pendingRewind,
 }: UseStepContextMenuOptions) {
+  const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
+  const toggleHiddenOutputTarget = useUiStore(
+    (s) => s.toggleHiddenOutputTarget
+  );
+  const soloOutputTarget = useUiStore((s) => s.soloOutputTarget);
+  const isViewingHistory = useUiStore((s) => s.isViewingHistory);
+  const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
+  const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+  const outputEntries = isViewingHistory
+    ? (historyOutputs?.orderedEntries ?? EMPTY_ORDERED_ENTRIES)
+    : liveOrderedEntries;
+  const presentOutputTargetKeys = useMemo(
+    () => getPresentOutputTargetKeys(outputEntries),
+    [outputEntries]
+  );
+  const outputFilterWorkflowKey = displayedViewAddress
+    ? workflowViewAddressKey(displayedViewAddress)
+    : SHELL_WORKFLOW_ID;
+  const hiddenOutputKeys =
+    hiddenOutputTargets[outputFilterWorkflowKey]?.keys ?? EMPTY_TARGET_KEYS;
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
@@ -199,6 +232,13 @@ export function useStepContextMenu({
           : pendingIndex >= pendingCount - 1
             ? "Already at the bottom of the queue"
             : undefined;
+      const targetKey = getTargetKey({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        index: deleteIndex,
+      });
+      const allPresentTargetKeys = presentOutputTargetKeys.includes(targetKey)
+        ? presentOutputTargetKeys
+        : [...presentOutputTargetKeys, targetKey];
 
       setContextMenu({
         x,
@@ -211,6 +251,15 @@ export function useStepContextMenu({
             latestOutput,
             runtimeMeta,
             liveContextWindow,
+          }),
+          { type: "divider" },
+          ...buildStepOutputFilterMenuItems({
+            hidden: hiddenOutputKeys.includes(targetKey),
+            allPresentTargetKeys,
+            onToggle: () =>
+              toggleHiddenOutputTarget(outputFilterWorkflowKey, targetKey),
+            onSolo: (keys) =>
+              soloOutputTarget(outputFilterWorkflowKey, targetKey, keys),
           }),
           {
             label: "Dry Run Step",
@@ -334,9 +383,14 @@ export function useStepContextMenu({
       handleSetStartPosition,
       isExternallyManaged,
       externalReadOnlyLabel,
+      hiddenOutputKeys,
       moveQueueStep,
+      outputFilterWorkflowKey,
+      presentOutputTargetKeys,
       pendingRewind?.fromStepIndex,
+      soloOutputTarget,
       totalSteps,
+      toggleHiddenOutputTarget,
     ]
   );
 

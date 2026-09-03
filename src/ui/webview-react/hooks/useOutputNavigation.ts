@@ -17,6 +17,7 @@ import {
 import {
   OUTPUT_SCROLL_ALIGNMENTS,
   OUTPUT_SCROLL_TARGET_KINDS,
+  OUTPUT_ROW_KINDS,
   type OutputScrollAlignment,
 } from "@root/types/DashboardConstants";
 
@@ -379,10 +380,21 @@ export function useOutputNavigation({
         options?: OutputNavigationOptions
       ) => {
         const targetKey = `${target.kind}:${target.index}`;
-        const rowIndex = firstRowIndexByTarget.get(targetKey);
-        if (rowIndex === undefined) {
+        const firstRowIndex = firstRowIndexByTarget.get(targetKey);
+        if (firstRowIndex === undefined) {
           return;
         }
+
+        // Hidden targets retain a one-pixel anchor for minimap positioning,
+        // followed by their visible placeholder. Navigation should land on
+        // the placeholder so the user can see the hidden-step affordance.
+        const rowIndex =
+          rows[firstRowIndex]?.rowKind === OUTPUT_ROW_KINDS.STEP_ANCHOR &&
+          rows[firstRowIndex + 1]?.rowKind === OUTPUT_ROW_KINDS.STEP_HIDDEN &&
+          rows[firstRowIndex + 1]?.target.kind === target.kind &&
+          rows[firstRowIndex + 1]?.target.index === target.index
+            ? firstRowIndex + 1
+            : firstRowIndex;
 
         scrollToRowIndex(rowIndex, options);
       },
