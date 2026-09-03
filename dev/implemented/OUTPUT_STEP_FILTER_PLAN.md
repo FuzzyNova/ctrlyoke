@@ -2,17 +2,26 @@
 
 > **Last Updated:** September 3, 2026
 >
-> **Status:** Steps 1–7 are implemented and committed. No implementation items were deferred; the
-> manual test script remains for manual verification.
-> Audited against `main` on this date; every symbol named below was verified to exist.
-> The questions the previous revision deferred are decided
-> here. **Correction in this revision:** Decision 3 previously keyed the hidden set by
+> **Status:** SHIPPED. Steps 1–7 are implemented, reviewed, and committed; nothing was
+> deferred. The "Manual Test Script" section below is the remaining manual verification
+> and is worth running once in the dev host. This was the precursor to
+> [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md) Stage 5, which reuses the
+> state and row-building primitives shipped here.
+>
+> **Correction made during planning:** Decision 3 originally keyed the hidden set by
 > workflow instance id and claimed existing `loadWorkflow`/`RUN_VIEW_LOADED` transitions
 > clear `outputScrollTargets` per address. They do not — `resetUi` is its only reset — so a
-> filter would have leaked between runs of the same lineage. The state is now keyed by view
-> address, which clears it structurally. This is the recommended precursor to
-> [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md) Stage 5, which reuses the state and
-> row-building primitives this plan ships.
+> filter would have leaked between runs of the same lineage. The state is keyed by view
+> address instead, which clears it structurally.
+>
+> **Fixes made during review:** (1) the placeholder row's "hidden but active" indicator was
+> rendered but never fed — `OutputPane` now passes `hasHiddenActivity` down from the minimap
+> model, which already computes it. (2) Address keying alone did not satisfy manual test 7:
+> entries were pruned only when another address was _written_, so navigating away and back
+> restored the old filter. Pruning now also happens when a different address renders, via
+> the `uiStore.pruneHiddenOutputTargets` action (which also skips key pruning while no
+> targets are rendered, so a replay that momentarily empties the output cannot wipe a filter
+> set on a running step).
 >
 > **Staging note:** this doc is written to be handed to the Spec-Driven Loop orchestrator as
 > its `specFile`. The "Implementation Order" section is the intended queue-step split; each
@@ -322,22 +331,22 @@ one of them a script step, plus a final step.
 
 ## Affected Components
 
-| Component                                                                                            | Role                                                                                              |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `store/uiStore.ts`                                                                                   | Own `hiddenOutputTargets` + actions; delete `selectedOutputStep`; bump filter version             |
-| `utils/viewAddress.ts`, `store/executionPreviewStore.ts`                                             | Shared `workflowViewAddressKey()`; drop the store's private duplicate                             |
-| `types/DashboardConstants.ts`                                                                        | `OUTPUT_ROW_KINDS.STEP_HIDDEN`                                                                    |
-| `utils/outputRows.ts`                                                                                | `StepHiddenRow`, `hiddenTargetKeys` input, skip-and-placeholder loop, base-type cleanup, estimate |
-| `hooks/useOutputRowsModel.ts`                                                                        | Read the set, prune stale keys, feed `buildOutputRows`                                            |
-| `hooks/useOutputMinimapModel.ts` / `components/output/OutputMinimap.tsx`                             | `hidden`/`hasHiddenActivity`, eye toggle, alt-click solo                                          |
-| `components/layout/output-section/OutputPane.tsx`                                                    | Pass-through props to the minimap only; still no filtering knowledge                              |
-| `components/layout/output-section/OutputSectionHeader.tsx`                                           | `N hidden · Show all` pill                                                                        |
-| `components/layout/OutputSection.tsx`                                                                | Wire store → rows model; fold filter version into `rowRenderIdentity`; scroll-target preservation |
-| `components/output/OutputRow.tsx`                                                                    | Render `StepHiddenRow`                                                                            |
-| `utils/stepContextMenuItems.ts`, `hooks/useStepContextMenu.tsx`, `hooks/useFinalStepContextMenu.tsx` | Hide / Show / Show only items                                                                     |
-| `hooks/useOutputNavigation.ts`, history search navigation                                            | Unhide on explicit navigation                                                                     |
-| `hooks/useOutputContextMenu.tsx`, `hooks/useOutputExport.ts`                                         | Filter-aware Copy All and export pre-fill                                                         |
-| `hooks/useOutputVirtualization.ts`, `hooks/useOutputScrollTarget.ts`                                 | Remeasure on toggle; anchor preservation                                                          |
+| Component                                                                                            | Role                                                                                                          |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `store/uiStore.ts`                                                                                   | Own `hiddenOutputTargets` + toggle/solo/clear/prune actions; delete `selectedOutputStep`; bump filter version |
+| `utils/viewAddress.ts`, `store/executionPreviewStore.ts`                                             | Shared `workflowViewAddressKey()`; drop the store's private duplicate                                         |
+| `types/DashboardConstants.ts`                                                                        | `OUTPUT_ROW_KINDS.STEP_HIDDEN`                                                                                |
+| `utils/outputRows.ts`                                                                                | `StepHiddenRow`, `hiddenTargetKeys` input, skip-and-placeholder loop, base-type cleanup, estimate             |
+| `hooks/useOutputRowsModel.ts`                                                                        | Read the set, prune stale keys, feed `buildOutputRows`                                                        |
+| `hooks/useOutputMinimapModel.ts` / `components/output/OutputMinimap.tsx`                             | `hidden`/`hasHiddenActivity`, eye toggle, alt-click solo                                                      |
+| `components/layout/output-section/OutputPane.tsx`                                                    | Pass-through props: minimap toggle/solo, plus `hasHiddenActivity` onto the placeholder row                    |
+| `components/layout/output-section/OutputSectionHeader.tsx`                                           | `N hidden · Show all` pill                                                                                    |
+| `components/layout/OutputSection.tsx`                                                                | Wire store → rows model; fold filter version into `rowRenderIdentity`; scroll-target preservation             |
+| `components/output/OutputRow.tsx`                                                                    | Render `StepHiddenRow`                                                                                        |
+| `utils/stepContextMenuItems.ts`, `hooks/useStepContextMenu.tsx`, `hooks/useFinalStepContextMenu.tsx` | Hide / Show / Show only items                                                                                 |
+| `hooks/useOutputNavigation.ts`, history search navigation                                            | Unhide on explicit navigation                                                                                 |
+| `hooks/useOutputContextMenu.tsx`, `hooks/useOutputExport.ts`                                         | Filter-aware Copy All and export pre-fill                                                                     |
+| `hooks/useOutputVirtualization.ts`, `hooks/useOutputScrollTarget.ts`                                 | Remeasure on toggle; anchor preservation                                                                      |
 
 ## Non-Goals
 

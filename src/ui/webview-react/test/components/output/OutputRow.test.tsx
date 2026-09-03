@@ -271,6 +271,29 @@ describe("OutputRow hidden steps", () => {
     fireEvent.click(showButtons[1]);
     expect(useUiStore.getState().hiddenOutputTargets).toEqual({});
   });
+
+  it("reveals the activity indicator only while the hidden step is active", () => {
+    const row: OutputRenderRow = {
+      key: "queue:2:hidden",
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index: 2 },
+      estimateSize: 40,
+      rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
+      stepLabel: "Step 3",
+      stepName: "research-db",
+    };
+
+    const { container, rerender } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+    expect(
+      container.querySelector("[data-hidden-output-activity]")
+    ).toHaveClass("invisible");
+
+    rerender(<OutputRow row={row} isExecutionActive hasHiddenActivity />);
+    expect(
+      container.querySelector("[data-hidden-output-activity]")
+    ).not.toHaveClass("invisible");
+  });
 });
 
 describe("OutputRow auto-expand on hidden active match", () => {

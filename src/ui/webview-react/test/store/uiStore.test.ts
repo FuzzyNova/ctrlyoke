@@ -216,6 +216,36 @@ describe("hidden output targets", () => {
     });
   });
 
+  it("drops another address's filter as soon as this address renders", () => {
+    store().toggleHiddenOutputTarget(otherRunKey, "queue:1");
+
+    store().pruneHiddenOutputTargets(runKey, new Set(["queue:0", "queue:1"]));
+
+    // Navigating away and back must not restore the old run's filter.
+    expect(store().hiddenOutputTargets).toEqual({});
+  });
+
+  it("prunes hidden keys whose target no longer exists", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    store().toggleHiddenOutputTarget(runKey, "queue:5");
+
+    store().pruneHiddenOutputTargets(runKey, new Set(["queue:0"]));
+
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual(["queue:0"]);
+  });
+
+  it("keeps the filter when no targets are rendered yet", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    const versionBefore = store().outputStepFilterVersion;
+
+    // A replay that momentarily empties the output must not wipe a filter set
+    // on a step that is still running.
+    store().pruneHiddenOutputTargets(runKey, new Set());
+
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual(["queue:0"]);
+    expect(store().outputStepFilterVersion).toBe(versionBefore);
+  });
+
   it("bumps the filter version when clearing", () => {
     store().toggleHiddenOutputTarget(runKey, "queue:0");
     store().clearHiddenOutputTargets(runKey);

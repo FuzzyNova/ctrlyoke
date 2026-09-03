@@ -1224,6 +1224,18 @@ const OutputSectionInner: React.FC = () => {
   });
 
   const hiddenOutputCount = minimapSteps.filter((step) => step.hidden).length;
+  // The minimap model already resolves "hidden but still producing output" per
+  // step; the placeholder row shows the same signal, so derive it from there
+  // rather than recomputing the newest-entry scan a second time.
+  const hiddenActivityTargetKeys = useMemo(
+    () =>
+      new Set(
+        minimapSteps
+          .filter((step) => step.hasHiddenActivity)
+          .map((step) => step.key)
+      ),
+    [minimapSteps]
+  );
   const handleMinimapStepToggle = useCallback(
     (step: MinimapStep) => {
       toggleHiddenOutputTarget(outputFilterAddressKey, step.key);
@@ -1577,6 +1589,7 @@ const OutputSectionInner: React.FC = () => {
           onDiffCollapsedChange={handleDiffCollapsedChange}
           onDiffGapExpand={handleDiffGapExpandWithScrollPin}
           onFileUndo={handleFileUndo}
+          hiddenActivityTargetKeys={hiddenActivityTargetKeys}
           onMinimapStepClick={handleMinimapStepClick}
           onMinimapStepToggle={handleMinimapStepToggle}
           onMinimapStepSolo={handleMinimapStepSolo}

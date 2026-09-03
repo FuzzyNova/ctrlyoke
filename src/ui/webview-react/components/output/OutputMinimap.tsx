@@ -410,6 +410,12 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
 
   return (
     // The rail itself is 14px and clips nothing — markers overflow to the left.
+    // The rail used to be aria-hidden, but it now contains real step controls,
+    // so it has to stay in the accessibility tree. Its own drag-to-scroll is a
+    // pointer-only shorthand for the output pane's native scrolling, and the
+    // step markers inside it are individually focusable buttons, so there is no
+    // keyboard affordance missing here for the rule to protect.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={railRef}
       className="relative flex-shrink-0 w-[var(--fp-output-minimap-width)] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"

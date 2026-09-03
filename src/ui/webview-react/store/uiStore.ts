@@ -772,6 +772,10 @@ interface UiActions {
     allPresentTargetKeys: readonly string[]
   ) => void;
   clearHiddenOutputTargets: (workflowKey: string) => void;
+  pruneHiddenOutputTargets: (
+    workflowKey: string,
+    presentTargetKeys: ReadonlySet<string>
+  ) => void;
   setPendingFindRequest: (request: PendingOutputFindRequest | null) => void;
   openHistorySearch: () => void;
   closeHistorySearch: () => void;
@@ -1334,6 +1338,43 @@ export const useUiStore = create<UiState & UiActions>()(
           hiddenOutputTargets: {},
           outputStepFilterVersion: state.outputStepFilterVersion + 1,
         })),
+
+      pruneHiddenOutputTargets: (workflowKey, presentTargetKeys) =>
+        set((state) => {
+          const current = state.hiddenOutputTargets[workflowKey];
+
+          // A hidden set belongs to exactly one viewed address. Writes already
+          // drop other addresses, but rendering a different address must drop
+          // them too, or navigating away and back silently restores a filter
+          // the user has no reason to expect.
+          const hasForeignEntries = Object.keys(state.hiddenOutputTargets).some(
+            (key) => key !== workflowKey
+          );
+
+          // With nothing rendered there is no way to judge staleness, and a
+          // replay that momentarily empties the output would otherwise wipe a
+          // filter set on a still-running step.
+          const nextKeys =
+            current && presentTargetKeys.size > 0
+              ? current.keys.filter((key) => presentTargetKeys.has(key))
+              : (current?.keys ?? []);
+          const keysChanged = nextKeys.length !== (current?.keys.length ?? 0);
+          if (!hasForeignEntries && !keysChanged) return state;
+
+          const hiddenAtMs: Record<string, number> = {};
+          for (const key of nextKeys) {
+            const timestamp = current?.hiddenAtMs[key];
+            if (timestamp !== undefined) hiddenAtMs[key] = timestamp;
+          }
+
+          return {
+            hiddenOutputTargets:
+              nextKeys.length > 0
+                ? { [workflowKey]: { keys: nextKeys, hiddenAtMs } }
+                : {},
+            outputStepFilterVersion: state.outputStepFilterVersion + 1,
+          };
+        }),
 
       setPendingFindRequest: (request) => set({ pendingFindRequest: request }),
 

@@ -103,10 +103,10 @@ export function useOutputRowsModel({
   invalidateMeasuredRowForUserResize,
   onDiffViewReset,
 }: UseOutputRowsModelInput) {
-  const displayedViewAddress = useUiStore((state) => state.displayedViewAddress);
-  const hiddenOutputTargets = useUiStore(
-    (state) => state.hiddenOutputTargets
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
   );
+  const hiddenOutputTargets = useUiStore((state) => state.hiddenOutputTargets);
   const hiddenOutputAddressKey = useMemo(
     () =>
       displayedViewAddress
@@ -272,29 +272,9 @@ export function useOutputRowsModel({
     const presentTargetKeys = new Set(
       uniqueStepTargets.map((target) => getTargetKey(target))
     );
-    useUiStore.setState((state) => {
-      const current = state.hiddenOutputTargets[hiddenOutputAddressKey];
-      if (!current) return state;
-
-      const nextKeys = current.keys.filter((key) =>
-        presentTargetKeys.has(key)
-      );
-      if (nextKeys.length === current.keys.length) return state;
-
-      const hiddenAtMs: Record<string, number> = {};
-      for (const key of nextKeys) {
-        const timestamp = current.hiddenAtMs[key];
-        if (timestamp !== undefined) hiddenAtMs[key] = timestamp;
-      }
-
-      return {
-        hiddenOutputTargets:
-          nextKeys.length > 0
-            ? { [hiddenOutputAddressKey]: { keys: nextKeys, hiddenAtMs } }
-            : {},
-        outputStepFilterVersion: state.outputStepFilterVersion + 1,
-      };
-    });
+    useUiStore
+      .getState()
+      .pruneHiddenOutputTargets(hiddenOutputAddressKey, presentTargetKeys);
 
     const diffKeys = new Set(
       rows.flatMap((row) =>

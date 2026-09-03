@@ -5,8 +5,8 @@
 > **Status:** Ready to implement in the staged order below. Audited against `main` on this
 > date; every symbol named in "Current-Code Audit" was verified. Concurrent fan-out stays
 > behind the gate in Decision 4 until Stages 1–5 are complete and verified. Recommended
-> precursor: [`OUTPUT_STEP_FILTER_PLAN.md`](OUTPUT_STEP_FILTER_PLAN.md), whose state and
-> row primitives Stage 5 reuses.
+> precursor: [`OUTPUT_STEP_FILTER_PLAN.md`](../implemented/OUTPUT_STEP_FILTER_PLAN.md),
+> which has shipped and whose state and row primitives Stage 5 reuses.
 >
 > **Staging note:** this doc is written to be handed to the Spec-Driven Loop orchestrator as
 > its `specFile`. Each stage's numbered items are the intended queue-step granularity;
