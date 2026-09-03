@@ -14,6 +14,9 @@ import {
   MAX_CONTENT_SIZE,
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
 } from "../types/DashboardConstants";
+import { configService } from "../config/CtrlYokeConfigService";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 
 suite("ContextExpander.expandContextSplit", () => {
   let workspaceRoot: string;
@@ -1179,6 +1182,114 @@ suite("ContextExpander.expandContextSplit", () => {
       const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
 
       assert.ok(result.excerptBlocks.includes("blocked"));
+    });
+
+    test("uses only the approved roots declared by the current workflow", async () => {
+      const root = freshWorkspace();
+      externalRoot = freshTemporaryRoot("workflow");
+      const externalFile = path.join(externalRoot, "workflow.txt");
+      fs.writeFileSync(externalFile, "workflow-only\n");
+      const workflowFile = path.join(root, "workflow.ctrlyoke.json");
+      const workspaceIdentity =
+        ExternalRootsTrustStore.canonicalizeRoot(root);
+      const workflowIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          root,
+          workflowFile
+        );
+      const deniedWorkflowIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          root,
+          path.join(root, "denied.ctrlyoke.json")
+        );
+      const pendingWorkflowIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          root,
+          path.join(root, "pending.ctrlyoke.json")
+        );
+      const canonicalExternalRoot =
+        ExternalRootsTrustStore.canonicalizeRoot(externalRoot);
+      const decisions: Record<string, "allow" | "deny"> = {
+        [`${workflowIdentity}::${canonicalExternalRoot}`]: "allow",
+        [`${deniedWorkflowIdentity}::${canonicalExternalRoot}`]: "deny",
+      };
+      const fakeTrustStore = {
+        getApprovedRoots: (scopeIdentity: string, roots: readonly string[]) =>
+          roots.filter(
+            (candidate) =>
+              decisions[
+                `${scopeIdentity}::${ExternalRootsTrustStore.canonicalizeRoot(candidate)}`
+              ] === "allow"
+          ),
+        getPendingRoots: (scopeIdentity: string, roots: readonly string[]) =>
+          roots.filter(
+            (candidate) =>
+              decisions[
+                `${scopeIdentity}::${ExternalRootsTrustStore.canonicalizeRoot(candidate)}`
+              ] === undefined
+          ),
+      };
+      configService.setUserBackend({
+        getAll: () => ({
+          permissions: {
+            allowedExternalFileRoots: [freshTemporaryRoot("inherited")],
+          },
+        }),
+        set: async () => {},
+      });
+      configService.setWorkspaceBackend({
+        getAll: () => ({}),
+        set: async () => {},
+      });
+
+      try {
+        const approvedRoots =
+          ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+            workspaceIdentity,
+            {
+              identity: workflowIdentity,
+              declaredRoots: [externalRoot],
+            },
+            fakeTrustStore
+          );
+        const approvedExpander = new ContextExpander({
+          workspaceRoot: root,
+          additionalTrustedRoots: approvedRoots,
+        });
+        const approved = await approvedExpander.expandContextSplit(
+          `@"${externalFile}"`
+        );
+        assert.deepStrictEqual(approved.directFileRefs, [externalFile]);
+
+        for (const identity of [
+          deniedWorkflowIdentity,
+          pendingWorkflowIdentity,
+        ]) {
+          const blockedRoots =
+            ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+              workspaceIdentity,
+              { identity, declaredRoots: [externalRoot] },
+              fakeTrustStore
+            );
+          const blockedExpander = new ContextExpander({
+            workspaceRoot: root,
+            additionalTrustedRoots: blockedRoots,
+          });
+          const blocked = await blockedExpander.expandContextSplit(
+            `@"${externalFile}"`
+          );
+          assert.deepStrictEqual(blocked.directFileRefs, []);
+        }
+      } finally {
+        configService.setUserBackend({
+          getAll: () => ({}),
+          set: async () => {},
+        });
+        configService.setWorkspaceBackend({
+          getAll: () => ({}),
+          set: async () => {},
+        });
+      }
     });
   });
 

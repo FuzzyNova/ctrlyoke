@@ -288,6 +288,23 @@
         },
         "vars": {
           "$ref": "#/definitions/varsConfig"
+        },
+        "trustedExternalRoots": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.allowedExternalFileRoots for this workflow's runs — a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity."
+            },
+            {
+              "type": "null",
+              "description": "Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all."
+            }
+          ],
+          "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
         }
       }
     },
@@ -694,6 +711,12 @@
             "type": "object",
             "required": ["worktree"]
           }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["trustedExternalRoots"]
+          }
         }
       ]
     },
@@ -945,6 +968,12 @@
           "not": {
             "type": "object",
             "required": ["worktree"]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["trustedExternalRoots"]
           }
         },
         {

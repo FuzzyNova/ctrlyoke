@@ -36,6 +36,10 @@ class FakeInteractionPort implements UserInteractionPort {
     this.lastRequest = request;
     return this.response;
   }
+
+  async requestChoice(): Promise<string | undefined> {
+    return undefined;
+  }
 }
 
 suite("SecretGrantsTrustPrompt", () => {

@@ -26,7 +26,10 @@ import {
   type McpAvailability,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
-import { externalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+} from "../config/ExternalRootsTrustStore";
 
 /** The subset of `ExternalRootsTrustStore` these helpers depend on — narrowed so tests can inject a fake without constructing a real file-backed store. */
 interface ExternalRootsTrustStoreLike {
@@ -38,6 +41,18 @@ interface ExternalRootsTrustStoreLike {
     workspaceIdentity: string,
     candidateRoots: readonly string[]
   ): string[];
+}
+
+function dedupeExternalRoots(roots: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return roots.filter((root) => {
+    const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
+    if (seen.has(canonicalRoot)) {
+      return false;
+    }
+    seen.add(canonicalRoot);
+    return true;
+  });
 }
 
 /**
@@ -511,13 +526,17 @@ export const ConfigurationUtils = {
       (value ?? []).filter((v): v is string => typeof v === "string");
 
     return {
-      user: toStringArray(
-        configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.USER)
-          ?.allowedExternalFileRoots
+      user: dedupeExternalRoots(
+        toStringArray(
+          configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.USER)
+            ?.allowedExternalFileRoots
+        )
       ),
-      workspace: toStringArray(
-        configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.WORKSPACE)
-          ?.allowedExternalFileRoots
+      workspace: dedupeExternalRoots(
+        toStringArray(
+          configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.WORKSPACE)
+            ?.allowedExternalFileRoots
+        )
       ),
     };
   },
@@ -532,7 +551,7 @@ export const ConfigurationUtils = {
   getAllowedExternalFileRoots(): string[] {
     const { user, workspace } =
       ConfigurationUtils.getAllowedExternalFileRootsByScope();
-    return Array.from(new Set([...user, ...workspace]));
+    return dedupeExternalRoots([...user, ...workspace]);
   },
 
   /**
@@ -549,6 +568,10 @@ export const ConfigurationUtils = {
    */
   getEffectiveApprovedExternalFileRoots(
     workspaceIdentity: string,
+    workflow?: {
+      identity: string;
+      declaredRoots: string[] | null | undefined;
+    },
     trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
   ): string[] {
     const { user, workspace } =
@@ -557,7 +580,35 @@ export const ConfigurationUtils = {
       workspaceIdentity,
       workspace
     );
-    return Array.from(new Set([...user, ...approvedWorkspaceRoots]));
+    const baseRoots = dedupeExternalRoots([
+      ...user,
+      ...approvedWorkspaceRoots,
+    ]);
+
+    if (!workflow || workflow.declaredRoots === undefined) {
+      return baseRoots;
+    }
+    if (workflow.declaredRoots === null) {
+      return [];
+    }
+
+    const approvedWorkflowRoots = trustStore.getApprovedRoots(
+      workflow.identity,
+      workflow.declaredRoots
+    );
+    const approvedRoots = new Set(
+      baseRoots.map((root) =>
+        ExternalRootsTrustStore.canonicalizeRoot(root)
+      )
+    );
+    for (const root of approvedWorkflowRoots) {
+      approvedRoots.add(ExternalRootsTrustStore.canonicalizeRoot(root));
+    }
+    return dedupeExternalRoots(
+      workflow.declaredRoots.filter((root) =>
+        approvedRoots.has(ExternalRootsTrustStore.canonicalizeRoot(root))
+      )
+    );
   },
 
   /**
@@ -577,6 +628,34 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get workflow-scope roots that have never been decided and are not already
+   * approved at user or workspace scope.
+   */
+  getPendingWorkflowExternalFileRoots(
+    workspaceIdentity: string,
+    workflowIdentity: string,
+    requestedRoots: readonly string[],
+    trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
+  ): string[] {
+    const approvedBaseRoots = new Set(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        workspaceIdentity,
+        undefined,
+        trustStore
+      ).map((root) => ExternalRootsTrustStore.canonicalizeRoot(root))
+    );
+    const candidates = dedupeExternalRoots(
+      requestedRoots.filter(
+        (root) =>
+          !approvedBaseRoots.has(
+            ExternalRootsTrustStore.canonicalizeRoot(root)
+          )
+      )
+    );
+    return trustStore.getPendingRoots(workflowIdentity, candidates);
+  },
+
+  /**
    * Add a directory to the user-scope `allowedExternalFileRoots` list (no
    * workspace-approval gate — this is the "Trust Parent Folder" action).
    * No-op if the directory is already present.
@@ -591,6 +670,19 @@ export const ConfigurationUtils = {
       CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
       [...current, root],
       CONFIG_SCOPE.USER
+    );
+  },
+
+  async addWorkspaceAllowedExternalFileRoot(root: string): Promise<void> {
+    const { workspace: current } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    if (current.includes(root)) {
+      return;
+    }
+    await configService.set(
+      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      [...current, root],
+      CONFIG_SCOPE.WORKSPACE
     );
   },
 

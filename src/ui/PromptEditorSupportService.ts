@@ -47,6 +47,7 @@ import {
   confirmExternalFileTrustAndOpen,
   type FileOpenTarget,
 } from "./ExternalFileTrustPrompt";
+import { NullUserInteractionPort } from "./UserInteractionPort";
 import {
   resolveReferencePath,
   getTrustedSourceDefinitionDir,
@@ -621,7 +622,20 @@ export class PromptEditorSupportService {
         approvedExternalRoots,
       });
       if (!decision.allowed) {
-        await confirmExternalFileTrustAndOpen(target);
+        await confirmExternalFileTrustAndOpen(target, {
+          port: ctx.interactionPort ?? new NullUserInteractionPort(),
+          workspaceRoot,
+          workflowSourcePath:
+            (await this.getOrchestrator()?.getViewSourceDefinitionPath(
+              ctx.clientId
+            )) ?? undefined,
+          onWorkflowRootsUpdated: async (roots) => {
+            await this.getOrchestrator()?.updateWorkflowTrustedExternalRootsForClient(
+              ctx.clientId,
+              roots
+            );
+          },
+        });
         return;
       }
       await openResolvedTarget(target);
@@ -1208,7 +1222,20 @@ export class PromptEditorSupportService {
         Log.warn(
           `Blocked dashboard request to open path outside every trusted root: ${relativePath}`
         );
-        await confirmExternalFileTrustAndOpen(target);
+        await confirmExternalFileTrustAndOpen(target, {
+          port: ctx.interactionPort ?? new NullUserInteractionPort(),
+          workspaceRoot,
+          workflowSourcePath:
+            (await this.getOrchestrator()?.getViewSourceDefinitionPath(
+              ctx.clientId
+            )) ?? undefined,
+          onWorkflowRootsUpdated: async (roots) => {
+            await this.getOrchestrator()?.updateWorkflowTrustedExternalRootsForClient(
+              ctx.clientId,
+              roots
+            );
+          },
+        });
         return;
       }
 

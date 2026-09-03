@@ -79,6 +79,43 @@ These settings apply to both the extension and the standalone CLI where relevant
 }
 ```
 
+### Allow external file roots
+
+Workspace files are trusted by default. External directories are opt-in through
+`permissions.allowedExternalFileRoots`:
+
+```json
+{
+  "permissions": {
+    "allowedExternalFileRoots": [
+      "C:/Users/me/.codex/sessions",
+      "C:/temp/repros"
+    ]
+  },
+  "ui": {
+    "offerTrustForUntrustedFileLinks": true
+  }
+}
+```
+
+The same setting can be written at two scopes:
+
+- **User scope** applies to every workspace and is trusted immediately because
+  editing the user's own settings is the approval.
+- **Workspace scope** applies only to the current workspace. A root declared in
+  workspace settings is a request and needs a separate, per-machine approval.
+  Use the dashboard approval flow or `ctrlyoke trust-external-roots <file>` to
+  review it. Decisions are stored locally and are never written into the
+  workspace settings file.
+
+`ui.offerTrustForUntrustedFileLinks` controls whether an untrusted
+AI-generated file link may offer the Trust Parent Folder action. It does not
+grant access or disable the external-root boundary.
+
+For a single workflow, use the workflow-level `trustedExternalRoots` field to
+inherit, replace, or disable the user/workspace set. See
+[YAML workflow format](/workflows/yaml-format#workflow-scoped-external-roots).
+
 ## Notable defaults
 
 Current defaults include:

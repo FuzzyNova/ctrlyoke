@@ -1,10 +1,22 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs/promises";
+import * as yaml from "js-yaml";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
 } from "../config/ExternalRootsTrustStore";
+import {
+  EXTERNAL_FILE_TRUST_SCOPES,
+  TRUST_DECISIONS,
+} from "../types/DashboardConstants";
+import type {
+  ChoiceRequest,
+  UserInteractionPort,
+} from "./UserInteractionPort";
+import { NullUserInteractionPort } from "./UserInteractionPort";
+import { Log } from "../utils/Log";
 
 /**
  * An already-resolved absolute path to open, plus enough shape to pick the
@@ -19,6 +31,15 @@ export interface FileOpenTarget {
   endLine?: number;
   openAsText?: boolean;
   viewColumn?: vscode.ViewColumn;
+  workflowSourcePath?: string;
+}
+
+export interface ExternalFileTrustContext {
+  port: UserInteractionPort;
+  workspaceRoot?: string;
+  workflowSourcePath?: string;
+  onWorkflowRootsUpdated?: (roots: string[]) => Promise<void>;
+  trustStore?: Pick<ExternalRootsTrustStore, "setDecisions">;
 }
 
 /**
@@ -74,42 +95,104 @@ export async function openResolvedTarget(
 }
 
 /**
- * Show the "Trust Parent Folder" confirmation for a path outside every
- * trusted root, and persist an approval to user-scope
- * `permissions.allowedExternalFileRoots` if the user confirms. Returns
- * whether the path is now trusted. See
+ * Show the host-neutral "Trust Parent Folder" scope choice for a path outside
+ * every trusted root, persist the selected approval, and return whether the
+ * path is now trusted. See
  * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md ("File Link Opening Flow").
  *
  * `ui.offerTrustForUntrustedFileLinks: false` does not widen trust — it only
  * suppresses this offer, leaving the path blocked outright.
  */
-async function confirmExternalFileTrust(
-  candidatePath: string
+export async function confirmExternalFileTrust(
+  candidatePath: string,
+  context: ExternalFileTrustContext = {
+    port: new NullUserInteractionPort(),
+  }
 ): Promise<boolean> {
   if (!ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks()) {
-    vscode.window.showWarningMessage(
-      `ctrlyoke blocked a file link outside the current workspace: ${candidatePath}`
-    );
     return false;
   }
 
   const parentFolder = path.dirname(candidatePath);
-  const choice = await vscode.window.showWarningMessage(
-    `Trust "${parentFolder}" so ctrlyoke can read and open files under it?`,
+  const workflowState = context.workflowSourcePath
+    ? await readWorkflowTrustState(context.workflowSourcePath)
+    : undefined;
+  const choices: ChoiceRequest["choices"] = [
     {
-      modal: true,
-      detail:
-        `ctrlyoke blocked access to a file outside your workspace and outside ` +
-        `any currently trusted external root:\n${candidatePath}`,
+      value: EXTERNAL_FILE_TRUST_SCOPES.USER,
+      label: "Trust for me (all workspaces)",
     },
-    "Trust Parent Folder"
-  );
-  if (choice !== "Trust Parent Folder") {
+  ];
+  if (context.workspaceRoot) {
+    choices.push({
+      value: EXTERNAL_FILE_TRUST_SCOPES.WORKSPACE,
+      label: "Trust for this workspace",
+    });
+  }
+  if (workflowState) {
+    choices.push({
+      value: EXTERNAL_FILE_TRUST_SCOPES.WORKFLOW,
+      label: "Trust for this workflow",
+    });
+  }
+
+  const choice = await context.port.requestChoice({
+    id: crypto.randomUUID(),
+    title: "Trust Parent Folder",
+    detail:
+      `ctrlyoke blocked access to a file outside your workspace and outside ` +
+      `any currently trusted external root:\n${candidatePath}`,
+    choices,
+  });
+  if (choice === undefined) {
     return false;
   }
 
-  await ConfigurationUtils.addUserAllowedExternalFileRoot(parentFolder);
-  return true;
+  switch (choice) {
+    case EXTERNAL_FILE_TRUST_SCOPES.USER:
+      await ConfigurationUtils.addUserAllowedExternalFileRoot(parentFolder);
+      return true;
+    case EXTERNAL_FILE_TRUST_SCOPES.WORKSPACE: {
+      if (!context.workspaceRoot) return false;
+      await ConfigurationUtils.addWorkspaceAllowedExternalFileRoot(parentFolder);
+      await (context.trustStore ?? externalRootsTrustStore).setDecisions(
+        ExternalRootsTrustStore.canonicalizeRoot(context.workspaceRoot),
+        [parentFolder],
+        TRUST_DECISIONS.ALLOW
+      );
+      return true;
+    }
+    case EXTERNAL_FILE_TRUST_SCOPES.WORKFLOW: {
+      if (!context.workspaceRoot || !context.workflowSourcePath || !workflowState) {
+        return false;
+      }
+      const workflowIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          context.workspaceRoot,
+          context.workflowSourcePath
+        );
+      const roots =
+        workflowState.declaredRoots === undefined
+          ? [
+              ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+                ExternalRootsTrustStore.canonicalizeRoot(context.workspaceRoot)
+              ),
+              parentFolder,
+            ]
+          : [...(workflowState.declaredRoots ?? []), parentFolder];
+      const nextRoots = dedupeRoots(roots);
+      await writeWorkflowTrustState(context.workflowSourcePath, nextRoots);
+      await context.onWorkflowRootsUpdated?.(nextRoots);
+      await (context.trustStore ?? externalRootsTrustStore).setDecisions(
+        workflowIdentity,
+        [parentFolder],
+        TRUST_DECISIONS.ALLOW
+      );
+      return true;
+    }
+    default:
+      return false;
+  }
 }
 
 /**
@@ -118,9 +201,16 @@ async function confirmExternalFileTrust(
  * handler behind the shared `ctrlyoke.confirmExternalFileTrust` command.
  */
 export async function confirmExternalFileTrustAndOpen(
-  target: FileOpenTarget
+  target: FileOpenTarget,
+  context: ExternalFileTrustContext = {
+    port: new NullUserInteractionPort(),
+  }
 ): Promise<void> {
-  const approved = await confirmExternalFileTrust(target.path);
+  const approved = await confirmExternalFileTrust(target.path, {
+    ...context,
+    workflowSourcePath:
+      context.workflowSourcePath ?? target.workflowSourcePath,
+  });
   if (approved) {
     await openResolvedTarget(target);
   }
@@ -129,10 +219,10 @@ export async function confirmExternalFileTrustAndOpen(
 /**
  * One-time batch approval for a workspace's requested external file roots
  * (`permissions.allowedExternalFileRoots` at workspace scope). Shows a
- * single scrollable, reviewable picker — never one popup per root — listing
+ * single scrollable, reviewable dashboard modal — never one popup per root — listing
  * every root that has no recorded decision yet for this workspace identity.
  * Each item defaults checked ("Trust"); unchecking an item before confirming
- * records a "deny" for it instead. Dismissing the picker (Escape) records no
+ * records a "deny" for it instead. Dismissing the modal records no
  * decision at all, so the user is asked again next time. Requires VS Code
  * Workspace Trust first — untrusted workspaces are skipped entirely and
  * retried once trust is granted (see the `onDidGrantWorkspaceTrust` listener
@@ -141,7 +231,12 @@ export async function confirmExternalFileTrustAndOpen(
  * (2026-07-13)").
  */
 export async function promptBatchApprovalForPendingWorkspaceExternalRoots(
-  workspaceRoot: string
+  workspaceRoot: string,
+  port: UserInteractionPort = new NullUserInteractionPort(),
+  store: Pick<
+    ExternalRootsTrustStore,
+    "getApprovedRoots" | "getPendingRoots" | "setDecisions"
+  > = externalRootsTrustStore
 ): Promise<void> {
   if (!vscode.workspace.isTrusted) {
     return;
@@ -149,47 +244,152 @@ export async function promptBatchApprovalForPendingWorkspaceExternalRoots(
 
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-  const pendingRoots =
-    ConfigurationUtils.getPendingWorkspaceExternalFileRoots(workspaceIdentity);
+  const pendingRoots = ConfigurationUtils.getPendingWorkspaceExternalFileRoots(
+    workspaceIdentity,
+    store
+  );
   if (pendingRoots.length === 0) {
     return;
   }
 
-  const picks = pendingRoots.map((root) => ({ label: root, picked: true }));
-  const selection = await vscode.window.showQuickPick(picks, {
-    canPickMany: true,
-    ignoreFocusOut: true,
-    title: `ctrlyoke: this workspace requests ${pendingRoots.length} external file root(s)`,
-    placeHolder:
-      "Uncheck a folder to keep it blocked, then press Enter to confirm — Escape asks again next time",
-  });
+  await promptBatchApprovalForPendingRoots(
+    workspaceIdentity,
+    pendingRoots,
+    `This workspace requests ${pendingRoots.length} external file root(s)`,
+    port,
+    store
+  );
+}
 
-  if (selection === undefined) {
+export async function promptBatchApprovalForPendingWorkflowExternalRoots(
+  workspaceRoot: string,
+  workflowSourcePath: string,
+  requestedRoots: readonly string[],
+  port: UserInteractionPort = new NullUserInteractionPort(),
+  store: Pick<
+    ExternalRootsTrustStore,
+    "getApprovedRoots" | "getPendingRoots" | "setDecisions"
+  > = externalRootsTrustStore
+): Promise<void> {
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+  const workflowIdentity =
+    ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+      workspaceRoot,
+      workflowSourcePath
+    );
+  const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+    workspaceIdentity,
+    workflowIdentity,
+    requestedRoots,
+    store
+  );
+  await promptBatchApprovalForPendingRoots(
+    workflowIdentity,
+    pendingRoots,
+    `This workflow requests ${pendingRoots.length} external file root(s)`,
+    port,
+    store
+  );
+}
+
+export async function promptBatchApprovalForPendingRoots(
+  scopeIdentity: string,
+  pendingRoots: readonly string[],
+  title: string,
+  port: UserInteractionPort,
+  store: Pick<ExternalRootsTrustStore, "setDecisions"> = externalRootsTrustStore
+): Promise<void> {
+  if (pendingRoots.length === 0 || !port.canPrompt()) {
     return;
   }
 
-  const approvedRoots = selection.map((item) => item.label);
-  const deniedRoots = pendingRoots.filter(
-    (root) => !approvedRoots.includes(root)
-  );
+  const result = await port.requestBatchApproval({
+    id: crypto.randomUUID(),
+    title,
+    description:
+      "Uncheck a folder to keep it blocked. Dismissing asks again next time.",
+    items: pendingRoots.map((root) => ({
+      value: root,
+      label: root,
+      checked: true,
+    })),
+  });
+  if (!result) return;
 
-  if (approvedRoots.length > 0) {
-    await externalRootsTrustStore.setDecisions(
-      workspaceIdentity,
-      approvedRoots,
-      "allow"
+  if (result.approvedValues.length > 0) {
+    await store.setDecisions(
+      scopeIdentity,
+      result.approvedValues,
+      TRUST_DECISIONS.ALLOW
     );
   }
-  if (deniedRoots.length > 0) {
-    await externalRootsTrustStore.setDecisions(
-      workspaceIdentity,
-      deniedRoots,
-      "deny"
+  if (result.deniedValues.length > 0) {
+    await store.setDecisions(
+      scopeIdentity,
+      result.deniedValues,
+      TRUST_DECISIONS.DENY
     );
   }
+}
 
-  vscode.window.showInformationMessage(
-    `ctrlyoke: approved ${approvedRoots.length} external file root(s)` +
-      (deniedRoots.length > 0 ? `, kept ${deniedRoots.length} blocked.` : ".")
-  );
+function dedupeRoots(roots: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return roots.filter((root) => {
+    const canonical = ExternalRootsTrustStore.canonicalizeRoot(root);
+    if (seen.has(canonical)) return false;
+    seen.add(canonical);
+    return true;
+  });
+}
+
+async function readWorkflowTrustState(
+  sourcePath: string
+): Promise<{ declaredRoots: string[] | null | undefined } | undefined> {
+  const extension = path.extname(sourcePath).toLowerCase();
+  if (extension === ".md") return undefined;
+  try {
+    const raw = await fs.readFile(sourcePath, "utf8");
+    const parsed = extension === ".json" ? JSON.parse(raw) : yaml.load(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const declaredRoots = (parsed as { trustedExternalRoots?: unknown })
+      .trustedExternalRoots;
+    if (
+      declaredRoots !== undefined &&
+      declaredRoots !== null &&
+      (!Array.isArray(declaredRoots) ||
+        !declaredRoots.every((root) => typeof root === "string"))
+    ) {
+      return undefined;
+    }
+    return {
+      declaredRoots: declaredRoots as string[] | null | undefined,
+    };
+  } catch (error) {
+    Log.warn(
+      `Unable to inspect workflow trust settings at "${sourcePath}": ${error}`
+    );
+    return undefined;
+  }
+}
+
+async function writeWorkflowTrustState(
+  sourcePath: string,
+  roots: readonly string[]
+): Promise<void> {
+  const extension = path.extname(sourcePath).toLowerCase();
+  const raw = await fs.readFile(sourcePath, "utf8");
+  const parsed = extension === ".json" ? JSON.parse(raw) : yaml.load(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("The active workflow file has an invalid root object.");
+  }
+  (parsed as { trustedExternalRoots?: readonly string[] }).trustedExternalRoots =
+    roots;
+  const serialized =
+    extension === ".json"
+      ? JSON.stringify(parsed, null, 2) + "\n"
+      : yaml.dump(parsed);
+  await fs.writeFile(sourcePath, serialized, "utf8");
 }

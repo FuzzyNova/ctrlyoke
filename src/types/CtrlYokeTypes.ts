@@ -340,6 +340,8 @@ export const EXECUTION_PROPERTY_KEYS = [
 export interface PromptFile extends ExecutionProperties {
   /** Worktree selection authored at the workflow root. */
   worktree?: WorktreeConfig;
+  /** External roots requested for this workflow, or null to disable access. */
+  trustedExternalRoots?: string[] | null;
   prompt?: string;
   steps?: WorkflowStep[];
   finalStep?: WorkflowStep;

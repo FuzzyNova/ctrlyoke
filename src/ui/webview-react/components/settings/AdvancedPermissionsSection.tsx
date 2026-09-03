@@ -3,14 +3,13 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
-import { LocalTextarea } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
-import { Button } from "../shared/Button";
 import { PermissionCapabilitySummary } from "../shared/PermissionCapabilitySummary";
+import { TrustedRootsListEditor } from "../shared/TrustedRootsListEditor";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -42,11 +41,46 @@ export function AdvancedPermissionsSection({
   const ui = settings.settings.ui;
   const sources = settings.sources as Record<string, SettingSource>;
   const rowProps = { sources, onReset, activeScope };
+  const scopedEntries =
+    activeScope === SETTING_SCOPES.USER
+      ? (
+          settings.externalFileRootsByScope?.user ??
+          permissions.allowedExternalFileRoots
+        ).map((path) => ({ path }))
+      : (
+          settings.externalFileRootsByScope?.workspace ??
+          permissions.allowedExternalFileRoots.map((path) => ({ path }))
+        ).map((entry) => (typeof entry === "string" ? { path: entry } : entry));
 
   const handleBrowseExternalRoot = () => {
     vscode.postMessage({
       type: MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT,
       scope: activeScope,
+    });
+  };
+
+  const handleAddExternalRoot = (path: string) => {
+    onUpdate("permissions.allowedExternalFileRoots", [
+      ...scopedEntries.map((entry) => entry.path),
+      path,
+    ]);
+  };
+
+  const handleRemoveExternalRoot = (path: string) => {
+    onUpdate(
+      "permissions.allowedExternalFileRoots",
+      scopedEntries
+        .map((entry) => entry.path)
+        .filter((entryPath) => entryPath !== path)
+    );
+  };
+
+  const handleDecisionChange = (path: string, decision: "allow" | "deny") => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_EXTERNAL_ROOT_DECISION,
+      scope: activeScope,
+      path,
+      decision,
     });
   };
 
@@ -82,35 +116,23 @@ export function AdvancedPermissionsSection({
           External File Roots
         </h3>
         <SettingInputRow
-          label="Allowed external directories (one per line)"
+          label="Allowed external directories"
           id="allowed-external-file-roots"
           path="permissions.allowedExternalFileRoots"
           {...rowProps}
         >
-          <div className="flex flex-col gap-2">
-            <LocalTextarea
-              id="allowed-external-file-roots"
-              rows={3}
-              value={permissions.allowedExternalFileRoots.join("\n")}
-              onCommit={(v) =>
-                onUpdate(
-                  "permissions.allowedExternalFileRoots",
-                  v
-                    .split("\n")
-                    .map((d) => d.trim())
-                    .filter(Boolean)
-                )
-              }
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleBrowseExternalRoot}
-            >
-              Add folder…
-            </Button>
-          </div>
+          <TrustedRootsListEditor
+            entries={scopedEntries}
+            showDecisionStatus={activeScope === SETTING_SCOPES.WORKSPACE}
+            onAdd={handleAddExternalRoot}
+            onBrowse={handleBrowseExternalRoot}
+            onRemove={handleRemoveExternalRoot}
+            onDecisionChange={
+              activeScope === SETTING_SCOPES.WORKSPACE
+                ? handleDecisionChange
+                : undefined
+            }
+          />
         </SettingInputRow>
         <p className="text-xs text-description-fg mt-1">
           Absolute directories outside the workspace that ctrlyoke may read for

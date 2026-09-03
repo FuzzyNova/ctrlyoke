@@ -1,7 +1,10 @@
 import { execFile } from "child_process";
 import * as path from "path";
 import { promisify } from "util";
-import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
+import type {
+  McpServerConfig,
+  PromptFile,
+} from "../../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../../../config/ExternalRootsTrustStore";
 import { Log } from "../../../utils/Log";
@@ -40,6 +43,18 @@ interface CliCommandOptions {
 
 interface GetCliVersionOptions extends CliCommandOptions {
   parseVersion?: (stdout: string) => string | undefined;
+}
+
+export interface CliProviderWorkflowContext {
+  filePath?: string;
+  stateRoot?: string;
+  workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
+}
+
+export interface WorkflowExternalRootsContext {
+  workspaceIdentity: string;
+  identity: string;
+  declaredRoots: string[] | null | undefined;
 }
 
 /**
@@ -307,7 +322,8 @@ export class CliProviderUtils {
   static getWorkspaceDirs(
     workspaceRoot: string,
     workspaceRoots: readonly string[] = [],
-    approvedExternalRoots?: readonly string[]
+    approvedExternalRoots?: readonly string[],
+    workflowContext?: CliProviderWorkflowContext
   ): string[] {
     const workspaceDirs: string[] = [];
     const directoryKeys = new Set<string>();
@@ -326,17 +342,55 @@ export class CliProviderUtils {
     addDirectory(workspaceRoot);
     workspaceRoots.forEach(addDirectory);
 
-    // Add every external root currently approved for this workspace
-    const workspaceIdentity =
-      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-    const effectiveExternalRoots =
-      approvedExternalRoots ??
-      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-        workspaceIdentity
-      );
+    // An explicit workflow declaration replaces the inherited roots. When no
+    // workflow context is available, retain the execution workspace snapshot
+    // supplied by callers.
+    const workflowRoots = workflowContext
+      ? CliProviderUtils.getWorkflowExternalRootsContext(
+          workspaceRoot,
+          workflowContext
+        )
+      : undefined;
+    const effectiveExternalRoots = workflowRoots
+      ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workflowRoots.workspaceIdentity,
+          {
+            identity: workflowRoots.identity,
+            declaredRoots: workflowRoots.declaredRoots,
+          }
+        )
+      : (approvedExternalRoots ??
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
+        ));
     effectiveExternalRoots.forEach(addDirectory);
 
     return workspaceDirs;
+  }
+
+  static getWorkflowExternalRootsContext(
+    workspaceRoot: string,
+    workflowContext: CliProviderWorkflowContext
+  ): WorkflowExternalRootsContext | undefined {
+    const workflowSourcePath = workflowContext.filePath;
+    if (
+      !workflowSourcePath ||
+      workflowSourcePath.startsWith("<") ||
+      !workflowContext.workflowFile
+    ) {
+      return undefined;
+    }
+
+    const trustWorkspaceRoot = workflowContext.stateRoot ?? workspaceRoot;
+    return {
+      workspaceIdentity:
+        ExternalRootsTrustStore.canonicalizeRoot(trustWorkspaceRoot),
+      identity: ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        trustWorkspaceRoot,
+        workflowSourcePath
+      ),
+      declaredRoots: workflowContext.workflowFile.trustedExternalRoots,
+    };
   }
 
   /**

@@ -165,6 +165,7 @@ const SAMPLES: Record<string, unknown> = {
     allowedTools: ["Bash"],
     deniedTools: ["Write"],
   },
+  trustedExternalRoots: ["C:\\trusted\\workflow"],
   vars: { region: "us-east-1" },
   worktree: { mode: "named", branch: "feature/seeded" },
 };
@@ -366,6 +367,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["skills", ["settings-skills"]],
   ["timeout", ["${idPrefix}-timeout"]],
   ["toolPermissions", ["settings-permission-mode"]],
+  ["trustedExternalRoots", ["settings-trusted-external-roots-mode"]],
   ["vars", ["settings-vars"]],
   ["worktree", ["settings-worktree-mode"]],
 ]);

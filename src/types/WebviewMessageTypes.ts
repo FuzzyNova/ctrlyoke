@@ -23,6 +23,7 @@ import {
   AnyTargetId,
   PromptEditorInsertMode,
   MESSAGE_TYPES,
+  TRUST_DECISIONS,
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
   STEP_TYPES,
@@ -502,6 +503,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
     terminal?: TerminalSettings;
@@ -1481,6 +1483,7 @@ export interface GlobalSettingsUpdatedMessage {
     hideGitIgnoredFiles?: boolean;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
+    externalFileRootsByScope?: ExternalFileRootsByScope;
     terminal?: TerminalSettings;
   };
   licenseAccess?: LicenseAccessState;
@@ -1492,9 +1495,23 @@ export interface GlobalSettingsUpdatedMessage {
 
 export type SettingSource = SettingScope;
 
+export type ExternalRootDecision =
+  (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
+
+export interface ExternalRootEntry {
+  path: string;
+  decision?: ExternalRootDecision;
+}
+
+export interface ExternalFileRootsByScope {
+  user: string[];
+  workspace: ExternalRootEntry[];
+}
+
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  externalFileRootsByScope?: ExternalFileRootsByScope;
   licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
   runHistoryPath?: string | null;
@@ -1531,6 +1548,14 @@ export interface UpdateGlobalSettingMessage {
   type: typeof MESSAGE_TYPES.UPDATE_GLOBAL_SETTING;
   path: string;
   value: unknown;
+  scope: SettingWriteScope;
+}
+
+/** Webview -> Extension: change a workspace-scope external-root decision. */
+export interface UpdateExternalRootDecisionMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_EXTERNAL_ROOT_DECISION;
+  path: string;
+  decision: ExternalRootDecision;
   scope: SettingWriteScope;
 }
 
@@ -2370,6 +2395,30 @@ export interface BatchApprovalResponseMessage {
   result: { approvedValues: string[]; deniedValues: string[] } | null;
 }
 
+/** Extension -> Webview: ask the connected client to choose one option. */
+export interface ShowChoiceRequestMessage {
+  type: typeof MESSAGE_TYPES.SHOW_CHOICE_REQUEST;
+  request: {
+    id: string;
+    title: string;
+    detail: string;
+    choices: { value: string; label: string }[];
+  };
+}
+
+/** Webview -> Extension: the selected option, or null when dismissed. */
+export interface ChoiceResponseMessage {
+  type: typeof MESSAGE_TYPES.CHOICE_RESPONSE;
+  id: string;
+  value: string | null;
+}
+
+export interface WorkflowExternalRootsApprovalRequiredMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED;
+  workflowId: string;
+  pendingRoots: string[];
+}
+
 // ============================================================================
 // HARNESS FILE MANAGER TYPES
 // ============================================================================
@@ -2586,6 +2635,8 @@ export type IncomingMessage =
   | SecretSetMessage
   | SecretDeletedMessage
   | ShowBatchApprovalRequestMessage
+  | ShowChoiceRequestMessage
+  | WorkflowExternalRootsApprovalRequiredMessage
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage

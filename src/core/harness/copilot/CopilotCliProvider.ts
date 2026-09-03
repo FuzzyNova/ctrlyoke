@@ -43,6 +43,7 @@ import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
+  PromptFile,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -222,6 +223,7 @@ export class CopilotCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -254,6 +256,7 @@ export class CopilotCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -352,7 +355,8 @@ export class CopilotCliProvider implements ICliProvider {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        workflowContext
       );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);

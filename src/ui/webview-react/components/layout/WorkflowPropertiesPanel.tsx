@@ -11,6 +11,7 @@ import type {
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
+import { TRUST_DECISIONS } from "@root/types/DashboardConstants";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -59,6 +60,7 @@ import {
   ScriptCommandEditor,
   AdditionalArgsEditor,
   KeyValueMapEditor,
+  TrustedRootsListEditor,
   BranchNameEditor,
   AnimatedSection,
   AutoResumeStatusRow,
@@ -82,6 +84,7 @@ import {
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
   WORKFLOW_EXECUTION_OUTCOMES,
+  SETTING_SCOPES,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
@@ -107,6 +110,23 @@ const SETTINGS_DRAWER_BREAKPOINT = 400;
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
 type ExecutionPropertyKey = (typeof EXECUTION_PROPERTY_KEYS)[number];
+const TRUSTED_ROOTS_MODES = {
+  INHERIT: "inherit",
+  NONE: "none",
+  CUSTOM: "custom",
+} as const;
+type TrustedRootsMode =
+  (typeof TRUSTED_ROOTS_MODES)[keyof typeof TRUSTED_ROOTS_MODES];
+
+function trustedRootsModeForValue(
+  value: WorkflowProperties["trustedExternalRoots"]
+): TrustedRootsMode {
+  return value === undefined
+    ? TRUSTED_ROOTS_MODES.INHERIT
+    : value === null
+      ? TRUSTED_ROOTS_MODES.NONE
+      : TRUSTED_ROOTS_MODES.CUSTOM;
+}
 
 function isExecutionPropertyKey(
   property: keyof WorkflowProperties
@@ -244,6 +264,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
     loadedWorkflows,
     activeWorkflowId,
   } = useUiStore();
+  const activeWorkflow = loadedWorkflows.find(
+    (workflow) => workflow.id === activeWorkflowId
+  );
+  const workflowFileName = useWorkflowStore((s) => s.fileName);
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isExternallyManaged =
@@ -356,6 +380,48 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveHooks = getEffectiveHooks();
   const effectivePriorContext = getEffectivePriorContext();
   const effectiveAdditionalArgs = getEffectiveAdditionalArgs();
+  const workflowSourcePath = activeWorkflow?.filePath ?? workflowFileName;
+  const workflowIdentity = useMemo(
+    () =>
+      globalSettings.workspaceRoot && workflowSourcePath
+        ? {
+            workspaceRoot: globalSettings.workspaceRoot,
+            workflowSourcePath,
+          }
+        : undefined,
+    [globalSettings.workspaceRoot, workflowSourcePath]
+  );
+  const liveTrustedExternalRoots = useMemo(() => {
+    const roots = globalSettings.externalFileRootsByScope;
+    if (!roots) {
+      return [];
+    }
+    const approvedWorkspaceRoots = roots.workspace
+      .filter((entry) => entry.decision === TRUST_DECISIONS.ALLOW)
+      .map((entry) => entry.path);
+    const seen = new Set<string>();
+    return [...roots.user, ...approvedWorkspaceRoots].filter((root) => {
+      const key = root.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [globalSettings.externalFileRootsByScope]);
+
+  const [trustedRootsMode, setTrustedRootsMode] = useState<TrustedRootsMode>(
+    trustedRootsModeForValue(workflowProperties.trustedExternalRoots)
+  );
+  const [trustedRootsInput, setTrustedRootsInput] = useState<string[]>(
+    workflowProperties.trustedExternalRoots ?? liveTrustedExternalRoots
+  );
+
+  useEffect(() => {
+    const authoredRoots = workflowProperties.trustedExternalRoots;
+    setTrustedRootsMode(trustedRootsModeForValue(authoredRoots));
+    setTrustedRootsInput(authoredRoots ?? liveTrustedExternalRoots);
+  }, [liveTrustedExternalRoots, workflowProperties.trustedExternalRoots]);
 
   const [worktreeMode, setWorktreeMode] = useState(effectiveWorktreeMode);
   const [worktreeBranchInput, setWorktreeBranchInput] = useState(
@@ -841,6 +907,64 @@ const WorkflowPropertiesPanelInner: React.FC<{
     },
     [syncWorkflowPropertiesForUndo, vscode]
   );
+
+  const handleTrustedRootsModeChange = useCallback(
+    (mode: string) => {
+      if (mode === TRUSTED_ROOTS_MODES.INHERIT) {
+        setTrustedRootsMode(TRUSTED_ROOTS_MODES.INHERIT);
+        setTrustedRootsInput(liveTrustedExternalRoots);
+        postWorkflowPropertiesUpdate({
+          trustedExternalRoots: undefined,
+        });
+        return;
+      }
+
+      if (mode === TRUSTED_ROOTS_MODES.NONE) {
+        setTrustedRootsMode(TRUSTED_ROOTS_MODES.NONE);
+        setTrustedRootsInput([]);
+        postWorkflowPropertiesUpdate({ trustedExternalRoots: null });
+        return;
+      }
+
+      const seededRoots =
+        workflowProperties.trustedExternalRoots ??
+        liveTrustedExternalRoots;
+      setTrustedRootsMode(TRUSTED_ROOTS_MODES.CUSTOM);
+      setTrustedRootsInput(seededRoots);
+      postWorkflowPropertiesUpdate({ trustedExternalRoots: seededRoots });
+    },
+    [
+      liveTrustedExternalRoots,
+      postWorkflowPropertiesUpdate,
+      workflowProperties.trustedExternalRoots,
+    ]
+  );
+
+  const handleTrustedRootAdd = useCallback(
+    (root: string) => {
+      const nextRoots = [...new Set([...trustedRootsInput, root])];
+      setTrustedRootsInput(nextRoots);
+      postWorkflowPropertiesUpdate({ trustedExternalRoots: nextRoots });
+    },
+    [postWorkflowPropertiesUpdate, trustedRootsInput]
+  );
+
+  const handleTrustedRootRemove = useCallback(
+    (root: string) => {
+      const nextRoots = trustedRootsInput.filter((entry) => entry !== root);
+      setTrustedRootsInput(nextRoots);
+      postWorkflowPropertiesUpdate({ trustedExternalRoots: nextRoots });
+    },
+    [postWorkflowPropertiesUpdate, trustedRootsInput]
+  );
+
+  const handleBrowseTrustedRoot = useCallback(() => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT,
+      scope: SETTING_SCOPES.WORKSPACE,
+      workflowIdentity,
+    });
+  }, [vscode, workflowIdentity]);
 
   const handleAgentChange = useCallback(
     (agent: string) => {
@@ -2235,6 +2359,41 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     id="settings-secrets-diagnostic"
                     diagnostics={unresolvedSecretDiagnostics}
                   />
+                </FormField>
+
+                <FormField
+                  label="Trusted External Roots"
+                  htmlFor="settings-trusted-external-roots-mode"
+                  description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
+                >
+                  <CustomSelect
+                    id="settings-trusted-external-roots-mode"
+                    value={trustedRootsMode}
+                    onChange={handleTrustedRootsModeChange}
+                    options={[
+                      {
+                        value: TRUSTED_ROOTS_MODES.INHERIT,
+                        label: `Inherit (${liveTrustedExternalRoots.length} roots)`,
+                      },
+                      {
+                        value: TRUSTED_ROOTS_MODES.NONE,
+                        label: "None",
+                      },
+                      {
+                        value: TRUSTED_ROOTS_MODES.CUSTOM,
+                        label: "Custom",
+                      },
+                    ]}
+                  />
+                  {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
+                    <TrustedRootsListEditor
+                      entries={trustedRootsInput.map((path) => ({ path }))}
+                      showDecisionStatus={false}
+                      onAdd={handleTrustedRootAdd}
+                      onBrowse={handleBrowseTrustedRoot}
+                      onRemove={handleTrustedRootRemove}
+                    />
+                  )}
                 </FormField>
 
                 {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}

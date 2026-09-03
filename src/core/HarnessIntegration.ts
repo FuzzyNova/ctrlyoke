@@ -39,6 +39,7 @@ import {
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -495,7 +496,8 @@ export abstract class HarnessIntegration {
   protected async buildPromptSections(
     prompt: PromptStep,
     resolvedAgent?: string,
-    resolvedSkills?: string[]
+    resolvedSkills?: string[],
+    workflowContext?: WorkflowContext
   ): Promise<PromptSections> {
     const rawPromptText = prompt.prompt.trim();
     let userPromptText = rawPromptText;
@@ -520,11 +522,11 @@ export abstract class HarnessIntegration {
           workspaceRoot,
           additionalTrustedRoots: [
             ...this.getExecutionWorkspaceRoots(),
-            ...this.getApprovedExternalRoots(),
+            ...this.getApprovedExternalRoots(workflowContext),
           ],
           namedRoots: this.getExecutionNamedWorkspaceRoots(),
           effectiveAbsolute,
-          sourceDefinitionDir: this.getSourceDefinitionDir(),
+          sourceDefinitionDir: this.getSourceDefinitionDir(workflowContext),
           allowWorkflowRelativeReferences:
             this.allowsWorkflowRelativeReferences(),
           sourceCheckoutRoot: this.getExecutionSourceCheckoutRoot(),
@@ -877,8 +879,30 @@ export abstract class HarnessIntegration {
     return this.getNamedWorkspaceRoots();
   }
 
-  protected getApprovedExternalRoots(): string[] {
-    return this.getEffectiveApprovedExternalFileRoots();
+  protected getApprovedExternalRoots(
+    workflowContext?: WorkflowContext
+  ): string[] {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return [];
+    }
+
+    const workflowRoots = workflowContext
+      ? CliProviderUtils.getWorkflowExternalRootsContext(
+          workspaceRoot,
+          workflowContext
+        )
+      : undefined;
+    return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+      workflowRoots?.workspaceIdentity ??
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+      workflowRoots
+        ? {
+            identity: workflowRoots.identity,
+            declaredRoots: workflowRoots.declaredRoots,
+          }
+        : undefined
+    );
   }
 
   /** Semantic definition path used by execution-side reference expansion. */
@@ -895,13 +919,15 @@ export abstract class HarnessIntegration {
    * Return the trusted directory containing the authored workflow definition.
    * The run working copy is intentionally never used as this source.
    */
-  protected getSourceDefinitionDir(): string | undefined {
+  protected getSourceDefinitionDir(
+    workflowContext?: WorkflowContext
+  ): string | undefined {
     return getTrustedSourceDefinitionDir(
       this.getExecutionSourceDefinitionPath(),
       Array.from(
         new Set([
           ...this.getExecutionWorkspaceRoots(),
-          ...this.getApprovedExternalRoots(),
+          ...this.getApprovedExternalRoots(workflowContext),
         ])
       )
     );

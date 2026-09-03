@@ -10,7 +10,10 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
     // was removed entirely (it now goes through UserInteractionPort), so its
     // one showInformationMessage() call — and the file's allowlist entry —
     // are both gone rather than migrated.
-    boundary: 49,
+    // Shrank from 49 to 46: the host-neutral trusted roots approval flow
+    // moved ExternalFileTrustPrompt.ts's three direct show*Message calls
+    // behind UserInteractionPort too.
+    boundary: 46,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",

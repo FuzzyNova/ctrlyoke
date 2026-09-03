@@ -1,4 +1,5 @@
 import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { UserInteractionPort } from "./UserInteractionPort";
 
 /**
  * The originating client's scope for a single inbound webview message.
@@ -25,15 +26,19 @@ export interface WebviewClientContext {
   readonly postMessage: PostMessageFn;
   /** Convenience wrapper over {@link postMessage}. */
   emit(message: unknown): void;
+  /** Host-neutral prompts routed to this client's dashboard. */
+  readonly interactionPort?: UserInteractionPort;
 }
 
 export function createWebviewClientContext(
   clientId: string,
-  postMessage: PostMessageFn
+  postMessage: PostMessageFn,
+  interactionPort?: UserInteractionPort
 ): WebviewClientContext {
   return {
     clientId,
     postMessage,
     emit: (message) => postMessage(message),
+    interactionPort,
   };
 }

@@ -345,8 +345,13 @@ export class CliIntegration extends HarnessIntegration {
     }));
   }
 
-  protected override getApprovedExternalRoots(): string[] {
-    return [...this.executionWorkspace.approvedExternalRoots];
+  protected override getApprovedExternalRoots(
+    workflowContext?: WorkflowContext
+  ): string[] {
+    if (!workflowContext) {
+      return [...this.executionWorkspace.approvedExternalRoots];
+    }
+    return super.getApprovedExternalRoots(workflowContext);
   }
 
   protected override getExecutionSourceDefinitionPath(): string | undefined {
@@ -836,8 +841,18 @@ export class CliIntegration extends HarnessIntegration {
     const promptPreparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () =>
         ConfigurationUtils.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume(),
-      buildPromptSections: (prompt, resolvedAgent, resolvedSkills) =>
-        this.buildPromptSections(prompt, resolvedAgent, resolvedSkills),
+      buildPromptSections: (
+        prompt,
+        resolvedAgent,
+        resolvedSkills,
+        workflowContext
+      ) =>
+        this.buildPromptSections(
+          prompt,
+          resolvedAgent,
+          resolvedSkills,
+          workflowContext
+        ),
       extractLeadingSlashCommand: (promptText) =>
         this.extractLeadingSlashCommand(promptText),
       isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
@@ -922,7 +937,8 @@ export class CliIntegration extends HarnessIntegration {
       provider: this.provider,
       getWorkspaceRoot: () => this.getExecutionRoot(),
       getWorkspaceRoots: () => this.getExecutionWorkspaceRoots(),
-      getApprovedExternalRoots: () => this.getApprovedExternalRoots(),
+      getApprovedExternalRoots: (workflowContext) =>
+        this.getApprovedExternalRoots(workflowContext),
       getStateRoot: () => this.getStateRoot(),
       getExtensionPath: () => this.platform.getExtensionPath(),
       getExecutionMode: () => this.getExecutionMode(),

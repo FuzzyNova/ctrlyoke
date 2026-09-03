@@ -204,6 +204,12 @@ function createHost(
   };
   internal.resolveExternalExecutionForPath = (filePath: string) =>
     resolver.resolve(filePath);
+  // addLocalExecution's instance double below only implements the ownership
+  // surface this suite exercises (id/getSummary/getQueueState/setState/dispose),
+  // not the full WorkflowInstance surface the external-roots approval guard
+  // reads (promptQueue, getCurrentPromptFilePath). Roots approval itself is
+  // covered separately in WorkflowOrchestrator.test.ts, so stub it here.
+  internal.approvePendingWorkflowExternalRootsForClient = async () => [];
 
   return {
     orchestrator,

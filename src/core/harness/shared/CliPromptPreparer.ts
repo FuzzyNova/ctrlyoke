@@ -93,7 +93,8 @@ export interface CliPromptPreparerDeps {
   buildPromptSections: (
     prompt: PromptStep,
     resolvedAgent?: string,
-    resolvedSkills?: string[]
+    resolvedSkills?: string[],
+    workflowContext?: WorkflowContext
   ) => Promise<PromptSections>;
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
@@ -269,7 +270,8 @@ export class CliPromptPreparer {
     const sections = await this.deps.buildPromptSections(
       promptForPreparation,
       attachmentResolution.agent,
-      effectiveSkillResolution
+      effectiveSkillResolution,
+      workflowContext
     );
     // A skipped reference previously vanished from the outgoing prompt with
     // only a debug/warn log line — surface it as a real diagnostic so

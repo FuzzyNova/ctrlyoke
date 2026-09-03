@@ -26,6 +26,7 @@ import {
   type StatusLineTrackingHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
   NETWORK_INTERFACE_FAMILIES,
+  TRUST_DECISIONS,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -33,6 +34,11 @@ import {
   CONFIG_SCOPE,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+  type ExternalRootTrustDecision,
+} from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
   getCliSupportedModelIdsSync,
@@ -102,6 +108,11 @@ export interface HarnessStatus {
  * Callback for posting messages to the webview.
  */
 export type PostMessageFn = (message: any) => void;
+
+export interface WorkflowExternalRootIdentity {
+  workspaceRoot: string;
+  workflowSourcePath: string;
+}
 
 type StatuslineManagerFactory = (
   harnessId: StatusLineTrackingHarnessId
@@ -636,6 +647,14 @@ export class WebviewSettingsSync {
       clientId
     );
 
+    const trustedExternalRoots = properties[PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS];
+    if (Array.isArray(trustedExternalRoots)) {
+      await this.recordInteractiveWorkflowExternalRootDecision(
+        clientId,
+        trustedExternalRoots
+      );
+    }
+
     await this.sendWorkflowPropertiesToSettings(postMessage, clientId);
     return createdWorkingFile;
   }
@@ -893,6 +912,7 @@ export class WebviewSettingsSync {
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,
       worktree: ConfigurationUtils.getDefaultWorktree(),
+      externalFileRootsByScope: this.buildExternalFileRootsByScope(),
       worktrees: {
         root: ConfigurationUtils.getWorktreeRoot() ?? "",
       },
@@ -1089,6 +1109,7 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          externalFileRootsByScope: this.buildExternalFileRootsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: isMultiRootWorkspace(),
           licenseAccess: this.licenseAccess,
@@ -1354,7 +1375,36 @@ export class WebviewSettingsSync {
       );
       return;
     }
+    const currentWorkspaceRoots =
+      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      scope === CONFIG_SCOPE.WORKSPACE
+        ? ConfigurationUtils.getAllowedExternalFileRootsByScope().workspace
+        : [];
     await configService.set(path, value, scope);
+    if (
+      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      scope === CONFIG_SCOPE.WORKSPACE &&
+      Array.isArray(value)
+    ) {
+      const currentCanonicalRoots = new Set(
+        currentWorkspaceRoots.map((root) =>
+          ExternalRootsTrustStore.canonicalizeRoot(root)
+        )
+      );
+      const addedRoots = value.filter(
+        (root): root is string =>
+          typeof root === "string" &&
+          root.trim().length > 0 &&
+          !currentCanonicalRoots.has(
+            ExternalRootsTrustStore.canonicalizeRoot(root)
+          )
+      );
+      await this.recordInteractiveExternalRootDecision(
+        scope,
+        addedRoots,
+        TRUST_DECISIONS.ALLOW
+      );
+    }
     await this.handleGlobalSettingsLoadRequest(postMessage);
     this.emitMessage(
       {
@@ -1367,15 +1417,40 @@ export class WebviewSettingsSync {
     );
   }
 
+  async handleUpdateExternalRootDecision(
+    scope: SettingWriteScope,
+    root: string,
+    decision: ExternalRootTrustDecision,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    if (scope !== CONFIG_SCOPE.WORKSPACE) {
+      return;
+    }
+    if (!root.trim()) {
+      throw new Error("External root path cannot be empty.");
+    }
+    if (
+      decision !== TRUST_DECISIONS.ALLOW &&
+      decision !== TRUST_DECISIONS.DENY
+    ) {
+      throw new Error(`Unsupported external root decision: ${decision}`);
+    }
+    await this.recordInteractiveExternalRootDecision(scope, [root], decision);
+    await this.handleGlobalSettingsLoadRequest(postMessage);
+  }
+
   /**
    * Handle BROWSE_AND_ADD_EXTERNAL_ROOT: open a native folder picker and, if
-   * the user selects a folder, append it to `permissions.allowedExternalFileRoots`
-   * for the given scope (deduping). No-op on cancel. See
+   * the user selects a folder, append it to either
+   * `permissions.allowedExternalFileRoots` or the active workflow's
+   * `trustedExternalRoots` (deduping). No-op on cancel. See
    * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
    */
   async handleBrowseAndAddExternalRoot(
     scope: SettingWriteScope,
-    postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage,
+    workflowIdentity?: WorkflowExternalRootIdentity,
+    clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: false,
@@ -1388,10 +1463,63 @@ export class WebviewSettingsSync {
     }
 
     const newRoot = uris[0].fsPath;
+    if (workflowIdentity) {
+      const orchestrator = this.getOrchestrator();
+      const workflow = orchestrator
+        ?.getActivePromptQueue(clientId)
+        ?.getWorkflowFile();
+      if (!orchestrator || !workflow) {
+        throw new Error(
+          "Cannot add a trusted external root without an active workflow."
+        );
+      }
+
+      const currentRoots =
+        workflow.trustedExternalRoots === undefined
+          ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+              ExternalRootsTrustStore.canonicalizeRoot(
+                workflowIdentity.workspaceRoot
+              )
+            )
+          : (workflow.trustedExternalRoots ?? []);
+      const canonicalNewRoot =
+        ExternalRootsTrustStore.canonicalizeRoot(newRoot);
+      if (
+        currentRoots.some(
+          (root) =>
+            ExternalRootsTrustStore.canonicalizeRoot(root) === canonicalNewRoot
+        )
+      ) {
+        return;
+      }
+
+      const nextRoots = [...currentRoots, newRoot];
+      await orchestrator.updateWorkflowTrustedExternalRootsForClient(
+        clientId,
+        nextRoots
+      );
+      await externalRootsTrustStore.setDecisions(
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          workflowIdentity.workspaceRoot,
+          workflowIdentity.workflowSourcePath
+        ),
+        [newRoot],
+        TRUST_DECISIONS.ALLOW
+      );
+      await this.sendWorkflowPropertiesToSettings(postMessage, clientId);
+      return;
+    }
+
     const { user, workspace } =
       ConfigurationUtils.getAllowedExternalFileRootsByScope();
     const current = scope === CONFIG_SCOPE.WORKSPACE ? workspace : user;
-    if (current.includes(newRoot)) {
+    const canonicalNewRoot = ExternalRootsTrustStore.canonicalizeRoot(newRoot);
+    if (
+      current.some(
+        (root) =>
+          ExternalRootsTrustStore.canonicalizeRoot(root) === canonicalNewRoot
+      )
+    ) {
       return;
     }
 
@@ -1400,7 +1528,81 @@ export class WebviewSettingsSync {
       [...current, newRoot],
       scope
     );
+    await this.recordInteractiveExternalRootDecision(
+      scope,
+      [newRoot],
+      TRUST_DECISIONS.ALLOW
+    );
     await this.handleGlobalSettingsLoadRequest(postMessage);
+  }
+
+  private async recordInteractiveWorkflowExternalRootDecision(
+    clientId: string,
+    roots: readonly string[]
+  ): Promise<void> {
+    if (roots.length === 0) {
+      return;
+    }
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    const orchestrator = this.getOrchestrator();
+    const workflowSourcePath =
+      orchestrator &&
+      typeof orchestrator.getViewSourceDefinitionPath === "function"
+        ? await orchestrator.getViewSourceDefinitionPath(clientId)
+        : undefined;
+    if (!workspaceRoot || !workflowSourcePath) {
+      Log.debug(
+        `Unable to record workflow external-root decisions for ${clientId}: workflow identity unavailable`
+      );
+      return;
+    }
+    await externalRootsTrustStore.setDecisions(
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        workspaceRoot,
+        workflowSourcePath
+      ),
+      roots,
+      TRUST_DECISIONS.ALLOW
+    );
+  }
+
+  private async recordInteractiveExternalRootDecision(
+    scope: SettingWriteScope,
+    roots: readonly string[],
+    decision: ExternalRootTrustDecision
+  ): Promise<void> {
+    if (
+      scope !== CONFIG_SCOPE.WORKSPACE ||
+      roots.length === 0 ||
+      !vscode.workspace.workspaceFolders?.length
+    ) {
+      return;
+    }
+    await externalRootsTrustStore.setDecisions(
+      ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot()),
+      roots,
+      decision
+    );
+  }
+
+  private buildExternalFileRootsByScope() {
+    const { user, workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    const workspaceIdentity = vscode.workspace.workspaceFolders?.length
+      ? ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot())
+      : undefined;
+
+    return {
+      user,
+      workspace: workspace.map((root) => {
+        const decision = workspaceIdentity
+          ? externalRootsTrustStore.getDecision(workspaceIdentity, root)
+          : undefined;
+        return decision ? { path: root, decision } : { path: root };
+      }),
+    };
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {

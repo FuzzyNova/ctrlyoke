@@ -118,6 +118,7 @@ export type CodeMirrorLanguageId =
 
 /** VS Code URI schemes used by extension-host integrations. */
 export const VSCODE_URI_SCHEMES = {
+  FILE: "file",
   OUTPUT: "output",
 } as const;
 
@@ -284,6 +285,7 @@ export const MESSAGE_TYPES = {
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+  UPDATE_EXTERNAL_ROOT_DECISION: "updateExternalRootDecision", // Webview -> Extension: change a workspace-scope external-root trust decision
   DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
   SET_STATUS_LINE_FORMAT_MODE: "setStatusLineFormatMode", // Webview -> Extension: set shared/per-harness statusline format mode
 
@@ -300,6 +302,10 @@ export const MESSAGE_TYPES = {
   // extension awaits BATCH_APPROVAL_RESPONSE before continuing.
   SHOW_BATCH_APPROVAL_REQUEST: "showBatchApprovalRequest",
   BATCH_APPROVAL_RESPONSE: "batchApprovalResponse",
+  SHOW_CHOICE_REQUEST: "showChoiceRequest",
+  CHOICE_RESPONSE: "choiceResponse",
+  WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED:
+    "workflowExternalRootsApprovalRequired",
 
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
@@ -1193,6 +1199,12 @@ export const PREVIEW_PERMISSION_ACTIONS = {
 export const TRUST_DECISIONS = {
   ALLOW: "allow",
   DENY: "deny",
+} as const;
+
+export const EXTERNAL_FILE_TRUST_SCOPES = {
+  USER: "user",
+  WORKSPACE: "workspace",
+  WORKFLOW: "workflow",
 } as const;
 
 export const PREVIEW_PERMISSION_RULE_STATUSES = {
@@ -2631,6 +2643,7 @@ export const PROMPT_PROPERTIES = {
   FINAL_STEP: "finalStep",
   VARS: "vars",
   WORKTREE: "worktree",
+  TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
 
   // Step type discriminant
   STEP_TYPE: "type",
@@ -2707,6 +2720,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
   PROMPT_PROPERTIES.WORKTREE,
+  PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS,
 ] as const;
 
 export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];

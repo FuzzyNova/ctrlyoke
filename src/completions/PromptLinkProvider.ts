@@ -279,7 +279,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       ? new vscode.DocumentLink(range, vscode.Uri.file(decision.normalizedPath))
       : new vscode.DocumentLink(
           range,
-          this.buildTrustCommandUri({ path: decision.normalizedPath })
+          this.buildTrustCommandUri({
+            path: decision.normalizedPath,
+            workflowSourcePath: document.fileName,
+          })
         );
     link.tooltip = decision.allowed
       ? `Open prompt file ${trimmedPath}`
@@ -401,6 +404,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
       const commandUri = this.buildTrustCommandUri({
         path: decision.normalizedPath,
+        workflowSourcePath: document.fileName,
       });
       const link = new vscode.DocumentLink(range, commandUri);
       link.tooltip = `Trust and open ${relativePath}`;
@@ -471,6 +475,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const trustCommandUri = this.buildTrustCommandUri({
         path: decision.normalizedPath,
         isDirectory: true,
+        workflowSourcePath: document.fileName,
       });
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and reveal ${relativePath} in File Explorer`;
@@ -547,6 +552,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         path: decision.normalizedPath,
         startLine,
         endLine,
+        workflowSourcePath: document.fileName,
       });
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and open ${relativePath} at lines ${startLine}-${endLine}`;
@@ -673,6 +679,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         path: decision.normalizedPath,
         startLine,
         endLine,
+        workflowSourcePath: document.fileName,
       });
       const link = new vscode.DocumentLink(range, trustCommandUri);
       link.tooltip = `Trust and go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;

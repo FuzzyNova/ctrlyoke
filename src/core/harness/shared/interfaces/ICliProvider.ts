@@ -13,6 +13,7 @@ export type {
 import type { BaseCliEvent, ILogParser } from "./ILogParser";
 import type {
   HookEvent,
+  PromptFile,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -209,6 +210,7 @@ export interface ICliProvider {
       allPrompts: WorkflowStep[];
       filePath?: string;
       stateRoot?: string;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -231,6 +233,7 @@ export interface ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]

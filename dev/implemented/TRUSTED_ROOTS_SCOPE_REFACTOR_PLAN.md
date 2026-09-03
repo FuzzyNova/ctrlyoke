@@ -1,14 +1,29 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-02):** Proposed.
+**Status (2026-09-03):** Implemented — Phases 1-5 complete and verified.
+
+**Final implementation record (2026-09-03):** Stages 1-5 in
+`TRUSTED_ROOTS_STAGING_PLAN.md` shipped across commits `416924b7`,
+`8565620a`, `b79bc8f5`, `d7cd96c4`, `8384c6a7`, `40e38aa2`, and
+`a310b9b4`. Stage 4 was delivered in its planned 4a-4c sub-stages, using the
+host-neutral `UserInteractionPort` flow and `ChoiceModal`; the native OS
+folder picker remains the deliberate exception described below. No work from
+Phases 1-5 was deferred or skipped. The remaining standalone WebSocket
+refactor in `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` is unrelated to this plan
+and is not part of its completion.
+
+**Implementation note (2026-09-03):** The current schema's two existing
+workflow-only denial clauses are on `workflowStep` and
+`promptRuntimeMetadata` (rather than two separate workflowStep branches);
+Phase 1 adds the `trustedExternalRoots` denial alongside both.
 
 **Related plans:**
 
-- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](../implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
+- [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —
   the user- and workspace-scope trust model this plan adds a third tier to.
   Read that plan first; this doc does not repeat its security model, only
   extends it.
-- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
+- [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
   owns the general native-vs-built-in-modal policy (decided 2026-09-02): this
   plan's approval UI is built **once**, host-neutral, from the start — there
   is no VS Code-native interim state and no separate browser-only dialog to
@@ -344,7 +359,7 @@ Add to the `workflowOnlyProperties` definition (alongside `worktree`, `vars`)
       "description": "Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all."
     }
   ],
-  "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
+  "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/implemented/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
 }
 ```
 
@@ -682,51 +697,51 @@ browser gap that no longer exists once this section's design ships.
 
 ### Phase 2: CLI
 
-1. Add the `cli.ts` fail-closed check for workflow-scope pending roots.
-2. Add `trust-workflow-external-roots` command and its help text.
-3. Tests: pending roots block `ctrlyoke run`; the trust command clears them;
-   `--yes` automation path.
+1. ~~Add the `cli.ts` fail-closed check for workflow-scope pending roots.~~
+2. ~~Add `trust-workflow-external-roots` command and its help text.~~
+3. ~~Tests: pending roots block `ctrlyoke run`; the trust command clears them;
+   `--yes` automation path.~~
 
 ### Phase 3: Approval UI (VS Code panel + browser, one implementation)
 
-1. Migrate `promptBatchApprovalForPendingWorkspaceExternalRoots`'s
+1. ~~Migrate `promptBatchApprovalForPendingWorkspaceExternalRoots`'s
    `showQuickPick` call to the `UserInteractionPort` pattern (matching
    `promptBatchApprovalForPendingWorkspaceSecretGrants`); extract the shared
    `promptBatchApprovalForPendingRoots` helper; add the workflow-scope call
-   site triggered on workflow load, gating "Run".
-2. Add `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
+   site triggered on workflow load, gating "Run".~~
+2. ~~Add `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
    support + the new choice modal; wire the scope-choice options into
    `confirmExternalFileTrust`; thread "current workflow file, if any" into
    its call sites in `PromptEditorSupportService.ts` and
    `PromptLinkProvider.ts` so "Trust for this workflow" can be offered where
-   applicable and omitted where there is no active workflow context.
-3. Add the panel-reveal-then-await-READY step to the two non-dashboard call
+   applicable and omitted where there is no active workflow context.~~
+3. ~~Add the panel-reveal-then-await-READY step to the two non-dashboard call
    sites (`extension.ts`'s `ctrlyoke.confirmExternalFileTrust` command; the
    four `ContextMenuReferenceCommands.ts` commands once
    `TRUSTED_ROOTS_STAGING_PLAN.md` Stage 1 lands) before requesting a prompt
-   through the port.
-4. Build `TrustedRootsListEditor.tsx` (see "Shared control" above),
+   through the port.~~
+4. ~~Build `TrustedRootsListEditor.tsx` (see "Shared control" above),
    including its decision-status badges, revoke control, and
    interactive-add-implies-allow behavior on both the native-picker and
    manual-path add paths. Replace `AdvancedPermissionsSection.tsx`'s raw
    textarea with it directly (`showDecisionStatus` true at workspace scope,
    false at user scope) — this also fixes the existing workspace-scope gap
    where adding via "Add folder…" or the old textarea didn't record an
-   immediate decision (see "Declared vs. approved" above).
-5. Add the Inherit/None/Custom-wrapped `trustedExternalRoots` field to
+   immediate decision (see "Declared vs. approved" above).~~
+5. ~~Add the Inherit/None/Custom-wrapped `trustedExternalRoots` field to
    `WorkflowPropertiesPanel.tsx` (below Secrets, above Allowed Tools — see
    "UI surfaces" above), rendering `TrustedRootsListEditor` in Custom mode
    with the seed-on-switch behavior. Extend
    `WebviewSettingsSync.handleBrowseAndAddExternalRoot` with the optional
    workflow-identity parameter needed for the workflow-scope "Add folder…"
-   path.
-6. Add `trustedExternalRoots` to `schemaUiPropertyRoundTrip.integration.test.ts`'s
+   path.~~
+6. ~~Add `trustedExternalRoots` to `schemaUiPropertyRoundTrip.integration.test.ts`'s
    `workflowOnlyProperties` matrix (mapping it to the new field's element id,
    alongside the existing `worktree`/`vars` entries) and to
    `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md` — this suite enumerates
    every `workflowOnlyProperties` schema key and fails closed if a new one
    has no mapped UI element and persistence round-trip, so this is not
-   optional cleanup.
+   optional cleanup.~~
 
 ### Phase 4: Harness plumbing
 
@@ -745,11 +760,22 @@ browser gap that no longer exists once this section's design ships.
    `trustedExternalRoots: null` receives no external `--add-dir` arguments
    at all, even when the user's global list is non-empty.
 
+**Completed 2026-09-03.**
+
 ### Phase 5: Documentation
 
 Document the three-tier model, the workflow-file abuse case and why it's
 mitigated, and the new CLI command, alongside the existing
-`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` documentation obligations.
+`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` documentation obligations. This is
+complete in the VitePress user documentation:
+
+- [`docs/reference/settings.md`](../../docs/reference/settings.md) documents
+  user/workspace roots and the link-trust setting.
+- [`docs/workflows/yaml-format.md`](../../docs/workflows/yaml-format.md)
+  documents `trustedExternalRoots`, its inherit/replace/disable semantics, and
+  the separate approval required for shared workflow files.
+- [`docs/cli/ctrlyoke.md`](../../docs/cli/ctrlyoke.md) documents
+  `ctrlyoke trust-workflow-external-roots <file>` and its `--yes` option.
 
 ## Files Likely Changed
 

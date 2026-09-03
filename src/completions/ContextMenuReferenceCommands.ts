@@ -7,7 +7,10 @@ import {
   buildSymbolReference,
 } from "./ContextReferenceBuilder";
 import { toWorkspaceRelativeReferencePath } from "./WorkspaceReferencePaths";
-import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
+import {
+  PROMPT_EDITOR_INSERT_MODES,
+  VSCODE_URI_SCHEMES,
+} from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import {
@@ -16,6 +19,13 @@ import {
 } from "./CompletionHelpers";
 import { writeOutputSnapshotAttachment } from "../ui/OutputSnapshotService";
 import type { OutputCaptureEntry } from "./OutputCaptureCache";
+import { confirmExternalFileTrust } from "../ui/ExternalFileTrustPrompt";
+import type { UserInteractionPort } from "../ui/UserInteractionPort";
+import { NullUserInteractionPort } from "../ui/UserInteractionPort";
+import { getVsCodeTrustedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
+import { evaluateFileAccess } from "../utils/FileAccessPolicy";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 
 interface TimelineItemLike {
   id?: unknown;
@@ -31,10 +41,17 @@ export interface ContextMenuPromptEditorInsertSink {
   enqueuePromptEditorInsert(request: PromptEditorInsertRequest): Promise<void>;
 }
 
+type WorkspaceRelativeReferencePathResolver = (
+  uri: vscode.Uri
+) => string | null;
+
 export class ContextMenuReferenceCommands {
   constructor(
     private readonly webviewProvider: ContextMenuPromptEditorInsertSink,
-    private readonly getWorkspaceRoot: () => string
+    private readonly getWorkspaceRoot: () => string,
+    private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath,
+    private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> =
+      async () => new NullUserInteractionPort()
   ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
@@ -42,15 +59,15 @@ export class ContextMenuReferenceCommands {
       return;
     }
 
-    const relativePath = toWorkspaceRelativeReferencePath(uri);
-    if (!relativePath) {
+    const referencePath = await this.resolveReferencePath(uri);
+    if (!referencePath) {
       void vscode.window.showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
       return;
     }
 
-    await this.insertReferences([buildFileReference(relativePath)]);
+    await this.insertReferences([buildFileReference(referencePath)]);
   }
 
   async addDirectoryToPromptEditor(uri: vscode.Uri): Promise<void> {
@@ -58,15 +75,15 @@ export class ContextMenuReferenceCommands {
       return;
     }
 
-    const relativePath = toWorkspaceRelativeReferencePath(uri);
-    if (!relativePath) {
+    const referencePath = await this.resolveReferencePath(uri);
+    if (!referencePath) {
       void vscode.window.showWarningMessage(
         "ctrlyoke: Selected directory is outside the workspace."
       );
       return;
     }
 
-    await this.insertReferences([buildDirectoryReference(relativePath)]);
+    await this.insertReferences([buildDirectoryReference(referencePath)]);
   }
 
   async addSelectionToPromptEditor(uri: vscode.Uri): Promise<void> {
@@ -74,8 +91,8 @@ export class ContextMenuReferenceCommands {
       return;
     }
 
-    const relativePath = toWorkspaceRelativeReferencePath(uri);
-    if (!relativePath) {
+    const referencePath = await this.resolveReferencePath(uri);
+    if (!referencePath) {
       void vscode.window.showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
@@ -93,7 +110,7 @@ export class ContextMenuReferenceCommands {
       editor && !editor.selection.isEmpty ? editor.selection.end.line + 1 : 1;
 
     await this.insertReferences([
-      buildSelectionReference(relativePath, startLine, endLine),
+      buildSelectionReference(referencePath, startLine, endLine),
     ]);
   }
 
@@ -105,8 +122,8 @@ export class ContextMenuReferenceCommands {
       return;
     }
 
-    const relativePath = toWorkspaceRelativeReferencePath(uri);
-    if (!relativePath) {
+    const referencePath = await this.resolveReferencePath(uri);
+    if (!referencePath) {
       void vscode.window.showWarningMessage(
         "ctrlyoke: Selected file is outside the workspace."
       );
@@ -122,15 +139,65 @@ export class ContextMenuReferenceCommands {
       1,
       lineNumber ?? (editor?.selection.active.line ?? 0) + 1
     );
-    const symbolReference = await this.tryBuildSymbolReference(uri, targetLine);
+    const symbolReference = await this.tryBuildSymbolReference(
+      uri,
+      targetLine,
+      referencePath
+    );
     if (symbolReference) {
       await this.insertReferences([symbolReference]);
       return;
     }
 
     await this.insertReferences([
-      buildSelectionReference(relativePath, targetLine, targetLine),
+      buildSelectionReference(referencePath, targetLine, targetLine),
     ]);
+  }
+
+  /**
+   * Resolve a context-menu target to the reference path that may be inserted.
+   * Workspace targets keep the existing relative-reference behavior. External
+   * targets use an absolute path only when the same effective external-root
+   * policy used by file-link flows allows it, or after the shared trust prompt
+   * grants access.
+   */
+  private async resolveReferencePath(
+    uri: vscode.Uri
+  ): Promise<string | undefined> {
+    const relativePath = this.workspaceRelativeReferencePathResolver(uri);
+    if (relativePath) {
+      return relativePath;
+    }
+
+    if (uri.scheme !== VSCODE_URI_SCHEMES.FILE || !uri.fsPath) {
+      return undefined;
+    }
+
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return undefined;
+    }
+
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const decision = evaluateFileAccess(uri.fsPath, {
+      workspaceRoots: getVsCodeTrustedWorkspaceRoots(),
+      approvedExternalRoots:
+        ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+          workspaceIdentity
+        ),
+    });
+    if (decision.allowed) {
+      return uri.fsPath;
+    }
+
+    const port = await this.prepareTrustPrompt();
+    return (await confirmExternalFileTrust(uri.fsPath, {
+      port,
+      workspaceRoot,
+    }))
+      ? uri.fsPath
+      : undefined;
   }
 
   async addOutputSelectionToPromptEditor(uri?: vscode.Uri): Promise<void> {
@@ -248,7 +315,8 @@ export class ContextMenuReferenceCommands {
 
   private async tryBuildSymbolReference(
     uri: vscode.Uri,
-    lineNumber: number
+    lineNumber: number,
+    referencePath: string
   ): Promise<string | undefined> {
     try {
       const symbols = (await vscode.commands.executeCommand(
@@ -265,13 +333,8 @@ export class ContextMenuReferenceCommands {
         return undefined;
       }
 
-      const relativePath = toWorkspaceRelativeReferencePath(uri);
-      if (!relativePath) {
-        return undefined;
-      }
-
       return buildSymbolReference(
-        relativePath,
+        referencePath,
         symbol.name,
         symbol.range.start.line + 1,
         symbol.range.end.line + 1,

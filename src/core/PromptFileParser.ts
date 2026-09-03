@@ -23,6 +23,17 @@ import {
 } from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
 
+/**
+ * Resolve the authored workflow path used for stable identity. Working files
+ * retain the source path in `originalFile`; parsed files use their own path.
+ */
+export function getAuthoredSourcePath(
+  parsedFilePath: string,
+  originalFile?: string
+): string {
+  return originalFile ?? parsedFilePath;
+}
+
 export class PromptFileParser {
   private ajv = new Ajv({ allowUnionTypes: true });
   private promptSchema: any;

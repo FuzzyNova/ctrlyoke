@@ -87,6 +87,7 @@ import type { LicenseService } from "../license/LicenseService";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
@@ -136,6 +137,7 @@ import {
   type DashboardClient,
 } from "../ui/DashboardBroadcastHub";
 import { promptBatchApprovalForPendingWorkspaceSecretGrants } from "../ui/SecretGrantsTrustPrompt";
+import { promptBatchApprovalForPendingWorkflowExternalRoots } from "../ui/ExternalFileTrustPrompt";
 import {
   NullUserInteractionPort,
   type UserInteractionPort,
@@ -751,8 +753,16 @@ export class WorkflowOrchestrator {
     const instance = this.buildWorkflowInstance();
     this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     this.instances.set(instance.id, instance);
+    let pendingWorkflowExternalRoots: string[] = [];
     if (_filePath) {
       await instance.loadPromptFile(_filePath);
+      pendingWorkflowExternalRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          this.PANEL_CLIENT_ID,
+          undefined,
+          undefined,
+          false
+        );
     }
 
     // Deliver full state to the panel via per-client replay (sends ACTIVE_WORKFLOW_CHANGED first,
@@ -763,6 +773,14 @@ export class WorkflowOrchestrator {
         instance.id,
         this.storedPanelSend,
         this.PANEL_CLIENT_ID
+      );
+    }
+    if (_filePath && this.storedPanelSend) {
+      this.emitWorkflowExternalRootsApprovalState(
+        this.PANEL_CLIENT_ID,
+        instance.id,
+        pendingWorkflowExternalRoots,
+        this.storedPanelSend
       );
     }
 
@@ -1185,6 +1203,7 @@ export class WorkflowOrchestrator {
        * and causes a visible output flash.
        */
       skipReplay?: boolean;
+      interactionPort?: UserInteractionPort;
     }
   ): Promise<void> {
     // Parse working file path to get workflowId (used for external session lookup)
@@ -1198,9 +1217,21 @@ export class WorkflowOrchestrator {
       // setViewedWorkflowId is normally called inside replayWorkflowStateTo; call
       // it explicitly here so the viewer registry stays consistent when skipping.
       this.setViewedWorkflowId(clientId, workflowId);
+      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        options?.interactionPort,
+        false
+      );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(workflowId, send, clientId);
       }
+      this.emitWorkflowExternalRootsApprovalState(
+        clientId,
+        workflowId,
+        pendingRoots,
+        send
+      );
       return;
     }
 
@@ -1210,9 +1241,21 @@ export class WorkflowOrchestrator {
     // converts an actively external RUNNING file to a VS Code instance.
     if (await this.ensureExternalRunWatchSession(filePath)) {
       this.setViewedWorkflowId(clientId, workflowId);
+      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        options?.interactionPort,
+        false
+      );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(workflowId, send, clientId);
       }
+      this.emitWorkflowExternalRootsApprovalState(
+        clientId,
+        workflowId,
+        pendingRoots,
+        send
+      );
       return;
     }
 
@@ -1233,9 +1276,21 @@ export class WorkflowOrchestrator {
     );
     if (existing) {
       this.setViewedWorkflowId(clientId, existing.id);
+      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        options?.interactionPort,
+        false
+      );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(existing.id, send, clientId);
       }
+      this.emitWorkflowExternalRootsApprovalState(
+        clientId,
+        existing.id,
+        pendingRoots,
+        send
+      );
       return;
     }
 
@@ -1246,9 +1301,21 @@ export class WorkflowOrchestrator {
     );
     if (existingRetired) {
       this.setViewedWorkflowId(clientId, existingRetired.id);
+      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        options?.interactionPort,
+        false
+      );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(existingRetired.id, send, clientId);
       }
+      this.emitWorkflowExternalRootsApprovalState(
+        clientId,
+        existingRetired.id,
+        pendingRoots,
+        send
+      );
       return;
     }
 
@@ -1276,7 +1343,7 @@ export class WorkflowOrchestrator {
     filePath: string,
     clientId: string,
     send: (message: unknown) => void,
-    options?: { skipReplay?: boolean }
+    options?: { skipReplay?: boolean; interactionPort?: UserInteractionPort }
   ): Promise<void> {
     const previousViewedId = this.getViewedWorkflowId(clientId);
     const instance = this.buildWorkflowInstance();
@@ -1289,9 +1356,21 @@ export class WorkflowOrchestrator {
       this.setViewedWorkflowId(clientId, previousViewedId);
       throw error;
     }
+    const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+      clientId,
+      undefined,
+      options?.interactionPort,
+      false
+    );
     if (!options?.skipReplay) {
       await this.replayWorkflowStateTo(instance.id, send, clientId);
     }
+    this.emitWorkflowExternalRootsApprovalState(
+      clientId,
+      instance.id,
+      pendingRoots,
+      send
+    );
   }
 
   /**
@@ -1869,6 +1948,13 @@ export class WorkflowOrchestrator {
       return;
     }
 
+    try {
+      await this.assertNoPendingWorkflowExternalRoots(this.PANEL_CLIENT_ID);
+    } catch (error) {
+      notifyUserFeedback(this.userFeedbackSink, "warning", getErrorMessage(error));
+      return;
+    }
+
     // Note: the instance is registered in this.instances when its promptQueue
     // transitions to RUNNING or PAUSED via the onDidChangeState listener wired
     // in buildWorkflowInstance(). Registering there (not here) guarantees
@@ -2265,11 +2351,24 @@ export class WorkflowOrchestrator {
   async loadPromptFileForClient(
     filePath: string,
     send: (msg: unknown) => void,
-    clientId: string
+    clientId: string,
+    interactionPort?: UserInteractionPort
   ): Promise<WorkflowInstance> {
     const instance = this.registerNewInstance(clientId);
     await instance.loadPromptFile(filePath);
+    const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
+      clientId,
+      undefined,
+      interactionPort,
+      false
+    );
     await this.replayWorkflowStateTo(instance.id, send, clientId);
+    this.emitWorkflowExternalRootsApprovalState(
+      clientId,
+      instance.id,
+      pendingRoots,
+      send
+    );
     return instance;
   }
 
@@ -2296,6 +2395,7 @@ export class WorkflowOrchestrator {
     options?: {
       skipTerminalReplay?: boolean;
       preferredViewAddress?: WorkflowViewAddress;
+      interactionPort?: UserInteractionPort;
     }
   ): Promise<void> {
     this.registerClient(clientId, send);
@@ -2359,7 +2459,8 @@ export class WorkflowOrchestrator {
           await this.loadWorkflowForClient(
             mostRecentWorkingFilePath,
             send,
-            clientId
+            clientId,
+            { interactionPort: options?.interactionPort }
           );
           send({
             type: MESSAGE_TYPES.WORKFLOWS_LIST,
@@ -2605,6 +2706,148 @@ export class WorkflowOrchestrator {
         `[WorkflowOrchestrator] Could not read source definition for ${clientId}: ${getErrorMessage(error)}`
       );
       return null;
+    }
+  }
+
+  async approvePendingWorkflowExternalRootsForClient(
+    clientId: string,
+    send?: (message: unknown) => void,
+    port: UserInteractionPort = this.userInteractionPort,
+    notify = true
+  ): Promise<string[]> {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    // Panel resolution goes through getInstanceForClient (equivalent to
+    // getActiveInstance() for the panel — see its fallback order) rather than
+    // getActiveInstance() directly, so this stays on the one seam every other
+    // panel-scoped instance resolution in this class already uses. Non-panel
+    // clients stay on the strict getBoundInstance: unlike getInstanceForClient,
+    // it never falls back to the panel's instance for a client with no binding
+    // of its own (see getBoundInstance's doc comment) — this state is
+    // per-client, so an unbound browser client must resolve to no instance,
+    // not silently inherit the panel's pending-roots state.
+    const instance =
+      clientId === this.PANEL_CLIENT_ID
+        ? this.getInstanceForClient(clientId)
+        : this.getBoundInstance(clientId);
+    const workflow = instance?.promptQueue?.getWorkflowFile();
+    const workflowSourcePath = instance?.getCurrentPromptFilePath();
+    const requestedRoots = workflow?.trustedExternalRoots;
+    let pendingRoots: string[] = [];
+
+    if (
+      workspaceRoot &&
+      workflowSourcePath &&
+      Array.isArray(requestedRoots)
+    ) {
+      const workflowIdentity =
+        ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+          workspaceRoot,
+          workflowSourcePath
+        );
+      pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+        workflowIdentity,
+        requestedRoots
+      );
+      if (vscode.workspace.isTrusted) {
+        await promptBatchApprovalForPendingWorkflowExternalRoots(
+          workspaceRoot,
+          workflowSourcePath,
+          requestedRoots,
+          port
+        );
+        pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+          ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+          workflowIdentity,
+          requestedRoots
+        );
+      }
+    }
+
+    if (notify) {
+      this.emitWorkflowExternalRootsApprovalState(
+        clientId,
+        instance?.id ?? "",
+        pendingRoots,
+        send
+      );
+    }
+    return pendingRoots;
+  }
+
+  private emitWorkflowExternalRootsApprovalState(
+    clientId: string,
+    workflowId: string,
+    pendingRoots: readonly string[],
+    send?: (message: unknown) => void
+  ): void {
+    const target =
+      send ??
+      (clientId === this.PANEL_CLIENT_ID
+        ? this.storedPanelSend
+        : this.getViewMessageSinks().get(clientId));
+    target?.({
+      type: MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED,
+      workflowId,
+      pendingRoots: [...pendingRoots],
+    });
+  }
+
+  async updateWorkflowTrustedExternalRootsForClient(
+    clientId: string,
+    roots: readonly string[]
+  ): Promise<void> {
+    const instance =
+      clientId === this.PANEL_CLIENT_ID
+        ? this.getActiveInstance()
+        : this.getBoundInstance(clientId);
+    if (!instance) {
+      throw new Error("The active workflow is unavailable.");
+    }
+    await instance.updateWorkingFileProperties({
+      trustedExternalRoots: [...roots],
+    });
+  }
+
+  private getPendingWorkflowExternalRootsForClient(
+    clientId: string
+  ): string[] {
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    // See approvePendingWorkflowExternalRootsForClient for why the panel
+    // branch goes through getInstanceForClient rather than getActiveInstance().
+    const instance =
+      clientId === this.PANEL_CLIENT_ID
+        ? this.getInstanceForClient(clientId)
+        : this.getBoundInstance(clientId);
+    const requestedRoots = instance?.promptQueue?.getWorkflowFile()
+      .trustedExternalRoots;
+    const workflowSourcePath = instance?.getCurrentPromptFilePath();
+    if (
+      !workspaceRoot ||
+      !workflowSourcePath ||
+      !Array.isArray(requestedRoots)
+    ) {
+      return [];
+    }
+    return ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+        workspaceRoot,
+        workflowSourcePath
+      ),
+      requestedRoots
+    );
+  }
+
+  private async assertNoPendingWorkflowExternalRoots(
+    clientId: string
+  ): Promise<void> {
+    const pendingRoots = this.getPendingWorkflowExternalRootsForClient(clientId);
+    if (pendingRoots.length > 0) {
+      throw new Error(
+        `Workflow external roots require approval before running: ${pendingRoots.join(", ")}. ` +
+          `Run "ctrlyoke trust-workflow-external-roots <file>" or approve them in the dashboard.`
+      );
     }
   }
 
@@ -3574,10 +3817,23 @@ export class WorkflowOrchestrator {
         this.PANEL_CLIENT_ID,
         existingRetiredForPanel.id
       );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          this.PANEL_CLIENT_ID,
+          undefined,
+          undefined,
+          false
+        );
       await this.replayWorkflowStateTo(
         existingRetiredForPanel.id,
         panelSend,
         this.PANEL_CLIENT_ID
+      );
+      this.emitWorkflowExternalRootsApprovalState(
+        this.PANEL_CLIENT_ID,
+        existingRetiredForPanel.id,
+        pendingRoots,
+        panelSend
       );
       return;
     }
@@ -4232,6 +4488,7 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ runRef: RunRef }> {
+    await this.assertNoPendingWorkflowExternalRoots(clientId);
     this.assertViewedRunAddress(address, clientId, "Re-run");
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
@@ -4378,6 +4635,7 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
+    await this.assertNoPendingWorkflowExternalRoots(clientId);
     const viewed = this.getViewAddress(clientId);
     if (
       !viewed ||
@@ -4524,6 +4782,7 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
+    await this.assertNoPendingWorkflowExternalRoots(clientId);
     const {
       workspaceRoot,
       activeInstance,
@@ -4584,6 +4843,7 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
+    await this.assertNoPendingWorkflowExternalRoots(clientId);
     const { workspaceRoot, activeInstance, pendingRewindOnThisRun } =
       await this.validateExplicitContinuationTarget(
         address,

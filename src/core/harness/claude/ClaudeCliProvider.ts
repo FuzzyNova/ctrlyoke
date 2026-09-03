@@ -26,6 +26,7 @@ import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
@@ -234,6 +235,7 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -266,6 +268,7 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -350,7 +353,8 @@ export class ClaudeCliProvider implements ICliProvider {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        workflowContext
       );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);

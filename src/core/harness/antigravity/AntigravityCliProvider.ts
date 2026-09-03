@@ -25,6 +25,7 @@ import {
 } from "../../../types/DashboardConstants";
 import type {
   McpServerConfig,
+  PromptFile,
   PromptStep,
   UserHookConfig,
   WorkflowStep,
@@ -191,6 +192,7 @@ export class AntigravityCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -223,6 +225,7 @@ export class AntigravityCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -281,7 +284,8 @@ export class AntigravityCliProvider implements ICliProvider {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        workflowContext
       );
       workspaceDirs.forEach((dir) => args.push("--add-dir", dir));
     }

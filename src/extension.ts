@@ -169,21 +169,23 @@ export async function activate(context: vscode.ExtensionContext) {
         getVsCodeWorkspaceRoot()
       );
       configService.setWorkspaceBackend(workspaceConfigBackend);
-
-      // Batch-approve any workspace-configured external file roots that
-      // haven't been reviewed yet (no-op if there are none, or the
-      // workspace isn't trusted — retried below via onDidGrantWorkspaceTrust).
-      // See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
-      void promptBatchApprovalForPendingWorkspaceExternalRoots(
-        getVsCodeWorkspaceRoot()
-      );
     }
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
         if (vscode.workspace.workspaceFolders?.length) {
-          void promptBatchApprovalForPendingWorkspaceExternalRoots(
-            getVsCodeWorkspaceRoot()
-          );
+          void webviewProvider
+            .awaitPanelReady()
+            .then(() =>
+              promptBatchApprovalForPendingWorkspaceExternalRoots(
+                getVsCodeWorkspaceRoot(),
+                webviewProvider.getUserInteractionPort()
+              )
+            )
+            .catch((error) => {
+              Log.warn(
+                `ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
+              );
+            });
         }
       })
     );
@@ -279,6 +281,21 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug("ctrlyoke: React webview provider registered");
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      void webviewProvider
+        .awaitPanelReady()
+        .then(() =>
+          promptBatchApprovalForPendingWorkspaceExternalRoots(
+            getVsCodeWorkspaceRoot(),
+            webviewProvider.getUserInteractionPort()
+          )
+        )
+        .catch((error) => {
+          Log.warn(
+            `ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
+          );
+        });
+    }
 
     // Initialize PTY process manager (must be after webviewProvider is created).
     // The globalState-backed persistence seeds the cold-start fallback size so new
@@ -542,7 +559,13 @@ function registerCommands(
     vscode.workspace.workspaceFolders?.length ? getVsCodeWorkspaceRoot() : "";
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
     webviewProvider,
-    getWorkspaceRoot
+    getWorkspaceRoot,
+    undefined,
+    async () => {
+      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+      await webviewProvider.awaitPanelReady();
+      return webviewProvider.getUserInteractionPort();
+    }
   );
 
   const resolveOutputCaptureCommand = registerNativeOutputCaptureCommand(
@@ -962,7 +985,13 @@ function registerCommands(
   const confirmExternalFileTrustCommand = vscode.commands.registerCommand(
     "ctrlyoke.confirmExternalFileTrust",
     async (target: FileOpenTarget) => {
-      await confirmExternalFileTrustAndOpen(target);
+      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+      await webviewProvider.awaitPanelReady();
+      await confirmExternalFileTrustAndOpen(target, {
+        port: webviewProvider.getUserInteractionPort(),
+        workspaceRoot: getWorkspaceRoot(),
+        workflowSourcePath: target.workflowSourcePath,
+      });
     }
   );
 
