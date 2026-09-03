@@ -3,11 +3,16 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
+import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
+import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
 import {
   CliProviderUtils,
   RetryableAsyncCache,
 } from "../../core/harness/shared/CliProviderUtils";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CliProviderUtils", () => {
   setup(() => {
@@ -85,6 +90,88 @@ suite("CliProviderUtils", () => {
     const result = CliProviderUtils.getWorkspaceDirs(root, [lowerRoot]);
 
     assert.deepStrictEqual(result, [expected]);
+  });
+
+  test("uses the workflow replacement set for --add-dir roots", async () => {
+    const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
+    const inheritedRoot = path.join(os.tmpdir(), "ctrlyoke-inherited-root");
+    const workflowRoot = path.join(os.tmpdir(), "ctrlyoke-workflow-root");
+    const workflowFile = path.join(primaryRoot, "workflow.ctrlyoke.json");
+    const original =
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots;
+    let receivedWorkflow:
+      | { identity: string; declaredRoots: string[] | null | undefined }
+      | undefined;
+
+    ConfigurationUtils.getEffectiveApprovedExternalFileRoots = (
+      _workspaceIdentity,
+      workflow
+    ) => {
+      receivedWorkflow = workflow;
+      return workflow?.declaredRoots === null
+        ? []
+        : workflow?.declaredRoots ?? [inheritedRoot];
+    };
+
+    try {
+      const workflowContext = {
+        filePath: workflowFile,
+        stateRoot: primaryRoot,
+        workflowFile: { trustedExternalRoots: [workflowRoot] },
+      };
+      const result = CliProviderUtils.getWorkspaceDirs(
+        primaryRoot,
+        [],
+        [inheritedRoot],
+        workflowContext
+      );
+
+      assert.deepStrictEqual(result, [
+        path.resolve(primaryRoot),
+        path.resolve(workflowRoot),
+      ]);
+      assert.strictEqual(receivedWorkflow?.declaredRoots?.[0], workflowRoot);
+
+      for (const provider of [
+        new ClaudeCliProvider(),
+        new CodexCliProvider(),
+        new CopilotCliProvider(),
+        new AntigravityCliProvider(),
+      ]) {
+        const args = await provider.buildCliArgs(
+          { prompt: "prompt" },
+          false,
+          "extension",
+          primaryRoot,
+          undefined,
+          {
+            promptIndex: 0,
+            allPrompts: [],
+            ...workflowContext,
+          },
+          []
+        );
+        const addDirValues = args.flatMap((arg, index) =>
+          arg === "--add-dir" ? [args[index + 1]] : []
+        );
+        assert.ok(addDirValues.includes(path.resolve(workflowRoot)));
+        assert.ok(!addDirValues.includes(path.resolve(inheritedRoot)));
+      }
+
+      const disabled = CliProviderUtils.getWorkspaceDirs(
+        primaryRoot,
+        [],
+        [inheritedRoot],
+        {
+          filePath: workflowFile,
+          stateRoot: primaryRoot,
+          workflowFile: { trustedExternalRoots: null },
+        }
+      );
+      assert.deepStrictEqual(disabled, [path.resolve(primaryRoot)]);
+    } finally {
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots = original;
+    }
   });
 
   test("shares successful probes and retries a failed probe", async () => {

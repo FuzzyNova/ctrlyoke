@@ -33,6 +33,7 @@ import {
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
+  PromptFile,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -262,6 +263,7 @@ export class CodexCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -294,6 +296,7 @@ export class CodexCliProvider implements ICliProvider {
       workingFilePath?: string;
       stateRoot?: string;
       secretEnvironment?: Readonly<Record<string, string>>;
+      workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -351,7 +354,8 @@ export class CodexCliProvider implements ICliProvider {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
         workspaceRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        workflowContext
       );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);

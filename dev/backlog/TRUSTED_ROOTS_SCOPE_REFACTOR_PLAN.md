@@ -1,6 +1,6 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-03):** Phases 1-3 complete; Phases 4-5 remain proposed.
+**Status (2026-09-03):** Phases 1-4 complete; Phase 5 remains proposed.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -749,6 +749,8 @@ browser gap that no longer exists once this section's design ships.
    `--add-dir` for user/workspace roots it left out; a workflow with
    `trustedExternalRoots: null` receives no external `--add-dir` arguments
    at all, even when the user's global list is non-empty.
+
+**Completed 2026-09-03.**
 
 ### Phase 5: Documentation
 

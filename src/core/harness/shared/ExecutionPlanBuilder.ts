@@ -30,12 +30,15 @@ import {
   type PreparedMutation,
 } from "./interfaces/PreparedMutation";
 import type { CliExecutionSession } from "./CliExecutionSession";
+import type { CliProviderWorkflowContext } from "./CliProviderUtils";
 
 export interface ExecutionPlanBuilderDeps {
   readonly provider: ICliProvider;
   readonly getWorkspaceRoot: () => string | undefined;
   readonly getWorkspaceRoots: () => readonly string[];
-  readonly getApprovedExternalRoots?: () => readonly string[];
+  readonly getApprovedExternalRoots?: (
+    workflowContext?: WorkflowContext
+  ) => readonly string[];
   readonly getStateRoot?: () => string;
   readonly getExtensionPath: () => string;
   readonly getExecutionMode: () => ExecutionMode;
@@ -68,6 +71,7 @@ type ProviderWorkflowContext = {
   workingFilePath?: string;
   stateRoot?: string;
   secretEnvironment?: Readonly<Record<string, string>>;
+  workflowFile?: CliProviderWorkflowContext["workflowFile"];
 };
 
 function asProviderWorkflowContext(
@@ -98,7 +102,8 @@ export class ExecutionPlanBuilder {
       session.workflowContext,
       this.deps.getStateRoot?.()
     );
-    const approvedExternalRoots = this.deps.getApprovedExternalRoots?.() ?? [];
+    const approvedExternalRoots =
+      this.deps.getApprovedExternalRoots?.(workflowContext) ?? [];
 
     const providerPreparation = this.deps.provider.planCliArgs
       ? await this.deps.provider.planCliArgs(
