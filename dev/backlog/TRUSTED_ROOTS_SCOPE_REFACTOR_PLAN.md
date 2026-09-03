@@ -9,9 +9,12 @@
   Read that plan first; this doc does not repeat its security model, only
   extends it.
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) —
-  owns making the trust-confirmation UI reachable from a browser/hosted
-  client. This plan's VS Code-native approval UI is an accepted interim state,
-  not a design choice to defend.
+  owns the general native-vs-built-in-modal policy (decided 2026-09-02): this
+  plan's approval UI is built **once**, host-neutral, from the start — there
+  is no VS Code-native interim state and no separate browser-only dialog to
+  build later. See "Approval Flow" and "Trust Parent Folder Dialog" below,
+  which reuse the `UserInteractionPort`/`BatchApprovalModal` pattern already
+  shipped for `SecretGrantsTrustPrompt.ts`.
 
 ## Problem
 
@@ -49,11 +52,18 @@ access) to workflow scope instead of inventing a new mechanism.
 
 ## Goals
 
-- Add a workflow-scoped trust tier: a workflow file can request specific
-  external roots, but reading under them (or passing `--add-dir` to a
-  harness) requires a one-time batch approval recorded against that
-  workflow's identity, mirroring `ExternalRootsTrustStore`'s existing
-  workspace-scope behavior.
+- Add a workflow-scoped trust tier that can both **extend and restrict**
+  access, not only extend it — **decided 2026-09-02, superseding this
+  section's original additive-only framing** (see "Security Model" below).
+  A workflow file can request specific external roots beyond the
+  user/workspace tiers, but it can *also* declare an explicit list that
+  **replaces** (not unions with) the inherited user+workspace set for that
+  workflow's runs, or `null` to disable external-root access entirely for
+  that workflow. Reading under any declared root still requires a one-time
+  batch approval recorded against the workflow's identity, mirroring
+  `ExternalRootsTrustStore`'s existing workspace-scope behavior — replace
+  semantics change *what set of roots* a workflow ends up with, not whether
+  each root still needs its own approval.
 - Fail closed: `ctrlyoke run` and the VS Code "Run" action must refuse to
   execute a workflow with pending (never-decided) requested roots, exactly
   like the existing workspace-scope gate in `cli.ts`.
@@ -71,8 +81,13 @@ access) to workflow scope instead of inventing a new mechanism.
   notes / prior brainstorm: "Option B — session-only trust"); it can be added
   later as an extra button on the same dialog this plan builds, not a
   replacement for the persisted workflow-scope decision.
-- No change to how user- or workspace-scope roots are approved; both are
-  already correct per `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`.
+- No change to how user- or workspace-scope roots are **approved**
+  (per-root batch-approval mechanics, `ExternalRootsTrustStore` shape) —
+  those are already correct per `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`. This
+  plan does fix one workspace-scope behavior gap (interactive UI adds not
+  recording an immediate decision — see "Declared vs. approved" above),
+  but that is a bug fix to an existing inconsistency, not a redesign of the
+  workspace-scope approval model itself.
 - Not responsible for making the approval UI work from a browser/hosted
   client — that's `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s
   `ExternalFileTrustPrompt.ts` row. The CLI command this plan adds
@@ -81,18 +96,173 @@ access) to workflow scope instead of inventing a new mechanism.
 
 ## Security Model
 
-Three tiers, widest-to-narrowest:
+**Revised 2026-09-02 — this plan originally made the workflow tier
+purely additive (union with user+workspace). That's wrong for the actual
+motivating use case and has been corrected to override/replace semantics
+below; see the design discussion this replaces at the end of this section.**
 
-| Scope | Persisted where | Grant trigger | Applies to |
+Three tiers, widest-to-narrowest, but the workflow tier now **overrides**
+rather than **adds to** the tiers above it when the workflow explicitly sets
+a value:
+
+| Scope | Persisted where | Grant trigger | Resolution |
 | --- | --- | --- | --- |
-| User | `permissions.allowedExternalFileRoots` at user config scope | Immediate — user already trusted it by editing their own settings | Every workspace this user opens |
-| Workspace | `permissions.allowedExternalFileRoots` at workspace config scope | One-time batch approval, keyed by workspace identity, in `~/.ctrlyoke/external-roots-trust.json` | Every workflow run in this workspace |
-| Workflow *(new)* | `trustedExternalRoots` on the workflow file itself | One-time batch approval, keyed by **workspace identity + workflow file identity**, in the same trust store | Only runs of this specific workflow file |
+| User | `permissions.allowedExternalFileRoots` at user config scope | Immediate — user already trusted it by editing their own settings | Always part of the base set (see below) |
+| Workspace | `permissions.allowedExternalFileRoots` at workspace config scope | One-time batch approval, keyed by workspace identity, in `~/.ctrlyoke/external-roots-trust.json` | Always part of the base set (see below) |
+| Workflow *(new)* | `trustedExternalRoots` on the workflow file itself — `undefined` \| `string[]` \| `null` | One-time batch approval per declared root, keyed by **workspace identity + workflow file identity**, in the same trust store | See resolution rule below |
 
-The effective set of readable/harness-accessible roots for a given workflow
-run is the union of all three, same union pattern
-`ConfigurationUtils.getEffectiveApprovedExternalFileRoots` already uses for
-user+workspace.
+**Resolution rule** — this is the actual design change, driven directly by
+the motivating use case (a user with a large personal library of
+user-scope trusted roots wants a specific *risky* workflow to see only one
+of them, or none, without shrinking their everyday default):
+
+- `trustedExternalRoots` **omitted** (the default — every workflow that
+  doesn't touch this field, including all existing workflows) → effective
+  set = the live union of approved user + workspace roots, exactly today's
+  behavior. Adding a new user-trusted root still grows every such
+  workflow's `--add-dir` list, same as today — that's the intentional,
+  unchanged default.
+- `trustedExternalRoots: [...]` (an explicit array) → effective set =
+  the **approved subset of exactly that list**, full stop. It **replaces**
+  the user+workspace union for this workflow rather than adding to it. A
+  root in this list that's already approved at a broader scope needs no
+  extra approval (trusting a path once is enough); a root that isn't
+  approved anywhere yet still goes through the same one-time batch-approval
+  gate as before.
+- `trustedExternalRoots: null` (explicit) → effective set = empty. This
+  workflow gets no external-root access at all — only workspace files, and
+  no external `--add-dir` arguments — regardless of how large the user's
+  global trusted-roots list is. This is the "I don't want any external
+  roots for this workflow" case that motivated this plan.
+
+This is the exact same `undefined` = inherit / explicit-array = replace /
+`null` = explicitly disable pattern `executionProperties.secrets` and
+`executionProperties.mcpServers` already use in this schema — reusing an
+established convention, not inventing a new one. The approval-gate
+mechanism (declare ≠ grant; a separate persisted decision is required) is
+**unchanged** by this correction — only the arithmetic that turns approved
+roots into an effective set changes, from union to conditional replace.
+`ConfigurationUtils.getEffectiveApprovedExternalFileRoots` gains this
+branching logic; see "Trust Store" below for the updated contract.
+
+**Why not union, revisited:** the original framing ("workflow can only ask
+for *more* access") solved the sharing-abuse case but not the actual
+request driving this plan — restricting a specific risky workflow to less
+than the user's everyday default. A pure union can never shrink the
+effective set below what user+workspace already grant, so it can't express
+"only this one directory, nothing else I normally trust" or "nothing at
+all." Replace-with-null-to-disable can express both, while the abuse case
+this plan exists to prevent (a shared workflow file silently reading a
+newly-declared path) is unaffected, because it was never about the
+union-vs-replace arithmetic — it was about requiring a separate approval
+before any declared root takes effect, which replace semantics still
+require identically.
+
+### Declared vs. approved — reconciled 2026-09-02, and a real existing gap
+
+"Grant trigger" above hides an asymmetry worth stating plainly, confirmed
+against the code (`ExternalRootsTrustStore.ts`, `WebviewSettingsSync.ts`):
+
+- **User scope**: presence in the user-scope `permissions.allowedExternalFileRoots`
+  array **is** the approval. `ExternalRootsTrustStore` never records a
+  decision for these at all — its own doc comment says so — because editing
+  your own settings already is the trust act. Revoke = delete the line.
+- **Workspace scope**: presence in the workspace-scope array is only a
+  *request*. The actual decision is a separate record in
+  `~/.ctrlyoke/external-roots-trust.json`, written only by the batch-approval
+  QuickPick or `ctrlyoke trust-external-roots`.
+- **Existing gap this plan should also fix, not just replicate for the new
+  tier**: `WebviewSettingsSync.handleBrowseAndAddExternalRoot` (the "Add
+  folder…" button in `AdvancedPermissionsSection.tsx`) and the raw textarea
+  `onUpdate` path both write *only* the workspace-scope request array —
+  neither calls `ExternalRootsTrustStore.setDecisions()`. So today, manually
+  adding a folder through the dashboard UI at workspace scope does **not**
+  auto-approve it; the user is re-prompted by the batch-approval QuickPick
+  the next time a workflow loads, identically to a root that arrived via a
+  hand-edited or `git`-pulled config file. That's inconsistent with how user
+  scope already treats "you just typed it yourself" as sufficient trust, and
+  it's needless friction for someone who just deliberately picked a folder
+  in their own native OS dialog.
+
+**Decision: any interactive add through the dashboard UI immediately
+records an "allow" decision, at whichever scope it was added.** This
+applies to the existing workspace-scope textarea/"Add folder…" paths (fixed
+as part of this plan, since the new workflow-scope surface would otherwise
+just copy the same inconsistency) and to the new
+`WorkflowPropertiesPanel.tsx` `trustedExternalRoots` field. This is safe
+because the *decision* store is always personal/local
+(`~/.ctrlyoke/external-roots-trust.json`, never committed) — only the
+*request* list can be shared, via a committed workspace config or a shared
+workflow file. A teammate who inherits that shared file still hits their
+own pending-approval gate on their own machine, because their local trust
+store has no decision recorded for it. The batch-approval prompt is then
+correctly reserved for exactly the case it exists to guard: a root that
+appears in a file this session's own UI didn't touch (hand-edited YAML,
+`git pull`, a teammate's shared config).
+
+**Missing today, needed for both the existing workspace tier and the new
+workflow tier: a way to see and revoke a recorded decision.** Neither
+`AdvancedPermissionsSection.tsx` nor any other surface currently shows
+per-root decision status (approved/denied/pending) or lets a user flip one
+without deleting-then-re-adding the request line (which only re-triggers
+the prompt — it does not record "deny"). Both `AdvancedPermissionsSection.tsx`
+and the new workflow-scope field should show each entry's live status
+sourced from `ExternalRootsTrustStore.getDecision()`, with a control to
+change it. This is scoped to workspace/workflow entries only — user-scope
+entries have no separate decision to show; presence in the array already is
+the full story there.
+
+### UI surfaces for `trustedExternalRoots` — three, not four, and confirmed against `WorkflowDefaultsSection.tsx` 2026-09-02
+
+1. **`WorkflowPropertiesPanel.tsx`** *(new)* — the editable per-workflow
+   field, using the same **Inherit / None / Custom** three-state pattern
+   already used throughout this file for other override-chain properties
+   (compare Additional Args' `INHERIT_DEFAULT_OPTION`/`NONE_OPTION`/
+   `PROPERTY_EDITOR_MODES.CUSTOM` handling, or the worktree mode select).
+   Position: below the existing Secrets section, above Allowed Tools (the
+   Secrets block ends around line 2231; Allowed Tools starts at line 2243 as
+   of 2026-09-02).
+   - **Inherit** (the default/undefined state): label shows something like
+     "Inherit (N roots)" resolving to the live user+workspace union — no
+     value is written to the workflow file.
+   - **None**: writes `trustedExternalRoots: null`. No seeding needed.
+   - **Custom**: writes an explicit array. **When switching from Inherit to
+     Custom, seed the editable list from the current live effective
+     user+workspace set** — the same seed-on-mode-switch pattern
+     `worktreeConfigForMode()` already uses for worktree defaults (see
+     `WorkflowPropertiesPanel.tsx` lines ~120-142, 774-807). This matters
+     for correctness, not just convenience: without seeding, a user who
+     picks "Trust for this workflow" from the ad hoc Trust Parent Folder
+     dialog (see below) to add *one more* directory to an already-inheriting
+     workflow would otherwise silently collapse that workflow down to just
+     the one new path, stripping away everything it used to inherit — the
+     opposite of what a one-off "also trust this" click should do.
+   Adding a root through Custom mode immediately records an "allow"
+   decision per the rule below, not just a request.
+2. **`AdvancedPermissionsSection.tsx`** *(existing, unchanged role)* — the
+   user/workspace-scope "External File Roots" section is the base set a
+   workflow inherits when it doesn't override. Gains the decision-status/
+   revoke display below; otherwise unchanged.
+3. **`ctrlyoke trust-workflow-external-roots`** *(new CLI command, Phase 2)*
+   — the non-interactive path, for headless/CI and non-VS-Code usage.
+
+**Explicitly not `WorkflowDefaultsSection.tsx`/`DefaultsPermissionsPage.tsx`
+— confirmed with the user 2026-09-02, who independently converged on the
+same conclusion while reviewing this plan against `WorkflowDefaultsSection.tsx`.**
+That section (and its `DefaultsHarnessPage.tsx` sibling tab) hosts the
+global-settings fallback tier consulted when a workflow-level property is
+undefined — `worktree` has an entry there (`defaults.worktree.*`) precisely
+because nothing else applies a worktree config broadly. `trustedExternalRoots`
+doesn't need that role filled a second time: `AdvancedPermissionsSection.tsx`'s
+existing External File Roots section, at user *or* workspace scope, **is**
+the base/inherited set now that resolution is undefined→inherit rather than
+pure union — the exact same underlying `permissions.allowedExternalFileRoots`
+setting that a second `WorkflowDefaultsSection.tsx` control would just edit
+a second time under a different tab. There is only one global setting here;
+it does double duty as both "the direct grant for every non-overriding
+workflow" and "the seed value `WorkflowPropertiesPanel.tsx` copies from when
+a user switches into Custom mode." Do not add a `defaults.trustedExternalRoots`
+field anywhere.
 
 ## Schema Changes (`schemas/workflow-schema.json`)
 
@@ -101,9 +271,18 @@ Add to the `workflowOnlyProperties` definition (alongside `worktree`, `vars`)
 
 ```json
 "trustedExternalRoots": {
-  "type": "array",
-  "items": { "type": "string", "minLength": 1 },
-  "description": "Absolute external directory roots this workflow requests read access to, in addition to the workspace's approved permissions.allowedExternalFileRoots. Declaring a root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
+  "oneOf": [
+    {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.allowedExternalFileRoots for this workflow's runs — a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity."
+    },
+    {
+      "type": "null",
+      "description": "Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all."
+    }
+  ],
+  "description": "Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md."
 }
 ```
 
@@ -196,16 +375,21 @@ silently bypass it.
 `ConfigurationUtils` gains the workflow-scope equivalents of the existing
 workspace-scope helpers, following the same naming and signature shape.
 
-**Cross-scope exclusion and canonicalization, not just a new tier.** A root
-the workflow declares that's already covered by a broader-scope approval
-(e.g. already present in workspace-scope `permissions.allowedExternalFileRoots`)
-must not trigger a redundant workflow-scope prompt — it's already granted.
-`getPendingWorkflowExternalFileRoots` therefore needs `workspaceIdentity` as
-well, so it can subtract `getEffectiveApprovedExternalFileRoots(workspaceIdentity)`
-from the declared roots before checking for an undecided workflow-scope
-entry. That subtraction — and the union inside
-`getEffectiveApprovedExternalFileRoots` itself — must compare by canonical
-path (`ExternalRootsTrustStore.canonicalizeRoot`), not raw string equality:
+**Cross-scope exclusion still applies to *approval*, even though the
+*effective-set arithmetic* is no longer a plain union (see "Security Model"
+above — this was corrected 2026-09-02 from a pure additive union to
+undefined→inherit / array→replace / null→disable).** A root the workflow
+declares that's already covered by a broader-scope approval (e.g. already
+present in workspace-scope `permissions.allowedExternalFileRoots`) must not
+trigger a redundant workflow-scope prompt — trusting a path once is enough,
+regardless of which scope's array happens to list it.
+`getPendingWorkflowExternalFileRoots` therefore still needs
+`workspaceIdentity`, so it can subtract
+`getEffectiveApprovedExternalFileRoots(workspaceIdentity)` from the declared
+roots before checking for an undecided workflow-scope entry. That
+subtraction — and the union inside `getEffectiveApprovedExternalFileRoots`'s
+own user+workspace base-set computation — must compare by canonical path
+(`ExternalRootsTrustStore.canonicalizeRoot`), not raw string equality:
 `C:\dev\codex` and `C:/dev/codex` are the same directory but different
 strings. Today's implementation unions user+workspace roots with a raw-string
 `Set` (`src/utils/ConfigurationUtils.ts:532-561`), so this canonicalize-
@@ -218,11 +402,19 @@ different casing/slash style, must produce one `--add-dir` argument, not two.
 ```ts
 getEffectiveApprovedExternalFileRoots(
   workspaceIdentity: string,
-  workflowIdentity?: string,
+  workflow?: { identity: string; declaredRoots: string[] | null | undefined },
   trustStore?: ExternalRootsTrustStoreLike
 ): string[]
-// unions, by canonical path: user roots + approved workspace roots +
-// (approved workflow roots, if workflowIdentity given)
+// Base set = union, by canonical path, of approved user roots + approved
+// workspace roots (unchanged two-tier arithmetic).
+// - workflow undefined, or workflow.declaredRoots === undefined:
+//     return the base set as-is (inherit).
+// - workflow.declaredRoots === null:
+//     return [] (explicitly disabled) regardless of the base set.
+// - workflow.declaredRoots is an array:
+//     return the approved subset of that array only (by workflow identity
+//     decisions, falling back to "already approved in the base set needs
+//     no separate decision") — REPLACES the base set, does not union with it.
 
 getPendingWorkflowExternalFileRoots(
   workspaceIdentity: string,
@@ -230,23 +422,42 @@ getPendingWorkflowExternalFileRoots(
   requestedRoots: readonly string[],
   trustStore?: ExternalRootsTrustStoreLike
 ): string[]
-// requestedRoots comes from the parsed workflow's own trustedExternalRoots —
-// unlike workspace scope, this isn't read from CtrlYokeConfigService, so the
-// caller must pass the workflow's declared array explicitly. Excludes (by
-// canonical path) any root already covered by
-// getEffectiveApprovedExternalFileRoots(workspaceIdentity) before checking
-// for an undecided workflow-scope entry.
+// requestedRoots comes from the parsed workflow's own trustedExternalRoots
+// array (called only when it's a non-null array — null needs no pending
+// check at all, since it grants nothing) — unlike workspace scope, this
+// isn't read from CtrlYokeConfigService, so the caller must pass the
+// workflow's declared array explicitly. Excludes (by canonical path) any
+// root already covered by getEffectiveApprovedExternalFileRoots(workspaceIdentity)
+// (the two-tier base set, i.e. no workflow override) before checking for an
+// undecided workflow-scope entry.
 ```
 
-## Approval Flow — VS Code
+## Approval Flow — VS Code panel and browser (one implementation)
 
-Reuse the shape of `promptBatchApprovalForPendingWorkspaceExternalRoots`
-(`src/ui/ExternalFileTrustPrompt.ts`) rather than writing a second, near-
-identical `showQuickPick` flow: extract a shared
-`promptBatchApprovalForPendingRoots(scopeIdentity, pendingRoots, title)`
-helper that both the existing workspace call site and a new
+**Decided 2026-09-02: this is not "native now, browser later."** Build it
+once, host-neutral, using the `UserInteractionPort` pattern already shipped
+for workspace secret grants
+(`promptBatchApprovalForPendingWorkspaceSecretGrants` in
+`SecretGrantsTrustPrompt.ts`, backed by `WebviewUserInteractionPort` and the
+`BatchApprovalModal.tsx` React component) — not `vscode.window.showQuickPick`.
+That existing flow already has zero `vscode` import and already renders
+identically in the VS Code panel and a browser-connected hosted-dashboard
+client, because both are just a connected `WebviewClientContext` receiving a
+`SHOW_BATCH_APPROVAL_REQUEST` message. There is no reason the workflow-root
+batch approval needs a different mechanism than the workspace-root one it's
+extending.
+
+Concretely: extract a shared
+`promptBatchApprovalForPendingRoots(scopeIdentity, pendingRoots, title, port)`
+helper (taking a `UserInteractionPort`, exactly like
+`promptBatchApprovalForPendingWorkspaceSecretGrants` already does) that both
+the existing workspace call site and a new
 `promptBatchApprovalForPendingWorkflowExternalRoots(workspaceRoot,
-workflowSourcePath, requestedRoots)` call into.
+workflowSourcePath, requestedRoots, port)` call into. This also means
+`promptBatchApprovalForPendingWorkspaceExternalRoots`'s existing
+`vscode.window.showQuickPick` implementation gets migrated to the same port
+in the same pass — it should not be left as a second, inconsistent
+mechanism sitting next to the new workflow-scope one.
 
 Trigger point: when a workflow/prompt file is loaded as the active workflow
 in the dashboard (the same moment `WorkflowOrchestrator`/`WorkflowSerializer`
@@ -254,6 +465,26 @@ resolves a parsed file into working-file state), not on every keystroke.
 Gate the "Run" action the same way the CLI gates execution below — a pending
 root should block Run, not just print a warning, matching the existing
 workspace-scope fail-closed behavior in `cli.ts`.
+
+**Non-dashboard call sites need a panel-reveal step.** Unlike the secret-grant
+flow (only triggered from dashboard-connected contexts, where a client is
+already known to be present), `confirmExternalFileTrustAndOpen` — which the
+single-item "Trust Parent Folder" dialog below extends — is also invoked from
+`extension.ts`'s `ctrlyoke.confirmExternalFileTrust` command (driven by
+`PromptLinkProvider` document-link clicks in the native editor) and, once
+`TRUSTED_ROOTS_STAGING_PLAN.md` Stage 1 ships, from
+`ContextMenuReferenceCommands.ts`'s four Explorer/editor context-menu
+commands. Neither guarantees the ctrlyoke webview panel is open. Once the
+dialog is webview-rendered only, `UserInteractionPort.canPrompt()` reflects
+whether a client is connected *and* READY — if the panel was never opened,
+`canPrompt()` is false and the trust offer silently does nothing, which is a
+regression from today's native modal (always shown, regardless of panel
+state). These two call sites must therefore reveal/focus the panel first
+(reuse the existing `vscode.commands.executeCommand("ctrlyoke.openPanel")`
+call already used this way at `extension.ts:1500`) and await the client's
+READY handshake before requesting the prompt. The dashboard-originated call
+sites in `PromptEditorSupportService.ts` need no such change — they already
+have `ctx` for a connected client.
 
 ## Approval Flow — CLI
 
@@ -277,18 +508,21 @@ message.
 Once approved, workflow-scope roots flow through the exact same downstream
 paths `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`'s "Harness Permission Alignment"
 section already established for workspace/user roots — no new plumbing
-there, only a wider input set:
+there, only a replace-aware input:
 
 - `ContextExpander`'s `trustedRoots`/`approvedExternalRoots` construction
-  gains the workflow's approved roots (call sites already pass
+  switches to whatever `getEffectiveApprovedExternalFileRoots` resolves to
+  for the executing workflow (call sites already pass
   `ConfigurationUtils.getEffectiveApprovedExternalFileRoots(...)`; they now
-  also pass the resolved workflow identity for the workflow currently
-  executing).
+  also pass the resolved workflow identity and its parsed
+  `trustedExternalRoots` value so the function can apply inherit/replace/
+  disable rather than a flat union).
 - `CliProviderUtils.getWorkspaceDirs()`'s `--add-dir` assembly (Claude,
-  Codex, Copilot, Antigravity) includes approved workflow roots the same way
-  it already includes approved workspace roots. Qwen/OpenCode behavior is
-  unchanged (their own trust mechanisms remain authoritative, per the
-  existing plan).
+  Codex, Copilot, Antigravity) is built from that same replace-aware result
+  — an overriding workflow's `--add-dir` list reflects exactly its
+  explicit array (or nothing, for `null`), not the full user+workspace set
+  plus the override. Qwen/OpenCode behavior is unchanged (their own trust
+  mechanisms remain authoritative, per the existing plan).
 
 ## Trust Parent Folder Dialog: Add a Scope Choice
 
@@ -307,25 +541,62 @@ into a choice among the scopes that are actually contextually available:
 - **Trust for this workflow** *(new, only offered when the untrusted
   reference was encountered while a specific workflow file is the active
   context — e.g. clicked from within the prompt editor or workflow dashboard,
-  not from an arbitrary output pane with no associated workflow)* → append to
-  that workflow file's `trustedExternalRoots` and record an immediate
-  "allow" for the workflow identity.
+  not from an arbitrary output pane with no associated workflow)* → append
+  to that workflow file's `trustedExternalRoots` and record an immediate
+  "allow" for the workflow identity. **Must not silently narrow an
+  inheriting workflow.** Because an explicit array now replaces the
+  inherited user+workspace union rather than adding to it (see "Security
+  Model"), this action's write depends on whether the workflow already has
+  an explicit override: if `trustedExternalRoots` is currently `undefined`
+  (inheriting), write the *current live effective set plus the new path*,
+  not just `[newPath]` — otherwise a one-off "also trust this" click would
+  unexpectedly strip away everything the workflow used to inherit. If
+  `trustedExternalRoots` is already an explicit array, simply append to it.
+  This is the same seed-from-current-effective-set rule the
+  `WorkflowPropertiesPanel.tsx` Inherit→Custom switch uses (see "UI
+  surfaces" above) — both are instances of "the first time a workflow
+  becomes explicit about this field, don't lose what it used to inherit."
 
-`vscode.window.showWarningMessage` supports multiple action strings, so this
-can stay a modal with 3-4 buttons rather than becoming a `showQuickPick`;
-keep whichever is more legible once the actual copy is drafted.
+This is a single-select choice among 3-4 named options (plus implicit
+cancel/dismiss), not a checklist — `UserInteractionPort` as it exists today
+only exposes `requestBatchApproval` (a checklist). Extend the port with a
+second, equally host-neutral capability, e.g.:
+
+```ts
+interface ChoiceRequest {
+  id: string;
+  title: string;
+  detail: string;
+  choices: { value: string; label: string }[];
+}
+// added to UserInteractionPort:
+requestChoice(request: ChoiceRequest): Promise<string | undefined>;
+```
+
+implemented by `WebviewUserInteractionPort` the same way
+`requestBatchApproval` is (a new `SHOW_CHOICE_REQUEST` /
+`CHOICE_RESPONSE` message pair, mirroring `SHOW_BATCH_APPROVAL_REQUEST`), and
+rendered by a small new React modal (or an extended `BatchApprovalModal`
+single-select mode — whichever is less duplicative once written). No native
+`vscode.window.showWarningMessage`/`showQuickPick` implementation is built
+for this dialog; see "Relationship to VS Code/Browser Decoupling" below.
 
 ## Relationship to VS Code/Browser Decoupling
 
+**Decided 2026-09-02 — superseding the original framing of this section.**
 This plan's approval UI (both the batch-approval picker and the Trust Parent
-Folder scope choice) is native VS Code UI, same as today. Making it reachable
-from a browser/hosted client is out of scope here — see the new
-`ExternalFileTrustPrompt.ts` row added to
-`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`. The CLI trust command
-(`ctrlyoke trust-workflow-external-roots`) is not a workaround for that gap;
-it is the same first-class path `trust-external-roots` already is for
-non-interactive/headless workflows, and it works today regardless of when
-the browser gap closes.
+Folder scope choice) is built once, host-neutral, using the
+`UserInteractionPort` pattern above. There is no VS Code-native version to
+build now and no separate browser-only dialog to build later in
+`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` — that plan's corrected
+`ExternalFileTrustPrompt.ts` row now points back here instead of describing
+a second implementation. The general policy (built-in modal by default;
+native VS Code UI only for the OS file/folder picker and toast/status-bar
+notifications) lives in that plan's "Decision" section. The CLI trust command
+(`ctrlyoke trust-workflow-external-roots`) remains independently useful for
+headless/non-interactive usage regardless of this UI's host — it is the same
+first-class path `trust-external-roots` already is, not a workaround for a
+browser gap that no longer exists once this section's design ships.
 
 ## Implementation Plan
 
@@ -339,8 +610,10 @@ the browser gap closes.
 4. Add `ConfigurationUtils.getPendingWorkflowExternalFileRoots`, excluding
    roots already effectively approved at a broader scope, and extend
    `getEffectiveApprovedExternalFileRoots` with the optional workflow
-   identity parameter. Canonicalize before dedup in both, and in the
-   `--add-dir` assembly.
+   identity **and declared-roots value** (`undefined` \| `string[]` \|
+   `null`), implementing inherit/replace/disable per "Security Model"
+   above — not a third unionable input. Canonicalize before dedup, and in
+   the `--add-dir` assembly.
 5. Resolve the "authored source path" open question above against
    `PromptFileParser`/`WorkflowSerializer` before writing tests that depend
    on it.
@@ -352,29 +625,58 @@ the browser gap closes.
 3. Tests: pending roots block `ctrlyoke run`; the trust command clears them;
    `--yes` automation path.
 
-### Phase 3: VS Code UI
+### Phase 3: Approval UI (VS Code panel + browser, one implementation)
 
-1. Extract the shared batch-approval helper; add the workflow-scope call
+1. Migrate `promptBatchApprovalForPendingWorkspaceExternalRoots`'s
+   `showQuickPick` call to the `UserInteractionPort` pattern (matching
+   `promptBatchApprovalForPendingWorkspaceSecretGrants`); extract the shared
+   `promptBatchApprovalForPendingRoots` helper; add the workflow-scope call
    site triggered on workflow load, gating "Run".
-2. Add the scope-choice buttons to `confirmExternalFileTrust`; thread
-   "current workflow file, if any" into its call sites in
-   `PromptEditorSupportService.ts` and `PromptLinkProvider.ts` so "Trust for
-   this workflow" can be offered where applicable and omitted where there is
-   no active workflow context.
-3. Settings/dashboard UI: show a workflow's requested/approved
-   `trustedExternalRoots` somewhere reachable (e.g. a read-only summary near
-   `AdvancedPermissionsSection.tsx`'s existing external-roots section,
-   pointing at the file rather than being editable there — this field is
-   authored in the workflow file, not global settings).
+2. Add `UserInteractionPort.requestChoice` + `WebviewUserInteractionPort`
+   support + the new choice modal; wire the scope-choice options into
+   `confirmExternalFileTrust`; thread "current workflow file, if any" into
+   its call sites in `PromptEditorSupportService.ts` and
+   `PromptLinkProvider.ts` so "Trust for this workflow" can be offered where
+   applicable and omitted where there is no active workflow context.
+3. Add the panel-reveal-then-await-READY step to the two non-dashboard call
+   sites (`extension.ts`'s `ctrlyoke.confirmExternalFileTrust` command; the
+   four `ContextMenuReferenceCommands.ts` commands once
+   `TRUSTED_ROOTS_STAGING_PLAN.md` Stage 1 lands) before requesting a prompt
+   through the port.
+4. Add the editable `trustedExternalRoots` field to
+   `WorkflowPropertiesPanel.tsx` (below Secrets, above Allowed Tools — see
+   "UI surfaces" above) and wire its interactive-add-implies-allow behavior.
+5. Add the decision-status display + revoke control to
+   `AdvancedPermissionsSection.tsx` (workspace scope) and the new
+   `WorkflowPropertiesPanel.tsx` field (workflow scope), and fix
+   `WebviewSettingsSync.handleBrowseAndAddExternalRoot`/the workspace
+   textarea path to record an immediate "allow" decision on interactive add
+   (see "Declared vs. approved" above — this is a fix to existing
+   workspace-scope behavior, not only new workflow-scope code).
+6. Add `trustedExternalRoots` to `schemaUiPropertyRoundTrip.integration.test.ts`'s
+   `workflowOnlyProperties` matrix (mapping it to the new field's element id,
+   alongside the existing `worktree`/`vars` entries) and to
+   `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md` — this suite enumerates
+   every `workflowOnlyProperties` schema key and fails closed if a new one
+   has no mapped UI element and persistence round-trip, so this is not
+   optional cleanup.
 
 ### Phase 4: Harness plumbing
 
-1. Thread the resolved workflow identity into the `ContextExpander`
-   construction call sites and `CliProviderUtils.getWorkspaceDirs()`.
+1. Thread the resolved workflow identity *and* the workflow's parsed
+   `trustedExternalRoots` value (`undefined` \| `string[]` \| `null`) into
+   the `ContextExpander` construction call sites and
+   `CliProviderUtils.getWorkspaceDirs()`, so both consume
+   `getEffectiveApprovedExternalFileRoots`'s replace-aware result rather
+   than a simple union of everything approved.
 2. Tests: a workflow-declared root that's approved is readable and reaches
    `--add-dir` for the four supporting harnesses; a pending/denied root is
    not, even if the identical path is already approved at workspace scope
-   for a *different* workflow.
+   for a *different* workflow; a workflow with an explicit
+   `trustedExternalRoots` array does **not** also receive
+   `--add-dir` for user/workspace roots it left out; a workflow with
+   `trustedExternalRoots: null` receives no external `--add-dir` arguments
+   at all, even when the user's global list is non-empty.
 
 ### Phase 5: Documentation
 
@@ -390,37 +692,85 @@ mitigated, and the new CLI command, alongside the existing
 | `schemas/workflow-schema.yaml` | Regenerated via `npm run generate-schema` |
 | `src/config/ExternalRootsTrustStore.ts` | Rename identity parameter; add `canonicalizeWorkflowIdentity` |
 | `src/utils/ConfigurationUtils.ts` | Add workflow-scope pending/effective-roots helpers |
-| `src/ui/ExternalFileTrustPrompt.ts` | Extract shared batch-approval helper; add workflow-scope call site; add scope choice to `confirmExternalFileTrust` |
+| `src/ui/ExternalFileTrustPrompt.ts` | Migrate `showQuickPick` batch-approval to `UserInteractionPort`; extract shared helper; add workflow-scope call site; add scope choice to `confirmExternalFileTrust` via `requestChoice`; add panel-reveal step to non-dashboard call sites |
+| `src/ui/UserInteractionPort.ts`, `src/ui/WebviewUserInteractionPort.ts` | Add `requestChoice`/`ChoiceRequest` |
+| `src/ui/webview-react/components/shared/` (new or extended modal) | Render the scope-choice dialog; reuse `BatchApprovalModal.tsx`'s plumbing where practical |
+| `src/types/DashboardConstants.ts`, `src/types/WebviewMessageTypes.ts` | Add `SHOW_CHOICE_REQUEST`/`CHOICE_RESPONSE` message types |
 | `src/cli.ts` | Fail-closed check for workflow-scope pending roots; `trust-workflow-external-roots` command |
 | `src/core/WorkflowOrchestrator.ts` / wherever "Run" is gated | Block Run on pending workflow-scope roots |
-| `src/utils/ContextExpander.ts` | Accept/merge workflow-scope approved roots |
-| `src/core/harness/shared/CliProviderUtils.ts` | Include approved workflow roots in `--add-dir` assembly |
+| `src/utils/ContextExpander.ts` | Consume the replace-aware effective-roots result (not a simple merge) |
+| `src/core/harness/shared/CliProviderUtils.ts` | Assemble `--add-dir` from the replace-aware effective-roots result |
 | `src/ui/PromptEditorSupportService.ts`, `src/completions/PromptLinkProvider.ts` | Thread current-workflow context into trust dialog call sites |
-| `src/ui/webview-react/components/settings/AdvancedPermissionsSection.tsx` | Optional read-only surfacing of a workflow's requested/approved roots |
+| `src/ui/webview-react/components/settings/AdvancedPermissionsSection.tsx` | Add per-root decision-status display + revoke control (workspace scope) |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Add editable `trustedExternalRoots` field (below Secrets, above Allowed Tools) with decision-status display + revoke control |
+| `src/ui/WebviewSettingsSync.ts` | `handleBrowseAndAddExternalRoot`/workspace textarea path: record an immediate "allow" decision on interactive add, not only a request |
+| `src/test/integration/schemaUiPropertyRoundTrip.integration.test.ts` | Add `trustedExternalRoots` to the `workflowOnlyProperties` matrix |
 | `src/test/**` | Store, `ConfigurationUtils`, CLI gate/command, `ContextExpander`, `CliProviderUtils` tests |
 
 ## Testing
 
 - Unit: `ExternalRootsTrustStore` workflow-identity keys don't collide with
   workspace-identity keys for the same literal path string.
-- Unit: `getPendingWorkflowExternalFileRoots`/`getEffectiveApprovedExternalFileRoots`
-  correctly union all three scopes and correctly exclude denied/pending
-  workflow roots.
+- Unit: `getEffectiveApprovedExternalFileRoots` — `trustedExternalRoots`
+  omitted returns the user+workspace union unchanged (regression); an
+  explicit array returns only the approved subset of that array, even when
+  the user+workspace union is non-empty and disjoint from it (replace, not
+  union); `null` returns `[]` regardless of a non-empty user+workspace union.
+- Unit: `getPendingWorkflowExternalFileRoots` correctly excludes
+  denied/pending workflow roots and does not require re-approval for a
+  declared root already approved at workspace or user scope.
 - Unit: a root already approved at workspace (or user) scope, when also
-  declared in a workflow's `trustedExternalRoots`, is not reported as
-  pending and does not trigger a second prompt; the same root expressed with
-  different casing/slash style across scopes still dedupes to one entry in
-  the effective set and one `--add-dir` argument.
+  declared in a workflow's explicit `trustedExternalRoots` array, is not
+  reported as pending and does not trigger a second prompt; the same root
+  expressed with different casing/slash style across scopes still dedupes
+  to one entry in the effective set and one `--add-dir` argument.
 - Abuse-case test (the reason this plan exists): a workflow file declaring
   `trustedExternalRoots: ["<some external dir>"]` plus an `@`-reference into
   it must fail closed on first `ctrlyoke run` (CLI) and must not enable Run
   (VS Code) until an explicit batch approval is recorded — never silently
-  read the file merely because the field is present.
+  read the file merely because the field is present. This holds regardless
+  of whether the declared array also overlaps with already-approved
+  user/workspace roots.
+- Restriction-case test (the corrected motivating use case): a user with
+  several approved user-scope roots sets a specific workflow's
+  `trustedExternalRoots` to a one-element array containing only one of
+  them; confirm the effective set for that workflow's run is exactly that
+  one root, and a second, unrelated workflow with `trustedExternalRoots`
+  omitted still sees the full user+workspace union unaffected. Repeat with
+  `trustedExternalRoots: null` and confirm an empty effective set.
+- Seed-on-first-override test: an inheriting workflow (undefined) that gets
+  one new root added via "Trust for this workflow" or the
+  `WorkflowPropertiesPanel.tsx` Inherit→Custom switch ends up with an
+  explicit array containing *both* everything it used to inherit *and* the
+  new path — never just the new path alone.
 - Regression: existing workspace- and user-scope behavior from
   `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` is unchanged for workflows that
   don't declare `trustedExternalRoots`.
+- Interactive add records an immediate "allow": adding a root via the
+  `WorkflowPropertiesPanel.tsx` field (workflow scope), and via the
+  `AdvancedPermissionsSection.tsx` textarea or "Add folder…" button
+  (workspace scope), each result in `ExternalRootsTrustStore.getDecision()`
+  returning `"allow"` immediately — no separate batch-approval prompt fires
+  for that root afterward. A root that instead appears because the workflow
+  file or workspace settings.json was edited outside the dashboard (or
+  pulled via git) remains pending until explicitly approved.
+- Decision-status display: a root with a recorded "deny" shows as denied in
+  both `AdvancedPermissionsSection.tsx` and the workflow-scope field, and
+  can be flipped back to pending/allow from the UI without deleting and
+  re-adding the request line.
 - Manual: approve a workflow-scope root via the CLI command, run the
   workflow, confirm `--add-dir` on a supporting harness; deny it and confirm
   the workflow's reference is skipped with a warning instead of blocking the
   whole run (matching `ContextExpander`'s existing skip-with-warning
   behavior for untrusted references).
+- Two-tab isolation: same pattern as `CoreFeedbackMigration.test.ts:25-45`,
+  adapted for `requestChoice`/the workflow batch-approval prompt — one
+  connected client receives the prompt, another connected client does not.
+- Manual, browser: the batch-approval picker and the Trust Parent Folder
+  scope choice both render in a browser-connected hosted-dashboard client,
+  not only the VS Code panel.
+- Manual, panel-closed: trigger `confirmExternalFileTrustAndOpen` via a
+  `PromptLinkProvider` link click (and, once available, a
+  `ContextMenuReferenceCommands.ts` command) while the ctrlyoke panel is
+  closed; confirm the panel opens and the dialog appears instead of silently
+  no-oping.

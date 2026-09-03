@@ -21,6 +21,76 @@ composition, editor integration, commands, completions, status-bar, trust, and
 notification files. The standalone and CLI module graphs must not import those
 files.
 
+### Native-vs-built-in-modal policy (decided 2026-09-02)
+
+Default to the shared, host-neutral, in-house React modal for **approval
+prompts, confirmation dialogs, and secret/API-key/license-key entry** —
+never build a native VS Code implementation of one of these just to "match"
+an existing native version, and never plan a native-first/browser-later
+sequence for one. If the built-in modal solves the problem as well as a
+native dialog would, the native dialog is dead weight to remove, not a
+parity target to keep. The reference implementation already exists and
+predates this policy: `SecretGrantsTrustPrompt.ts`'s workspace secret-grant
+batch approval is built entirely on `UserInteractionPort` →
+`WebviewUserInteractionPort` → `BatchApprovalModal.tsx`, with **no** native
+`showQuickPick`/`showWarningMessage` implementation at all, and it already
+renders identically in the VS Code panel and a browser-connected
+hosted-dashboard client. New approval/confirmation/secret-entry UI (see the
+corrected `ExternalFileTrustPrompt.ts` row below, and
+`TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`'s "Approval Flow"/"Trust Parent
+Folder Dialog" sections) follows this same pattern from the start.
+
+**Licensing was checked against this policy on 2026-09-02 — correcting an
+earlier, wrong claim in this same review that "licensing already checked
+out."** That check only looked at `LicenseSettingsHandlers.ts` and
+`LicenseSection.tsx` (the webview side, which is genuinely fine: both
+`ACTIVATE_LICENSE_KEY` and the deactivate flow are already built-in modals —
+see `LicenseSection.tsx` lines ~237-271 for the key-entry form and
+~454-498 for the deactivate confirm modal) and missed `extension.ts`'s three
+Command Palette license commands entirely. Two of them are real violations
+of this policy, found 2026-09-02:
+
+- **`ctrlyoke.activatePro`** (`extension.ts:586-613`) shows a native
+  `showInputBox` (password-masked) for pasting a license key and calls
+  `licenseService.activateWithKey()` directly — a second, native-only
+  implementation of the form that already exists in `LicenseSection.tsx`.
+- **`ctrlyoke.deactivatePro`** (`extension.ts:670-700`) shows a native
+  `showQuickPick` used as a single-choice confirm ("Deactivate" or dismiss)
+  and calls `licenseService.deactivate()` directly — duplicating the confirm
+  modal that already exists in `LicenseSection.tsx`.
+
+Both should be fixed to match **`ctrlyoke.manageLicense`**'s existing
+pattern (`extension.ts:702-708`: `workflowOrchestrator.openPanel()` +
+`webviewProvider.openGlobalSettingsTab("license")`, no native dialog at
+all) instead of running a second, divergent implementation of a flow the
+webview already owns. `ctrlyoke.activateOfflinePro`
+(`extension.ts:616-668`, native `showOpenDialog` for the license file) is
+the legitimate OS-file-picker carve-out and needs no change — it is already
+reachable from a connected webview client too, via `LicenseSection.tsx`'s
+narrowly-scoped `EXECUTE_VSCODE_COMMAND` bridge
+(`WebviewMessageRouter.ts:1639-1648`, which only ever forwards
+`ACTIVATE_OFFLINE_PRO`, nothing else).
+
+There are exactly two carve-outs, both already reflected in the inventory
+below, and neither is scheduled to move to a built-in modal:
+
+1. **The native OS file/folder picker in the VS Code panel**
+   (`vscode.window.showOpenDialog`/`showSaveDialog`). The native OS picker is
+   objectively better than `FileBrowserModal` — thumbnails, recent
+   locations, OS-level search, drive/network browsing. The VS Code panel
+   keeps it. The browser/hosted dashboard has no OS picker to call and keeps
+   `FileBrowserModal` for the same action. **This is a permanent, intentional
+   divergence**, not an unfinished parity gap to unify later — see the
+   `WebviewSettingsSync.ts` row.
+2. **Native toast/status-bar notifications.** These are a different
+   capability tier from modals (non-blocking, no decision to make) and are
+   governed by `BROWSER_USER_FEEDBACK_PLAN.md`'s toast-queue work, not this
+   policy.
+
+If a future call site looks like it needs a third carve-out, treat that as a
+decision to raise explicitly, not a default — the bar is "the built-in modal
+genuinely cannot do the job," not "the native version already exists."
+
 For the first standalone release, one process owns one repository/root:
 
 - `getWorkspaceRoot()` is the configured `cwd`;
@@ -127,7 +197,7 @@ files themselves.
 | `src/completions/PromptLinkProvider.ts`           | `workspaceFolders` ×1                                                                                                                    | Keep as VS Code document-link adapter.                                                          |
 | `src/completions/WorkspaceReferencePaths.ts`      | `asRelativePath` ×1, `getWorkspaceFolder` ×1                                                                                             | Keep beside context-menu integration; shared path rules stay in `WorkspaceViewerPath`.          |
 | `src/dev/DevCommands.ts`                          | active editor ×1, terminal ×1, webview panel ×1, errors ×6, information ×4, warnings ×2, quick pick ×1, documents/editors ×8, roots ×3   | Keep dev-only.                                                                                  |
-| `src/extension.ts`                                | theme/provider events ×2, errors ×16, information ×2, warnings ×2, quick pick ×1, documents/editors ×4, trust/folder events ×2, roots ×6 | Keep as the VS Code composition root.                                                           |
+| `src/extension.ts`                                | theme/provider events ×2, errors ×16, information ×2, warnings ×2, input box ×1, quick pick ×2, documents/editors ×4, trust/folder events ×2, roots ×6 — counts corrected 2026-09-02 (original audit undercounted quick pick as ×1 and missed the input box entirely) | Keep as the VS Code composition root, **except** `ctrlyoke.activatePro`'s `showInputBox` and `ctrlyoke.deactivatePro`'s `showQuickPick`-as-confirm — both duplicate a form/modal that already exists in `LicenseSection.tsx` and violate the native-vs-built-in-modal policy above; fix both to match `ctrlyoke.manageLicense`'s existing `openPanel()` + `openGlobalSettingsTab("license")` pattern instead. `ctrlyoke.selectPromptFile`'s quick pick (file picker, no existing webview duplicate) and `ctrlyoke.activateOfflinePro`'s `showOpenDialog` (the file-picker carve-out) remain legitimately native. |
 | `src/platform/VsCodeAdapter.ts`                   | six accesses for native messages and editor opening                                                                                      | Keep as an explicit implementation boundary.                                                    |
 | `src/platform/VsCodeWorkspaceRoot.ts`             | configuration, workspace file, and `workspaceFolders` ×4                                                                                 | Keep as the multi-root VS Code resolver input adapter.                                          |
 | `src/scm/ScmCommitCommand.ts`                     | errors ×2, information ×2, warning ×1, progress ×1, roots ×1                                                                             | Keep as a VS Code command facade; commit generation stays in shared services.                   |
@@ -147,13 +217,13 @@ files themselves.
 | `src/core/orchestration/TemplateImporter.ts`       | errors ×4, information ×2, warning ×1, quick pick ×1, document/editor ×2, `workspace.fs` ×5                 | Split import/file operations from VS Code selection/confirmation/opening.                                      |
 | `src/core/orchestration/WorkflowCommandHandler.ts` | errors ×8, information ×3, warnings ×2, inputs ×2, quick picks ×2, documents/editors ×10, `workspace.fs` ×4 | Move domain operations into shared services; keep a VS Code command UI facade.                                 |
 | `src/core/WorkflowOrchestrator.ts`                 | messages ×7, quick pick ×1, watcher ×1                                                                      | Inject platform, feedback, watcher, status, and host actions once.                                             |
-| `src/ui/ExternalFileTrustPrompt.ts`                 | modal `showWarningMessage` ×1, `showInformationMessage` ×1, `showQuickPick` ×1, plus `openTextDocument`/`showTextDocument`/`executeCommand` in `openResolvedTarget` — new finding, 2026-09-02, not in the original audit | Both the "Trust Parent Folder" confirmation and the workspace-root batch-approval picker are native-only: a hosted/remote browser client never sees either dialog, so an untrusted-link trust offer silently does nothing there (confirmed 2026-09-02, filed against `dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`). **Not blocked on Phase 4/the standalone-router work** — its two dashboard-originated callers (`PromptEditorSupportService.handleOpenPromptFile`, and the sibling `OPEN_FILE`-handling method around line 1211) already receive `ctx: WebviewClientContext` and simply don't thread it through; `WebviewSettingsSync.handleBrowseAndAddExternalRoot` likewise already receives `ctx.postMessage` from its `WebviewMessageRouter.ts:1943-1948` call site and ignores it. This is an application of the client-scoped typed-message pattern Phase 5 item 1 already shipped (2026-07-24 to 2026-08-06) for `WorkflowMutationCoordinator`/`WorkflowStepHandlers`/`UndoRedoCoordinator`/terminal handlers, not new plumbing — split the trust *decision* (persisted via `ExternalRootsTrustStore`/`ConfigurationUtils`, already host-neutral) from the *prompt* (native modal/QuickPick here) using that same pattern; browser gets a `Modal.tsx`/`FileBrowserModal`-based dialog, matching the `WebviewSettingsSync.ts` row below (same correction applies there). |
+| `src/ui/ExternalFileTrustPrompt.ts`                 | modal `showWarningMessage` ×1, `showInformationMessage` ×1, `showQuickPick` ×1, plus `openTextDocument`/`showTextDocument`/`executeCommand` in `openResolvedTarget` — new finding, 2026-09-02, not in the original audit | **File splits into two dispositions, not one.** The trust-decision UI — `confirmExternalFileTrust`'s "Trust Parent Folder" confirmation and `promptBatchApprovalForPendingWorkspaceExternalRoots`'s batch-approval picker — is a Shared/reusable-table item per the native-vs-built-in-modal policy above: both convert to the `UserInteractionPort`/`WebviewUserInteractionPort`/`BatchApprovalModal` pattern already shipped for `SecretGrantsTrustPrompt.ts`, with **no native fallback retained**, exactly as detailed in `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`'s "Approval Flow" and "Trust Parent Folder Dialog" sections (superseding this row's original "browser gets a separate `Modal.tsx`-based dialog" framing — it is one implementation, not two). `openResolvedTarget`'s document-opening calls are a separate, legitimately native concern (opening a file in the VS Code editor) that stays in this boundary table — the browser equivalent is `WorkspaceFileEditor`, already listed elsewhere in this plan as the correct browser pattern for opening a reference. **Not blocked on Phase 4/the standalone-router work** — its two dashboard-originated callers (`PromptEditorSupportService.handleOpenPromptFile`, and the sibling `OPEN_FILE`-handling method around line 1211) already receive `ctx: WebviewClientContext` and simply don't thread it through; its two non-dashboard callers (`extension.ts`'s `ctrlyoke.confirmExternalFileTrust` command and, once staged, `ContextMenuReferenceCommands.ts`'s four context-menu commands) need a panel-reveal-then-await-READY step first, since a webview-only dialog has nothing to render into if the panel was never opened (see `TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md` for the concrete call sites). This reuses the client-scoped typed-message pattern Phase 5 item 1 already shipped (2026-07-24 to 2026-08-06) for `WorkflowMutationCoordinator`/`WorkflowStepHandlers`/`UndoRedoCoordinator`/terminal handlers, not new plumbing. |
 | `src/ui/McpManagerService.ts`                      | native messages ×8                                                                                          | Return typed results or emit scoped feedback.                                                                  |
 | `src/ui/PromptEditorSupportService.ts`             | roots ×5, documents ×2, editor ×1, error ×1                                                                 | Inject workspace context and document host; use workspace-viewer HTTP path in browsers.                        |
 | `src/ui/TerminalMessageHandlers.ts`                | `showWarningMessage` ×2 — **resolved 2026-08-06**                                                           | Emit client-scoped typed failure/feedback.                                                                     |
 | `src/ui/UndoRedoCoordinator.ts`                    | native messages ×5 — **resolved 2026-08-06**                                                                | Emit typed undo/redo results to the initiating client.                                                         |
 | `src/ui/WebviewMessageRouter.ts`                   | roots ×2 and temporary-document/editor calls ×2                                                             | Make the router host-neutral and inject domain-specific host actions.                                          |
-| `src/ui/WebviewSettingsSync.ts`                    | roots ×2 and `showOpenDialog` ×1                                                                            | Inject workspace context; keep browser selection in `FileBrowserModal`, native selection behind a host action. **`handleBrowseAndAddExternalRoot` specifically is not blocked on that host-action port** — its `WebviewMessageRouter.ts:1943-1948` call site already passes `ctx.postMessage`; the handler just doesn't use it (confirmed 2026-09-02). |
+| `src/ui/WebviewSettingsSync.ts`                    | roots ×2 and `showOpenDialog` ×1                                                                            | Inject workspace context; keep browser selection in `FileBrowserModal`, native selection behind a host action. **This is the OS-file-picker carve-out from the native-vs-built-in-modal policy above — the native `showOpenDialog` path is a permanent, intentional keep, not a step toward an eventual modal-only end state.** `handleBrowseAndAddExternalRoot` specifically is not blocked on that host-action port — its `WebviewMessageRouter.ts:1943-1948` call site already passes `ctx.postMessage`; the handler just doesn't use it (confirmed 2026-09-02). |
 | `src/ui/WorkflowMutationCoordinator.ts`            | `showErrorMessage` ×1 — **resolved 2026-08-02**                                                             | Use its existing client-scoped failure contract exclusively.                                                   |
 | `src/ui/WorkflowSerializer.ts`                     | roots ×11, errors ×5, information ×2, warning ×1, open dialogs ×2, save dialog ×1, document/editor ×2       | Inject workspace/state/file services; move native dialogs/opening to host actions.                             |
 | `src/ui/WorkflowStepHandlers.ts`                   | `showErrorMessage` ×5 — **resolved 2026-08-02**                                                             | Emit scoped typed operation results.                                                                           |
