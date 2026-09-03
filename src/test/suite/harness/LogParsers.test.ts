@@ -3849,6 +3849,79 @@ suite("CodexLogParser", () => {
       }
     });
 
+    test("should correct exec-wrapped apply_patch line numbers from disk when patch_apply_end never fires", () => {
+      // Newer Codex builds execute apply_patch from inside the `exec` sandbox
+      // wrapper (tools.apply_patch(patch) as a JS call) instead of the discrete
+      // apply_patch tool, and this shape emits no patch_apply_end event at all —
+      // confirmed against a real session capture. Without a disk-based fallback,
+      // every hunk stays at the bare-marker default of line 1 forever.
+      const tmpFile = path.join(
+        os.tmpdir(),
+        `codex-apply-patch-disk-test-${Date.now()}.txt`
+      );
+      const lines: string[] = [];
+      for (let i = 1; i <= 30; i++) lines.push(`Line ${i}`);
+      lines[19] = "Line 20 EDITED";
+      lines[20] = "Line 21 EDITED";
+      fs.writeFileSync(tmpFile, lines.join("\n") + "\n");
+
+      try {
+        const patchInput =
+          "*** Begin Patch\n" +
+          `*** Update File: ${tmpFile}\n` +
+          "@@\n" +
+          " Line 19\n" +
+          "-Line 20\n" +
+          "-Line 21\n" +
+          "+Line 20 EDITED\n" +
+          "+Line 21 EDITED\n" +
+          " Line 22\n" +
+          "*** End Patch";
+
+        const events = [
+          {
+            type: "response_item",
+            payload: {
+              type: "custom_tool_call",
+              name: "exec",
+              call_id: "call_exec_patch",
+              input: `const patch = ${JSON.stringify(patchInput)};\ntext(await tools.apply_patch(patch));\n`,
+            },
+          },
+          {
+            type: "response_item",
+            payload: {
+              type: "custom_tool_call_output",
+              call_id: "call_exec_patch",
+              output: "{}",
+            },
+          },
+        ];
+
+        const response = parser.extractResponse(
+          events as unknown as BaseCliEvent[]
+        );
+
+        const fileEditEvents = response.events.filter(
+          (e) => e.type === CLI_EVENT_TYPES.FILE_EDIT
+        );
+        assert.ok(fileEditEvents.length > 0, "expected FILE_EDIT events");
+        for (const editEvent of fileEditEvents) {
+          const hunks = (editEvent.data as any).structuredPatch as
+            | Array<{ oldStart: number; newStart: number }>
+            | undefined;
+          assert.ok(
+            hunks && hunks.length > 0,
+            "expected structuredPatch hunks"
+          );
+          assert.strictEqual(hunks[0].oldStart, 19);
+          assert.strictEqual(hunks[0].newStart, 19);
+        }
+      } finally {
+        fs.unlinkSync(tmpFile);
+      }
+    });
+
     test("should unwrap exec shell_command into BASH_COMMAND (gpt-5.x format)", () => {
       // Newer Codex models wrap every action in a single `exec` custom tool whose
       // input is a JS snippet driving sandbox helpers. The output is an array of

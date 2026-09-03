@@ -11,6 +11,7 @@ import {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
+  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -347,6 +348,34 @@ export class CopilotToolBuilder {
       classifiedType === CLI_EVENT_TYPES.FILE_EDIT &&
       toolName === COPILOT_TOOL_NAMES.APPLY_PATCH
     ) {
+      // Copilot's apply_patch completion reports a real `diff --git a/... b/...`
+      // unified diff (with accurate `@@ -17,17 +17,17 @@` offsets) in
+      // detailedContent — a different shape from the bare `*** Begin Patch`
+      // format the model wrote as args. ApplyPatchParser only understands the
+      // latter (it never matches "*** Begin Patch" here and silently returns
+      // no edits), so parse detailedContent as a git diff first; only fall
+      // back to the model's own bare-marker patch text (line numbers default
+      // to 1) when no real diff was reported.
+      const detailedContent = completionData?.result?.detailedContent;
+      const gitDiffEdits = detailedContent?.includes("diff --git ")
+        ? this.parseGitDiffFileEdits(detailedContent)
+        : [];
+      if (gitDiffEdits.length > 0) {
+        return gitDiffEdits.map((fileEdit) => ({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: fileEdit.path,
+            structuredPatch: fileEdit.structuredPatch,
+            status: success
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
+            success,
+            error: errorMsg,
+          } as FileEditData,
+        }));
+      }
+
       const patchText =
         completionData?.result?.detailedContent ||
         completionData?.result?.content ||
@@ -548,5 +577,46 @@ export class CopilotToolBuilder {
         } as ToolCall,
       },
     ];
+  }
+
+  /**
+   * Split a `diff --git a/... b/...`-style unified diff (as Copilot's
+   * apply_patch completion reports in `detailedContent`) into one
+   * `{path, structuredPatch}` entry per file, so a multi-file patch gets a
+   * separate FILE_EDIT event per file just like `ApplyPatchParser.parseFileEdits`.
+   *
+   * Each file's hunks are parsed with `CliParseUtils.parseUnifiedDiff`, which
+   * understands the real `@@ -oldStart,oldLines +newStart,newLines @@` headers
+   * this format carries — unlike `ApplyPatchParser`, which only understands the
+   * model's bare-marker `*** Begin Patch` input format.
+   */
+  private static parseGitDiffFileEdits(
+    diffText: string
+  ): { path: string; structuredPatch: UnifiedDiffHunk[] }[] {
+    const sections = diffText
+      .split(/(?=^diff --git )/m)
+      .filter((section) => section.trim().length > 0);
+
+    const edits: { path: string; structuredPatch: UnifiedDiffHunk[] }[] = [];
+    for (const section of sections) {
+      const plusMatch = section.match(/^\+\+\+ (?:b\/)?(.+)$/m);
+      const minusMatch = section.match(/^--- (?:a\/)?(.+)$/m);
+      const path =
+        plusMatch && plusMatch[1] !== "/dev/null"
+          ? plusMatch[1].trim()
+          : minusMatch && minusMatch[1] !== "/dev/null"
+            ? minusMatch[1].trim()
+            : undefined;
+      if (!path) {
+        continue;
+      }
+
+      const structuredPatch = CliParseUtils.parseUnifiedDiff(section);
+      if (structuredPatch?.length) {
+        edits.push({ path, structuredPatch });
+      }
+    }
+
+    return edits;
   }
 }

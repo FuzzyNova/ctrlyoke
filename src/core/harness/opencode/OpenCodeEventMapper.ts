@@ -5,13 +5,11 @@
  * stdout and interactive polling and produces the shared CliEvent types.
  * This module is the single source of truth for tool and token mapping.
  */
-import * as Diff from "diff";
 import {
   type CliEvent,
   type AskUserQuestionData,
   type AskUserQuestionEntry,
   type AskUserQuestionOption,
-  type UnifiedDiffHunk,
   type TokenUsage,
 } from "../../../types/CliOutputTypes";
 import {
@@ -19,37 +17,10 @@ import {
   OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
+import { CliParseUtils } from "../shared/CliParseUtils";
 import { OPENCODE_TOOL_NAMES } from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
-
-/**
- * Compute structured diff hunks from a full before/after file pair.
- * Returns undefined when either input is unavailable (incomplete tool call).
- */
-function computeStructuredPatch(
-  filePath: string,
-  before: string,
-  after: string
-): UnifiedDiffHunk[] | undefined {
-  const result = Diff.structuredPatch(
-    filePath,
-    filePath,
-    before,
-    after,
-    "",
-    "",
-    { context: 3 }
-  );
-  if (!result.hunks.length) return undefined;
-  return result.hunks.map((h) => ({
-    oldStart: h.oldStart,
-    oldLines: h.oldLines,
-    newStart: h.newStart,
-    newLines: h.newLines,
-    lines: h.lines as string[],
-  }));
-}
 
 /**
  * Accumulate token counts from a step_finish event's `tokens` field into a
@@ -132,22 +103,25 @@ export function mapOpenCodeToolPartToCliEvent(
       };
 
     case OPENCODE_TOOL_NAMES.EDIT: {
+      // OpenCode's edit metadata carries a ready-made unified diff string
+      // (`filediff.patch`, e.g. `@@ -16,19 +16,19 @@`) with accurate line
+      // offsets — not a before/after content pair. Parsing it with the same
+      // unified-diff parser other harnesses use keeps this single-sourced.
       const filediff = part.state?.metadata?.filediff;
       const filePath = input.filePath ?? input.path ?? input.file_path ?? "";
       const structuredPatch =
-        filediff?.before != null && filediff?.after != null
-          ? computeStructuredPatch(filePath, filediff.before, filediff.after)
+        typeof filediff?.patch === "string"
+          ? CliParseUtils.parseUnifiedDiff(filediff.patch)
           : undefined;
       return {
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp,
         data: {
           path: filePath,
-          // Use old_string/new_string for display (shows only the changed region,
-          // matching Claude CLI behaviour). Falls back to full before/after when input
-          // params are absent (unexpected) so the diff is never empty.
-          oldContent: input.oldString ?? filediff?.before ?? "",
-          newContent: input.newString ?? filediff?.after ?? "",
+          // old_string/new_string show only the changed region, matching Claude
+          // CLI behaviour.
+          oldContent: input.oldString ?? "",
+          newContent: input.newString ?? "",
           structuredPatch,
           success: isCompleted,
         },

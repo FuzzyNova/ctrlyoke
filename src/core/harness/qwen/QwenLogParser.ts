@@ -172,6 +172,13 @@ export class QwenLogParser extends BaseLogParser {
   >();
 
   /**
+   * Streaming counterpart to `extractResponse`'s local `callPathMap` — retains
+   * each functionCall's full file path until the matching tool_result event
+   * arrives, since `toolCallResult.resultDisplay.fileName` is basename-only.
+   */
+  private readonly streamingCallPathMap = new Map<string, string>();
+
+  /**
    * Set the workspace root directory for session log discovery.
    * Called by CliIntegration so the log parser knows where to look.
    */
@@ -244,19 +251,12 @@ export class QwenLogParser extends BaseLogParser {
 
           // TOOL_USE — functionCall block
           if (part.functionCall) {
-            const args = part.functionCall.args || {};
-            // Track file path for later correlation with tool_result resultDisplay
-            const fp = (args.absolute_path ?? args.file_path ?? args.path) as
-              | string
-              | undefined;
-            if (fp) {
-              callPathMap.set(part.functionCall.id, fp);
-            }
             outputEvents.push(
               ...this.buildFunctionCallEvents(
                 part.functionCall,
                 timestamp,
-                askQuestionMap
+                askQuestionMap,
+                callPathMap
               )
             );
           }
@@ -313,54 +313,13 @@ export class QwenLogParser extends BaseLogParser {
         // Emit COMPLETED semantic events from structured result metadata.
         // toolCallResult.resultDisplay provides fileDiff, originalContent, and newContent
         // for edit/write operations — richer than what's in functionResponse.response.
-        const tcr = event.toolCallResult;
-        if (tcr && tcr.resultDisplay && typeof tcr.resultDisplay === "object") {
-          const rd = tcr.resultDisplay as Record<string, any>;
-          const toolName = event.message.parts[0]?.functionResponse?.name;
-          const fullPath =
-            callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
-          const succeeded = tcr.status === TOOL_RESULT_STATUSES.SUCCESS;
-
-          if (toolName === TOOL_PERMISSION_CATEGORIES.EDIT && rd.fileDiff) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              data: {
-                path: fullPath,
-                oldContent: rd.originalContent || undefined,
-                newContent: rd.newContent || undefined,
-                structuredPatch: this.parseUnifiedDiff(rd.fileDiff as string),
-                status: OPERATION_STATUS.COMPLETED,
-                success: succeeded,
-              } as FileEditData,
-            });
-          } else if (toolName === "write_file" && rd.newContent !== undefined) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_WRITE,
-              timestamp,
-              data: {
-                path: fullPath,
-                content: rd.newContent as string,
-                status: OPERATION_STATUS.COMPLETED,
-                success: succeeded,
-              } as FileWriteData,
-            });
-          }
-        } else if (
-          tcr &&
-          event.message.parts[0]?.functionResponse?.name ===
-            QwenLogParser.READ_FILE_TOOL_NAME
-        ) {
-          const readEvent = this.buildReadFileCompletedEvent(
+        outputEvents.push(
+          ...this.buildToolCallResultCompletedEvents(
             event,
-            tcr,
-            callPathMap.get(tcr.callId) ?? "unknown",
-            timestamp
-          );
-          if (readEvent) {
-            outputEvents.push(readEvent);
-          }
-        }
+            timestamp,
+            callPathMap
+          )
+        );
       }
     }
 
@@ -659,14 +618,14 @@ export class QwenLogParser extends BaseLogParser {
    * Extract structured CliEvents from a single Qwen log event for streaming.
    *
    * Mirrors the per-event logic in `extractResponse` so that thinking blocks,
-   * text, tool invocations, and tool results all stream with proper structure.
+   * text, tool invocations, and tool results all stream with proper structure —
+   * including the resultDisplay-derived FILE_EDIT/FILE_WRITE/FILE_READ
+   * COMPLETED events that carry Qwen's accurate `fileDiff` line numbers
+   * (`streamingCallPathMap` is this method's cross-event state, mirroring
+   * `extractResponse`'s local `callPathMap`).
    *
    * A single `assistant` event can produce multiple CliEvents (one per part).
    * `tool_result` events emit TOOL_RESULT CliEvents.
-   *
-   * Note: The callPathMap used by `extractResponse` for resolving full file paths
-   * on tool_result events is not available here (requires cross-event state).
-   * Tool results are emitted with the information available in the single event.
    */
   extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
     const e = event as QwenProviderEvent;
@@ -702,7 +661,8 @@ export class QwenLogParser extends BaseLogParser {
             ...this.buildFunctionCallEvents(
               part.functionCall,
               timestamp,
-              this.streamingAskQuestions
+              this.streamingAskQuestions,
+              this.streamingCallPathMap
             )
           );
         }
@@ -738,9 +698,84 @@ export class QwenLogParser extends BaseLogParser {
           });
         }
       }
+
+      cliEvents.push(
+        ...this.buildToolCallResultCompletedEvents(
+          e,
+          timestamp,
+          this.streamingCallPathMap
+        )
+      );
     }
 
     return cliEvents;
+  }
+
+  /**
+   * Emit COMPLETED semantic events (FILE_EDIT/FILE_WRITE/FILE_READ) from a
+   * `tool_result` event's structured `toolCallResult` metadata. Shared by
+   * `extractResponse` and `extractStructuredEventsFromEvent` so streaming
+   * gets the same accurate `fileDiff`-derived line numbers as the final
+   * reparse instead of falling back to line-1 old/new-string diffing.
+   */
+  private buildToolCallResultCompletedEvents(
+    event: QwenProviderEvent,
+    timestamp: number,
+    callPathMap: Map<string, string>
+  ): CliEvent[] {
+    const events: CliEvent[] = [];
+    const tcr = event.toolCallResult;
+    if (!tcr) {
+      return events;
+    }
+
+    if (tcr.resultDisplay && typeof tcr.resultDisplay === "object") {
+      const rd = tcr.resultDisplay as Record<string, any>;
+      const toolName = event.message?.parts[0]?.functionResponse?.name;
+      const fullPath = callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
+      const succeeded = tcr.status === TOOL_RESULT_STATUSES.SUCCESS;
+
+      if (toolName === TOOL_PERMISSION_CATEGORIES.EDIT && rd.fileDiff) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: fullPath,
+            oldContent: rd.originalContent || undefined,
+            newContent: rd.newContent || undefined,
+            structuredPatch: this.parseUnifiedDiff(rd.fileDiff as string),
+            status: OPERATION_STATUS.COMPLETED,
+            success: succeeded,
+          } as FileEditData,
+        });
+      } else if (toolName === "write_file" && rd.newContent !== undefined) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp,
+          data: {
+            path: fullPath,
+            content: rd.newContent as string,
+            status: OPERATION_STATUS.COMPLETED,
+            success: succeeded,
+          } as FileWriteData,
+        });
+      }
+    } else if (
+      event.message?.parts[0]?.functionResponse?.name ===
+      QwenLogParser.READ_FILE_TOOL_NAME
+    ) {
+      const readEvent = this.buildReadFileCompletedEvent(
+        event,
+        tcr,
+        callPathMap.get(tcr.callId) ?? "unknown",
+        timestamp
+      );
+      if (readEvent) {
+        events.push(readEvent);
+      }
+    }
+
+    return events;
   }
 
   private static readonly ASK_USER_QUESTION_TOOL_NAMES = new Set([
@@ -834,9 +869,18 @@ export class QwenLogParser extends BaseLogParser {
   private buildFunctionCallEvents(
     functionCall: NonNullable<QwenMessagePart["functionCall"]>,
     timestamp: number,
-    askQuestionMap: Map<string, AskUserQuestionEntry[]>
+    askQuestionMap: Map<string, AskUserQuestionEntry[]>,
+    callPathMap: Map<string, string>
   ): CliEvent[] {
     const args = functionCall.args || {};
+    // Track file path for later correlation with tool_result resultDisplay
+    // (resultDisplay.fileName is basename-only).
+    const fp = (args.absolute_path ?? args.file_path ?? args.path) as
+      | string
+      | undefined;
+    if (fp) {
+      callPathMap.set(functionCall.id, fp);
+    }
     if (!this.isAskUserQuestionTool(functionCall.name)) {
       return BaseToolBuilder.buildInitiatedEvents(
         functionCall.name,
