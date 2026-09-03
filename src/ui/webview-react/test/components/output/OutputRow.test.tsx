@@ -17,6 +17,7 @@ import {
   SCRIPT_VERDICT_OUTCOMES,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 
 afterEach(() => {
   useSettingsStore.setState({ fullGlobalSettings: null });
@@ -238,6 +239,37 @@ describe("OutputRow collapsed attempt groups", () => {
     expect(screen.getByText("3 attempts · 410k total")).toBeInTheDocument();
     screen.getByRole("button", { name: /Expand 3 attempts/ }).click();
     expect(onToggle).toHaveBeenCalledWith("queue:0:run0");
+  });
+});
+
+describe("OutputRow hidden steps", () => {
+  it("shows the step label and toggles the hidden target", () => {
+    useUiStore.getState().clearHiddenOutputTargets("_shell");
+    const row: OutputRenderRow = {
+      key: "queue:2:hidden",
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index: 2 },
+      estimateSize: 40,
+      rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
+      stepLabel: "Step 3",
+      stepName: "research-db",
+    };
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+
+    expect(
+      screen.getByText("Step 3 · research-db · hidden")
+    ).toBeInTheDocument();
+    const showButtons = screen.getAllByRole("button", {
+      name: "Show output for Step 3 · research-db",
+    });
+    expect(showButtons).toHaveLength(2);
+
+    fireEvent.click(showButtons[0]);
+    expect(useUiStore.getState().hiddenOutputTargets._shell?.keys).toEqual([
+      "queue:2",
+    ]);
+    fireEvent.click(showButtons[1]);
+    expect(useUiStore.getState().hiddenOutputTargets).toEqual({});
   });
 });
 

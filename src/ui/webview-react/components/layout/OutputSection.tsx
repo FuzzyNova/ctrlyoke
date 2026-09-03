@@ -136,6 +136,7 @@ const OutputSectionInner: React.FC = () => {
   const undoRecords = useWorkflowStore((s) => s.undoRecords);
 
   const outputCollapsed = useUiStore((s) => s.outputCollapsed);
+  const outputStepFilterVersion = useUiStore((s) => s.outputStepFilterVersion);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const toggleOutputCollapse = useUiStore((s) => s.toggleOutputCollapse);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
@@ -487,7 +488,7 @@ const OutputSectionInner: React.FC = () => {
 
   const rowRenderIdentity = `${fileName ?? ""}:${
     isViewingHistory ? (displayedRunRef ?? "history") : "live"
-  }`;
+  }:${outputStepFilterVersion}`;
   const scrollSeekRowsRef = useRef(rows);
   scrollSeekRowsRef.current = rows;
   const isOutputVirtualizedRef = useRef(false);
@@ -658,6 +659,7 @@ const OutputSectionInner: React.FC = () => {
     pendingNavigationRef,
     rowLayout,
     rowVirtualizer,
+    rows,
     rowsRef,
     restoreTrigger: rowRenderIdentity,
     savedOutputScrollTarget,

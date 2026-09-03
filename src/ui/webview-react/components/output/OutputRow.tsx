@@ -99,9 +99,13 @@ import {
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
+import { useUiStore } from "@store/uiStore";
+import { workflowViewAddressKey } from "@utils/viewAddress";
+import { getTargetKey } from "@utils/outputProjection";
 import type {
   CliHeaderRow,
   OutputRenderRow,
+  StepHiddenRow,
   ScriptOutputRow,
   StructuredEventRow,
 } from "@utils/outputRows";
@@ -207,7 +211,65 @@ interface OutputRowProps {
     expanded: boolean
   ) => void;
   onAttemptGroupToggle?: (groupKey: string) => void;
+  hasHiddenActivity?: boolean;
 }
+
+const SHELL_WORKFLOW_ID = "_shell";
+
+const StepHiddenRowView: React.FC<{
+  row: StepHiddenRow;
+  hasHiddenActivity?: boolean;
+}> = ({ row, hasHiddenActivity = false }) => {
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
+  const toggleHiddenOutputTarget = useUiStore(
+    (state) => state.toggleHiddenOutputTarget
+  );
+  const workflowKey = displayedViewAddress
+    ? workflowViewAddressKey(displayedViewAddress)
+    : SHELL_WORKFLOW_ID;
+  const targetKey = getTargetKey(row.target);
+  const stepDescription = [row.stepLabel, row.stepName]
+    .filter(Boolean)
+    .join(" · ");
+  const showLabel = `Show output for ${stepDescription}`;
+  const handleShow = useCallback(() => {
+    toggleHiddenOutputTarget(workflowKey, targetKey);
+  }, [targetKey, toggleHiddenOutputTarget, workflowKey]);
+
+  return (
+    <div className="flex min-h-10 items-center gap-2 border-y border-panel-border bg-sidebar-bg px-3 py-2 text-description-fg">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left hover:text-foreground"
+        aria-label={showLabel}
+        onClick={handleShow}
+      >
+        <span className="min-w-0 truncate">{stepDescription} · hidden</span>
+        <span
+          data-hidden-output-activity
+          className={
+            hasHiddenActivity
+              ? "text-output-streaming animate-pulse-streaming"
+              : "invisible"
+          }
+          aria-hidden={!hasHiddenActivity}
+        >
+          ·
+        </span>
+      </button>
+      <button
+        type="button"
+        className="shrink-0 rounded border border-btn-border px-2 py-0.5 text-xs text-link-fg hover:bg-toolbar-hover-bg hover:text-link-active-fg"
+        aria-label={showLabel}
+        onClick={handleShow}
+      >
+        Show
+      </button>
+    </div>
+  );
+};
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
@@ -1544,6 +1606,7 @@ function OutputRowComponent({
   onScriptVerdictExpansionChange,
   onScriptOutputExpansionChange,
   onAttemptGroupToggle,
+  hasHiddenActivity,
 }: OutputRowProps) {
   const rowSearchSegments = getOutputRowSearchSegments(row);
   const getFieldMatches = (field: string, occurrence = 0) => {
@@ -1559,6 +1622,11 @@ function OutputRowComponent({
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       content = <div className="h-px" aria-hidden="true" />;
+      break;
+    case OUTPUT_ROW_KINDS.STEP_HIDDEN:
+      content = (
+        <StepHiddenRowView row={row} hasHiddenActivity={hasHiddenActivity} />
+      );
       break;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (

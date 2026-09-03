@@ -950,10 +950,17 @@ export function useOutputVirtualization({
     // they mount, so a full re-measure is only needed when the output pane
     // transitions from collapsed back into view (the output/terminal tab
     // switch keeps the pane's layout size via visibility, so it doesn't need
-    // this). performBulkRemeasure suppresses the per-row scroll-correction
-    // cascade from that mismatch (error #185) and reconciles the scroll
-    // target once afterward.
-  }, [isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
+    // this). A row-render identity change also means the row structure or its
+    // measurements changed (for example, a step filter toggle), so it must
+    // take this same bulk-remeasure path. performBulkRemeasure suppresses the
+    // per-row scroll-correction cascade from that mismatch (error #185) and
+    // reconciles the scroll target once afterward.
+  }, [
+    isOutputVirtualized,
+    outputCollapsed,
+    performBulkRemeasure,
+    rowRenderIdentity,
+  ]);
 
   const hasAnyRows = rows.length > 0;
 
