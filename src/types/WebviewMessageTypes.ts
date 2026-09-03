@@ -23,6 +23,7 @@ import {
   AnyTargetId,
   PromptEditorInsertMode,
   MESSAGE_TYPES,
+  TRUST_DECISIONS,
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
   STEP_TYPES,
@@ -1492,9 +1493,23 @@ export interface GlobalSettingsUpdatedMessage {
 
 export type SettingSource = SettingScope;
 
+export type ExternalRootDecision =
+  (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
+
+export interface ExternalRootEntry {
+  path: string;
+  decision?: ExternalRootDecision;
+}
+
+export interface ExternalFileRootsByScope {
+  user: string[];
+  workspace: ExternalRootEntry[];
+}
+
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  externalFileRootsByScope?: ExternalFileRootsByScope;
   licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
   runHistoryPath?: string | null;
@@ -1531,6 +1546,14 @@ export interface UpdateGlobalSettingMessage {
   type: typeof MESSAGE_TYPES.UPDATE_GLOBAL_SETTING;
   path: string;
   value: unknown;
+  scope: SettingWriteScope;
+}
+
+/** Webview -> Extension: change a workspace-scope external-root decision. */
+export interface UpdateExternalRootDecisionMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_EXTERNAL_ROOT_DECISION;
+  path: string;
+  decision: ExternalRootDecision;
   scope: SettingWriteScope;
 }
 

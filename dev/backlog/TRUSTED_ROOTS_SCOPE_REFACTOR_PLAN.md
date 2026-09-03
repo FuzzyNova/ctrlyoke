@@ -1,7 +1,7 @@
 # Trusted Roots Scope Refactor Plan
 
-**Status (2026-09-03):** Phase 2 complete; Phase 3 items 1-3 complete;
-Phase 3 items 4-6 and Phases 4-5 remain proposed.
+**Status (2026-09-03):** Phase 2 complete; Phase 3 items 1-4 complete;
+Phase 3 items 5-6 and Phases 4-5 remain proposed.
 
 **Implementation note (2026-09-03):** The current schema's two existing
 workflow-only denial clauses are on `workflowStep` and
@@ -711,14 +711,14 @@ browser gap that no longer exists once this section's design ships.
    four `ContextMenuReferenceCommands.ts` commands once
    `TRUSTED_ROOTS_STAGING_PLAN.md` Stage 1 lands) before requesting a prompt
    through the port.~~
-4. Build `TrustedRootsListEditor.tsx` (see "Shared control" above),
+4. ~~Build `TrustedRootsListEditor.tsx` (see "Shared control" above),
    including its decision-status badges, revoke control, and
    interactive-add-implies-allow behavior on both the native-picker and
    manual-path add paths. Replace `AdvancedPermissionsSection.tsx`'s raw
    textarea with it directly (`showDecisionStatus` true at workspace scope,
    false at user scope) — this also fixes the existing workspace-scope gap
    where adding via "Add folder…" or the old textarea didn't record an
-   immediate decision (see "Declared vs. approved" above).
+   immediate decision (see "Declared vs. approved" above).~~
 5. Add the Inherit/None/Custom-wrapped `trustedExternalRoots` field to
    `WorkflowPropertiesPanel.tsx` (below Secrets, above Allowed Tools — see
    "UI surfaces" above), rendering `TrustedRootsListEditor` in Custom mode

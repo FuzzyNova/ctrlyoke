@@ -18,8 +18,13 @@ import {
   type StatusLineTrackingProvider,
   type StatusLineTrackingHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  TRUST_DECISIONS,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+} from "../../config/ExternalRootsTrustStore";
 import {
   ConfigurationUtils,
   CONFIG_KEYS,
@@ -2121,6 +2126,189 @@ suite("WebviewSettingsSync bind-address licensing gate", () => {
     }
   });
 });
+
+suite("WebviewSettingsSync external root decisions", () => {
+  test("approves a newly browsed workspace root immediately", async () => {
+    const originalSet = configService.set;
+    const originalShowOpenDialog = vscode.window.showOpenDialog;
+    const originalGetRoots =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope;
+    const originalSetDecisions = externalRootsTrustStore.setDecisions;
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceRoot = externalRootTestPath("workspace");
+    const newRoot = externalRootTestPath("external");
+    const writes: unknown[] = [];
+    const decisions: unknown[] = [];
+
+    try {
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(workspaceRoot) }],
+        configurable: true,
+      });
+      Object.defineProperty(vscode.window, "showOpenDialog", {
+        value: async () => [vscode.Uri.file(newRoot)],
+        configurable: true,
+      });
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = () => ({
+        user: [],
+        workspace: [],
+      });
+      configService.set = (async (...args: unknown[]) => {
+        writes.push(args);
+      }) as typeof configService.set;
+      externalRootsTrustStore.setDecisions = (async (...args: unknown[]) => {
+        decisions.push(args);
+      }) as typeof externalRootsTrustStore.setDecisions;
+
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () => undefined
+      );
+      sync.handleGlobalSettingsLoadRequest = async () => {};
+      await sync.handleBrowseAndAddExternalRoot("workspace");
+
+      assert.deepStrictEqual(writes, [
+        [
+          CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+          [vscode.Uri.file(newRoot).fsPath],
+          "workspace",
+        ],
+      ]);
+      assert.deepStrictEqual(decisions, [
+        [
+          ExternalRootsTrustStore.canonicalizeRoot(
+            vscode.Uri.file(workspaceRoot).fsPath
+          ),
+          [vscode.Uri.file(newRoot).fsPath],
+          TRUST_DECISIONS.ALLOW,
+        ],
+      ]);
+    } finally {
+      configService.set = originalSet;
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = originalGetRoots;
+      externalRootsTrustStore.setDecisions = originalSetDecisions;
+      Object.defineProperty(vscode.window, "showOpenDialog", {
+        value: originalShowOpenDialog,
+        configurable: true,
+      });
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: originalWorkspaceFolders,
+        configurable: true,
+      });
+    }
+  });
+
+  test("approves newly added workspace roots through the setting update path", async () => {
+    const originalSet = configService.set;
+    const originalGetRoots =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope;
+    const originalSetDecisions = externalRootsTrustStore.setDecisions;
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceRoot = externalRootTestPath("workspace");
+    const oldRoot = externalRootTestPath("old");
+    const newRoot = externalRootTestPath("new");
+    const decisions: unknown[] = [];
+
+    try {
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(workspaceRoot) }],
+        configurable: true,
+      });
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = () => ({
+        user: [],
+        workspace: [oldRoot],
+      });
+      configService.set = (async () => {}) as typeof configService.set;
+      externalRootsTrustStore.setDecisions = (async (...args: unknown[]) => {
+        decisions.push(args);
+      }) as typeof externalRootsTrustStore.setDecisions;
+
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () => undefined
+      );
+      sync.handleGlobalSettingsLoadRequest = async () => {};
+      await sync.handleUpdateGlobalSetting(
+        CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+        [oldRoot, newRoot],
+        "workspace",
+        () => {}
+      );
+
+      assert.deepStrictEqual(decisions, [
+        [
+          ExternalRootsTrustStore.canonicalizeRoot(
+            vscode.Uri.file(workspaceRoot).fsPath
+          ),
+          [newRoot],
+          TRUST_DECISIONS.ALLOW,
+        ],
+      ]);
+    } finally {
+      configService.set = originalSet;
+      ConfigurationUtils.getAllowedExternalFileRootsByScope = originalGetRoots;
+      externalRootsTrustStore.setDecisions = originalSetDecisions;
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: originalWorkspaceFolders,
+        configurable: true,
+      });
+    }
+  });
+
+  test("updates a workspace decision without changing the request list", async () => {
+    const originalSetDecisions = externalRootsTrustStore.setDecisions;
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceRoot = externalRootTestPath("workspace");
+    const root = externalRootTestPath("root");
+    const decisions: unknown[] = [];
+
+    try {
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(workspaceRoot) }],
+        configurable: true,
+      });
+      externalRootsTrustStore.setDecisions = (async (...args: unknown[]) => {
+        decisions.push(args);
+      }) as typeof externalRootsTrustStore.setDecisions;
+
+      const sync = new WebviewSettingsSync(
+        () => {},
+        () => undefined
+      );
+      sync.handleGlobalSettingsLoadRequest = async () => {};
+      await sync.handleUpdateExternalRootDecision(
+        "workspace",
+        root,
+        TRUST_DECISIONS.ALLOW
+      );
+
+      assert.deepStrictEqual(decisions, [
+        [
+          ExternalRootsTrustStore.canonicalizeRoot(
+            vscode.Uri.file(workspaceRoot).fsPath
+          ),
+          [root],
+          TRUST_DECISIONS.ALLOW,
+        ],
+      ]);
+    } finally {
+      externalRootsTrustStore.setDecisions = originalSetDecisions;
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: originalWorkspaceFolders,
+        configurable: true,
+      });
+    }
+  });
+});
+
+function externalRootTestPath(name: string): string {
+  return path.join(
+    os.tmpdir(),
+    `fp-wss-external-root-${name}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`
+  );
+}
 
 suite("WebviewMessageRouter stable run actions", () => {
   const runAddress = {

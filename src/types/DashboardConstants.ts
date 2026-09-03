@@ -285,6 +285,7 @@ export const MESSAGE_TYPES = {
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+  UPDATE_EXTERNAL_ROOT_DECISION: "updateExternalRootDecision", // Webview -> Extension: change a workspace-scope external-root trust decision
   DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
   SET_STATUS_LINE_FORMAT_MODE: "setStatusLineFormatMode", // Webview -> Extension: set shared/per-harness statusline format mode
 

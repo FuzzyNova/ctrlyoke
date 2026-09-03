@@ -57,6 +57,7 @@ import type {
   ShowNativeFeedbackMessage,
   DisableStatusLineTrackingMessage,
   SetStatusLineFormatModeMessage,
+  UpdateExternalRootDecisionMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
   DeleteSecretMessage,
@@ -1994,6 +1995,16 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.BROWSE_AND_ADD_EXTERNAL_ROOT, (message, ctx) => {
       this.settingsSync.handleBrowseAndAddExternalRoot(
         message.scope,
+        ctx.postMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.UPDATE_EXTERNAL_ROOT_DECISION, (message, ctx) => {
+      const request = message as UpdateExternalRootDecisionMessage;
+      return this.settingsSync.handleUpdateExternalRootDecision(
+        request.scope,
+        request.path,
+        request.decision,
         ctx.postMessage
       );
     });

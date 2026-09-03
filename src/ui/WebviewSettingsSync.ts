@@ -26,6 +26,7 @@ import {
   type StatusLineTrackingHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
   NETWORK_INTERFACE_FAMILIES,
+  TRUST_DECISIONS,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -33,6 +34,11 @@ import {
   CONFIG_SCOPE,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
+import {
+  ExternalRootsTrustStore,
+  externalRootsTrustStore,
+  type ExternalRootTrustDecision,
+} from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
   getCliSupportedModelIdsSync,
@@ -1089,6 +1095,7 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          externalFileRootsByScope: this.buildExternalFileRootsByScope(),
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: isMultiRootWorkspace(),
           licenseAccess: this.licenseAccess,
@@ -1354,7 +1361,36 @@ export class WebviewSettingsSync {
       );
       return;
     }
+    const currentWorkspaceRoots =
+      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      scope === CONFIG_SCOPE.WORKSPACE
+        ? ConfigurationUtils.getAllowedExternalFileRootsByScope().workspace
+        : [];
     await configService.set(path, value, scope);
+    if (
+      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      scope === CONFIG_SCOPE.WORKSPACE &&
+      Array.isArray(value)
+    ) {
+      const currentCanonicalRoots = new Set(
+        currentWorkspaceRoots.map((root) =>
+          ExternalRootsTrustStore.canonicalizeRoot(root)
+        )
+      );
+      const addedRoots = value.filter(
+        (root): root is string =>
+          typeof root === "string" &&
+          root.trim().length > 0 &&
+          !currentCanonicalRoots.has(
+            ExternalRootsTrustStore.canonicalizeRoot(root)
+          )
+      );
+      await this.recordInteractiveExternalRootDecision(
+        scope,
+        addedRoots,
+        TRUST_DECISIONS.ALLOW
+      );
+    }
     await this.handleGlobalSettingsLoadRequest(postMessage);
     this.emitMessage(
       {
@@ -1365,6 +1401,28 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
+  }
+
+  async handleUpdateExternalRootDecision(
+    scope: SettingWriteScope,
+    root: string,
+    decision: ExternalRootTrustDecision,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    if (scope !== CONFIG_SCOPE.WORKSPACE) {
+      return;
+    }
+    if (!root.trim()) {
+      throw new Error("External root path cannot be empty.");
+    }
+    if (
+      decision !== TRUST_DECISIONS.ALLOW &&
+      decision !== TRUST_DECISIONS.DENY
+    ) {
+      throw new Error(`Unsupported external root decision: ${decision}`);
+    }
+    await this.recordInteractiveExternalRootDecision(scope, [root], decision);
+    await this.handleGlobalSettingsLoadRequest(postMessage);
   }
 
   /**
@@ -1391,7 +1449,13 @@ export class WebviewSettingsSync {
     const { user, workspace } =
       ConfigurationUtils.getAllowedExternalFileRootsByScope();
     const current = scope === CONFIG_SCOPE.WORKSPACE ? workspace : user;
-    if (current.includes(newRoot)) {
+    const canonicalNewRoot = ExternalRootsTrustStore.canonicalizeRoot(newRoot);
+    if (
+      current.some(
+        (root) =>
+          ExternalRootsTrustStore.canonicalizeRoot(root) === canonicalNewRoot
+      )
+    ) {
       return;
     }
 
@@ -1400,7 +1464,49 @@ export class WebviewSettingsSync {
       [...current, newRoot],
       scope
     );
+    await this.recordInteractiveExternalRootDecision(
+      scope,
+      [newRoot],
+      TRUST_DECISIONS.ALLOW
+    );
     await this.handleGlobalSettingsLoadRequest(postMessage);
+  }
+
+  private async recordInteractiveExternalRootDecision(
+    scope: SettingWriteScope,
+    roots: readonly string[],
+    decision: ExternalRootTrustDecision
+  ): Promise<void> {
+    if (
+      scope !== CONFIG_SCOPE.WORKSPACE ||
+      roots.length === 0 ||
+      !vscode.workspace.workspaceFolders?.length
+    ) {
+      return;
+    }
+    await externalRootsTrustStore.setDecisions(
+      ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot()),
+      roots,
+      decision
+    );
+  }
+
+  private buildExternalFileRootsByScope() {
+    const { user, workspace } =
+      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+    const workspaceIdentity = vscode.workspace.workspaceFolders?.length
+      ? ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot())
+      : undefined;
+
+    return {
+      user,
+      workspace: workspace.map((root) => {
+        const decision = workspaceIdentity
+          ? externalRootsTrustStore.getDecision(workspaceIdentity, root)
+          : undefined;
+        return decision ? { path: root, decision } : { path: root };
+      }),
+    };
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {

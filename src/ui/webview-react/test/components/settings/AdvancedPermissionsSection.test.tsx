@@ -33,7 +33,7 @@ function createSettings(
 }
 
 describe("AdvancedPermissionsSection — allowed external file roots", () => {
-  it("renders configured external file roots in the textarea", () => {
+  it("renders user-scope roots without decision status controls", () => {
     render(
       <AdvancedPermissionsSection
         settings={createSettings({
@@ -45,13 +45,16 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
       />
     );
 
-    const textarea = screen.getByRole("textbox", {
-      name: /Allowed external directories/i,
-    }) as HTMLTextAreaElement;
-    expect(textarea.value).toBe("/home/user/logs\n/var/log/my-tool");
+    expect(screen.getByText("/home/user/logs")).toBeInTheDocument();
+    expect(screen.getByText("/var/log/my-tool")).toBeInTheDocument();
+    expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Allow /i })
+    ).not.toBeInTheDocument();
   });
 
-  it("commits parsed, trimmed lines on blur", async () => {
+  it("adds a trimmed manual path through the shared editor", async () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();
     render(
@@ -63,17 +66,46 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
       />
     );
 
-    const textarea = screen.getByRole("textbox", {
-      name: /Allowed external directories/i,
-    });
-    await user.click(textarea);
-    await user.paste("/home/user/logs\n  /var/log/my-tool  \n");
-    await user.tab();
+    await user.type(
+      screen.getByRole("textbox", { name: /External directory path/i }),
+      "  /home/user/logs  "
+    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
 
     expect(onUpdate).toHaveBeenCalledWith(
       "permissions.allowedExternalFileRoots",
-      ["/home/user/logs", "/var/log/my-tool"]
+      ["/home/user/logs"]
     );
+  });
+
+  it("shows workspace decisions and posts decision changes without editing the request list", async () => {
+    const user = userEvent.setup();
+    render(
+      <AdvancedPermissionsSection
+        settings={{
+          ...createSettings({ allowedExternalFileRoots: ["/shared/logs"] }),
+          externalFileRootsByScope: {
+            user: [],
+            workspace: [{ path: "/shared/logs", decision: "deny" }],
+          },
+        }}
+        activeScope={SETTING_SCOPES.WORKSPACE}
+        onUpdate={() => {}}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Denied")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Allow /shared/logs" })
+    );
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_EXTERNAL_ROOT_DECISION,
+      scope: SETTING_SCOPES.WORKSPACE,
+      path: "/shared/logs",
+      decision: "allow",
+    });
   });
 
   it("posts BROWSE_AND_ADD_EXTERNAL_ROOT with the active scope when 'Add folder…' is clicked", async () => {
