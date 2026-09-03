@@ -24,3 +24,10 @@ export function areWorkflowAddressesEqual(
       left.runRef === right.runRef)
   );
 }
+
+/** Return the stable record key for a client's addressed workflow view. */
+export function workflowViewAddressKey(address: WorkflowViewAddress): string {
+  return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+    ? `${address.workflowKey}:run:${address.runRef}`
+    : `${address.workflowKey}:draft`;
+}

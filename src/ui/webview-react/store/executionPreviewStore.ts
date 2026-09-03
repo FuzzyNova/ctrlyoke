@@ -11,8 +11,8 @@ import { sendMessage } from "../hooks/useMessageHandler";
 import {
   PREVIEW_SCOPES,
   PREVIEW_STATUSES,
-  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 
 export type ExecutionPreviewStatus =
   (typeof PREVIEW_STATUSES)[keyof typeof PREVIEW_STATUSES];
@@ -45,12 +45,6 @@ interface ExecutionPreviewActions {
 }
 
 let requestSequence = 0;
-
-function addressKey(address: WorkflowViewAddress): string {
-  return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-    ? `${address.workflowKey}:run:${address.runRef}`
-    : `${address.workflowKey}:draft`;
-}
 
 function sameScope(
   left: ExecutionPreviewScope,
@@ -110,7 +104,7 @@ export const useExecutionPreviewStore = create<
     ) {
       return;
     }
-    const key = addressKey(message.address);
+    const key = workflowViewAddressKey(message.address);
     const currentHead = Math.max(
       state.definitionRevisionHeads[key] ?? message.displayedDefinitionRevision,
       message.displayedDefinitionRevision
@@ -130,14 +124,14 @@ export const useExecutionPreviewStore = create<
 
   observeDefinitionRevision: (address, definitionRevision) =>
     set((state) => {
-      const key = addressKey(address);
+      const key = workflowViewAddressKey(address);
       const head = Math.max(
         state.definitionRevisionHeads[key] ?? definitionRevision,
         definitionRevision
       );
       const isPlanAddress =
         state.displayedAddress !== null &&
-        addressKey(state.displayedAddress) === key;
+        workflowViewAddressKey(state.displayedAddress) === key;
       return {
         definitionRevisionHeads: {
           ...state.definitionRevisionHeads,

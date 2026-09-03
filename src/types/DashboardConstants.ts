@@ -3041,6 +3041,7 @@ export const OUTPUT_DEFAULT_LABELS = {
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
   STEP_ANCHOR: "step-anchor",
+  STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",
   STATUS: "status",
   CLI_HEADER: "cli-header",
