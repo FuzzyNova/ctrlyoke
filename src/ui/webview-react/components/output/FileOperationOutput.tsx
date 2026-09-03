@@ -196,6 +196,36 @@ function boolDotStatus(success?: boolean): DotStatus {
   return TOOL_RESULT_STATUSES.PENDING;
 }
 
+/** Shared undo/redo icon button for file edit, write, and delete outputs. */
+const FileUndoButton: React.FC<{
+  path: string;
+  onUndoFile: () => void;
+  fileUndoMode?: UndoRedoDirection;
+  /** What was undone/redone, e.g. "changes to" or "deletion of". */
+  actionNoun?: string;
+}> = ({
+  path,
+  onUndoFile,
+  fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
+  actionNoun = "changes to",
+}) => (
+  <button
+    type="button"
+    className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
+    title={
+      fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
+        ? `Redo ${actionNoun} ${path}`
+        : `Undo ${actionNoun} ${path}`
+    }
+    onClick={onUndoFile}
+  >
+    <i
+      className={`codicon ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "codicon-redo" : "codicon-discard"} text-xxs`}
+    />
+    <span>{fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo"}</span>
+  </button>
+);
+
 // ============================================================================
 // FileEditOutput
 // ============================================================================
@@ -285,23 +315,11 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       onUndoFile &&
       status !== OPERATION_STATUS.INITIATED &&
       status !== OPERATION_STATUS.FAILED ? (
-        <button
-          type="button"
-          className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
-          title={
-            fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
-              ? `Redo changes to ${path}`
-              : `Undo changes to ${path}`
-          }
-          onClick={onUndoFile}
-        >
-          <i
-            className={`codicon ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "codicon-redo" : "codicon-discard"} text-xxs`}
-          />
-          <span>
-            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo"}
-          </span>
-        </button>
+        <FileUndoButton
+          path={path}
+          onUndoFile={onUndoFile}
+          fileUndoMode={fileUndoMode}
+        />
       ) : null;
 
     return (
@@ -394,18 +412,11 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
       error={status === OPERATION_STATUS.FAILED ? error : undefined}
       trailingAction={
         onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
-          <button
-            type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={
-              fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
-                ? `Redo changes to ${path}`
-                : `Undo changes to ${path}`
-            }
-            onClick={onUndoFile}
-          >
-            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "↻ Redo" : "↩ Undo"}
-          </button>
+          <FileUndoButton
+            path={path}
+            onUndoFile={onUndoFile}
+            fileUndoMode={fileUndoMode}
+          />
         ) : null
       }
     />
@@ -507,18 +518,12 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
       error={success === false ? error : undefined}
       trailingAction={
         onUndoFile && success !== false ? (
-          <button
-            type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={
-              fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
-                ? `Redo deletion of ${path}`
-                : `Undo deletion of ${path}`
-            }
-            onClick={onUndoFile}
-          >
-            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "↻ Redo" : "↩ Undo"}
-          </button>
+          <FileUndoButton
+            path={path}
+            onUndoFile={onUndoFile}
+            fileUndoMode={fileUndoMode}
+            actionNoun="deletion of"
+          />
         ) : null
       }
     />
