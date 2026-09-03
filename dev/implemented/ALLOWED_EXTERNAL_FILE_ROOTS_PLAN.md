@@ -16,6 +16,40 @@
 > "Shared Path Policy Helper" and "ContextExpander" sections below for the
 > updated call sites.
 
+> **2026-09-02 update — two confirmed implementation gaps, plus a new scope
+> tier.** A follow-up review confirmed the "Prompt Attachment Flow" and "File
+> Link Opening Flow" sections below are implemented as designed, but found two
+> gaps this doc didn't anticipate:
+>
+> 1. **The Explorer/editor "Add file/directory/selection/symbol to prompt"
+>    context-menu commands never call the trust flow at all.**
+>    `src/completions/ContextMenuReferenceCommands.ts`
+>    (`addFileToPromptEditor`, `addDirectoryToPromptEditor`,
+>    `addSelectionToPromptEditor`, `addSymbolToPromptEditor`) resolves the
+>    target with `toWorkspaceRelativeReferencePath(uri)` and, when that
+>    returns falsy (target outside the workspace), just shows a dead-end
+>    `showWarningMessage` — it never consults `FileAccessPolicy`,
+>    `allowedExternalFileRoots`, or `ui.offerTrustForUntrustedFileLinks`, and
+>    never calls `confirmExternalFileTrustAndOpen`
+>    (`src/ui/ExternalFileTrustPrompt.ts`). This is a real gap in Phase 3/4 of
+>    this plan, not a design decision: these commands should follow the same
+>    trust-or-offer-trust path the dashboard's untrusted-link click and
+>    `PromptLinkProvider` already use.
+> 2. **The browser/hosted-dashboard halves of both flows are native-VS-Code-only
+>    with no fallback** — the "Trust Parent Folder" modal and the workspace
+>    batch-approval `showQuickPick`, both in `ExternalFileTrustPrompt.ts`, and
+>    the "Add folder…" native OS picker behind `BROWSE_AND_ADD_EXTERNAL_ROOT`
+>    in `WebviewSettingsSync.ts`. Tracked as new/expanded rows in
+>    `dev/backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` rather than here.
+>
+> Separately, `confirmExternalFileTrust()` always persists an accepted "Trust
+> Parent Folder" offer to **user scope** (every workspace, not just the
+> current one) with no scope choice offered, and there is still no way to
+> trust a root for a single workflow without touching
+> `permissions.allowedExternalFileRoots` at all. Both are addressed by adding
+> a third, workflow-scoped trust tier and a scope choice on that dialog — see
+> `dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md`.
+
 ## Problem
 
 ctrlyoke is safest when prompt references and output file links stay inside the
