@@ -2,6 +2,10 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import type { OutputScrollTarget } from "@store/uiStore";
+import {
+  OUTPUT_ROW_KINDS,
+  type OutputRowKind,
+} from "@root/types/DashboardConstants";
 
 function renderRowTargetHook(
   scrollElement: HTMLDivElement,
@@ -372,5 +376,120 @@ describe("useOutputScrollTarget", () => {
     });
 
     expect(scrollTop).toBe(433);
+  });
+
+  it("re-anchors a removed step row to its hidden placeholder and keeps bottom targets at bottom", () => {
+    const scrollElement = document.createElement("div");
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1200 },
+      scrollTop: { configurable: true, writable: true, value: 400 },
+    });
+
+    type TestRow = {
+      key: string;
+      rowKind: OutputRowKind;
+      target: { kind: "queue"; index: number };
+    };
+    const oldRows: TestRow[] = [
+      {
+        key: "queue:0:anchor",
+        rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+        target: { kind: "queue" as const, index: 0 },
+      },
+      {
+        key: "queue:1:anchor",
+        rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+        target: { kind: "queue" as const, index: 1 },
+      },
+      {
+        key: "queue:1:content",
+        rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+        target: { kind: "queue" as const, index: 1 },
+      },
+    ];
+    const newRows: TestRow[] = [
+      oldRows[0],
+      oldRows[1],
+      {
+        key: "queue:1:hidden",
+        rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
+        target: { kind: "queue" as const, index: 1 },
+      },
+    ];
+    const scrollTargetRef: { current: OutputScrollTarget } = {
+      current: {
+        kind: "row" as const,
+        rowKey: "queue:1:content",
+        viewportOffsetPx: 80,
+      },
+    };
+    const rowsRef = { current: oldRows };
+    const setOutputScrollTarget = vi.fn();
+
+    const { rerender } = renderHook(
+      ({
+        rows,
+        target,
+      }: {
+        rows: typeof oldRows;
+        target: OutputScrollTarget;
+      }) => {
+        rowsRef.current = rows;
+        scrollTargetRef.current = target;
+        return useOutputScrollTarget({
+          applyScrollTargetRef: {
+            current: () => ({ resolved: false, appliedDelta: 0 }),
+          },
+          autoscrollEnabledRef: { current: false },
+          bottomThresholdPx: 40,
+          commitMaxRetries: 2,
+          commitScrollTargetFromViewportRef: { current: () => undefined },
+          defaultTarget: { kind: "bottom" },
+          isProgrammaticScrollRef: { current: false },
+          lastProgrammaticScrollTopRef: { current: null },
+          lastScrollEventAtRef: { current: null },
+          lastScrollTopRef: { current: null },
+          lastUserScrollInputAtRef: { current: null },
+          layoutApplyTrigger: "initial",
+          outputOverscanRef: { current: 6 },
+          outputRef: { current: scrollElement },
+          pendingNavigationRef: { current: null },
+          restoreTrigger: target.kind === "bottom" ? "bottom" : "initial",
+          rowLayout: { rowStartsByKey: new Map(), totalSize: 1200 },
+          rowVirtualizer: { measurementsCache: [] },
+          rows,
+          rowsRef,
+          savedOutputScrollTarget: target,
+          scrollTargetRef,
+          setOutputScrollTarget,
+          userScrollInputGraceMs: 200,
+          workflowScrollTargetId: "workflow",
+        });
+      },
+      {
+        initialProps: {
+          rows: oldRows,
+          target: scrollTargetRef.current as OutputScrollTarget,
+        },
+      }
+    );
+
+    rerender({
+      rows: newRows,
+      target: {
+        kind: "row",
+        rowKey: "queue:1:content",
+        viewportOffsetPx: 80,
+      },
+    });
+    expect(scrollTargetRef.current).toEqual({
+      kind: "row",
+      rowKey: "queue:1:hidden",
+      viewportOffsetPx: 80,
+    });
+
+    rerender({ rows: newRows, target: { kind: "bottom" } });
+    expect(scrollTargetRef.current).toEqual({ kind: "bottom" });
   });
 });

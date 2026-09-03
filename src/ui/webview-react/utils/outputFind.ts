@@ -168,6 +168,7 @@ export function getOutputRowSearchSegments(
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STATS:
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
+    case OUTPUT_ROW_KINDS.STEP_HIDDEN:
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
       return [];

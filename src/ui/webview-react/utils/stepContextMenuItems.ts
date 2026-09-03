@@ -1,5 +1,7 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import type { StepContextMenuItem } from "../components/shared/StepContextMenu";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import { getTargetKey, toOutputMessageTarget } from "./outputProjection";
 import {
   getWorkflowStepRawText,
   isScriptWorkflowStep,
@@ -86,4 +88,47 @@ export function buildStepCopyMenuItems({
       },
     },
   ];
+}
+
+export interface StepOutputFilterMenuItemsInput {
+  hidden: boolean;
+  allPresentTargetKeys: readonly string[];
+  onToggle: () => void;
+  onSolo: (allPresentTargetKeys: readonly string[]) => void;
+}
+
+/** Output visibility actions shared by queue-step and final-step menus. */
+export function buildStepOutputFilterMenuItems({
+  hidden,
+  allPresentTargetKeys,
+  onToggle,
+  onSolo,
+}: StepOutputFilterMenuItemsInput): StepContextMenuItem[] {
+  return [
+    {
+      label: hidden ? "Show output" : "Hide output",
+      icon: hidden ? "codicon-eye" : "codicon-eye-closed",
+      disabled: false,
+      onClick: onToggle,
+    },
+    {
+      label: "Show only this step's output",
+      icon: "codicon-target",
+      disabled: false,
+      onClick: () => onSolo(allPresentTargetKeys),
+    },
+  ];
+}
+
+/** Collect the logical output targets present in a displayed entry list. */
+export function getPresentOutputTargetKeys(
+  entries: readonly OrderedHistoryEntry[]
+): string[] {
+  const keys = new Set<string>();
+  for (const entry of entries) {
+    if ("target" in entry) {
+      keys.add(getTargetKey(toOutputMessageTarget(entry.target)));
+    }
+  }
+  return [...keys];
 }

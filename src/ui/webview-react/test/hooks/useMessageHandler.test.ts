@@ -70,6 +70,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1183,25 +1184,26 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   it("opens output find with the pending history query and clears staged navigation", () => {
     renderHook(() => useMessageHandler());
 
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    } as const;
+
     act(() => {
       useUiStore.getState().setPendingHistorySearchNavigation({
-        address: {
-          workflowKey: "wf-1" as never,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: "run-2026-07-20T10-30-00-000Z" as never,
-        },
+        address,
         findQuery: "needle",
         target: { kind: "queue", stepIndex: 0 },
       });
+      useUiStore
+        .getState()
+        .toggleHiddenOutputTarget(workflowViewAddressKey(address), "queue:0");
     });
 
     act(() => {
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
-        address: {
-          workflowKey: "wf-1" as never,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: "run-2026-07-20T10-30-00-000Z" as never,
-        },
+        address,
         workingFile: { workflowName: "History", steps: [] },
         workflowProperties: {},
         runSummaries: [],
@@ -1221,6 +1223,9 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       preferredTarget: { kind: "queue", stepIndex: 0 },
     });
     expect(useUiStore.getState().pendingHistorySearchNavigation).toBeNull();
+    expect(
+      useUiStore.getState().hiddenOutputTargets[workflowViewAddressKey(address)]
+    ).toBeUndefined();
   });
 });
 

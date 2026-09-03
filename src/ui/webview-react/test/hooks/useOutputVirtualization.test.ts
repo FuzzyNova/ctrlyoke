@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import type { OutputRenderRow } from "@utils/outputRows";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
@@ -16,7 +16,10 @@ function makeRows(count: number): OutputRenderRow[] {
   }));
 }
 
-function renderVirtualization(rows: OutputRenderRow[]) {
+function renderVirtualization(
+  rows: OutputRenderRow[],
+  rowRenderIdentity = "identity"
+) {
   const scrollElement = document.createElement("div");
   Object.defineProperties(scrollElement, {
     clientHeight: { configurable: true, value: 600 },
@@ -24,30 +27,32 @@ function renderVirtualization(rows: OutputRenderRow[]) {
     scrollTop: { configurable: true, writable: true, value: 1000 },
   });
 
-  return renderHook(() =>
-    useOutputVirtualization({
-      applyScrollTargetRef: {
-        current: () => ({ resolved: false, appliedDelta: 0 }),
-      },
-      getVirtualItemsRef: { current: () => [] },
-      isProgrammaticScrollRef: { current: false },
-      isMeasurementFlushInProgressRef: { current: false },
-      lastScrollEventAtRef: { current: null },
-      outputCollapsed: false,
-      outputContentWidth: 360,
-      outputFontSize: 13,
-      outputOverscan: 2,
-      outputOverscanRef: { current: 2 },
-      outputRef: { current: scrollElement },
-      outputVirtualizationRowThreshold: 0,
-      rowRenderIdentity: "identity",
-      rows,
-      scrollSeekPlaceholderActive: false,
-      scrollSeekRestoreRequestedAtRef: { current: null },
-      scrollTargetRef: {
-        current: { kind: "row", rowKey: "row-20", viewportOffsetPx: 200 },
-      },
-    })
+  return renderHook(
+    ({ identity }: { identity: string }) =>
+      useOutputVirtualization({
+        applyScrollTargetRef: {
+          current: () => ({ resolved: false, appliedDelta: 0 }),
+        },
+        getVirtualItemsRef: { current: () => [] },
+        isProgrammaticScrollRef: { current: false },
+        isMeasurementFlushInProgressRef: { current: false },
+        lastScrollEventAtRef: { current: null },
+        outputCollapsed: false,
+        outputContentWidth: 360,
+        outputFontSize: 13,
+        outputOverscan: 2,
+        outputOverscanRef: { current: 2 },
+        outputRef: { current: scrollElement },
+        outputVirtualizationRowThreshold: 0,
+        rowRenderIdentity: identity,
+        rows,
+        scrollSeekPlaceholderActive: false,
+        scrollSeekRestoreRequestedAtRef: { current: null },
+        scrollTargetRef: {
+          current: { kind: "row", rowKey: "row-20", viewportOffsetPx: 200 },
+        },
+      }),
+    { initialProps: { identity: rowRenderIdentity } }
   );
 }
 
@@ -115,6 +120,23 @@ describe("useOutputVirtualization scroll compensation", () => {
         result.current.rowVirtualizer as never
       )
     ).toBe(false);
+  });
+
+  it("bulk remeasures when the row render identity changes", async () => {
+    const rows = makeRows(60);
+    const rendered = renderVirtualization(rows);
+    const measure = vi.spyOn(rendered.result.current.rowVirtualizer, "measure");
+
+    await waitFor(() => expect(measure).toHaveBeenCalled());
+    const callsBeforeIdentityChange = measure.mock.calls.length;
+
+    rendered.rerender({ identity: "identity:filter-1" });
+    await waitFor(() =>
+      expect(measure.mock.calls.length).toBeGreaterThan(
+        callsBeforeIdentityChange
+      )
+    );
+    rendered.unmount();
   });
 });
 

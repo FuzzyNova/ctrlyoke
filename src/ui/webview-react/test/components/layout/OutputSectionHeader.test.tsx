@@ -13,6 +13,7 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
       activeTerminalSession={null}
       anyDiffCollapsed={false}
       hasOutput={false}
+      hiddenOutputCount={0}
       isFindOpen={false}
       isExecutionActive={true}
       isFullscreen={false}
@@ -32,6 +33,7 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
       onExpandAllDiffs={noop}
       onExport={noop}
       onToggleFind={noop}
+      onClearHiddenOutputTargets={noop}
       onNewTerminal={noop}
       onOutputFontSizeChange={noop}
       onSelectOutputTab={noop}
@@ -153,6 +155,7 @@ describe("OutputSectionHeader find action", () => {
         activeTerminalSession={null}
         anyDiffCollapsed={false}
         hasOutput={false}
+        hiddenOutputCount={0}
         isFindOpen={false}
         isExecutionActive={true}
         isFullscreen={false}
@@ -172,6 +175,7 @@ describe("OutputSectionHeader find action", () => {
         onExpandAllDiffs={vi.fn()}
         onExport={vi.fn()}
         onToggleFind={onToggleFind}
+        onClearHiddenOutputTargets={vi.fn()}
         onNewTerminal={vi.fn()}
         onOutputFontSizeChange={vi.fn()}
         onSelectOutputTab={vi.fn()}
@@ -189,6 +193,27 @@ describe("OutputSectionHeader find action", () => {
     expect(
       screen.queryByRole("button", { name: "Find in output" })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("OutputSectionHeader hidden output action", () => {
+  it("shows the hidden-step escape hatch in a narrow output header", () => {
+    const onClearHiddenOutputTargets = vi.fn();
+    renderHeader({
+      activeOutputTab: "output",
+      hiddenOutputCount: 2,
+      isHeaderNarrow: true,
+      isHeaderVeryNarrow: true,
+      onClearHiddenOutputTargets,
+    });
+
+    const button = screen.getByRole("button", {
+      name: "Show all output steps (2 hidden)",
+    });
+    expect(button).toHaveTextContent("2 hidden · Show all");
+
+    fireEvent.click(button);
+    expect(onClearHiddenOutputTargets).toHaveBeenCalledOnce();
   });
 });
 

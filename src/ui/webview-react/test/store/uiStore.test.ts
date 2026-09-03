@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
@@ -13,6 +14,7 @@ import {
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 
 // Zustand store is a module singleton — reset between tests.
@@ -150,19 +152,127 @@ describe("properties drawer", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Output step selection
+// Output step filtering
 // ---------------------------------------------------------------------------
 
-describe("selectOutputStep", () => {
-  it("sets selectedOutputStep", () => {
-    store().selectOutputStep(3);
-    expect(store().selectedOutputStep).toBe(3);
+describe("hidden output targets", () => {
+  const runAddress = {
+    workflowKey: "workflow-1" as never,
+    kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+    runRef: "run-1" as never,
+  } as const;
+  const otherRunAddress = {
+    ...runAddress,
+    runRef: "run-2" as never,
+  } as const;
+  const runKey = workflowViewAddressKey(runAddress);
+  const otherRunKey = workflowViewAddressKey(otherRunAddress);
+
+  it("toggles a target and records/removes its hidden timestamp", () => {
+    expect(store().outputStepFilterVersion).toBe(0);
+
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    expect(store().hiddenOutputTargets[runKey]).toEqual({
+      keys: ["queue:0"],
+      hiddenAtMs: { "queue:0": expect.any(Number) },
+    });
+    expect(store().outputStepFilterVersion).toBe(1);
+
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    expect(store().hiddenOutputTargets).toEqual({});
+    expect(store().outputStepFilterVersion).toBe(2);
   });
 
-  it("accepts null to reset to current step", () => {
-    store().selectOutputStep(3);
-    store().selectOutputStep(null);
-    expect(store().selectedOutputStep).toBeNull();
+  it("solos a target, then clears when that target is soloed again", () => {
+    const allTargets = ["queue:0", "queue:1", "finalStep:0"];
+
+    store().soloOutputTarget(runKey, "queue:1", allTargets);
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual([
+      "queue:0",
+      "finalStep:0",
+    ]);
+    expect(store().outputStepFilterVersion).toBe(1);
+
+    store().soloOutputTarget(runKey, "queue:1", allTargets);
+    expect(store().hiddenOutputTargets).toEqual({});
+    expect(store().outputStepFilterVersion).toBe(2);
+  });
+
+  it("does not expose one view address's filter under another address", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+
+    expect(store().hiddenOutputTargets[otherRunKey]).toBeUndefined();
+  });
+
+  it("prunes stale address entries whenever a new address is written", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    store().toggleHiddenOutputTarget(otherRunKey, "queue:1");
+
+    expect(store().hiddenOutputTargets).toEqual({
+      [otherRunKey]: {
+        keys: ["queue:1"],
+        hiddenAtMs: { "queue:1": expect.any(Number) },
+      },
+    });
+  });
+
+  it("drops another address's filter as soon as this address renders", () => {
+    store().toggleHiddenOutputTarget(otherRunKey, "queue:1");
+
+    store().pruneHiddenOutputTargets(runKey, new Set(["queue:0", "queue:1"]));
+
+    // Navigating away and back must not restore the old run's filter.
+    expect(store().hiddenOutputTargets).toEqual({});
+  });
+
+  it("prunes hidden keys whose target no longer exists", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    store().toggleHiddenOutputTarget(runKey, "queue:5");
+
+    store().pruneHiddenOutputTargets(runKey, new Set(["queue:0"]));
+
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual(["queue:0"]);
+  });
+
+  it("keeps the filter when no targets are rendered yet", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    const versionBefore = store().outputStepFilterVersion;
+
+    // A replay that momentarily empties the output must not wipe a filter set
+    // on a step that is still running.
+    store().pruneHiddenOutputTargets(runKey, new Set());
+
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual(["queue:0"]);
+    expect(store().outputStepFilterVersion).toBe(versionBefore);
+  });
+
+  it("bumps the filter version when clearing", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    store().clearHiddenOutputTargets(runKey);
+
+    expect(store().hiddenOutputTargets).toEqual({});
+    expect(store().outputStepFilterVersion).toBe(2);
+  });
+
+  it("does not include transient filter state in persisted output", () => {
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+    const persisted = useUiStore.persist.getOptions().partialize?.(store());
+
+    expect(persisted).not.toHaveProperty("hiddenOutputTargets");
+    expect(persisted).not.toHaveProperty("outputStepFilterVersion");
+  });
+
+  it("does not change workflow status or progress state", () => {
+    const workflowBefore = useWorkflowStore.getState();
+    const entriesBefore = workflowBefore.liveOrderedEntries;
+
+    store().toggleHiddenOutputTarget(runKey, "queue:0");
+
+    const workflowAfter = useWorkflowStore.getState();
+    expect(workflowAfter.currentStep).toBe(workflowBefore.currentStep);
+    expect(workflowAfter.totalSteps).toBe(workflowBefore.totalSteps);
+    expect(workflowAfter.steps).toBe(workflowBefore.steps);
+    expect(workflowAfter.liveOrderedEntries).toBe(entriesBefore);
   });
 });
 

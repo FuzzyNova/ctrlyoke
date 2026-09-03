@@ -24,6 +24,7 @@ import type {
   StructuredEventRow,
 } from "@utils/outputRows";
 import type { OutputFindMatch, RowFindDecoration } from "@utils/outputFind";
+import { getTargetKey } from "@utils/outputProjection";
 import type { ToolCallExpansionSection } from "@utils/toolCallLayout";
 import {
   OutputScrollSeekPlaceholder,
@@ -97,6 +98,10 @@ interface OutputPaneProps {
     request: OutputRowFileUndoRequest
   ) => void;
   onMinimapStepClick: (step: MinimapStep) => void;
+  /** Target keys of hidden steps that have produced output since being hidden. */
+  hiddenActivityTargetKeys: ReadonlySet<string>;
+  onMinimapStepToggle: (step: MinimapStep) => void;
+  onMinimapStepSolo: (step: MinimapStep) => void;
   onOutputProfilerRender: React.ProfilerOnRenderCallback;
   onPromptRedo: (row: CliHeaderRow) => void;
   onPromptUndo: (row: CliHeaderRow) => void;
@@ -135,6 +140,7 @@ function renderOutputRow(
     | "onPromptUndo"
     | "onToolCallExpansionChange"
     | "activeMatch"
+    | "hiddenActivityTargetKeys"
   >
 ): React.ReactNode {
   return (
@@ -162,6 +168,9 @@ function renderOutputRow(
       onScriptVerdictExpansionChange={props.onScriptVerdictExpansionChange}
       onScriptOutputExpansionChange={props.onScriptOutputExpansionChange}
       onAttemptGroupToggle={props.onAttemptGroupToggle}
+      hasHiddenActivity={props.hiddenActivityTargetKeys.has(
+        getTargetKey(row.target)
+      )}
     />
   );
 }
@@ -195,6 +204,8 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     onBackToLive,
     onContextMenuOpen,
     onMinimapStepClick,
+    onMinimapStepToggle,
+    onMinimapStepSolo,
     onOutputProfilerRender,
     onScroll,
     onTouchCancel,
@@ -386,6 +397,8 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             scrollContainerRef={outputRef}
             contentHeight={contentHeight}
             onStepClick={onMinimapStepClick}
+            onStepToggle={onMinimapStepToggle}
+            onStepSolo={onMinimapStepSolo}
           />
         </Profiler>
       )}

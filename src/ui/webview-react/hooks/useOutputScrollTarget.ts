@@ -8,6 +8,10 @@ import {
   captureViewportRowAnchor,
   findRenderedRowElementByKey,
 } from "@utils/outputDom";
+import {
+  getTargetKey,
+  type OutputMessageTarget,
+} from "@utils/outputProjection";
 import { resolveDeferredScrollTargetApplyDelayMs } from "@utils/outputAutoscroll";
 import { clamp } from "@utils/number";
 import {
@@ -15,8 +19,10 @@ import {
   logProfilerEvent,
 } from "@utils/performanceProfiler";
 import {
+  OUTPUT_ROW_KINDS,
   OUTPUT_SCROLL_ANCHOR_MODES,
   OUTPUT_SCROLL_TARGET_KINDS,
+  type OutputRowKind,
 } from "@root/types/DashboardConstants";
 
 interface OutputRowLayoutModel {
@@ -70,6 +76,7 @@ interface UseOutputScrollTargetInput {
   pendingNavigationRef: RefObject<unknown | null>;
   rowLayout: OutputRowLayoutModel;
   rowVirtualizer: RowVirtualizerLike;
+  rows?: readonly OutputScrollRow[];
   rowsRef: RefObject<readonly { key: string }[]>;
   restoreTrigger: string;
   savedOutputScrollTarget: OutputScrollTarget | undefined;
@@ -84,6 +91,14 @@ interface UseOutputScrollTargetInput {
   layoutApplyTrigger: string;
   userScrollInputGraceMs: number;
 }
+
+interface OutputScrollRow {
+  key: string;
+  rowKind: OutputRowKind;
+  target: OutputMessageTarget;
+}
+
+const EMPTY_OUTPUT_SCROLL_ROWS: readonly OutputScrollRow[] = [];
 
 export function useOutputScrollTarget({
   applyScrollTargetRef,
@@ -100,6 +115,7 @@ export function useOutputScrollTarget({
   pendingNavigationRef,
   rowLayout,
   rowVirtualizer,
+  rows,
   rowsRef,
   restoreTrigger,
   savedOutputScrollTarget,
@@ -123,6 +139,9 @@ export function useOutputScrollTarget({
   const lastApplyAtRef = useRef<number | null>(null);
   const previousRestoreTriggerRef = useRef<string | null>(null);
   const previousWorkflowScrollTargetIdRef = useRef<string | null>(null);
+  const previousRowsRef = useRef<readonly OutputScrollRow[]>(
+    rows ?? EMPTY_OUTPUT_SCROLL_ROWS
+  );
 
   const setCurrentScrollTarget = useCallback(
     (target: OutputScrollTarget, reason: string) => {
@@ -445,6 +464,48 @@ export function useOutputScrollTarget({
   applyScrollTargetRef.current = applyScrollTarget;
   commitScrollTargetFromViewportRef.current = commitScrollTargetFromViewport;
 
+  const preserveTargetForRenderedRows = useCallback(
+    (target: OutputScrollTarget): OutputScrollTarget => {
+      if (target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM) {
+        return target;
+      }
+
+      if (!rows || rows.some((row) => row.key === target.rowKey)) {
+        return target;
+      }
+
+      const previousAnchor = previousRowsRef.current.find(
+        (row) => row.key === target.rowKey
+      );
+      if (!previousAnchor?.target) {
+        return target;
+      }
+
+      const targetKey = getTargetKey(previousAnchor.target);
+      const placeholder = rows.find(
+        (row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.STEP_HIDDEN &&
+          getTargetKey(row.target) === targetKey
+      );
+      return placeholder ? { ...target, rowKey: placeholder.key } : target;
+    },
+    [rows]
+  );
+
+  // A filter removes content rows but deliberately leaves the step anchor. If
+  // the saved anchor was one of the removed content rows, move it to the
+  // step's placeholder before the anchor-lock layout effect runs. This keeps
+  // the lock as the only scrollTop writer and preserves the viewport offset.
+  useLayoutEffect(() => {
+    const currentTarget = scrollTargetRef.current;
+    const preservedTarget = preserveTargetForRenderedRows(currentTarget);
+    if (areOutputScrollTargetsEqual(currentTarget, preservedTarget)) {
+      return;
+    }
+
+    setCurrentScrollTarget(preservedTarget, "hidden-output-placeholder");
+  }, [preserveTargetForRenderedRows, scrollTargetRef, setCurrentScrollTarget]);
+
   const scheduleScrollTargetCommit = useCallback(
     (reason: string) => {
       if (scrollTargetCommitTimerRef.current !== null) {
@@ -465,7 +526,9 @@ export function useOutputScrollTarget({
 
   useEffect(() => {
     void restoreTrigger;
-    const nextTarget = savedOutputScrollTarget ?? defaultTarget;
+    const nextTarget = preserveTargetForRenderedRows(
+      savedOutputScrollTarget ?? defaultTarget
+    );
     const restoreContextChanged =
       previousRestoreTriggerRef.current !== restoreTrigger ||
       previousWorkflowScrollTargetIdRef.current !== workflowScrollTargetId;
@@ -481,6 +544,12 @@ export function useOutputScrollTarget({
     scrollTargetRef.current = nextTarget;
     autoscrollEnabledRef.current =
       nextTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM;
+    if (
+      savedOutputScrollTarget &&
+      !areOutputScrollTargetsEqual(savedOutputScrollTarget, nextTarget)
+    ) {
+      setOutputScrollTarget(workflowScrollTargetId, nextTarget);
+    }
     requestAnimationFrame(() => {
       applyScrollTargetRef.current("workflow-target-restore", { force: true });
     });
@@ -490,9 +559,17 @@ export function useOutputScrollTarget({
     defaultTarget,
     restoreTrigger,
     savedOutputScrollTarget,
+    preserveTargetForRenderedRows,
     scrollTargetRef,
+    setOutputScrollTarget,
     workflowScrollTargetId,
   ]);
+
+  useEffect(() => {
+    if (rows) {
+      previousRowsRef.current = rows;
+    }
+  }, [rows]);
 
   useEffect(
     () => () => {

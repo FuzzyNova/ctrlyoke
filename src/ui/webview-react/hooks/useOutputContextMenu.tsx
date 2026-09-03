@@ -9,14 +9,17 @@ import type { OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { getTargetKey } from "@utils/outputProjection";
 
 function buildCopyAllText(
   allMessages: OutputMessage[],
-  lastCliIndexPerStep: Map<string, number>
+  lastCliIndexPerStep: Map<string, number>,
+  hiddenTargetKeys: readonly string[]
 ): string {
+  const hiddenKeys = new Set(hiddenTargetKeys);
   const seen = new Map<string, OutputMessage["target"]>();
   for (const msg of allMessages) {
-    const key = `${msg.target.kind}:${msg.target.index}`;
+    const key = getTargetKey(msg.target);
     if (!seen.has(key)) seen.set(key, msg.target);
   }
 
@@ -32,6 +35,14 @@ function buildCopyAllText(
 
     const output = msg.data as CliOutputType;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+
+    // Keep the original step numbering in copied headers even when an earlier
+    // step is hidden. This matches the numbering used by markdown export.
+    if (hiddenKeys.has(key)) {
+      if (!isFinalStep) queueStepNum++;
+      continue;
+    }
+
     const header = isFinalStep
       ? `Final Step Loop ${target.index + 1}`
       : `Step ${queueStepNum}`;
@@ -54,6 +65,7 @@ function buildCopyAllText(
 
 interface UseOutputContextMenuOptions {
   allMessages: OutputMessage[];
+  hiddenTargetKeys: readonly string[];
   stepScrollFractions: Map<string, number>;
   lastCliIndexPerStep: Map<string, number>;
   onOpenFind: () => void;
@@ -61,6 +73,7 @@ interface UseOutputContextMenuOptions {
 
 export function useOutputContextMenu({
   allMessages,
+  hiddenTargetKeys,
   stepScrollFractions,
   lastCliIndexPerStep,
   onOpenFind,
@@ -100,7 +113,17 @@ export function useOutputContextMenu({
         }
       }
 
-      const copyAllText = buildCopyAllText(allMessages, lastCliIndexPerStep);
+      const copyAllText = buildCopyAllText(
+        allMessages,
+        lastCliIndexPerStep,
+        hiddenTargetKeys
+      );
+      const presentTargetKeys = new Set(
+        allMessages.map((message) => getTargetKey(message.target))
+      );
+      const hiddenStepCount = hiddenTargetKeys.filter((key) =>
+        presentTargetKeys.has(key)
+      ).length;
       const hasAnyOutput = allMessages.some(
         (m) => m.type === OUTPUT_MESSAGE_TYPES.CLI
       );
@@ -119,7 +142,10 @@ export function useOutputContextMenu({
           },
           { type: "divider" },
           {
-            label: "Copy All",
+            label:
+              hiddenStepCount > 0
+                ? `Copy All (${hiddenStepCount} step${hiddenStepCount === 1 ? "" : "s"} hidden)`
+                : "Copy All",
             icon: "codicon-copy",
             disabled: !hasAnyOutput || copyAllText.length === 0,
             disabledTitle: "No output to copy",
@@ -151,7 +177,13 @@ export function useOutputContextMenu({
         ],
       });
     },
-    [allMessages, stepScrollFractions, lastCliIndexPerStep, onOpenFind]
+    [
+      allMessages,
+      hiddenTargetKeys,
+      stepScrollFractions,
+      lastCliIndexPerStep,
+      onOpenFind,
+    ]
   );
 
   const outputContextMenuPortal = contextMenu ? (

@@ -65,6 +65,8 @@ A workflow `steps` array can contain two kinds of step:
 
 Prompt steps default to type `prompt`, so the `type` field is optional unless you want to be explicit.
 
+**Hiding steps in the Output pane.** Use the Output pane's minimap eye controls or a step context menu to hide output from individual steps while keeping their status and progress visible. The header shows how many steps are hidden; use the pill's show-all action, the step controls, or the context menu to restore output. Copy All follows the filter, while Markdown export starts with the visible steps selected and lets you widen the range before exporting.
+
 ## Final step
 
 `finalStep` runs after the queue completes. It is useful for review passes, post-processing, or dynamic queue extension loops.

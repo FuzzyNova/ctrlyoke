@@ -1,4 +1,7 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  KEYBOARD_KEYS,
+} from "@root/types/DashboardConstants";
 import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
@@ -47,6 +50,8 @@ export interface MinimapStep {
   /** Real pixel fraction (0–1): offsetTop of the step anchor / shared content height */
   scrollFraction: number;
   label: string;
+  hidden: boolean;
+  hasHiddenActivity: boolean;
   /**
    * Available undo/redo actions for this step.
    * Both can be non-null in mixed state (some files undone, others not).
@@ -64,6 +69,8 @@ interface OutputMinimapProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   contentHeight: number;
   onStepClick?: (step: MinimapStep) => void;
+  onStepToggle?: (step: MinimapStep) => void;
+  onStepSolo?: (step: MinimapStep) => void;
 }
 
 // ============================================================================
@@ -115,10 +122,11 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   scrollContainerRef,
   contentHeight,
   onStepClick,
+  onStepToggle,
+  onStepSolo,
 }) => {
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // pinnedKey: popup opened by tap/click (stays open until tapped away).
-  // Separate from hoveredKey so mouse-hover and touch-tap don't conflict.
+  // Mouse hover and focus visibility are handled by the marker group's CSS.
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isThumbHovered, setIsThumbHovered] = useState(false);
@@ -402,10 +410,15 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
 
   return (
     // The rail itself is 14px and clips nothing — markers overflow to the left.
+    // The rail used to be aria-hidden, but it now contains real step controls,
+    // so it has to stay in the accessibility tree. Its own drag-to-scroll is a
+    // pointer-only shorthand for the output pane's native scrolling, and the
+    // step markers inside it are individually focusable buttons, so there is no
+    // keyboard affordance missing here for the rule to protect.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={railRef}
       className="relative flex-shrink-0 w-[var(--fp-output-minimap-width)] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
-      aria-hidden="true"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
       style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
@@ -566,8 +579,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       {/* Step markers */}
       {steps.map((step) => {
         const topPct = step.scrollFraction * 100;
-        // isHovered: true when mouse-hovering OR popup was pinned open by tap
-        const isHovered = hoveredKey === step.key || pinnedKey === step.key;
+        const isPinned = pinnedKey === step.key;
         const { undo, redo } = step.undoActions;
         const hasUndo = undo !== null;
         const hasRedo = redo !== null;
@@ -586,108 +598,129 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           // continuously — moving from dot to popup never leaves the container.
           <div
             key={step.key}
-            role="button"
-            tabIndex={0}
-            className="absolute right-0 flex flex-row items-center z-header"
+            role="group"
+            aria-label={`Step ${step.label}`}
+            className={`group absolute right-0 flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
             style={{
               top: `clamp(3px, ${topPct}%, calc(100% - 3px))`,
               transform: "translateY(-50%)",
             }}
-            onMouseEnter={() => setHoveredKey(step.key)}
-            onMouseLeave={() => setHoveredKey(null)}
-            onClick={(e) => {
-              // stopPropagation prevents the document dismiss-listener from
-              // immediately closing the popup we're about to open.
-              e.stopPropagation();
-              setPinnedKey((prev) => (prev === step.key ? null : step.key));
-            }}
-            onKeyDown={(e) => {
-              if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
-                e.preventDefault();
-                setPinnedKey((prev) => (prev === step.key ? null : step.key));
-              } else if (e.key === KEYBOARD_KEYS.ESCAPE) {
-                setHoveredKey(null);
-                setPinnedKey(null);
-              }
-            }}
-            aria-label={`Step ${step.label}: ${hasUndo ? "undo available. " : ""}${hasRedo ? "redo available." : ""}`}
           >
             {/* Speech-bubble popup — visible on hover (mouse) or when pinned open (touch/click) */}
-            {isHovered && (
-              <div className="flex items-stretch mr-[3px]">
-                {/* Bubble body */}
-                <div
-                  className="flex flex-col justify-center gap-1 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
-                  style={{ whiteSpace: "nowrap" }}
-                >
-                  {/* Step label */}
-                  <span className="text-xxs font-semibold text-foreground leading-tight">
-                    {step.label}
-                  </span>
+            <div
+              className={`flex items-stretch mr-[3px] ${isPinned ? "" : "hidden group-hover:flex group-focus-within:flex"}`}
+            >
+              {/* Bubble body */}
+              <div
+                className="flex flex-col justify-center gap-1 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
+                style={{ whiteSpace: "nowrap" }}
+              >
+                {/* Step label */}
+                <span className="text-xxs font-semibold text-foreground leading-tight">
+                  {step.label}
+                </span>
 
-                  {/* Redo action (shown above undo in mixed state) */}
-                  {hasRedo && redo && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPinnedKey(null);
-                        redo.onTrigger();
-                      }}
-                      style={{ touchAction: "manipulation" }}
-                      className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
-                    >
-                      <i className="codicon codicon-redo text-xxs" />
-                      {redo.label}
-                    </button>
-                  )}
+                {/* Redo action (shown above undo in mixed state) */}
+                {hasRedo && redo && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinnedKey(null);
+                      redo.onTrigger();
+                    }}
+                    style={{ touchAction: "manipulation" }}
+                    className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
+                  >
+                    <i className="codicon codicon-redo text-xxs" />
+                    {redo.label}
+                  </button>
+                )}
 
-                  {/* Undo action */}
-                  {hasUndo && undo && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPinnedKey(null);
-                        undo.onTrigger();
-                      }}
-                      style={{ touchAction: "manipulation" }}
-                      className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
-                    >
-                      <i className="codicon codicon-discard text-xxs" />
-                      {undo.label}
-                    </button>
-                  )}
-                </div>
-
-                {/* Tail triangle pointing right toward the dot */}
-                <div
-                  className="self-center flex-shrink-0 text-dropdown-bg"
-                  style={{
-                    width: 0,
-                    height: 0,
-                    borderTop: "5px solid transparent",
-                    borderBottom: "5px solid transparent",
-                    borderLeft: "5px solid currentColor",
-                    filter:
-                      "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
-                  }}
-                />
+                {/* Undo action */}
+                {hasUndo && undo && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinnedKey(null);
+                      undo.onTrigger();
+                    }}
+                    style={{ touchAction: "manipulation" }}
+                    className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
+                  >
+                    <i className="codicon codicon-discard text-xxs" />
+                    {undo.label}
+                  </button>
+                )}
               </div>
-            )}
+
+              {/* Tail triangle pointing right toward the dot */}
+              <div
+                className="self-center flex-shrink-0 text-dropdown-bg"
+                style={{
+                  width: 0,
+                  height: 0,
+                  borderTop: "5px solid transparent",
+                  borderBottom: "5px solid transparent",
+                  borderLeft: "5px solid currentColor",
+                  filter:
+                    "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
+                }}
+              />
+            </div>
 
             {/* Marker pill — click scrolls to step */}
             <button
               type="button"
-              onClick={() => handleMarkerClick(step)}
+              onClick={(e) => {
+                if (e.altKey && onStepSolo) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onStepSolo(step);
+                  return;
+                }
+                // Keep the popup pinned for mouse, keyboard, and touch
+                // activation; stopping propagation protects it from the
+                // document-level dismiss listener.
+                e.stopPropagation();
+                handleMarkerClick(step);
+                setPinnedKey((prev) => (prev === step.key ? null : step.key));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === KEYBOARD_KEYS.ESCAPE) {
+                  setPinnedKey(null);
+                }
+              }}
               title={step.label}
               aria-label={step.label}
               tabIndex={0}
-              className={`w-[var(--fp-output-minimap-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current ${dotColorClass}`}
-              style={{
-                height: isHovered ? "6px" : "4px",
-              }}
+              className={`h-1 w-[var(--fp-output-minimap-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
             />
+            <button
+              type="button"
+              className="ml-0.5 flex h-4 w-4 items-center justify-center rounded text-description-fg opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-border group-hover:opacity-100 group-focus-within:opacity-100"
+              aria-label={`${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`}
+              aria-pressed={step.hidden}
+              title={`${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onStepToggle?.(step);
+              }}
+            >
+              <i
+                className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
+                aria-hidden="true"
+              />
+            </button>
+            {step.hasHiddenActivity && (
+              <span
+                data-minimap-hidden-activity
+                className="ml-0.5 h-1 w-1 rounded-full bg-output-streaming animate-pulse-streaming"
+                aria-hidden="true"
+              />
+            )}
           </div>
         );
       })}

@@ -14,6 +14,7 @@ export interface OutputSectionHeaderProps {
   activeTerminalSession: TerminalSession | null;
   anyDiffCollapsed: boolean;
   hasOutput: boolean;
+  hiddenOutputCount: number;
   isFindOpen: boolean;
   isExecutionActive: boolean;
   isFullscreen: boolean;
@@ -34,6 +35,7 @@ export interface OutputSectionHeaderProps {
   onExpandAllDiffs: () => void;
   onExport: () => void;
   onToggleFind: () => void;
+  onClearHiddenOutputTargets: () => void;
   onNewTerminal: () => void;
   onSelectOutputTab: () => void;
   onSelectTerminalTab: () => void;
@@ -52,6 +54,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   activeTerminalSession,
   anyDiffCollapsed,
   hasOutput,
+  hiddenOutputCount,
   isFindOpen,
   isExecutionActive,
   isFullscreen,
@@ -71,6 +74,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   onExpandAllDiffs,
   onExport,
   onToggleFind,
+  onClearHiddenOutputTargets,
   onNewTerminal,
   onSelectOutputTab,
   onSelectTerminalTab,
@@ -255,6 +259,16 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
 
         {activeOutputTab === OUTPUT_TABS.OUTPUT && (
           <>
+            {hiddenOutputCount > 0 && (
+              <button
+                type="button"
+                className="rounded border border-panel-border px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors whitespace-nowrap"
+                aria-label={`Show all output steps (${hiddenOutputCount} hidden)`}
+                onClick={onClearHiddenOutputTargets}
+              >
+                {hiddenOutputCount} hidden · Show all
+              </button>
+            )}
             {workflowUndoEntries.length > 0 && (
               <button
                 type="button"

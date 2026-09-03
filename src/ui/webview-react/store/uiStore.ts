@@ -305,6 +305,13 @@ export type OutputScrollTarget =
     }
   | { kind: typeof OUTPUT_SCROLL_TARGET_KINDS.BOTTOM };
 
+export interface HiddenOutputTargetsEntry {
+  /** getTargetKey() strings. */
+  keys: readonly string[];
+  /** When each key was hidden; drives the "hidden but active" indicator. */
+  hiddenAtMs: Readonly<Record<string, number>>;
+}
+
 export interface PendingOutputFindRequest {
   query: string;
   preferredTarget?: OutputExecutionTarget;
@@ -451,8 +458,9 @@ interface UiState {
   settingsCollapsed: boolean;
 
   // Output panel state
-  selectedOutputStep: number | null; // Which step's output to show (null = current)
   outputScrollTargets: Record<string, OutputScrollTarget>; // transient per-workflow output scroll memory
+  hiddenOutputTargets: Record<string, HiddenOutputTargetsEntry>;
+  outputStepFilterVersion: number;
   pendingFindRequest: PendingOutputFindRequest | null;
 
   // History search drawer state (transient, not persisted)
@@ -769,10 +777,20 @@ interface UiActions {
   setSettingsCollapsed: (collapsed: boolean) => void;
 
   // Output panel
-  selectOutputStep: (stepIndex: number | null) => void;
   setOutputScrollTarget: (
     workflowId: string,
     target: OutputScrollTarget
+  ) => void;
+  toggleHiddenOutputTarget: (workflowKey: string, targetKey: string) => void;
+  soloOutputTarget: (
+    workflowKey: string,
+    targetKey: string,
+    allPresentTargetKeys: readonly string[]
+  ) => void;
+  clearHiddenOutputTargets: (workflowKey: string) => void;
+  pruneHiddenOutputTargets: (
+    workflowKey: string,
+    presentTargetKeys: ReadonlySet<string>
   ) => void;
   setPendingFindRequest: (request: PendingOutputFindRequest | null) => void;
   openHistorySearch: () => void;
@@ -1050,8 +1068,9 @@ const initialState: UiState = {
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
   settingsCollapsed: false,
-  selectedOutputStep: null,
   outputScrollTargets: {},
+  hiddenOutputTargets: {},
+  outputStepFilterVersion: 0,
   pendingFindRequest: null,
   isHistorySearchOpen: false,
   historySearchResults: [],
@@ -1257,8 +1276,6 @@ export const useUiStore = create<UiState & UiActions>()(
       // OUTPUT PANEL
       // ============================================================================
 
-      selectOutputStep: (stepIndex) => set({ selectedOutputStep: stepIndex }),
-
       setOutputScrollTarget: (workflowId, target) =>
         set((state) => {
           const previous = state.outputScrollTargets[workflowId];
@@ -1271,6 +1288,113 @@ export const useUiStore = create<UiState & UiActions>()(
               ...state.outputScrollTargets,
               [workflowId]: target,
             },
+          };
+        }),
+
+      toggleHiddenOutputTarget: (workflowKey, targetKey) =>
+        set((state) => {
+          const current = state.hiddenOutputTargets[workflowKey];
+          const isHidden = current?.keys.includes(targetKey) ?? false;
+          const nextKeys = isHidden
+            ? (current?.keys ?? []).filter((key) => key !== targetKey)
+            : [...(current?.keys ?? []), targetKey];
+          const nextHiddenAtMs: Record<string, number> = {};
+
+          for (const key of nextKeys) {
+            if (key === targetKey && !isHidden) {
+              nextHiddenAtMs[key] = Date.now();
+            } else if (current?.hiddenAtMs[key] !== undefined) {
+              nextHiddenAtMs[key] = current.hiddenAtMs[key];
+            }
+          }
+
+          return {
+            hiddenOutputTargets:
+              nextKeys.length > 0
+                ? {
+                    [workflowKey]: {
+                      keys: nextKeys,
+                      hiddenAtMs: nextHiddenAtMs,
+                    },
+                  }
+                : {},
+            outputStepFilterVersion: state.outputStepFilterVersion + 1,
+          };
+        }),
+
+      soloOutputTarget: (workflowKey, targetKey, allPresentTargetKeys) =>
+        set((state) => {
+          const current = state.hiddenOutputTargets[workflowKey];
+          const currentKeys = current?.keys ?? [];
+          const targetKeys = [...new Set(allPresentTargetKeys)];
+          const nextKeys = targetKeys.filter((key) => key !== targetKey);
+          const isAlreadySoloed =
+            currentKeys.length === nextKeys.length &&
+            nextKeys.every((key) => currentKeys.includes(key));
+
+          if (isAlreadySoloed || nextKeys.length === 0) {
+            return {
+              hiddenOutputTargets: {},
+              outputStepFilterVersion: state.outputStepFilterVersion + 1,
+            };
+          }
+
+          const now = Date.now();
+          const hiddenAtMs: Record<string, number> = {};
+          for (const key of nextKeys) {
+            const previousHiddenAtMs = current?.hiddenAtMs[key];
+            hiddenAtMs[key] =
+              previousHiddenAtMs === undefined ? now : previousHiddenAtMs;
+          }
+
+          return {
+            hiddenOutputTargets: {
+              [workflowKey]: { keys: nextKeys, hiddenAtMs },
+            },
+            outputStepFilterVersion: state.outputStepFilterVersion + 1,
+          };
+        }),
+
+      clearHiddenOutputTargets: (_workflowKey) =>
+        set((state) => ({
+          hiddenOutputTargets: {},
+          outputStepFilterVersion: state.outputStepFilterVersion + 1,
+        })),
+
+      pruneHiddenOutputTargets: (workflowKey, presentTargetKeys) =>
+        set((state) => {
+          const current = state.hiddenOutputTargets[workflowKey];
+
+          // A hidden set belongs to exactly one viewed address. Writes already
+          // drop other addresses, but rendering a different address must drop
+          // them too, or navigating away and back silently restores a filter
+          // the user has no reason to expect.
+          const hasForeignEntries = Object.keys(state.hiddenOutputTargets).some(
+            (key) => key !== workflowKey
+          );
+
+          // With nothing rendered there is no way to judge staleness, and a
+          // replay that momentarily empties the output would otherwise wipe a
+          // filter set on a still-running step.
+          const nextKeys =
+            current && presentTargetKeys.size > 0
+              ? current.keys.filter((key) => presentTargetKeys.has(key))
+              : (current?.keys ?? []);
+          const keysChanged = nextKeys.length !== (current?.keys.length ?? 0);
+          if (!hasForeignEntries && !keysChanged) return state;
+
+          const hiddenAtMs: Record<string, number> = {};
+          for (const key of nextKeys) {
+            const timestamp = current?.hiddenAtMs[key];
+            if (timestamp !== undefined) hiddenAtMs[key] = timestamp;
+          }
+
+          return {
+            hiddenOutputTargets:
+              nextKeys.length > 0
+                ? { [workflowKey]: { keys: nextKeys, hiddenAtMs } }
+                : {},
+            outputStepFilterVersion: state.outputStepFilterVersion + 1,
           };
         }),
 
@@ -2102,7 +2226,6 @@ export const useUiStore = create<UiState & UiActions>()(
           duplicateWorkflowError: null,
           fileBrowserState: null,
           propertiesDrawerOpen: false,
-          selectedOutputStep: null,
           newWorkflowModalOpen: false,
           openCreateTemplateForm: false,
           viewingDeletedWorkflow: null,
@@ -2128,6 +2251,8 @@ export const useUiStore = create<UiState & UiActions>()(
           isLoading: false,
           loadingMessage: null,
           outputScrollTargets: {},
+          hiddenOutputTargets: {},
+          outputStepFilterVersion: initialState.outputStepFilterVersion,
           toastQueue: [],
           footerOpenPicker: null,
           suffixEditConfirmation: null,

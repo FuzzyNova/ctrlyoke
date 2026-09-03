@@ -7,6 +7,7 @@ import {
   buildOutputRows,
   getCollapsibleAttemptGroupKeys,
 } from "@utils/outputRows";
+import { getTargetKey } from "@utils/outputProjection";
 import { measurePhase } from "@utils/performanceProfiler";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
@@ -21,6 +22,8 @@ import {
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   OUTPUT_ROW_KINDS,
@@ -68,6 +71,8 @@ interface UseOutputRowsModelInput {
   onDiffViewReset: () => void;
 }
 
+const SHELL_WORKFLOW_ID = "_shell";
+
 /**
  * Owns the projection from live/history entries to chronologically sorted
  * `OutputMessage[]`, the `buildOutputRows` orchestration, and the diff/tool/bash
@@ -98,6 +103,21 @@ export function useOutputRowsModel({
   invalidateMeasuredRowForUserResize,
   onDiffViewReset,
 }: UseOutputRowsModelInput) {
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
+  const hiddenOutputTargets = useUiStore((state) => state.hiddenOutputTargets);
+  const hiddenOutputAddressKey = useMemo(
+    () =>
+      displayedViewAddress
+        ? workflowViewAddressKey(displayedViewAddress)
+        : SHELL_WORKFLOW_ID,
+    [displayedViewAddress]
+  );
+  const hiddenTargetKeys = useMemo(
+    () => new Set(hiddenOutputTargets[hiddenOutputAddressKey]?.keys ?? []),
+    [hiddenOutputAddressKey, hiddenOutputTargets]
+  );
   const [diffCollapseState, setDiffCollapseState] = useState<
     Map<string, boolean>
   >(new Map());
@@ -165,6 +185,7 @@ export function useOutputRowsModel({
           outputContentWidth,
           outputFontSize,
           collapsedToolOutputLineCount,
+          hiddenTargets: hiddenTargetKeys.size,
         },
         () =>
           buildOutputRows({
@@ -187,6 +208,7 @@ export function useOutputRowsModel({
             scriptVerdictExpansionState,
             scriptOutputExpansionState,
             collapsedAttemptGroupKeys,
+            hiddenTargetKeys,
             defaultDiffCollapsed: diffsCollapsed,
             diffViewType: outputDiffViewType,
             outputFontSize,
@@ -214,6 +236,7 @@ export function useOutputRowsModel({
       scriptVerdictExpansionState,
       scriptOutputExpansionState,
       collapsedAttemptGroupKeys,
+      hiddenTargetKeys,
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
@@ -246,6 +269,13 @@ export function useOutputRowsModel({
   // Drop expansion-state entries for rows that no longer exist, and seed newly
   // appearing diffs with the current default-collapsed setting.
   useEffect(() => {
+    const presentTargetKeys = new Set(
+      uniqueStepTargets.map((target) => getTargetKey(target))
+    );
+    useUiStore
+      .getState()
+      .pruneHiddenOutputTargets(hiddenOutputAddressKey, presentTargetKeys);
+
     const diffKeys = new Set(
       rows.flatMap((row) =>
         row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
@@ -368,7 +398,13 @@ export function useOutputRowsModel({
 
       return changed ? next : previous;
     });
-  }, [rows, diffsCollapsed]);
+  }, [
+    diffsCollapsed,
+    hiddenOutputAddressKey,
+    hiddenOutputTargets,
+    rows,
+    uniqueStepTargets,
+  ]);
 
   const previousDiffResetVersion = useRef(diffResetVersion);
   useEffect(() => {
