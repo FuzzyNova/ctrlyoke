@@ -249,7 +249,7 @@ Completions respect `.gitignore` by default (`ctrlyoke.respectGitignoreForComple
 
 ## Dashboard
 
-The ctrlyoke panel opens in the VS Code bottom panel area and contains:
+The ctrlyoke panel opens in the VS Code secondary side bar (far right) by default and contains:
 
 **Prompts panel** — draggable prompt list with numbered slots, status indicators, and a prompt counter. Select any prompt to open it in the editor.
 
@@ -276,7 +276,7 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 
 | Command                                    | Description                                                                                   |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel`            | Open the dashboard in the bottom panel                                                        |
+| `ctrlyoke: Open ctrlyoke Panel`            | Open the dashboard in the secondary side bar                                                  |
 | `ctrlyoke: New Workflow from Template`     | Create a workflow from a built-in or custom template                                          |
 | `ctrlyoke: New Blank Workflow`             | Clear the dashboard and start with an empty workflow                                          |
 | Editor convert button                      | Write a step prompt to `.ctrlyoke/prompts/`                                                   |

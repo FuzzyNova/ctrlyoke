@@ -15,7 +15,7 @@
     "url": "https://github.com/FuzzyNova/ctrlyoke/issues"
   },
   "engines": {
-    "vscode": "^1.104.0",
+    "vscode": "^1.106.0",
     "node": ">=22.12.0"
   },
   "categories": [
@@ -521,7 +521,7 @@
       ]
     },
     "viewsContainers": {
-      "panel": [
+      "secondarySideBar": [
         {
           "id": "ctrlyoke",
           "title": "ctrlyoke",

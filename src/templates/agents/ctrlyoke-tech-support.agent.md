@@ -44,7 +44,7 @@ Users must install and authenticate at least one harness separately; ctrlyoke do
 </supportedHarnesses>
 
 <dashboardNavigation>
-The ctrlyoke panel opens from `Command Palette -> ctrlyoke: Open ctrlyoke Panel` in the VS Code bottom panel area.
+The ctrlyoke panel opens from `Command Palette -> ctrlyoke: Open ctrlyoke Panel` in the VS Code secondary side bar (far right) by default.
 
 Desktop layout:
 

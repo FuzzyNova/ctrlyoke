@@ -174,9 +174,9 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
         One quick tip
       </span>
       <span className="text-xs text-description-fg select-none leading-relaxed">
-        ctrlyoke lives in the bottom panel by default. On smaller screens it can
-        feel cramped — drag the ctrlyoke tab to the sidebar for more vertical
-        space.
+        ctrlyoke lives in the secondary side bar (far right) by default,
+        alongside chat. Prefer a wider, horizontal layout instead? Drag the
+        ctrlyoke tab down to the bottom panel.
       </span>
       <button
         className="mt-1 px-4 py-1.5 text-xs font-medium rounded
