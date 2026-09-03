@@ -100,6 +100,7 @@ beforeEach(() => {
   useUiStore.setState({
     displayedViewAddress: null,
     appliedViewAddress: null,
+    appliedDefinitionRevision: null,
     executionRunRef: null,
   });
   useEditorStore.getState().resetEditor();
@@ -1374,6 +1375,7 @@ describe("RUN_VIEW_LOADED navigation identity", () => {
         displayedViewAddress: address,
         appliedViewAddress: address,
         displayedDefinitionRevision: 1,
+        appliedDefinitionRevision: 1,
         displayedDescriptorRevision: 1,
       });
       useWorkflowStore.getState().loadWorkflow({
@@ -1993,6 +1995,7 @@ describe("run view revision snapshots", () => {
         displayedViewAddress: address,
         appliedViewAddress: address,
         displayedDefinitionRevision: 3,
+        appliedDefinitionRevision: 3,
         displayedDescriptorRevision: 5,
       });
       useWorkflowStore.setState({
@@ -2034,7 +2037,9 @@ describe("run view revision snapshots", () => {
     act(() => {
       useUiStore.setState({
         displayedViewAddress: address,
+        appliedViewAddress: address,
         displayedDefinitionRevision: 5,
+        appliedDefinitionRevision: 5,
         displayedDescriptorRevision: 10,
         pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 4 },
       });
@@ -2065,6 +2070,63 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().displayedDefinitionRevision).toBe(4);
     expect(useUiStore.getState().displayedDescriptorRevision).toBe(11);
     expect(useUiStore.getState().pendingRewind).toBeNull();
+  });
+
+  it("applies the snapshot that follows a write's early identity publish", () => {
+    // Every run-addressed write now publishes WORKFLOW_VIEW_IDENTITY as soon as
+    // it is durable and lets the (far slower) RUN_VIEW_LOADED snapshot follow,
+    // so the client can act on the write immediately instead of echoing a
+    // superseded revision for as long as the snapshot takes to build. That
+    // leaves the displayed revision equal to the incoming snapshot's, so the
+    // snapshot must be judged against the revision whose content is actually
+    // applied — otherwise a write that removed a step is discarded as
+    // regressive and the deleted step stays on screen forever.
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: address,
+        appliedViewAddress: address,
+        displayedDefinitionRevision: 7,
+        appliedDefinitionRevision: 7,
+        displayedDescriptorRevision: 2,
+      });
+      useWorkflowStore.setState({
+        steps: [makePrompt("a"), makePrompt("b"), makePrompt("c")],
+      });
+
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address,
+        definitionRevision: 8,
+        descriptorRevision: 2,
+      });
+    });
+
+    // Armed for the next action right away; the content is still the old one.
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(8);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(7);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Deleted a step",
+          definitionRevision: 8,
+          steps: [makePrompt("a"), makePrompt("c")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 2,
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toHaveLength(2);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(8);
   });
 
   it("re-arms the next edit with the revisions a write just produced", () => {
@@ -2230,6 +2292,7 @@ describe("run view revision snapshots", () => {
       displayedViewAddress: previousAddress,
       appliedViewAddress: previousAddress,
       displayedDefinitionRevision: 9,
+      appliedDefinitionRevision: 9,
     });
 
     let requestId = "";

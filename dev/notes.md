@@ -73,8 +73,10 @@ mcp sometimes does not get attached, or harness bugs where the don't pick up the
 
 ☑️ token count uses cached tokens and inflates the actual totals and makes it hard to read, context bar should switch to using "2x or 3x" instead of the raw token value too
 
-fix default location of ctrlyoke panel in vs code, bottom panel feels wrong now.
+☑️ fix default location of ctrlyoke panel in vs code, bottom panel feels wrong now.
 
 ☑️ find the right way to force a specific aspect ratio and resolution (maybe in the developer section, or just using playwright), ideally it takes an automatic screenshot too
 
 ☑️ fix externally controlled banners, use the same banner as pause and continue instead of overloading the chips in the workflow summary table.
+
+readAddressedRunView is slow on large histories — measured 4.1s for the summaries/descriptor/history read on a ~1350-run lineage (ctrlyoke-1788448120396.log, 19:31:28→19:31:33), because getRunSummaries reads one working file per run. It no longer blocks acting on a workflow (revisions are published ahead of the snapshot now), but it still delays every run-view refresh.

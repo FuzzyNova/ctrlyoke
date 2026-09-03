@@ -738,9 +738,37 @@ describe("markViewAddressApplied", () => {
     const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
     expect(store().appliedViewAddress).toBeNull();
 
-    store().markViewAddressApplied(address);
+    store().markViewAddressApplied(address, 4);
 
     expect(store().appliedViewAddress).toEqual(address);
+    expect(store().appliedDefinitionRevision).toBe(4);
+  });
+
+  it("keeps the applied revision independent of the displayed one", () => {
+    // An identity published ahead of a write's snapshot advances only the
+    // optimistic token the next mutation echoes; the content the client is
+    // rendering is still the older revision until a snapshot applies it.
+    store().markViewAddressApplied(
+      { workflowKey: "wf-1" as never, kind: "draft" as const },
+      4
+    );
+    store().setDisplayedViewIdentity(
+      { workflowKey: "wf-1" as never, kind: "draft" as const },
+      5,
+      2
+    );
+
+    expect(store().displayedDefinitionRevision).toBe(5);
+    expect(store().appliedDefinitionRevision).toBe(4);
+  });
+});
+
+describe("markAppliedDefinitionRevision", () => {
+  it("advances monotonically so a late push cannot rewind applied content", () => {
+    store().markAppliedDefinitionRevision(6);
+    store().markAppliedDefinitionRevision(3);
+
+    expect(store().appliedDefinitionRevision).toBe(6);
   });
 });
 

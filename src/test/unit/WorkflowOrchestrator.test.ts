@@ -210,7 +210,9 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
       const { orchestrator, internal } = createApprovalHarness();
       const feedback: string[] = [];
       let executed = false;
-      internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "workflow-instance"]]);
+      internal.viewerRegistry = new Map([
+        [PANEL_CLIENT_ID, "workflow-instance"],
+      ]);
       internal.userFeedbackSink = {
         notify: ({ message }: { message: string }) => feedback.push(message),
       };
@@ -3456,6 +3458,206 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       assert.strictEqual(externalOwner.runner, RUNNER_IDS.CLI);
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
+suite("WorkflowOrchestrator addressed write revision publishing", () => {
+  // The client echoes `definitionRevision` on its next mutation *and* on every
+  // run-start action, so it is unusable until the write's new revision reaches
+  // it. Sequencing that behind `invalidateRunViews` made the wait as long as a
+  // lineage-wide summary scan (over four seconds on a large history), and a
+  // Continue pressed inside that window was rejected as a revision conflict
+  // and only worked on a second press.
+  test("publishes a run-addressed write's revisions to viewers before its snapshot invalidation", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-write-revisions-")
+    );
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "prefix" }, { prompt: "suffix" }],
+        getCurrentIndex: () => 2,
+        getStatus: () => EXECUTION_STATES.ERROR,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Published",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "published",
+        sourceAccess.getSteps(),
+        workspace,
+        "Published"
+      );
+      const run = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: run.runRef,
+      };
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.lineageRepository = new WorkflowLineageRepository();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, address],
+        ["browser:watcher", address],
+      ]);
+      const operations: string[] = [];
+      const identities: unknown[] = [];
+      const recordIdentity = (clientId: string) => (message: unknown) => {
+        operations.push(`identity:${clientId}`);
+        identities.push(message);
+      };
+      internal.viewMessageSinks = new Map([
+        [PANEL_CLIENT_ID, recordIdentity(PANEL_CLIENT_ID)],
+        ["browser:watcher", recordIdentity("browser:watcher")],
+      ]);
+      internal.invalidateRunViews = async () => {
+        operations.push("snapshot");
+      };
+
+      await orchestrator.updateFinalStepInQueue(
+        {
+          address,
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: 1,
+        } as never,
+        { prompt: "wrap up" } as never,
+        undefined,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(operations, [
+        `identity:${PANEL_CLIENT_ID}`,
+        "identity:browser:watcher",
+        "snapshot",
+      ]);
+      // Every viewer of the written address is armed, not just the actor: the
+      // revision a write supersedes is per-address, not per-client.
+      for (const identity of identities) {
+        assert.deepStrictEqual(
+          (identity as { type: string; definitionRevision: number }).type,
+          MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY
+        );
+        assert.strictEqual(
+          (identity as { definitionRevision: number }).definitionRevision,
+          2
+        );
+      }
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  // Setting a start position is the most common prelude to pressing Continue,
+  // and `validateExplicitContinuationTarget` checks both revisions the rewind
+  // just moved.
+  test("publishes a rewind's revisions before its snapshot invalidation", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-rewind-revisions-")
+    );
+    let history: OutputHistoryManager | undefined;
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [
+          { prompt: "prefix", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "suffix", _runtime: { startedAt: 3, completedAt: 4 } },
+        ],
+        getCurrentIndex: () => 2,
+        getStatus: () => EXECUTION_STATES.ERROR,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Rewound",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "rewound",
+        sourceAccess.getSteps(),
+        workspace,
+        "Rewound"
+      );
+      const run = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      history = new OutputHistoryManager(workspace);
+      await history.initializeRunAt(
+        workflowKey,
+        run.runRef,
+        run.runDir,
+        run.runId,
+        Date.now()
+      );
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: run.runRef,
+      };
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.lineageRepository = new WorkflowLineageRepository();
+      internal.viewAddressRegistry = new Map([[PANEL_CLIENT_ID, address]]);
+      const operations: string[] = [];
+      const identities: Array<{ definitionRevision: number }> = [];
+      internal.viewMessageSinks = new Map([
+        [
+          PANEL_CLIENT_ID,
+          (message: { definitionRevision: number }) => {
+            operations.push("identity");
+            identities.push(message);
+          },
+        ],
+      ]);
+      internal.invalidateRunViews = async () => {
+        operations.push("snapshot");
+      };
+
+      const result = await orchestrator.setStartPositionAtRun(
+        { workflowKey, runRef: run.runRef },
+        1,
+        1,
+        await new WorkflowLineageRepository()
+          .readDescriptor(workspace, workflowKey)
+          .then((descriptor) => descriptor.revision),
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result.kind, "rewind");
+      assert.deepStrictEqual(operations, ["identity", "snapshot"]);
+      assert.strictEqual(
+        identities[0]?.definitionRevision,
+        result.definitionRevision
+      );
+    } finally {
+      await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });

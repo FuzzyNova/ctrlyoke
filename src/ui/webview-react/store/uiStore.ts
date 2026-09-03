@@ -508,6 +508,22 @@ interface UiState {
    * displayed.
    */
   appliedViewAddress: WorkflowViewAddress | null;
+  /**
+   * The definition revision of the content `appliedViewAddress` names, moved
+   * only by messages that actually replace that content (a RUN_VIEW_LOADED
+   * snapshot, a STEPS_EXTENDED queue push).
+   *
+   * Deliberately separate from `displayedDefinitionRevision`, which is the
+   * optimistic-concurrency token the client echoes on its next mutation or run
+   * action and therefore has to advance the moment a write lands — including
+   * from a bare WORKFLOW_VIEW_IDENTITY published ahead of the snapshot that
+   * write triggered. RUN_VIEW_LOADED's stale/replay comparisons are about
+   * content and must use this field: judging an incoming snapshot against a
+   * revision the client only holds as a promise would drop the very snapshot
+   * that fulfils it. Not persisted, for the same reason as
+   * `appliedViewAddress`.
+   */
+  appliedDefinitionRevision: number | null;
   /** Latest client-initiated run-view request; not persisted across reloads. */
   pendingRunViewRequestId: string | null;
   /**
@@ -945,8 +961,13 @@ interface UiActions {
     runRef: WorkflowRunAddress["runRef"],
     worktree: WorktreeRunProjection
   ) => void;
-  /** Marks `address` as the content actually applied to `workflowStore`. */
-  markViewAddressApplied: (address: WorkflowViewAddress) => void;
+  /** Marks `address` and its revision as the content applied to `workflowStore`. */
+  markViewAddressApplied: (
+    address: WorkflowViewAddress,
+    definitionRevision: number
+  ) => void;
+  /** Advances the applied revision for content pushed without a full snapshot. */
+  markAppliedDefinitionRevision: (definitionRevision: number) => void;
   requestRunViewLoad: (
     address: WorkflowViewAddress,
     summaries: RunSummary[],
@@ -1077,6 +1098,7 @@ const initialState: UiState = {
   displayedViewAddress: null,
   displayedRunDirectory: null,
   appliedViewAddress: null,
+  appliedDefinitionRevision: null,
   pendingRunViewRequestId: null,
   pendingRunViewAddress: null,
   pendingRunViewSwitch: null,
@@ -1856,7 +1878,19 @@ export const useUiStore = create<UiState & UiActions>()(
           ),
         })),
 
-      markViewAddressApplied: (address) => set({ appliedViewAddress: address }),
+      markViewAddressApplied: (address, definitionRevision) =>
+        set({
+          appliedViewAddress: address,
+          appliedDefinitionRevision: definitionRevision,
+        }),
+
+      markAppliedDefinitionRevision: (definitionRevision) =>
+        set((state) => ({
+          appliedDefinitionRevision:
+            state.appliedDefinitionRevision === null
+              ? definitionRevision
+              : Math.max(state.appliedDefinitionRevision, definitionRevision),
+        })),
 
       requestRunViewLoad: (
         address,
@@ -1944,6 +1978,7 @@ export const useUiStore = create<UiState & UiActions>()(
             // returned to a real reload instead of the inert no-op the
             // displayed/applied short-circuit would otherwise make it.
             appliedViewAddress: null,
+            appliedDefinitionRevision: null,
           };
         }),
 

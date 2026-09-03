@@ -366,6 +366,7 @@ function applyWorkflowChange(options?: {
       displayedViewAddress: null,
       displayedRunDirectory: null,
       appliedViewAddress: null,
+      appliedDefinitionRevision: null,
       displayedDefinitionRevision: null,
       displayedDescriptorRevision: null,
       // FILE_SELECTED/SESSION_RESTORED describe a normal live workflow and do
@@ -854,6 +855,11 @@ export function createMessageHandlers(
             ? definitionRevision
             : Math.max(state.displayedDefinitionRevision, definitionRevision),
       }));
+      // The steps applied below are this revision's content, so the applied
+      // head moves with them — otherwise the snapshot that follows a live
+      // queue push is read as new content and clears runtime/undo state the
+      // client already has.
+      useUiStore.getState().markAppliedDefinitionRevision(definitionRevision);
     }
 
     const workflowStore = useWorkflowStore.getState();
@@ -2286,7 +2292,13 @@ export function createMessageHandlers(
       address,
       uiStore.appliedViewAddress
     );
-    const currentDefinitionRevision = uiStore.displayedDefinitionRevision;
+    // The *applied* revision, not the displayed one: a WORKFLOW_VIEW_IDENTITY
+    // published ahead of this snapshot (every run-addressed write does that, so
+    // the client can act on the write immediately) has already advanced the
+    // displayed value to exactly what this snapshot carries, and comparing
+    // against it would classify the snapshot as a content-free replay — or, for
+    // a write that removed a step, discard it as regressive.
+    const currentDefinitionRevision = uiStore.appliedDefinitionRevision;
     const currentDescriptorRevision = uiStore.displayedDescriptorRevision;
     const currentStepCount = useWorkflowStore.getState().steps.length;
     const incomingStepCount = workingFile.steps?.length ?? 0;
@@ -2437,7 +2449,7 @@ export function createMessageHandlers(
     // workflowStore now genuinely holds this address's content — record it
     // separately from the optimistic displayedViewAddress below so a later
     // requestless snapshot's stale-check has an honest baseline.
-    ui.markViewAddressApplied(address);
+    ui.markViewAddressApplied(address, incomingDefinitionRevision);
     ui.setDisplayedRunView(
       address,
       runSummaries,
@@ -2795,7 +2807,10 @@ export function createMessageHandlers(
       // the replay snapshot cannot be rejected as a same-address regression
       // against unrelated retained steps/name.
       if (!message.requestId) {
-        useUiStore.setState({ appliedViewAddress: null });
+        useUiStore.setState({
+          appliedViewAddress: null,
+          appliedDefinitionRevision: null,
+        });
       }
       // A backend-initiated switch supersedes any in-flight run-view request,
       // and clearing here is also the recovery valve for a stale pending id

@@ -2906,14 +2906,28 @@ export class WorkflowOrchestrator {
     clientId: string
   ): Promise<WorkflowViewIdentityMessage | null> {
     const address = this.getViewAddress(clientId);
-    const filePath = this.getViewFilePath(clientId);
+    return address ? this.buildViewIdentityForAddress(address) : null;
+  }
+
+  /**
+   * The authoritative identity of an address, read from disk without going
+   * through any client's view registration. Two small reads (the addressed
+   * definition file and the lineage descriptor) — cheap enough to publish on
+   * the write path itself, unlike the full `RUN_VIEW_LOADED` snapshot.
+   */
+  private async buildViewIdentityForAddress(
+    address: WorkflowViewAddress
+  ): Promise<WorkflowViewIdentityMessage | null> {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
-    if (!address || !filePath || !workspaceRoot) {
+    if (!workspaceRoot) {
       return null;
     }
     try {
       const [content, descriptor] = await Promise.all([
-        fs.promises.readFile(filePath, "utf8"),
+        fs.promises.readFile(
+          this.resolveAddressFilePath(workspaceRoot, address),
+          "utf8"
+        ),
         this.lineageRepository.readDescriptor(
           workspaceRoot,
           address.workflowKey
@@ -2930,9 +2944,47 @@ export class WorkflowOrchestrator {
       };
     } catch (error) {
       Log.warn(
-        `[WorkflowOrchestrator] Could not resolve view identity for ${clientId}: ${getErrorMessage(error)}`
+        `[WorkflowOrchestrator] Could not resolve view identity for ${WorkflowOrchestrator.describeViewAddress(address)}: ${getErrorMessage(error)}`
       );
       return null;
+    }
+  }
+
+  /**
+   * Hands every client viewing a run the revisions its next action must carry,
+   * as soon as the write that bumped them is durable.
+   *
+   * `invalidateRunViews` already carries the same fields, but building its
+   * snapshot costs a lineage-wide scan (`getRunSummaries` reads one working
+   * file per run in the lineage) — measured at over four seconds on a large
+   * history. Until it landed, the acting client kept echoing the superseded
+   * `definitionRevision` on every message, so a Run or Continue pressed inside
+   * that window was rejected as a "Definition revision conflict" and only
+   * worked on the second press, once the snapshot finally arrived. The client
+   * has no way to know it is holding a stale revision, so the window has to be
+   * closed here: publish the cheap identity read first, then let the snapshot
+   * follow with the content.
+   */
+  private async publishRunRevisionsToViewers(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<void> {
+    const address: WorkflowViewAddress = {
+      workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef,
+    };
+    const sends: Array<(message: unknown) => void> = [];
+    for (const [clientId, viewed] of this.getViewAddressRegistry()) {
+      if (!sameViewAddress(viewed, address)) continue;
+      const send = this.getViewMessageSinks().get(clientId);
+      if (send) sends.push(send);
+    }
+    if (sends.length === 0) return;
+    const identity = await this.buildViewIdentityForAddress(address);
+    if (!identity) return;
+    for (const send of sends) {
+      send(identity);
     }
   }
 
@@ -3657,6 +3709,13 @@ export class WorkflowOrchestrator {
     } else {
       await staticEdit(this.requireWorkspaceRoot());
     }
+    // Before the invalidation, never after: the write is already durable, and
+    // the client cannot safely act on this address again until it holds the
+    // revisions the write produced. See `publishRunRevisionsToViewers`.
+    await this.publishRunRevisionsToViewers(
+      runAddress.workflowKey,
+      runAddress.runRef
+    );
     if (invalidation === "properties") {
       await this.invalidateRunViewProperties(
         runAddress.workflowKey,
@@ -4133,10 +4192,18 @@ export class WorkflowOrchestrator {
     } catch (error) {
       // The rewind is already durable even if the content edit fails. Publish
       // it so clients see the continuation state they can discard or retry.
+      await this.publishRunRevisionsToViewers(
+        runAddress.workflowKey,
+        runAddress.runRef
+      );
       await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
       throw error;
     }
 
+    await this.publishRunRevisionsToViewers(
+      runAddress.workflowKey,
+      runAddress.runRef
+    );
     await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
   }
 
@@ -4476,6 +4543,13 @@ export class WorkflowOrchestrator {
       JSON.parse(await fs.promises.readFile(targetPath, "utf8")) as WorkingFile
     );
     if (options.invalidateViews !== false) {
+      // Setting a start position is the single most common prelude to pressing
+      // Continue, so the rewind's new revisions must reach the client ahead of
+      // the snapshot rather than behind it.
+      await this.publishRunRevisionsToViewers(
+        address.workflowKey,
+        address.runRef
+      );
       await this.invalidateRunViews(address.workflowKey, address.runRef);
     }
     return { kind: WORKTREE_EDIT_KINDS.REWIND, ...result };
