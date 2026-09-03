@@ -1023,7 +1023,7 @@ that concerns execution passes with fake integrations. The gate stays closed in 
 
 ### Stage 5 — Chronological output projection
 
-Prerequisite: `OUTPUT_STEP_FILTER_PLAN.md` shipped.
+Prerequisite: `OUTPUT_STEP_FILTER_PLAN.md` shipped (steps 1–7 complete).
 
 1. Expose target-attributed activity entries from the append-only timeline without
    removing aggregate attempt output.

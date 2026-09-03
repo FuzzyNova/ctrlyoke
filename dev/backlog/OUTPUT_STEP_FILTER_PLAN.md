@@ -2,7 +2,8 @@
 
 > **Last Updated:** September 3, 2026
 >
-> **Status:** Step 5 (step context menus + navigation) is implemented. Steps 6–7 remain pending.
+> **Status:** Steps 1–7 are implemented and committed. No implementation items were deferred; the
+> manual test script remains for manual verification.
 > Audited against `main` on this date; every symbol named below was verified to exist.
 > The questions the previous revision deferred are decided
 > here. **Correction in this revision:** Decision 3 previously keyed the hidden set by

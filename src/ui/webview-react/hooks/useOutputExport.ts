@@ -11,6 +11,7 @@ import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@/utils/logger";
+import { getTargetKey } from "@utils/outputProjection";
 
 interface UseOutputExportInput {
   allMessages: OutputMessage[];
@@ -20,8 +21,39 @@ interface UseOutputExportInput {
   finalStep: WorkflowStep | null;
   historyOrderedEntries?: OrderedHistoryEntry[];
   isViewingHistory: boolean;
+  hiddenTargetKeys: readonly string[];
   steps: WorkflowStep[];
   totalSteps: number;
+}
+
+function getVisibleStepRange(
+  allMessages: readonly OutputMessage[],
+  hiddenTargetKeys: readonly string[]
+): string {
+  if (hiddenTargetKeys.length === 0) return "";
+
+  const hiddenKeys = new Set(hiddenTargetKeys);
+  const seenKeys = new Set<string>();
+  const visibleStepNumbers: number[] = [];
+  const sortedMessages = [...allMessages].sort(
+    (left, right) =>
+      left.timestamp - right.timestamp ||
+      (left.sequence ?? 0) - (right.sequence ?? 0)
+  );
+
+  for (const message of sortedMessages) {
+    if (message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
+
+    const key = getTargetKey(message.target);
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+
+    if (!hiddenKeys.has(key)) {
+      visibleStepNumbers.push(seenKeys.size);
+    }
+  }
+
+  return visibleStepNumbers.join(",");
 }
 
 export function useOutputExport({
@@ -32,6 +64,7 @@ export function useOutputExport({
   finalStep,
   historyOrderedEntries,
   isViewingHistory,
+  hiddenTargetKeys,
   steps,
   totalSteps,
 }: UseOutputExportInput) {
@@ -41,9 +74,18 @@ export function useOutputExport({
   const [stepRange, setStepRange] = useState("");
   const [stepRangeError, setStepRangeError] = useState(false);
 
+  const visibleStepRange = useMemo(
+    () => getVisibleStepRange(allMessages, hiddenTargetKeys),
+    [allMessages, hiddenTargetKeys]
+  );
+
   const openModal = useCallback(() => {
+    if (hiddenTargetKeys.length > 0) {
+      setStepRange(visibleStepRange);
+      setStepRangeError(false);
+    }
     setModalOpen(true);
-  }, []);
+  }, [hiddenTargetKeys, visibleStepRange]);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);

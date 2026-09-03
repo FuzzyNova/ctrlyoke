@@ -496,6 +496,7 @@ const OutputSectionInner: React.FC = () => {
     fileName,
     finalStep,
     historyOrderedEntries: historyOutputs?.orderedEntries,
+    hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     isViewingHistory,
     steps,
     totalSteps,
@@ -1245,6 +1246,7 @@ const OutputSectionInner: React.FC = () => {
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
     allMessages,
+    hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     stepScrollFractions,
     lastCliIndexPerStep,
     onOpenFind: handleOpenFind,
