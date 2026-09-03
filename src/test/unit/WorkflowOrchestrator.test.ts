@@ -4302,6 +4302,73 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
+  test("continues a run whose lock is retained by a resident instance in a spent state", async () => {
+    // A named-worktree run that errored while retaining its injectable PTY
+    // (`preserveWorktreeReservation` in `WorkflowInstance`) stays resident and
+    // keeps the runner lock, but its queue status is a terminal, non-owner
+    // state (ERROR). The owner-state-filtered lookup misses it, so the
+    // self-owned-active-lock branch must fall back to `findResidentInstanceForRun`
+    // instead of treating this as an untracked invariant violation.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-retained-lock-continue-")
+    );
+    try {
+      const run = await createRun(workspace);
+      await fs.writeFile(
+        WorkflowLockManager.getLockPath(workspace, run.workflowKey),
+        JSON.stringify({
+          schemaVersion: 2,
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+          runner: RUNNER_IDS.VSCODE,
+          pid: process.pid,
+          ownerToken: "retained-owner",
+          hostInstanceId: "test-host",
+          executionInstanceId: "retained-instance",
+          startedAt: Date.now(),
+          lastHeartbeat: Date.now(),
+        }),
+        "utf8"
+      );
+      let continued = false;
+      const retained = {
+        id: "retained-worktree-owner",
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+          status: EXECUTION_STATES.ERROR,
+        }),
+        getExecutionRunRef: () => run.runRef,
+        ownsRunnerLock: () => true,
+        executeContinuationAtRun: async () => {
+          continued = true;
+        },
+      };
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        retained
+      );
+      internal.runnerHostIdentity = {
+        runner: RUNNER_IDS.VSCODE,
+        hostInstanceId: "test-host",
+        pid: process.pid,
+      };
+
+      await orchestrator.continueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        1,
+        2,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(continued, true);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("allows an interrupted running file to be rebound only through explicit continuation", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-crash-continue-")

@@ -4693,25 +4693,38 @@ export class WorkflowOrchestrator {
     const lockNamesTarget = activeLock?.runRef === address.runRef;
     if (activeLock && !activeInstance) {
       if (activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF) {
-        Log.error(
-          `[WorkflowOrchestrator] self-owned but untracked execution for ${address.workflowKey}/${activeLock.runRef}`
-        );
-        throw new Error(
-          "Self-owned execution is not tracked by this process; refusing continuation"
-        );
-      }
-      if (
+        // A spent-but-resident instance (for example a named-worktree run
+        // that errored while retaining its injectable PTY, per
+        // `preserveWorktreeReservation` in `WorkflowInstance`) is not an
+        // owner-state instance, so the lookup above misses it even though it
+        // still legitimately holds this exact run's lock. Mirrors the
+        // locally-owned-run carve-out in `applyRunAddressedMutation`. Fall
+        // through so the caller's own `findResidentInstanceForRun` fallback
+        // reuses it below instead of rejecting a real invariant violation.
+        const retainedResident = lockNamesTarget
+          ? this.findResidentInstanceForRun(address.workflowKey, address.runRef)
+          : undefined;
+        if (!retainedResident?.ownsRunnerLock()) {
+          Log.error(
+            `[WorkflowOrchestrator] self-owned but untracked execution for ${address.workflowKey}/${activeLock.runRef}`
+          );
+          throw new Error(
+            "Self-owned execution is not tracked by this process; refusing continuation"
+          );
+        }
+      } else if (
         activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
       ) {
         throw new Error(
           "Cannot continue while execution ownership is indeterminate"
         );
+      } else {
+        throw new Error(
+          lockNamesTarget
+            ? "The requested run is executing in another process"
+            : "Another run in this workflow lineage is executing"
+        );
       }
-      throw new Error(
-        lockNamesTarget
-          ? "The requested run is executing in another process"
-          : "Another run in this workflow lineage is executing"
-      );
     }
     if (activeLock && !lockNamesTarget) {
       throw new Error("Another run in this workflow lineage is executing");
