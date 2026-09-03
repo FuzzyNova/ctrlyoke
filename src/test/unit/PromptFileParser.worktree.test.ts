@@ -1,11 +1,28 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { PromptFileParser } from "../../core/PromptFileParser";
+import {
+  getAuthoredSourcePath,
+  PromptFileParser,
+} from "../../core/PromptFileParser";
 
 suite("PromptFileParser worktree authoring", function () {
   this.timeout(10_000);
 
   const parser = new PromptFileParser();
+
+  test("resolves authored source from a working file or parsed path", () => {
+    assert.strictEqual(
+      getAuthoredSourcePath(
+        "C:\\workspace\\.runs\\workflow\\run-1\\workflow.ctrlyoke.json",
+        "C:\\workspace\\workflow.ctrlyoke.yaml"
+      ),
+      "C:\\workspace\\workflow.ctrlyoke.yaml"
+    );
+    assert.strictEqual(
+      getAuthoredSourcePath("C:\\workspace\\workflow.ctrlyoke.yaml"),
+      "C:\\workspace\\workflow.ctrlyoke.yaml"
+    );
+  });
 
   test("round-trips the supported root forms", async () => {
     const cases = [

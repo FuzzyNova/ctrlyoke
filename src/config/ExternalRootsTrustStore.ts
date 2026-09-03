@@ -12,7 +12,7 @@ export type ExternalRootTrustDecision =
   (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
 
 interface ExternalRootsTrustFile {
-  /** `${workspaceIdentity}␟${canonicalRoot}` -> decision */
+  /** `${scopeIdentity}␟${canonicalRoot}` -> decision */
   decisions: Record<string, ExternalRootTrustDecision>;
 }
 
@@ -45,17 +45,28 @@ export class ExternalRootsTrustStore {
   static canonicalizeRoot(root: string): string {
     const resolved = path.resolve(root);
     try {
-      return fs.realpathSync(resolved);
+      return fs.realpathSync.native(resolved);
     } catch {
       return resolved;
     }
   }
 
   private static keyFor(
-    workspaceIdentity: string,
+    scopeIdentity: string,
     canonicalRoot: string
   ): string {
-    return `${workspaceIdentity}${DECISION_KEY_SEPARATOR}${canonicalRoot}`;
+    return `${scopeIdentity}${DECISION_KEY_SEPARATOR}${canonicalRoot}`;
+  }
+
+  static canonicalizeWorkflowIdentity(
+    workspaceRoot: string,
+    workflowSourcePath: string
+  ): string {
+    const workspaceIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+    const workflowIdentity =
+      ExternalRootsTrustStore.canonicalizeRoot(workflowSourcePath);
+    return `workflow:${workspaceIdentity}::${workflowIdentity}`;
   }
 
   private load(): ExternalRootsTrustFile {
@@ -92,18 +103,18 @@ export class ExternalRootsTrustStore {
 
   /** Get the recorded decision for a single root, or `undefined` if never decided. */
   getDecision(
-    workspaceIdentity: string,
+    scopeIdentity: string,
     root: string
   ): ExternalRootTrustDecision | undefined {
     const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
     return this.load().decisions[
-      ExternalRootsTrustStore.keyFor(workspaceIdentity, canonicalRoot)
+      ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
     ];
   }
 
   /** Filter `candidateRoots` down to those with a recorded `"allow"` decision. */
   getApprovedRoots(
-    workspaceIdentity: string,
+    scopeIdentity: string,
     candidateRoots: readonly string[]
   ): string[] {
     const decisions = this.load().decisions;
@@ -111,7 +122,7 @@ export class ExternalRootsTrustStore {
       const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
       return (
         decisions[
-          ExternalRootsTrustStore.keyFor(workspaceIdentity, canonicalRoot)
+          ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
         ] === TRUST_DECISIONS.ALLOW
       );
     });
@@ -119,7 +130,7 @@ export class ExternalRootsTrustStore {
 
   /** Filter `candidateRoots` down to those with no recorded decision at all. */
   getPendingRoots(
-    workspaceIdentity: string,
+    scopeIdentity: string,
     candidateRoots: readonly string[]
   ): string[] {
     const decisions = this.load().decisions;
@@ -127,7 +138,7 @@ export class ExternalRootsTrustStore {
       const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
       return (
         decisions[
-          ExternalRootsTrustStore.keyFor(workspaceIdentity, canonicalRoot)
+          ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
         ] === undefined
       );
     });
@@ -135,7 +146,7 @@ export class ExternalRootsTrustStore {
 
   /** Record the same decision for a batch of roots in one write. */
   async setDecisions(
-    workspaceIdentity: string,
+    scopeIdentity: string,
     roots: readonly string[],
     decision: ExternalRootTrustDecision
   ): Promise<void> {
@@ -146,7 +157,7 @@ export class ExternalRootsTrustStore {
     for (const root of roots) {
       const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
       data.decisions[
-        ExternalRootsTrustStore.keyFor(workspaceIdentity, canonicalRoot)
+        ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
       ] = decision;
     }
     await this.save(data);

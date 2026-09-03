@@ -1,10 +1,12 @@
 import * as assert from "assert";
+import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
+import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -15,16 +17,19 @@ function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
 
 /** In-memory fake so tests never touch the real ~/.ctrlyoke trust store file. */
 function makeFakeTrustStore(decisions: Record<string, "allow" | "deny">) {
-  const keyFor = (workspaceIdentity: string, root: string) =>
-    `${workspaceIdentity}::${root}`;
+  const keyFor = (scopeIdentity: string, root: string) =>
+    `${scopeIdentity}::${ExternalRootsTrustStore.canonicalizeRoot(root)}`;
+  const getDecision = (scopeIdentity: string, root: string) =>
+    decisions[keyFor(scopeIdentity, root)] ??
+    decisions[`${scopeIdentity}::${root}`];
   return {
-    getApprovedRoots: (workspaceIdentity: string, roots: readonly string[]) =>
+    getApprovedRoots: (scopeIdentity: string, roots: readonly string[]) =>
       roots.filter(
-        (root) => decisions[keyFor(workspaceIdentity, root)] === "allow"
+        (root) => getDecision(scopeIdentity, root) === "allow"
       ),
-    getPendingRoots: (workspaceIdentity: string, roots: readonly string[]) =>
+    getPendingRoots: (scopeIdentity: string, roots: readonly string[]) =>
       roots.filter(
-        (root) => decisions[keyFor(workspaceIdentity, root)] === undefined
+        (root) => getDecision(scopeIdentity, root) === undefined
       ),
   };
 }
@@ -88,6 +93,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
 
     const effective = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       "workspace-id",
+      undefined,
       fakeStore
     );
     assert.deepStrictEqual(effective, ["/home/user/logs"]);
@@ -104,6 +110,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
 
     const effective = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       "workspace-id",
+      undefined,
       fakeStore
     );
     assert.deepStrictEqual(effective, []);
@@ -122,6 +129,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
 
     const effective = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       "workspace-id",
+      undefined,
       fakeStore
     );
     assert.deepStrictEqual(effective, ["/shared/logs"]);
@@ -145,6 +153,130 @@ suite("ConfigurationUtils — allowed external file roots", () => {
       fakeStore
     );
     assert.deepStrictEqual(pending, ["/shared/other"]);
+  });
+
+  test("getEffectiveApprovedExternalFileRoots inherits, replaces, or disables", () => {
+    const userRoot = "C:\\trusted\\user";
+    const workspaceRoot = "C:\\trusted\\workspace";
+    const workflowRoot = "C:\\trusted\\workflow";
+    const fakeStore = makeFakeTrustStore({
+      "workspace-id::C:\\trusted\\workspace": "allow",
+      "workflow-id::C:\\trusted\\workflow": "allow",
+    });
+    configService.setUserBackend(
+      makeBackend({
+        permissions: { allowedExternalFileRoots: [userRoot] },
+      })
+    );
+    configService.setWorkspaceBackend(
+      makeBackend({
+        permissions: { allowedExternalFileRoots: [workspaceRoot] },
+      })
+    );
+
+    assert.deepStrictEqual(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        "workspace-id",
+        undefined,
+        fakeStore
+      ),
+      [userRoot, workspaceRoot]
+    );
+    assert.deepStrictEqual(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        "workspace-id",
+        { identity: "workflow-id", declaredRoots: [workflowRoot] },
+        fakeStore
+      ),
+      [workflowRoot]
+    );
+    assert.deepStrictEqual(
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        "workspace-id",
+        { identity: "workflow-id", declaredRoots: null },
+        fakeStore
+      ),
+      []
+    );
+  });
+
+  test("deduplicates equivalent roots across base and workflow scopes", () => {
+    const root = process.cwd();
+    const equivalentRoot = root.replace(/\\/g, "/").toLowerCase();
+    const workflowRoot = path.join(root, "src");
+    const equivalentWorkflowRoot = workflowRoot
+      .replace(/\\/g, "/")
+      .toLowerCase();
+    const fakeStore = makeFakeTrustStore({
+      [`workspace-id::${ExternalRootsTrustStore.canonicalizeRoot(
+        equivalentRoot
+      )}`]: "allow",
+      [`workflow-id::${ExternalRootsTrustStore.canonicalizeRoot(
+        equivalentWorkflowRoot
+      )}`]: "allow",
+    });
+    configService.setUserBackend(
+      makeBackend({
+        permissions: { allowedExternalFileRoots: [root] },
+      })
+    );
+    configService.setWorkspaceBackend(
+      makeBackend({
+        permissions: { allowedExternalFileRoots: [equivalentRoot] },
+      })
+    );
+
+    assert.strictEqual(
+      ConfigurationUtils.getAllowedExternalFileRoots().length,
+      1
+    );
+
+    const inherited =
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        "workspace-id",
+        undefined,
+        fakeStore
+      );
+    assert.strictEqual(inherited.length, 1);
+
+    const workflowRoots =
+      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+        "workspace-id",
+        {
+          identity: "workflow-id",
+          declaredRoots: [workflowRoot, equivalentWorkflowRoot],
+        },
+        fakeStore
+      );
+    assert.strictEqual(workflowRoots.length, 1);
+  });
+
+  test("getPendingWorkflowExternalFileRoots excludes broader-scope approvals", () => {
+    const approvedAtWorkspace = process.cwd();
+    const equivalentRequested = approvedAtWorkspace
+      .replace(/\\/g, "/")
+      .toLowerCase();
+    const workflowOnly = `${approvedAtWorkspace}\\workflow-root`;
+    const fakeStore = makeFakeTrustStore({
+      [`workspace-id::${ExternalRootsTrustStore.canonicalizeRoot(
+        approvedAtWorkspace
+      )}`]: "allow",
+    });
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(
+      makeBackend({
+        permissions: { allowedExternalFileRoots: [approvedAtWorkspace] },
+      })
+    );
+
+    const pending =
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+        "workspace-id",
+        "workflow-id",
+        [equivalentRequested, workflowOnly],
+        fakeStore
+      );
+    assert.deepStrictEqual(pending, [workflowOnly]);
   });
 });
 

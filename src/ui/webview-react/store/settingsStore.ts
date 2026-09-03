@@ -174,6 +174,7 @@ export interface WorkflowProperties {
     deniedTools?: string[];
   } | null;
   worktree?: WorktreeConfig;
+  trustedExternalRoots?: string[] | null;
 }
 
 /**

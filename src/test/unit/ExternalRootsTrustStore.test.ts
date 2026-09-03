@@ -77,6 +77,23 @@ suite("ExternalRootsTrustStore", () => {
     assert.strictEqual(store.getDecision(workspaceB, root), undefined);
   });
 
+  test("workflow identities do not collide with workspace identities", async () => {
+    const root = rootDir();
+    const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+      root,
+      root
+    );
+    const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(root);
+
+    await store.setDecisions(workspaceIdentity, [root], "allow");
+    assert.strictEqual(store.getDecision(workspaceIdentity, root), "allow");
+    assert.strictEqual(store.getDecision(workflowIdentity, root), undefined);
+
+    await store.setDecisions(workflowIdentity, [root], "deny");
+    assert.strictEqual(store.getDecision(workflowIdentity, root), "deny");
+    assert.strictEqual(store.getDecision(workspaceIdentity, root), "allow");
+  });
+
   test("a denied root stays denied and is never reported as pending again", async () => {
     const root = rootDir();
     await store.setDecisions(workspaceA, [root], "deny");

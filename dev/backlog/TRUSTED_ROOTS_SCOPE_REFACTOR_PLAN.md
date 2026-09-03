@@ -2,6 +2,11 @@
 
 **Status (2026-09-02):** Proposed.
 
+**Implementation note (2026-09-03):** The current schema's two existing
+workflow-only denial clauses are on `workflowStep` and
+`promptRuntimeMetadata` (rather than two separate workflowStep branches);
+Phase 1 adds the `trustedExternalRoots` denial alongside both.
+
 **Related plans:**
 
 - [`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`](../implemented/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) —

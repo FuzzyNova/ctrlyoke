@@ -165,6 +165,7 @@ const SAMPLES: Record<string, unknown> = {
     allowedTools: ["Bash"],
     deniedTools: ["Write"],
   },
+  trustedExternalRoots: ["C:\\trusted\\workflow"],
   vars: { region: "us-east-1" },
   worktree: { mode: "named", branch: "feature/seeded" },
 };
@@ -376,7 +377,12 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
  * dashboard control. A future opt-out must explain why it is safe to leave a
  * schema property unreachable from the UI.
  */
-const UI_CONTROL_OPTOUTS = new Map<string, string>();
+const UI_CONTROL_OPTOUTS = new Map<string, string>([
+  [
+    "trustedExternalRoots",
+    "Workflow-scoped trust control is staged for the later approval-UI phase.",
+  ],
+]);
 
 const WEBVIEW_SOURCE_ROOT = path.resolve(
   __dirname,

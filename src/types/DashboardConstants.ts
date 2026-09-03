@@ -2632,6 +2632,7 @@ export const PROMPT_PROPERTIES = {
   FINAL_STEP: "finalStep",
   VARS: "vars",
   WORKTREE: "worktree",
+  TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
 
   // Step type discriminant
   STEP_TYPE: "type",
@@ -2708,6 +2709,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.ADDITIONAL_ARGS,
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
   PROMPT_PROPERTIES.WORKTREE,
+  PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS,
 ] as const;
 
 export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];
