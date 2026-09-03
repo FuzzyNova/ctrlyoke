@@ -3043,6 +3043,14 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
     internal.instances = new Map<string, any>([["live-1", liveInstance]]);
     internal.retiredInstances = new Map<string, any>();
     internal.ensureExternalRunWatchSession = async () => false;
+    // liveInstance is a minimal double (id + getSummary only) predating the
+    // workflow external-roots approval flow, and setViewedWorkflowId below is
+    // stubbed rather than real, so the registry-backed resolution behind
+    // approvePendingWorkflowExternalRootsForClient has nothing to resolve
+    // against. Stub it out the same way the "checks workflow roots when
+    // reloading a retired active working file" fixture does — this test is
+    // only about path-matching, not roots approval.
+    internal.approvePendingWorkflowExternalRootsForClient = async () => [];
 
     let viewed: { clientId: string; workflowId: string } | undefined;
     internal.setViewedWorkflowId = (clientId: string, workflowId: string) => {
@@ -3881,6 +3889,13 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     internal.viewMessageSinks = new Map();
     internal.lineageRepository = new WorkflowLineageRepository();
     internal.invalidateRunViews = async () => undefined;
+    // This suite's instance doubles (sourceInstance/resident/executionInstance/etc.)
+    // are narrow fakes scoped to each test's own assertions; none implement the
+    // full WorkflowInstance surface the external-roots approval guard reads
+    // (promptQueue, getCurrentPromptFilePath). Roots approval itself is covered
+    // separately by the dedicated "WorkflowOrchestrator workflow-root approval"
+    // suite, so stub the guard here rather than growing every double.
+    internal.assertNoPendingWorkflowExternalRoots = async () => undefined;
     return { orchestrator, internal };
   }
 
@@ -4256,6 +4271,12 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       ]);
       internal.viewMessageSinks = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
+      // fakeInstance below is a narrow double for the execution/address-switch
+      // behavior this test covers; it doesn't implement the WorkflowInstance
+      // surface the external-roots approval guard reads. That's covered
+      // separately by the dedicated "WorkflowOrchestrator workflow-root
+      // approval" suite, so stub the guard here.
+      internal.assertNoPendingWorkflowExternalRoots = async () => undefined;
 
       // Execution never resolves until the test releases it — proves
       // executeDraftAtAddress resolves once the client is switched onto the

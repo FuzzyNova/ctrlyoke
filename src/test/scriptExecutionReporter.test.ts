@@ -28,8 +28,14 @@ import type {
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 const temporaryDirectories: string[] = [];
+const outputHistoryManagers: OutputHistoryManager[] = [];
 
 teardown(async () => {
+  await Promise.all(
+    outputHistoryManagers.splice(0).map((manager) =>
+      manager.flushPendingIndexRefresh()
+    )
+  );
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -162,6 +168,7 @@ suite("ScriptExecutionReporter", () => {
     );
     temporaryDirectories.push(temporaryDirectory);
     const historyManager = new OutputHistoryManager(temporaryDirectory);
+    outputHistoryManagers.push(historyManager);
     const historyFilePath = (
       await historyManager.initializeRunAt(
         "reporter-test" as WorkflowKey,
@@ -234,6 +241,7 @@ suite("ScriptExecutionReporter", () => {
     );
     temporaryDirectories.push(temporaryDirectory);
     const historyManager = new OutputHistoryManager(temporaryDirectory);
+    outputHistoryManagers.push(historyManager);
     const firstHistoryFilePath = (
       await historyManager.initializeRunAt(
         "reporter-rerun" as WorkflowKey,

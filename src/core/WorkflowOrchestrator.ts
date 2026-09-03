@@ -2716,11 +2716,20 @@ export class WorkflowOrchestrator {
     notify = true
   ): Promise<string[]> {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    // Panel resolution goes through getInstanceForClient (equivalent to
+    // getActiveInstance() for the panel — see its fallback order) rather than
+    // getActiveInstance() directly, so this stays on the one seam every other
+    // panel-scoped instance resolution in this class already uses. Non-panel
+    // clients stay on the strict getBoundInstance: unlike getInstanceForClient,
+    // it never falls back to the panel's instance for a client with no binding
+    // of its own (see getBoundInstance's doc comment) — this state is
+    // per-client, so an unbound browser client must resolve to no instance,
+    // not silently inherit the panel's pending-roots state.
     const instance =
       clientId === this.PANEL_CLIENT_ID
-        ? this.getActiveInstance()
+        ? this.getInstanceForClient(clientId)
         : this.getBoundInstance(clientId);
-    const workflow = instance?.promptQueue.getWorkflowFile();
+    const workflow = instance?.promptQueue?.getWorkflowFile();
     const workflowSourcePath = instance?.getCurrentPromptFilePath();
     const requestedRoots = workflow?.trustedExternalRoots;
     let pendingRoots: string[] = [];
@@ -2804,11 +2813,13 @@ export class WorkflowOrchestrator {
     clientId: string
   ): string[] {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    // See approvePendingWorkflowExternalRootsForClient for why the panel
+    // branch goes through getInstanceForClient rather than getActiveInstance().
     const instance =
       clientId === this.PANEL_CLIENT_ID
-        ? this.getActiveInstance()
+        ? this.getInstanceForClient(clientId)
         : this.getBoundInstance(clientId);
-    const requestedRoots = instance?.promptQueue.getWorkflowFile()
+    const requestedRoots = instance?.promptQueue?.getWorkflowFile()
       .trustedExternalRoots;
     const workflowSourcePath = instance?.getCurrentPromptFilePath();
     if (
