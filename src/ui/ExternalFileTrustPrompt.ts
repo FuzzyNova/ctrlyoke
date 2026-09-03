@@ -83,7 +83,7 @@ export async function openResolvedTarget(
  * `ui.offerTrustForUntrustedFileLinks: false` does not widen trust — it only
  * suppresses this offer, leaving the path blocked outright.
  */
-async function confirmExternalFileTrust(
+export async function confirmExternalFileTrust(
   candidatePath: string
 ): Promise<boolean> {
   if (!ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks()) {

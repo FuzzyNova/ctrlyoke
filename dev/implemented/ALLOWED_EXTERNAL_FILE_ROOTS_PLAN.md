@@ -35,6 +35,9 @@
 >    this plan, not a design decision: these commands should follow the same
 >    trust-or-offer-trust path the dashboard's untrusted-link click and
 >    `PromptLinkProvider` already use.
+>    Stage 1 of `TRUSTED_ROOTS_STAGING_PLAN.md` closes this gap by applying the
+>    same access decision and trust prompt before inserting an absolute
+>    external reference.
 > 2. **The browser/hosted-dashboard halves of both flows are native-VS-Code-only
 >    with no fallback** — the "Trust Parent Folder" modal and the workspace
 >    batch-approval `showQuickPick`, both in `ExternalFileTrustPrompt.ts`, and

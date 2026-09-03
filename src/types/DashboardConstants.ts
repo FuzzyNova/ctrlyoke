@@ -118,6 +118,7 @@ export type CodeMirrorLanguageId =
 
 /** VS Code URI schemes used by extension-host integrations. */
 export const VSCODE_URI_SCHEMES = {
+  FILE: "file",
   OUTPUT: "output",
 } as const;
 
