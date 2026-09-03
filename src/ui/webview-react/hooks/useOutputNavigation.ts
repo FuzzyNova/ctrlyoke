@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
 import type { OutputMessageTarget } from "@utils/outputProjection";
+import type { OutputRowBase } from "@utils/outputRows";
 import {
   alignRowElementToViewport,
   findRenderedRowElement,
@@ -23,11 +24,6 @@ interface OutputRowLayoutModel {
   rowSizesByKey: Map<string, number>;
   rowStartsByIndex: number[];
   totalSize: number;
-}
-
-interface OutputRow {
-  key: string;
-  target?: OutputMessageTarget;
 }
 
 interface PendingNavigationState {
@@ -76,7 +72,7 @@ interface UseOutputNavigationInput {
   postNavSettlingTimerRef: RefObject<ReturnType<typeof setTimeout> | null>;
   rowLayout: OutputRowLayoutModel;
   rowVirtualizer: RowVirtualizerLike;
-  rows: OutputRow[];
+  rows: OutputRowBase[];
   setCurrentScrollTarget: (
     target: {
       kind: typeof OUTPUT_SCROLL_TARGET_KINDS.ROW;

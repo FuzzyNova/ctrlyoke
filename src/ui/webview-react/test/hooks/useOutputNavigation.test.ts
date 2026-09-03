@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useOutputNavigation } from "@hooks/useOutputNavigation";
 import { FINAL_STEP_PHASES } from "@/types/messages";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 describe("useOutputNavigation", () => {
   let originalRequestAnimationFrame: typeof window.requestAnimationFrame;
@@ -111,7 +112,14 @@ describe("useOutputNavigation", () => {
           totalSize: 4000,
         },
         rowVirtualizer,
-        rows: [{ key: "row-1", target }],
+        rows: [
+          {
+            key: "row-1",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target,
+            estimateSize: 80,
+          },
+        ],
         setCurrentScrollTarget,
       })
     );
@@ -227,7 +235,14 @@ describe("useOutputNavigation", () => {
           totalSize: 4000,
         },
         rowVirtualizer,
-        rows: [{ key: "row-1", target }],
+        rows: [
+          {
+            key: "row-1",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target,
+            estimateSize: 80,
+          },
+        ],
         setCurrentScrollTarget,
       })
     );

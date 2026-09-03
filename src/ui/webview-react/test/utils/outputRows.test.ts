@@ -142,6 +142,142 @@ describe("outputRows", () => {
     ).toHaveLength(2);
   });
 
+  it("retains a hidden target anchor and replaces its content with one placeholder", () => {
+    const hiddenTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 1,
+    } as const;
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "First step",
+          response: "first",
+          elapsed: 1,
+          isStreaming: false,
+        },
+      },
+      ...[0, 1].map((attemptIndex) => ({
+        type: "cli" as const,
+        target: hiddenTarget,
+        timestamp: 1001 + attemptIndex,
+        attemptIndex,
+        runIndex: 0,
+        data: {
+          prompt: "Second step",
+          response: "second " + attemptIndex,
+          elapsed: 1,
+          isStreaming: false,
+        },
+      })),
+    ];
+    const common = {
+      allMessages,
+      steps: [
+        { name: "First" },
+        { name: "Second" },
+      ] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    };
+
+    const visible = buildOutputRows(common);
+    const hidden = buildOutputRows({
+      ...common,
+      hiddenTargetKeys: new Set(["queue:1"]),
+    });
+    const hiddenRows = hidden.rows.filter(
+      (row) =>
+        row.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        row.target.index === hiddenTarget.index
+    );
+
+    expect(hiddenRows.map((row) => row.rowKind)).toEqual([
+      OUTPUT_ROW_KINDS.STEP_ANCHOR,
+      OUTPUT_ROW_KINDS.STEP_HIDDEN,
+    ]);
+    expect(hiddenRows).toHaveLength(2);
+    expect(hiddenRows[1]).toMatchObject({
+      rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
+      stepLabel: "Step 2",
+      stepName: "Second",
+      estimateSize: 40,
+    });
+    expect(estimateOutputRowHeight(hiddenRows[1], 13, 760)).toBe(40);
+    expect(hidden.firstRowIndexByTarget).toEqual(
+      visible.firstRowIndexByTarget
+    );
+    expect(hidden.stepOutputsMap).toEqual(visible.stepOutputsMap);
+    expect(hidden.lastCliIndexPerStep).toEqual(visible.lastCliIndexPerStep);
+  });
+
+  it("keeps visible row keys stable when a different target is hidden", () => {
+    const allMessages: OutputMessage[] = [0, 1, 2].map((index) => ({
+      type: "cli" as const,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index },
+      timestamp: 1000 + index,
+      attemptIndex: 0,
+      runIndex: 0,
+      data: {
+        prompt: "Step " + (index + 1),
+        response: "response " + (index + 1),
+        elapsed: 1,
+        isStreaming: false,
+      },
+    }));
+    const common = {
+      allMessages,
+      steps: [
+        { name: "One" },
+        { name: "Two" },
+        { name: "Three" },
+      ] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    };
+    const visible = buildOutputRows(common);
+    const hidden = buildOutputRows({
+      ...common,
+      hiddenTargetKeys: new Set(["queue:1"]),
+    });
+    const visibleRowKeys = visible.rows
+      .filter((row) => row.target.index !== 1)
+      .map((row) => row.key);
+    const hiddenVisibleRowKeys = hidden.rows
+      .filter((row) => row.target.index !== 1)
+      .map((row) => row.key);
+
+    expect(hiddenVisibleRowKeys).toEqual(visibleRowKeys);
+  });
+
   it("threads the collapsed tool output line count into Bash and generic tool rows", () => {
     const output = Array.from(
       { length: 8 },

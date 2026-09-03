@@ -130,6 +130,7 @@ function getZeroHeightStructuredEventReason(
 function getRowHeightBucket(row: OutputRenderRow): string {
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
+    case OUTPUT_ROW_KINDS.STEP_HIDDEN:
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
     case OUTPUT_ROW_KINDS.STATUS:
     case OUTPUT_ROW_KINDS.CLI_HEADER:

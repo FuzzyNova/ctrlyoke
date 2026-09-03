@@ -117,10 +117,12 @@ export interface OutputRowBashExpansionState {
   errorExpanded: boolean;
 }
 
-interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
+const STEP_HIDDEN_ROW_HEIGHT = 40;
+
+export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   key: string;
   rowKind: TRowKind;
-  target?: OutputMessageTarget;
+  target: OutputMessageTarget;
   estimateSize: number;
   groupStart?: boolean;
   groupEnd?: boolean;
@@ -140,6 +142,14 @@ export interface StepAnchorRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.STEP_ANCHOR
 > {
   target: OutputMessageTarget;
+}
+
+export interface StepHiddenRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.STEP_HIDDEN
+> {
+  target: OutputMessageTarget;
+  stepLabel: string;
+  stepName?: string;
 }
 
 export interface FinalStepLabelRow extends OutputRowBase<
@@ -277,6 +287,7 @@ export interface ScriptVerdictRow extends OutputRowBase<
 
 export type OutputRenderRow =
   | StepAnchorRow
+  | StepHiddenRow
   | FinalStepLabelRow
   | StatusRow
   | CliHeaderRow
@@ -318,6 +329,8 @@ export interface BuildOutputRowsInput {
   scriptOutputExpansionState?: ReadonlyMap<string, boolean>;
   /** Retry/manual-rerun groups currently shown as one aggregate row. */
   collapsedAttemptGroupKeys?: ReadonlySet<string>;
+  /** Steps whose content is replaced by one StepHiddenRow. */
+  hiddenTargetKeys?: ReadonlySet<string>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -1535,6 +1548,8 @@ function estimateOutputRowContentHeight(
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       return 1;
+    case OUTPUT_ROW_KINDS.STEP_HIDDEN:
+      return STEP_HIDDEN_ROW_HEIGHT;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return 24;
     case OUTPUT_ROW_KINDS.STATUS:
@@ -1792,6 +1807,25 @@ export function buildOutputRows(
         target,
         estimateSize: 1,
       });
+      if (input.hiddenTargetKeys?.has(targetKey)) {
+        const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+        const workflowStep = isFinalStep
+          ? input.finalStep
+          : input.steps[target.index];
+        rows.push({
+          key: `${targetKey}:hidden`,
+          rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
+          target,
+          stepLabel: isFinalStep
+            ? `Final Step Loop ${target.index + 1}`
+            : `Step ${target.index + 1}`,
+          stepName: isFinalStep
+            ? getStepName(workflowStep, `Final Step Loop ${target.index + 1}`)
+            : workflowStep?.name?.trim() || undefined,
+          estimateSize: STEP_HIDDEN_ROW_HEIGHT,
+        });
+        continue;
+      }
       if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         rows.push({
           key: `${targetKey}:final-step-label`,
@@ -1802,6 +1836,8 @@ export function buildOutputRows(
         });
       }
     }
+
+    if (input.hiddenTargetKeys?.has(targetKey)) continue;
 
     if (message.type === OUTPUT_MESSAGE_TYPES.STATUS) {
       rows.push({

@@ -172,8 +172,8 @@ export function useOutputMinimapModel({
           const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
             if (
               row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
-              row.target?.kind !== msgTarget.kind ||
-              row.target?.index !== msgTarget.index ||
+              row.target.kind !== msgTarget.kind ||
+              row.target.index !== msgTarget.index ||
               !row.diff
             ) {
               return [];
