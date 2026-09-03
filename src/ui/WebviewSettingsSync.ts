@@ -1476,7 +1476,11 @@ export class WebviewSettingsSync {
 
       const currentRoots =
         workflow.trustedExternalRoots === undefined
-          ? ConfigurationUtils.getAllowedExternalFileRoots()
+          ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+              ExternalRootsTrustStore.canonicalizeRoot(
+                workflowIdentity.workspaceRoot
+              )
+            )
           : (workflow.trustedExternalRoots ?? []);
       const canonicalNewRoot =
         ExternalRootsTrustStore.canonicalizeRoot(newRoot);

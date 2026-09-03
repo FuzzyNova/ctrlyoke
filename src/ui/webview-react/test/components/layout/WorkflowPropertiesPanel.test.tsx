@@ -274,6 +274,49 @@ describe("WorkflowPropertiesPanel permissions", () => {
       messages[messages.length - 1]?.properties?.trustedExternalRoots
     ).toEqual([userRoot, workspaceRoot, "/workflow/only"]);
   });
+
+  it("excludes pending and denied workspace roots from the inherited set", () => {
+    const userRoot = "/home/user/library";
+    const approvedRoot = "/workspace/shared";
+    const pendingRoot = "/workspace/undecided";
+    const deniedRoot = "/workspace/rejected";
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      externalFileRootsByScope: {
+        user: [userRoot],
+        workspace: [
+          { path: approvedRoot, decision: "allow" },
+          { path: pendingRoot },
+          { path: deniedRoot, decision: "deny" },
+        ],
+      },
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    expect(
+      screen.getByText("Inherit (2 roots)", { exact: false })
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Trusted External Roots" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+
+    expect(
+      screen.getByTestId(`trusted-root-row-${userRoot}`)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`trusted-root-row-${approvedRoot}`)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId(`trusted-root-row-${pendingRoot}`)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(`trusted-root-row-${deniedRoot}`)
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("WorkflowPropertiesPanel variables", () => {

@@ -11,6 +11,7 @@ import type {
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import { EXECUTION_PROPERTY_KEYS } from "@root/types/CtrlYokeTypes";
+import { TRUST_DECISIONS } from "@root/types/DashboardConstants";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -395,17 +396,18 @@ const WorkflowPropertiesPanelInner: React.FC<{
     if (!roots) {
       return [];
     }
+    const approvedWorkspaceRoots = roots.workspace
+      .filter((entry) => entry.decision === TRUST_DECISIONS.ALLOW)
+      .map((entry) => entry.path);
     const seen = new Set<string>();
-    return [...roots.user, ...roots.workspace.map((entry) => entry.path)].filter(
-      (root) => {
-        const key = root.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
-        if (seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
+    return [...roots.user, ...approvedWorkspaceRoots].filter((root) => {
+      const key = root.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+      if (seen.has(key)) {
+        return false;
       }
-    );
+      seen.add(key);
+      return true;
+    });
   }, [globalSettings.externalFileRootsByScope]);
 
   const [trustedRootsMode, setTrustedRootsMode] = useState<TrustedRootsMode>(
