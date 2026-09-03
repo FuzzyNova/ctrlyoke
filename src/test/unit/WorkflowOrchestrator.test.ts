@@ -3336,6 +3336,33 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     }
   });
 
+  test("checks workflow roots when reloading a retired active working file", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-vscode-working-retired-")
+    );
+    try {
+      const filePath = path.join(workspace, "workflow.ctrlyoke.json");
+      const { orchestrator, internal } = createWatchHarness(workspace);
+      const retiredInstance = {
+        id: "retired-workflow",
+        getSummary: () => ({ workingFilePath: filePath }),
+      };
+      let approvalChecks = 0;
+      internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+      internal.retiredInstances.set(retiredInstance.id, retiredInstance);
+      internal.approvePendingWorkflowExternalRootsForClient = async () => {
+        approvalChecks += 1;
+        return [];
+      };
+
+      await orchestrator.loadWorkingFile(filePath);
+
+      assert.strictEqual(approvalChecks, 1);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("does not retire a locally in-flight WorkflowInstance for its own active lock", async () => {
     // Regression: an active lock may be this very process's own
     // lock for a workflow it is already executing. startExternalRunWatchSession must not

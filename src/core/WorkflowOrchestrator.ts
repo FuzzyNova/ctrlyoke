@@ -3806,10 +3806,23 @@ export class WorkflowOrchestrator {
         this.PANEL_CLIENT_ID,
         existingRetiredForPanel.id
       );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          this.PANEL_CLIENT_ID,
+          undefined,
+          undefined,
+          false
+        );
       await this.replayWorkflowStateTo(
         existingRetiredForPanel.id,
         panelSend,
         this.PANEL_CLIENT_ID
+      );
+      this.emitWorkflowExternalRootsApprovalState(
+        this.PANEL_CLIENT_ID,
+        existingRetiredForPanel.id,
+        pendingRoots,
+        panelSend
       );
       return;
     }
