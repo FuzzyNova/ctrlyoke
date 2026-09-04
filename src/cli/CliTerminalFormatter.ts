@@ -213,20 +213,51 @@ export class CliTerminalFormatter {
     }
 
     writeLine(chalk.bold("Steps"));
+    const renderedGroups = new Set<string>();
     for (const step of preview.steps) {
+      const group = step.parallelGroupId
+        ? preview.parallelGroups.find(
+            (candidate) => candidate.id === step.parallelGroupId
+          )
+        : undefined;
+      if (group && !renderedGroups.has(group.id)) {
+        renderedGroups.add(group.id);
+        const groupPreflight = preview.parallelGroupPreflights.find(
+          (candidate) => candidate.parallelGroupId === group.id
+        );
+        const effectiveWidth = groupPreflight?.effectiveWidth ?? 1;
+        const executableMemberCount =
+          groupPreflight?.executableMemberCount ??
+          group.endIndex - group.startIndex + 1;
+        writeLine(
+          chalk.bold(
+            `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}${group.failFast ? " (failFast)" : ""}`
+          )
+        );
+        writeLine(
+          chalk.dim(
+            effectiveWidth <= 1
+              ? "  runs sequentially"
+              : `  ${Math.min(executableMemberCount, effectiveWidth)} of ${executableMemberCount} will run concurrently (width ${effectiveWidth})`
+          )
+        );
+      }
+      const indent = group ? "  " : "";
       const name = step.stepName ? ` — ${step.stepName}` : "";
-      writeLine(`Step ${step.stepIndex + 1}${name} (${step.type})`);
-      writeLine(`  Harness: ${step.resolvedProperties.harnessId}`);
+      writeLine(`${indent}Step ${step.stepIndex + 1}${name} (${step.type})`);
+      writeLine(`${indent}  Harness: ${step.resolvedProperties.harnessId}`);
       if (step.resolvedProperties.model) {
-        writeLine(`  Model: ${step.resolvedProperties.model}`);
+        writeLine(`${indent}  Model: ${step.resolvedProperties.model}`);
       }
       if (step.command) {
         writeLine(
-          `  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
+          `${indent}  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
         );
       }
       for (const variable of step.variables) {
-        writeLine(`  Variable: ${variable.name}=${variable.value}`);
+        writeLine(
+          `${indent}  Variable: ${variable.name}=${variable.value}`
+        );
       }
       for (const section of step.prompt?.sections ?? []) {
         const includedBytes = section.body
@@ -234,11 +265,11 @@ export class CliTerminalFormatter {
           : 0;
         const lineInfo = section.lineCount === null ? "?" : section.lineCount;
         writeLine(
-          `  Payload: ${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
+          `${indent}  Payload: ${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
         );
         if (section.body) {
           for (const line of section.body.split("\n")) {
-            writeLine(`    ${line}`);
+            writeLine(`${indent}    ${line}`);
           }
         }
         if (section.truncationReason) {
@@ -253,7 +284,7 @@ export class CliTerminalFormatter {
                     PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
                   ]
                 : "the full planned payload remains available to the harness";
-          const line = `    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`;
+          const line = `${indent}    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`;
           writeLine(
             section.truncationReason ===
               PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
@@ -268,7 +299,9 @@ export class CliTerminalFormatter {
           mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED && mutation.warning
             ? ` — ${mutation.warning}`
             : "";
-        writeLine(`  Mutation: ${mutation.operation}${mutationPath}${warning}`);
+        writeLine(
+          `${indent}  Mutation: ${mutation.operation}${mutationPath}${warning}`
+        );
       }
       writeLine("");
     }

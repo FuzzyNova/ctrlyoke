@@ -215,6 +215,8 @@ describe("dashboard mount smoke", () => {
     seedDisplayedRun();
     useExecutionPreviewStore.setState({
       preview: {
+        parallelGroups: [],
+        parallelGroupPreflights: [],
         workflow: {
           name: "Smoke workflow",
           stepCount: 0,

@@ -556,6 +556,7 @@ function OverviewPanel({
   const stepsWithTimeline = preview.steps
     .map((step) => ({ step, entries: buildStepTimeline(step) }))
     .filter(({ entries }) => entries.length > 0);
+  const renderedGroupIds = new Set<string>();
   return (
     <div className="flex flex-col gap-5 p-4">
       <div>
@@ -604,15 +605,72 @@ function OverviewPanel({
           Workflow timeline
         </h3>
         <div className="flex flex-col gap-3">
-          {stepsWithTimeline.map(({ step, entries }) => (
-            <section key={step.stepIndex} className="flex flex-col gap-2">
-              <StepTimelineHeading step={step} />
-              <TimelineSection
-                entries={entries}
-                onNavigate={(tab) => onNavigateToStepTab(step.stepIndex, tab)}
-              />
-            </section>
-          ))}
+          {stepsWithTimeline.flatMap(({ step, entries }) => {
+            const group = step.parallelGroupId
+              ? preview.parallelGroups.find(
+                  (candidate) => candidate.id === step.parallelGroupId
+                )
+              : undefined;
+            if (!group) {
+              return [
+                <section key={step.stepIndex} className="flex flex-col gap-2">
+                  <StepTimelineHeading step={step} />
+                  <TimelineSection
+                    entries={entries}
+                    onNavigate={(tab) =>
+                      onNavigateToStepTab(step.stepIndex, tab)
+                    }
+                  />
+                </section>,
+              ];
+            }
+            if (renderedGroupIds.has(group.id)) return [];
+            renderedGroupIds.add(group.id);
+            const groupPreflight = preview.parallelGroupPreflights.find(
+              (candidate) => candidate.parallelGroupId === group.id
+            );
+            const effectiveWidth = groupPreflight?.effectiveWidth ?? 1;
+            const executableMemberCount =
+              groupPreflight?.executableMemberCount ??
+              group.endIndex - group.startIndex + 1;
+            const members = stepsWithTimeline.filter(
+              (candidate) => candidate.step.parallelGroupId === group.id
+            );
+            const executionSummary =
+              effectiveWidth <= 1
+                ? "runs sequentially"
+                : `${Math.min(executableMemberCount, effectiveWidth)} of ${executableMemberCount} will run concurrently (width ${effectiveWidth})`;
+            return [
+              <section
+                key={group.id}
+                className="flex flex-col gap-2 rounded border border-panel-border p-2"
+                aria-label={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-foreground">
+                    Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+                  </span>
+                  <span className="text-description-fg">
+                    failFast: {String(group.failFast)} · {executionSummary}
+                  </span>
+                </div>
+                {members.map((member) => (
+                  <div
+                    key={member.step.stepIndex}
+                    className="flex flex-col gap-2 border-l border-panel-border pl-2"
+                  >
+                    <StepTimelineHeading step={member.step} />
+                    <TimelineSection
+                      entries={member.entries}
+                      onNavigate={(tab) =>
+                        onNavigateToStepTab(member.step.stepIndex, tab)
+                      }
+                    />
+                  </div>
+                ))}
+              </section>,
+            ];
+          })}
         </div>
       </section>
 

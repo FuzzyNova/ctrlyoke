@@ -22,6 +22,7 @@ import {
   SETTING_SCOPES,
   HOOK_EVENT_ORDER,
   PROMPT_DIAGNOSTIC_CODES,
+  PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
@@ -236,6 +237,94 @@ suite("ExecutionPreviewService", () => {
     for (const root of temporaryRoots.splice(0)) {
       await fsPromises.rm(root, { recursive: true, force: true });
     }
+  });
+
+  test("reports inherited session collisions and group metadata on every offending step", async () => {
+    const preview = await createService().build({
+      workflow: {
+        resumeSession: true,
+        sessionId: "shared-session",
+        steps: [
+          { name: "alpha", prompt: "one" },
+          { name: "beta", prompt: "two" },
+        ],
+        parallelGroups: [
+          {
+            id: "group",
+            startIndex: 0,
+            endIndex: 1,
+            failFast: true,
+          },
+        ],
+      },
+    });
+
+    assert.strictEqual(preview.parallelGroupPreflights[0].effectiveWidth, 1);
+    assert.deepStrictEqual(
+      preview.steps.map((step) => step.parallelGroupId),
+      ["group", "group"]
+    );
+    for (const step of preview.steps) {
+      const collision = step.diagnostics.find(
+        (diagnostic) =>
+          diagnostic.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+      );
+      assert.ok(collision);
+      assert.match(collision.message, /Step 1 \("alpha"\).*Step 2 \("beta"\)/);
+    }
+  });
+
+  test("allows different-harness auto-resume sessions at a shared boundary", async () => {
+    const capabilities = createCapabilities();
+    capabilities.harnesses[HARNESS_IDS.COPILOT_CLI] = {
+      ...capabilities.harnesses[HARNESS_IDS.CLAUDE_CLI],
+      descriptor: {
+        ...capabilities.harnesses[HARNESS_IDS.CLAUDE_CLI].descriptor,
+        harnessId: HARNESS_IDS.COPILOT_CLI,
+      },
+    };
+    const preview = await createService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      capabilities
+    ).build({
+      workflow: {
+        resumeSession: true,
+        steps: [
+          {
+            prompt: "before",
+            _runtime: {
+              harness: HARNESS_IDS.CLAUDE_CLI,
+              model: "model",
+              sessionId: "claude-session",
+              startedAt: 1,
+              completedAt: 2,
+            },
+          },
+          { prompt: "one", harness: HARNESS_IDS.CLAUDE_CLI },
+          { prompt: "two", harness: HARNESS_IDS.COPILOT_CLI },
+        ],
+        parallelGroups: [
+          {
+            id: "group",
+            startIndex: 1,
+            endIndex: 2,
+            failFast: false,
+          },
+        ],
+      },
+    });
+    assert.strictEqual(
+      preview.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+      ),
+      false
+    );
   });
 
   test("propagates configured hook compatibility diagnostics to workflow and step preview", async () => {

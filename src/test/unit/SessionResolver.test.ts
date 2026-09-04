@@ -222,6 +222,64 @@ suite("SessionResolver Tests", () => {
   });
 
   suite("resolve - auto-resume", () => {
+    test("uses the group start boundary for auto-resume and numeric references", () => {
+      const workflow: PromptFile = {
+        steps: [],
+        harness: HARNESS_IDS.COPILOT_CLI,
+        resumeSession: true,
+      };
+      const prompts: PromptStep[] = [
+        {
+          prompt: "before group",
+          _runtime: {
+            harness: HARNESS_IDS.COPILOT_CLI,
+            model: "model",
+            sessionId: "before-session",
+            startedAt: 1,
+            completedAt: 2,
+          },
+        },
+        {
+          prompt: "first member",
+          _runtime: {
+            harness: HARNESS_IDS.COPILOT_CLI,
+            model: "model",
+            sessionId: "sibling-session",
+            startedAt: 3,
+            completedAt: 4,
+          },
+        },
+        { prompt: "second member", sessionId: 2 },
+      ];
+
+      assert.strictEqual(
+        SessionResolver.resolve(
+          prompts[2],
+          2,
+          prompts,
+          workflow,
+          undefined,
+          1
+        ),
+        undefined
+      );
+      assert.strictEqual(
+        SessionResolver.resolve(
+          { prompt: "second member" },
+          2,
+          prompts,
+          workflow,
+          undefined,
+          1
+        ),
+        "before-session"
+      );
+      assert.strictEqual(
+        SessionResolver.validate(prompts[2], 2, prompts, workflow, 1).valid,
+        false
+      );
+    });
+
     test("should auto-resume from previous prompt when resumeSession=true", () => {
       const workflow: PromptFile = {
         steps: [],

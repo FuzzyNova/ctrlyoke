@@ -1000,23 +1000,24 @@ dashboard with undo/redo.
 
 ### Stage 3 — Target-keyed runtime foundations
 
-**Status: items 1–4 complete.** The sequential execution path now uses target-keyed
-queue and attempt primitives while fan-out remains unimplemented.
+**Status: complete.** The sequential execution path now uses target-keyed
+queue and attempt primitives while fan-out remains unimplemented; runtime resources
+are isolated and registered per target in preparation for the coordinator.
 
 1. **Complete.** Indexed `PromptQueue` primitives and `commitParallelGroupJoin`; sequential wrappers
    delegate to them.
 2. **Complete.** Retry counts into attempt state; `EndConditionHandler` explicit-target.
 3. **Complete.** `WorkflowStateMachine` active-attempt set; `stop()` cancels all.
 4. **Complete.** Response-wait target set.
-5. Target-keyed integration acquisition and cleanup; resource registry in
+5. **Complete.** Target-keyed integration acquisition and cleanup; resource registry in
    `WorkflowInstance`.
-6. Per-target `ScriptProcessRunner`; cancellation/timeout isolation tests.
-7. Session-activity attribution keyed by target; `OutputCaptureBuffer.replayTo` replays
-   every in-flight buffer.
-8. `activeStepIndices` in dashboard state; `CONTEXT_WINDOW_UPDATE` guard removed.
-9. `queue.maxParallelSteps` setting plumbing + settings UI control;
+6. **Complete.** Per-target `ScriptProcessRunner`; cancellation/timeout isolation tests.
+7. **Complete.** Session-activity attribution keyed by target; `OutputCaptureBuffer.replayTo`
+   replays every in-flight buffer.
+8. **Complete.** `activeStepIndices` in dashboard state; `CONTEXT_WINDOW_UPDATE` guard removed.
+9. **Complete.** `queue.maxParallelSteps` setting plumbing + settings UI control;
    `PARALLEL_GROUP_FAN_OUT_ENABLED = false`.
-10. `supportsConcurrentInteractiveSessions` host flag.
+10. **Complete.** `supportsConcurrentInteractiveSessions` host flag.
 
 Done when: all existing tests pass with the sequential path routed through the new
 primitives, and a fake-integration test can drive two targets to completion in reverse
@@ -1024,8 +1025,8 @@ order without corrupting queue state.
 
 ### Stage 4 — Parallel coordinator, preflight, preview, and recovery
 
-1. `ParallelGroupPreflight` (shared) and its use in `ExecutionPreviewService`; preview
-   types, `DryRunModal`, CLI preview rendering.
+1. **Complete.** `ParallelGroupPreflight` (shared) and its use in
+   `ExecutionPreviewService`; preview types, `DryRunModal`, CLI preview rendering.
 2. Coordinator: bounded pool, `StepExecutionOutcome` leaf contract, join commit, progress.
 3. Fail-fast / fail-after-settle and cancellation draining.
 4. Join-based pause/resume; all-target stop.

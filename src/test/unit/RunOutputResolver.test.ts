@@ -497,6 +497,24 @@ suite("RunOutputResolver", () => {
       ["partial retry response", "pass\n0", finalResponse],
       "prior context is resolved from timeline attempts, including scripts and final loops"
     );
+    const groupBoundaryItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous", "all", [2]],
+      revisionTwo.steps,
+      1
+    );
+    assert.deepStrictEqual(
+      groupBoundaryItems.map((item) => item.text),
+      ["partial retry response"],
+      "previous/all stop at the group start and numeric same-group references are excluded"
+    );
+    const indexZeroItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous", "all", [1]],
+      revisionTwo.steps,
+      0
+    );
+    assert.deepStrictEqual(indexZeroItems, []);
   });
 
   test("streams very large logs without readEvents or response truncation", async () => {

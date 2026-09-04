@@ -97,18 +97,46 @@ export class SessionResolver {
     promptIndex: number,
     allPrompts: WorkflowStep[],
     workflow?: PromptFile,
-    finalStepSessionId?: string
+    finalStepSessionId?: string,
+    groupStartBoundary: number = promptIndex
   ): string | undefined {
     const resolved = workflow
       ? PropertyResolver.resolve(prompt, workflow)
       : undefined;
+    return this.resolveWithProperties(
+      prompt,
+      promptIndex,
+      allPrompts,
+      resolved,
+      finalStepSessionId,
+      groupStartBoundary
+    );
+  }
 
+  /**
+   * Resolve against execution properties that were already inherited,
+   * defaulted, and variable-substituted by a caller such as group preflight.
+   */
+  static resolveWithProperties(
+    prompt: PromptStep,
+    promptIndex: number,
+    allPrompts: WorkflowStep[],
+    resolved: Pick<
+      import("../types/ExecutionPropertyTypes").ResolvedProperties,
+      "resumeSession" | "sessionId" | "harness"
+    > | undefined,
+    finalStepSessionId?: string,
+    groupStartBoundary: number = promptIndex,
+    logWarnings: boolean = true
+  ): string | undefined {
     // 1. Check if session should NOT be resumed (i.e., start new session)
-    if (!this.shouldResumeSession(prompt, workflow)) {
+    if (
+      resolved ? !resolved.resumeSession : !this.shouldResumeSession(prompt)
+    ) {
       return undefined;
     }
 
-    // 2. Use resolved sessionId (includes workflow-level sessionId via PropertyResolver)
+    // 2. Use the supplied effective sessionId.
     const resolvedSessionId = resolved?.sessionId;
     if (resolvedSessionId !== undefined) {
       // 2a. "finalStep" sentinel — resume the previous final step loop's session
@@ -130,9 +158,10 @@ export class SessionResolver {
         return this.resolveNumericReference(
           prompt,
           resolvedSessionId,
-          promptIndex,
+          groupStartBoundary,
           allPrompts,
-          resolved?.harness
+          resolved?.harness,
+          logWarnings
         );
       }
 
@@ -143,9 +172,10 @@ export class SessionResolver {
     // 3. Auto-resume previous prompt in same workflow
     return this.autoResumeFromPrevious(
       prompt,
-      promptIndex,
+      groupStartBoundary,
       allPrompts,
-      resolved?.harness
+      resolved?.harness,
+      logWarnings
     );
   }
 
@@ -167,20 +197,23 @@ export class SessionResolver {
   private static resolveNumericReference(
     prompt: PromptStep,
     refNumber: number,
-    promptIndex: number,
+    groupStartBoundary: number,
     allPrompts: WorkflowStep[],
-    resolvedHarness?: HarnessId
+    resolvedHarness?: HarnessId,
+    logWarnings: boolean = true
   ): string | undefined {
     const refIndex = refNumber - 1; // 1-based to 0-based
 
     // Validate reference is within bounds and points to previous prompt
-    if (refIndex < 0 || refIndex >= promptIndex) {
-      Log.warn(
-        `⚠️ Invalid sessionId reference: ${refNumber}. ` +
-          `Must reference a completed prompt (1-${promptIndex}). ` +
-          `Starting new session instead.\n` +
-          `   To fix: Use a valid prompt number (1-${promptIndex}) or remove sessionId to auto-resume.`
-      );
+    if (refIndex < 0 || refIndex >= groupStartBoundary) {
+      if (logWarnings) {
+        Log.warn(
+          `⚠️ Invalid sessionId reference: ${refNumber}. ` +
+            `Must reference a completed prompt (1-${groupStartBoundary}). ` +
+            `Starting new session instead.\n` +
+            `   To fix: Use a valid prompt number (1-${groupStartBoundary}) or remove sessionId to auto-resume.`
+        );
+      }
       return undefined;
     }
 
@@ -188,21 +221,25 @@ export class SessionResolver {
     const sessionId = referencedPrompt._runtime?.sessionId;
 
     if (!sessionId) {
-      Log.warn(
-        `⚠️ Prompt ${refNumber} has no session ID. Starting new session instead.\n` +
-          `   This usually means prompt ${refNumber} hasn't been executed yet.\n` +
-          `   To fix: Ensure prompts run in order, or use a different prompt number.`
-      );
+      if (logWarnings) {
+        Log.warn(
+          `⚠️ Prompt ${refNumber} has no session ID. Starting new session instead.\n` +
+            `   This usually means prompt ${refNumber} hasn't been executed yet.\n` +
+            `   To fix: Ensure prompts run in order, or use a different prompt number.`
+        );
+      }
       return undefined;
     }
 
     // Runtime sessionId should always be string (actual CLI session ID)
     // If it's somehow a number, that's an error in runtime metadata
     if (typeof sessionId === "number") {
-      Log.warn(
-        `⚠️ Prompt ${refNumber} has invalid runtime sessionId (number instead of string). ` +
-          `Starting new session.`
-      );
+      if (logWarnings) {
+        Log.warn(
+          `⚠️ Prompt ${refNumber} has invalid runtime sessionId (number instead of string). ` +
+            `Starting new session.`
+        );
+      }
       return undefined;
     }
 
@@ -211,15 +248,17 @@ export class SessionResolver {
     const currentHarness = resolvedHarness ?? prompt.harness;
 
     if (!this.areHarnessesCompatible(refHarness, currentHarness)) {
-      Log.warn(
-        `⚠️ Cross-harness session reference detected!\n` +
-          `   Prompt ${refNumber} used ${refHarness}, but current prompt uses ${currentHarness}.\n` +
-          `   Sessions cannot be shared across different harnesses (Copilot ↔ Claude ↔ Codex).\n` +
-          `   Starting new ${currentHarness} session instead.\n` +
-          `   To fix: Either:\n` +
-          `     1. Use same harness for all prompts that share a session, OR\n` +
-          `     2. Remove sessionId to auto-resume from last prompt with matching harness`
-      );
+      if (logWarnings) {
+        Log.warn(
+          `⚠️ Cross-harness session reference detected!\n` +
+            `   Prompt ${refNumber} used ${refHarness}, but current prompt uses ${currentHarness}.\n` +
+            `   Sessions cannot be shared across different harnesses (Copilot ↔ Claude ↔ Codex).\n` +
+            `   Starting new ${currentHarness} session instead.\n` +
+            `   To fix: Either:\n` +
+            `     1. Use same harness for all prompts that share a session, OR\n` +
+            `     2. Remove sessionId to auto-resume from last prompt with matching harness`
+        );
+      }
       return undefined;
     }
 
@@ -241,16 +280,17 @@ export class SessionResolver {
    */
   private static autoResumeFromPrevious(
     prompt: PromptStep,
-    promptIndex: number,
+    groupStartBoundary: number,
     allPrompts: WorkflowStep[],
-    resolvedHarness?: HarnessId
+    resolvedHarness?: HarnessId,
+    logWarnings: boolean = true
   ): string | undefined {
-    if (promptIndex === 0) {
+    if (groupStartBoundary === 0) {
       return undefined; // First prompt, no previous
     }
 
     // Find most recent completed prompt with same harness
-    for (let i = promptIndex - 1; i >= 0; i--) {
+    for (let i = groupStartBoundary - 1; i >= 0; i--) {
       const prevPrompt = allPrompts[i];
       const prevHarness = prevPrompt._runtime?.harness;
       const prevSessionId = prevPrompt._runtime?.sessionId;
@@ -273,10 +313,12 @@ export class SessionResolver {
       if (harnessesMatch && prevSessionId) {
         // Runtime sessionId should always be string (actual CLI session ID)
         if (typeof prevSessionId === "number") {
-          Log.warn(
-            `⚠️ Prompt ${i + 1} has invalid runtime sessionId (number instead of string). ` +
-              `Skipping auto-resume.`
-          );
+          if (logWarnings) {
+            Log.warn(
+              `⚠️ Prompt ${i + 1} has invalid runtime sessionId (number instead of string). ` +
+                `Skipping auto-resume.`
+            );
+          }
           continue;
         }
 
@@ -338,7 +380,8 @@ export class SessionResolver {
     prompt: PromptStep,
     promptIndex: number,
     allPrompts: PromptStep[],
-    workflow?: PromptFile
+    workflow?: PromptFile,
+    groupStartBoundary: number = promptIndex
   ): SessionValidationResult {
     // Resolve sessionId (check prompt first, then workflow if available)
     const sessionId = workflow
@@ -372,12 +415,12 @@ export class SessionResolver {
       }
 
       // Check if reference points to future prompt (not yet executed)
-      if (refIndex >= promptIndex) {
+      if (refIndex >= groupStartBoundary) {
         return {
           valid: false,
           error:
             `Invalid sessionId reference: ${sessionId}. ` +
-            `Cannot reference future prompt (current: ${promptIndex + 1}).`,
+            `Cannot reference a prompt at or after the execution boundary (${groupStartBoundary + 1}).`,
         };
       }
     }

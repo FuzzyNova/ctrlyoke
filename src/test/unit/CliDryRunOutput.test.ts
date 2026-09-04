@@ -16,6 +16,8 @@ import {
 
 function previewFixture(): WorkflowExecutionPreview {
   return {
+    parallelGroups: [],
+    parallelGroupPreflights: [],
     workflow: {
       name: "fixture",
       stepCount: 1,
@@ -179,6 +181,42 @@ CliTerminalFormatter.renderEvent({
         line.includes("showing 7 of 20 bytes; reason=body-budget")
       )
     );
+  });
+
+  test("renders parallel group headings and indents members", () => {
+    const preview = previewFixture();
+    preview.workflow.stepCount = 2;
+    preview.parallelGroups = [
+      {
+        id: "group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: true,
+      },
+    ];
+    preview.parallelGroupPreflights = [
+      {
+        parallelGroupId: "group",
+        effectiveWidth: 1,
+        executableMemberCount: 2,
+      },
+    ];
+    preview.steps[0].parallelGroupId = "group";
+    preview.steps.push({
+      ...preview.steps[0],
+      stepIndex: 1,
+      parallelGroupId: "group",
+    });
+
+    const lines: string[] = [];
+    CliTerminalFormatter.renderExecutionPreview(preview, (line) =>
+      lines.push(line)
+    );
+
+    assert.ok(lines.includes("Parallel steps 1–2 (failFast)"));
+    assert.ok(lines.includes("  runs sequentially"));
+    assert.ok(lines.some((line) => line.startsWith("  Step 1")));
+    assert.ok(lines.some((line) => line.startsWith("  Step 2")));
   });
 
   test("renders not-yet-available prior context neutrally with distinct delivery copy", () => {

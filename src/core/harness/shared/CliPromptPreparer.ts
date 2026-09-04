@@ -390,7 +390,7 @@ export class CliPromptPreparer {
               ...inlineRefs.map(refToPriorContext),
             ],
             allPrompts,
-            promptIndex
+            workflowContext.groupStartBoundary ?? promptIndex
           )
         : []
       : [];

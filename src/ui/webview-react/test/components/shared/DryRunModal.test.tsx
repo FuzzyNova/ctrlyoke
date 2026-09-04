@@ -27,6 +27,8 @@ vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
 const clipboardWriteText = vi.fn<(text: string) => Promise<void>>();
 
 const preview: WorkflowExecutionPreview = {
+  parallelGroups: [],
+  parallelGroupPreflights: [],
   workflow: {
     name: "Preview Workflow",
     stepCount: 2,
@@ -274,6 +276,39 @@ describe("DryRunModal", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("Prepare")).toBeInTheDocument();
     expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
+  });
+
+  it("renders grouped members in a bordered block with failFast and width", () => {
+    const groupedPreview: WorkflowExecutionPreview = {
+      ...preview,
+      parallelGroups: [
+        {
+          id: "group",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+      parallelGroupPreflights: [
+        {
+          parallelGroupId: "group",
+          effectiveWidth: 1,
+          executableMemberCount: 2,
+        },
+      ],
+      steps: preview.steps.slice(0, 2).map((step) => ({
+        ...step,
+        parallelGroupId: "group",
+      })),
+    };
+    openPreview({ kind: "workflow" }, groupedPreview);
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    expect(screen.getByText("Parallel steps 1–2")).toBeInTheDocument();
+    expect(
+      screen.getByText("failFast: true · runs sequentially")
+    ).toBeInTheDocument();
   });
 
   it("shows the workflow portability report as an overview section", async () => {

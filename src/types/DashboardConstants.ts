@@ -193,6 +193,7 @@ export const MESSAGE_TYPES = {
   SESSION_RESTORED: "sessionRestored", // Restore previous session with runtime state preserved
   EXECUTION_STARTED: "executionStarted",
   EXECUTION_STATE_CHANGED: "executionStateChanged",
+  ACTIVE_STEP_INDICES_CHANGED: "activeStepIndicesChanged",
   PROGRESS_UPDATE: "progressUpdate",
   STEP_STATUS_CHANGED: "stepStatusChanged",
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
@@ -808,8 +809,29 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
-/** Stage 2 keeps grouped steps on the existing sequential execution path. */
+/** Stage 3 keeps grouped steps on the existing sequential execution path. */
 export const PARALLEL_GROUP_FAN_OUT_ENABLED = false;
+
+/** Clamp parallel group width until the fan-out gate is enabled. */
+export function getEffectiveParallelGroupWidth(configuredWidth: number): number {
+  return Math.min(
+    configuredWidth,
+    PARALLEL_GROUP_FAN_OUT_ENABLED ? Number.POSITIVE_INFINITY : 1
+  );
+}
+
+export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
+  INVALID_REFERENCE: "parallelGroup.preflight.invalidReference",
+  SESSION_COLLISION: "parallelGroup.preflight.sessionCollision",
+  DYNAMIC_QUEUE: "parallelGroup.preflight.dynamicQueue",
+  HARNESS_UNAVAILABLE: "parallelGroup.preflight.harnessUnavailable",
+  INTEGRATION_CREATION: "parallelGroup.preflight.integrationCreation",
+  INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",
+  EFFECTIVE_WIDTH: "parallelGroup.preflight.effectiveWidth",
+} as const;
+
+export type ParallelGroupPreflightDiagnosticCode =
+  (typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES)[keyof typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES];
 
 /** Commands emitted by the workflow runtime state machine. */
 export const WORKFLOW_RUNTIME_COMMANDS = {

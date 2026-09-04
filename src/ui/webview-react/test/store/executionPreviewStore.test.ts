@@ -16,6 +16,8 @@ const address = {
   kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
 } as const;
 const preview = {
+  parallelGroups: [],
+  parallelGroupPreflights: [],
   workflow: {
     name: "Workflow A",
     stepCount: 1,

@@ -52,6 +52,7 @@ function makeContext(
     shouldShowCliCommand: false,
     dynamicQueueConfig: {
       maxQueueSize: 100,
+      maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
       unlimitedMode: false,
       notifyOnExtension: false,
@@ -281,6 +282,36 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("preflights inherited/default session collisions before any group member launches", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      resumeSession: true,
+      sessionId: "shared-session",
+      steps: [
+        { name: "alpha", prompt: "one" },
+        { name: "beta", prompt: "two" },
+      ],
+      parallelGroups: [
+        {
+          id: "group",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    await assert.rejects(
+      makeExecutor(queue).execute(integration, makeContext(integration)),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Step 1 \("alpha"\).*Step 2 \("beta"\)/s);
+        return true;
+      }
+    );
+    assert.deepStrictEqual(integration.sentPrompts, []);
+  });
+
   test("gates unknown MCP references in fail mode but reports and continues in warn mode", async () => {
     const promptText = "Use /mcp:missing-for-strict-resolution-test";
     const failQueue = new PromptQueue();

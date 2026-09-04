@@ -114,17 +114,25 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
+import type { ScriptProcessRunner } from "./orchestration/ScriptProcessRunner";
 import {
   getSignedStepIndex as getSignedWorkflowStepIndex,
   toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
   type StatusMessageReporter,
 } from "./orchestration/StatusMessageReporter";
+import {
+  preflightParallelGroup,
+  throwIfParallelGroupPreflightFailed,
+  type ParallelGroupPreflightMember,
+} from "./ParallelGroupPreflight";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
   /** Whether this host can provide a PTY for interactive execution. */
   hostCanProvidePty?: boolean;
+  /** Whether this host can multiplex concurrent interactive sessions. */
+  supportsConcurrentInteractiveSessions?: boolean;
   workspaceFolderPath: string | undefined;
   /**
    * Open workspace roots (multi-root). Passed to WorkspaceSnapshotService so
@@ -143,8 +151,24 @@ export interface WorkflowExecutionContext {
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
     prompt: PromptStep,
-    harnessOverride?: HarnessId
+    harnessOverride?: HarnessId,
+    target?: ExecutionTarget
   ) => HarnessIntegration;
+  /** Wait for the detector singleton to prove a required harness ready. */
+  ensureHarnessReady?: (
+    harnessId: HarnessId
+  ) => Promise<string | undefined>;
+  /** Enables isolated target-keyed integrations for a parallel coordinator. */
+  targetKeyedExecution?: boolean;
+  registerActiveTarget?: (
+    target: ExecutionTarget,
+    attemptIndex: number
+  ) => void;
+  registerTargetPtySession?: (target: ExecutionTarget, sessionId: string) => void;
+  clearTargetPtySession?: (target: ExecutionTarget) => void;
+  unregisterActiveTarget?: (target: ExecutionTarget) => void;
+  releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
+  getScriptProcessRunner?: (target: ExecutionTarget) => ScriptProcessRunner;
   historyFilePath: string;
   workingFilePath?: string;
   instanceTag?: string;
@@ -178,7 +202,11 @@ export interface WorkflowExecutionContext {
   /** Always-on chunk buffer for queue steps — enables output replay on workflow switch. */
   captureChunk?: (stepIndex: number, chunk: string) => void;
   /** Always-on completed-output capture for queue steps — enables replay on workflow switch. */
-  captureCompletedOutput?: (stepIndex: number, output: any) => void;
+  captureCompletedOutput?: (
+    stepIndex: number,
+    output: any,
+    integration?: HarnessIntegration
+  ) => void;
   /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
   /** Snapshot of in-flight queue output already sent to the dashboard. */
@@ -200,10 +228,17 @@ export interface WorkflowExecutionContext {
    * be dispatched. Called immediately before sendPrompt synchronously parks the
    * prior step's watcher.
    */
-  beginSessionActivityTargetCapture?: () => void;
+  beginSessionActivityTargetCapture?: (
+    integration: HarnessIntegration,
+    target: ExecutionTarget
+  ) => void;
   captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
   captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
-  captureFinalStepCompletedOutput?: (loopIndex: number, output: any) => void;
+  captureFinalStepCompletedOutput?: (
+    loopIndex: number,
+    output: any,
+    integration?: HarnessIntegration
+  ) => void;
   /** Snapshot of in-flight finalStep output already sent to the dashboard. */
   getFinalStepBufferedOutput?: (loopIndex: number) => CliOutput | undefined;
   onFinalStepStatusMessage?: (
@@ -230,6 +265,8 @@ export interface WorkflowExecutionContext {
     stepName: string;
     /** Signed step index used as the CLI output slot. */
     stepIndex: number;
+    /** Resource-registry key for the owning execution target. */
+    targetKey: string;
     /** Raw script string from the step definition (e.g. ".ctrlyoke/scripts/check.py arg"). */
     script: string;
     /** Working directory for the script process. */
@@ -242,6 +279,8 @@ export interface WorkflowExecutionContext {
     timeout: number;
     /** Called when the PTY is killed because its timeout expired. */
     onTimeout?: () => void;
+    onSessionCreated?: (sessionId: string) => void;
+    onSessionEnded?: () => void;
   }) => Promise<number>;
   targetRunIndices?: Map<string, number>;
   /**
@@ -365,6 +404,11 @@ export class WorkflowExecutor {
       this.promptQueue.getFinalStepRuntime()?.phase ===
         FINAL_STEP_PHASES.FINAL_STEP &&
       !this.promptQueue.hasNext();
+    const groupPreflightMembers = new Map<
+      number,
+      ParallelGroupPreflightMember
+    >();
+    const preflightedGroupIds = new Set<string>();
 
     while (true) {
       if (!runFinalStepFirst) {
@@ -375,12 +419,97 @@ export class WorkflowExecutor {
             stepIndex: state.currentIndex,
           };
           const prompt = state.steps[state.currentIndex];
+          const group = state.parallelGroups.find(
+            (candidate) =>
+              state.currentIndex >= candidate.startIndex &&
+              state.currentIndex <= candidate.endIndex
+          );
+          if (
+            group &&
+            !preflightedGroupIds.has(group.id) &&
+            state.currentIndex === group.startIndex
+          ) {
+            const workflow = this.promptQueue.getWorkflowFile();
+            const preflight = await preflightParallelGroup({
+              workflow,
+              group,
+              defaults: PropertyResolver.createContext({
+                hostCanProvidePty: context.hostCanProvidePty,
+              }).defaults,
+              hostCanProvidePty: context.hostCanProvidePty ?? true,
+              supportsConcurrentInteractiveSessions:
+                context.supportsConcurrentInteractiveSessions ?? true,
+              configuredWidth: context.dynamicQueueConfig.maxParallelSteps,
+              resolvePromptText: (promptText, variables) =>
+                this.resolveEffectivePrompt(promptText, context, {
+                  ...variables,
+                }),
+              normalizeProperties: async (
+                properties,
+                memberStep,
+                effectivePromptText
+              ) =>
+                isScriptStep(memberStep)
+                  ? properties
+                  : (
+                      await McpServerNormalizer.applyFromRegistryWithDiagnostics(
+                        properties,
+                        context.workspaceFolderPath ??
+                          context.executionWorkspace.executionRoot,
+                        effectivePromptText ?? ""
+                      )
+                    ).properties,
+              checkHarnessReady: context.ensureHarnessReady,
+              ensureIsolatedIntegration: (member) =>
+                context.getIntegrationForPrompt(
+                  member.step as PromptStep,
+                  member.resolvedProperties.harness,
+                  {
+                    kind: FINAL_STEP_PHASES.QUEUE,
+                    stepIndex: member.stepIndex,
+                  }
+                ),
+              finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
+                | string
+                | undefined,
+            });
+            Log.info(
+              `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+            );
+            if (preflight.issues.length > 0) {
+              await Promise.all(
+                preflight.members.map((member) =>
+                  context.releaseTargetResources?.({
+                    kind: FINAL_STEP_PHASES.QUEUE,
+                    stepIndex: member.stepIndex,
+                  })
+                )
+              );
+              throwIfParallelGroupPreflightFailed(preflight);
+            }
+            for (const member of preflight.members) {
+              if (
+                !isScriptStep(member.step) &&
+                member.resolvedProperties.resumeSession &&
+                member.resolvedSessionId === undefined
+              ) {
+                Log.warn(
+                  `Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
+                );
+              }
+            }
+            for (const member of preflight.members) {
+              groupPreflightMembers.set(member.stepIndex, member);
+            }
+            preflightedGroupIds.add(group.id);
+          }
 
           const shouldContinue = await this.executeWithSnapshot(
             target,
             prompt,
             context,
-            snapshotStrategy
+            snapshotStrategy,
+            groupPreflightMembers.get(state.currentIndex)
           );
 
           if (!shouldContinue) {
@@ -507,7 +636,8 @@ export class WorkflowExecutor {
   private async executeSinglePrompt(
     target: ExecutionTarget,
     step: WorkflowStep,
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     const state = this.promptQueue.getState();
     const runtime = this.getRuntime();
@@ -567,16 +697,23 @@ export class WorkflowExecutor {
     let attemptIndex = 0;
     while (true) {
       runtime.beginAttempt(target, attemptIndex, Date.now());
+      context.registerActiveTarget?.(target, attemptIndex);
 
       // Evaluate pre-condition gate before running the AI prompt.
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
-      let preResolvedProperties = PropertyResolver.resolve(
-        prompt,
-        workflowFileForPre,
-        { hostCanProvidePty: context.hostCanProvidePty }
-      );
-      const preVars = workflowFileForPre.vars;
-      if (preVars && Object.keys(preVars).length > 0) {
+      let preResolvedProperties =
+        preflightMember?.resolvedProperties ??
+        PropertyResolver.resolve(prompt, workflowFileForPre, {
+          hostCanProvidePty: context.hostCanProvidePty,
+        });
+      const preVars = preflightMember
+        ? { ...preflightMember.variables }
+        : workflowFileForPre.vars;
+      if (
+        !preflightMember &&
+        preVars &&
+        Object.keys(preVars).length > 0
+      ) {
         preResolvedProperties = VarSubstitutor.applyToResolvedProperties(
           preResolvedProperties,
           preVars
@@ -725,13 +862,21 @@ export class WorkflowExecutor {
       }
 
       const workflowFile = this.promptQueue.getWorkflowFile();
-      let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile, {
-        hostCanProvidePty: context.hostCanProvidePty,
-      });
+      let resolvedProperties =
+        preflightMember?.resolvedProperties ??
+        PropertyResolver.resolve(prompt, workflowFile, {
+          hostCanProvidePty: context.hostCanProvidePty,
+        });
 
       // Apply {{var}} substitution when the workflow has vars defined.
-      const vars = workflowFile.vars;
-      if (vars && Object.keys(vars).length > 0) {
+      const vars = preflightMember
+        ? { ...preflightMember.variables }
+        : workflowFile.vars;
+      if (
+        !preflightMember &&
+        vars &&
+        Object.keys(vars).length > 0
+      ) {
         resolvedProperties = VarSubstitutor.applyToResolvedProperties(
           resolvedProperties,
           vars
@@ -741,11 +886,9 @@ export class WorkflowExecutor {
       // Substitute first, then resolve a standalone prompt-file reference into
       // a local copy. The queue and working file retain the authored path so
       // edits to the target file are visible on the next run.
-      const effectivePromptText = await this.resolveEffectivePrompt(
-        prompt.prompt,
-        context,
-        vars
-      );
+      const effectivePromptText =
+        preflightMember?.effectivePromptText ??
+        (await this.resolveEffectivePrompt(prompt.prompt, context, vars));
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
@@ -806,7 +949,8 @@ export class WorkflowExecutor {
 
       const integration = context.getIntegrationForPrompt(
         prompt,
-        resolvedProperties.harness
+        resolvedProperties.harness,
+        target
       );
 
       const runtimeStepIndex =
@@ -884,6 +1028,18 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          ...(preflightMember
+            ? {
+                groupStartBoundary: preflightMember.stepIndex >= 0
+                  ? this.getParallelGroupStartBoundary(
+                      preflightMember.stepIndex
+                    )
+                  : undefined,
+                preflightSession: {
+                  sessionId: preflightMember.resolvedSessionId,
+                },
+              }
+            : {}),
           secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
@@ -1213,6 +1369,7 @@ export class WorkflowExecutor {
           ptyExitCode = await context.spawnScriptPty({
             stepName: stepLabel,
             stepIndex: signedStepIndex,
+            targetKey: getExecutionTargetRunKey(target),
             script: effectiveStep.script,
             cwd: context.executionWorkspace.executionRoot,
             env: await this.resolveScriptEnvironment(
@@ -1228,6 +1385,9 @@ export class WorkflowExecutor {
             onTimeout: () => {
               ptyTimedOut = true;
             },
+            onSessionCreated: (sessionId) =>
+              context.registerTargetPtySession?.(target, sessionId),
+            onSessionEnded: () => context.clearTargetPtySession?.(target),
           });
         }
 
@@ -1237,7 +1397,8 @@ export class WorkflowExecutor {
             context.executionWorkspace.executionRoot,
             this.promptQueue.getWorkflowFile().vars,
             onOutput,
-            secretNames
+            secretNames,
+            context.getScriptProcessRunner?.(target)
           );
         }
 
@@ -1555,7 +1716,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     step: WorkflowStep,
     context: WorkflowExecutionContext,
-    snapshotStrategy: "git" | "filesystem" | undefined
+    snapshotStrategy: "git" | "filesystem" | undefined,
+    preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     let beforeState: RawWorkspaceState | undefined;
     if (context.snapshotService && snapshotStrategy) {
@@ -1570,26 +1732,30 @@ export class WorkflowExecutor {
       }
     }
 
-    const shouldContinue = await this.executeSinglePrompt(
-      target,
-      step,
-      context
-    );
+    try {
+      const shouldContinue = await this.executeSinglePrompt(
+        target,
+        step,
+        context,
+        preflightMember
+      );
 
-    if (beforeState && context.snapshotService && snapshotStrategy) {
-      try {
-        await this.captureAndEmitSnapshot(
-          target,
-          beforeState,
-          snapshotStrategy,
-          context
-        );
-      } catch (e) {
-        Log.warn("Failed to capture workspace snapshot:", e);
+      if (beforeState && context.snapshotService && snapshotStrategy) {
+        try {
+          await this.captureAndEmitSnapshot(
+            target,
+            beforeState,
+            snapshotStrategy,
+            context
+          );
+        } catch (e) {
+          Log.warn("Failed to capture workspace snapshot:", e);
+        }
       }
+      return shouldContinue;
+    } finally {
+      context.unregisterActiveTarget?.(target);
     }
-
-    return shouldContinue;
   }
 
   /**
@@ -1640,13 +1806,18 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
-    output: CliOutput
+    output: CliOutput,
+    integration: HarnessIntegration
   ): void {
     this.dispatchDashboardOutput(context, target, signedStepIndex, output);
     if (signedStepIndex !== undefined && signedStepIndex >= 0) {
-      context.captureCompletedOutput?.(signedStepIndex, output);
+      context.captureCompletedOutput?.(signedStepIndex, output, integration);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(target.loopIndex, output);
+      context.captureFinalStepCompletedOutput?.(
+        target.loopIndex,
+        output,
+        integration
+      );
     }
   }
 
@@ -1678,9 +1849,16 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
     output: CliOutput,
+    integration: HarnessIntegration,
     logContext: string
   ): Promise<void> {
-    this.dispatchCompletedOutput(context, target, signedStepIndex, output);
+    this.dispatchCompletedOutput(
+      context,
+      target,
+      signedStepIndex,
+      output,
+      integration
+    );
     await this.persistExecutionOutput(context, target, output, logContext);
   }
 
@@ -2672,7 +2850,7 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
     };
 
-    context.beginSessionActivityTargetCapture?.();
+    context.beginSessionActivityTargetCapture?.(integration, target);
     const success = await integration.sendPrompt(promptStep, true, {
       ...sendOptions,
       promptStartedAt: initTimestampMs,
@@ -2833,6 +3011,13 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          ...(target.kind === FINAL_STEP_PHASES.QUEUE
+            ? {
+                groupStartBoundary: this.getParallelGroupStartBoundary(
+                  target.stepIndex
+                ),
+              }
+            : {}),
           secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
@@ -3088,6 +3273,17 @@ export class WorkflowExecutor {
     );
   }
 
+  private getParallelGroupStartBoundary(stepIndex: number): number {
+    return (
+      this.promptQueue
+        .getState()
+        .parallelGroups.find(
+          (group) =>
+            stepIndex >= group.startIndex && stepIndex <= group.endIndex
+        )?.startIndex ?? stepIndex
+    );
+  }
+
   clearResponseWaitState(): void {
     this.waitingResponseTargets.clear();
   }
@@ -3278,6 +3474,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         stoppedOutput,
+        integration,
         "stopped-by-user output"
       );
       await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3425,6 +3622,7 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       errorCliOutput,
+      integration,
       "error output"
     );
     await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3518,6 +3716,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         failureOutputRecord,
+        integration,
         `${failureKind} output`
       );
       await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3657,6 +3856,7 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       cliOutputObj,
+      integration,
       "step output"
     );
     if (context.historyFilePath && context.outputHistoryManager) {
