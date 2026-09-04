@@ -160,7 +160,11 @@ export class PromptFileLoader {
     // to keep the emptiness check honest.
     const validation = this.promptFileParser.validateWorkflowSteps(
       promptFile.steps,
-      { finalStep: promptFile.finalStep }
+      {
+        finalStep: promptFile.finalStep,
+        parallelGroups: promptFile.parallelGroups,
+        workflowProperties: promptFile,
+      }
     );
     if (!validation.valid) {
       const errors = validation.errors.join("\n");
@@ -282,7 +286,11 @@ export class PromptFileLoader {
       // Validate prompts (only if there are prompts to validate)
       if (workingFile.steps?.length) {
         const validation = this.promptFileParser.validateWorkflowSteps(
-          workingFile.steps
+          workingFile.steps,
+          {
+            parallelGroups: workingFile.parallelGroups,
+            workflowProperties: workingFile,
+          }
         );
         if (!validation.valid) {
           const errorMessage = validation.errors.join(",");
