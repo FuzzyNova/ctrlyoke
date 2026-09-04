@@ -200,13 +200,22 @@ export class WorkflowTaggedSink implements IDashboardSink {
   updateCliStreamingChunk(
     stepIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    _workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.inner.updateCliStreamingChunk(
       stepIndex,
       chunk,
       phase,
-      this.workflowId
+      this.workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
     );
   }
 
@@ -214,14 +223,21 @@ export class WorkflowTaggedSink implements IDashboardSink {
     stepIndex: number,
     events: CliEvent[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    _workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.inner.updateCliStreamingEvents(
       stepIndex,
       events,
       attemptIndex,
       runIndex,
-      this.workflowId
+      this.workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
 
@@ -291,13 +307,22 @@ export class WorkflowTaggedSink implements IDashboardSink {
   updateFinalStepStreamingChunk(
     loopIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    _workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.inner.updateFinalStepStreamingChunk(
       loopIndex,
       chunk,
       phase,
-      this.workflowId
+      this.workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
     );
   }
 
@@ -305,14 +330,21 @@ export class WorkflowTaggedSink implements IDashboardSink {
     loopIndex: number,
     events: CliEvent[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    _workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.inner.updateFinalStepStreamingEvents(
       loopIndex,
       events,
       attemptIndex,
       runIndex,
-      this.workflowId
+      this.workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
 

@@ -283,7 +283,10 @@ export class DashboardBroadcastHub
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     for (const client of this.clients) {
       client.updateCliStreamingEvents?.(
@@ -291,7 +294,10 @@ export class DashboardBroadcastHub
         events,
         attemptIndex,
         runIndex,
-        workflowId
+        workflowId,
+        phase,
+        timestampMs,
+        sequence
       );
     }
   }
@@ -384,14 +390,22 @@ export class DashboardBroadcastHub
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     for (const client of this.clients) {
       client.updateFinalStepStreamingChunk?.(
         loopIndex,
         chunk,
         phase,
-        workflowId
+        workflowId,
+        timestampMs,
+        sequence,
+        attemptIndex,
+        runIndex
       );
     }
   }
@@ -401,7 +415,10 @@ export class DashboardBroadcastHub
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     for (const client of this.clients) {
       client.updateFinalStepStreamingEvents?.(
@@ -409,7 +426,10 @@ export class DashboardBroadcastHub
         events,
         attemptIndex,
         runIndex,
-        workflowId
+        workflowId,
+        phase,
+        timestampMs,
+        sequence
       );
     }
   }

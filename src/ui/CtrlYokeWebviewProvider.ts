@@ -681,23 +681,42 @@ export class CtrlYokeWebviewProvider
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
-    this.sink.updateCliStreamingChunk(stepIndex, chunk, phase, workflowId);
+    this.sink.updateCliStreamingChunk(
+      stepIndex,
+      chunk,
+      phase,
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
+    );
   }
   public updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateCliStreamingEvents(
       stepIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   public updateContextWindow(
@@ -777,13 +796,21 @@ export class CtrlYokeWebviewProvider
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.sink.updateFinalStepStreamingChunk(
       loopIndex,
       chunk,
       phase,
-      workflowId
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
     );
   }
   public updateFinalStepStreamingEvents(
@@ -791,14 +818,20 @@ export class CtrlYokeWebviewProvider
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateFinalStepStreamingEvents(
       loopIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   public notifyPromptsReordered(

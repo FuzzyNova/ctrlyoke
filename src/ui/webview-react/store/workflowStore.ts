@@ -4,9 +4,9 @@ import { temporal } from "zundo";
 import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
-  EXECUTION_PHASES,
   STEP_STATUS,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
@@ -298,29 +298,50 @@ interface WorkflowActions {
   appendStreamingChunk: (
     stepIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
-  clearStreamingChunk: (stepIndex: number, phase?: ExecutionPhase) => void;
+  clearStreamingChunk: (
+    stepIndex: number,
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number
+  ) => void;
   appendStreamingEvents: (
     stepIndex: number,
     events: any[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
   appendFinalStepStreamingChunk: (
     loopIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
   clearFinalStepStreamingChunk: (
     loopIndex: number,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number
   ) => void;
   appendFinalStepStreamingEvents: (
     loopIndex: number,
     events: any[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
 
   // Retry management
@@ -569,7 +590,10 @@ function appendStreamingEventsToOutputState(
   target: OutputExecutionTarget,
   events: any[],
   attemptIndex: number,
-  runIndex: number
+  runIndex: number,
+  phase: ExecutionPhase | undefined,
+  timestampMs: number | undefined,
+  sequence: number | undefined
 ): Pick<
   WorkflowState,
   "liveOrderedEntries" | "liveSequence" | "historyOutputs"
@@ -578,7 +602,7 @@ function appendStreamingEventsToOutputState(
     target,
     runIndex,
     attemptIndex,
-    phase: EXECUTION_PHASES.PROMPT,
+    phase,
   };
   const liveMerge = mergeStreamingEventsIntoEntries(
     state.liveOrderedEntries,
@@ -762,6 +786,9 @@ export const useWorkflowStore = create<
         withUndoPause(() => set({ currentStep }));
       },
 
+      setActiveStepIndices: (activeStepIndices) =>
+        withUndoPause(() => set({ activeStepIndices: [...activeStepIndices] })),
+
       setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
       setFinalStep: (finalStep) =>
@@ -830,25 +857,54 @@ export const useWorkflowStore = create<
       clearLiveEntries: () =>
         withUndoPause(() => set({ liveOrderedEntries: [], liveSequence: 0 })),
 
-      appendStreamingChunk: (stepIndex, chunk, phase) =>
+      appendStreamingChunk: (
+        stepIndex,
+        chunk,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0,
+        _timestampMs,
+        _sequence
+      ) =>
         withUndoPause(() =>
           set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
-              [getStreamingChunkKey(stepIndex, phase)]:
+              [getStreamingChunkKey(
+                stepIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.QUEUE
+              )]:
                 (state.streamingChunks[
-                  getStreamingChunkKey(stepIndex, phase)
+                  getStreamingChunkKey(
+                    stepIndex,
+                    phase,
+                    runIndex,
+                    attemptIndex,
+                    OUTPUT_ACTIVITY_KINDS.TEXT,
+                    FINAL_STEP_PHASES.QUEUE
+                  )
                 ] || "") + chunk,
             },
           }))
         ),
 
-      clearStreamingChunk: (stepIndex, phase) =>
+      clearStreamingChunk: (stepIndex, phase, runIndex = 0, attemptIndex = 0) =>
         withUndoPause(() =>
           set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
-              [getStreamingChunkKey(stepIndex, phase)]: "",
+              [getStreamingChunkKey(
+                stepIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.QUEUE
+              )]: "",
             },
           }))
         ),
@@ -857,7 +913,10 @@ export const useWorkflowStore = create<
         stepIndex,
         events,
         attemptIndex = 0,
-        runIndex = 0
+        runIndex = 0,
+        phase,
+        timestampMs,
+        sequence
       ) =>
         withUndoPause(() =>
           set((state) =>
@@ -869,30 +928,65 @@ export const useWorkflowStore = create<
               },
               events,
               attemptIndex,
-              runIndex
+              runIndex,
+              phase,
+              timestampMs,
+              sequence
             )
           )
         ),
 
-      appendFinalStepStreamingChunk: (loopIndex, chunk, phase) =>
+      appendFinalStepStreamingChunk: (
+        loopIndex,
+        chunk,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0
+      ) =>
         withUndoPause(() =>
           set((state) => ({
             finalStepStreamingChunks: {
               ...state.finalStepStreamingChunks,
-              [getStreamingChunkKey(loopIndex, phase)]:
+              [getStreamingChunkKey(
+                loopIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.FINAL_STEP
+              )]:
                 (state.finalStepStreamingChunks[
-                  getStreamingChunkKey(loopIndex, phase)
+                  getStreamingChunkKey(
+                    loopIndex,
+                    phase,
+                    runIndex,
+                    attemptIndex,
+                    OUTPUT_ACTIVITY_KINDS.TEXT,
+                    FINAL_STEP_PHASES.FINAL_STEP
+                  )
                 ] || "") + chunk,
             },
           }))
         ),
 
-      clearFinalStepStreamingChunk: (loopIndex, phase) =>
+      clearFinalStepStreamingChunk: (
+        loopIndex,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0
+      ) =>
         withUndoPause(() =>
           set((state) => ({
             finalStepStreamingChunks: {
               ...state.finalStepStreamingChunks,
-              [getStreamingChunkKey(loopIndex, phase)]: "",
+              [getStreamingChunkKey(
+                loopIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.FINAL_STEP
+              )]: "",
             },
           }))
         ),
@@ -901,7 +995,10 @@ export const useWorkflowStore = create<
         loopIndex,
         events,
         attemptIndex = 0,
-        runIndex = 0
+        runIndex = 0,
+        phase,
+        timestampMs,
+        sequence
       ) =>
         withUndoPause(() =>
           set((state) =>

@@ -1328,7 +1328,12 @@ export function createMessageHandlers(
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
-      store.clearFinalStepStreamingChunk(message.loopIndex, phase);
+      store.clearFinalStepStreamingChunk(
+        message.loopIndex,
+        phase,
+        message.output.runIndex ?? 0,
+        message.output.attemptIndex ?? 0
+      );
     }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -1361,7 +1366,11 @@ export function createMessageHandlers(
       .appendFinalStepStreamingChunk(
         message.loopIndex,
         message.chunk || "",
-        message.phase
+        message.phase,
+        message.runIndex ?? 0,
+        message.attemptIndex ?? 0,
+        message.timestampMs,
+        message.sequence
       );
   };
 
@@ -1381,7 +1390,10 @@ export function createMessageHandlers(
         message.loopIndex,
         message.events || [],
         message.attemptIndex ?? 0,
-        message.runIndex ?? 0
+        message.runIndex ?? 0,
+        message.phase,
+        message.timestampMs,
+        message.sequence
       );
   };
 
@@ -1398,7 +1410,12 @@ export function createMessageHandlers(
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
-      store.clearStreamingChunk(message.stepIndex, phase);
+      store.clearStreamingChunk(
+        message.stepIndex,
+        phase,
+        message.output.runIndex ?? 0,
+        message.output.attemptIndex ?? 0
+      );
     }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -1451,7 +1468,11 @@ export function createMessageHandlers(
     workflowStore.appendStreamingChunk(
       message.stepIndex,
       message.chunk || "",
-      message.phase
+      message.phase,
+      message.runIndex ?? 0,
+      message.attemptIndex ?? 0,
+      message.timestampMs,
+      message.sequence
     );
   };
 
@@ -1474,7 +1495,10 @@ export function createMessageHandlers(
       message.stepIndex,
       events,
       message.attemptIndex ?? 0,
-      message.runIndex ?? 0
+      message.runIndex ?? 0,
+      message.phase,
+      message.timestampMs,
+      message.sequence
     );
   };
 

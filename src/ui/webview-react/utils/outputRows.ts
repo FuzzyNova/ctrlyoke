@@ -2,6 +2,7 @@ import type { WorkflowStep } from "@store/workflowStore";
 import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   getStreamingChunkKey,
   type ExecutionPhase,
 } from "../types/messages";
@@ -440,12 +441,30 @@ function getStepOutputArtifacts(
 function getStreamingChunk(
   input: BuildOutputRowsInput,
   target: OutputMessageTarget,
-  phase?: ExecutionPhase
+  phase?: ExecutionPhase,
+  runIndex = 0,
+  attemptIndex = 0
 ): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? input.streamingChunks[getStreamingChunkKey(target.index, phase)] || ""
+    ? input.streamingChunks[
+        getStreamingChunkKey(
+          target.index,
+          phase,
+          runIndex,
+          attemptIndex,
+          OUTPUT_ACTIVITY_KINDS.TEXT,
+          FINAL_STEP_PHASES.QUEUE
+        )
+      ] || ""
     : input.finalStepStreamingChunks[
-        getStreamingChunkKey(target.index, phase)
+        getStreamingChunkKey(
+          target.index,
+          phase,
+          runIndex,
+          attemptIndex,
+          OUTPUT_ACTIVITY_KINDS.TEXT,
+          FINAL_STEP_PHASES.FINAL_STEP
+        )
       ] || "";
 }
 
@@ -2065,7 +2084,13 @@ export function buildOutputRows(
         OUTPUT_ROW_HORIZONTAL_PADDING +
         toolResultPrefixWidth(input.outputFontSize ?? 13),
     });
-    const streamingChunk = getStreamingChunk(input, target, message.phase);
+    const streamingChunk = getStreamingChunk(
+      input,
+      target,
+      message.phase,
+      message.runIndex,
+      message.attemptIndex
+    );
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);
     const hasStructuredEvents = visibleEvents.length > 0;
 

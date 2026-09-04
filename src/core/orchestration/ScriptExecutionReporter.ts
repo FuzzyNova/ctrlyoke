@@ -256,7 +256,8 @@ export class ScriptExecutionReporter {
               context.workspaceFolderPath,
             request.vars,
             onOutput,
-            request.secretNames
+            request.secretNames,
+            request.processRunner ?? context.getScriptProcessRunner?.(target)
           );
     } finally {
       // The buffered tail must land before the completed output replaces the

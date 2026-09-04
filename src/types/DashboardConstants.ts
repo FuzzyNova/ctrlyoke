@@ -2990,6 +2990,13 @@ export const OUTPUT_HISTORY_KINDS = {
   RUNTIME: "runtime",
 } as const;
 
+export const OUTPUT_ACTIVITY_KINDS = {
+  TEXT: "text",
+  STRUCTURED: "structured",
+  STATUS: "status",
+  SCRIPT: "script",
+} as const;
+
 /** Message types produced by the live/history output projection. */
 export const OUTPUT_MESSAGE_TYPES = {
   STATUS: "status",
@@ -3634,6 +3641,8 @@ export type TerminalSessionStatus =
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
 export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
+export type OutputActivityKind =
+  (typeof OUTPUT_ACTIVITY_KINDS)[keyof typeof OUTPUT_ACTIVITY_KINDS];
 export type SnapshotStrategy =
   (typeof SNAPSHOT_STRATEGIES)[keyof typeof SNAPSHOT_STRATEGIES];
 export type SnapshotBaseSource =
@@ -3668,12 +3677,18 @@ export function getExecutionPhaseForScriptOutputSource(
   }
 }
 
-/** Stable key for a live streaming buffer scoped to one target and phase. */
+/** Stable key for a live streaming buffer scoped to one full activity identity. */
 export function getStreamingChunkKey(
   targetIndex: number,
-  phase: ExecutionPhase = EXECUTION_PHASES.PROMPT
+  phase: ExecutionPhase = EXECUTION_PHASES.PROMPT,
+  runIndex = 0,
+  attemptIndex = 0,
+  kind: OutputActivityKind = OUTPUT_ACTIVITY_KINDS.TEXT,
+  targetKind:
+    | typeof FINAL_STEP_PHASES.QUEUE
+    | typeof FINAL_STEP_PHASES.FINAL_STEP = FINAL_STEP_PHASES.QUEUE
 ): string {
-  return `${targetIndex}:${phase}`;
+  return `${targetKind}:${targetIndex}:run:${runIndex}:attempt:${attemptIndex}:${phase}:${kind}`;
 }
 
 /** Preserve legacy prompt keys while separating condition execution phases. */

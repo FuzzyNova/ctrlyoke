@@ -57,6 +57,7 @@ import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   QUEUE_POSITION,
   RUNNER_IDS,
@@ -153,6 +154,7 @@ import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
+  OutputActivityEntry,
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
@@ -573,6 +575,9 @@ export class WorkflowInstance {
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.outputHistoryManager.setOutputActivityHandler((entry) =>
+      this.publishOutputActivity(entry)
+    );
     this.statusMessageReporter = new StatusMessageReporter(
       () => this.dashboardSink,
       () => {
@@ -3647,6 +3652,69 @@ export class WorkflowInstance {
       Log.warn(
         `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,
         error
+      );
+    }
+  }
+
+  private publishOutputActivity(entry: OutputActivityEntry): void {
+    if (!this.dashboardSink) {
+      return;
+    }
+
+    if (entry.target.kind === FINAL_STEP_PHASES.QUEUE) {
+      if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
+        this.dashboardSink.updateCliStreamingChunk(
+          entry.target.stepIndex,
+          entry.text ?? "",
+          entry.phase,
+          this.id,
+          entry.timestampMs,
+          entry.sequence,
+          entry.attemptIndex,
+          entry.runIndex
+        );
+      } else if (
+        entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
+        entry.events
+      ) {
+        this.dashboardSink.updateCliStreamingEvents(
+          entry.target.stepIndex,
+          entry.events,
+          entry.attemptIndex,
+          entry.runIndex,
+          this.id,
+          entry.phase,
+          entry.timestampMs,
+          entry.sequence
+        );
+      }
+      return;
+    }
+
+    if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
+      this.dashboardSink.updateFinalStepStreamingChunk(
+        entry.target.loopIndex,
+        entry.text ?? "",
+        entry.phase,
+        this.id,
+        entry.timestampMs,
+        entry.sequence,
+        entry.attemptIndex,
+        entry.runIndex
+      );
+    } else if (
+      entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
+      entry.events
+    ) {
+      this.dashboardSink.updateFinalStepStreamingEvents(
+        entry.target.loopIndex,
+        entry.events,
+        entry.attemptIndex,
+        entry.runIndex,
+        this.id,
+        entry.phase,
+        entry.timestampMs,
+        entry.sequence
       );
     }
   }

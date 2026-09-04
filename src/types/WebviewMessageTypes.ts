@@ -737,6 +737,10 @@ export interface CliStreamingChunkMessage {
   stepIndex: number;
   chunk: string;
   phase?: ExecutionPhase;
+  attemptIndex?: number;
+  runIndex?: number;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -748,6 +752,9 @@ export interface CliStreamingEventsMessage {
   events: CliEvent[];
   attemptIndex?: number;
   runIndex?: number;
+  phase?: ExecutionPhase;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -835,6 +842,10 @@ export interface FinalStepStreamingChunkMessage {
   loopIndex: number;
   chunk: string;
   phase?: ExecutionPhase;
+  attemptIndex?: number;
+  runIndex?: number;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -846,6 +857,9 @@ export interface FinalStepStreamingEventsMessage {
   events: CliEvent[];
   attemptIndex?: number;
   runIndex?: number;
+  phase?: ExecutionPhase;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**

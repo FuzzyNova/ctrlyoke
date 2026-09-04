@@ -12,6 +12,7 @@ import type {
 import {
   WorkflowOutputHistory,
   OutputExecutionTarget,
+  OutputActivityEntry,
   WorkspaceSnapshot,
   UndoRecord,
   StepOutput,
@@ -22,6 +23,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   HARNESS_IDS,
+  OUTPUT_ACTIVITY_KINDS,
   STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
@@ -75,11 +77,14 @@ export interface TimelineAttemptStartContext {
   prompt: string;
   phase?: ExecutionPhase;
 }
+
+export type OutputActivityHandler = (entry: OutputActivityEntry) => void;
 import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/CliOutputTypes";
 import {
   StreamingHistoryBuffer,
   type StreamingHistoryFlush,
+  type StreamingHistoryFlushResult,
 } from "./StreamingHistoryBuffer";
 
 /**
@@ -143,7 +148,9 @@ export class OutputHistoryManager {
   private readonly lifetimeUsageStore: LifetimeUsageStore;
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
   private readonly streamingBuffer = new StreamingHistoryBuffer(
-    (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush)
+    (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush),
+    {},
+    (flush, result) => this.publishStreamingFlush(flush, result)
   );
   private readonly snapshotService = new WorkspaceSnapshotService();
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
@@ -162,6 +169,7 @@ export class OutputHistoryManager {
   private harnessUsageRefreshHandler?: (
     harnessId: HarnessId
   ) => Promise<unknown> | void;
+  private outputActivityHandler?: OutputActivityHandler;
 
   constructor(private _workspaceFolderPath: string) {
     this.historySearchIndexService =
@@ -170,6 +178,14 @@ export class OutputHistoryManager {
       _workspaceFolderPath
     );
     this.lifetimeUsageStore = new LifetimeUsageStore(_workspaceFolderPath);
+  }
+
+  setOutputActivityHandler(handler: OutputActivityHandler | undefined): void {
+    this.outputActivityHandler = handler;
+  }
+
+  hasOutputActivityHandler(): boolean {
+    return this.outputActivityHandler !== undefined;
   }
 
   /** Project reducer snapshots into the owning queue/working file. */
@@ -620,7 +636,7 @@ export class OutputHistoryManager {
   private async writeStreamingFlush(
     historyFilePath: string,
     flush: StreamingHistoryFlush
-  ): Promise<void> {
+  ): Promise<StreamingHistoryFlushResult> {
     const drafts: WorkflowTimelineEventDraft[] = [];
     const shared = {
       timestampMs: flush.timestampMs,
@@ -647,9 +663,55 @@ export class OutputHistoryManager {
 
     try {
       // One appendEvents call so a chunk + event batch cost a single write.
-      await this.timelineRecorder.appendEvents(historyFilePath, drafts);
+      const events = await this.timelineRecorder.appendEvents(
+        historyFilePath,
+        drafts
+      );
+      return { sequences: events.map((event) => event.sequence) };
     } catch (error) {
       Log.warn("Failed to append streamed output deltas to history:", error);
+      return { sequences: [] };
+    }
+  }
+
+  private publishStreamingFlush(
+    flush: StreamingHistoryFlush,
+    result: StreamingHistoryFlushResult
+  ): void {
+    if (!this.outputActivityHandler) {
+      return;
+    }
+
+    let sequenceIndex = 0;
+    if (flush.chunk) {
+      const sequence = result.sequences[sequenceIndex++];
+      if (sequence !== undefined) {
+        this.outputActivityHandler({
+          timestampMs: flush.timestampMs,
+          sequence,
+          target: flush.target,
+          runIndex: flush.runIndex,
+          attemptIndex: flush.attemptIndex,
+          phase: flush.phase,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: flush.chunk,
+        });
+      }
+    }
+    if (flush.events) {
+      const sequence = result.sequences[sequenceIndex];
+      if (sequence !== undefined) {
+        this.outputActivityHandler({
+          timestampMs: flush.timestampMs,
+          sequence,
+          target: flush.target,
+          runIndex: flush.runIndex,
+          attemptIndex: flush.attemptIndex,
+          phase: flush.phase,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: flush.events,
+        });
+      }
     }
   }
 

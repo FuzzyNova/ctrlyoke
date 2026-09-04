@@ -110,7 +110,11 @@ export interface IDashboardSink {
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void;
 
   updateCliStreamingEvents(
@@ -118,7 +122,10 @@ export interface IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void;
 
   updateContextWindow(
@@ -173,7 +180,11 @@ export interface IDashboardSink {
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void;
 
   updateFinalStepStreamingEvents(
@@ -181,7 +192,10 @@ export interface IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void;
 
   notifyPromptsReordered(

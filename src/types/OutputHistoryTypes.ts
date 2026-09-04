@@ -5,6 +5,7 @@ import {
   UNDO_DIALOG_SCOPE_MODES,
   type ExecutionPhase,
   type FileOperationKind,
+  type OutputActivityKind,
   type SnapshotBaseSource,
 } from "./DashboardConstants";
 import type {
@@ -12,7 +13,7 @@ import type {
   WorkflowRuntimeState,
   WorktreeRunProjection,
 } from "./CtrlYokeTypes";
-import { CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
+import { CliEvent, CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
 import type { StatusMessage } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
@@ -48,6 +49,18 @@ export interface OrderedRuntimeHistoryEntry extends OrderedHistoryEntryBase {
     previous: WorkflowRuntimeState;
     current: WorkflowRuntimeState;
   };
+}
+
+export interface OutputActivityEntry {
+  timestampMs: number;
+  sequence: number;
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  kind: OutputActivityKind;
+  events?: CliEvent[];
+  text?: string;
 }
 
 export type OrderedHistoryEntry =
@@ -86,6 +99,8 @@ export interface WorkflowOutputHistory {
 
   // Canonical ordered entries for timeline-backed runs.
   orderedEntries: OrderedHistoryEntry[];
+  /** Chronological activity projection of streamed/status/script timeline events. */
+  activityEntries?: OutputActivityEntry[];
 }
 
 export type WorkflowRunMetadata = Pick<

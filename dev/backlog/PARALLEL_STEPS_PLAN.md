@@ -1046,16 +1046,16 @@ that concerns execution passes with fake integrations. The gate stays closed in 
 
 Prerequisite: `OUTPUT_STEP_FILTER_PLAN.md` shipped (steps 1–7 complete).
 
-1. Expose target-attributed activity entries from the append-only timeline without
+[x] 1. Expose target-attributed activity entries from the append-only timeline without
    removing aggregate attempt output.
-2. Thread `sequence`/`timestampMs`/target through live activity messages; full-key
+[x] 2. Thread `sequence`/`timestampMs`/target through live activity messages; full-key
    `streamingChunks`.
-3. Live/history activity state and deduplication/reconciliation in `workflowStore`.
-4. Interleaved activity rows, group header with chips (writing `hiddenOutputTargets`),
+[ ] 3. Live/history activity state and deduplication/reconciliation in `workflowStore`.
+[ ] 4. Interleaved activity rows, group header with chips (writing `hiddenOutputTargets`),
    step-switch markers, continuation rails.
-5. `LATEST_ACTIVITY` live-follow target.
-6. Virtualization measurement invalidation and minimap first/latest markers.
-7. Verify history replay produces the same order and grouping as live output.
+[ ] 5. `LATEST_ACTIVITY` live-follow target.
+[ ] 6. Virtualization measurement invalidation and minimap first/latest markers.
+[ ] 7. Verify history replay produces the same order and grouping as live output.
 
 Done when: a fake two-writer run renders A1 → B1 → A2 live and identically on reload, and
 the filter chips isolate one writer.

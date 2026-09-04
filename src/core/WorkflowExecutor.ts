@@ -3251,16 +3251,30 @@ export class WorkflowExecutor {
         signedStepIndex !== undefined
       ) {
         context.captureChunk?.(signedStepIndex, chunk);
-        context.dashboardProvider?.updateCliStreamingChunk(
-          signedStepIndex,
-          chunk
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateCliStreamingChunk(
+            signedStepIndex,
+            chunk
+          );
+        }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepChunk?.(target.loopIndex, chunk);
-        context.dashboardProvider?.updateFinalStepStreamingChunk(
-          target.loopIndex,
-          chunk
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateFinalStepStreamingChunk(
+            target.loopIndex,
+            chunk
+          );
+        }
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -3289,20 +3303,36 @@ export class WorkflowExecutor {
         signedStepIndex !== undefined
       ) {
         context.captureEvents?.(signedStepIndex, events);
-        context.dashboardProvider?.updateCliStreamingEvents(
-          signedStepIndex,
-          events,
-          attemptIndex,
-          runIndex
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateCliStreamingEvents(
+            signedStepIndex,
+            events,
+            attemptIndex,
+            runIndex,
+            undefined
+          );
+        }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepEvents?.(target.loopIndex, events);
-        context.dashboardProvider?.updateFinalStepStreamingEvents(
-          target.loopIndex,
-          events,
-          attemptIndex,
-          runIndex
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateFinalStepStreamingEvents(
+            target.loopIndex,
+            events,
+            attemptIndex,
+            runIndex,
+            undefined
+          );
+        }
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {

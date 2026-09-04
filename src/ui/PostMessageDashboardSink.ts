@@ -235,7 +235,10 @@ export class PostMessageDashboardSink implements IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
@@ -243,6 +246,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       events,
       ...(attemptIndex !== undefined ? { attemptIndex } : {}),
       ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(phase !== undefined ? { phase } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -353,13 +359,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
       chunk,
       ...(phase !== undefined ? { phase } : {}),
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -369,7 +383,10 @@ export class PostMessageDashboardSink implements IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
@@ -377,6 +394,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       events,
       ...(attemptIndex !== undefined ? { attemptIndex } : {}),
       ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(phase !== undefined ? { phase } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

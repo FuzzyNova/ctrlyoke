@@ -2636,7 +2636,7 @@ describe("active workflow summaries", () => {
       });
     });
     expect(useWorkflowStore.getState().streamingChunks).toEqual({
-      "0:prompt": "executing tab receives this",
+      "queue:0:run:0:attempt:0:prompt:text": "executing tab receives this",
     });
   });
 

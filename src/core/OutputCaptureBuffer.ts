@@ -523,13 +523,21 @@ export class OutputCaptureBuffer {
         if (buffer.accumulatedText) {
           dashboardSink.updateCliStreamingChunk(
             stepIndex,
-            buffer.accumulatedText
+            buffer.accumulatedText,
+            undefined,
+            undefined,
+            buffer.timestampMs,
+            undefined,
+            buffer.attemptIndex,
+            buffer.runIndex
           );
         }
         if (buffer.accumulatedEvents.length > 0) {
           dashboardSink.updateCliStreamingEvents(
             stepIndex,
-            buffer.accumulatedEvents
+            buffer.accumulatedEvents,
+            buffer.attemptIndex,
+            buffer.runIndex
           );
         }
       }

@@ -29,7 +29,11 @@ import {
   TIMELINE_STORAGE_KIND,
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
-import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
+import type {
+  OutputActivityEntry,
+  WorkspaceSnapshot,
+} from "../../types/OutputHistoryTypes";
+import type { CliEvent } from "../../types/CliOutputTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
@@ -39,6 +43,44 @@ import type {
 } from "../../types/CtrlYokeTypes";
 
 let nextTestRunOrdinal = 0;
+
+function expectActivityEntries(
+  live: readonly {
+    sequence: number;
+    timestampMs: number;
+    target: unknown;
+    kind: string;
+    text?: string;
+    events?: CliEvent[];
+  }[],
+  replay: readonly {
+    sequence: number;
+    timestampMs: number;
+    target: unknown;
+    kind: string;
+    text?: string;
+    events?: CliEvent[];
+  }[]
+): void {
+  assert.deepStrictEqual(
+    replay.map(({ sequence, timestampMs, target, kind, text, events }) => ({
+      sequence,
+      timestampMs,
+      target,
+      kind,
+      text,
+      events,
+    })),
+    live.map(({ sequence, timestampMs, target, kind, text, events }) => ({
+      sequence,
+      timestampMs,
+      target,
+      kind,
+      text,
+      events,
+    }))
+  );
+}
 
 /**
  * Test-only shim: allocates a workflowKey + runRef under `workspaceRoot` and
@@ -900,6 +942,70 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         data: { text: "Hello world" },
       },
     ]);
+  });
+
+  test("projects the same coalesced activity boundary for live and replay output", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-activity"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 } as const;
+    const liveActivities: OutputActivityEntry[] = [];
+    manager.setOutputActivityHandler((entry) => liveActivities.push(entry));
+
+    await manager.startStreamingExecutionOutput(filePath, target, {
+      prompt: "stream me",
+      response: "",
+      elapsed: 0,
+      isStreaming: true,
+      timestampMs: 100,
+      runIndex: 1,
+      attemptIndex: 2,
+    });
+    for (const token of ["A", "1"]) {
+      await manager.appendStreamingEvents(filePath, target, 1, 2, [
+        { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: token } },
+      ]);
+    }
+    await manager.flushPendingWrites(filePath);
+
+    const history = await manager.loadHistory(filePath);
+    expectActivityEntries(liveActivities, history.activityEntries ?? []);
+    assert.strictEqual(liveActivities.length, 1);
+    assert.ok(typeof liveActivities[0]?.sequence === "number");
+    assert.strictEqual(
+      liveActivities[0]?.timestampMs,
+      history.activityEntries?.[0]?.timestampMs
+    );
+    assert.deepStrictEqual(liveActivities[0]?.events, [
+      { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: "A1" } },
+    ]);
+
+    await manager.saveExecutionOutput(filePath, target, [
+      {
+        prompt: "stream me",
+        response: "A1",
+        elapsed: 10,
+        isStreaming: false,
+        timestampMs: 100,
+        runIndex: 1,
+        attemptIndex: 2,
+        structured: {
+          events: [
+            { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: "A1" } },
+          ],
+          metadata: {},
+        },
+      },
+    ]);
+    const completed = await manager.loadHistory(filePath);
+    assert.strictEqual(completed.activityEntries?.length, 1);
+    const completedOutput = completed.orderedEntries.find(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(completedOutput?.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(completedOutput.cliOutput.response, "A1");
   });
 
   test("does not re-append streamed deltas once the completed aggregate lands", async () => {
