@@ -11,6 +11,9 @@
  *   CTRLYOKE_WORKSPACE - Workspace root directory (defaults to cwd)
  */
 
+import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
+ensureMinFsThreadpoolSize(64);
+
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const {

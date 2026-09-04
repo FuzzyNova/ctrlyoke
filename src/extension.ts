@@ -1,3 +1,6 @@
+import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
+ensureMinFsThreadpoolSize(64);
+
 import * as vscode from "vscode";
 import * as path from "path";
 import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
