@@ -483,6 +483,22 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("only shows the failed icon on the step that errored, not the next pending step", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Failed step" }, { prompt: "Pending step" }],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.getAllByLabelText(STEP_STATUS.FAILED)).toHaveLength(1);
+    expect(screen.getByLabelText(STEP_STATUS.PENDING)).toBeInTheDocument();
+  });
+
   it("lets not-yet-run steps be dragged during a run while pinning the running and completed steps", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({

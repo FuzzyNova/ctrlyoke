@@ -13,7 +13,7 @@ import { isWorkflowRunning } from "../utils/status";
  * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function usePromptStatus() {
-  const { currentStep, executionState } = useWorkflowStore();
+  const { currentStep, executionState, steps } = useWorkflowStore();
   const isRunning = isWorkflowRunning(executionState);
 
   return function getPromptStatus(
@@ -53,7 +53,18 @@ export function usePromptStatus() {
       return STEP_STATUS.CANCELLED;
     }
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
-      return STEP_STATUS.FAILED;
+      // An in-flight failure advances currentStep past the step that actually
+      // failed (see WorkflowStepsPanel's workflowContinuedAfterFailure), and
+      // that step's own FAILED status is sent before executionState flips to
+      // ERROR. So if the previous step already recorded FAILED, currentStep
+      // now points at the next, not-yet-run step — leave it alone instead of
+      // painting a second error icon. Only fall back to eagerly marking
+      // currentStep FAILED for failures with no per-step status of their own
+      // (e.g. a pre-flight harness failure before any step started).
+      const previousStep = currentStep > 0 ? steps[currentStep - 1] : undefined;
+      if ((previousStep as any)?.status !== STEP_STATUS.FAILED) {
+        return STEP_STATUS.FAILED;
+      }
     }
     if ((prompt as any).status) return (prompt as any).status as StepStatus;
     if (index < currentStep) return STEP_STATUS.COMPLETED;
