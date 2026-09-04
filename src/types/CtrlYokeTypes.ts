@@ -640,6 +640,12 @@ export type WorkflowAttemptTarget =
   | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
   | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number };
 
+export interface StepExecutionOutcome {
+  target: WorkflowAttemptTarget;
+  status: PromptTerminalStatus;
+  failureReason?: string;
+}
+
 export type { WorkflowAttemptStatus };
 
 export interface WorkflowAttemptState {

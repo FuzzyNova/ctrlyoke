@@ -1000,11 +1000,14 @@ dashboard with undo/redo.
 
 ### Stage 3 — Target-keyed runtime foundations
 
-1. Indexed `PromptQueue` primitives and `commitParallelGroupJoin`; sequential wrappers
+**Status: items 1–4 complete.** The sequential execution path now uses target-keyed
+queue and attempt primitives while fan-out remains unimplemented.
+
+1. **Complete.** Indexed `PromptQueue` primitives and `commitParallelGroupJoin`; sequential wrappers
    delegate to them.
-2. Retry counts into attempt state; `EndConditionHandler` explicit-target.
-3. `WorkflowStateMachine` active-attempt set; `stop()` cancels all.
-4. Response-wait target set.
+2. **Complete.** Retry counts into attempt state; `EndConditionHandler` explicit-target.
+3. **Complete.** `WorkflowStateMachine` active-attempt set; `stop()` cancels all.
+4. **Complete.** Response-wait target set.
 5. Target-keyed integration acquisition and cleanup; resource registry in
    `WorkflowInstance`.
 6. Per-target `ScriptProcessRunner`; cancellation/timeout isolation tests.

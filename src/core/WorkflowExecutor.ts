@@ -301,7 +301,7 @@ function canRetryErrorBehavior(
  * all finish before execution transitions from PAUSING to PAUSED.
  */
 export class WorkflowExecutor {
-  private isWaitingForResponse: boolean = false;
+  private readonly waitingResponseTargets = new Set<string>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
 
   constructor(
@@ -891,7 +891,7 @@ export class WorkflowExecutor {
         },
         async () => {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-            await this.promptQueue.markCurrentAsSent();
+            await this.promptQueue.markStepAsSent(target.stepIndex);
           }
         },
         "initial",
@@ -2280,7 +2280,9 @@ export class WorkflowExecutor {
         return undefined;
       }
 
-      return `retry ${this.promptQueue.getCurrentRetryCount()} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+      return `retry ${this.promptQueue.getCurrentRetryCount(
+        target
+      )} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
     };
 
     await this.trackStatusMessage(
@@ -2466,8 +2468,11 @@ export class WorkflowExecutor {
    */
   private async waitForResponseComplete(
     _prompt: PromptStep,
-    integration: HarnessIntegration
+    integration: HarnessIntegration,
+    target: ExecutionTarget
   ): Promise<string> {
+    const targetKey = getExecutionTargetRunKey(target);
+    this.waitingResponseTargets.add(targetKey);
     return new Promise<string>((resolve) => {
       let responseHandled = false;
 
@@ -2479,7 +2484,7 @@ export class WorkflowExecutor {
           responseHandled = true;
           disposable.dispose();
 
-          this.isWaitingForResponse = false;
+          this.waitingResponseTargets.delete(targetKey);
           resolve(responseText);
         }
       );
@@ -2495,8 +2500,7 @@ export class WorkflowExecutor {
    *
    * @param onPromptSent Optional async callback invoked after a successful send
    *   but *before* awaiting the response. Use for queue bookkeeping that must
-   *   happen in that specific window (e.g. `markCurrentAsSent`,
-   *   `isWaitingForResponse = true`).
+   *   happen in that specific window (e.g. `markStepAsSent`).
    * @returns `{ responseText, duration }` on success, `null` if `sendPrompt`
    *   returns false.
    */
@@ -2557,7 +2561,8 @@ export class WorkflowExecutor {
 
     const responsePromise = this.waitForResponseComplete(
       promptStep,
-      integration
+      integration,
+      target
     );
 
     let streamingDisposable: { dispose(): void } | undefined;
@@ -2667,14 +2672,13 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
     };
 
-    this.isWaitingForResponse = true;
     context.beginSessionActivityTargetCapture?.();
     const success = await integration.sendPrompt(promptStep, true, {
       ...sendOptions,
       promptStartedAt: initTimestampMs,
     });
     if (!success) {
-      this.isWaitingForResponse = false;
+      this.waitingResponseTargets.delete(getExecutionTargetRunKey(target));
       disposeListeners();
       return null;
     }
@@ -3085,11 +3089,11 @@ export class WorkflowExecutor {
   }
 
   clearResponseWaitState(): void {
-    this.isWaitingForResponse = false;
+    this.waitingResponseTargets.clear();
   }
 
   isAwaitingResponse(): boolean {
-    return this.isWaitingForResponse;
+    return this.waitingResponseTargets.size > 0;
   }
 
   private logWorkflowStart(

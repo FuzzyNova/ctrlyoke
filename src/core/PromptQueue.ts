@@ -9,11 +9,13 @@ import {
   PromptResult,
   ConditionEvaluationSummary,
   WorkflowAttemptTarget,
+  StepExecutionOutcome,
   EXECUTION_STATES,
   WorkflowStep,
   ScriptRuntimeOutput,
   isScriptStep,
   PromptRuntimeMetadata,
+  ParallelGroupDefinition,
   WorkflowTokenTotals,
   type WorkingFileWorktreeRuntimePatch,
   type RunRef,
@@ -23,6 +25,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
+  type PromptTerminalStatus,
   STEP_STATUS,
 } from "../types/DashboardConstants";
 
@@ -121,7 +124,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
   private finalStepRuntime?: FinalStepRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
-  private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
   private readonly stateMachine: WorkflowStateMachine;
   private readonly runtimeArchive = new Map<string, PromptRuntimeMetadata>();
@@ -279,22 +281,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   public finalizeCancelledPromptAfterStop(): boolean {
     const index = this.state.currentIndex;
-    const prompt = this.state.steps[index];
-
-    if (!prompt) {
+    if (!this.state.steps[index]) {
       return false;
     }
 
-    const now = Date.now();
-    prompt._runtime = {
-      startedAt: prompt._runtime?.startedAt ?? now,
-      ...prompt._runtime,
-      completedAt: now,
-      terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED,
-    };
-    this.state.completedIndices.add(String(index));
+    void this.cancelStep(index);
     this.state.currentIndex++;
-
+    this.emitStateChange();
     return true;
   }
 
@@ -304,34 +297,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
 
     const index = this.state.currentIndex;
-    const currentResult = this.state.results[index];
-    if (
-      currentResult?.status !== STEP_STATUS.SENT &&
-      currentResult?.status !== STEP_STATUS.RUNNING &&
-      currentResult?.status !== STEP_STATUS.PENDING
-    ) {
+    if (!this.canFinalizeStep(index)) {
       return false;
     }
 
-    currentResult.status = STEP_STATUS.FAILED;
-    if (error) {
-      currentResult.error = error;
-    }
-    currentResult.timestamp = new Date();
-
-    const prompt = this.state.steps[index];
-    if (prompt) {
-      const now = Date.now();
-      prompt._runtime = {
-        startedAt: prompt._runtime?.startedAt ?? now,
-        ...prompt._runtime,
-        completedAt: now,
-        terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
-      };
-    }
-    this.state.completedIndices.add(String(index));
+    void this.failStep(index, error);
     this.state.currentIndex++;
-
+    this.emitStateChange();
     return true;
   }
 
@@ -610,7 +582,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   async restart(): Promise<void> {
     this.stateMachine.reset();
     this.state.currentIndex = 0;
-    this.currentRetryCount = 0;
 
     // Reset all results to pending
     this.state.results = this.state.steps.map((step) => ({
@@ -800,14 +771,21 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return;
     }
 
-    const currentResult = this.state.results[this.state.currentIndex];
-    currentResult.status = STEP_STATUS.SENT;
-    currentResult.timestamp = new Date();
-
-    this.emitStateChange();
+    await this.markStepAsSent(this.state.currentIndex);
 
     // WorkflowOrchestrator handles end condition evaluation and workflow progression
     // Do NOT set up timers or automatically move to next prompt here
+  }
+
+  async markStepAsSent(stepIndex: number): Promise<void> {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    currentResult.status = STEP_STATUS.SENT;
+    currentResult.timestamp = new Date();
+    this.emitStateChange();
   }
 
   /**
@@ -819,22 +797,27 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return;
     }
 
-    const currentResult = this.state.results[this.state.currentIndex];
-
-    currentResult.status = STEP_STATUS.COMPLETED;
-    currentResult.timestamp = new Date();
-
-    // Mark prompt as completed (sets completedAt on _runtime and updates in-memory index)
-    this.markPromptCompleted(this.state.currentIndex);
-
-    // Reset retry count when successfully moving to next prompt
-    this.resetRetryCount();
+    const index = this.state.currentIndex;
+    await this.completeStep(index);
 
     this.state.currentIndex++;
     this.emitStateChange();
 
     // Update working file with new currentIndex and completedPrompts
     await this.updateWorkingFile();
+  }
+
+  async completeStep(
+    stepIndex: number,
+    metadata?: Partial<PromptRuntimeMetadata>
+  ): Promise<void> {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    this.completeStepState(stepIndex, metadata);
+    this.emitStateChange();
   }
 
   /**
@@ -846,19 +829,93 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return;
     }
 
-    const currentResult = this.state.results[this.state.currentIndex];
-    currentResult.status = STEP_STATUS.SKIPPED;
-    currentResult.timestamp = new Date();
-
-    this.markPromptCompleted(
-      this.state.currentIndex,
-      PROMPT_TERMINAL_STATUS.SKIPPED
-    );
-
-    this.resetRetryCount();
+    const index = this.state.currentIndex;
+    await this.skipStep(index);
     this.state.currentIndex++;
     this.emitStateChange();
 
+    await this.updateWorkingFile();
+  }
+
+  async skipStep(
+    stepIndex: number,
+    terminalStatus: PromptTerminalStatus = PROMPT_TERMINAL_STATUS.SKIPPED
+  ): Promise<void> {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    this.skipStepState(stepIndex, terminalStatus);
+    this.emitStateChange();
+  }
+
+  async failStep(stepIndex: number, reason?: string): Promise<void> {
+    if (!this.canFinalizeStep(stepIndex)) {
+      return;
+    }
+
+    this.failStepState(stepIndex, reason);
+    this.emitStateChange();
+  }
+
+  async cancelStep(stepIndex: number): Promise<void> {
+    const currentResult = this.state.results[stepIndex];
+    if (
+      !currentResult ||
+      (currentResult.status !== STEP_STATUS.CANCELLED &&
+        !this.canFinalizeStep(stepIndex))
+    ) {
+      return;
+    }
+
+    this.cancelStepState(stepIndex);
+    this.emitStateChange();
+  }
+
+  async commitParallelGroupJoin(
+    group: ParallelGroupDefinition,
+    outcomes: readonly StepExecutionOutcome[]
+  ): Promise<void> {
+    for (const outcome of outcomes) {
+      if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+        continue;
+      }
+
+      if (
+        outcome.target.stepIndex < group.startIndex ||
+        outcome.target.stepIndex > group.endIndex
+      ) {
+        continue;
+      }
+
+      switch (outcome.status) {
+        case PROMPT_TERMINAL_STATUS.COMPLETED:
+          this.completeStepState(outcome.target.stepIndex);
+          break;
+        case PROMPT_TERMINAL_STATUS.SKIPPED:
+          this.skipStepState(
+            outcome.target.stepIndex,
+            PROMPT_TERMINAL_STATUS.SKIPPED
+          );
+          break;
+        case PROMPT_TERMINAL_STATUS.FAILED:
+          this.failStepState(
+            outcome.target.stepIndex,
+            outcome.failureReason
+          );
+          break;
+        case PROMPT_TERMINAL_STATUS.CANCELLED:
+          this.cancelStepState(outcome.target.stepIndex);
+          break;
+      }
+    }
+
+    this.state.currentIndex = Math.max(
+      this.state.currentIndex,
+      group.endIndex + 1
+    );
+    this.emitStateChange();
     await this.updateWorkingFile();
   }
 
@@ -931,7 +988,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   /**
    * Check if current prompt can be retried
    */
-  canRetry(prompt: PromptStep): boolean {
+  canRetry(
+    prompt: PromptStep,
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): boolean {
     const { maxRetries, retryPrompt } = resolveRetrySettings(
       prompt.endCondition
     );
@@ -944,7 +1004,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return true;
     }
 
-    return this.currentRetryCount < maxRetries;
+    return this.getRetryCount(target) < maxRetries;
   }
 
   /**
@@ -952,7 +1012,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * Pass retries intentionally do not require a configured template because
    * the handler falls back to the prompt's own text.
    */
-  canPassRetry(prompt: PromptStep): boolean {
+  canPassRetry(
+    prompt: PromptStep,
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): boolean {
     const { maxRetries } = resolveRetrySettings(prompt.endCondition);
 
     // -1 means unlimited retries
@@ -960,7 +1023,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return true;
     }
 
-    return this.currentRetryCount < maxRetries;
+    return this.getRetryCount(target) < maxRetries;
   }
 
   /**
@@ -987,29 +1050,43 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   /**
    * Increment retry count for current prompt
    */
-  incrementRetryCount(): void {
-    this.currentRetryCount++;
+  incrementRetryCount(
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): number {
+    const retryCount = this.stateMachine.incrementRetryCount(target);
 
-    // Update result with retry count
-    if (this.hasNext()) {
-      const currentResult = this.state.results[this.state.currentIndex];
-      currentResult.retryCount = this.currentRetryCount;
-      this.emitStateChange();
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      const currentResult = this.state.results[target.stepIndex];
+      if (currentResult) {
+        currentResult.retryCount = retryCount;
+        this.emitStateChange();
+      }
     }
+    return retryCount;
   }
 
   /**
    * Reset retry count (call when moving to next prompt or on success)
    */
-  resetRetryCount(): void {
-    this.currentRetryCount = 0;
+  resetRetryCount(
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): void {
+    this.stateMachine.resetRetryCount(target);
   }
 
   /**
    * Get current retry count
    */
-  getCurrentRetryCount(): number {
-    return this.currentRetryCount;
+  getCurrentRetryCount(
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): number {
+    return this.getRetryCount(target);
+  }
+
+  getRetryCount(
+    target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
+  ): number {
+    return this.stateMachine.getRetryCount(target);
   }
 
   /**
@@ -1019,19 +1096,118 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   markPromptCompleted(
     index: number,
-    terminalStatus?: PromptRuntimeMetadata["terminalStatus"]
+    terminalStatus?: PromptRuntimeMetadata["terminalStatus"],
+    metadata?: Partial<PromptRuntimeMetadata>
   ): void {
     const prompt = this.state.steps[index];
     if (prompt) {
+      const now = Date.now();
       prompt._runtime = {
         ...prompt._runtime,
-        startedAt: prompt._runtime?.startedAt ?? Date.now(),
-        completedAt: Date.now(),
-        terminalStatus: terminalStatus ?? PROMPT_TERMINAL_STATUS.COMPLETED,
+        ...metadata,
+        startedAt: prompt._runtime?.startedAt ?? metadata?.startedAt ?? now,
+        completedAt: now,
+        terminalStatus:
+          terminalStatus ??
+          metadata?.terminalStatus ??
+          PROMPT_TERMINAL_STATUS.COMPLETED,
       };
     }
     // Update in-memory fast-lookup cache (key = prompt index as string)
     this.state.completedIndices.add(String(index));
+  }
+
+  private getCurrentQueueTarget(): WorkflowAttemptTarget {
+    return {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: this.state.currentIndex,
+    };
+  }
+
+  private canFinalizeStep(stepIndex: number): boolean {
+    const currentResult = this.state.results[stepIndex];
+    return (
+      currentResult?.status === STEP_STATUS.SENT ||
+      currentResult?.status === STEP_STATUS.RUNNING ||
+      currentResult?.status === STEP_STATUS.PENDING
+    );
+  }
+
+  private completeStepState(
+    stepIndex: number,
+    metadata?: Partial<PromptRuntimeMetadata>
+  ): void {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    currentResult.status = STEP_STATUS.COMPLETED;
+    currentResult.timestamp = new Date();
+    if (metadata?.retryCount !== undefined) {
+      currentResult.retryCount = metadata.retryCount;
+    }
+
+    this.markPromptCompleted(
+      stepIndex,
+      PROMPT_TERMINAL_STATUS.COMPLETED,
+      metadata
+    );
+    this.stateMachine.resetRetryCount({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    });
+  }
+
+  private skipStepState(
+    stepIndex: number,
+    terminalStatus: PromptTerminalStatus
+  ): void {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    currentResult.status = terminalStatus;
+    currentResult.timestamp = new Date();
+    this.markPromptCompleted(stepIndex, terminalStatus);
+    this.stateMachine.resetRetryCount({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    });
+  }
+
+  private failStepState(stepIndex: number, error?: string): void {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    currentResult.status = STEP_STATUS.FAILED;
+    if (error) {
+      currentResult.error = error;
+    }
+    currentResult.timestamp = new Date();
+    this.markPromptCompleted(stepIndex, PROMPT_TERMINAL_STATUS.FAILED);
+    this.stateMachine.resetRetryCount({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    });
+  }
+
+  private cancelStepState(stepIndex: number): void {
+    const currentResult = this.state.results[stepIndex];
+    if (!currentResult) {
+      return;
+    }
+
+    currentResult.status = STEP_STATUS.CANCELLED;
+    currentResult.timestamp = new Date();
+    this.markPromptCompleted(stepIndex, PROMPT_TERMINAL_STATUS.CANCELLED);
+    this.stateMachine.resetRetryCount({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    });
   }
 
   /**

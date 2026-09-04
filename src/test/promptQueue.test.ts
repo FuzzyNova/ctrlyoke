@@ -11,7 +11,11 @@ import {
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
-import { PromptStep, PromptFile } from "../types/CtrlYokeTypes";
+import {
+  PromptStep,
+  PromptFile,
+  StepExecutionOutcome,
+} from "../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 /**
@@ -674,6 +678,93 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.completeCurrentAndMoveNext();
       const state = queue.getState();
       assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
+    });
+
+    suite("target-keyed execution primitives", () => {
+      test("keeps retry counters isolated while sharing pass/fail budget per target", () => {
+        queue.loadPrompts(
+          createPromptFile([
+            {
+              prompt: "First",
+              endCondition: {
+                script: "check.js",
+                returns: "true",
+                retryPrompt: "Retry",
+                maxRetries: 2,
+              },
+            },
+            {
+              prompt: "Second",
+              endCondition: {
+                script: "check.js",
+                returns: "true",
+                retryPrompt: "Retry",
+                maxRetries: 2,
+              },
+            },
+          ])
+        );
+        const firstTarget = { kind: "queue" as const, stepIndex: 0 };
+        const secondTarget = { kind: "queue" as const, stepIndex: 1 };
+
+        queue.incrementRetryCount(firstTarget);
+        queue.incrementRetryCount(firstTarget);
+        queue.incrementRetryCount(secondTarget);
+
+        assert.strictEqual(queue.getRetryCount(firstTarget), 2);
+        assert.strictEqual(queue.getRetryCount(secondTarget), 1);
+        assert.strictEqual(queue.canRetry(
+          queue.getState().steps[0] as PromptStep,
+          firstTarget
+        ), false);
+        assert.strictEqual(queue.canPassRetry(
+          queue.getState().steps[0] as PromptStep,
+          firstTarget
+        ), false);
+        assert.strictEqual(queue.canRetry(
+          queue.getState().steps[1] as PromptStep,
+          secondTarget
+        ), true);
+      });
+
+      test("joins reverse-order target completion without advancing early", async () => {
+        queue.loadPrompts(
+          createPromptFile([{ prompt: "First" }, { prompt: "Second" }])
+        );
+        const group = {
+          id: "group-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        };
+
+        const fakeIntegration = async (
+          stepIndex: number
+        ): Promise<StepExecutionOutcome> => {
+          const target = { kind: "queue" as const, stepIndex };
+          await queue.markStepAsSent(stepIndex);
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, stepIndex === 0 ? 10 : 0)
+          );
+          await queue.completeStep(stepIndex);
+          return { target, status: "completed" };
+        };
+
+        const outcomes = await Promise.all([
+          fakeIntegration(0),
+          fakeIntegration(1),
+        ]);
+
+        assert.strictEqual(queue.getState().currentIndex, 0);
+        await queue.commitParallelGroupJoin(group, outcomes);
+
+        const state = queue.getState();
+        assert.strictEqual(state.currentIndex, 2);
+        assert.deepStrictEqual(
+          state.results.map((result) => result.status),
+          [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+        );
+      });
     });
 
     test("should add prompt identity to completedIndices", async () => {

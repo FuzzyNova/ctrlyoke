@@ -2381,13 +2381,9 @@ export class WorkflowInstance {
     Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
 
     this.promptQueue.markInFlightPromptCancelled();
-    const activeAttempt = this.workflowRuntime.getActiveAttempt();
-    if (activeAttempt) {
-      this.workflowRuntime.cancelAttempt(
-        activeAttempt.target,
-        activeAttempt.attemptIndex,
-        stopReason
-      );
+    const activeAttempts = this.workflowRuntime.getActiveAttempts();
+    if (activeAttempts.length > 0) {
+      this.workflowRuntime.cancelActiveAttempts(stopReason);
     } else {
       const currentTarget = this.getCurrentCancellationTarget();
       if (currentTarget) {
