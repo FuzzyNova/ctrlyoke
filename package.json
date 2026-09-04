@@ -142,12 +142,6 @@
         "icon": "$(debug-stop)"
       },
       {
-        "command": "ctrlyoke.devMenu",
-        "title": "Developer Tools",
-        "category": "ctrlyoke",
-        "icon": "$(beaker)"
-      },
-      {
         "command": "ctrlyoke.newWorkflow",
         "title": "New Workflow from Template",
         "category": "ctrlyoke",
@@ -329,10 +323,6 @@
         },
         {
           "command": "ctrlyoke.stop"
-        },
-        {
-          "command": "ctrlyoke.devMenu",
-          "when": "ctrlyoke.devMode"
         },
         {
           "command": "ctrlyoke.runFromContext",

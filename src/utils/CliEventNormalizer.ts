@@ -640,11 +640,33 @@ function mergeInitiatedWithCompleted(
   }
 }
 
-export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
+export interface NormalizedCliEvent {
+  event: CliEvent;
+  /**
+   * Index, in the input array, of the event that *opened* this slot — the
+   * INITIATED half of a merged pair, not the completion that filled it in.
+   *
+   * Callers that place normalized events back onto a timeline must anchor to
+   * this. Anchoring to the completion instead would jump every tool block
+   * forward to the moment it finished, reordering it against everything the
+   * harness did while it ran.
+   */
+  sourceIndex: number;
+}
+
+/**
+ * `normalizeCliEvents` plus the provenance needed to re-anchor each merged
+ * event to where its operation started. Kept as the single implementation so
+ * the pairing rules can never drift between the two entry points.
+ */
+export function normalizeCliEventsWithSource(
+  events: readonly CliEvent[]
+): NormalizedCliEvent[] {
   const output: CliEvent[] = [];
+  const sourceIndexes: number[] = [];
   const pending: PendingEvent[] = [];
 
-  for (const originalEvent of events) {
+  for (const [inputIndex, originalEvent] of events.entries()) {
     const event = normalizeEventToolResult(cloneEvent(originalEvent));
 
     if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
@@ -680,6 +702,7 @@ export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
       }
 
       output.push(event);
+      sourceIndexes.push(inputIndex);
       continue;
     }
 
@@ -705,11 +728,19 @@ export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
     }
 
     output.push(event);
+    sourceIndexes.push(inputIndex);
     const pendingEvent = createPendingEvent(event, output.length - 1);
     if (pendingEvent) {
       pending.push(pendingEvent);
     }
   }
 
-  return output;
+  return output.map((event, index) => ({
+    event,
+    sourceIndex: sourceIndexes[index],
+  }));
+}
+
+export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
+  return normalizeCliEventsWithSource(events).map((entry) => entry.event);
 }

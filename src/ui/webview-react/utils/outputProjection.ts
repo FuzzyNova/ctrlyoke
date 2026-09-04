@@ -19,6 +19,7 @@ import {
   type OutputMessageType,
   type ExecutionPhase,
 } from "@root/types/DashboardConstants";
+import { normalizeCliEventsWithSource } from "@root/utils/CliEventNormalizer";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
@@ -80,48 +81,61 @@ function activityIdentityKey(entry: OutputActivityEntry): string {
   return `${entry.target.kind}:${targetIndex}:run:${entry.runIndex}:attempt:${entry.attemptIndex}:${entry.phase ?? EXECUTION_PHASES.PROMPT}`;
 }
 
-function getActivityEventKey(event: CliEvent, index: number): string {
-  const data = event.data;
-  const id =
-    "toolCallId" in data && typeof data.toolCallId === "string"
-      ? data.toolCallId
-      : "id" in data && typeof data.id === "string"
-        ? data.id
-        : undefined;
-  if (id) return `tool:${id}`;
-  if ("path" in data && typeof data.path === "string") {
-    return `path:${event.type}:${data.path}`;
-  }
-  if (
-    "server" in data &&
-    typeof data.server === "string" &&
-    "tool" in data &&
-    typeof data.tool === "string"
-  ) {
-    return `mcp:${data.server}:${data.tool}`;
-  }
-  return `${event.type}:${index}`;
-}
-
-function mergeActivityEvents(
-  existing: CliEvent[],
-  incoming: readonly CliEvent[]
-): CliEvent[] {
-  const merged = [...existing];
-  const indexByKey = new Map(
-    merged.map((event, index) => [getActivityEventKey(event, index), index])
-  );
-  incoming.forEach((event, index) => {
-    const key = getActivityEventKey(event, index);
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, merged.length);
-      merged.push(event);
-      return;
+/**
+ * Normalized structured events, grouped under the activity slice that *started*
+ * each operation.
+ *
+ * A slice is one streamed batch, not one logical operation: the harness emits a
+ * tool call's INITIATED event in one batch and its COMPLETED/toolResult
+ * counterpart in a later one. Pairing them can therefore only happen across the
+ * whole attempt — normalizing a slice in isolation leaves every block painted as
+ * still running, with its output nowhere on screen. Anchoring the merged event
+ * back to the opening slice is what keeps the block at the moment the operation
+ * began, which is the entire point of the chronological interleaving.
+ *
+ * Slices whose events were all absorbed into an earlier slice get no entry, and
+ * their message is dropped rather than rendered empty.
+ */
+function normalizeStructuredActivityEvents(
+  activities: readonly OutputActivityEntry[]
+): Map<OutputActivityEntry, CliEvent[]> {
+  const slicesByIdentity = new Map<string, OutputActivityEntry[]>();
+  for (const activity of activities) {
+    if (activity.kind !== OUTPUT_ACTIVITY_KINDS.STRUCTURED) continue;
+    const key = activityIdentityKey(activity);
+    const slices = slicesByIdentity.get(key);
+    if (slices) {
+      slices.push(activity);
+    } else {
+      slicesByIdentity.set(key, [activity]);
     }
-    merged[existingIndex] = event;
-  });
-  return merged;
+  }
+
+  const eventsBySlice = new Map<OutputActivityEntry, CliEvent[]>();
+  for (const slices of slicesByIdentity.values()) {
+    const attemptEvents: CliEvent[] = [];
+    const sliceByEventIndex: OutputActivityEntry[] = [];
+    for (const slice of slices) {
+      for (const event of slice.events ?? []) {
+        attemptEvents.push(event);
+        sliceByEventIndex.push(slice);
+      }
+    }
+
+    for (const { event, sourceIndex } of normalizeCliEventsWithSource(
+      attemptEvents
+    )) {
+      const slice = sliceByEventIndex[sourceIndex];
+      const owned = eventsBySlice.get(slice);
+      if (owned) {
+        owned.push(event);
+      } else {
+        eventsBySlice.set(slice, [event]);
+      }
+    }
+  }
+
+  return eventsBySlice;
 }
 
 export function matchesCliEntryIdentity(
@@ -232,18 +246,26 @@ export function mapOrderedHistoryEntriesToMessages(
     );
   }
 
-  const projected: OutputMessage[] = [];
-  const activityByKey = new Map<string, OutputMessage>();
-  for (const activity of [...activityEntries].sort(
+  const sortedActivities = [...activityEntries].sort(
     (left, right) =>
       left.timestampMs - right.timestampMs || left.sequence - right.sequence
-  )) {
+  );
+  const structuredEventsBySlice =
+    normalizeStructuredActivityEvents(sortedActivities);
+
+  const projected: OutputMessage[] = [];
+  const activityByKey = new Map<string, OutputMessage>();
+  for (const activity of sortedActivities) {
     const identityKey = activityIdentityKey(activity);
     const aggregate = aggregateByIdentity.get(identityKey);
     const isStructured = activity.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED;
     const baseKey = `${identityKey}:${activity.kind}`;
-    const eventEntries = isStructured ? (activity.events ?? []) : [];
-    const events = isStructured ? eventEntries : undefined;
+    const events = isStructured
+      ? (structuredEventsBySlice.get(activity) ?? [])
+      : undefined;
+    // Every event this slice carried was merged into a block an earlier slice
+    // opened, so the slice has nothing of its own left to draw.
+    if (events?.length === 0) continue;
     const previous = projected[projected.length - 1];
     const canCoalesceText =
       (activity.kind === OUTPUT_ACTIVITY_KINDS.TEXT ||
@@ -256,25 +278,14 @@ export function mapOrderedHistoryEntriesToMessages(
       (previous.attemptIndex ?? 0) === activity.attemptIndex &&
       (previous.phase ?? EXECUTION_PHASES.PROMPT) ===
         (activity.phase ?? EXECUTION_PHASES.PROMPT);
-    const activityKey =
-      isStructured && events && events.length > 0
-        ? `${baseKey}:${getActivityEventKey(events[0], 0)}`
-        : canCoalesceText
-          ? (previous.activityKey ?? baseKey)
-          : `${baseKey}:${activity.sequence}`;
+    // Structured slices are keyed by sequence and so are always distinct;
+    // only coalescing text/script deltas re-enters an existing message.
+    const activityKey = canCoalesceText
+      ? (previous.activityKey ?? baseKey)
+      : `${baseKey}:${activity.sequence}`;
     const existing = activityByKey.get(activityKey);
     if (existing) {
-      if (
-        activity.kind === OUTPUT_ACTIVITY_KINDS.TEXT ||
-        activity.kind === OUTPUT_ACTIVITY_KINDS.SCRIPT
-      ) {
-        existing.activityText = `${existing.activityText ?? ""}${activity.text ?? ""}`;
-      } else if (activity.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED) {
-        existing.activityEvents = mergeActivityEvents(
-          existing.activityEvents ?? [],
-          activity.events ?? []
-        );
-      }
+      existing.activityText = `${existing.activityText ?? ""}${activity.text ?? ""}`;
       existing.aggregate = aggregate?.data as CliOutput | undefined;
       continue;
     }
@@ -312,7 +323,7 @@ export function mapOrderedHistoryEntriesToMessages(
       activityKey,
       activityKind: activity.kind,
       activityText: activity.text,
-      activityEvents: events ?? activity.events,
+      activityEvents: events,
       aggregate: aggregate?.data as CliOutput | undefined,
     };
     activityByKey.set(activityKey, message);

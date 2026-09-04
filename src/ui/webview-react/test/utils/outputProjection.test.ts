@@ -3,6 +3,7 @@ import { mapOrderedHistoryEntriesToMessages } from "@utils/outputProjection";
 import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
+  OPERATION_STATUS,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
 } from "@/types/messages";
@@ -232,11 +233,111 @@ describe("outputProjection", () => {
       ]
     );
 
+    // The result folds into the call it answers rather than replacing it, and
+    // stays anchored to the slice the call arrived in — a completed block, at
+    // the moment the tool started.
     expect(messages).toHaveLength(1);
     expect(messages[0]?.sequence).toBe(1);
+    expect(messages[0]?.activityEvents).toHaveLength(1);
     expect(messages[0]?.activityEvents?.[0]).toMatchObject({
-      type: CLI_EVENT_TYPES.TOOL_RESULT,
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      data: { id: "tool-1", result: { success: true, output: "done" } },
     });
+  });
+
+  it("completes a semantic operation whose halves arrive in different slices", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const slice = (
+      sequence: number,
+      events: { type: string; data: Record<string, unknown> }[]
+    ) =>
+      ({
+        timestampMs: 1000 + sequence,
+        sequence,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+        events,
+      }) as never;
+
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        slice(1, [
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            data: {
+              command: "npm run lint",
+              status: OPERATION_STATUS.INITIATED,
+            },
+          },
+        ]),
+        slice(2, [
+          { type: CLI_EVENT_TYPES.THINKING, data: { text: "considering" } },
+        ]),
+        slice(3, [
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            data: {
+              command: "npm run lint",
+              status: OPERATION_STATUS.COMPLETED,
+              exitCode: 0,
+              output: "all good",
+            },
+          },
+        ]),
+      ]
+    );
+
+    // The completion merges back into the slice that opened the command, so the
+    // block stays where the command started and carries its output. Slice 3 has
+    // nothing left of its own and is dropped rather than drawn as an empty row.
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.sequence).toBe(1);
+    expect(messages[0]?.activityEvents).toHaveLength(1);
+    expect(messages[0]?.activityEvents?.[0]).toMatchObject({
+      type: CLI_EVENT_TYPES.BASH_COMMAND,
+      data: { status: OPERATION_STATUS.COMPLETED, output: "all good" },
+    });
+    expect(messages[1]?.sequence).toBe(2);
+    expect(messages[1]?.activityEvents?.[0]).toMatchObject({
+      type: CLI_EVENT_TYPES.THINKING,
+    });
+  });
+
+  it("keeps every slice whose first event has no stable identity", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const commands = ["one", "two", "three"];
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [],
+      commands.map(
+        (command, index) =>
+          ({
+            timestampMs: 1000 + index,
+            sequence: index + 1,
+            target,
+            runIndex: 0,
+            attemptIndex: 0,
+            kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: { command, status: OPERATION_STATUS.INITIATED },
+              },
+            ],
+          }) as never
+      )
+    );
+
+    // A bash event carries no tool-call id, so keying slices by their first
+    // event collapsed every one of these into a single message.
+    expect(
+      messages.map(
+        (message) =>
+          (message.activityEvents?.[0]?.data as { command?: string }).command
+      )
+    ).toEqual(commands);
   });
 
   it("keeps live and replay projections in the same interleaved order", () => {
@@ -310,7 +411,9 @@ describe("outputProjection", () => {
     const replayProjection = project();
 
     expect(
-      liveProjection.map((message) => `${message.target.index}:${message.activityText}`)
+      liveProjection.map(
+        (message) => `${message.target.index}:${message.activityText}`
+      )
     ).toEqual(["0:A1", "1:B1", "0:A2"]);
     expect(replayProjection).toEqual(liveProjection);
   });
