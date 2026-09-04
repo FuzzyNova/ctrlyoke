@@ -951,6 +951,10 @@ Each of these must have a test or an explicit "not supported" message.
 
 ### Stage 1 — Topology, schema, and round-trip persistence
 
+**Status: complete.** Definition snapshots and historical views retain the run's
+normalized groups, while Save As reconstructs authored `parallel:` items and
+omits the working-file-only `parallelGroups` root key.
+
 [x] 1. Schema: `parallelGroupItem`, root `parallelGroups`, template-branch harness
    restriction, YAML regeneration; `NOT_AUTHORABLE` entry in the round-trip test.
 [x] 2. Types: `ParallelGroupDefinition`, `PromptFile.parallelGroups`, `QueueState`,
@@ -962,8 +966,8 @@ Each of these must have a test or an explicit "not supported" message.
    `WorkflowStepSanitizer.buildDefinitionSnapshot`, `TimelineRecorder`,
    `RunOutputResolver`: carry and preserve groups through every mutation path listed in
    the audit, including the insert/rewind/start-position snapping rules.
-6. `WorkflowSerializer.buildCleanWorkflow`: reconstruct nested `parallel:` items.
-7. Tests: parser, schema, serializer round trip, queue mutation, revision snapshot,
+[x] 6. `WorkflowSerializer.buildCleanWorkflow`: reconstruct nested `parallel:` items.
+[x] 7. Tests: parser, schema, serializer round trip, queue mutation, revision snapshot,
    invalid-range, every-bundled-template parse.
 
 Done when: grouped steps execute **sequentially** through the existing path with no

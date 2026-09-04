@@ -55,6 +55,7 @@ import {
 } from "../utils/WorkflowBundleAnalyzer";
 import type { SaveWorkflowBundlePreview } from "../types/WebviewMessageTypes";
 import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
+import { normalizeParallelGroupTopology } from "../core/ParallelGroupTopology";
 
 /**
  * WorkflowSerializer
@@ -545,15 +546,42 @@ export class WorkflowSerializer {
     }
 
     if (Array.isArray(workingFile.steps)) {
-      clean.steps = workingFile.steps.map((p: Record<string, unknown>) => {
-        const cleanPrompt: Record<string, unknown> = {};
-        for (const field of WorkflowSerializer.PROMPT_FIELDS) {
-          if (field in p) {
-            cleanPrompt[field] = p[field];
+      const cleanSteps = workingFile.steps.map(
+        (step: Record<string, unknown>) => {
+          const cleanStep: Record<string, unknown> = {};
+          for (const field of WorkflowSerializer.PROMPT_FIELDS) {
+            if (field in step) {
+              cleanStep[field] = step[field];
+            }
           }
+          return cleanStep;
         }
-        return cleanPrompt;
+      );
+      const topology = normalizeParallelGroupTopology({
+        steps: workingFile.steps,
+        parallelGroups: workingFile.parallelGroups,
       });
+      const parallelGroups = topology.parallelGroups;
+      const groupsByStart = new Map(
+        parallelGroups.map((group) => [group.startIndex, group])
+      );
+      const authoredSteps: Record<string, unknown>[] = [];
+
+      for (let index = 0; index < cleanSteps.length; ) {
+        const group = groupsByStart.get(index);
+        if (!group) {
+          authoredSteps.push(cleanSteps[index]);
+          index++;
+          continue;
+        }
+
+        authoredSteps.push({
+          parallel: cleanSteps.slice(group.startIndex, group.endIndex + 1),
+          failFast: group.failFast,
+        });
+        index = group.endIndex + 1;
+      }
+      clean.steps = authoredSteps;
     } else if (workingFile.prompt !== undefined) {
       clean.prompt = workingFile.prompt;
     }

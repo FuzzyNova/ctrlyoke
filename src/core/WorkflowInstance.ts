@@ -1298,7 +1298,10 @@ export class WorkflowInstance {
       this.sourceDefinitionPath = workingFile.originalFile;
       this.currentPromptFile = {
         filePath,
-        promptFile: { steps: workingFile.steps },
+        promptFile: {
+          steps: workingFile.steps,
+          parallelGroups: workingFile.parallelGroups,
+        },
       };
     }
 
@@ -1354,7 +1357,10 @@ export class WorkflowInstance {
       this.sourceDefinitionPath = workingFile.originalFile;
       this.currentPromptFile = {
         filePath,
-        promptFile: { steps: workingFile.steps },
+        promptFile: {
+          steps: workingFile.steps,
+          parallelGroups: workingFile.parallelGroups,
+        },
       };
     }
 
@@ -4850,7 +4856,10 @@ export class WorkflowInstance {
           const fp = workingFile.originalFile || changedFilePath;
           this.currentPromptFile = {
             filePath: fp,
-            promptFile: { steps: workingFile.steps },
+            promptFile: {
+              steps: workingFile.steps,
+              parallelGroups: workingFile.parallelGroups,
+            },
           };
         }
       },

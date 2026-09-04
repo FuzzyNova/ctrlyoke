@@ -12,6 +12,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
+import { buildDefinitionSnapshot } from "../../core/WorkflowStepSanitizer";
 import { Log } from "../../utils/Log";
 import {
   RunSecretRedactor,
@@ -154,6 +155,56 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 2);
     assert.strictEqual(manifest.nextSequence, 3);
     assert.strictEqual(manifest.lastUpdatedAt, 210);
+  });
+
+  test("persists parallel groups in a definition revision snapshot", async () => {
+    const definition = buildDefinitionSnapshot(
+      "grouped revision",
+      [{ prompt: "one" }, { prompt: "two" }],
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          id: "grouped-revision",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ]
+    );
+
+    const first = await recorder.commitDefinitionRevisionIfNewer(
+      manifestPath,
+      2,
+      definition,
+      110
+    );
+    const second = await recorder.commitDefinitionRevisionIfNewer(
+      manifestPath,
+      2,
+      definition,
+      111
+    );
+    const events = await recorder.readEvents(manifestPath);
+
+    assert.strictEqual(first.committed, true);
+    assert.strictEqual(second.committed, false);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(
+      events[0]?.eventType,
+      TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    );
+    if (events[0]?.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED) {
+      assert.deepStrictEqual(events[0].payload.definition.parallelGroups, [
+        {
+          id: "grouped-revision",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ]);
+    }
   });
 
   test("never persists a resolved value in events, manifest, or the session log", async () => {

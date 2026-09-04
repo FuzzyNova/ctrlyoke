@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
+import { PromptFileParser } from "../../core/PromptFileParser";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -26,6 +27,39 @@ suite("Workflow template schema", () => {
       true,
       JSON.stringify(validate.errors)
     );
+  });
+
+  test("parses and validates every bundled workflow template", async () => {
+    const workflowsDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(workflowsDirectory)
+      .filter(
+        (fileName) =>
+          fileName.endsWith(".ctrlyoke.yaml") ||
+          fileName.endsWith(".ctrlyoke.yml") ||
+          fileName.endsWith(".ctrlyoke.json")
+      )
+      .sort();
+    const parser = new PromptFileParser();
+
+    for (const fileName of templateFiles) {
+      const filePath = path.join(workflowsDirectory, fileName);
+      const parsed = await parser.parsePromptFile(filePath);
+      assert.ok(parsed, `${fileName} should parse`);
+      const validation = parser.validateWorkflowSteps(parsed.steps ?? [], {
+        finalStep: parsed.finalStep,
+        parallelGroups: parsed.parallelGroups,
+        workflowProperties: parsed,
+      });
+      assert.deepStrictEqual(
+        validation,
+        { valid: true, errors: [] },
+        `${fileName}: ${validation.errors.join("; ")}`
+      );
+    }
   });
 
   test("accepts a harness placeholder in a declared template", () => {

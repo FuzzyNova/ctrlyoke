@@ -888,8 +888,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @returns Complete PromptFile with workflow-level properties, or empty object if not loaded
    */
   getWorkflowFile(): PromptFile {
-    // Return the stored workflow file, or an empty object with just prompts if not available
-    return this.workflowFile || { steps: this.state.steps };
+    // Return the stored workflow file, or an empty topology if not available.
+    return (
+      this.workflowFile || {
+        steps: this.state.steps,
+        parallelGroups: this.state.parallelGroups,
+      }
+    );
   }
 
   /**
@@ -898,7 +903,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   updateWorkflowProperty(property: string, value: unknown): void {
     if (!this.workflowFile) {
-      this.workflowFile = { steps: this.state.steps };
+      this.workflowFile = {
+        steps: this.state.steps,
+        parallelGroups: this.state.parallelGroups,
+      };
     }
 
     if (value === undefined) {
