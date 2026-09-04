@@ -166,7 +166,7 @@ import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectio
 import {
   getPtyProcessManager,
   ptyPostMessage,
-  resolveWindowsShell,
+  resolveShellInvocation,
 } from "./harness/PtyProcessManager";
 export type {
   PromptStartData,
@@ -3711,12 +3711,21 @@ export class WorkflowInstance {
                 controllerClientId,
               });
 
-              // Wrap the script in a shell so PTY interactive input works.
-              const isWindows = process.platform === "win32";
-              const shell = isWindows ? resolveWindowsShell() : "/bin/sh";
-              const shellArgs = isWindows
-                ? ["-NoProfile", "-Command", options.script]
-                : ["-c", options.script];
+              // Wrap the script in the user's configured (or auto-detected) shell
+              // so PTY interactive input works. Same resolution headless inline
+              // script/condition execution uses (resolveShellInvocation), so the
+              // same script text runs under the same shell whether the step is
+              // interactive or headless.
+              const {
+                executable: shell,
+                args: shellArgs,
+                shellKind,
+              } = resolveShellInvocation(options.script);
+              Log.debug(
+                `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
+                  .map((a) => JSON.stringify(a))
+                  .join(" ")}`
+              );
 
               try {
                 let timeoutHandle: ReturnType<typeof setTimeout> | undefined;

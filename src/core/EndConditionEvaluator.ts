@@ -30,6 +30,7 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
+import { resolveShellInvocation } from "./harness/PtyProcessManager";
 import {
   buildSecretProcessEnvironment,
   resolveSecretEnvironment,
@@ -210,15 +211,30 @@ export class EndConditionEvaluator {
         command = fileCommand;
       } else {
         // File not found - treat as direct shell command. Run the untouched
-        // command string through the platform shell: spawning the bare name
-        // with shell:false fails ENOENT on Windows for anything that is not a
-        // .exe (npm/npx/yarn are .cmd shims; echo is a builtin), and the shell
-        // is also what gives PATH lookup, quoting, and pipes the semantics a
-        // user's terminal would.
+        // command string through an explicitly resolved shell (same
+        // resolution interactive script-step PTYs use): spawning the bare
+        // name with shell:false fails ENOENT on Windows for anything that is
+        // not a .exe (npm/npx/yarn are .cmd shims; echo is a builtin), and a
+        // shell is also what gives PATH lookup, quoting, and pipes the
+        // semantics a user's terminal would. Resolving the shell explicitly
+        // (honoring `terminal.shellExecutable`) instead of Node's own
+        // `shell:true`/ComSpec fallback is what keeps this consistent with
+        // interactive script steps — the same script text no longer runs
+        // under a different, silently-chosen shell depending on execution mode.
         Log.info(
           `Script file not found, treating as direct command: ${condition.script}`
         );
-        command = { executable: condition.script, args: [], viaShell: true };
+        const shellInvocation = resolveShellInvocation(condition.script);
+        Log.debug(
+          `Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
+            .map((a) => JSON.stringify(a))
+            .join(" ")}`
+        );
+        command = {
+          executable: shellInvocation.executable,
+          args: shellInvocation.args,
+          viaShell: false,
+        };
       }
 
       // Execute script with timeout from config or per-condition override

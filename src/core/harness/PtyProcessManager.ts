@@ -111,6 +111,49 @@ export function resolveShellKind(shellPath: string): ShellKind {
   return SHELL_KINDS.BASH;
 }
 
+/**
+ * Build the argv that runs `script` as a single command line under the given
+ * shell kind. Each shell has its own "run this string" flag, so the same
+ * script text needs different wrapping depending on which shell resolves.
+ */
+function buildShellWrapArgs(shellKind: ShellKind, script: string): string[] {
+  switch (shellKind) {
+    case SHELL_KINDS.PWSH:
+    case SHELL_KINDS.POWERSHELL:
+      return ["-NoProfile", "-Command", script];
+    case SHELL_KINDS.CMD:
+      return ["/d", "/c", script];
+    case SHELL_KINDS.WSL:
+      return ["-e", "bash", "-lc", script];
+    default:
+      // bash/zsh/sh/fish/nu, and anything unrecognized — universal POSIX -c.
+      return ["-c", script];
+  }
+}
+
+/**
+ * Resolve the shell executable + wrap-args to run an arbitrary script string
+ * (an interactive script step, or a headless precondition/end-condition/script
+ * step's inline command). Single source for "which shell runs this text" —
+ * honors the user's `terminal.shellExecutable` override exactly like
+ * `spawnShell()` does, falling back to the platform auto-detected shell
+ * otherwise, so a script step and a manually opened terminal never disagree
+ * about which shell interprets the same text.
+ */
+export function resolveShellInvocation(script: string): {
+  executable: string;
+  args: string[];
+  shellKind: ShellKind;
+} {
+  const terminalSettings = ConfigurationUtils.getTerminalSettings();
+  const shellOverride = terminalSettings.shellExecutable.trim();
+  const executable =
+    shellOverride ||
+    (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
+  const shellKind = resolveShellKind(executable);
+  return { executable, args: buildShellWrapArgs(shellKind, script), shellKind };
+}
+
 let _nodePtyModule: NodePtyModule | null | undefined;
 let _nodePtyLoadError: unknown;
 
@@ -553,8 +596,12 @@ export class PtyProcessManager {
       : spawnCols === DEFAULT_COLS && spawnRows === DEFAULT_ROWS
         ? "default — no viewport seen yet"
         : "cold-start fallback";
+    const argsForLog = Array.isArray(options.args)
+      ? options.args.map((a) => JSON.stringify(a)).join(" ")
+      : options.args;
     Log.debug(
       `🖥️ Spawned PTY session ${sessionId} (${options.kind}): ${options.command} ` +
+        `${argsForLog} ` +
         `— initial size ${spawnCols}x${spawnRows} ` +
         `(${sizeSource}; harness first-render width until webview resize arrives)`
     );
