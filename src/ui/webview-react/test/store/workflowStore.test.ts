@@ -126,6 +126,21 @@ describe("loadWorkflow", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);
   });
+
+  it("tracks active step indices independently of the group join index", () => {
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt(), makePrompt(), makePrompt()],
+      currentStep: 0,
+      activeStepIndices: [2, 1],
+    });
+
+    expect(store().currentStep).toBe(0);
+    expect(store().activeStepIndices).toEqual([2, 1]);
+
+    store().setActiveStepIndices([1]);
+    expect(store().activeStepIndices).toEqual([1]);
+  });
 });
 
 // ---------------------------------------------------------------------------

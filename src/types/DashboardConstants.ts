@@ -3041,6 +3041,7 @@ export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
 export const OUTPUT_SCROLL_TARGET_KINDS = {
   ROW: "row",
   BOTTOM: "bottom",
+  LATEST_ACTIVITY: "latestActivity",
 } as const;
 
 export type OutputScrollTargetKind =
@@ -3075,6 +3076,7 @@ export const OUTPUT_DEFAULT_LABELS = {
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
+  STEP_SWITCH: "step-switch",
   STEP_ANCHOR: "step-anchor",
   STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowStep } from "@store/workflowStore";
 import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
-import type { OutputMessage } from "@utils/outputProjection";
+import {
+  mapOrderedHistoryEntriesToMessages,
+  type OutputMessage,
+} from "@utils/outputProjection";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import {
   OUTPUT_ROW_GROUP_END_PADDING,
@@ -17,6 +20,7 @@ import {
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   getStreamingChunkKey,
 } from "@/types/messages";
@@ -177,10 +181,7 @@ describe("outputRows", () => {
     ];
     const common = {
       allMessages,
-      steps: [
-        { name: "First" },
-        { name: "Second" },
-      ] as WorkflowStep[],
+      steps: [{ name: "First" }, { name: "Second" }] as WorkflowStep[],
       finalStep: null,
       streamingChunks: {},
       finalStepStreamingChunks: {},
@@ -220,9 +221,7 @@ describe("outputRows", () => {
       estimateSize: 40,
     });
     expect(estimateOutputRowHeight(hiddenRows[1], 13, 760)).toBe(40);
-    expect(hidden.firstRowIndexByTarget).toEqual(
-      visible.firstRowIndexByTarget
-    );
+    expect(hidden.firstRowIndexByTarget).toEqual(visible.firstRowIndexByTarget);
     expect(hidden.stepOutputsMap).toEqual(visible.stepOutputsMap);
     expect(hidden.lastCliIndexPerStep).toEqual(visible.lastCliIndexPerStep);
   });
@@ -268,6 +267,7 @@ describe("outputRows", () => {
       ...common,
       hiddenTargetKeys: new Set(["queue:1"]),
     });
+
     const visibleRowKeys = visible.rows
       .filter((row) => row.target.index !== 1)
       .map((row) => row.key);
@@ -276,6 +276,81 @@ describe("outputRows", () => {
       .map((row) => row.key);
 
     expect(hiddenVisibleRowKeys).toEqual(visibleRowKeys);
+  });
+
+  it("renders semantic activity switches and continuation rails", () => {
+    const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A1",
+        },
+        {
+          timestampMs: 1001,
+          sequence: 2,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "A2" },
+            },
+          ],
+        },
+        {
+          timestampMs: 1002,
+          sequence: 3,
+          target: targetB,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "B1",
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: true,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const activityRows = result.rows.filter(
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+        row.rowKind === OUTPUT_ROW_KINDS.STEP_SWITCH
+    );
+    expect(activityRows.map((row) => row.rowKind)).toEqual([
+      OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+      OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      OUTPUT_ROW_KINDS.STEP_SWITCH,
+      OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+    ]);
+    expect(activityRows[0]?.activityFirst).toBe(true);
+    expect(activityRows[1]?.activityContinuation).toBe(true);
   });
 
   it("threads the collapsed tool output line count into Bash and generic tool rows", () => {

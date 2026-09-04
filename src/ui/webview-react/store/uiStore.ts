@@ -303,6 +303,11 @@ export type OutputScrollTarget =
       rowKey: string;
       viewportOffsetPx: number;
     }
+  | {
+      kind: typeof OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY;
+      rowKey: string;
+      viewportOffsetPx: number;
+    }
   | { kind: typeof OUTPUT_SCROLL_TARGET_KINDS.BOTTOM };
 
 export interface HiddenOutputTargetsEntry {
@@ -412,7 +417,7 @@ export function areOutputScrollTargetsEqual(
   if (left.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM) {
     return true;
   }
-  if (right.kind !== OUTPUT_SCROLL_TARGET_KINDS.ROW) {
+  if (right.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM) {
     return false;
   }
 

@@ -42,11 +42,13 @@ interface UseOutputRowsModelInput {
   isViewingHistory: boolean;
   historyOutputs: {
     orderedEntries: OrderedHistoryEntry[];
+    activityEntries?: import("@root/types/OutputHistoryTypes").OutputActivityEntry[];
     promptOutputs: Record<number, StepOutput>;
     finalStepOutputs?: Record<number, StepOutput>;
     runMetadata: WorkflowRunMetadata;
   } | null;
   liveOrderedEntries: OrderedHistoryEntry[];
+  liveActivityEntries: import("@root/types/OutputHistoryTypes").OutputActivityEntry[];
   steps: WorkflowStep[];
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
@@ -86,6 +88,7 @@ export function useOutputRowsModel({
   isViewingHistory,
   historyOutputs,
   liveOrderedEntries,
+  liveActivityEntries,
   steps,
   finalStep,
   parallelGroups,
@@ -145,10 +148,21 @@ export function useOutputRowsModel({
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
     if (isViewingHistory && historyOutputs) {
-      return mapOrderedHistoryEntriesToMessages(historyOutputs.orderedEntries);
+      return mapOrderedHistoryEntriesToMessages(
+        historyOutputs.orderedEntries,
+        historyOutputs.activityEntries
+      );
     }
-    return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
-  }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
+    return mapOrderedHistoryEntriesToMessages(
+      liveOrderedEntries,
+      liveActivityEntries
+    );
+  }, [
+    isViewingHistory,
+    historyOutputs,
+    liveOrderedEntries,
+    liveActivityEntries,
+  ]);
 
   const collapsibleAttemptGroupKeys = useMemo(
     () => getCollapsibleAttemptGroupKeys(allMessages),
@@ -177,6 +191,8 @@ export function useOutputRowsModel({
     stepOutputsMap,
     lastCliIndexPerStep,
     firstRowIndexByTarget,
+    anchorRowIndexByTarget,
+    latestActivityRowKey,
   } = useMemo(
     () =>
       measurePhase(
@@ -635,6 +651,8 @@ export function useOutputRowsModel({
     stepOutputsMap,
     lastCliIndexPerStep,
     firstRowIndexByTarget,
+    anchorRowIndexByTarget,
+    latestActivityRowKey,
     anyDiffCollapsed,
     bashExpansionState,
     handleScriptVerdictExpansionChange,

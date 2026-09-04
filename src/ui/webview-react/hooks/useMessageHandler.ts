@@ -537,6 +537,7 @@ export function createMessageHandlers(
         steps: data.steps,
         executionState: data.executionState as ExecutionState,
         currentStep: data.currentIndex || 0,
+        activeStepIndices: data.activeStepIndices ?? [],
         results: data.results || [],
         finalStep: data.finalStep ?? null,
         finalStepStatus: data.finalStepStatus ?? null,
@@ -814,6 +815,7 @@ export function createMessageHandlers(
       parallelGroups: message.parallelGroups || [],
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
+      activeStepIndices: message.activeStepIndices ?? [],
       results: message.results || [],
       finalStep: message.finalStep ?? null,
       finalStepStatus: message.finalStepStatus ?? null,
@@ -1025,6 +1027,7 @@ export function createMessageHandlers(
       workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
       workflowStore.setTotalSteps(message.totalSteps);
       workflowStore.setCurrentStep(preserveStepCount);
+      workflowStore.setActiveStepIndices(message.activeStepIndices ?? []);
 
       // Reset only the new (not-yet-run) prompts to pending; preserve completed status.
       // Pause undo recording — execution start is not a user-undoable action.
@@ -1056,6 +1059,7 @@ export function createMessageHandlers(
       workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
       workflowStore.setTotalSteps(message.totalSteps);
       workflowStore.setCurrentStep(0);
+      workflowStore.setActiveStepIndices(message.activeStepIndices ?? []);
 
       const resetPrompts = workflowStore.steps.map((prompt) => ({
         ...prompt,
@@ -1146,6 +1150,21 @@ export function createMessageHandlers(
       }
     }
     applyExecutionState(message.state as ExecutionState);
+    if (message.activeStepIndices !== undefined) {
+      useWorkflowStore
+        .getState()
+        .setActiveStepIndices(message.activeStepIndices);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
+    useWorkflowStore.getState().setActiveStepIndices(message.activeStepIndices);
   };
 
   // --------------------------------------------------------------------------
@@ -1161,6 +1180,9 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setCurrentStep(message.current);
     workflowStore.setTotalSteps(message.total);
+    if (message.activeStepIndices !== undefined) {
+      workflowStore.setActiveStepIndices(message.activeStepIndices);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1175,6 +1197,9 @@ export function createMessageHandlers(
     }
     const workflowStore = useWorkflowStore.getState();
     const { stepIndex, status, details } = message;
+    if (message.activeStepIndices !== undefined) {
+      workflowStore.setActiveStepIndices(message.activeStepIndices);
+    }
 
     if (workflowStore.steps[stepIndex]) {
       // Pause around updatePrompt — step status changes are runtime events,
@@ -1521,7 +1546,6 @@ export function createMessageHandlers(
     // CLI output token metadata, which is the durable source used by history.
     if (
       !isWorkflowRunning(workflowStore.executionState) ||
-      workflowStore.currentStep !== message.stepIndex ||
       isTerminalStepStatus(stepStatus)
     ) {
       return;

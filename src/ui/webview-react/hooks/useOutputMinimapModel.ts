@@ -47,6 +47,7 @@ interface OutputRowLayoutModel {
 interface UseOutputMinimapModelInput {
   allMessages: OutputMessage[];
   allowUndoActions: boolean;
+  anchorRowIndexByTarget?: Map<string, number>;
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
@@ -87,7 +88,7 @@ function getQueueStepFallbackName(
 
 function getStepScrollFractions(
   uniqueStepTargets: OutputMessage["target"][],
-  firstRowIndexByTarget: Map<string, number>,
+  anchorRowIndexByTarget: Map<string, number>,
   rowLayout: OutputRowLayoutModel,
   rowCount: number
 ): Map<string, number> {
@@ -100,7 +101,7 @@ function getStepScrollFractions(
 
       for (const target of uniqueStepTargets) {
         const targetKey = `${target.kind}:${target.index}`;
-        const rowIndex = firstRowIndexByTarget.get(targetKey);
+        const rowIndex = anchorRowIndexByTarget.get(targetKey);
         if (rowIndex === undefined) continue;
         fractions.set(
           targetKey,
@@ -116,10 +117,11 @@ function getStepScrollFractions(
 export function useOutputMinimapModel({
   allMessages,
   allowUndoActions,
+  anchorRowIndexByTarget,
+  firstRowIndexByTarget,
   finalStep,
   parallelGroups,
   finalStepWorkspaceSnapshots,
-  firstRowIndexByTarget,
   historyOutputs,
   isViewingHistory,
   lastCliIndexPerStep,
@@ -140,11 +142,17 @@ export function useOutputMinimapModel({
     () =>
       getStepScrollFractions(
         uniqueStepTargets,
-        firstRowIndexByTarget,
+        anchorRowIndexByTarget ?? firstRowIndexByTarget,
         rowLayout,
         rows.length
       ),
-    [firstRowIndexByTarget, rowLayout, rows.length, uniqueStepTargets]
+    [
+      anchorRowIndexByTarget,
+      firstRowIndexByTarget,
+      rowLayout,
+      rows.length,
+      uniqueStepTargets,
+    ]
   );
 
   const minimapSteps = useMemo((): MinimapStep[] => {
@@ -168,7 +176,9 @@ export function useOutputMinimapModel({
 
         return uniqueStepTargets.flatMap((msgTarget) => {
           const key = `${msgTarget.kind}:${msgTarget.index}`;
-          const firstRowIndex = firstRowIndexByTarget.get(key);
+          const firstRowIndex = (
+            anchorRowIndexByTarget ?? firstRowIndexByTarget
+          ).get(key);
           if (firstRowIndex === undefined) return [];
 
           const kind = msgTarget.kind;
@@ -203,6 +213,31 @@ export function useOutputMinimapModel({
             stepScrollFractions.get(key) ??
             rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
           const hidden = hiddenTargetKeys.includes(key);
+          const activityRowIndexes = rows.reduce<number[]>((indexes, row, rowIndex) => {
+            if (
+              row.activityKey &&
+              row.target.kind === msgTarget.kind &&
+              row.target.index === msgTarget.index
+            ) {
+              indexes.push(rowIndex);
+            }
+            return indexes;
+          }, []);
+          const firstActivityRowIndex = activityRowIndexes[0];
+          const latestActivityRowIndex =
+            activityRowIndexes[activityRowIndexes.length - 1];
+          const firstActivityScrollFraction =
+            firstActivityRowIndex === undefined
+              ? undefined
+              : (rowLayout.rowStartsByIndex[firstActivityRowIndex] ?? 0) /
+                totalSize;
+          const latestActivityScrollFraction =
+            latestActivityRowIndex === undefined
+              ? undefined
+              : (rowLayout.rowStartsByIndex[latestActivityRowIndex] ?? 0) /
+                totalSize;
+          const selected =
+            hiddenTargetKeys.length > 0 && !hiddenTargetKeys.includes(key);
           const hiddenTimestamp = hiddenAtMs[key];
           const hasHiddenActivity =
             hidden &&
@@ -248,9 +283,14 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
+                firstActivityRowIndex,
+                latestActivityRowIndex,
+                firstActivityScrollFraction,
+                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
+                selected,
                 hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
@@ -266,9 +306,14 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
+                firstActivityRowIndex,
+                latestActivityRowIndex,
+                firstActivityScrollFraction,
+                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
+                selected,
                 hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
@@ -285,9 +330,14 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
+                firstActivityRowIndex,
+                latestActivityRowIndex,
+                firstActivityScrollFraction,
+                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
+                selected,
                 hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
@@ -299,19 +349,22 @@ export function useOutputMinimapModel({
             ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
             : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
 
-          if (
-            concurrentGroup &&
-            stepIndex !== concurrentGroup.startIndex
-          ) {
+          const groupForLabels = concurrentGroup;
+          if (concurrentGroup) {
             return [
               {
                 key,
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
+                firstActivityRowIndex,
+                latestActivityRowIndex,
+                firstActivityScrollFraction,
+                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
+                selected,
                 hasHiddenActivity,
                 undoActions: noActions,
                 diffBlocks,
@@ -343,14 +396,14 @@ export function useOutputMinimapModel({
           const actions = computePromptUndoActions(
             stepOutputs,
             effectiveUndoRecord,
-            concurrentGroup ? groupSnapshot : effectiveSnapshot
+            groupForLabels ? groupSnapshot : effectiveSnapshot
           );
 
           const undoActions: MinimapStep["undoActions"] = {
             redo: actions.redo
               ? {
-                  label: concurrentGroup
-                    ? `Redo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+                  label: groupForLabels
+                    ? `Redo parallel steps ${groupForLabels.startIndex + 1}–${groupForLabels.endIndex + 1}`
                     : actions.redo.label,
                   onTrigger: () => {
                     onOpenMinimapRedoDialog({
@@ -363,8 +416,8 @@ export function useOutputMinimapModel({
               : null,
             undo: actions.undo
               ? {
-                  label: concurrentGroup
-                    ? `Undo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+                  label: groupForLabels
+                    ? `Undo parallel steps ${groupForLabels.startIndex + 1}–${groupForLabels.endIndex + 1}`
                     : actions.undo.label,
                   onTrigger: () => {
                     const alreadyUndone =
@@ -395,9 +448,14 @@ export function useOutputMinimapModel({
               kind,
               stepIndex,
               firstMessageIndex: firstRowIndex,
+              firstActivityRowIndex,
+              latestActivityRowIndex,
+              firstActivityScrollFraction,
+              latestActivityScrollFraction,
               scrollFraction,
               label,
               hidden,
+              selected,
               hasHiddenActivity,
               undoActions,
               diffBlocks,
@@ -411,6 +469,7 @@ export function useOutputMinimapModel({
     allowUndoActions,
     finalStep,
     finalStepWorkspaceSnapshots,
+    anchorRowIndexByTarget,
     firstRowIndexByTarget,
     hiddenAtMs,
     hiddenTargetKeys,

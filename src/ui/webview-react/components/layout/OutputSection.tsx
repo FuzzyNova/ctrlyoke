@@ -31,7 +31,11 @@ import {
   SESSION_KINDS,
   SETTING_SCOPES,
 } from "../../types/messages";
-import { OUTPUT_TABS } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  OUTPUT_SCROLL_TARGET_KINDS,
+  OUTPUT_TABS,
+} from "@root/types/DashboardConstants";
 import { type MinimapStep } from "../output/OutputMinimap";
 import { OutputFindBar } from "../output";
 import {
@@ -45,6 +49,7 @@ import { terminalRegistry } from "../../terminalRegistry";
 import { ExportOutputModal } from "./output-section/ExportOutputModal";
 import { OutputSectionHeader } from "./output-section/OutputSectionHeader";
 import { OutputPane } from "./output-section/OutputPane";
+import { ParallelOutputGroupHeader } from "./output-section/ParallelOutputGroupHeader";
 import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 
 import { triggerPanelAnimation } from "@utils/panelAnimation";
@@ -120,12 +125,14 @@ const OutputSectionInner: React.FC = () => {
   const fileName = useWorkflowStore((s) => s.fileName);
   const executionState = useWorkflowStore((s) => s.executionState);
   const currentStep = useWorkflowStore((s) => s.currentStep);
+  const activeStepIndices = useWorkflowStore((s) => s.activeStepIndices);
   const totalSteps = useWorkflowStore((s) => s.totalSteps);
   const steps = useWorkflowStore((s) => s.steps);
   const parallelGroups = useWorkflowStore((s) => s.parallelGroups);
   const finalStep = useWorkflowStore((s) => s.finalStep);
   const cliOutputs = useWorkflowStore((s) => s.liveOrderedEntries);
   const liveOrderedEntries = cliOutputs; // alias for clarity
+  const liveActivityEntries = useWorkflowStore((s) => s.liveActivityEntries);
   // streamingChunks changes on every token — keep it isolated so the
   // auto-scroll effect doesn't require rebuilding allMessages.
   const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
@@ -421,6 +428,17 @@ const OutputSectionInner: React.FC = () => {
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
+  const isLatestActivityFollowEnabled =
+    !isViewingHistory &&
+    isExecutionActive &&
+    parallelGroups.some(
+      (group) =>
+        group.startIndex !== group.endIndex &&
+        activeStepIndices.some(
+          (stepIndex) =>
+            stepIndex >= group.startIndex && stepIndex <= group.endIndex
+        )
+    );
   const allowUndoActions =
     (isViewingHistory || !isExecutionActive) &&
     !isManagedWorktreeUndoUnavailable(displayedRunBanner?.worktree);
@@ -456,6 +474,8 @@ const OutputSectionInner: React.FC = () => {
     stepOutputsMap,
     lastCliIndexPerStep,
     firstRowIndexByTarget,
+    anchorRowIndexByTarget,
+    latestActivityRowKey,
     anyDiffCollapsed,
     bashExpansionState,
     handleDiffCollapsedChange,
@@ -469,6 +489,7 @@ const OutputSectionInner: React.FC = () => {
     isViewingHistory,
     historyOutputs,
     liveOrderedEntries,
+    liveActivityEntries,
     steps,
     parallelGroups,
     finalStep,
@@ -666,12 +687,14 @@ const OutputSectionInner: React.FC = () => {
     commitMaxRetries: OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES,
     commitScrollTargetFromViewportRef,
     defaultTarget: DEFAULT_OUTPUT_SCROLL_TARGET,
+    isLatestActivityFollowEnabled,
     isProgrammaticScrollRef: isProgrammaticScroll,
     lastProgrammaticScrollTopRef,
     lastScrollEventAtRef,
     lastScrollTopRef,
     lastUserScrollInputAtRef,
     layoutApplyTrigger: `${measurementVersion}:${outputOverscan}:${rows.length}:${scrollSeekPlaceholderActive}`,
+    latestActivityRowKey,
     outputOverscanRef,
     outputRef,
     pendingNavigationRef,
@@ -849,15 +872,20 @@ const OutputSectionInner: React.FC = () => {
       // auto-scroll effect fires again on the next measurementVersion bump.
       // Attribution is strict here: only a *recent real input event* counts, so
       // the pane's own pinning writes can never release their own latch.
-      autoscrollEnabled.current = nextAutoscrollArmed({
-        distanceFromBottomPx: getDistanceFromBottomPx(el),
-        viewportHeightPx: el.clientHeight,
-        isArmed: autoscrollEnabled.current,
-        movedUp:
-          lastScrollTopRef.current != null &&
-          el.scrollTop < lastScrollTopRef.current,
-        isUserDriven: hasRecentUserScrollInput,
-      });
+      if (
+        scrollTargetRef.current.kind !==
+        OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+      ) {
+        autoscrollEnabled.current = nextAutoscrollArmed({
+          distanceFromBottomPx: getDistanceFromBottomPx(el),
+          viewportHeightPx: el.clientHeight,
+          isArmed: autoscrollEnabled.current,
+          movedUp:
+            lastScrollTopRef.current != null &&
+            el.scrollTop < lastScrollTopRef.current,
+          isUserDriven: hasRecentUserScrollInput,
+        });
+      }
       return;
     }
     // TanStack's rAF-deferred scroll corrections fire during the flush window.
@@ -911,13 +939,18 @@ const OutputSectionInner: React.FC = () => {
     // scrollbar-drag scrolling produce no wheel/touch stamp, so attribution
     // can't be narrowed further than that — the `movedUp` + release-distance
     // requirement is what keeps virtualizer corrections from unpinning the view.
-    autoscrollEnabled.current = nextAutoscrollArmed({
-      distanceFromBottomPx: getDistanceFromBottomPx(el),
-      viewportHeightPx: el.clientHeight,
-      isArmed: autoscrollEnabled.current,
-      movedUp: previousScrollTop != null && el.scrollTop < previousScrollTop,
-      isUserDriven: true,
-    });
+    if (
+      scrollTargetRef.current.kind !==
+      OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+    ) {
+      autoscrollEnabled.current = nextAutoscrollArmed({
+        distanceFromBottomPx: getDistanceFromBottomPx(el),
+        viewportHeightPx: el.clientHeight,
+        isArmed: autoscrollEnabled.current,
+        movedUp: previousScrollTop != null && el.scrollTop < previousScrollTop,
+        isUserDriven: true,
+      });
+    }
 
     // Immediately track the live scroll position so layout effects always apply
     // the current position, not a stale pre-scroll target. This covers momentum
@@ -926,9 +959,13 @@ const OutputSectionInner: React.FC = () => {
     // The latch — not raw `atBottom` — decides, so a pane that grew out from
     // under a pinned viewport keeps its bottom target instead of pinning itself
     // to whichever row happened to be on screen that frame.
-    if (autoscrollEnabled.current) {
+    if (
+      autoscrollEnabled.current &&
+      scrollTargetRef.current.kind !==
+        OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+    ) {
       scrollTargetRef.current = DEFAULT_OUTPUT_SCROLL_TARGET;
-    } else {
+    } else if (!autoscrollEnabled.current) {
       const anchor = captureViewportRowAnchor(el, "visible-top");
       if (anchor) {
         scrollTargetRef.current = {
@@ -995,6 +1032,7 @@ const OutputSectionInner: React.FC = () => {
   const { navigationController, navigationPendingRowIndex } =
     useOutputNavigation({
       autoscrollEnabledRef: autoscrollEnabled,
+      anchorRowIndexByTarget,
       finalizeSettlingDelayMs: 1000,
       firstRowIndexByTarget,
       isOutputVirtualized,
@@ -1098,6 +1136,17 @@ const OutputSectionInner: React.FC = () => {
     lastAutoScrollRowCountRef.current = rows.length;
 
     if (
+      !isLatestActivityFollowEnabled &&
+      autoscrollEnabled.current &&
+      scrollTargetRef.current.kind ===
+        OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+    ) {
+      setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "group-complete");
+      applyScrollTarget("group-complete");
+      return;
+    }
+
+    if (
       suppressOutputLayoutWorkRef.current ||
       !autoscrollEnabled.current ||
       !outputRef.current ||
@@ -1113,7 +1162,23 @@ const OutputSectionInner: React.FC = () => {
       return;
     }
 
-    setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
+    if (
+      isLatestActivityFollowEnabled &&
+      latestActivityRowKey &&
+      scrollTargetRef.current.kind !==
+        OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+    ) {
+      setCurrentScrollTarget(
+        {
+          kind: OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY,
+          rowKey: latestActivityRowKey,
+          viewportOffsetPx: 0,
+        },
+        "auto-scroll-latest-activity"
+      );
+    } else if (!isLatestActivityFollowEnabled) {
+      setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
+    }
     applyScrollTarget("auto-scroll");
   }, [
     applyScrollTarget,
@@ -1121,6 +1186,9 @@ const OutputSectionInner: React.FC = () => {
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,
+    isLatestActivityFollowEnabled,
+    latestActivityRowKey,
+    scrollTargetRef,
     setCurrentScrollTarget,
   ]);
 
@@ -1188,6 +1256,7 @@ const OutputSectionInner: React.FC = () => {
     handleFileUndo,
     handlePromptRedo,
     handlePromptUndo,
+    handlePromptUndoMeta,
     handleWorkflowRedo,
     handleWorkflowUndo,
     minimapDialogState,
@@ -1209,6 +1278,7 @@ const OutputSectionInner: React.FC = () => {
     finalStep,
     parallelGroups,
     finalStepWorkspaceSnapshots,
+    anchorRowIndexByTarget,
     firstRowIndexByTarget,
     hiddenAtMs: hiddenOutputEntry?.hiddenAtMs ?? EMPTY_HIDDEN_AT_MS,
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
@@ -1261,6 +1331,7 @@ const OutputSectionInner: React.FC = () => {
   }, [clearHiddenOutputTargets, outputFilterAddressKey]);
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
+    anchorScrollFractions: stepScrollFractions,
     allMessages,
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,
     stepScrollFractions,
@@ -1552,62 +1623,105 @@ const OutputSectionInner: React.FC = () => {
         >
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
-        <OutputPane
-          activeOutputTab={activeOutputTab}
-          activeMatch={activeMatch}
-          bashExpansionState={bashExpansionState}
-          contentHeight={rowLayout.totalSize}
-          findBar={findBar}
-          findDecorations={rowDecorations}
-          findQuery={findState.isOpen ? findState.query : undefined}
-          findCaseSensitive={findState.caseSensitive}
-          atomicContextReferences={atomicContextReferences}
-          hasOutput={hasOutput}
-          isExecutionActive={isExecutionActive}
-          isNavigationTargetVirtualized={isNavigationTargetVirtualized}
-          isOutputCollapsed={outputCollapsed}
-          isOutputScrollSeeking={isOutputScrollSeeking}
-          isOutputVirtualized={isOutputVirtualized}
-          minimapSteps={minimapSteps}
-          nonVirtualRows={nonVirtualRows}
-          nonVirtualSpacerHeight={nonVirtualSpacerHeight}
-          outputRef={outputRef}
-          renderedScrollSeekIndices={renderedScrollSeekIndices}
-          rows={rows}
-          showVirtualizationOverlay={showVirtualizationOverlay}
-          virtualRows={virtualRows}
-          virtualizedTotalSize={rowVirtualizer.getTotalSize()}
-          measureRowElement={measureRowElement}
-          measureStaticRowElement={measureStaticRowElement}
-          runBanner={displayedRunBanner}
-          workspaceWorktreeOwnership={workspaceWorktreeOwnership ?? undefined}
-          isRunBannerPinned={runBannerPinned}
-          onToggleRunBannerPinned={toggleRunBannerPinned}
-          showBackToLive={isViewingHistory && isExecutionActive}
-          onBackToLive={handleBackToLive}
-          onBashExpansionChange={handleBashExpansionChange}
-          onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
-          onScriptOutputExpansionChange={handleScriptOutputExpansionChange}
-          onAttemptGroupToggle={handleAttemptGroupToggle}
-          onContextMenuOpen={openContextMenu}
-          onDiffCollapsedChange={handleDiffCollapsedChange}
-          onDiffGapExpand={handleDiffGapExpandWithScrollPin}
-          onFileUndo={handleFileUndo}
-          hiddenActivityTargetKeys={hiddenActivityTargetKeys}
-          onMinimapStepClick={handleMinimapStepClick}
-          onMinimapStepToggle={handleMinimapStepToggle}
-          onMinimapStepSolo={handleMinimapStepSolo}
-          onOutputProfilerRender={handleOutputProfilerRender}
-          onPromptRedo={handlePromptRedo}
-          onPromptUndo={handlePromptUndo}
-          onScroll={handleScroll}
-          onToolCallExpansionChange={handleToolCallExpansionChange}
-          onTouchCancel={handleOutputTouchCancel}
-          onTouchEnd={handleOutputTouchEnd}
-          onTouchMove={handleOutputTouchMove}
-          onTouchStart={handleOutputTouchStart}
-          onWheel={handleWheel}
-        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {activeOutputTab === OUTPUT_TABS.OUTPUT &&
+            parallelGroups
+              .filter((group) => group.startIndex < group.endIndex)
+              .map((group) => {
+                const groupUndoRow = rows.find(
+                  (row) =>
+                    row.target.kind === FINAL_STEP_PHASES.QUEUE &&
+                    row.target.index === group.startIndex &&
+                    row.promptUndo?.undo
+                );
+                return (
+                  <ParallelOutputGroupHeader
+                    key={group.id}
+                    group={group}
+                    steps={steps}
+                    activeStepIndices={activeStepIndices}
+                    hiddenTargetKeys={
+                      new Set(
+                        hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS
+                      )
+                    }
+                    onShowAll={handleClearHiddenOutputTargets}
+                    onSoloTarget={(targetKey, allTargetKeys) =>
+                      soloOutputTarget(
+                        outputFilterAddressKey,
+                        targetKey,
+                        allTargetKeys
+                      )
+                    }
+                    onUndo={
+                      groupUndoRow?.promptUndo
+                        ? () =>
+                            handlePromptUndoMeta(
+                              groupUndoRow.target,
+                              groupUndoRow.promptUndo
+                            )
+                        : undefined
+                    }
+                  />
+                );
+              })}
+          <OutputPane
+            activeOutputTab={activeOutputTab}
+            activeMatch={activeMatch}
+            bashExpansionState={bashExpansionState}
+            contentHeight={rowLayout.totalSize}
+            findBar={findBar}
+            findDecorations={rowDecorations}
+            findQuery={findState.isOpen ? findState.query : undefined}
+            findCaseSensitive={findState.caseSensitive}
+            atomicContextReferences={atomicContextReferences}
+            hasOutput={hasOutput}
+            isExecutionActive={isExecutionActive}
+            isNavigationTargetVirtualized={isNavigationTargetVirtualized}
+            isOutputCollapsed={outputCollapsed}
+            isOutputScrollSeeking={isOutputScrollSeeking}
+            isOutputVirtualized={isOutputVirtualized}
+            minimapSteps={minimapSteps}
+            nonVirtualRows={nonVirtualRows}
+            nonVirtualSpacerHeight={nonVirtualSpacerHeight}
+            outputRef={outputRef}
+            renderedScrollSeekIndices={renderedScrollSeekIndices}
+            rows={rows}
+            showVirtualizationOverlay={showVirtualizationOverlay}
+            virtualRows={virtualRows}
+            virtualizedTotalSize={rowVirtualizer.getTotalSize()}
+            measureRowElement={measureRowElement}
+            measureStaticRowElement={measureStaticRowElement}
+            runBanner={displayedRunBanner}
+            workspaceWorktreeOwnership={workspaceWorktreeOwnership ?? undefined}
+            isRunBannerPinned={runBannerPinned}
+            onToggleRunBannerPinned={toggleRunBannerPinned}
+            showBackToLive={isViewingHistory && isExecutionActive}
+            onBackToLive={handleBackToLive}
+            onBashExpansionChange={handleBashExpansionChange}
+            onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
+            onScriptOutputExpansionChange={handleScriptOutputExpansionChange}
+            onAttemptGroupToggle={handleAttemptGroupToggle}
+            onContextMenuOpen={openContextMenu}
+            onDiffCollapsedChange={handleDiffCollapsedChange}
+            onDiffGapExpand={handleDiffGapExpandWithScrollPin}
+            onFileUndo={handleFileUndo}
+            hiddenActivityTargetKeys={hiddenActivityTargetKeys}
+            onMinimapStepClick={handleMinimapStepClick}
+            onMinimapStepToggle={handleMinimapStepToggle}
+            onMinimapStepSolo={handleMinimapStepSolo}
+            onOutputProfilerRender={handleOutputProfilerRender}
+            onPromptRedo={handlePromptRedo}
+            onPromptUndo={handlePromptUndo}
+            onScroll={handleScroll}
+            onToolCallExpansionChange={handleToolCallExpansionChange}
+            onTouchCancel={handleOutputTouchCancel}
+            onTouchEnd={handleOutputTouchEnd}
+            onTouchMove={handleOutputTouchMove}
+            onTouchStart={handleOutputTouchStart}
+            onWheel={handleWheel}
+          />
+        </div>
       </div>
 
       <OutputUndoDialogs

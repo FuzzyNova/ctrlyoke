@@ -58,6 +58,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Hidden step";
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return row.label;
+    case OUTPUT_ROW_KINDS.STEP_SWITCH:
+      return `Switched to ${row.stepLabel}`;
   }
 }
 

@@ -14,7 +14,12 @@ import {
   buildUndoDialogInputForSpecificEvent,
   sameFilePath,
 } from "@utils/promptUndo";
-import type { CliHeaderRow, StructuredEventRow } from "@utils/outputRows";
+import type {
+  CliHeaderRow,
+  OutputRowPromptUndoMeta,
+  StructuredEventRow,
+} from "@utils/outputRows";
+import type { OutputMessageTarget } from "@utils/outputProjection";
 import type {
   OrderedHistoryEntry,
   StepOutput,
@@ -249,31 +254,39 @@ export function useOutputUndoActions({
     [runAddress]
   );
 
-  const handlePromptUndo = useCallback(
-    (row: CliHeaderRow) => {
-      if (!row.promptUndo || !runAddress) return;
-      const target: UndoExecutionTarget = row.isFinalStep
-        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
+  const handlePromptUndoMeta = useCallback(
+    (
+      target: OutputMessageTarget,
+      promptUndo: OutputRowPromptUndoMeta | undefined
+    ) => {
+      if (!promptUndo || !runAddress) return;
+      const undoTarget: UndoExecutionTarget =
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.index }
+          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.index };
       const alreadyUndone =
-        row.promptUndo.undoRecord != null &&
-        row.promptUndo.undoRecord.isRedone !== true
-          ? row.promptUndo.undoRecord.redoInstructions
+        promptUndo.undoRecord != null && promptUndo.undoRecord.isRedone !== true
+          ? promptUndo.undoRecord.redoInstructions
           : undefined;
       const input = buildUndoDialogInputForPrompt(
-        target,
-        row.promptUndo.allStepOutputs,
-        row.promptUndo.workspaceSnapshot,
-        row.promptUndo.workspacePath,
+        undoTarget,
+        promptUndo.allStepOutputs,
+        promptUndo.workspaceSnapshot,
+        promptUndo.workspacePath,
         alreadyUndone
       );
       openMinimapUndoDialog({
-        target,
-        workspacePath: row.promptUndo.workspacePath,
+        target: undoTarget,
+        workspacePath: promptUndo.workspacePath,
         input,
       });
     },
     [openMinimapUndoDialog, runAddress]
+  );
+
+  const handlePromptUndo = useCallback(
+    (row: CliHeaderRow) => handlePromptUndoMeta(row.target, row.promptUndo),
+    [handlePromptUndoMeta]
   );
 
   const handlePromptRedo = useCallback(
@@ -379,6 +392,7 @@ export function useOutputUndoActions({
     handleFileUndo,
     handlePromptRedo,
     handlePromptUndo,
+    handlePromptUndoMeta,
     handleWorkflowRedo,
     handleWorkflowUndo,
     minimapDialogState,

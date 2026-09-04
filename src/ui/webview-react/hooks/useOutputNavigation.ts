@@ -57,6 +57,7 @@ interface RowVirtualizerLike {
 
 interface UseOutputNavigationInput {
   autoscrollEnabledRef: RefObject<boolean>;
+  anchorRowIndexByTarget?: Map<string, number>;
   finalizeSettlingDelayMs: number;
   firstRowIndexByTarget: Map<string, number>;
   isOutputVirtualized: boolean;
@@ -86,6 +87,7 @@ interface UseOutputNavigationInput {
 
 export function useOutputNavigation({
   autoscrollEnabledRef,
+  anchorRowIndexByTarget,
   finalizeSettlingDelayMs,
   firstRowIndexByTarget,
   isOutputVirtualized,
@@ -380,7 +382,9 @@ export function useOutputNavigation({
         options?: OutputNavigationOptions
       ) => {
         const targetKey = `${target.kind}:${target.index}`;
-        const firstRowIndex = firstRowIndexByTarget.get(targetKey);
+        const firstRowIndex = (
+          anchorRowIndexByTarget ?? firstRowIndexByTarget
+        ).get(targetKey);
         if (firstRowIndex === undefined) {
           return;
         }
@@ -412,6 +416,7 @@ export function useOutputNavigation({
     };
   }, [
     autoscrollEnabledRef,
+    anchorRowIndexByTarget,
     finalizePendingNavigation,
     firstRowIndexByTarget,
     isOutputVirtualized,

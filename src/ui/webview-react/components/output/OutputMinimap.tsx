@@ -54,10 +54,15 @@ export interface MinimapStep {
   kind: FinalStepPhase;
   stepIndex: number;
   firstMessageIndex: number;
+  firstActivityRowIndex?: number;
+  latestActivityRowIndex?: number;
+  firstActivityScrollFraction?: number;
+  latestActivityScrollFraction?: number;
   /** Real pixel fraction (0–1): offsetTop of the step anchor / shared content height */
   scrollFraction: number;
   label: string;
   hidden: boolean;
+  selected?: boolean;
   hasHiddenActivity: boolean;
   /**
    * Available undo/redo actions for this step.
@@ -660,28 +665,60 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         const hasUndo = undo !== null;
         const hasRedo = redo !== null;
         const isMixed = hasUndo && hasRedo;
-        const dotColorClass = isMixed
-          ? "text-warning-fg"
-          : hasRedo
-            ? "text-terminal-ansiGreen"
-            : hasUndo
-              ? "text-link-fg"
-              : "text-description-fg";
+        const dotColorClass = step.selected
+          ? "text-focus-border"
+          : isMixed
+            ? "text-warning-fg"
+            : hasRedo
+              ? "text-terminal-ansiGreen"
+              : hasUndo
+                ? "text-link-fg"
+                : "text-description-fg";
+        const activityMarkerClass = step.selected
+          ? "bg-focus-border"
+          : "bg-output-streaming";
 
         return (
-          // Outer row: anchored to the right edge of the rail, grows leftward.
-          // The popup + dot are flex siblings so the hover zone covers both
-          // continuously — moving from dot to popup never leaves the container.
-          <div
-            key={step.key}
-            role="group"
-            aria-label={`Step ${step.label}`}
-            className={`group absolute right-0 flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
-            style={{
-              top: topStyle,
-              transform: "translateY(-50%)",
-            }}
-          >
+          <React.Fragment key={step.key}>
+            {step.firstActivityScrollFraction !== undefined &&
+              step.latestActivityScrollFraction !== undefined &&
+              step.firstActivityScrollFraction !==
+                step.latestActivityScrollFraction && (
+                <span
+                  data-minimap-activity-marker="first"
+                  className={`pointer-events-none absolute right-0 h-1 w-1 rounded-full ${activityMarkerClass}`}
+                  style={{
+                    top: `${step.firstActivityScrollFraction * 100}%`,
+                    transform: "translate(0.5px, -50%)",
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            {step.latestActivityScrollFraction !== undefined &&
+              step.latestActivityScrollFraction !==
+                step.firstActivityScrollFraction && (
+                <span
+                  data-minimap-activity-marker="latest"
+                  className={`pointer-events-none absolute right-0 h-1.5 w-1.5 rounded-full ${activityMarkerClass}`}
+                  style={{
+                    top: `${step.latestActivityScrollFraction * 100}%`,
+                    transform: "translate(0.5px, -50%)",
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            {/* Outer row: anchored to the right edge of the rail, grows leftward.
+                The popup + dot are flex siblings so the hover zone covers both
+                continuously — moving from dot to popup never leaves the container. */}
+            <div
+              role="group"
+              aria-label={`Step ${step.label}`}
+              className={`group absolute right-0 flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
+              style={{
+                top: topStyle,
+                transform: "translateY(-50%)",
+              }}
+            >
             {/* Speech-bubble popup — visible on hover (mouse) or when pinned open (touch/click) */}
             <div
               className={`flex items-stretch mr-[3px] ${isPinned ? "" : "hidden group-hover:flex group-focus-within:flex"}`}
@@ -797,7 +834,8 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 aria-hidden="true"
               />
             )}
-          </div>
+            </div>
+          </React.Fragment>
         );
       })}
     </div>

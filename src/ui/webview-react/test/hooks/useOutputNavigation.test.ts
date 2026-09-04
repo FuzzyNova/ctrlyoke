@@ -333,4 +333,75 @@ describe("useOutputNavigation", () => {
       behavior: "auto",
     });
   });
+
+  it("uses the one-per-target anchor when activity rows are interleaved", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 1 } as const;
+    const scrollElement = document.createElement("div");
+    const outputRef = { current: scrollElement };
+    const rowVirtualizer = {
+      scrollToIndex: vi.fn(),
+      scrollToOffset: vi.fn(),
+    };
+    const pendingNavigationRef = { current: null };
+
+    const { result } = renderHook(() =>
+      useOutputNavigation({
+        anchorRowIndexByTarget: new Map([["queue:1", 0]]),
+        autoscrollEnabledRef: { current: false },
+        finalizeSettlingDelayMs: 1000,
+        firstRowIndexByTarget: new Map([["queue:1", 2]]),
+        isOutputVirtualized: true,
+        isProgrammaticScrollRef: { current: false },
+        lastScrollTopRef: { current: null },
+        maxAlignmentAttempts: 8,
+        maxStabilizationMs: 1000,
+        measurementVersion: 0,
+        measurementVersionRef: { current: 0 },
+        navigationFrameRef: { current: null },
+        outputRef,
+        pendingNavigationRef: pendingNavigationRef as never,
+        postNavSettlingRef: { current: false },
+        postNavSettlingTimerRef: { current: null },
+        rowLayout: {
+          rowSizesByKey: new Map(),
+          rowStartsByIndex: [0, 40, 80],
+          totalSize: 120,
+        },
+        rowVirtualizer,
+        rows: [
+          {
+            key: "queue:1:anchor",
+            rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+            target,
+            estimateSize: 1,
+          },
+          {
+            key: "queue:0:activity",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            estimateSize: 40,
+          },
+          {
+            key: "queue:1:latest-activity",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target,
+            estimateSize: 40,
+          },
+        ],
+        setCurrentScrollTarget: vi.fn(),
+      })
+    );
+
+    act(() => {
+      result.current.navigationController.scrollToTarget(target, {
+        behavior: "smooth",
+        align: "start",
+      });
+    });
+
+    expect(rowVirtualizer.scrollToIndex).toHaveBeenCalledWith(0, {
+      align: "start",
+      behavior: "auto",
+    });
+  });
 });

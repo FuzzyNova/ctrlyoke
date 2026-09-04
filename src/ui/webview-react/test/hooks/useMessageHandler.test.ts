@@ -2837,6 +2837,33 @@ describe("CONTEXT_WINDOW_UPDATE", () => {
     });
   });
 
+  it("stores live context for an active step after the group join index", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+      useWorkflowStore.getState().setCurrentStep(0);
+      useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.RUNNING);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE, {
+        stepIndex: 1,
+        used: 100000,
+        size: 200000,
+      });
+    });
+
+    expect(useWorkflowStore.getState().liveContextWindow[1]).toEqual({
+      used: 100000,
+      size: 200000,
+    });
+  });
+
   it("ignores late live context for a completed step", () => {
     renderHook(() => useMessageHandler());
 

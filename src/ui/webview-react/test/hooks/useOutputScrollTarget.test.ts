@@ -492,4 +492,102 @@ describe("useOutputScrollTarget", () => {
     rerender({ rows: newRows, target: { kind: "bottom" } });
     expect(scrollTargetRef.current).toEqual({ kind: "bottom" });
   });
+
+  it("follows the newest activity row and releases when that row leaves the viewport", () => {
+    const scrollElement = document.createElement("div");
+    const activityRow = document.createElement("div");
+    activityRow.dataset.rowKey = "activity-a1";
+    const viewportRow = document.createElement("div");
+    viewportRow.dataset.rowKey = "viewport-row";
+    scrollElement.append(activityRow);
+    scrollElement.append(viewportRow);
+
+    let rowTop = 40;
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1200 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+    });
+    scrollElement.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 200, height: 200 }) as DOMRect;
+    activityRow.getBoundingClientRect = () =>
+      ({ top: rowTop, bottom: rowTop + 50, height: 50 }) as DOMRect;
+    viewportRow.getBoundingClientRect = () =>
+      ({ top: 20, bottom: 60, height: 40 }) as DOMRect;
+
+    const scrollTargetRef: { current: OutputScrollTarget } = {
+      current: {
+        kind: "latestActivity",
+        rowKey: "activity-a1",
+        viewportOffsetPx: 0,
+      },
+    };
+    const autoscrollEnabledRef = { current: true };
+    const setOutputScrollTarget = vi.fn();
+    const { result } = renderHook(() =>
+      useOutputScrollTarget({
+        applyScrollTargetRef: {
+          current: () => ({ resolved: false, appliedDelta: 0 }),
+        },
+        autoscrollEnabledRef,
+        bottomThresholdPx: 40,
+        commitMaxRetries: 2,
+        commitScrollTargetFromViewportRef: { current: () => undefined },
+        defaultTarget: { kind: "bottom" },
+        isLatestActivityFollowEnabled: true,
+        isProgrammaticScrollRef: { current: false },
+        lastProgrammaticScrollTopRef: { current: null },
+        lastScrollEventAtRef: { current: null },
+        lastScrollTopRef: { current: null },
+        lastUserScrollInputAtRef: { current: null },
+        latestActivityRowKey: "activity-a1",
+        layoutApplyTrigger: "initial",
+        outputOverscanRef: { current: 6 },
+        outputRef: { current: scrollElement },
+        pendingNavigationRef: { current: null },
+        restoreTrigger: "workflow",
+        rowLayout: {
+          rowStartsByKey: new Map([["activity-a1", 100]]),
+          totalSize: 1200,
+        },
+        rows: [
+          {
+            key: "activity-a1",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target: { kind: "queue", index: 0 },
+          },
+          {
+            key: "viewport-row",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+            target: { kind: "queue", index: 0 },
+          },
+        ],
+        rowsRef: { current: [{ key: "activity-a1" }, { key: "viewport-row" }] },
+        rowVirtualizer: { measurementsCache: [] },
+        savedOutputScrollTarget: scrollTargetRef.current,
+        scrollTargetRef,
+        setOutputScrollTarget,
+        userScrollInputGraceMs: 200,
+        workflowScrollTargetId: "workflow",
+      })
+    );
+
+    act(() => {
+      result.current.commitScrollTargetFromViewport("user-scroll-settled");
+    });
+    expect(autoscrollEnabledRef.current).toBe(true);
+    expect(setOutputScrollTarget).not.toHaveBeenCalled();
+
+    rowTop = -300;
+    act(() => {
+      result.current.commitScrollTargetFromViewport("user-scroll-settled");
+    });
+
+    expect(autoscrollEnabledRef.current).toBe(false);
+    expect(setOutputScrollTarget).toHaveBeenLastCalledWith("workflow", {
+      kind: "row",
+      rowKey: "viewport-row",
+      viewportOffsetPx: 20,
+    });
+  });
 });
