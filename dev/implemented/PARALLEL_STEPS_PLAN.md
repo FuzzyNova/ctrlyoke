@@ -1104,6 +1104,13 @@ step; repeat once with one member set to `enabled: false` and once with
 
 ### Manual verification results
 
+A post-implementation orchestration review found and fixed one defect: the private
+`shiftForInsert` helper in `src/core/ParallelGroupTopology.ts` shifted later group ranges
+by a hard-coded `1` regardless of how many steps were spliced in, so a multi-step insert
+before a group (MCP `ctrlyoke_append_queue` with `position: next`, or a clipboard topology
+paste) left that group pointing at the wrong members. It now shifts by the inserted step
+count, with regression coverage in `src/test/unit/ParallelGroupTopology.test.ts`.
+
 The repository gates passed: `npm run typecheck`, `npm run lint`, and `npm test` (the
 full suite was rerun with the malformed inherited `GIT_CONFIG_VALUE_2` environment entry
 removed). The bundled-template parser covers the new Parallel Research template, and

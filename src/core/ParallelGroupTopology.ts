@@ -161,16 +161,23 @@ export function resolveParallelGroupInsertIndex(
     : containing.endIndex + 1;
 }
 
+/**
+ * Shift group ranges that sit after an insertion point. `insertedCount` is the
+ * number of steps spliced in, not 1: multi-step inserts (MCP queue appends,
+ * clipboard topology pastes) would otherwise leave every later group pointing
+ * at the wrong members.
+ */
 function shiftForInsert(
   groups: ParallelGroupDefinition[],
-  insertIndex: number
+  insertIndex: number,
+  insertedCount: number
 ): ParallelGroupDefinition[] {
   return groups.map((group) =>
     insertIndex <= group.startIndex
       ? {
           ...group,
-          startIndex: group.startIndex + 1,
-          endIndex: group.endIndex + 1,
+          startIndex: group.startIndex + insertedCount,
+          endIndex: group.endIndex + insertedCount,
         }
       : { ...group }
   );
@@ -199,7 +206,11 @@ export function insertParallelGroupSteps(
   );
   const result = {
     steps: [...normalized.steps],
-    parallelGroups: shiftForInsert(normalized.parallelGroups, insertIndex),
+    parallelGroups: shiftForInsert(
+      normalized.parallelGroups,
+      insertIndex,
+      steps.length
+    ),
   };
   result.steps.splice(insertIndex, 0, ...steps);
   validateParallelGroupTopology(result);
@@ -222,7 +233,11 @@ export function insertParallelGroupTopology(
   const result: ParallelGroupTopology = {
     steps: [...normalized.steps],
     parallelGroups: [
-      ...shiftForInsert(normalized.parallelGroups, insertIndex),
+      ...shiftForInsert(
+        normalized.parallelGroups,
+        insertIndex,
+        incomingNormalized.steps.length
+      ),
       ...incomingNormalized.parallelGroups.map((group) => ({
         ...group,
         startIndex: group.startIndex + insertIndex,

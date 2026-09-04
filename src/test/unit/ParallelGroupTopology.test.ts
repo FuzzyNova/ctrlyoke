@@ -4,6 +4,7 @@ import { getEffectiveParallelGroupWidth } from "../../types/DashboardConstants";
 import {
   groupParallelGroupSteps,
   insertParallelGroupStep,
+  insertParallelGroupSteps,
   insertParallelGroupTopology,
   normalizeParallelGroupTopology,
   reorderParallelGroupSteps,
@@ -150,6 +151,64 @@ suite("ParallelGroupTopology", () => {
       const result = insertParallelGroupStep(input, 0, step("x"));
       assert.strictEqual(ranges(result), "g1:2-4");
       assert.strictEqual(ranges(input), "g1:1-3");
+    });
+
+    test("shifts later groups by the number of inserted steps", () => {
+      const result = insertParallelGroupSteps(topology(), 0, [
+        step("x"),
+        step("y"),
+        step("z"),
+      ]);
+      assert.deepStrictEqual(names(result), [
+        "x",
+        "y",
+        "z",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+      ]);
+      assert.strictEqual(ranges(result), "g1:4-6");
+    });
+
+    test("shifts a group when several steps land directly before it", () => {
+      const result = insertParallelGroupSteps(topology(), 1, [
+        step("x"),
+        step("y"),
+      ]);
+      assert.deepStrictEqual(names(result), [
+        "a",
+        "x",
+        "y",
+        "b",
+        "c",
+        "d",
+        "e",
+      ]);
+      assert.strictEqual(ranges(result), "g1:3-5");
+    });
+
+    test("shifts later groups by the incoming step count when pasting a topology", () => {
+      const result = insertParallelGroupTopology(topology(), 0, {
+        steps: [step("x"), step("y")],
+        parallelGroups: [
+          { id: "g2", startIndex: 0, endIndex: 1, failFast: false },
+        ],
+      });
+      assert.deepStrictEqual(names(result), [
+        "x",
+        "y",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+      ]);
+      assert.deepStrictEqual(result.parallelGroups, [
+        { id: "g2", startIndex: 0, endIndex: 1, failFast: false },
+        { id: "g1", startIndex: 3, endIndex: 5, failFast: true },
+      ]);
     });
 
     test("inserts a grouped tail without reversing its order", () => {
