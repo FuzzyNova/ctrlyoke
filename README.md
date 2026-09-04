@@ -1,6 +1,6 @@
 # ctrlyoke
 
-ctrlyoke is a VS Code extension that automates AI coding assistants through structured YAML/JSON/Markdown workflows. Define multi-step prompt sequences, execute them against any supported harness, and let the AI continue working unattended.
+ctrlyoke is a VS Code extension and workflow engine for AI coding CLIs — Claude Code, Codex, Copilot CLI, OpenCode, Qwen Code, and Antigravity. Prompt, steer, automate, and revisit sessions with any supported harness: send a single prompt, or define a structured YAML/JSON/Markdown workflow and let the AI continue working unattended.
 
 ---
 
@@ -8,7 +8,7 @@ ctrlyoke is a VS Code extension that automates AI coding assistants through stru
 
 - **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
 - **Script-based validation** — attach an end condition script to any prompt; if the script returns the expected value the step passes, otherwise the AI retries with a configurable retry prompt
-- **Harness-agnostic** — switch between seven AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
+- **Harness-agnostic** — switch between six AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
 - **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to give the AI MCP tools (`ctrlyoke_append_queue`, `ctrlyoke_queue_status`) so it can extend the workflow queue autonomously
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
 - **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
@@ -18,8 +18,8 @@ ctrlyoke is a VS Code extension that automates AI coding assistants through stru
 
 ## Requirements
 
-- VS Code 1.104.0 or higher
-- Node.js 18 or higher
+- VS Code 1.106.0 or higher
+- Node.js 22.12.0 or higher
 - At least one supported harness installed and authenticated
 
 ---

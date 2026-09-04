@@ -1,7 +1,7 @@
 {
   "name": "ctrlyoke",
   "displayName": "ctrlyoke",
-  "description": "Run multi-step AI coding workflows across 6 harnesses (Copilot CLI, Claude, Codex, Antigravity, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
+  "description": "One workflow engine for every AI coding CLI. Prompt, steer, automate, and revisit sessions across Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity — one message or a whole validated workflow.",
   "version": "0.1.0",
   "publisher": "fuzzynova",
   "license": "SEE LICENSE IN LICENSE.md",

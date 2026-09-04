@@ -5,18 +5,24 @@
 
 ## Positioning in one line
 
-**Category:** Multi-harness AI coding control and workflow automation.  
+**Category:** Workflow engine and control surface for AI coding CLIs, delivered as a VS Code extension.  
 **Core promise:** Keep your prompting habits, reusable toolkit, controls, and history when you switch harnesses.
 
 ### Recommended tagline
 
-> **One interface for every AI coding harness.**
+> **One workflow engine for every AI coding CLI.**
 
 ### Recommended supporting line
 
-> The better way to prompt, steer, automate, and revisit work across Claude Code, Codex, Copilot CLI, and more.
+> Prompt, steer, automate, and revisit every AI coding session — one message or a whole workflow.
 
-This leads with ctrlyoke's broadest differentiator in the clearest possible language: it is not merely a workflow file runner. It is a consistent control surface around the developer's preferred AI coding harnesses. **Steer** keeps the control-yoke character in the supporting copy without asking the audience to decode an aviation metaphor before they understand the product. Workflow automation is one of ctrlyoke's strongest capabilities, but not the limit of the product.
+### VS Code identity
+
+The tagline and supporting line intentionally do not spell out "VS Code extension" — that fact is carried by a small **VS Code Extension** badge placed directly above the hero headline (see `landing/src/pages/index.astro`), using the official Microsoft VS Code icon (`landing/public/icons/vscode.svg`, the "stable" blue mark; `vscode-alt.svg` is the white variant for low-contrast backgrounds — see the branding guidelines at code.visualstudio.com/brand before reusing these elsewhere). Keeping that fact in a badge instead of the headline/subhead leaves both free to carry the harness-CLI-scope and single-prompt-vs-workflow distinctions instead. Any marketing surface that cannot place a badge next to the headline (README, Marketplace description, social copy) should state "VS Code extension" explicitly in its own first line instead of assuming the reader already knows.
+
+This tagline replaces the older **"One interface for every AI coding harness."** That phrasing overclaimed on two axes: "every" harness (ctrlyoke supports six, all CLI-based, by design) and "interface," which undersold that ctrlyoke is a genuine workflow engine, not just a chrome layer. "CLI" replaces "harness" in the headline specifically because ctrlyoke's supported harnesses are all CLIs by design (no GUI-based harness like the removed copilot-chat is supported or planned as a near-term default) — see the guardrail on **CLI vs. harness** below for when to use which word.
+
+The supporting line replaces **"The better way to prompt, steer, automate, and revisit work across Claude Code, Codex, Copilot CLI, and more."** The new version keeps the same four-verb rhythm (prompt/steer/automate/revisit) but drops naming specific CLIs — the harness strip lower on the homepage already shows all six — and adds **"one message or a whole workflow"** to explicitly head off the impression that ctrlyoke is only useful for pre-planned, multi-step automation. Most real usage is a single conversational prompt; the workflow engine is there when a sequence is worth repeating, not a prerequisite for everyday use.
 
 ### Useful alternate taglines
 
@@ -27,17 +33,17 @@ This leads with ctrlyoke's broadest differentiator in the clearest possible lang
 - **One yoke for piloting every AI harness.**
 - **Automate your favorite AI coding harness.**
 
-**Switch harnesses, not habits** is the preferred campaign line and the strongest alternative to the main tagline. **Take control of every AI coding harness** is the preferred brand-forward option: it evokes the control-yoke name without becoming too literal. The two pilot/yoke options are useful for playful brand moments, but both require more explanation and should not lead general product positioning. **Automate your favorite AI coding harness** is direct and searchable, but narrower than the product; it works best as campaign copy or the heading of a workflow-focused section.
+**Switch harnesses, not habits** is the preferred campaign line and the strongest alternative to the main tagline. **Take control of every AI coding harness** is the preferred brand-forward option: it evokes the control-yoke name without becoming too literal. The two pilot/yoke options are useful for playful brand moments, but both require more explanation and should not lead general product positioning. **Automate your favorite AI coding harness** is direct and searchable, but narrower than the product; it works best as campaign copy or the heading of a workflow-focused section. These alternates still use "harness" rather than "CLI" — that's fine for campaign moments and body copy per the guardrail below; only the primary hero tagline needed the more literal, scope-accurate word.
 
 ## Elevator pitch
 
 ### Short version
 
-ctrlyoke is a unified control surface for AI coding harnesses. Use one prompt language, one full-featured editor, one output view, and one set of controls whether the work runs through Claude Code, Codex, Copilot CLI, or another supported harness.
+ctrlyoke is a VS Code extension and workflow engine for AI coding CLIs. Use one prompt language, one full-featured editor, one output view, and one set of controls whether the work runs through Claude Code, Codex, Copilot CLI, or another supported harness — for a single conversational prompt or a validated multi-step workflow.
 
 ### Full version
 
-ctrlyoke gives developers one place to prompt, steer, automate, and revisit work across their AI coding harnesses. It handles harness-specific invocation, session resumption, permissions, MCP servers, hooks, agents, and skills behind a consistent interface. Its prompt editor understands project files, symbols, selections, images, Git changes, prior results, and the size of the expanded context; its dashboard turns harness-specific event streams into a unified, navigable history with diffs and granular undo/redo. Start with one prompt, visually build a validated multi-step workflow, mix harnesses within the same run, take it to CI, or inspect the workspace and steer the live terminal from a phone.
+ctrlyoke is a VS Code extension that gives developers one place to prompt, steer, automate, and revisit work across their AI coding CLIs. It handles harness-specific invocation, session resumption, permissions, MCP servers, hooks, agents, and skills behind a consistent interface — configure your toolkit once and it works across every supported harness instead of being copied by hand into each harness's own config directory. Its prompt editor understands project files, symbols, selections, images, Git changes, prior results, and the size of the expanded context; its dashboard turns harness-specific event streams into a unified, navigable history with diffs and granular undo/redo. Start with one prompt, visually build a validated multi-step workflow, mix harnesses within the same run, take it to CI, or inspect the workspace and steer the live terminal from a phone.
 
 ## Messaging hierarchy
 
@@ -285,17 +291,18 @@ These are important supporting benefits even when they do not lead the page:
 
 ## Suggested homepage narrative
 
-1. **Hero:** One interface for every AI coding harness.
-2. **Subhead:** The better way to prompt, steer, automate, and revisit work across supported harnesses.
-3. **Harness strip:** Show the supported harnesses early as proof of breadth.
-4. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
-5. **Everyday use:** Demonstrate a single prompt with file, selection, image, Git, and prior-context references plus the expanded-context token estimate.
-6. **Visual authoring:** Build and rearrange a workflow in the dashboard, then reveal the clean YAML file underneath.
-7. **Native terminal, structured control:** Show the real CLI terminal beside the normalized output timeline.
-8. **Control and safety:** Show the output minimap, diffs, history search/replay, and undo/redo.
-9. **Automation:** Introduce mixed prompt/script steps, per-step harness choice, parallel workflows, validation, retries, and dynamic final-step loops.
-10. **Anywhere:** Show the CLI/CI path and the mobile browser's workspace, source control, output, and terminal surfaces.
-11. **Closing CTA:** Start with one prompt. Build visually. Automate when you are ready.
+1. **Badge:** VS Code Extension, placed directly above the headline.
+2. **Hero:** One workflow engine for every AI coding CLI.
+3. **Subhead:** Prompt, steer, automate, and revisit every AI coding session — one message or a whole workflow.
+4. **Harness strip:** Show the supported harnesses early as proof of breadth.
+5. **Three primary promises:** One prompt language; one rich output view; one reusable toolkit.
+6. **Everyday use:** Demonstrate a single prompt with file, selection, image, Git, and prior-context references plus the expanded-context token estimate.
+7. **Visual authoring:** Build and rearrange a workflow in the dashboard, then reveal the clean YAML file underneath.
+8. **Native terminal, structured control:** Show the real CLI terminal beside the normalized output timeline.
+9. **Control and safety:** Show the output minimap, diffs, history search/replay, and undo/redo.
+10. **Automation:** Introduce mixed prompt/script steps, per-step harness choice, parallel workflows, validation, retries, and dynamic final-step loops.
+11. **Anywhere:** Show the CLI/CI path and the mobile browser's workspace, source control, output, and terminal surfaces.
+12. **Closing CTA:** Start with one prompt. Build visually. Automate when you are ready.
 
 This order corrects the impression that users must first become YAML workflow authors before ctrlyoke becomes useful.
 
@@ -311,6 +318,7 @@ This order corrects the impression that users must first become YAML workflow au
 - Qualify remote claims with **“when hosted access is configured.”** Network reachability depends on the selected bind address, TLS, and the user's LAN or remote-access setup.
 - Avoid unverified exclusivity claims such as **“the only tool”** or **“no other VS Code extension.”** The spell-check joke can keep its personality without making an absolute competitive claim.
 - Use **harness** for the AI execution strategy. Reserve **provider** for VS Code API concepts.
+- **CLI vs. harness:** Use **"AI coding CLI"** in the primary hero tagline and other headline-scale copy where scope precision matters most — it makes the CLI-only, no-GUI-harness boundary explicit without extra qualification. Use **"harness"** everywhere else (body copy, feature descriptions, campaign lines) — it is the established, more specific product term and is still accurate since every current harness is a CLI. Do not treat this as a wholesale terminology swap; only the tagline changed.
 
 ## Product evidence map
 
