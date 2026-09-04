@@ -1,3 +1,6 @@
+import { ensureMinFsThreadpoolSize } from "./utils/ThreadPoolBootstrap";
+ensureMinFsThreadpoolSize(64);
+
 import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";

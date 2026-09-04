@@ -60,6 +60,7 @@ import {
   lookupRunSummary,
   stampRunFiles,
   storeRunSummary,
+  type RunFilesStamp,
 } from "./RunSummaryCache";
 
 /** The definitionRevision that produced an attempt, plus the snapshot to commit before its first output. */
@@ -1029,27 +1030,74 @@ export class OutputHistoryManager {
    * run be active" and must not narrow as a side effect of that. Both come from
    * the same pair of file reads, so carrying the extra field is free and keeps
    * `RunSummary` — a webview-facing contract — free of protection plumbing.
+   *
+   * Stamp validation (two `fs.stat` calls per run) is deliberately **not**
+   * subject to `RUN_SUMMARY_READ_BATCH_SIZE`: unlike a manifest/working-file
+   * read, a stat holds no file handle open across an await, so there is no
+   * EMFILE risk in validating every run's cache entry at once. Gating it behind
+   * the same 32-wide batch as full reads serialized a warm-cache lineage into
+   * dozens of sequential round trips for no reason — every run paid that cost
+   * on every refresh even when nothing on disk had changed. Only the runs that
+   * actually miss the cache (typically just the newest, still-executing one)
+   * go through the EMFILE-safe batch below.
    */
   private async getRunSummaryRecords(
     workflowKey: WorkflowKey
   ): Promise<RunSummaryRecord[]> {
     const runs = await this.getRunsForWorkflow(workflowKey);
-    const records: Array<RunSummaryRecord | null> = [];
+
+    const stamped = await Promise.all(
+      runs.map(async (runRef) => {
+        const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
+        const runFilePath = WorkflowPaths.runFilePath(
+          this._workspaceFolderPath,
+          workflowKey,
+          runRef
+        );
+        const runDirectoryPath = WorkflowPaths.runDir(
+          this._workspaceFolderPath,
+          workflowKey,
+          runRef
+        );
+        // Stamp before reading — see `stampRunFiles`. The executing run stamps
+        // differently on every read and so is a permanent miss, which is
+        // correct: the cache is here for the runs that have stopped changing.
+        const stamp = await stampRunFiles(historyFilePath, runFilePath);
+        const cached = lookupRunSummary(runDirectoryPath, stamp);
+        return { runRef, historyFilePath, runFilePath, stamp, cached };
+      })
+    );
+
+    const misses = stamped.filter((entry) => !entry.cached);
+    const missedRecords = new Map<RunRef, RunSummaryRecord | null>();
     for (
       let startIndex = 0;
-      startIndex < runs.length;
+      startIndex < misses.length;
       startIndex += RUN_SUMMARY_READ_BATCH_SIZE
     ) {
-      const batch = runs.slice(
+      const batch = misses.slice(
         startIndex,
         startIndex + RUN_SUMMARY_READ_BATCH_SIZE
       );
-      records.push(
-        ...(await Promise.all(
-          batch.map((runRef) => this.readRunSummaryRecord(workflowKey, runRef))
-        ))
+      const batchResults = await Promise.all(
+        batch.map((entry) =>
+          this.readRunSummaryRecord(
+            workflowKey,
+            entry.runRef,
+            entry.historyFilePath,
+            entry.runFilePath,
+            entry.stamp
+          )
+        )
+      );
+      batch.forEach((entry, index) =>
+        missedRecords.set(entry.runRef, batchResults[index])
       );
     }
+
+    const records = stamped.map(
+      (entry) => entry.cached ?? missedRecords.get(entry.runRef) ?? null
+    );
     return records.filter(
       (record): record is RunSummaryRecord => record !== null
     );
@@ -1057,28 +1105,16 @@ export class OutputHistoryManager {
 
   private async readRunSummaryRecord(
     workflowKey: WorkflowKey,
-    runRef: RunRef
+    runRef: RunRef,
+    historyFilePath: string,
+    runFilePath: string,
+    stamp: RunFilesStamp
   ): Promise<RunSummaryRecord | null> {
-    const historyFilePath = this.getHistoryFilePath(workflowKey, runRef);
-    const runFilePath = WorkflowPaths.runFilePath(
-      this._workspaceFolderPath,
-      workflowKey,
-      runRef
-    );
     const runDirectoryPath = WorkflowPaths.runDir(
       this._workspaceFolderPath,
       workflowKey,
       runRef
     );
-
-    // Stamp before reading — see `stampRunFiles`. The executing run stamps
-    // differently on every read and so is a permanent miss, which is correct:
-    // the cache is here for the runs that have stopped changing.
-    const stamp = await stampRunFiles(historyFilePath, runFilePath);
-    const cached = lookupRunSummary(runDirectoryPath, stamp);
-    if (cached) {
-      return cached;
-    }
 
     try {
       const manifest =
