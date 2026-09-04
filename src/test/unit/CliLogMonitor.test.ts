@@ -458,6 +458,175 @@ suite("CliLogMonitor", () => {
     });
   });
 
+  test("completes once a mid-turn-consumed Claude notification's turn ends, even when no second Stop ever arrives", async () => {
+    // Regression for a real production hang: a background Bash task's
+    // <task-notification> can be consumed *mid-turn* (delivered as a
+    // `queued_command` attachment while the model is still actively working,
+    // not between turns as a `user` message) — see the Claude gotcha in
+    // harness-cli-providers.instructions.md. When that happens, the turn that
+    // clears `hasPendingBackgroundWork()` is the *same* turn already in
+    // progress, so Claude never fires a genuinely new, second Stop hook for
+    // it. The old hold loop only re-checked `hasPendingBackgroundWork()`
+    // after a fresh Stop-hook file, so it hung until the 10-minute idle
+    // backstop even though the still-active log watcher had already observed
+    // the closing `end_turn` event. This replays that shape against the real
+    // file-tailing ClaudeLogParser (no `readNewLines`/`watchLogFile`
+    // overrides), with the hold's own notification wait deliberately
+    // rigged to *never* resolve, to prove live log tailing alone is now
+    // enough to release the hold.
+    await withZeroDrainDeadline(async () => {
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-claude-monitor-")
+      );
+      const logPath = path.join(tempDir, "session.jsonl");
+
+      try {
+        const writeLine = (event: Record<string, unknown>) =>
+          fs.appendFileSync(logPath, JSON.stringify(event) + "\n", "utf8");
+
+        writeLine({
+          type: "assistant",
+          timestamp: "2026-01-01T00:00:00.000Z",
+          sessionId: "sess-mid-turn",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_bg",
+                name: "Bash",
+                input: { run_in_background: true },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        });
+
+        const parser = new ClaudeLogParser();
+        let notificationCallCount = 0;
+        let resolveFirstStop: (() => void) | undefined;
+        const completion = {
+          completed: true as const,
+          kind: "completion" as const,
+          data: {},
+        };
+
+        const monitor = new CliLogMonitor({
+          logParser: parser,
+          notificationMonitor: createNotificationMonitor({
+            monitorForCompletion: async () => {
+              notificationCallCount++;
+              if (notificationCallCount === 1) {
+                return await new Promise<typeof completion>((resolve) => {
+                  resolveFirstStop = () => resolve(completion);
+                });
+              }
+              // Every later call simulates "no further Stop hook ever
+              // arrives" — the exact condition that used to hang the step.
+              return await new Promise(() => {});
+            },
+          }),
+          runtimeState: {
+            getWorkspaceRoot: () => tempDir,
+            isCancelling: () => false,
+          },
+          hostCallbacks: {
+            onStreamingEvents: () => undefined,
+            onResponseComplete: () => undefined,
+            logResponse: () => undefined,
+          },
+        });
+
+        const monitorPromise = monitor.monitor(
+          logPath,
+          "sess-mid-turn",
+          new Date(0),
+          "claude-opus-5"
+        );
+
+        for (let attempt = 0; attempt < 100 && !resolveFirstStop; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(resolveFirstStop, "the first Stop callback was not captured");
+
+        // First (intermediate) Stop: the background task is still genuinely
+        // running.
+        resolveFirstStop!();
+
+        for (
+          let attempt = 0;
+          attempt < 100 && notificationCallCount < 2;
+          attempt++
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.strictEqual(
+          notificationCallCount,
+          2,
+          "expected the hold loop to start waiting on a (never-arriving) second Stop"
+        );
+
+        // The task finishes and its notification is consumed mid-turn (a
+        // `queued_command` attachment, not a between-turns `user` message),
+        // then the model keeps working before the turn genuinely ends —
+        // mirroring the real capture exactly. No second Stop-hook file will
+        // ever be written for this turn.
+        writeLine({
+          type: "attachment",
+          timestamp: "2026-01-01T00:00:05.000Z",
+          attachment: {
+            type: "queued_command",
+            commandMode: "task-notification",
+            prompt:
+              "<task-notification>\n<tool-use-id>toolu_bg</tool-use-id>\n<status>completed</status>\n</task-notification>",
+          },
+        });
+        writeLine({
+          type: "assistant",
+          timestamp: "2026-01-01T00:00:06.000Z",
+          message: {
+            content: [
+              { type: "tool_use", id: "toolu_more", name: "Bash", input: {} },
+            ],
+            stop_reason: "tool_use",
+          },
+        });
+        writeLine({
+          type: "user",
+          timestamp: "2026-01-01T00:00:06.500Z",
+          message: {
+            content: [
+              { type: "tool_result", tool_use_id: "toolu_more", content: "ok" },
+            ],
+          },
+        });
+        writeLine({
+          type: "assistant",
+          timestamp: "2026-01-01T00:00:07.000Z",
+          message: {
+            content: [{ type: "text", text: "All good." }],
+            stop_reason: "end_turn",
+          },
+        });
+
+        // Give the real fs.watch a moment to deliver the appended lines live,
+        // same as the production log watcher does during the hold. Unlike
+        // the second Stop-hook wait above, nothing else will ever unblock
+        // this — a regression would hang here until the suite's test
+        // timeout.
+        const result = await monitorPromise;
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.cliResult?.response, "All good.");
+        assert.ok(
+          notificationCallCount >= 2,
+          "expected the hold to have started waiting on a further Stop"
+        );
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   test("completes on the second real Copilot Stop with no stale-stop guard, even when the resumed turn closes live between Stops", async () => {
     // Regression for a real production hang: a real capture (two concurrent
     // `powershell mode: async, detach: true` shells) showed an early Stop

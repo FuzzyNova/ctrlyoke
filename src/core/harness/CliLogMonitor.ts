@@ -415,6 +415,10 @@ export class CliLogMonitor {
       // abandoned task, a long-lived dev server) can't hold a workflow forever.
       // ──────────────────────────────────────────────────────
       let holdingForBackgroundWork = false;
+      // Resolver for "another log event was just processed while holding" —
+      // see the race inside `runBackgroundWorkHold` for why this exists
+      // alongside the notification-file wait.
+      let onHoldWake: (() => void) | undefined;
 
       const runBackgroundWorkHold = async (): Promise<void> => {
         holdingForBackgroundWork = true;
@@ -451,8 +455,17 @@ export class CliLogMonitor {
             ? (sessionId ?? undefined)
             : undefined;
 
-          const result =
-            await this.deps.notificationMonitor.monitorForCompletion(
+          // Race a further Stop/error notification file against the
+          // still-active log watcher observing new content. A background
+          // task's completion notification can be consumed *mid-turn* with
+          // no intervening Stop (see harness-integrations.instructions.md),
+          // so the turn that actually clears `hasPendingBackgroundWork()` may
+          // never produce a *second* Stop-hook file to wake this loop —
+          // without this race the hold would sit until the idle backstop
+          // even though the watcher (`CliLogEventPump` →
+          // `trackBackgroundWorkState`) already observed the closing event.
+          const notificationResult =
+            this.deps.notificationMonitor.monitorForCompletion(
               { directory: notifyDir, timeoutMs: remaining, pollMs: 100 },
               monitoringSessionId,
               new Date(),
@@ -462,28 +475,42 @@ export class CliLogMonitor {
                 completed
             );
 
-          if (
-            this.deps.notificationMonitor.cleanupNotificationFiles &&
-            sessionId
-          ) {
-            await this.deps.notificationMonitor.cleanupNotificationFiles(
-              sessionId,
-              notifyDir
-            );
-          }
+          const nextLogEvent = new Promise<void>((resolveWake) => {
+            onHoldWake = () => resolveWake();
+          });
 
-          if (!result.completed) {
-            // Timed out, cancelled, or errored mid-hold. Do not loop forever —
-            // release so the normal cancellation/timeout/exit paths (already
-            // in flight if that's what triggered this) or the finalize below
-            // can settle the monitor.
-            break;
+          const winner = await Promise.race([
+            notificationResult.then(
+              (result) => ({ kind: "notification" as const, result })
+            ),
+            nextLogEvent.then(() => ({ kind: "log-event" as const })),
+          ]);
+          onHoldWake = undefined;
+
+          if (winner.kind === "notification") {
+            if (
+              this.deps.notificationMonitor.cleanupNotificationFiles &&
+              sessionId
+            ) {
+              await this.deps.notificationMonitor.cleanupNotificationFiles(
+                sessionId,
+                notifyDir
+              );
+            }
+
+            if (!winner.result.completed) {
+              // Timed out, cancelled, or errored mid-hold. Do not loop
+              // forever — release so the normal cancellation/timeout/exit
+              // paths (already in flight if that's what triggered this) or
+              // the finalize below can settle the monitor.
+              break;
+            }
           }
 
           // Catch up before re-checking, same rationale as handleCompletion's
-          // catch-up read — closes the race between the Stop file appearing
-          // and the still-active fs.watch callback processing the log content
-          // that precedes it.
+          // catch-up read — closes the race between a completion signal
+          // (Stop file or log content) and the still-active fs.watch callback
+          // processing the log content that precedes it.
           try {
             const catchUpEntries = await pump.readNewEntriesSince(
               logPath,
@@ -550,6 +577,14 @@ export class CliLogMonitor {
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
         pump.processEvent(event);
+
+        // Wake a background-work hold as soon as this event's effect on
+        // `trackBackgroundWorkState` is applied, so the hold doesn't have to
+        // wait for another Stop-hook file that may never arrive — see the
+        // race in `runBackgroundWorkHold`.
+        if (holdingForBackgroundWork) {
+          onHoldWake?.();
+        }
 
         // Check completion via log file — only for harnesses without a notification monitor.
         // When a notification monitor (Stop hook) is active, the hook is authoritative.
