@@ -1025,8 +1025,7 @@ order without corrupting queue state.
 
 ### Stage 4 — Parallel coordinator, preflight, preview, and recovery
 
-**Status: in progress.** Items 1–5 are complete; group snapshots and standalone CLI
-output work remain.
+**Status: complete.** Items 1–7 are complete.
 
 1. **Complete.** `ParallelGroupPreflight` (shared) and its use in
    `ExecutionPreviewService`; preview types, `DryRunModal`, CLI preview rendering.
@@ -1035,10 +1034,10 @@ output work remain.
 3. **Complete.** Fail-fast / fail-after-settle and cancellation draining.
 4. **Complete.** Join-based pause/resume; all-target stop.
 5. **Complete.** Recovery: schedule only non-terminal members on resume.
-6. Group-level before/after workspace snapshots with the `parallelGroupId` marker; hide
-   per-member prompt undo when width > 1.
-7. Standalone CLI: interactive-multiplex rejection; per-target streaming buffers and
-   prefixes; JSON `parallelGroupId`.
+6. **Complete.** Group-level before/after workspace snapshots with the `parallelGroupId`
+   marker; hide per-member prompt undo when width > 1.
+7. **Complete.** Standalone CLI: interactive-multiplex rejection; per-target streaming
+   buffers and prefixes; JSON `parallelGroupId`.
 
 Done when: with the gate temporarily forced open in tests, every case in "Edge Cases"
 that concerns execution passes with fake integrations. The gate stays closed in the build.

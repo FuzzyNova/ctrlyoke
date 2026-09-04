@@ -22,6 +22,7 @@ import {
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
@@ -48,6 +49,7 @@ interface UseOutputRowsModelInput {
   liveOrderedEntries: OrderedHistoryEntry[];
   steps: WorkflowStep[];
   finalStep: WorkflowStep | null;
+  parallelGroups?: readonly ParallelGroupDefinition[];
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -86,6 +88,7 @@ export function useOutputRowsModel({
   liveOrderedEntries,
   steps,
   finalStep,
+  parallelGroups,
   streamingChunks,
   finalStepStreamingChunks,
   isExecutionActive,
@@ -192,6 +195,7 @@ export function useOutputRowsModel({
             allMessages,
             steps,
             finalStep,
+            parallelGroups,
             streamingChunks,
             finalStepStreamingChunks,
             isExecutionActive,
@@ -220,6 +224,7 @@ export function useOutputRowsModel({
       allMessages,
       steps,
       finalStep,
+      parallelGroups,
       streamingChunks,
       finalStepStreamingChunks,
       isExecutionActive,

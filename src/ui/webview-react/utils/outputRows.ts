@@ -13,7 +13,10 @@ import type {
   OutputStatusMessage,
   ToolCall,
 } from "../types/cliEvents";
-import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  ScriptVerdict,
+} from "@root/types/CtrlYokeTypes";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
@@ -306,6 +309,7 @@ export interface BuildOutputRowsInput {
   allMessages: readonly OutputMessage[];
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null | undefined;
+  parallelGroups?: readonly ParallelGroupDefinition[];
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -337,6 +341,22 @@ export interface BuildOutputRowsInput {
   outputContentWidth?: number;
   /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
   collapsedToolOutputLineCount?: number;
+}
+
+function getConcurrentGroupForStep(
+  input: BuildOutputRowsInput,
+  stepIndex: number
+): ParallelGroupDefinition | undefined {
+  const group = input.parallelGroups?.find(
+    (candidate) =>
+      stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
+  );
+  if (!group || group.startIndex === group.endIndex) return undefined;
+  const groupSnapshot =
+    input.isViewingHistory && input.historyOutputs
+      ? input.historyOutputs.promptOutputs[group.startIndex]?.workspaceSnapshot
+      : input.workspaceSnapshots[group.startIndex];
+  return groupSnapshot?.parallelGroupId === group.id ? group : undefined;
 }
 
 interface AttemptGroupAggregate {
@@ -1918,11 +1938,42 @@ export function buildOutputRows(
       lastCliIndexPerStep.get(targetKey) === messageIndex;
     const promptUndoActions =
       input.allowUndoActions && isLastCliForStep && !output.isStreaming
-        ? computePromptUndoActions(
-            allStepOutputs,
-            undoRecord,
-            workspaceSnapshot
-          )
+        ? (() => {
+            const concurrentGroup = getConcurrentGroupForStep(
+              input,
+              target.index
+            );
+            if (concurrentGroup && target.index !== concurrentGroup.startIndex) {
+              return { undo: null, redo: null };
+            }
+            const effectiveSnapshot = concurrentGroup
+              ? input.isViewingHistory && input.historyOutputs
+                ? input.historyOutputs.promptOutputs[
+                    concurrentGroup.startIndex
+                  ]?.workspaceSnapshot
+                : input.workspaceSnapshots[concurrentGroup.startIndex]
+              : workspaceSnapshot;
+            const actions = computePromptUndoActions(
+              allStepOutputs,
+              undoRecord,
+              effectiveSnapshot
+            );
+            if (!concurrentGroup) return actions;
+            return {
+              undo: actions.undo
+                ? {
+                    ...actions.undo,
+                    label: `Undo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
+                  }
+                : null,
+              redo: actions.redo
+                ? {
+                    ...actions.redo,
+                    label: `Redo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
+                  }
+                : null,
+            };
+          })()
         : { undo: null, redo: null };
 
     rows.push({

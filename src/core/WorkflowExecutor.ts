@@ -190,6 +190,16 @@ export interface WorkflowExecutionContext {
     message: string,
     severity: string
   ) => void;
+  onTargetStreamingEvents?: (data: {
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    events: CliEvent[];
+  }) => void;
+  onTargetStreamingChunk?: (data: {
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    chunk: string;
+  }) => void;
   outputHistoryManager?: OutputHistoryManager;
   /** Run-owned redactor populated only with values resolved during execution. */
   secretRedactor?: RunSecretRedactor;
@@ -711,6 +721,19 @@ export class WorkflowExecutor {
       preflight.members.map((member) => [member.stepIndex, member])
     );
     const outcomes = new Map<number, StepExecutionOutcome>();
+    let groupBeforeState: RawWorkspaceState | undefined;
+    if (preflight.effectiveWidth > 1 && snapshotStrategy) {
+      try {
+        groupBeforeState =
+          await context.snapshotService?.captureWorkspaceState(
+            context.executionWorkspace.executionRoot,
+            snapshotStrategy,
+            context.executionWorkspace.namedWorkspaceRoots
+          );
+      } catch (error) {
+        Log.warn("Failed to capture parallel group workspace snapshot:", error);
+      }
+    }
     const pendingIndices: number[] = [];
     for (
       let stepIndex = group.startIndex;
@@ -729,6 +752,17 @@ export class WorkflowExecutor {
         };
         outcomes.set(stepIndex, skipped);
         await this.persistGroupSettlement(skipped, context);
+        if (groupBeforeState && snapshotStrategy) {
+          await this.captureAndEmitSnapshot(
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
+            groupBeforeState,
+            snapshotStrategy,
+            context,
+            group.id
+          ).catch((error) =>
+            Log.warn("Failed to capture parallel group workspace snapshot:", error)
+          );
+        }
       } else {
         pendingIndices.push(stepIndex);
       }
@@ -803,6 +837,17 @@ export class WorkflowExecutor {
       running.delete(stepIndex);
       outcomes.set(stepIndex, outcome);
       await this.persistGroupSettlement(outcome, context);
+      if (groupBeforeState && snapshotStrategy) {
+        await this.captureAndEmitSnapshot(
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
+          groupBeforeState,
+          snapshotStrategy,
+          context,
+          group.id
+        ).catch((error) =>
+          Log.warn("Failed to capture parallel group workspace snapshot:", error)
+        );
+      }
       await context.releaseTargetResources?.(target);
 
       if (
@@ -2015,7 +2060,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     beforeState: RawWorkspaceState,
     strategy: "git" | "filesystem",
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    parallelGroupId?: string
   ): Promise<void> {
     if (!context.snapshotService) {
       return;
@@ -2042,6 +2088,7 @@ export class WorkflowExecutor {
       git: afterState.git,
       repos: context.snapshotService.snapshotRepoInfos(afterState),
       changedFiles,
+      ...(parallelGroupId ? { parallelGroupId } : {}),
     };
 
     snapshot = await context.snapshotService.enrichSnapshotBeforeContent(
@@ -3190,6 +3237,15 @@ export class WorkflowExecutor {
     });
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
+      context.onTargetStreamingChunk?.({
+        target,
+        stepName:
+          promptStep.name?.trim() ||
+          (target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `Step ${target.stepIndex + 1}`
+            : `Final Step Loop ${target.loopIndex + 1}`),
+        chunk,
+      });
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         signedStepIndex !== undefined
@@ -3219,6 +3275,15 @@ export class WorkflowExecutor {
     });
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
+      context.onTargetStreamingEvents?.({
+        target,
+        stepName:
+          promptStep.name?.trim() ||
+          (target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `Step ${target.stepIndex + 1}`
+            : `Final Step Loop ${target.loopIndex + 1}`),
+        events,
+      });
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         signedStepIndex !== undefined

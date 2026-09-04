@@ -4,6 +4,7 @@ import type {
   MinimapStep,
 } from "@components/output/OutputMinimap";
 import type { WorkflowStep } from "@store/workflowStore";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { OutputMessage } from "@utils/outputProjection";
 import {
   estimateOutputDiffBlockHeight,
@@ -47,6 +48,7 @@ interface UseOutputMinimapModelInput {
   allMessages: OutputMessage[];
   allowUndoActions: boolean;
   finalStep: WorkflowStep | null;
+  parallelGroups?: readonly ParallelGroupDefinition[];
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
   firstRowIndexByTarget: Map<string, number>;
   historyOutputs: OutputHistoryView;
@@ -115,6 +117,7 @@ export function useOutputMinimapModel({
   allMessages,
   allowUndoActions,
   finalStep,
+  parallelGroups,
   finalStepWorkspaceSnapshots,
   firstRowIndexByTarget,
   historyOutputs,
@@ -172,6 +175,24 @@ export function useOutputMinimapModel({
           const stepIndex = msgTarget.index;
           const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
           const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
+          const parallelGroup = isFinalStep
+            ? undefined
+            : parallelGroups?.find(
+                (group) =>
+                  stepIndex >= group.startIndex &&
+                  stepIndex <= group.endIndex &&
+                  group.startIndex !== group.endIndex
+              );
+          const groupSnapshot = parallelGroup
+            ? isViewingHistory && historyOutputs
+              ? historyOutputs.promptOutputs[parallelGroup.startIndex]
+                  ?.workspaceSnapshot
+              : workspaceSnapshots[parallelGroup.startIndex]
+            : undefined;
+          const concurrentGroup =
+            parallelGroup?.id === groupSnapshot?.parallelGroupId
+              ? parallelGroup
+              : undefined;
           const label = isFinalStep
             ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
             : getStepName(
@@ -278,6 +299,26 @@ export function useOutputMinimapModel({
             ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
             : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
 
+          if (
+            concurrentGroup &&
+            stepIndex !== concurrentGroup.startIndex
+          ) {
+            return [
+              {
+                key,
+                kind,
+                stepIndex,
+                firstMessageIndex: firstRowIndex,
+                scrollFraction,
+                label,
+                hidden,
+                hasHiddenActivity,
+                undoActions: noActions,
+                diffBlocks,
+              },
+            ];
+          }
+
           let effectiveSnapshot: WorkspaceSnapshot | undefined;
           let effectiveUndoRecord: UndoRecord | undefined;
 
@@ -302,13 +343,15 @@ export function useOutputMinimapModel({
           const actions = computePromptUndoActions(
             stepOutputs,
             effectiveUndoRecord,
-            effectiveSnapshot
+            concurrentGroup ? groupSnapshot : effectiveSnapshot
           );
 
           const undoActions: MinimapStep["undoActions"] = {
             redo: actions.redo
               ? {
-                  label: actions.redo.label,
+                  label: concurrentGroup
+                    ? `Redo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+                    : actions.redo.label,
                   onTrigger: () => {
                     onOpenMinimapRedoDialog({
                       target: undoTarget,
@@ -320,7 +363,9 @@ export function useOutputMinimapModel({
               : null,
             undo: actions.undo
               ? {
-                  label: actions.undo.label,
+                  label: concurrentGroup
+                    ? `Undo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+                    : actions.undo.label,
                   onTrigger: () => {
                     const alreadyUndone =
                       effectiveUndoRecord != null &&
@@ -375,6 +420,7 @@ export function useOutputMinimapModel({
     onOpenMinimapRedoDialog,
     onOpenMinimapUndoDialog,
     outputFontSize,
+    parallelGroups,
     rowLayout,
     rows,
     stepOutputsMap,

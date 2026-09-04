@@ -239,6 +239,8 @@ export interface SnapshotRepoInfo {
 export interface WorkspaceSnapshot {
   /** Timestamp when the after-snapshot was captured */
   capturedAt: number;
+  /** Present when this snapshot represents the cumulative state of a parallel group. */
+  parallelGroupId?: string;
   /** Strategy used to capture the snapshot ('git' or 'filesystem'). */
   strategy: "git" | "filesystem";
   /**

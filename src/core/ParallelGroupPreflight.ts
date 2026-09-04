@@ -268,7 +268,7 @@ export async function preflightParallelGroup(
     issues.push({
       code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
       memberIndices: interactiveIndices,
-      message: `${memberList(workflow, interactiveIndices)} resolve to interactive mode, but this host cannot multiplex interactive sessions. Use executionMode: headless for all but one member.`,
+      message: `${memberList(workflow, interactiveIndices)} resolve to interactive mode, but this host cannot multiplex interactive sessions. Run headless or set those members to executionMode: headless.`,
     });
   }
 

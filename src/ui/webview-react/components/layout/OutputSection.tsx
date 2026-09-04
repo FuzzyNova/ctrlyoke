@@ -122,6 +122,7 @@ const OutputSectionInner: React.FC = () => {
   const currentStep = useWorkflowStore((s) => s.currentStep);
   const totalSteps = useWorkflowStore((s) => s.totalSteps);
   const steps = useWorkflowStore((s) => s.steps);
+  const parallelGroups = useWorkflowStore((s) => s.parallelGroups);
   const finalStep = useWorkflowStore((s) => s.finalStep);
   const cliOutputs = useWorkflowStore((s) => s.liveOrderedEntries);
   const liveOrderedEntries = cliOutputs; // alias for clarity
@@ -469,6 +470,7 @@ const OutputSectionInner: React.FC = () => {
     historyOutputs,
     liveOrderedEntries,
     steps,
+    parallelGroups,
     finalStep,
     streamingChunks,
     finalStepStreamingChunks,
@@ -1171,6 +1173,7 @@ const OutputSectionInner: React.FC = () => {
     allMessages,
     allowUndoActions,
     finalStepWorkspaceSnapshots,
+    parallelGroups,
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
@@ -1204,6 +1207,7 @@ const OutputSectionInner: React.FC = () => {
     allMessages,
     allowUndoActions,
     finalStep,
+    parallelGroups,
     finalStepWorkspaceSnapshots,
     firstRowIndexByTarget,
     hiddenAtMs: hiddenOutputEntry?.hiddenAtMs ?? EMPTY_HIDDEN_AT_MS,

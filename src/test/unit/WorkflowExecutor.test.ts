@@ -39,6 +39,11 @@ import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
+import {
+  WorkspaceSnapshotService,
+  type RawWorkspaceState,
+} from "../../utils/WorkspaceSnapshotService";
+import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
 function makeContext(
@@ -177,6 +182,43 @@ class FixedEvaluationEvaluator extends EndConditionEvaluator {
   }
 }
 
+class RecordingSnapshotService extends WorkspaceSnapshotService {
+  captureCount = 0;
+
+  override async captureWorkspaceState(
+    _executionRoot: string,
+    strategy: "git" | "filesystem"
+  ): Promise<RawWorkspaceState> {
+    this.captureCount += 1;
+    return {
+      capturedAt: this.captureCount,
+      strategy,
+      segments: [],
+    };
+  }
+
+  override snapshotRepoInfos(): undefined {
+    return undefined;
+  }
+
+  override async computeSnapshotChanges(): Promise<
+    WorkspaceSnapshot["changedFiles"]
+  > {
+    return [
+      {
+        path: `member-${this.captureCount}`,
+        changeType: "created",
+      },
+    ];
+  }
+
+  override async enrichSnapshotBeforeContent(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot> {
+    return snapshot;
+  }
+}
+
 async function requestQueuePause(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().pause()) {
     await queue.commitRuntimeTransition({ persist: false });
@@ -310,6 +352,81 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("captures cumulative group snapshots at the group target", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        await new Promise((resolve) =>
+          setTimeout(resolve, (2 - stepIndex) * 5)
+        );
+        return { responseText: `ok-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+      parallelGroups: [
+        { id: "snapshots", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    const snapshotService = new RecordingSnapshotService();
+    const captured: Array<{
+      target: number;
+      snapshot: WorkspaceSnapshot;
+    }> = [];
+    context.snapshotService = snapshotService;
+    context.onSnapshotCaptured = (target, snapshot) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        captured.push({ target: target.stepIndex, snapshot });
+      }
+    };
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.strictEqual(snapshotService.captureCount, 4);
+    assert.strictEqual(captured.length, 3);
+    assert.deepStrictEqual(
+      captured.map(({ target }) => target),
+      [0, 0, 0]
+    );
+    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === "snapshots"));
+  });
+
+  test("keeps ordinary per-step snapshots when effective width is one", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      integrations.set(stepIndex, new MockHarnessIntegration(undefined, false));
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+      parallelGroups: [
+        { id: "sequential", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 1;
+    const snapshotService = new RecordingSnapshotService();
+    const captured: Array<{ target: number; snapshot: WorkspaceSnapshot }> = [];
+    context.snapshotService = snapshotService;
+    context.onSnapshotCaptured = (target, snapshot) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        captured.push({ target: target.stepIndex, snapshot });
+      }
+    };
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(
+      captured.map(({ target }) => target),
+      [0, 1, 2]
+    );
+    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined));
+  });
+
   test("joins parallel members completed in reverse order without advancing currentIndex early", async () => {
     const queue = new PromptQueue();
     const observedCurrentIndices: number[] = [];

@@ -114,6 +114,7 @@ suite("CliJsonResultBuilder", () => {
     assert.deepStrictEqual(output.steps[0], {
       index: 0,
       name: "scan",
+      parallelGroupId: null,
       type: "prompt",
       enabled: true,
       harness: "codex-cli",

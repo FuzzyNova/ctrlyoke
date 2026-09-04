@@ -25,6 +25,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
@@ -39,6 +40,7 @@ interface UseOutputUndoActionsInput {
   allMessages: OutputMessage[];
   allowUndoActions: boolean;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  parallelGroups?: readonly ParallelGroupDefinition[];
   historyOutputs: OutputHistoryView;
   isViewingHistory: boolean;
   lastCliIndexPerStep: Map<string, number>;
@@ -64,6 +66,7 @@ export function useOutputUndoActions({
   allMessages,
   allowUndoActions,
   finalStepWorkspaceSnapshots,
+  parallelGroups,
   historyOutputs,
   isViewingHistory,
   lastCliIndexPerStep,
@@ -113,6 +116,27 @@ export function useOutputUndoActions({
 
       const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
       const stepIndex = msgTarget.index;
+      const parallelGroup = isFinalStep
+        ? undefined
+        : parallelGroups?.find(
+            (group) =>
+              stepIndex >= group.startIndex &&
+              stepIndex <= group.endIndex &&
+              group.startIndex !== group.endIndex
+          );
+      const groupSnapshot = parallelGroup
+        ? isViewingHistory && historyOutputs
+          ? historyOutputs.promptOutputs[parallelGroup.startIndex]
+              ?.workspaceSnapshot
+          : workspaceSnapshots[parallelGroup.startIndex]
+        : undefined;
+      const concurrentGroup =
+        parallelGroup?.id === groupSnapshot?.parallelGroupId
+          ? parallelGroup
+          : undefined;
+      if (concurrentGroup && stepIndex !== concurrentGroup.startIndex) {
+        continue;
+      }
 
       let effectiveSnapshot: WorkspaceSnapshot | undefined;
       let effectiveUndoRecord: UndoRecord | undefined;
@@ -135,12 +159,17 @@ export function useOutputUndoActions({
       }
 
       const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
+      if (concurrentGroup) {
+        effectiveSnapshot = groupSnapshot;
+      }
       const undoTarget: UndoExecutionTarget = isFinalStep
         ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
         : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
       const label = isFinalStep
         ? `Final Step Loop ${stepIndex + 1}`
-        : `Prompt ${stepIndex + 1}`;
+        : concurrentGroup
+          ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+          : `Prompt ${stepIndex + 1}`;
 
       const redoInstructions =
         effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
@@ -180,6 +209,7 @@ export function useOutputUndoActions({
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
+    parallelGroups,
     stepOutputsMap,
     undoRecords,
     uniqueStepTargets,

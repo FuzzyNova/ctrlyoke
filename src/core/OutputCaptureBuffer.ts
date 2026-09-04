@@ -23,9 +23,11 @@ import { Log } from "../utils/Log";
 export interface PromptStartData {
   stepIndex: number;
   totalSteps: number;
+  stepName: string;
   promptText: string;
   attemptIndex: number;
   runIndex: number;
+  parallelGroupId?: string;
   /** The harness CLI command string, populated only on the second fire. */
   cliCommand?: string;
   /** True when cliCommand is injected prompt text instead of a spawned command. */
@@ -35,6 +37,8 @@ export interface PromptStartData {
 /** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
 export interface PromptCompleteData {
   stepIndex: number;
+  stepName: string;
+  parallelGroupId?: string;
   tokens?: TokenStats;
   sessionId?: string;
   harness?: HarnessId;
@@ -75,6 +79,7 @@ export interface OutputCaptureCallbacks {
     severity: string
   ) => void;
   getWorkflowStep: (stepIndex: number) => WorkflowStep | undefined;
+  getParallelGroupId: (stepIndex: number) => string | undefined;
   getTotalSteps: () => number;
 }
 
@@ -202,9 +207,13 @@ export class OutputCaptureBuffer {
     this.callbacks.onPromptStart({
       stepIndex,
       totalSteps,
+      stepName:
+        this.callbacks.getWorkflowStep(stepIndex)?.name?.trim() ||
+        `Step ${stepIndex + 1}`,
       promptText: prompt,
       attemptIndex,
       runIndex,
+      parallelGroupId: this.callbacks.getParallelGroupId(stepIndex),
       cliCommand,
       cliCommandWasInjected,
     });
@@ -253,6 +262,10 @@ export class OutputCaptureBuffer {
     // Fire prompt-complete event so standalone CLI can render per-step stats.
     this.callbacks.onPromptComplete({
       stepIndex,
+      stepName:
+        this.callbacks.getWorkflowStep(stepIndex)?.name?.trim() ||
+        `Step ${stepIndex + 1}`,
+      parallelGroupId: this.callbacks.getParallelGroupId(stepIndex),
       tokens: output.tokens,
       sessionId: output.structured?.metadata?.sessionId,
       harness: output.structured?.metadata?.harness,
@@ -389,7 +402,8 @@ export class OutputCaptureBuffer {
     dashboardSink: IDashboardSink,
     state: { status: string; currentIndex: number },
     finalRuntime: { phase: string; loopCount: number } | null | undefined,
-    instanceTag: string
+    instanceTag: string,
+    activeTargets: ReadonlySet<string> = new Set()
   ): void {
     // Replay completed step outputs so the user sees prior-prompt results
     // when switching back to a workflow that is already partway through.
@@ -441,28 +455,35 @@ export class OutputCaptureBuffer {
       }
     }
 
-    // Replay buffered streaming output for the currently-running step.
+    // Replay every active queue target. Before target-keyed execution this
+    // reduces to the current index; with multiple in-flight targets each
+    // buffer must survive a reconnect independently.
     if (
-      state.status === EXECUTION_STATES.RUNNING &&
-      this.stepOutputBuffer.size > 0
+      this.stepOutputBuffer.size > 0 &&
+      (state.status === EXECUTION_STATES.RUNNING || activeTargets.size > 0)
     ) {
-      const buffer = this.stepOutputBuffer.get(state.currentIndex);
-      if (buffer) {
+      for (const [stepIndex, buffer] of this.stepOutputBuffer) {
+        if (
+          state.status !== EXECUTION_STATES.RUNNING &&
+          !activeTargets.has(`queue:${stepIndex}`)
+        ) {
+          continue;
+        }
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying step ${state.currentIndex} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
+          `${instanceTag} sendFullStateToDashboard: replaying step ${stepIndex} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
         );
 
         // Belt-and-suspenders: ensure retryState was already sent above so
         // the webview store accepts attemptIndex > 0 outputs.
         if (buffer.attemptIndex > 0) {
           const completedEntry = this.completedStepOutputs.get(
-            state.currentIndex
+            stepIndex
           );
           if (!completedEntry?.retryState) {
             // Edge case: retry streaming started but completedStepOutputs
             // doesn't have retryState yet (defend against timing gaps).
             const promptStep = this.callbacks.getWorkflowStep(
-              state.currentIndex
+              stepIndex
             );
             const promptStepTyped =
               promptStep && !isScriptStep(promptStep)
@@ -471,21 +492,21 @@ export class OutputCaptureBuffer {
             const maxRetries =
               promptStepTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
             Log.trace(
-              `${instanceTag} sendFullStateToDashboard: sending fallback retryState for step ${state.currentIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
+              `${instanceTag} sendFullStateToDashboard: sending fallback retryState for step ${stepIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
             );
             dashboardSink.updateRetryAttempt(
-              state.currentIndex,
+              stepIndex,
               buffer.attemptIndex,
               maxRetries
             );
           } else {
             Log.trace(
-              `${instanceTag} sendFullStateToDashboard: retryState already sent for step ${state.currentIndex} (attempt ${completedEntry.retryState.currentRetry}/${completedEntry.retryState.maxRetries})`
+              `${instanceTag} sendFullStateToDashboard: retryState already sent for step ${stepIndex} (attempt ${completedEntry.retryState.currentRetry}/${completedEntry.retryState.maxRetries})`
             );
           }
         }
 
-        dashboardSink.updateCliOutput(state.currentIndex, {
+        dashboardSink.updateCliOutput(stepIndex, {
           prompt: buffer.prompt,
           response: "",
           elapsed: 0,
@@ -501,13 +522,13 @@ export class OutputCaptureBuffer {
         });
         if (buffer.accumulatedText) {
           dashboardSink.updateCliStreamingChunk(
-            state.currentIndex,
+            stepIndex,
             buffer.accumulatedText
           );
         }
         if (buffer.accumulatedEvents.length > 0) {
           dashboardSink.updateCliStreamingEvents(
-            state.currentIndex,
+            stepIndex,
             buffer.accumulatedEvents
           );
         }

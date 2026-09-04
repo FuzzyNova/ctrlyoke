@@ -447,6 +447,24 @@ export class WorkflowInstance {
   /** Fires plain-text chunks (Copilot) from the active execution integration. */
   public readonly onStreamingChunk = this._streamingChunkEmitter.event;
 
+  private readonly _targetedStreamingEventsEmitter = new TypedEmitter<{
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    events: CliEvent[];
+  }>();
+  /** Fires structured output with the execution target that produced it. */
+  public readonly onTargetStreamingEvents =
+    this._targetedStreamingEventsEmitter.event;
+
+  private readonly _targetedStreamingChunkEmitter = new TypedEmitter<{
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    chunk: string;
+  }>();
+  /** Fires plain-text output with the execution target that produced it. */
+  public readonly onTargetStreamingChunk =
+    this._targetedStreamingChunkEmitter.event;
+
   private readonly _responseCompleteEmitter = new TypedEmitter<string>();
   /** Fires the final plain-text response from the active execution integration. */
   public readonly onResponseComplete = this._responseCompleteEmitter.event;
@@ -646,6 +664,13 @@ export class WorkflowInstance {
         }),
       getWorkflowStep: (stepIndex) =>
         this.promptQueue.getState().steps[stepIndex],
+      getParallelGroupId: (stepIndex) =>
+        this.promptQueue
+          .getState()
+          .parallelGroups.find(
+            (group) =>
+              stepIndex >= group.startIndex && stepIndex <= group.endIndex
+          )?.id,
       getTotalSteps: () => this.promptQueue.getProgress().total,
     };
     this.outputCaptureBuffer = new OutputCaptureBuffer(
@@ -3988,6 +4013,10 @@ export class WorkflowInstance {
           severity,
         });
       },
+      onTargetStreamingEvents: (data) =>
+        this._targetedStreamingEventsEmitter.fire(data),
+      onTargetStreamingChunk: (data) =>
+        this._targetedStreamingChunkEmitter.fire(data),
       snapshotService: new WorkspaceSnapshotService(),
       onSnapshotCaptured: (target, snapshot) => {
         self.dashboardSink?.sendStepUndoDataUpdated(

@@ -88,6 +88,37 @@ function previewFixture(): WorkflowExecutionPreview {
 }
 
 suite("CLI dry-run output", () => {
+  test("keeps concurrent headless bursts identified by target", () => {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    const formatterPath = path.join(
+      repoRoot,
+      "out",
+      "cli",
+      "CliTerminalFormatter.js"
+    );
+    const constantsPath = path.join(
+      repoRoot,
+      "out",
+      "types",
+      "DashboardConstants.js"
+    );
+    const output = execFileSync(
+      process.execPath,
+      [
+        "-e",
+        `const { CliTerminalFormatter } = require(${JSON.stringify(formatterPath)});
+const { CLI_EVENT_TYPES } = require(${JSON.stringify(constantsPath)});
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "research" } }], { stepIndex: 1, stepName: "research-auth" });
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }], { stepIndex: 2, stepName: "unit-tests" });
+CliTerminalFormatter.flushStreamingBuffer();`,
+      ],
+      { encoding: "utf8" }
+    );
+
+    assert.ok(output.includes("[2 research-auth] research"));
+    assert.ok(output.includes("[3 unit-tests] done"));
+  });
+
   test("renders MCP parameters and results in terminal output", () => {
     const repoRoot = path.resolve(__dirname, "..", "..", "..");
     const formatterPath = path.join(
