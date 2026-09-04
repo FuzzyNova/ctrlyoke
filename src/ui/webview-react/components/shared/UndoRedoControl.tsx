@@ -376,6 +376,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     postWorkflowDefinitionMutation(vscode, {
       type: MESSAGE_TYPES.UNDO_REDO_SYNC,
       steps: ws.steps,
+      parallelGroups: ws.parallelGroups,
       finalStep: ws.finalStep,
       workflowProperties,
       // workflowName is zundo-tracked (partialize/equality/describeChange all
@@ -475,6 +476,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     const s = useWorkflowStore.getState();
     const current: UndoableWorkflowState = {
       steps: s.steps ?? [],
+      parallelGroups: s.parallelGroups ?? [],
       workflowName: s.workflowName ?? null,
       finalStep: s.finalStep ?? null,
       undoWorkflowProperties: s.undoWorkflowProperties ?? {},

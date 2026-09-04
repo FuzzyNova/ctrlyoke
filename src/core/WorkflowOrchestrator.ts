@@ -6803,6 +6803,7 @@ export class WorkflowOrchestrator {
               const wf = JSON.parse(content) as {
                 steps?: unknown[];
                 definitionRevision?: number;
+                parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[];
               };
               if (wf.steps) {
                 Log.info(
@@ -6811,7 +6812,8 @@ export class WorkflowOrchestrator {
                 provider.notifyCliPromptsExtended(
                   workflowId,
                   wf.steps,
-                  wf.definitionRevision ?? 1
+                  wf.definitionRevision ?? 1,
+                  wf.parallelGroups
                 );
               }
             })

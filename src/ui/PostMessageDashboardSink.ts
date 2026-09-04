@@ -16,6 +16,7 @@ import type {
   WorkflowStep,
   WorkflowViewAddress,
   WorktreeRunProjection,
+  ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
@@ -69,7 +70,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -82,6 +84,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -99,7 +102,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -115,6 +119,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -279,7 +284,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     finalStep?: WorkflowStep | null,
     executionState?: string,
     definitionRevision?: number,
-    workflowId?: string
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.send({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
@@ -288,19 +294,22 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(executionState !== undefined ? { executionState } : {}),
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.send({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
       steps,
       finalStep: finalStep ?? null,
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -372,11 +381,16 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
     this.send({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
       steps,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 

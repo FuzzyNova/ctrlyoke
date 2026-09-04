@@ -27,24 +27,28 @@ import {
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
 import {
-  WorkflowStepItem,
-  type StepDetails,
   type PromptOverride,
 } from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
 import {
-  ExecutingStepHighlight,
   PauseBoundary,
 } from "../prompts/ExecutingStepHighlight";
+import {
+  WorkflowStepRow,
+  SortableWorkflowStepWrapper,
+} from "../prompts/WorkflowStepRow";
+import {
+  ParallelGroupPanel,
+  isStepExecutionLocked,
+} from "../prompts/ParallelGroupPanel";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  type ExecutionState,
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
@@ -53,7 +57,6 @@ import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
-  useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
@@ -70,255 +73,10 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-/** Local type guard for script steps */
+
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
 }
-
-/** Get the displayable text content of a step */
-function getStepText(step: WorkflowStep): string {
-  return isScriptStep(step) ? step.script : step.prompt;
-}
-
-type WorkflowStepComponentProps = React.ComponentProps<typeof WorkflowStepItem>;
-type WorkflowStepDragHandleProps =
-  WorkflowStepComponentProps["dragHandleProps"];
-
-type StepHarnessModel = Pick<
-  WorkflowStepComponentProps,
-  | "harnessId"
-  | "harnessLabel"
-  | "harnessIsDefault"
-  | "modelLabel"
-  | "modelIsDefault"
->;
-
-type StepContextMenuRequest = {
-  step: WorkflowStep;
-  setPositionTarget: number;
-  deleteIndex: number;
-  isCurrentStep: boolean;
-  isExecutionTargetLocked: boolean;
-  direction: "rewind" | "forward";
-  outputText?: string;
-  latestOutput?: WorkflowStepComponentProps["latestOutput"];
-  runtimeMeta?: WorkflowStepComponentProps["runtimeMeta"];
-  liveContextWindow?: WorkflowStepComponentProps["liveContextWindow"];
-};
-
-type WorkflowStepRowProps = {
-  step: WorkflowStep;
-  index: number;
-  slotNumber: number;
-  currentStep: number;
-  executionState: ExecutionState;
-  status: StepStatus;
-  retryState?: WorkflowStepComponentProps["retryState"];
-  latestOutput?: WorkflowStepComponentProps["latestOutput"];
-  liveContextWindow?: WorkflowStepComponentProps["liveContextWindow"];
-  isCurrent: boolean;
-  isSelected: boolean;
-  canSetStartPosition: boolean;
-  startPositionDirection: "rewind" | "forward";
-  setPositionTarget: number;
-  isExecutionTargetLocked: boolean;
-  hideBorderBottom?: boolean;
-  dimmed?: boolean;
-  dragHandleProps?: WorkflowStepDragHandleProps;
-  getStepHarnessModel: (
-    step: WorkflowStep,
-    status: StepStatus
-  ) => StepHarnessModel;
-  getStepOverrides: (step: WorkflowStep) => PromptOverride[];
-  onStepClick: (index: number) => void;
-  onSetStartPosition: (index: number) => void;
-  onOpenContextMenu: (
-    x: number,
-    y: number,
-    request: StepContextMenuRequest
-  ) => void;
-};
-
-/**
- * Keeps live output/context telemetry updates local to the affected row.
- * The panel itself must still re-render for workflow-level layout changes, but
- * unchanged rows should not repeat token formatting and DOM reconciliation.
- */
-const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
-  ({
-    step,
-    index,
-    slotNumber,
-    currentStep,
-    executionState,
-    status,
-    retryState,
-    latestOutput,
-    liveContextWindow,
-    isCurrent,
-    isSelected,
-    canSetStartPosition,
-    startPositionDirection,
-    setPositionTarget,
-    isExecutionTargetLocked,
-    hideBorderBottom = false,
-    dimmed = false,
-    dragHandleProps,
-    getStepHarnessModel,
-    getStepOverrides,
-    onStepClick,
-    onSetStartPosition,
-    onOpenContextMenu,
-  }) => {
-    const harnessModel = getStepHarnessModel(step, status);
-    const overrides = getStepOverrides(step);
-    const details: StepDetails = {};
-
-    if (latestOutput?.elapsed) {
-      details.duration = latestOutput.elapsed;
-    }
-    // A failed step is one position behind currentStep after it has been
-    // finalized. That alone does not mean the workflow continued: a stop-on-
-    // error failure also advances currentStep past the failed step so the
-    // terminal state can be persisted. Only describe continuation for that
-    // adjacent case when execution is still progressing (or when a later step
-    // has already been passed).
-    const workflowContinuedAfterFailure =
-      status === STEP_STATUS.FAILED &&
-      index < currentStep &&
-      (executionState !== EXECUTION_STATES.ERROR || index < currentStep - 1);
-    if (workflowContinuedAfterFailure) {
-      const failureMessage = !isScriptStep(step)
-        ? step._runtime?.failureMessage
-        : undefined;
-      details.message = failureMessage
-        ? `Workflow continued after failure: ${failureMessage}`
-        : "Workflow continued after this step failed.";
-    }
-
-    const outputText = latestOutput?.response as string | undefined;
-    const handleContextMenu = useCallback(
-      (x: number, y: number) =>
-        onOpenContextMenu(x, y, {
-          step,
-          setPositionTarget,
-          deleteIndex: index,
-          isCurrentStep: isCurrent,
-          isExecutionTargetLocked,
-          direction: startPositionDirection,
-          outputText,
-          latestOutput,
-          runtimeMeta: !isScriptStep(step) ? step._runtime : undefined,
-          liveContextWindow,
-        }),
-      [
-        index,
-        isCurrent,
-        isExecutionTargetLocked,
-        latestOutput,
-        liveContextWindow,
-        onOpenContextMenu,
-        outputText,
-        setPositionTarget,
-        startPositionDirection,
-        step,
-      ]
-    );
-
-    return (
-      <WorkflowStepItem
-        text={getStepText(step)}
-        index={index}
-        displayNumber={slotNumber}
-        name={step.name}
-        status={status}
-        retryState={retryState}
-        details={details}
-        latestOutput={latestOutput}
-        liveContextWindow={liveContextWindow}
-        runtimeMeta={step._runtime}
-        isDisabled={step.enabled === false}
-        isCurrent={isCurrent}
-        isSelected={isSelected}
-        onClick={() => onStepClick(index)}
-        harnessId={harnessModel.harnessId}
-        harnessLabel={harnessModel.harnessLabel}
-        harnessIsDefault={harnessModel.harnessIsDefault}
-        modelLabel={harnessModel.modelLabel}
-        modelIsDefault={harnessModel.modelIsDefault}
-        overrides={overrides}
-        canSetStartPosition={canSetStartPosition}
-        startPositionDirection={startPositionDirection}
-        onSetStartPosition={() => onSetStartPosition(setPositionTarget)}
-        onContextMenu={handleContextMenu}
-        hideBorderBottom={hideBorderBottom}
-        dimmed={dimmed}
-        isScript={isScriptStep(step)}
-        dragHandleProps={dragHandleProps}
-      />
-    );
-  }
-);
-
-WorkflowStepRow.displayName = "WorkflowStepRow";
-
-type SortableWrapperProps = Omit<WorkflowStepRowProps, "dragHandleProps"> & {
-  id: string;
-  disabled: boolean;
-  /** Visual 1-based slot number rendered outside the draggable area */
-  slotNumber: number;
-  showPauseBoundaryBefore?: boolean;
-};
-
-const SortableWorkflowStepWrapper = React.memo(
-  function SortableWorkflowStepWrapper({
-    id,
-    disabled,
-    slotNumber,
-    showPauseBoundaryBefore = false,
-    ...stepItemProps
-  }: SortableWrapperProps) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id, disabled });
-    const style = {
-      // Restrict to vertical axis only — prevent horizontal drift during drag
-      transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-    return (
-      // Number column sits outside setNodeRef so it stays anchored to the DOM
-      // slot position while the content transforms during drag.
-      <div
-        className="relative flex items-stretch"
-        data-workflow-step-index={stepItemProps.index}
-      >
-        {showPauseBoundaryBefore && <PauseBoundary />}
-        <div className="w-[2px] flex-shrink-0 self-stretch" />
-        <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-          {slotNumber}
-        </div>
-        {stepItemProps.isCurrent && <ExecutingStepHighlight />}
-        <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
-          <WorkflowStepRow
-            {...stepItemProps}
-            slotNumber={slotNumber}
-            dragHandleProps={disabled ? undefined : { listeners, attributes }}
-          />
-        </div>
-      </div>
-    );
-  }
-);
-
-SortableWorkflowStepWrapper.displayName = "SortableWorkflowStepWrapper";
-
 /**
  * WorkflowStepsPanel - Left panel showing the list of steps in the workflow
  *
@@ -335,6 +93,7 @@ const WorkflowStepsPanelInner: React.FC<{
 }> = ({ onRequestSidebar, onRequestClose }) => {
   const {
     steps,
+    parallelGroups,
     currentStep,
     executionState,
     retryStates,
@@ -717,6 +476,68 @@ const WorkflowStepsPanelInner: React.FC<{
     selectPrompt,
   ]);
 
+  const handleFailFastChange = useCallback(
+    (group: (typeof parallelGroups)[number], failFast: boolean) => {
+      useWorkflowStore
+        .getState()
+        .setParallelGroups(
+          parallelGroups.map((candidate) =>
+            candidate.id === group.id ? { ...candidate, failFast } : candidate
+          )
+        );
+    },
+    [parallelGroups]
+  );
+
+  const renderParallelGroup = useCallback(
+    (group: (typeof parallelGroups)[number]) => (
+      <ParallelGroupPanel
+        key={`parallel-${group.id}`}
+        group={group}
+        steps={steps}
+        currentStep={currentStep}
+        executionState={executionState}
+        statuses={steps
+          .slice(group.startIndex, group.endIndex + 1)
+          .map((step, offset) =>
+            getPromptStatus(step, group.startIndex + offset)
+          )}
+        retryStates={retryStates}
+        liveContextWindow={liveContextWindow ?? {}}
+        selectedIndex={
+          selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+            ? selectionTarget.index
+            : undefined
+        }
+        canSetStartPosition={canChangeStartPosition}
+        getLatestOutput={getLatestOutput}
+        getStepHarnessModel={getStepHarnessModel}
+        getStepOverrides={getStepOverrides}
+        onStepClick={handleStepClick}
+        onSetStartPosition={handleSetStartPosition}
+        onOpenContextMenu={openContextMenu}
+        onFailFastChange={handleFailFastChange}
+      />
+    ),
+    [
+      canChangeStartPosition,
+      currentStep,
+      executionState,
+      getLatestOutput,
+      getPromptStatus,
+      getStepHarnessModel,
+      getStepOverrides,
+      handleFailFastChange,
+      handleSetStartPosition,
+      handleStepClick,
+      liveContextWindow,
+      openContextMenu,
+      retryStates,
+      selectionTarget,
+      steps,
+    ]
+  );
+
   const handleToggleFinalStepEnabled = useCallback(() => {
     if (isExternallyManaged || isLineageReadOnly || !finalStep) return;
     const enabling = finalStep.enabled === false;
@@ -1065,6 +886,22 @@ const WorkflowStepsPanelInner: React.FC<{
               const doneStepCount = currentStep;
               return steps.slice(0, doneStepCount).map((step, sliceIdx) => {
                 const index = sliceIdx;
+                const group = parallelGroups.find(
+                  (candidate) =>
+                    candidate.startIndex === index &&
+                    candidate.endIndex < doneStepCount
+                );
+                if (group) return renderParallelGroup(group);
+                if (
+                  parallelGroups.some(
+                    (candidate) =>
+                      candidate.endIndex < doneStepCount &&
+                      index > candidate.startIndex &&
+                      index <= candidate.endIndex
+                  )
+                ) {
+                  return null;
+                }
                 const slotNumber = index + 1;
                 const status = getPromptStatus(step, index);
                 const retryState = retryStates[index];
@@ -1073,7 +910,13 @@ const WorkflowStepsPanelInner: React.FC<{
                   selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                   selectionTarget.index === index;
                 const isExecutionTargetLocked =
-                  isExecutionBusy(executionState) && index === currentStep;
+                  isStepExecutionLocked(
+                    step,
+                    index,
+                    currentStep,
+                    executionState
+                  ) ||
+                  (isExecutionBusy(executionState) && index === currentStep);
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -1135,6 +978,22 @@ const WorkflowStepsPanelInner: React.FC<{
                   const index = parseInt(id.replace("step-pending-", ""));
                   const step = steps[index];
                   if (!step) return null;
+                  const group = parallelGroups.find(
+                    (candidate) =>
+                      candidate.startIndex === index &&
+                      candidate.endIndex >= currentStep
+                  );
+                  if (group) return renderParallelGroup(group);
+                  if (
+                    parallelGroups.some(
+                      (candidate) =>
+                        candidate.endIndex >= currentStep &&
+                        index > candidate.startIndex &&
+                        index <= candidate.endIndex
+                    )
+                  ) {
+                    return null;
+                  }
                   // Use visual position, not absolute index, so isCurrentStep
                   // stays correct after local reorders (before backend confirms).
                   const isCurrentStep = visualIdx === 0;
@@ -1150,7 +1009,13 @@ const WorkflowStepsPanelInner: React.FC<{
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
                   const isExecutionTargetLocked =
-                    isExecutionBusy(executionState) && isCurrentStep;
+                    isStepExecutionLocked(
+                      step,
+                      index,
+                      currentStep,
+                      executionState
+                    ) ||
+                    (isExecutionBusy(executionState) && isCurrentStep);
                   return (
                     <SortableWorkflowStepWrapper
                       key={id}

@@ -786,6 +786,7 @@ export function createMessageHandlers(
       fileName: message.fileName,
       workflowName: message.workflowName,
       steps: message.steps || [],
+      parallelGroups: message.parallelGroups || [],
       finalStep: message.finalStep ?? null,
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
@@ -810,6 +811,7 @@ export function createMessageHandlers(
       fileName: message.fileName,
       workflowName: message.workflowName,
       steps: message.steps || [],
+      parallelGroups: message.parallelGroups || [],
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
       results: message.results || [],
@@ -892,11 +894,17 @@ export function createMessageHandlers(
         (p: WorkflowStep, i: number) =>
           !isStepContentEqual(p, currentSteps[i] as WorkflowStep)
       );
+    const nextParallelGroups =
+      message.parallelGroups ?? workflowStore.parallelGroups;
+    const parallelGroupsChanged =
+      JSON.stringify(nextParallelGroups) !==
+      JSON.stringify(workflowStore.parallelGroups);
     // Also suppress undo recording for the initial auto-load (0 → N steps).
     // Loading from an empty state is a system-driven restore, not a user edit.
     const isInitialAutoLoad = currentSteps.length === 0;
     const shouldRecord =
-      !isInitialAutoLoad && (stepCountChanged || stepContentChanged);
+      !isInitialAutoLoad &&
+      (stepCountChanged || stepContentChanged || parallelGroupsChanged);
     WebviewLog.debug(
       `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
     );
@@ -911,6 +919,7 @@ export function createMessageHandlers(
       useWorkflowStore.temporal.getState().pause();
     }
     workflowStore.setPrompts(newSteps);
+    workflowStore.setParallelGroups(nextParallelGroups);
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().resume();
     }
@@ -935,6 +944,11 @@ export function createMessageHandlers(
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setPrompts(message.steps || []);
+    useWorkflowStore.temporal.getState().pause();
+    workflowStore.setParallelGroups(
+      message.parallelGroups ?? workflowStore.parallelGroups
+    );
+    useWorkflowStore.temporal.getState().resume();
   };
 
   // --------------------------------------------------------------------------
@@ -946,6 +960,11 @@ export function createMessageHandlers(
     rememberUndoRedoRuntime(workflowStore.steps);
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.steps || []);
+    useWorkflowStore.temporal.getState().pause();
+    workflowStore.setParallelGroups(
+      message.parallelGroups ?? workflowStore.parallelGroups
+    );
+    useWorkflowStore.temporal.getState().resume();
     // Pause around setFinalStep — the delete action is already recorded by
     // setPrompts above; a second entry from setFinalStep would require two
     // undos to restore a single deleted prompt.
@@ -2435,6 +2454,7 @@ export function createMessageHandlers(
       fileName: workingFile.workflowName,
       workflowName: workingFile.workflowName,
       steps: workingFile.steps ?? [],
+      parallelGroups: workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,
       currentStep: runtime?.currentIndex,
       results,

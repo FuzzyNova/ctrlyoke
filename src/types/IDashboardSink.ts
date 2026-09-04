@@ -3,6 +3,7 @@ import type {
   WorkflowStep,
   WorkflowViewAddress,
   WorktreeRunProjection,
+  ParallelGroupDefinition,
 } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
@@ -37,7 +38,8 @@ export interface IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void>;
 
   updateSessionRestored(
@@ -54,7 +56,8 @@ export interface IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(
@@ -140,13 +143,15 @@ export interface IDashboardSink {
     finalStep?: WorkflowStep | null,
     executionState?: string,
     definitionRevision?: number,
-    workflowId?: string
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void;
 
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void;
 
   updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void;
@@ -179,7 +184,11 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void;
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void;
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
   notifyUndoRedoSynced(): void;

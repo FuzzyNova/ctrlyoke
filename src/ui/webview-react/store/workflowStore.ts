@@ -21,6 +21,7 @@ import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
@@ -226,6 +227,7 @@ interface WorkflowState {
   fileName: string | null;
   workflowName: string | null;
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
@@ -278,6 +280,7 @@ interface WorkflowActions {
   setFileName: (fileName: string | null) => void;
   setWorkflowName: (name: string | null) => void;
   setPrompts: (steps: WorkflowStep[]) => void;
+  setParallelGroups: (parallelGroups: ParallelGroupDefinition[]) => void;
   updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
@@ -351,6 +354,7 @@ interface WorkflowActions {
     fileName: string;
     workflowName?: string;
     steps: WorkflowStep[];
+    parallelGroups?: ParallelGroupDefinition[];
     executionState?: ExecutionState;
     currentStep?: number;
     results?: Array<{ status?: StepStatus }>;
@@ -428,6 +432,7 @@ const initialState: WorkflowState = {
   fileName: null,
   workflowName: null,
   steps: [],
+  parallelGroups: [],
   executionState: EXECUTION_STATES.IDLE,
   currentStep: 0,
   totalSteps: 0,
@@ -719,6 +724,11 @@ export const useWorkflowStore = create<
         });
       },
 
+      setParallelGroups: (parallelGroups) =>
+        set({
+          parallelGroups,
+        }),
+
       updatePrompt: (index, updates) => {
         set((state) => ({
           steps: state.steps.map((p, i) =>
@@ -951,6 +961,7 @@ export const useWorkflowStore = create<
         fileName,
         workflowName,
         steps,
+        parallelGroups = [],
         executionState = EXECUTION_STATES.IDLE,
         currentStep = 0,
         results = [],
@@ -993,6 +1004,10 @@ export const useWorkflowStore = create<
             // must not hand the output pane fresh step identities — that alone
             // rebuilds every rendered row (see utils/structuralSharing.ts).
             steps: preserveReferences(state.steps, promptsWithStatus),
+            parallelGroups: preserveReferences(
+              state.parallelGroups,
+              parallelGroups
+            ),
             executionState,
             currentStep,
             totalSteps: steps.length,
@@ -1479,6 +1494,7 @@ export const useWorkflowStore = create<
     {
       partialize: (state): UndoableWorkflowState => ({
         steps: state.steps,
+        parallelGroups: state.parallelGroups,
         workflowName: state.workflowName,
         finalStep: state.finalStep,
         undoWorkflowProperties: state.undoWorkflowProperties,
@@ -1493,6 +1509,7 @@ export const useWorkflowStore = create<
         if (
           a.workflowName !== b.workflowName ||
           a.steps.length !== b.steps.length ||
+          !deepValueEqual(a.parallelGroups, b.parallelGroups) ||
           a.finalStep !== b.finalStep ||
           a.runtimeUndoGeneration !== b.runtimeUndoGeneration ||
           JSON.stringify(a.undoWorkflowProperties) !==
@@ -1538,6 +1555,7 @@ export type {
 
 export interface UndoableWorkflowState {
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   workflowName: string | null;
   finalStep: WorkflowStep | null;
   undoWorkflowProperties: WorkflowProperties;

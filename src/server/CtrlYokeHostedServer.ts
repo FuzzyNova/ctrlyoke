@@ -18,6 +18,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
+  ParallelGroupDefinition,
   WorktreeRunProjection,
   RunnerHostIdentity,
 } from "../types/CtrlYokeTypes";
@@ -341,13 +342,15 @@ export class CtrlYokeHostedServer
   notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.broadcast({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       workflowId,
       steps,
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -643,8 +646,12 @@ export class CtrlYokeHostedServer
     );
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
-    this.sink.notifyPromptsReordered(steps, workflowId);
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
+    this.sink.notifyPromptsReordered(steps, workflowId, parallelGroups);
   }
   notifyUndoRedoSynced(): void {
     this.sink.notifyUndoRedoSynced();

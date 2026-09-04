@@ -1,4 +1,7 @@
-import type { WorkflowSummary } from "../types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  WorkflowSummary,
+} from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import type { HarnessId } from "../types/DashboardConstants";
 
@@ -37,7 +40,8 @@ export interface IDashboardProvider {
   notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void;
 
   // ── Harness availability ──────────────────────────────────────────────────

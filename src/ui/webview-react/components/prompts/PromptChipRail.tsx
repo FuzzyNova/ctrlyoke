@@ -51,6 +51,7 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
+import { isStepExecutionLocked } from "./ParallelGroupPanel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -439,7 +440,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       setPositionTarget: i,
                       deleteIndex: i,
                       isCurrentStep: false,
-                      isExecutionTargetLocked: false,
+                      isExecutionTargetLocked: isStepExecutionLocked(
+                        prompt,
+                        i,
+                        currentStep,
+                        executionState
+                      ),
                       direction: "rewind",
                       outputText: getLatestOutput(i)?.response as
                         | string
@@ -466,7 +472,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
               // Only an in-flight step is locked; PAUSED stops at a step
               // boundary, so the current chip is the next PENDING step.
               const isExecutionTargetLocked =
-                isExecutionBusy(executionState) && isCurrentStep;
+                isStepExecutionLocked(
+                  prompt,
+                  index,
+                  currentStep,
+                  executionState
+                ) ||
+                (isExecutionBusy(executionState) && isCurrentStep);
               return (
                 <ChipContent
                   key={index}

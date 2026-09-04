@@ -1,5 +1,6 @@
 import type {
   WorkflowStep,
+  ParallelGroupDefinition,
   WorkflowSummary,
   WorkflowViewAddress,
   WorktreeRunProjection,
@@ -110,10 +111,16 @@ export class DashboardBroadcastHub
   notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     for (const client of this.clients) {
-      client.notifyCliPromptsExtended(workflowId, steps, definitionRevision);
+      client.notifyCliPromptsExtended(
+        workflowId,
+        steps,
+        definitionRevision,
+        parallelGroups
+      );
     }
   }
 
@@ -407,9 +414,13 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
     for (const client of this.clients) {
-      client.notifyPromptsReordered?.(steps, workflowId);
+      client.notifyPromptsReordered?.(steps, workflowId, parallelGroups);
     }
   }
 

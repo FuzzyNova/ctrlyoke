@@ -975,16 +975,19 @@ behavior change, and every mutation path preserves ranges. No UI yet.
 
 ### Stage 2 — Group editing and sequential UI
 
-1. `workflowStore`: `parallelGroups` in state, `partialize`, and `equality`; message
-   handlers for the extended `REORDER_PROMPTS_CONFIRMED`, `STEPS_EXTENDED`,
-   `PROMPT_DELETED`, `RUN_VIEW_LOADED`.
-2. `ParallelGroupPanel.tsx` inside `WorkflowStepsPanel` using `WorkflowStepRow` /
-   `SortableWorkflowStepWrapper` (extract them from the panel file so the group panel can
-   reuse them), group status derivation, `failFast` toggle, "runs sequentially in this
-   build" label while the gate is closed.
+1. **Complete.** `workflowStore` carries `parallelGroups` through state,
+   `partialize`, `equality`, and the `REORDER_PROMPTS_CONFIRMED`,
+   `STEPS_EXTENDED`, `PROMPT_DELETED`, and `RUN_VIEW_LOADED` handlers.
+2. **Complete.** `ParallelGroupPanel.tsx` is rendered inside
+   `WorkflowStepsPanel`; the shared `WorkflowStepRow` and
+   `SortableWorkflowStepWrapper` now live in their own module. The panel derives
+   group status, exposes the `failFast` toggle, and labels the gated build as
+   sequential.
 3. Extended `REORDER_PROMPTS` payload, group/ungroup context-menu items, multi-container
    drag; extension-side validation through the topology helper.
-4. `usePromptStatus` change (Decision 9); partially settled group edit locks (Decision 7).
+4. **Complete.** `usePromptStatus` uses recorded member statuses while a group
+   is at `currentStep`, and terminal runtime members are locked while an active
+   group is paused or settling.
 5. Tests: store temporal (group edits are undoable), panel render/status/drag, context
    menu, `WorkflowStepsPanel.test.tsx` (currently keyboard-shortcuts only; add a drag
    suite), extension-side reorder validation.

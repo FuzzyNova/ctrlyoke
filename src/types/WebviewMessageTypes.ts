@@ -64,6 +64,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeRunProjection,
   ScriptVerdict,
+  ParallelGroupDefinition,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -623,6 +624,7 @@ export interface FileSelectedMessage {
   type: typeof MESSAGE_TYPES.FILE_SELECTED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   workflowName?: string;
   workingFilePath?: string | null;
   finalStep?: WorkflowStep | null;
@@ -639,6 +641,7 @@ export interface SessionRestoredMessage {
   type: typeof MESSAGE_TYPES.SESSION_RESTORED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   results: any[];
   executionState: ExecutionState;
   currentIndex: number;
@@ -779,6 +782,7 @@ export interface StatusMessageMessage {
 export interface StepsExtendedMessage {
   type: typeof MESSAGE_TYPES.STEPS_EXTENDED;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;
   /** The definition head that produced `steps`. Lets a following edit target
    *  the append immediately, without waiting for long-running execution to end. */
@@ -792,6 +796,7 @@ export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;
 }
 
@@ -1992,6 +1997,25 @@ export interface ReorderPromptsMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
+/** Extension -> webview confirmation of a pending-tail reorder. */
+export interface ReorderPromptsConfirmedMessage {
+  type: typeof MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED;
+  steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
+  workflowId?: string;
+}
+
+/** Webview -> extension: restore the complete normalized workflow topology. */
+export interface UndoRedoSyncMessage {
+  type: typeof MESSAGE_TYPES.UNDO_REDO_SYNC;
+  steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
+  finalStep: WorkflowStep | null;
+  workflowProperties: Record<string, unknown>;
+  workflowName?: string;
+  mutation?: WorkflowDefinitionMutation;
+}
+
 // ============================================================================
 // PROMPT UNDO TYPES
 // ============================================================================
@@ -2564,6 +2588,7 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | StepsExtendedMessage
   | PromptDeletedMessage
+  | ReorderPromptsConfirmedMessage
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
   | HarnessUsageUpdatedMessage

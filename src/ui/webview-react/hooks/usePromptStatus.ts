@@ -14,6 +14,7 @@ import { isWorkflowRunning } from "../utils/status";
  */
 export function usePromptStatus() {
   const { currentStep, executionState } = useWorkflowStore();
+  const parallelGroups = useWorkflowStore((state) => state.parallelGroups);
   const isRunning = isWorkflowRunning(executionState);
 
   return function getPromptStatus(
@@ -24,13 +25,24 @@ export function usePromptStatus() {
     // This prevents stale RUNNING icons when currentStep advances without
     // an explicit STEP_STATUS_CHANGED being sent (e.g., CLI watch mode).
     if (isRunning) {
+      const currentGroup = parallelGroups.find(
+        (group) =>
+          currentStep >= group.startIndex &&
+          currentStep <= group.endIndex &&
+          index >= group.startIndex &&
+          index <= group.endIndex
+      );
+      if (currentGroup) {
+        const recordedStatus = (prompt as { status?: StepStatus }).status;
+        if (recordedStatus !== undefined) return recordedStatus;
+      }
       if (index === currentStep) return STEP_STATUS.RUNNING;
       if (index < currentStep) {
         // Preserve a recorded terminal status (failed/cancelled/skipped) for
         // past steps. Only fall back to COMPLETED when no terminal status has
         // been recorded yet — e.g. currentStep advanced before the
         // STEP_STATUS_CHANGED message arrived (CLI watch mode).
-        const status = (prompt as any).status as StepStatus | undefined;
+        const status = (prompt as { status?: StepStatus }).status;
         switch (status) {
           case STEP_STATUS.FAILED:
           case STEP_STATUS.CANCELLED:
@@ -55,7 +67,8 @@ export function usePromptStatus() {
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
       return STEP_STATUS.FAILED;
     }
-    if ((prompt as any).status) return (prompt as any).status as StepStatus;
+    const recordedStatus = (prompt as { status?: StepStatus }).status;
+    if (recordedStatus) return recordedStatus;
     if (index < currentStep) return STEP_STATUS.COMPLETED;
     return STEP_STATUS.PENDING;
   };

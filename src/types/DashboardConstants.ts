@@ -808,6 +808,9 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
+/** Stage 2 keeps grouped steps on the existing sequential execution path. */
+export const PARALLEL_GROUP_FAN_OUT_ENABLED = false;
+
 /** Commands emitted by the workflow runtime state machine. */
 export const WORKFLOW_RUNTIME_COMMANDS = {
   START_EXECUTION: "startExecution",

@@ -808,7 +808,8 @@ export class WorkflowInstance {
       this.promptQueue.getWorkflowFile().finalStep ?? null,
       this.promptQueue.getFinalStepRuntime(),
       undefined,
-      this.getWorkflowPropertiesForDashboard()
+      this.getWorkflowPropertiesForDashboard(),
+      state.parallelGroups
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
@@ -840,7 +841,8 @@ export class WorkflowInstance {
       this.promptQueue.getWorkflowFile().finalStep ?? null,
       this.promptQueue.getFinalStepRuntime(),
       undefined,
-      this.getWorkflowPropertiesForDashboard()
+      this.getWorkflowPropertiesForDashboard(),
+      state.parallelGroups
     );
     this.outputCaptureBuffer.replayTo(
       sink,
@@ -2576,7 +2578,8 @@ export class WorkflowInstance {
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           undefined,
           updatedState.definitionRevision,
-          this.id
+          this.id,
+          updatedState.parallelGroups
         );
         this.dashboardSink.updateProgress(
           updatedState.currentIndex,
@@ -2818,7 +2821,9 @@ export class WorkflowInstance {
         currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null,
         this.getAuthoritativeExecutionState(),
-        currentState.definitionRevision
+        currentState.definitionRevision,
+        undefined,
+        currentState.parallelGroups
       );
       this.dashboardSink.updateProgress(
         currentState.currentIndex,
@@ -2922,7 +2927,8 @@ export class WorkflowInstance {
       this.dashboardSink.updatePromptDeleted(
         fileName,
         currentState.steps,
-        this.promptQueue.getWorkflowFile().finalStep ?? null
+        this.promptQueue.getWorkflowFile().finalStep ?? null,
+        currentState.parallelGroups
       );
     }
     await this.reconcileExecutionStateAfterStepChange();
@@ -2984,7 +2990,11 @@ export class WorkflowInstance {
     await this.promptQueue.reorderPendingPrompts(newPendingOrder);
     if (this.dashboardSink) {
       const state = this.promptQueue.getState();
-      this.dashboardSink.notifyPromptsReordered(state.steps);
+      this.dashboardSink.notifyPromptsReordered(
+        state.steps,
+        undefined,
+        state.parallelGroups
+      );
     }
   }
 
@@ -5137,7 +5147,9 @@ export class WorkflowInstance {
           state.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           executionState,
-          state.definitionRevision
+          state.definitionRevision,
+          undefined,
+          state.parallelGroups
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,
@@ -5244,7 +5256,10 @@ export class WorkflowInstance {
         steps,
         queueState.workflowName || undefined,
         promptFile.finalStep ?? null,
-        this.promptQueue.getFinalStepRuntime()
+        this.promptQueue.getFinalStepRuntime(),
+        undefined,
+        undefined,
+        promptFile.parallelGroups
       );
     }
 

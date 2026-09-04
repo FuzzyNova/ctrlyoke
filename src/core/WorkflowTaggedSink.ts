@@ -6,6 +6,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowStep,
+  ParallelGroupDefinition,
   WorkflowViewAddress,
   WorktreeRunProjection,
 } from "../types/CtrlYokeTypes";
@@ -51,7 +52,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowIdOrProperties?: string | Record<string, unknown>,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -64,7 +66,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       finalStep,
       finalStepRuntime,
       this.workflowId,
-      properties
+      properties,
+      parallelGroups
     );
   }
 
@@ -82,7 +85,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowIdOrProperties?: string | Record<string, unknown>,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -98,7 +102,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       finalStep,
       finalStepRuntime,
       this.workflowId,
-      properties
+      properties,
+      parallelGroups
     );
   }
 
@@ -244,23 +249,27 @@ export class WorkflowTaggedSink implements IDashboardSink {
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string,
-    definitionRevision?: number
+    definitionRevision?: number,
+    _workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.inner.updateStepsExtended(
       steps,
       finalStep,
       executionState,
       definitionRevision,
-      this.workflowId
+      this.workflowId,
+      parallelGroups
     );
   }
 
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
-    this.inner.updatePromptDeleted(fileName, steps, finalStep);
+    this.inner.updatePromptDeleted(fileName, steps, finalStep, parallelGroups);
   }
 
   updateFinalStep(finalStep: WorkflowStep | null): void {
@@ -307,8 +316,12 @@ export class WorkflowTaggedSink implements IDashboardSink {
     );
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[]): void {
-    this.inner.notifyPromptsReordered(steps, this.workflowId);
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    _workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
+    this.inner.notifyPromptsReordered(steps, this.workflowId, parallelGroups);
   }
 
   notifyUndoRedoSynced(): void {
