@@ -133,13 +133,14 @@ export function normalizeParallelGroupTopology(topology: {
   return normalized;
 }
 
-function resolveInsertIndex(
+export function resolveParallelGroupInsertIndex(
   topology: ParallelGroupTopology,
   index: number,
   position: ParallelGroupInsertPosition
 ): number {
+  const normalized = normalizeParallelGroupTopology(topology);
   assertIndex(index, "Insert index");
-  if (index < 0 || index > topology.steps.length) {
+  if (index < 0 || index > normalized.steps.length) {
     throw new Error(`Insert index ${index} is out of bounds`);
   }
   if (
@@ -149,7 +150,7 @@ function resolveInsertIndex(
     throw new Error(`Unknown parallel group insert position: ${position}`);
   }
 
-  const containing = topology.parallelGroups.find(
+  const containing = normalized.parallelGroups.find(
     (group) => index > group.startIndex && index <= group.endIndex
   );
   if (!containing) {
@@ -181,13 +182,58 @@ export function insertParallelGroupStep(
   step: WorkflowStep,
   position: ParallelGroupInsertPosition = PARALLEL_GROUP_INSERT_POSITIONS.AFTER
 ): ParallelGroupTopology {
+  return insertParallelGroupSteps(topology, index, [step], position);
+}
+
+export function insertParallelGroupSteps(
+  topology: ParallelGroupTopology,
+  index: number,
+  steps: WorkflowStep[],
+  position: ParallelGroupInsertPosition = PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
-  const insertIndex = resolveInsertIndex(normalized, index, position);
+  const insertIndex = resolveParallelGroupInsertIndex(
+    normalized,
+    index,
+    position
+  );
   const result = {
     steps: [...normalized.steps],
     parallelGroups: shiftForInsert(normalized.parallelGroups, insertIndex),
   };
-  result.steps.splice(insertIndex, 0, step);
+  result.steps.splice(insertIndex, 0, ...steps);
+  validateParallelGroupTopology(result);
+  return result;
+}
+
+export function insertParallelGroupTopology(
+  topology: ParallelGroupTopology,
+  index: number,
+  incoming: ParallelGroupTopology,
+  position: ParallelGroupInsertPosition = PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+): ParallelGroupTopology {
+  const normalized = normalizeParallelGroupTopology(topology);
+  const incomingNormalized = normalizeParallelGroupTopology(incoming);
+  const insertIndex = resolveParallelGroupInsertIndex(
+    normalized,
+    index,
+    position
+  );
+  const result: ParallelGroupTopology = {
+    steps: [...normalized.steps],
+    parallelGroups: [
+      ...shiftForInsert(normalized.parallelGroups, insertIndex),
+      ...incomingNormalized.parallelGroups.map((group) => ({
+        ...group,
+        startIndex: group.startIndex + insertIndex,
+        endIndex: group.endIndex + insertIndex,
+      })),
+    ],
+  };
+  result.steps.splice(insertIndex, 0, ...incomingNormalized.steps);
+  result.parallelGroups.sort(
+    (left, right) => left.startIndex - right.startIndex
+  );
   validateParallelGroupTopology(result);
   return result;
 }
@@ -336,6 +382,147 @@ export function reorderParallelGroupSteps(
   }
   validateParallelGroupTopology(result);
   return result;
+}
+
+function assertPendingOrder(
+  pendingCount: number,
+  newPendingOrder: number[]
+): void {
+  if (newPendingOrder.length !== pendingCount) {
+    throw new Error(
+      `Pending reorder must contain exactly ${pendingCount} indices`
+    );
+  }
+  const seen = new Set<number>();
+  for (const index of newPendingOrder) {
+    assertIndex(index, "Pending reorder index");
+    if (index < 0 || index >= pendingCount || seen.has(index)) {
+      throw new Error("Pending reorder must be a permutation of its indices");
+    }
+    seen.add(index);
+  }
+}
+
+/**
+ * Reorders the pending tail while keeping every complete parallel group
+ * contiguous. Members of a group may be reordered within that group; a group
+ * move is represented by the first member encountered in the requested order.
+ */
+export function reorderParallelGroupPendingSteps(
+  topology: ParallelGroupTopology,
+  currentIndex: number,
+  newPendingOrder: number[]
+): ParallelGroupTopology {
+  const normalized = normalizeParallelGroupTopology(topology);
+  assertIndex(currentIndex, "Current index");
+  if (currentIndex < 0 || currentIndex > normalized.steps.length) {
+    throw new Error(`Current index ${currentIndex} is out of bounds`);
+  }
+  assertPendingOrder(normalized.steps.length - currentIndex, newPendingOrder);
+
+  const crossingGroup = normalized.parallelGroups.find(
+    (group) => group.startIndex < currentIndex && group.endIndex >= currentIndex
+  );
+  if (crossingGroup) {
+    const requestedPending = newPendingOrder.filter((index) => {
+      const absoluteIndex = currentIndex + index;
+      return (
+        absoluteIndex >= currentIndex && absoluteIndex <= crossingGroup.endIndex
+      );
+    });
+    if (
+      requestedPending.length !== crossingGroup.endIndex - currentIndex + 1 ||
+      requestedPending.some(
+        (index, position) => index !== position
+      )
+    ) {
+      throw new Error(
+        "Cannot reorder a parallel group across the current execution boundary"
+      );
+    }
+  }
+
+  interface PendingBlock {
+    firstRequestedPosition: number;
+    sourceIndices: number[];
+    groupId?: string;
+  }
+
+  const requestedAbsolute = newPendingOrder.map(
+    (index) => currentIndex + index
+  );
+  const blocks: PendingBlock[] = [];
+  const seenGroups = new Set<string>();
+  for (const [
+    requestedPosition,
+    absoluteIndex,
+  ] of requestedAbsolute.entries()) {
+    const group = normalized.parallelGroups.find(
+      (candidate) =>
+        absoluteIndex >= candidate.startIndex &&
+        absoluteIndex <= candidate.endIndex
+    );
+    if (!group || group.startIndex < currentIndex) {
+      blocks.push({
+        firstRequestedPosition: requestedPosition,
+        sourceIndices: [absoluteIndex],
+      });
+      continue;
+    }
+    if (seenGroups.has(group.id)) {
+      continue;
+    }
+    seenGroups.add(group.id);
+    blocks.push({
+      firstRequestedPosition: requestedPosition,
+      sourceIndices: requestedAbsolute.filter(
+        (candidate) =>
+          candidate >= group.startIndex && candidate <= group.endIndex
+      ),
+      groupId: group.id,
+    });
+  }
+
+  blocks.sort(
+    (left, right) => left.firstRequestedPosition - right.firstRequestedPosition
+  );
+  const pendingSourceIndices = blocks.flatMap((block) => block.sourceIndices);
+  const prefixIndices = Array.from(
+    { length: currentIndex },
+    (_, index) => index
+  );
+  const orderedIndices = [...prefixIndices, ...pendingSourceIndices];
+  const items: TopologyStep[] = orderedIndices.map((sourceIndex) => ({
+    step: normalized.steps[sourceIndex],
+    groupId: normalized.parallelGroups.find(
+      (group) =>
+        sourceIndex >= group.startIndex && sourceIndex <= group.endIndex
+    )?.id,
+  }));
+  const result = topologyFromItems(items);
+  for (const group of result.parallelGroups) {
+    const original = normalized.parallelGroups.find(
+      (candidate) => candidate.id === group.id
+    );
+    group.failFast = original?.failFast ?? true;
+  }
+  validateParallelGroupTopology(result);
+  return result;
+}
+
+export function replaceParallelGroupStep(
+  topology: ParallelGroupTopology,
+  index: number,
+  step: WorkflowStep
+): ParallelGroupTopology {
+  const normalized = normalizeParallelGroupTopology(topology);
+  assertIndex(index, "Replace index");
+  if (index < 0 || index >= normalized.steps.length) {
+    throw new Error(`Replace index ${index} is out of bounds`);
+  }
+  normalized.steps[index] = step;
+  validateParallelGroupTopology(normalized);
+  return normalized;
 }
 
 export function groupParallelGroupSteps(

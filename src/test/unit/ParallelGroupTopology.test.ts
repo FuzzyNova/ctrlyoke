@@ -3,8 +3,10 @@ import { suite, test } from "mocha";
 import {
   groupParallelGroupSteps,
   insertParallelGroupStep,
+  insertParallelGroupTopology,
   normalizeParallelGroupTopology,
   reorderParallelGroupSteps,
+  reorderParallelGroupPendingSteps,
   snapParallelGroupIndex,
   ungroupParallelGroup,
   unwrapParallelGroup,
@@ -141,6 +143,28 @@ suite("ParallelGroupTopology", () => {
       assert.strictEqual(ranges(input), "g1:1-3");
     });
 
+    test("inserts a grouped tail without reversing its order", () => {
+      const result = insertParallelGroupTopology(topology(), 5, {
+        steps: [step("x"), step("y")],
+        parallelGroups: [
+          { id: "g2", startIndex: 0, endIndex: 1, failFast: false },
+        ],
+      });
+      assert.deepStrictEqual(names(result), [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "x",
+        "y",
+      ]);
+      assert.deepStrictEqual(result.parallelGroups, [
+        { id: "g1", startIndex: 1, endIndex: 3, failFast: true },
+        { id: "g2", startIndex: 5, endIndex: 6, failFast: false },
+      ]);
+    });
+
     test("shrinks a group on deletion and unwraps a two-member group", () => {
       const result = deleteParallelGroupStep(topology(), 2);
       assert.strictEqual(ranges(result), "g1:1-2");
@@ -171,6 +195,16 @@ suite("ParallelGroupTopology", () => {
       const result = reorderParallelGroupSteps(topology(), 0, 2);
       assert.deepStrictEqual(names(result), ["b", "c", "d", "a", "e"]);
       assert.strictEqual(ranges(result), "g1:0-2");
+    });
+
+    test("reorders pending members while preserving the group", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(),
+        0,
+        [0, 2, 1, 3, 4]
+      );
+      assert.deepStrictEqual(names(result), ["a", "c", "b", "d", "e"]);
+      assert.strictEqual(ranges(result), "g1:1-3");
     });
 
     test("creates, ungroups, and unwraps groups", () => {

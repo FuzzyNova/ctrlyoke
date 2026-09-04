@@ -4341,14 +4341,16 @@ export class WorkflowOrchestrator {
     mutation: WorkflowDefinitionMutation | undefined,
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null,
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
   ): Promise<
     { definitionRevision: number; descriptorRevision: number } | undefined
   > {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       await this.getInstanceForClient(clientId).syncStepsForUndoRedo(
         steps,
-        finalStep
+        finalStep,
+        parallelGroups
       );
       return undefined;
     }
@@ -4358,7 +4360,8 @@ export class WorkflowOrchestrator {
       | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
-      (instance) => instance.syncStepsForUndoRedo(steps, finalStep),
+      (instance) =>
+        instance.syncStepsForUndoRedo(steps, finalStep, parallelGroups),
       async (workspaceRoot) => {
         const stepsResult = await WorkingFileManager.syncStepsForUndoRedoAtRun(
           workspaceRoot,
@@ -4366,7 +4369,8 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           steps,
           mutation.expectedDefinitionRevision,
-          this.lineageRepository
+          this.lineageRepository,
+          parallelGroups
         );
         latest = {
           definitionRevision: stepsResult.definitionRevision,
@@ -5170,7 +5174,8 @@ export class WorkflowOrchestrator {
           workingFile.steps ?? [],
           workingFile._runtime?.pendingRewind?.fromStepIndex,
           workingFile.finalStep,
-          workingFile.worktree
+          workingFile.worktree,
+          workingFile.parallelGroups
         ),
       }
     );

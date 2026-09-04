@@ -294,7 +294,8 @@ export class WorkflowStepHandlers {
       mutation,
       message.steps,
       message.finalStep ?? null,
-      ctx.clientId
+      ctx.clientId,
+      message.parallelGroups
     );
     if (typeof message.workflowName === "string") {
       // Undo/redo tracks workflowName as part of its zundo-covered state

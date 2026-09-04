@@ -219,6 +219,88 @@ suite("PromptQueue State Machine Tests", () => {
         /Cannot delete the currently executing step/
       );
     });
+
+    suite("parallel topology mutations", () => {
+      const grouped = {
+        steps: [
+          { prompt: "before" },
+          { prompt: "member-a" },
+          { prompt: "member-b" },
+          { prompt: "member-c" },
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+        ],
+      };
+
+      setup(() => {
+        queue.loadPrompts(grouped);
+      });
+
+      test("exposes normalized groups on queue state and preserves them on edits", async () => {
+        await queue.updatePrompt(2, { name: "renamed" });
+        await queue.replaceStep(1, { prompt: "replacement" });
+        const state = queue.getState();
+        assert.deepStrictEqual(state.parallelGroups, [
+          { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+        ]);
+      });
+
+      test("snaps insertion inside a group after the group", async () => {
+        await queue.insertStepAfterIndex(1, { prompt: "inserted" });
+        const state = queue.getState();
+        assert.deepStrictEqual(
+          state.steps.map((step) => (step as PromptStep).prompt),
+          ["before", "member-a", "member-b", "member-c", "inserted", "after"]
+        );
+        assert.deepStrictEqual(state.parallelGroups, [
+          { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+        ]);
+      });
+
+      test("shrinks and unwraps groups when members are deleted", async () => {
+        await queue.deletePrompt(2);
+        assert.deepStrictEqual(queue.getState().parallelGroups, [
+          { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+        ]);
+        await queue.deletePrompt(1);
+        assert.deepStrictEqual(queue.getState().parallelGroups, []);
+      });
+
+      test("reorders pending members without losing group topology", async () => {
+        await queue.reorderPendingPrompts([0, 2, 1, 3, 4]);
+        const state = queue.getState();
+        assert.deepStrictEqual(
+          state.steps.map((step) => (step as PromptStep).prompt),
+          ["before", "member-b", "member-a", "member-c", "after"]
+        );
+        assert.deepStrictEqual(state.parallelGroups, [
+          { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+        ]);
+      });
+
+      test("snaps pending rewind boundaries to a group's start", () => {
+        queue.applyPendingRewind(2, 1, 2, false);
+        assert.strictEqual(queue.getState().currentIndex, 1);
+        assert.deepStrictEqual(queue.getState().pendingRewind, {
+          fromStepIndex: 1,
+          baseDefinitionRevision: 1,
+        });
+      });
+
+      test("carries groups through undo/redo sync and rejects invalid reorder ranges", async () => {
+        await queue.syncStepsForUndoRedo(grouped.steps, grouped.parallelGroups);
+        assert.deepStrictEqual(
+          queue.getState().parallelGroups,
+          grouped.parallelGroups
+        );
+        await assert.rejects(
+          queue.reorderPendingPrompts([0, 0, 1, 2, 3]),
+          /permutation/
+        );
+      });
+    });
   });
 
   suite("Runtime State Projection - startExecution()", () => {

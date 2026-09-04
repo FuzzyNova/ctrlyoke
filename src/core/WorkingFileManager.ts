@@ -11,6 +11,7 @@ import type {
   WorkingFileWorktreeRuntimePatch,
   WorkflowTokenTotals,
   WorkflowLineageCreationOptions,
+  ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
@@ -43,6 +44,16 @@ import {
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
+import {
+  deleteParallelGroupStep,
+  insertParallelGroupSteps,
+  normalizeParallelGroupTopology,
+  reorderParallelGroupPendingSteps,
+  replaceParallelGroupStep,
+  resolveParallelGroupInsertIndex,
+  snapParallelGroupStartPosition,
+  PARALLEL_GROUP_INSERT_POSITIONS,
+} from "./ParallelGroupTopology";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
   return key === PROMPT_PROPERTIES.AGENT &&
@@ -414,8 +425,14 @@ export interface IWorkingFileQueueAccess {
   /** Current workflow name */
   getWorkflowName(): string | undefined;
 
+  /** Current normalized parallel-group topology. */
+  getParallelGroups?(): ParallelGroupDefinition[];
+
   /** Merge disk steps into memory, returning newly added steps */
-  mergeDiskSteps(diskSteps: WorkflowStep[]): WorkflowStep[];
+  mergeDiskSteps(
+    diskSteps: WorkflowStep[],
+    parallelGroups?: ParallelGroupDefinition[]
+  ): WorkflowStep[];
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
@@ -542,8 +559,13 @@ export class WorkingFileManager {
     workspaceFolderPath: string,
     workflowName: string,
     originalFilePath?: string,
-    options?: WorkflowLineageCreationOptions
+    options?: WorkflowLineageCreationOptions,
+    parallelGroups: ParallelGroupDefinition[] = []
   ): Promise<{ workingFilePath: string; workflowKey: WorkflowKey }> {
+    const topology = normalizeParallelGroupTopology({
+      steps,
+      parallelGroups,
+    });
     const { workflowKey, draftFilePath } =
       await this.lineageRepository.createLineage(
         workspaceFolderPath,
@@ -560,7 +582,8 @@ export class WorkingFileManager {
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
       definitionRevision: 1,
-      steps: steps.map(stripViewOnlyWorkflowStepFields),
+      steps: topology.steps.map(stripViewOnlyWorkflowStepFields),
+      parallelGroups: topology.parallelGroups,
       _runtime: {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,
@@ -644,6 +667,11 @@ export class WorkingFileManager {
       isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
       steps: this.queueAccess.getSteps().map(stripViewOnlyWorkflowStepFields),
+      parallelGroups: normalizeParallelGroupTopology({
+        steps: this.queueAccess.getSteps(),
+        parallelGroups:
+          this.queueAccess.getParallelGroups?.() ?? head?.parallelGroups,
+      }).parallelGroups,
       _runtime: {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
@@ -668,7 +696,8 @@ export class WorkingFileManager {
         workingFile.steps ?? [],
         undefined,
         workingFile.finalStep,
-        workingFile.worktree
+        workingFile.worktree,
+        workingFile.parallelGroups
       )
     );
     await WorkingFileManager.finalizeAllocatedRun(
@@ -779,6 +808,10 @@ export class WorkingFileManager {
     );
 
     const startedAt = Date.now();
+    const sourceTopology = normalizeParallelGroupTopology({
+      steps: source.steps ?? [],
+      parallelGroups: source.parallelGroups,
+    });
     const finalStep = source.finalStep
       ? stripViewOnlyWorkflowStepFields(stripStepRuntime([source.finalStep])[0])
       : undefined;
@@ -792,9 +825,10 @@ export class WorkingFileManager {
       lastModifiedAt: startedAt,
       isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
-      steps: stripStepRuntime(source.steps ?? []).map(
+      steps: stripStepRuntime(sourceTopology.steps).map(
         stripViewOnlyWorkflowStepFields
       ),
+      parallelGroups: sourceTopology.parallelGroups,
       ...(finalStep ? { finalStep } : {}),
       ...(overrides.harness ? { harness: overrides.harness } : {}),
       ...(overrides.model ? { model: overrides.model } : {}),
@@ -817,7 +851,8 @@ export class WorkingFileManager {
         workingFile.steps ?? [],
         undefined,
         workingFile.finalStep,
-        workingFile.worktree
+        workingFile.worktree,
+        workingFile.parallelGroups
       )
     );
     await WorkingFileManager.finalizeAllocatedRun(
@@ -920,12 +955,19 @@ export class WorkingFileManager {
               `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
             );
           }
-          const steps = source.steps ?? [];
-          if (fromStepIndex >= steps.length) {
+          const topology = normalizeParallelGroupTopology({
+            steps: source.steps ?? [],
+            parallelGroups: source.parallelGroups,
+          });
+          if (fromStepIndex >= topology.steps.length) {
             throw new Error(
-              `Invalid rewind index ${fromStepIndex}; expected a suffix within ${steps.length} step(s)`
+              `Invalid rewind index ${fromStepIndex}; expected a suffix within ${topology.steps.length} step(s)`
             );
           }
+          const boundary = snapParallelGroupStartPosition(
+            topology,
+            fromStepIndex
+          );
 
           // Snapshot first. A crash after this point is recoverable; a crash before
           // it leaves the untouched run and descriptor without a pending marker.
@@ -940,21 +982,22 @@ export class WorkingFileManager {
           await writeSnapshotAtomic(snapshotPath, sourceBytes);
           const now = Date.now();
           const pendingRewind = {
-            fromStepIndex,
+            fromStepIndex: boundary,
             baseDefinitionRevision: sourceRevision,
           };
           const workingFile: WorkingFile = {
             ...source,
             lastModifiedAt: now,
             definitionRevision: sourceRevision + 1,
-            steps: steps.map((step, index) =>
-              index < fromStepIndex
+            steps: topology.steps.map((step, index) =>
+              index < boundary
                 ? stripViewOnlyWorkflowStepFields(step)
                 : stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
             ),
+            parallelGroups: topology.parallelGroups,
             _runtime: {
               ...source._runtime,
-              currentIndex: fromStepIndex,
+              currentIndex: boundary,
               executionState:
                 source._runtime?.executionState === EXECUTION_STATES.PAUSED
                   ? EXECUTION_STATES.PAUSED
@@ -976,7 +1019,7 @@ export class WorkingFileManager {
               pendingEdit: {
                 kind: WORKTREE_EDIT_KINDS.REWIND,
                 runRef,
-                fromStepIndex,
+                fromStepIndex: boundary,
                 baseDefinitionRevision: sourceRevision,
               },
             },
@@ -1235,16 +1278,28 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const topology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const steps = topology.steps;
         const isEmptyInsert = steps.length === 0 && afterIndex === -1;
         const isValidExistingIndex =
           steps.length > 0 && afterIndex >= 0 && afterIndex < steps.length;
         if (!isEmptyInsert && !isValidExistingIndex) {
           throw new Error(`Invalid insert index: ${afterIndex}`);
         }
-        const insertIndex = afterIndex + 1;
-        const nextSteps = [...steps];
-        nextSteps.splice(insertIndex, 0, step);
+        const requestedIndex = afterIndex + 1;
+        const insertIndex = resolveParallelGroupInsertIndex(
+          topology,
+          requestedIndex,
+          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+        );
+        const nextTopology = insertParallelGroupSteps(
+          topology,
+          requestedIndex,
+          [step]
+        );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
         // `currentIndex` becomes the next step to run rather than being shifted
@@ -1254,7 +1309,8 @@ export class WorkingFileManager {
         return {
           workingFile: {
             ...source,
-            steps: nextSteps,
+            steps: nextTopology.steps,
+            parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
               : source._runtime,
@@ -1292,7 +1348,11 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const topology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const steps = topology.steps;
         if (index < 0 || index >= steps.length) {
           throw new Error(`Invalid prompt index: ${index}`);
         }
@@ -1302,18 +1362,25 @@ export class WorkingFileManager {
             `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
           );
         }
-        const nextSteps = [...steps];
         const incomingStep =
           "replace" in change
             ? change.replace
             : (change.updates as WorkflowStep);
-        nextSteps[index] = mergeWorkflowStepUpdate(
-          steps[index],
-          incomingStep,
-          "replace" in change ? change.clearProperties : undefined
+        const nextTopology = replaceParallelGroupStep(
+          topology,
+          index,
+          mergeWorkflowStepUpdate(
+            steps[index],
+            incomingStep,
+            "replace" in change ? change.clearProperties : undefined
+          )
         );
         return {
-          workingFile: { ...source, steps: nextSteps },
+          workingFile: {
+            ...source,
+            steps: nextTopology.steps,
+            parallelGroups: nextTopology.parallelGroups,
+          },
           result: undefined,
         };
       },
@@ -1397,19 +1464,23 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const topology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const steps = topology.steps;
         if (index < 0 || index >= steps.length) {
           throw new Error(`Invalid prompt index: ${index}`);
         }
-        const nextSteps = [...steps];
-        nextSteps.splice(index, 1);
+        const nextTopology = deleteParallelGroupStep(topology, index);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
           index < currentIndex ? currentIndex - 1 : currentIndex;
         return {
           workingFile: {
             ...source,
-            steps: nextSteps,
+            steps: nextTopology.steps,
+            parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
               : source._runtime,
@@ -1446,13 +1517,22 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const steps = source.steps ?? [];
+        const topology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
         const currentIndex = source._runtime?.currentIndex ?? 0;
-        const donePrompts = steps.slice(0, currentIndex);
-        const pendingPrompts = steps.slice(currentIndex);
-        const newPending = newPendingOrder.map((i) => pendingPrompts[i]);
+        const nextTopology = reorderParallelGroupPendingSteps(
+          topology,
+          currentIndex,
+          newPendingOrder
+        );
         return {
-          workingFile: { ...source, steps: [...donePrompts, ...newPending] },
+          workingFile: {
+            ...source,
+            steps: nextTopology.steps,
+            parallelGroups: nextTopology.parallelGroups,
+          },
           result: undefined,
         };
       },
@@ -1477,7 +1557,8 @@ export class WorkingFileManager {
     runRef: RunRef,
     newSteps: WorkflowStep[],
     expectedDefinitionRevision: number,
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
@@ -1489,19 +1570,30 @@ export class WorkingFileManager {
       runRef,
       expectedDefinitionRevision,
       (source) => {
-        const existingSteps = source.steps ?? [];
-        const nextSteps = newSteps.map((newStep, index) => {
+        const existingTopology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const incomingTopology = normalizeParallelGroupTopology({
+          steps: newSteps,
+          parallelGroups: parallelGroups ?? existingTopology.parallelGroups,
+        });
+        const nextSteps = incomingTopology.steps.map((newStep, index) => {
           const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
           if (persistableStep._runtime) {
             return persistableStep;
           }
-          const existing = existingSteps[index];
+          const existing = existingTopology.steps[index];
           return existing?._runtime
             ? { ...persistableStep, _runtime: existing._runtime }
             : persistableStep;
         });
         return {
-          workingFile: { ...source, steps: nextSteps },
+          workingFile: {
+            ...source,
+            steps: nextSteps,
+            parallelGroups: incomingTopology.parallelGroups,
+          },
           result: undefined,
         };
       },
@@ -1793,7 +1885,10 @@ export class WorkingFileManager {
         const diskSteps = workingFile.steps || [];
         const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
 
-        const newStepsFromDisk = this.queueAccess.mergeDiskSteps(diskSteps);
+        const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
+          diskSteps,
+          workingFile.parallelGroups
+        );
 
         // If disk has new steps, log and emit state change
         if (newStepsFromDisk.length > 0) {
@@ -1816,6 +1911,10 @@ export class WorkingFileManager {
       workingFile.steps = this.queueAccess
         .getSteps()
         .map(stripViewOnlyWorkflowStepFields);
+      workingFile.parallelGroups = normalizeParallelGroupTopology({
+        steps: this.queueAccess.getSteps(),
+        parallelGroups: this.queueAccess.getParallelGroups?.() ?? [],
+      }).parallelGroups;
       const tokenTotals =
         this.queueAccess.getTokenTotals?.() ??
         workingFile._runtime?.tokenTotals;
@@ -2170,13 +2269,16 @@ export class WorkingFileManager {
    * and file I/O to be atomic (e.g., appendSteps).
    */
   public async runInQueue(fn: () => Promise<void>): Promise<void> {
-    this.operationQueue = this.operationQueue.then(fn).catch((err) => {
-      Log.error(
-        `operationQueue: serialized operation failed: ${getErrorMessage(err)}`
-      );
-    });
-
-    await this.operationQueue;
+    const operation = this.operationQueue.then(fn);
+    this.operationQueue = operation.then(
+      () => undefined,
+      (err) => {
+        Log.error(
+          `operationQueue: serialized operation failed: ${getErrorMessage(err)}`
+        );
+      }
+    );
+    await operation;
   }
 
   // ==================== Private Helpers ====================

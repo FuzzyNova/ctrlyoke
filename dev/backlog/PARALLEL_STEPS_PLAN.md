@@ -958,7 +958,7 @@ Each of these must have a test or an explicit "not supported" message.
 [x] 3. `src/core/ParallelGroupTopology.ts`: normalize/validate/insert/delete/reorder/
    group/ungroup/unwrap/snap helpers with exhaustive unit tests.
 [x] 4. `PromptFileParser`: flatten containers, populate groups, structural validation rules.
-5. `WorkingFileManager`, `PromptQueue`, `RunContinuationService`, `WorkflowInstance`,
+[x] 5. `WorkingFileManager`, `PromptQueue`, `RunContinuationService`, `WorkflowInstance`,
    `WorkflowStepSanitizer.buildDefinitionSnapshot`, `TimelineRecorder`,
    `RunOutputResolver`: carry and preserve groups through every mutation path listed in
    the audit, including the insert/rewind/start-position snapping rules.

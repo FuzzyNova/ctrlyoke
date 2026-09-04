@@ -20,8 +20,10 @@ import {
   type WorkingFile,
   type WorktreeConfig,
   type WorkflowStep,
+  type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
+import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
 
 /**
  * Empty-string agent selections are used by settings/UI controls to represent
@@ -55,11 +57,19 @@ export function buildDefinitionSnapshot(
   steps: WorkflowStep[],
   rewindBoundary?: number,
   finalStep?: WorkflowStep,
-  worktree?: WorktreeConfig
+  worktree?: WorktreeConfig,
+  parallelGroups?: ParallelGroupDefinition[]
 ): WorkflowDefinitionSnapshot {
+  const topology = normalizeParallelGroupTopology({
+    steps,
+    parallelGroups,
+  });
   return {
     workflowName,
-    steps: stripStepRuntime(steps),
+    steps: stripStepRuntime(topology.steps),
+    ...(topology.parallelGroups.length > 0
+      ? { parallelGroups: topology.parallelGroups }
+      : {}),
     ...(worktree !== undefined ? { worktree } : {}),
     ...(finalStep ? { finalStep: stripStepRuntime([finalStep])[0] } : {}),
     ...(rewindBoundary !== undefined ? { rewindBoundary } : {}),

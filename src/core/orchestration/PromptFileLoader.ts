@@ -186,7 +186,9 @@ export class PromptFileLoader {
           displayName,
           promptFile.steps,
           workspaceFolderPath,
-          originalFilePath
+          originalFilePath,
+          undefined,
+          promptFile.parallelGroups
         );
 
         // Copy workflow-level properties from loaded file to working file

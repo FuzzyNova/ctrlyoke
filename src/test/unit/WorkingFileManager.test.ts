@@ -1541,6 +1541,128 @@ suite("WorkingFileManager", () => {
       };
     }
 
+    async function makeGroupedIdleRun(): Promise<{
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      runFilePath: string;
+    }> {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-grouped-"));
+      const steps: WorkingFile["steps"] = [
+        { prompt: "before" },
+        { prompt: "member-a" },
+        { prompt: "member-b" },
+        { prompt: "member-c" },
+        { prompt: "after" },
+      ];
+      const parallelGroups = [
+        { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+      ];
+      const draft = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await draft.createWorkingFile(
+        "grouped-source",
+        steps,
+        workspace,
+        "Grouped source",
+        undefined,
+        undefined,
+        parallelGroups
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => steps;
+      access.getParallelGroups = () => parallelGroups;
+      access.getCurrentIndex = () => 0;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      return {
+        workflowKey,
+        runRef: promoted.runRef,
+        runFilePath: promoted.workingFilePath,
+      };
+    }
+
+    test("create, promote, and seed preserve parallel groups", async () => {
+      const grouped = await makeGroupedIdleRun();
+      const seeded = await WorkingFileManager.seedNewRun(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef
+      );
+      const seededFile = JSON.parse(
+        await fs.readFile(seeded.workingFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(seededFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+      ]);
+    });
+
+    test("addressed insert/delete/reorder preserve and update group ranges", async () => {
+      const grouped = await makeGroupedIdleRun();
+      const inserted = await WorkingFileManager.insertStepAtRun(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef,
+        1,
+        { prompt: "inserted" },
+        1
+      );
+      assert.deepStrictEqual(inserted.workingFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+      ]);
+      const deleted = await WorkingFileManager.deleteStepAtRun(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef,
+        2,
+        2
+      );
+      assert.deepStrictEqual(deleted.workingFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+      ]);
+      const reordered = await WorkingFileManager.reorderStepsAtRun(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef,
+        [0, 2, 1, 3, 4],
+        3
+      );
+      assert.deepStrictEqual(reordered.workingFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+      ]);
+    });
+
+    test("addressed append and rewind apply group snapping", async () => {
+      const grouped = await makeGroupedIdleRun();
+      const appended = await WorkingFileManager.appendStepsToRun(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef,
+        [{ prompt: "tail" }],
+        1
+      );
+      assert.strictEqual(appended.insertIndex, 5);
+      assert.deepStrictEqual(appended.workingFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+      ]);
+      const rewound = await WorkingFileManager.beginPendingRewind(
+        workspace,
+        grouped.workflowKey,
+        grouped.runRef,
+        2,
+        2,
+        2
+      );
+      assert.strictEqual(
+        rewound.workingFile._runtime?.pendingRewind?.fromStepIndex,
+        1
+      );
+      assert.deepStrictEqual(rewound.workingFile.parallelGroups, [
+        { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
+      ]);
+    });
+
     test("insertStepAtRun splices the step and shifts currentIndex, bumping the definition revision only", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
 

@@ -359,6 +359,11 @@ export class CtrlYokeMCPServer {
       log("ERROR: Invalid steps array", steps);
       throw new Error("steps must be a non-empty array");
     }
+    if (steps.some((step) => "parallel" in step)) {
+      throw new Error(
+        "ctrlyoke_append_queue accepts flat workflow steps only; parallel groups cannot be created through MCP"
+      );
+    }
 
     if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
       log("ERROR: Invalid position:", position);

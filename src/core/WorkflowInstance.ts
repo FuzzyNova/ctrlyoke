@@ -39,6 +39,7 @@ import {
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
   type RunnerHostIdentity,
+  type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
@@ -1273,7 +1274,8 @@ export class WorkflowInstance {
           promptFile.steps ?? [],
           workspaceFolderPath,
           undefined,
-          lineageOptions
+          lineageOptions,
+          promptFile.parallelGroups
         )
       : undefined;
 
@@ -2521,7 +2523,8 @@ export class WorkflowInstance {
           path.basename(filePath),
           filePath,
           true,
-          `Queued ${parsed.steps.length} prompt(s) to ${workflowType}`
+          `Queued ${parsed.steps.length} prompt(s) to ${workflowType}`,
+          parsed.parallelGroups
         );
         return;
       }
@@ -2552,7 +2555,12 @@ export class WorkflowInstance {
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
       this.reopenRuntimeForContinuationIfNeeded(false);
-      await this.promptQueue.appendSteps(parsed.steps, source, position);
+      await this.promptQueue.appendSteps(
+        parsed.steps,
+        source,
+        position,
+        parsed.parallelGroups
+      );
       this.syncCurrentPromptFileFromQueue();
 
       if (this.dashboardSink) {
@@ -2747,9 +2755,13 @@ export class WorkflowInstance {
    */
   async syncStepsForUndoRedo(
     steps: WorkflowStep[],
-    finalStep: WorkflowStep | null
+    finalStep: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): Promise<void> {
-    await this.promptQueue.syncStepsForUndoRedo(steps);
+    await this.promptQueue.syncStepsForUndoRedo(
+      steps,
+      parallelGroups ?? this.promptQueue.getState().parallelGroups
+    );
 
     // Sync finalStep if it changed
     if (finalStep !== null) {
@@ -3012,7 +3024,8 @@ export class WorkflowInstance {
       expectedDescriptorRevision
     );
     this.promptQueue.applyPendingRewind(
-      fromStepIndex,
+      result.workingFile._runtime?.pendingRewind?.fromStepIndex ??
+        fromStepIndex,
       expectedDefinitionRevision,
       result.definitionRevision,
       executionState === EXECUTION_STATES.PAUSED
@@ -4879,7 +4892,8 @@ export class WorkflowInstance {
         state.steps,
         undefined,
         this.promptQueue.getWorkflowFile().finalStep,
-        this.promptQueue.getWorkflowFile().worktree
+        this.promptQueue.getWorkflowFile().worktree,
+        state.parallelGroups
       ),
     };
   }
@@ -5132,7 +5146,8 @@ export class WorkflowInstance {
     displayName: string,
     originalFilePath?: string,
     reuseExistingWorkingFile: boolean = false,
-    notificationMessage?: string
+    notificationMessage?: string,
+    parallelGroups: ParallelGroupDefinition[] = []
   ): Promise<string | undefined> {
     // Set instance-level name so getSummary() returns it immediately
     this.workflowName = displayName;
@@ -5162,7 +5177,9 @@ export class WorkflowInstance {
           displayName,
           steps,
           workspaceFolderPath,
-          originalFilePath
+          originalFilePath,
+          undefined,
+          parallelGroups
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
 
@@ -5191,10 +5208,14 @@ export class WorkflowInstance {
     if (workingFilePath) {
       promptFile = await this.promptQueue.readWorkingFile(workingFilePath);
       if (!promptFile.steps || promptFile.steps.length === 0) {
-        promptFile = { ...promptFile, steps: steps };
+        promptFile = {
+          ...promptFile,
+          steps: steps,
+          parallelGroups,
+        };
       }
     } else {
-      promptFile = { steps: steps };
+      promptFile = { steps, parallelGroups };
     }
     this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
