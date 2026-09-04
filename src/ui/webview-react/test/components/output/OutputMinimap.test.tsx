@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import {
@@ -23,7 +24,10 @@ function makeStep(overrides: Partial<MinimapStep> = {}): MinimapStep {
   };
 }
 
-function renderMinimap(steps: MinimapStep[]) {
+function renderMinimap(
+  steps: MinimapStep[],
+  props: Partial<ComponentProps<typeof OutputMinimap>> = {}
+) {
   const scrollContainerRef = {
     current: document.createElement("div"),
   };
@@ -36,38 +40,42 @@ function renderMinimap(steps: MinimapStep[]) {
       steps={steps}
       scrollContainerRef={scrollContainerRef}
       contentHeight={100}
+      {...props}
     />
   );
 }
 
 describe("OutputMinimap step visibility controls", () => {
-  it("renders an accessible eye control for each step", () => {
-    renderMinimap([
-      makeStep(),
-      makeStep({ key: "queue:3", stepIndex: 3, label: "deploy" }),
-    ]);
+  it("renders an accessible hide/show control inside each step's popup", () => {
+    const onStepClick = vi.fn();
+    renderMinimap(
+      [makeStep(), makeStep({ key: "queue:3", stepIndex: 3, label: "deploy" })],
+      { onStepClick }
+    );
 
+    // Only one popup is pinned open at a time — pin each marker in turn and
+    // check its own hide/show control renders with the right label.
+    fireEvent.click(screen.getByRole("button", { name: "research-db" }));
     expect(
       screen.getByRole("button", { name: "Hide step 3 output" })
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "deploy" }));
     expect(
       screen.getByRole("button", { name: "Hide step 4 output" })
     ).toBeInTheDocument();
   });
 
-  it("toggles a step through its eye control", () => {
+  it("toggles a step's visibility through the popup's hide/show control", () => {
     const onStepToggle = vi.fn();
+    const onStepClick = vi.fn();
     const step = makeStep();
-    render(
-      <OutputMinimap
-        steps={[step]}
-        scrollContainerRef={{ current: document.createElement("div") }}
-        contentHeight={100}
-        onStepToggle={onStepToggle}
-      />
-    );
+    renderMinimap([step], { onStepToggle, onStepClick });
 
-    fireEvent.click(screen.getByRole("button", { name: "Hide step 3 output" }));
+    fireEvent.click(screen.getByRole("button", { name: "research-db" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hide step 3 output" })
+    );
 
     expect(onStepToggle).toHaveBeenCalledWith(step);
   });
@@ -91,19 +99,24 @@ describe("OutputMinimap step visibility controls", () => {
     expect(onStepSolo).toHaveBeenCalledWith(step);
   });
 
-  it("dims hidden steps and shows activity while hidden", () => {
-    renderMinimap([makeStep({ hidden: true, hasHiddenActivity: true })]);
+  it("dims hidden steps, surfaces hidden-but-active state, and labels the popup control Show", () => {
+    const onStepClick = vi.fn();
+    renderMinimap([makeStep({ hidden: true, hasHiddenActivity: true })], {
+      onStepClick,
+    });
 
     expect(
-      screen.getByRole("button", { name: "Show step 3 output" })
-    ).toHaveClass("opacity-0");
-    expect(
       screen
-        .getByRole("button", { name: "Show step 3 output" })
+        .getByRole("button", { name: "research-db" })
         .closest('[role="group"]')
     ).toHaveClass("opacity-60");
     expect(
       document.querySelector("[data-minimap-hidden-activity]")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "research-db" }));
+    expect(
+      screen.getByRole("button", { name: "Show step 3 output" })
     ).toBeInTheDocument();
   });
 });
@@ -118,11 +131,11 @@ describe("computeDeclutteredTopsPx", () => {
     expect(computeDeclutteredTopsPx(steps, 200)).toEqual([20, 180]);
   });
 
-  it("pushes two close markers apart by at least the eye-toggle's own footprint", () => {
+  it("pushes two close markers apart by at least the pill button's own footprint", () => {
     // Two step anchors landing within a few pixels of each other in
     // scroll-fraction space is the exact condition that let one step's
-    // always-in-layout (opacity-0) eye-toggle button silently steal clicks
-    // meant for its neighbor.
+    // always-in-layout pill button silently steal clicks meant for its
+    // neighbor.
     const steps = [
       makeStep({ key: "queue:0", scrollFraction: 0.5 }),
       makeStep({ key: "queue:1", scrollFraction: 0.51 }),

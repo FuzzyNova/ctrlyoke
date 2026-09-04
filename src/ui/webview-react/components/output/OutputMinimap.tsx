@@ -107,10 +107,10 @@ interface OutputMinimapProps {
  * never triggers onMouseLeave.
  */
 const MIN_THUMB_PX = 24;
-// Matches the eye-toggle button's own h-4 (16px) footprint: two markers whose
-// raw scrollFraction positions land closer together than this always keep an
-// overlapping click target, since the toggle button occupies layout space
-// even while invisible (opacity-0) between hovers.
+// Two markers whose raw scrollFraction positions land closer together than
+// this always keep an overlapping click target, since each step's pill
+// button occupies real layout space in the pills track at all times, not
+// just on hover.
 const MIN_MARKER_GAP_PX = 16;
 const MARKER_EDGE_INSET_PX = 3;
 
@@ -196,12 +196,40 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isThumbHovered, setIsThumbHovered] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
+  const pillsColumnRef = useRef<HTMLDivElement>(null);
+  const diffColumnRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef(steps);
   const contentHeightRef = useRef(contentHeight);
   const lastObservedScrollHeightRef = useRef<number | null>(null);
   const lastObservedRailHeightRef = useRef<number | null>(null);
   stepsRef.current = steps;
   contentHeightRef.current = contentHeight;
+
+  // Whether the viewport thumb should expand to cover both tracks (pills +
+  // diff) instead of resting over just the diff track. True while actively
+  // scrolling or dragging; reverts a short debounce after the last scroll,
+  // producing the fade-back-to-diff-track behavior.
+  const [isTrackExpanded, setIsTrackExpanded] = useState(false);
+  const trackExpandResetTimeoutRef = useRef<number | null>(null);
+
+  const markScrollActive = useCallback(() => {
+    setIsTrackExpanded(true);
+    if (trackExpandResetTimeoutRef.current !== null) {
+      window.clearTimeout(trackExpandResetTimeoutRef.current);
+    }
+    trackExpandResetTimeoutRef.current = window.setTimeout(() => {
+      trackExpandResetTimeoutRef.current = null;
+      setIsTrackExpanded(false);
+    }, 400);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (trackExpandResetTimeoutRef.current !== null) {
+        window.clearTimeout(trackExpandResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Dismiss the pinned popup when clicking/tapping anywhere outside it.
   // Uses only 'click' (not 'touchend') to avoid a race where touchend fires
@@ -330,13 +358,16 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       }
     );
     observer.observe(el);
-    const handleScroll = () => update();
+    const handleScroll = () => {
+      update();
+      markScrollActive();
+    };
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       disconnect();
       el.removeEventListener("scroll", handleScroll);
     };
-  }, [getSharedContentHeight, scrollContainerRef]);
+  }, [getSharedContentHeight, markScrollActive, scrollContainerRef]);
 
   // ── Draggable thumb ────────────────────────────────────────────────────────
 
@@ -354,6 +385,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const railHeight = rail.clientHeight;
 
       setIsDragging(true);
+      markScrollActive();
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientY - startY;
@@ -363,6 +395,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           0,
           Math.min(maxScroll, startScrollTop + scrollDelta)
         );
+        markScrollActive();
       };
 
       const onTouchMove = (moveEvent: TouchEvent) => {
@@ -373,10 +406,12 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           0,
           Math.min(maxScroll, startScrollTop + scrollDelta)
         );
+        markScrollActive();
       };
 
       const cleanup = () => {
         setIsDragging(false);
+        markScrollActive();
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", cleanup);
         document.removeEventListener("touchmove", onTouchMove);
@@ -388,7 +423,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       document.addEventListener("touchmove", onTouchMove, { passive: true });
       document.addEventListener("touchend", cleanup);
     },
-    [getSharedContentHeight, scrollContainerRef]
+    [getSharedContentHeight, markScrollActive, scrollContainerRef]
   );
 
   const handleThumbMouseDown = useCallback(
@@ -415,8 +450,16 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const rail = railRef.current;
       const el = scrollContainerRef.current;
       if (!rail || !el) return;
-      // Only handle direct taps on the rail background, not on children
-      if (target !== rail) return;
+      // Only handle direct taps on the rail background or on one of its two
+      // track columns' own background (pills or diff) — not on markers, the
+      // popup, or the thumb. Both tracks are click-to-scroll, matching VS
+      // Code's overview-ruler + minimap split, where the (transparent) ruler
+      // column is just as much a scrollbar as the diff column next to it.
+      const isTrackBackground =
+        target === rail ||
+        target === pillsColumnRef.current ||
+        target === diffColumnRef.current;
+      if (!isTrackBackground) return;
 
       const sharedContentHeight = getSharedContentHeight();
       const canScroll = sharedContentHeight > el.clientHeight;
@@ -481,7 +524,12 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   );
 
   return (
-    // The rail itself is 14px and clips nothing — markers overflow to the left.
+    // The rail is split into two vertical tracks, styled after VS Code's own
+    // overview-ruler (pills) + minimap (diff) split: a transparent pills
+    // track (left) for step markers, and an opaque diff track (right, flush
+    // with the panel edge) for diff overlays and the scroll thumb. Neither
+    // track clips its own content — markers and popups overflow left of the
+    // rail intentionally (see the group container below).
     // The rail used to be aria-hidden, but it now contains real step controls,
     // so it has to stay in the accessibility tree. Its own drag-to-scroll is a
     // pointer-only shorthand for the output pane's native scrolling, and the
@@ -490,11 +538,26 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={railRef}
-      className="relative flex-shrink-0 w-[var(--fp-output-minimap-width)] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
+      className="relative flex-shrink-0 flex flex-row w-[var(--fp-output-minimap-width)] [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
       style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
     >
+      {/* Pills track — transparent (page background shows through), so it can
+          sit over content without visually blocking it. Its left border marks
+          the rail's outer edge. Click-to-scroll like the diff track; step
+          markers below are absolutely positioned on top of it. */}
+      <div
+        ref={pillsColumnRef}
+        className="flex-shrink-0 w-[var(--fp-output-minimap-pills-width)] border-l border-panel-border"
+      />
+
+      {/* Diff track — opaque, flush with the panel edge; holds the diff
+          overlays and the scroll thumb. */}
+      <div
+        ref={diffColumnRef}
+        className="relative flex-shrink-0 w-[var(--fp-output-minimap-diff-width)] bg-sidebar-bg"
+      >
       {/* Diff overlays — rendered below thumb and markers */}
       {steps.map((step) => (
         <React.Fragment key={`diffs-${step.key}`}>
@@ -602,14 +665,18 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           })}
         </React.Fragment>
       ))}
+      </div>
 
-      {/* Draggable viewport thumb (replaces native scrollbar) */}
+      {/* Draggable viewport thumb (replaces native scrollbar). Rests over
+          just the diff track; expands to cover the pills track too while
+          actively scrolling or dragging, then fades back once scrolling
+          settles (see markScrollActive/isTrackExpanded). */}
       <div
         role="slider"
         tabIndex={0}
         aria-label="Scroll viewport"
         aria-valuenow={Math.round(viewportPct.top * 100)}
-        className={`absolute left-0 right-0 rounded-sm z-raised ${
+        className={`absolute right-0 rounded-sm z-raised ${
           isDragging
             ? "bg-minimap-thumb-active"
             : isThumbHovered
@@ -619,10 +686,16 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         style={{
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
+          width:
+            isDragging || isTrackExpanded
+              ? "var(--fp-output-minimap-width)"
+              : "var(--fp-output-minimap-diff-width)",
           boxShadow:
             "inset 0 0 0 1px var(--vscode-panel-border, rgba(128,128,128,0.45))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
-          transition: isDragging ? "none" : "background 0.1s",
+          transition: isDragging
+            ? "none"
+            : "background 0.1s, width 0.25s ease-out",
         }}
         onMouseDown={handleThumbMouseDown}
         onTouchStart={handleThumbTouchStart}
@@ -667,16 +740,21 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             : hasUndo
               ? "text-link-fg"
               : "text-description-fg";
+        const hideShowLabel = `${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`;
 
         return (
-          // Outer row: anchored to the right edge of the rail, grows leftward.
-          // The popup + dot are flex siblings so the hover zone covers both
-          // continuously — moving from dot to popup never leaves the container.
+          // Outer row: anchored to the boundary between the pills and diff
+          // tracks (not the rail's outer edge), so the marker pill lands
+          // inside the pills track while the popup grows further left,
+          // overflowing past the rail's own left edge — the overflow the
+          // top-of-file comment documents. The popup + dot are flex siblings
+          // so the hover zone covers both continuously — moving from dot to
+          // popup never leaves the container.
           <div
             key={step.key}
             role="group"
             aria-label={`Step ${step.label}`}
-            className={`group absolute right-0 flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
+            className={`group absolute right-[var(--fp-output-minimap-diff-width)] flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
             style={{
               top: topStyle,
               transform: "translateY(-50%)",
@@ -691,10 +769,30 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 className="flex flex-col justify-center gap-1 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
                 style={{ whiteSpace: "nowrap" }}
               >
-                {/* Step label */}
-                <span className="text-xxs font-semibold text-foreground leading-tight">
-                  {step.label}
-                </span>
+                {/* Title row: step label + hide/show toggle */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xxs font-semibold text-foreground leading-tight">
+                    {step.label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStepToggle?.(step);
+                    }}
+                    style={{ touchAction: "manipulation" }}
+                    aria-pressed={step.hidden}
+                    aria-label={hideShowLabel}
+                    title={hideShowLabel}
+                    className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-none"
+                  >
+                    <i
+                      className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
+                      aria-hidden="true"
+                    />
+                    {step.hidden ? "Show" : "Hide"}
+                  </button>
+                </div>
 
                 {/* Redo action (shown above undo in mixed state) */}
                 {hasRedo && redo && (
@@ -771,25 +869,8 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               title={step.label}
               aria-label={step.label}
               tabIndex={0}
-              className={`h-1 w-[var(--fp-output-minimap-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
+              className={`h-1 w-[var(--fp-output-minimap-pills-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
             />
-            <button
-              type="button"
-              className="ml-0.5 flex h-4 w-4 items-center justify-center rounded text-description-fg opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-border group-hover:opacity-100 group-focus-within:opacity-100"
-              aria-label={`${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`}
-              aria-pressed={step.hidden}
-              title={`${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onStepToggle?.(step);
-              }}
-            >
-              <i
-                className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
-                aria-hidden="true"
-              />
-            </button>
             {step.hasHiddenActivity && (
               <span
                 data-minimap-hidden-activity

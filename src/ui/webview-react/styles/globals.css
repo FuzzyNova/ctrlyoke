@@ -50,10 +50,19 @@
   --fp-output-font-size-sm: calc(var(--fp-output-font-size) - 1px);
   --fp-output-font-size-xs: calc(var(--fp-output-font-size) - 2px);
 
-  /* Output minimap rail width — single source shared by the rail itself,
-     the virtualization overlay's right inset, and the find bar's right offset
-     so the find bar can never overlap the minimap. */
-  --fp-output-minimap-width: 14px;
+  /* Output minimap rail — split into two vertical tracks side by side, styled
+     after VS Code's own overview-ruler (pills) + minimap (diff) split: a
+     transparent step-pills track (left) and an opaque diff-overview track
+     (right, flush with the panel edge).
+     --fp-output-minimap-width is the TOTAL rail width — the single source
+     shared by the rail itself, the virtualization overlay's right inset, and
+     the find bar's right offset, so those consumers keep clearing the whole
+     rail (both tracks) without needing to know about the split. */
+  --fp-output-minimap-pills-width: 10px;
+  --fp-output-minimap-diff-width: 14px;
+  --fp-output-minimap-width: calc(
+    var(--fp-output-minimap-pills-width) + var(--fp-output-minimap-diff-width)
+  );
 
   /* Semantic colors — used in CliOutput, StatusMessage, and base element styles below.
      All other VS Code colors are referenced directly via Tailwind tokens. */
