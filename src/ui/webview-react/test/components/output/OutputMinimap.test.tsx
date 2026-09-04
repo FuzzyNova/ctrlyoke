@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import {
   OutputMinimap,
+  computeDeclutteredTopsPx,
   type MinimapStep,
 } from "@components/output/OutputMinimap";
 
@@ -104,5 +105,57 @@ describe("OutputMinimap step visibility controls", () => {
     expect(
       document.querySelector("[data-minimap-hidden-activity]")
     ).toBeInTheDocument();
+  });
+});
+
+describe("computeDeclutteredTopsPx", () => {
+  it("keeps markers at their raw position when they are already spaced apart", () => {
+    const steps = [
+      makeStep({ key: "queue:0", scrollFraction: 0.1 }),
+      makeStep({ key: "queue:1", scrollFraction: 0.9 }),
+    ];
+
+    expect(computeDeclutteredTopsPx(steps, 200)).toEqual([20, 180]);
+  });
+
+  it("pushes two close markers apart by at least the eye-toggle's own footprint", () => {
+    // Two step anchors landing within a few pixels of each other in
+    // scroll-fraction space is the exact condition that let one step's
+    // always-in-layout (opacity-0) eye-toggle button silently steal clicks
+    // meant for its neighbor.
+    const steps = [
+      makeStep({ key: "queue:0", scrollFraction: 0.5 }),
+      makeStep({ key: "queue:1", scrollFraction: 0.51 }),
+    ];
+
+    const tops = computeDeclutteredTopsPx(steps, 200);
+    expect(tops[1] - tops[0]).toBeGreaterThanOrEqual(16);
+  });
+
+  it("preserves original step order regardless of scrollFraction order", () => {
+    const steps = [
+      makeStep({ key: "queue:0", scrollFraction: 0.8 }),
+      makeStep({ key: "queue:1", scrollFraction: 0.2 }),
+    ];
+
+    const tops = computeDeclutteredTopsPx(steps, 200);
+    expect(tops[1]).toBeLessThan(tops[0]);
+  });
+
+  it("compresses back within the rail when many close markers would overrun it", () => {
+    const steps = Array.from({ length: 5 }, (_, i) =>
+      makeStep({ key: `queue:${i}`, scrollFraction: 0.95 + i * 0.001 })
+    );
+
+    const tops = computeDeclutteredTopsPx(steps, 60);
+    expect(Math.max(...tops)).toBeLessThanOrEqual(57);
+    for (let i = 1; i < tops.length; i++) {
+      expect(tops[i]).toBeGreaterThan(tops[i - 1]);
+    }
+  });
+
+  it("returns zeros when the rail has not been measured yet", () => {
+    const steps = [makeStep()];
+    expect(computeDeclutteredTopsPx(steps, 0)).toEqual([0]);
   });
 });

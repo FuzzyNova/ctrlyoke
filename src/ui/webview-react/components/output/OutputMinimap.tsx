@@ -2,7 +2,14 @@ import {
   FINAL_STEP_PHASES,
   KEYBOARD_KEYS,
 } from "@root/types/DashboardConstants";
-import React, { memo, useState, useCallback, useEffect, useRef } from "react";
+import React, {
+  memo,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { getProfilerState, logProfilerEvent } from "@utils/performanceProfiler";
@@ -100,6 +107,64 @@ interface OutputMinimapProps {
  * never triggers onMouseLeave.
  */
 const MIN_THUMB_PX = 24;
+// Matches the eye-toggle button's own h-4 (16px) footprint: two markers whose
+// raw scrollFraction positions land closer together than this always keep an
+// overlapping click target, since the toggle button occupies layout space
+// even while invisible (opacity-0) between hovers.
+const MIN_MARKER_GAP_PX = 16;
+const MARKER_EDGE_INSET_PX = 3;
+
+function clampMarkerPx(scrollFraction: number, railHeightPx: number): number {
+  return Math.min(
+    Math.max(scrollFraction * railHeightPx, MARKER_EDGE_INSET_PX),
+    railHeightPx - MARKER_EDGE_INSET_PX
+  );
+}
+
+/**
+ * Nudges markers apart along the rail so no two are closer than
+ * MIN_MARKER_GAP_PX, without changing their relative order. Without this, two
+ * step anchors close in scroll-fraction space (a common case for a run with
+ * several fast steps) silently steal each other's clicks: the later step's
+ * always-in-layout (opacity-0) eye-toggle button paints on top of the earlier
+ * step's, so a click aimed at one step's toggle lands on its neighbor's.
+ */
+export function computeDeclutteredTopsPx(
+  steps: readonly MinimapStep[],
+  railHeightPx: number
+): number[] {
+  const result = new Array<number>(steps.length).fill(0);
+  if (railHeightPx <= 0 || steps.length === 0) return result;
+
+  const order = steps
+    .map((step, index) => ({
+      index,
+      top: clampMarkerPx(step.scrollFraction, railHeightPx),
+    }))
+    .sort((a, b) => a.top - b.top);
+
+  for (let i = 1; i < order.length; i++) {
+    if (order[i].top < order[i - 1].top + MIN_MARKER_GAP_PX) {
+      order[i].top = order[i - 1].top + MIN_MARKER_GAP_PX;
+    }
+  }
+
+  const bottomLimit = railHeightPx - MARKER_EDGE_INSET_PX;
+  const last = order[order.length - 1];
+  if (last.top > bottomLimit) {
+    last.top = bottomLimit;
+    for (let i = order.length - 2; i >= 0; i--) {
+      if (order[i].top > order[i + 1].top - MIN_MARKER_GAP_PX) {
+        order[i].top = order[i + 1].top - MIN_MARKER_GAP_PX;
+      }
+    }
+  }
+
+  for (const { index, top } of order) {
+    result[index] = top;
+  }
+  return result;
+}
 
 function getResizeObserverEntryHeight(
   entry: ResizeObserverEntry | undefined
@@ -155,6 +220,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   // the content is very long. The top position is recalculated to match so the
   // thumb still accurately tracks the scroll position.
   const [viewportPct, setViewportPct] = useState({ top: 0, height: 100 });
+  const [railHeightPx, setRailHeightPx] = useState(0);
   // Do NOT read live scrollHeight here. During navigation TanStack Virtual
   // temporarily inflates getTotalSize() (and therefore scrollHeight) with
   // large bucket estimates for newly-rendered rows. Reading the live value
@@ -176,6 +242,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const startedAt = performance.now();
       const { clientHeight } = el;
       const railHeight = railRef.current?.clientHeight ?? 0;
+      setRailHeightPx((prev) => (prev === railHeight ? prev : railHeight));
       const sharedContentHeight = getSharedContentHeight();
       const logUpdateDuration = () => {
         const durationMs = performance.now() - startedAt;
@@ -408,6 +475,11 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     ? getSharedContentHeight() > scrollContainerRef.current.clientHeight
     : false;
 
+  const declutteredTopsPx = useMemo(
+    () => computeDeclutteredTopsPx(steps, railHeightPx),
+    [steps, railHeightPx]
+  );
+
   return (
     // The rail itself is 14px and clips nothing — markers overflow to the left.
     // The rail used to be aria-hidden, but it now contains real step controls,
@@ -577,8 +649,12 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       />
 
       {/* Step markers */}
-      {steps.map((step) => {
+      {steps.map((step, stepPositionIndex) => {
         const topPct = step.scrollFraction * 100;
+        const topStyle =
+          railHeightPx > 0
+            ? `${declutteredTopsPx[stepPositionIndex]}px`
+            : `clamp(3px, ${topPct}%, calc(100% - 3px))`;
         const isPinned = pinnedKey === step.key;
         const { undo, redo } = step.undoActions;
         const hasUndo = undo !== null;
@@ -602,7 +678,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             aria-label={`Step ${step.label}`}
             className={`group absolute right-0 flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
             style={{
-              top: `clamp(3px, ${topPct}%, calc(100% - 3px))`,
+              top: topStyle,
               transform: "translateY(-50%)",
             }}
           >
