@@ -105,6 +105,7 @@ import { getTargetKey } from "@utils/outputProjection";
 import type {
   CliHeaderRow,
   OutputRenderRow,
+  StepSwitchRow,
   StepHiddenRow,
   ScriptOutputRow,
   StructuredEventRow,
@@ -267,6 +268,57 @@ const StepHiddenRowView: React.FC<{
       >
         Show
       </button>
+    </div>
+  );
+};
+
+const StepSwitchRowView: React.FC<{ row: StepSwitchRow }> = ({ row }) => (
+  <div
+    className="flex items-center gap-2 border-y border-panel-border/60 bg-sidebar-bg/60 px-3 py-1 text-xs text-description-fg"
+    role="status"
+    aria-label={`Switched to ${row.stepLabel}${row.stepName ? `, ${row.stepName}` : ""}`}
+  >
+    <i
+      className="codicon codicon-arrow-right text-output-streaming"
+      aria-hidden="true"
+    />
+    <span className="font-semibold text-foreground">{row.stepLabel}</span>
+    {row.stepName && <span className="truncate">{row.stepName}</span>}
+  </div>
+);
+
+const ActivityAttribution: React.FC<{
+  row: OutputRenderRow;
+  children: React.ReactNode;
+}> = ({ row, children }) => {
+  if (!row.activityFirst && !row.activityContinuation) return <>{children}</>;
+  const label = row.activityLabel ?? `Step ${row.target.index + 1}`;
+  return (
+    <div className="relative">
+      <div
+        className={
+          row.activityFirst
+            ? "mb-1 flex items-center gap-1.5 text-xs text-foreground"
+            : "absolute inset-y-0 left-0 w-1 border-l-2 border-output-streaming/40"
+        }
+        aria-label={row.activityFirst ? label : undefined}
+      >
+        {row.activityFirst && (
+          <>
+            <i
+              className="codicon codicon-symbol-event text-output-streaming"
+              aria-hidden="true"
+            />
+            <span className="font-semibold">{label}</span>
+            {row.activityName && (
+              <span className="truncate text-description-fg">
+                · {row.activityName}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+      <div className={row.activityContinuation ? "pl-2" : ""}>{children}</div>
     </div>
   );
 };
@@ -1628,6 +1680,9 @@ function OutputRowComponent({
         <StepHiddenRowView row={row} hasHiddenActivity={hasHiddenActivity} />
       );
       break;
+    case OUTPUT_ROW_KINDS.STEP_SWITCH:
+      content = <StepSwitchRowView row={row} />;
+      break;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (
         <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
@@ -1840,12 +1895,14 @@ function OutputRowComponent({
     row.rowKind === OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY;
 
   if (!isCliGroupRow) {
+    content = <ActivityAttribution row={row} children={content} />;
     if (!isActiveRow) {
       return <>{content}</>;
     }
     return <div className="rounded-sm ring-1 ring-focus-border">{content}</div>;
   }
 
+  content = <ActivityAttribution row={row} children={content} />;
   return (
     <div
       className={[

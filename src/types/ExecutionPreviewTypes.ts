@@ -12,6 +12,7 @@ import {
 } from "./DashboardConstants";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { CommandDisplayShell } from "./CommandDisplayFormatter";
+import type { ParallelGroupDefinition } from "./CtrlYokeTypes";
 
 export type { CommandDisplayShell } from "./CommandDisplayFormatter";
 
@@ -35,9 +36,17 @@ export interface RedactionSpan {
 export interface WorkflowExecutionPreview {
   workflow: WorkflowPreviewSummary;
   steps: StepExecutionPreview[];
+  parallelGroups: ParallelGroupDefinition[];
+  parallelGroupPreflights: ParallelGroupPreflightPreview[];
   diagnostics: CompatibilityDiagnostic[];
   /** Absent when the workflow is not configured to use a worktree. */
   worktree?: WorktreeExecutionPreview;
+}
+
+export interface ParallelGroupPreflightPreview {
+  parallelGroupId: string;
+  effectiveWidth: number;
+  executableMemberCount: number;
 }
 
 export interface WorktreeExecutionPreview {
@@ -73,6 +82,7 @@ export interface WorkflowPreviewSummary {
 export interface StepExecutionPreview {
   stepIndex: number;
   stepId?: string;
+  parallelGroupId?: string;
   stepName?: string;
   type: PreviewStepType;
   resolvedProperties: ResolvedPropertiesPreview;

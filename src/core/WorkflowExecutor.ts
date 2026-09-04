@@ -14,6 +14,9 @@ import {
   type ErrorBehavior,
   type WorkflowAttemptTarget,
   type PreConditionAction,
+  type StepExecutionOutcome,
+  type ParallelGroupOutcome,
+  type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -43,6 +46,7 @@ import {
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
+  PROMPT_TERMINAL_STATUS,
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
@@ -114,17 +118,25 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
+import type { ScriptProcessRunner } from "./orchestration/ScriptProcessRunner";
 import {
   getSignedStepIndex as getSignedWorkflowStepIndex,
   toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
   type StatusMessageReporter,
 } from "./orchestration/StatusMessageReporter";
+import {
+  preflightParallelGroup,
+  throwIfParallelGroupPreflightFailed,
+  type ParallelGroupPreflightMember,
+} from "./ParallelGroupPreflight";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
   /** Whether this host can provide a PTY for interactive execution. */
   hostCanProvidePty?: boolean;
+  /** Whether this host can multiplex concurrent interactive sessions. */
+  supportsConcurrentInteractiveSessions?: boolean;
   workspaceFolderPath: string | undefined;
   /**
    * Open workspace roots (multi-root). Passed to WorkspaceSnapshotService so
@@ -141,10 +153,32 @@ export interface WorkflowExecutionContext {
   analyzeCompatibilityForPrompt?: WorkflowContext["analyzeCompatibilityForPrompt"];
   shouldShowCliCommand: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
+  /** Allows coordinator tests to exercise fan-out while the production gate is closed. */
+  parallelGroupFanOutEnabled?: boolean;
+  /** Group-scoped cancellation signal for target leaves. */
+  abortSignal?: AbortSignal;
   getIntegrationForPrompt: (
     prompt: PromptStep,
-    harnessOverride?: HarnessId
+    harnessOverride?: HarnessId,
+    target?: ExecutionTarget
   ) => HarnessIntegration;
+  /** Wait for the detector singleton to prove a required harness ready. */
+  ensureHarnessReady?: (harnessId: HarnessId) => Promise<string | undefined>;
+  /** Enables isolated target-keyed integrations for a parallel coordinator. */
+  targetKeyedExecution?: boolean;
+  registerActiveTarget?: (
+    target: ExecutionTarget,
+    attemptIndex: number
+  ) => void;
+  registerTargetPtySession?: (
+    target: ExecutionTarget,
+    sessionId: string
+  ) => void;
+  clearTargetPtySession?: (target: ExecutionTarget) => void;
+  unregisterActiveTarget?: (target: ExecutionTarget) => void;
+  cancelTarget?: (target: ExecutionTarget) => Promise<void>;
+  releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
+  getScriptProcessRunner?: (target: ExecutionTarget) => ScriptProcessRunner;
   historyFilePath: string;
   workingFilePath?: string;
   instanceTag?: string;
@@ -156,6 +190,16 @@ export interface WorkflowExecutionContext {
     message: string,
     severity: string
   ) => void;
+  onTargetStreamingEvents?: (data: {
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    events: CliEvent[];
+  }) => void;
+  onTargetStreamingChunk?: (data: {
+    target: WorkflowAttemptTarget;
+    stepName: string;
+    chunk: string;
+  }) => void;
   outputHistoryManager?: OutputHistoryManager;
   /** Run-owned redactor populated only with values resolved during execution. */
   secretRedactor?: RunSecretRedactor;
@@ -178,7 +222,11 @@ export interface WorkflowExecutionContext {
   /** Always-on chunk buffer for queue steps — enables output replay on workflow switch. */
   captureChunk?: (stepIndex: number, chunk: string) => void;
   /** Always-on completed-output capture for queue steps — enables replay on workflow switch. */
-  captureCompletedOutput?: (stepIndex: number, output: any) => void;
+  captureCompletedOutput?: (
+    stepIndex: number,
+    output: any,
+    integration?: HarnessIntegration
+  ) => void;
   /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
   /** Snapshot of in-flight queue output already sent to the dashboard. */
@@ -200,10 +248,17 @@ export interface WorkflowExecutionContext {
    * be dispatched. Called immediately before sendPrompt synchronously parks the
    * prior step's watcher.
    */
-  beginSessionActivityTargetCapture?: () => void;
+  beginSessionActivityTargetCapture?: (
+    integration: HarnessIntegration,
+    target: ExecutionTarget
+  ) => void;
   captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
   captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
-  captureFinalStepCompletedOutput?: (loopIndex: number, output: any) => void;
+  captureFinalStepCompletedOutput?: (
+    loopIndex: number,
+    output: any,
+    integration?: HarnessIntegration
+  ) => void;
   /** Snapshot of in-flight finalStep output already sent to the dashboard. */
   getFinalStepBufferedOutput?: (loopIndex: number) => CliOutput | undefined;
   onFinalStepStatusMessage?: (
@@ -230,6 +285,10 @@ export interface WorkflowExecutionContext {
     stepName: string;
     /** Signed step index used as the CLI output slot. */
     stepIndex: number;
+    /** Parallel group identity for grouped queue steps. */
+    parallelGroupId?: string;
+    /** Resource-registry key for the owning execution target. */
+    targetKey: string;
     /** Raw script string from the step definition (e.g. ".ctrlyoke/scripts/check.py arg"). */
     script: string;
     /** Working directory for the script process. */
@@ -242,6 +301,8 @@ export interface WorkflowExecutionContext {
     timeout: number;
     /** Called when the PTY is killed because its timeout expired. */
     onTimeout?: () => void;
+    onSessionCreated?: (sessionId: string) => void;
+    onSessionEnded?: () => void;
   }) => Promise<number>;
   targetRunIndices?: Map<string, number>;
   /**
@@ -301,7 +362,8 @@ function canRetryErrorBehavior(
  * all finish before execution transitions from PAUSING to PAUSED.
  */
 export class WorkflowExecutor {
-  private isWaitingForResponse: boolean = false;
+  private readonly waitingResponseTargets = new Set<string>();
+  private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
 
   constructor(
@@ -365,22 +427,52 @@ export class WorkflowExecutor {
       this.promptQueue.getFinalStepRuntime()?.phase ===
         FINAL_STEP_PHASES.FINAL_STEP &&
       !this.promptQueue.hasNext();
-
     while (true) {
       if (!runFinalStepFirst) {
         while (this.promptQueue.hasNext()) {
           const state = this.promptQueue.getState();
+          if (
+            await this.checkExecutionTimeLimit(
+              context.dynamicQueueConfig,
+              state.currentIndex,
+              this.promptQueue.getProgress().total
+            )
+          ) {
+            break;
+          }
+          const group = state.parallelGroups.find(
+            (candidate) => candidate.startIndex === state.currentIndex
+          );
+          if (group) {
+            const groupOutcome = await this.executeParallelGroup(
+              group,
+              context,
+              snapshotStrategy
+            );
+            if (
+              groupOutcome.paused ||
+              groupOutcome.stopped ||
+              groupOutcome.terminalFailure
+            ) {
+              break;
+            }
+            continue;
+          }
+
           const target: ExecutionTarget = {
             kind: FINAL_STEP_PHASES.QUEUE,
             stepIndex: state.currentIndex,
           };
           const prompt = state.steps[state.currentIndex];
-
-          const shouldContinue = await this.executeWithSnapshot(
+          const outcome = await this.executeWithSnapshot(
             target,
             prompt,
             context,
             snapshotStrategy
+          );
+          const shouldContinue = await this.commitSequentialOutcome(
+            outcome,
+            context
           );
 
           if (!shouldContinue) {
@@ -408,6 +500,15 @@ export class WorkflowExecutor {
       if (!currentFinalStep) {
         break;
       }
+      if (
+        await this.checkExecutionTimeLimit(
+          context.dynamicQueueConfig,
+          this.promptQueue.getState().currentIndex,
+          this.promptQueue.getProgress().total
+        )
+      ) {
+        break;
+      }
 
       // Initialize runtime if a final step was added after execution started
       if (!this.promptQueue.getFinalStepRuntime()) {
@@ -432,14 +533,26 @@ export class WorkflowExecutor {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex,
       };
-      const shouldContinue = await this.executeWithSnapshot(
+      const finalOutcome = await this.executeWithSnapshot(
         finalTarget,
         currentFinalStep,
         context,
         snapshotStrategy
       );
+      const shouldContinue =
+        finalOutcome.status === PROMPT_TERMINAL_STATUS.COMPLETED;
 
       if (!shouldContinue) {
+        if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
+          runtime.fail();
+          await this.promptQueue.commitRuntimeTransition();
+        } else if (
+          finalOutcome.status === PROMPT_TERMINAL_STATUS.CANCELLED &&
+          runtime.status === EXECUTION_STATES.CANCELLING
+        ) {
+          runtime.confirmStopped();
+          await this.promptQueue.commitRuntimeTransition();
+        }
         await this.persistInterruptedFinalStepRuntime(context);
         break;
       }
@@ -504,23 +617,529 @@ export class WorkflowExecutor {
     this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
   }
 
-  private async executeSinglePrompt(
+  private async preflightGroup(
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext
+  ) {
+    const workflow = this.promptQueue.getWorkflowFile();
+    const preflight = await preflightParallelGroup({
+      workflow,
+      group,
+      defaults: PropertyResolver.createContext({
+        hostCanProvidePty: context.hostCanProvidePty,
+      }).defaults,
+      hostCanProvidePty: context.hostCanProvidePty ?? true,
+      supportsConcurrentInteractiveSessions:
+        context.supportsConcurrentInteractiveSessions ?? true,
+      configuredWidth: context.dynamicQueueConfig.maxParallelSteps,
+      fanOutEnabled: context.parallelGroupFanOutEnabled,
+      excludeTerminalMembers: true,
+      resolvePromptText: (promptText, variables) =>
+        this.resolveEffectivePrompt(promptText, context, { ...variables }),
+      normalizeProperties: async (
+        properties,
+        memberStep,
+        effectivePromptText
+      ) =>
+        isScriptStep(memberStep)
+          ? properties
+          : (
+              await McpServerNormalizer.applyFromRegistryWithDiagnostics(
+                properties,
+                context.workspaceFolderPath ??
+                  context.executionWorkspace.executionRoot,
+                effectivePromptText ?? ""
+              )
+            ).properties,
+      checkHarnessReady: context.ensureHarnessReady,
+      ensureIsolatedIntegration: (member) =>
+        context.getIntegrationForPrompt(
+          member.step as PromptStep,
+          member.resolvedProperties.harness,
+          {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: member.stepIndex,
+          }
+        ),
+      finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
+        | string
+        | undefined,
+    });
+
+    Log.info(
+      `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+    );
+    if (preflight.issues.length > 0) {
+      await Promise.all(
+        preflight.members.map((member) =>
+          context.releaseTargetResources?.({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: member.stepIndex,
+          })
+        )
+      );
+      throwIfParallelGroupPreflightFailed(preflight);
+    }
+    for (const member of preflight.members) {
+      if (
+        !isScriptStep(member.step) &&
+        member.resolvedProperties.resumeSession &&
+        member.resolvedSessionId === undefined
+      ) {
+        Log.warn(
+          `Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
+        );
+      }
+    }
+    return preflight;
+  }
+
+  private getRecoveredGroupOutcome(
+    stepIndex: number
+  ): StepExecutionOutcome | undefined {
+    const step = this.promptQueue.getState().steps[stepIndex];
+    if (step?._runtime?.completedAt === undefined) {
+      return undefined;
+    }
+    return {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      status: step._runtime.terminalStatus ?? PROMPT_TERMINAL_STATUS.COMPLETED,
+      ...(step._runtime.failureMessage
+        ? { failureReason: step._runtime.failureMessage }
+        : {}),
+      ...(step._runtime.terminalFailure === false
+        ? { terminalFailure: false }
+        : {}),
+    };
+  }
+
+  private async executeParallelGroup(
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<ParallelGroupOutcome> {
+    const preflight = await this.preflightGroup(group, context);
+    const preflightMembers = new Map(
+      preflight.members.map((member) => [member.stepIndex, member])
+    );
+    const outcomes = new Map<number, StepExecutionOutcome>();
+    let groupBeforeState: RawWorkspaceState | undefined;
+    if (preflight.effectiveWidth > 1 && snapshotStrategy) {
+      try {
+        groupBeforeState =
+          await context.snapshotService?.captureWorkspaceState(
+            context.executionWorkspace.executionRoot,
+            snapshotStrategy,
+            context.executionWorkspace.namedWorkspaceRoots
+          );
+      } catch (error) {
+        Log.warn("Failed to capture parallel group workspace snapshot:", error);
+      }
+    }
+    const pendingIndices: number[] = [];
+    for (
+      let stepIndex = group.startIndex;
+      stepIndex <= group.endIndex;
+      stepIndex += 1
+    ) {
+      const recovered = this.getRecoveredGroupOutcome(stepIndex);
+      if (recovered) {
+        outcomes.set(stepIndex, recovered);
+      } else if (
+        this.promptQueue.getState().steps[stepIndex]?.enabled === false
+      ) {
+        const skipped: StepExecutionOutcome = {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          status: PROMPT_TERMINAL_STATUS.SKIPPED,
+        };
+        outcomes.set(stepIndex, skipped);
+        await this.persistGroupSettlement(skipped, context);
+        if (groupBeforeState && snapshotStrategy) {
+          await this.captureAndEmitSnapshot(
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
+            groupBeforeState,
+            snapshotStrategy,
+            context,
+            group.id
+          ).catch((error) =>
+            Log.warn("Failed to capture parallel group workspace snapshot:", error)
+          );
+        }
+      } else {
+        pendingIndices.push(stepIndex);
+      }
+    }
+
+    const abortController = new AbortController();
+    const groupContext: WorkflowExecutionContext = {
+      ...context,
+      abortSignal: abortController.signal,
+    };
+    const running = new Map<number, ExecutionTarget>();
+    let nextPending = 0;
+    let failFastTriggered = false;
+
+    const cancelRunning = async (exceptIndex?: number): Promise<void> => {
+      abortController.abort();
+      await Promise.allSettled(
+        [...running.entries()]
+          .filter(([stepIndex]) => stepIndex !== exceptIndex)
+          .map(([, target]) => context.cancelTarget?.(target))
+      );
+    };
+    const stopWatcher = this.getRuntime().onDidTransition((transition) => {
+      if (
+        transition.current.status !== EXECUTION_STATES.CANCELLING &&
+        transition.current.status !== EXECUTION_STATES.STOPPED
+      ) {
+        return;
+      }
+
+      abortController.abort();
+      void Promise.allSettled(
+        [...running.values()].map((target) => context.cancelTarget?.(target))
+      );
+    });
+
+    const runMember = async (stepIndex: number): Promise<void> => {
+      const target: ExecutionTarget = {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex,
+      };
+      running.set(stepIndex, target);
+      let outcome: StepExecutionOutcome;
+      try {
+        outcome = await this.executeWithSnapshot(
+          target,
+          this.promptQueue.getState().steps[stepIndex],
+          groupContext,
+          preflight.effectiveWidth === 1 ? snapshotStrategy : undefined,
+          preflightMembers.get(stepIndex)
+        );
+      } catch (error) {
+        const failureReason =
+          error instanceof Error ? error.message : String(error);
+        outcome = {
+          target,
+          status: PROMPT_TERMINAL_STATUS.FAILED,
+          failureReason,
+        };
+      }
+      if (
+        abortController.signal.aborted &&
+        failFastTriggered &&
+        outcome.status === PROMPT_TERMINAL_STATUS.FAILED
+      ) {
+        outcome = {
+          target,
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        };
+      }
+      this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
+      running.delete(stepIndex);
+      outcomes.set(stepIndex, outcome);
+      await this.persistGroupSettlement(outcome, context);
+      if (groupBeforeState && snapshotStrategy) {
+        await this.captureAndEmitSnapshot(
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
+          groupBeforeState,
+          snapshotStrategy,
+          context,
+          group.id
+        ).catch((error) =>
+          Log.warn("Failed to capture parallel group workspace snapshot:", error)
+        );
+      }
+      await context.releaseTargetResources?.(target);
+
+      if (
+        outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
+        outcome.terminalFailure !== false &&
+        group.failFast &&
+        !failFastTriggered
+      ) {
+        failFastTriggered = true;
+        await cancelRunning(stepIndex);
+      }
+    };
+
+    const worker = async (): Promise<void> => {
+      while (nextPending < pendingIndices.length) {
+        const status = this.getRuntime().status;
+        if (
+          abortController.signal.aborted ||
+          status === EXECUTION_STATES.PAUSING ||
+          status === EXECUTION_STATES.PAUSED ||
+          status === EXECUTION_STATES.CANCELLING ||
+          status === EXECUTION_STATES.STOPPED
+        ) {
+          return;
+        }
+        const stepIndex = pendingIndices[nextPending++];
+        await runMember(stepIndex);
+      }
+    };
+
+    const workerCount = Math.min(
+      Math.max(1, preflight.effectiveWidth),
+      Math.max(1, pendingIndices.length)
+    );
+    const workerSettlements = await Promise.allSettled(
+      Array.from({ length: workerCount }, () => worker())
+    );
+    const rejectedWorker = workerSettlements.find(
+      (settlement): settlement is PromiseRejectedResult =>
+        settlement.status === "rejected"
+    );
+    if (rejectedWorker) {
+      await cancelRunning();
+      stopWatcher.dispose();
+      throw rejectedWorker.reason;
+    }
+
+    const stopped =
+      this.getRuntime().status === EXECUTION_STATES.CANCELLING ||
+      this.getRuntime().status === EXECUTION_STATES.STOPPED;
+    if (stopped || failFastTriggered) {
+      await cancelRunning();
+      for (; nextPending < pendingIndices.length; nextPending += 1) {
+        const stepIndex = pendingIndices[nextPending];
+        const cancelled: StepExecutionOutcome = {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+        };
+        outcomes.set(stepIndex, cancelled);
+        await this.persistGroupSettlement(cancelled, context);
+        await context.releaseTargetResources?.(cancelled.target);
+      }
+    }
+
+    const paused =
+      this.getRuntime().status === EXECUTION_STATES.PAUSING ||
+      this.getRuntime().status === EXECUTION_STATES.PAUSED;
+    const orderedOutcomes = [...outcomes.values()].sort(
+      (left, right) =>
+        (left.target.kind === FINAL_STEP_PHASES.QUEUE
+          ? left.target.stepIndex
+          : Number.MAX_SAFE_INTEGER) -
+        (right.target.kind === FINAL_STEP_PHASES.QUEUE
+          ? right.target.stepIndex
+          : Number.MAX_SAFE_INTEGER)
+    );
+
+    if (paused) {
+      stopWatcher.dispose();
+      await this.confirmPauseAndStop(
+        "Workflow paused after parallel group members settled"
+      );
+      return {
+        group,
+        outcomes: orderedOutcomes,
+        settledCount: orderedOutcomes.length,
+        terminalFailure: false,
+        paused: true,
+        stopped: false,
+      };
+    }
+
+    await this.promptQueue.commitParallelGroupJoin(group, orderedOutcomes);
+    stopWatcher.dispose();
+    this.broadcastSettledProgress(context);
+
+    if (stopped && this.getRuntime().status === EXECUTION_STATES.CANCELLING) {
+      if (this.getRuntime().confirmStopped()) {
+        await this.promptQueue.commitRuntimeTransition();
+      }
+    }
+
+    const terminalFailure = orderedOutcomes.some(
+      (outcome) =>
+        outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
+        outcome.terminalFailure !== false
+    );
+    if (terminalFailure && !stopped) {
+      this.getRuntime().fail();
+      await this.promptQueue.commitRuntimeTransition();
+    }
+    return {
+      group,
+      outcomes: orderedOutcomes,
+      settledCount: orderedOutcomes.length,
+      terminalFailure,
+      paused: false,
+      stopped,
+    };
+  }
+
+  private async persistGroupSettlement(
+    outcome: StepExecutionOutcome,
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    await this.promptQueue.persistStepOutcome(outcome);
+    this.broadcastSettledProgress(context);
+  }
+
+  private broadcastSettledProgress(context: WorkflowExecutionContext): void {
+    context.dashboardProvider?.updateProgress(
+      this.promptQueue.getSettledCount(),
+      this.promptQueue.getProgress().total
+    );
+  }
+
+  private async commitSequentialOutcome(
+    outcome: StepExecutionOutcome,
+    context: WorkflowExecutionContext
+  ): Promise<boolean> {
+    await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
+    this.broadcastSettledProgress(context);
+
+    if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
+      if (outcome.terminalFailure !== false) {
+        this.getRuntime().fail();
+        await this.promptQueue.commitRuntimeTransition();
+        const targetKey = getExecutionTargetRunKey(outcome.target);
+        const executionError = this.targetExecutionErrors.get(targetKey);
+        this.targetExecutionErrors.delete(targetKey);
+        if (executionError !== undefined) {
+          throw executionError;
+        }
+        return false;
+      }
+      return true;
+    }
+    if (outcome.status === PROMPT_TERMINAL_STATUS.CANCELLED) {
+      if (this.getRuntime().status === EXECUTION_STATES.CANCELLING) {
+        this.getRuntime().confirmStopped();
+        await this.promptQueue.commitRuntimeTransition();
+      }
+      return false;
+    }
+    if (await this.confirmPauseAndStop("Workflow paused")) {
+      return false;
+    }
+    return true;
+  }
+
+  private async executeTarget(
     target: ExecutionTarget,
     step: WorkflowStep,
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    preflightMember?: ParallelGroupPreflightMember
+  ): Promise<StepExecutionOutcome> {
+    let shouldContinue: boolean;
+    try {
+      shouldContinue = await this.executeTargetContract(
+        target,
+        step,
+        context,
+        preflightMember
+      );
+    } catch (error) {
+      const failureReason =
+        error instanceof Error ? error.message : String(error);
+      if (
+        context.abortSignal?.aborted ||
+        this.getRuntime().status === EXECUTION_STATES.CANCELLING ||
+        this.getRuntime().status === EXECUTION_STATES.STOPPED
+      ) {
+        const attempt = this.getRuntime().getAttempt(target);
+        if (attempt) {
+          this.getRuntime().cancelAttempt(
+            target,
+            attempt.attemptIndex,
+            failureReason
+          );
+        }
+        return {
+          target,
+          status: PROMPT_TERMINAL_STATUS.CANCELLED,
+          failureReason,
+        };
+      }
+      this.targetExecutionErrors.set(getExecutionTargetRunKey(target), error);
+      const attempt = this.getRuntime().getAttempt(target);
+      if (attempt) {
+        this.getRuntime().failAttempt(
+          target,
+          attempt.attemptIndex,
+          failureReason
+        );
+      }
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.failStep(target.stepIndex, failureReason);
+        context.dashboardProvider?.updateStepStatus(target.stepIndex, {
+          state: STEP_STATUS.FAILED,
+          message: failureReason,
+        });
+      } else {
+        await this.setFinalStepRuntime(context, {
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopCount: target.loopIndex,
+          status: STEP_STATUS.FAILED,
+          startedAt:
+            this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
+          completedAt: Date.now(),
+        });
+      }
+      return {
+        target,
+        status: PROMPT_TERMINAL_STATUS.FAILED,
+        failureReason,
+      };
+    }
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      const result = this.promptQueue.getState().results[target.stepIndex];
+      if (result?.status === STEP_STATUS.SKIPPED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.SKIPPED };
+      }
+      if (result?.status === STEP_STATUS.CANCELLED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.CANCELLED };
+      }
+      if (result?.status === STEP_STATUS.FAILED) {
+        return {
+          target,
+          status: PROMPT_TERMINAL_STATUS.FAILED,
+          ...(result.error ? { failureReason: result.error } : {}),
+          ...(shouldContinue ? { terminalFailure: false } : {}),
+        };
+      }
+    } else {
+      const finalStatus = this.promptQueue.getFinalStepRuntime()?.status;
+      if (finalStatus === STEP_STATUS.SKIPPED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.SKIPPED };
+      }
+      if (finalStatus === STEP_STATUS.FAILED) {
+        return { target, status: PROMPT_TERMINAL_STATUS.FAILED };
+      }
+    }
+
+    if (shouldContinue) {
+      return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+    }
+    const runtime = this.getRuntime();
+    return {
+      target,
+      status:
+        context.abortSignal?.aborted ||
+        runtime.status === EXECUTION_STATES.CANCELLING ||
+        runtime.status === EXECUTION_STATES.STOPPED
+          ? PROMPT_TERMINAL_STATUS.CANCELLED
+          : PROMPT_TERMINAL_STATUS.FAILED,
+    };
+  }
+
+  private async executeTargetContract(
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    preflightMember?: ParallelGroupPreflightMember
   ): Promise<boolean> {
     const state = this.promptQueue.getState();
     const runtime = this.getRuntime();
     const currentStatus = runtime.status;
 
     if (
-      await this.confirmPauseAndStop(
-        "Workflow paused before executing next prompt"
-      )
-    ) {
-      return false;
-    }
-    if (
+      context.abortSignal?.aborted ||
       currentStatus === EXECUTION_STATES.STOPPED ||
       currentStatus === EXECUTION_STATES.CANCELLING
     ) {
@@ -529,18 +1148,6 @@ export class WorkflowExecutor {
     }
 
     const progress = this.promptQueue.getProgress();
-    const guardIndex =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? target.stepIndex
-        : state.currentIndex;
-    const shouldStopForTime = await this.checkExecutionTimeLimit(
-      context.dynamicQueueConfig,
-      guardIndex,
-      progress.total
-    );
-    if (shouldStopForTime) {
-      return false;
-    }
 
     if (!isStepEnabled(step)) {
       return this.handleSkippedStep(
@@ -566,17 +1173,23 @@ export class WorkflowExecutor {
     // re-runs the gate before spending another harness call.
     let attemptIndex = 0;
     while (true) {
+      if (context.abortSignal?.aborted) {
+        return false;
+      }
       runtime.beginAttempt(target, attemptIndex, Date.now());
+      context.registerActiveTarget?.(target, attemptIndex);
 
       // Evaluate pre-condition gate before running the AI prompt.
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
-      let preResolvedProperties = PropertyResolver.resolve(
-        prompt,
-        workflowFileForPre,
-        { hostCanProvidePty: context.hostCanProvidePty }
-      );
-      const preVars = workflowFileForPre.vars;
-      if (preVars && Object.keys(preVars).length > 0) {
+      let preResolvedProperties =
+        preflightMember?.resolvedProperties ??
+        PropertyResolver.resolve(prompt, workflowFileForPre, {
+          hostCanProvidePty: context.hostCanProvidePty,
+        });
+      const preVars = preflightMember
+        ? { ...preflightMember.variables }
+        : workflowFileForPre.vars;
+      if (!preflightMember && preVars && Object.keys(preVars).length > 0) {
         preResolvedProperties = VarSubstitutor.applyToResolvedProperties(
           preResolvedProperties,
           preVars
@@ -725,13 +1338,17 @@ export class WorkflowExecutor {
       }
 
       const workflowFile = this.promptQueue.getWorkflowFile();
-      let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile, {
-        hostCanProvidePty: context.hostCanProvidePty,
-      });
+      let resolvedProperties =
+        preflightMember?.resolvedProperties ??
+        PropertyResolver.resolve(prompt, workflowFile, {
+          hostCanProvidePty: context.hostCanProvidePty,
+        });
 
       // Apply {{var}} substitution when the workflow has vars defined.
-      const vars = workflowFile.vars;
-      if (vars && Object.keys(vars).length > 0) {
+      const vars = preflightMember
+        ? { ...preflightMember.variables }
+        : workflowFile.vars;
+      if (!preflightMember && vars && Object.keys(vars).length > 0) {
         resolvedProperties = VarSubstitutor.applyToResolvedProperties(
           resolvedProperties,
           vars
@@ -741,11 +1358,9 @@ export class WorkflowExecutor {
       // Substitute first, then resolve a standalone prompt-file reference into
       // a local copy. The queue and working file retain the authored path so
       // edits to the target file are visible on the next run.
-      const effectivePromptText = await this.resolveEffectivePrompt(
-        prompt.prompt,
-        context,
-        vars
-      );
+      const effectivePromptText =
+        preflightMember?.effectivePromptText ??
+        (await this.resolveEffectivePrompt(prompt.prompt, context, vars));
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
@@ -806,7 +1421,8 @@ export class WorkflowExecutor {
 
       const integration = context.getIntegrationForPrompt(
         prompt,
-        resolvedProperties.harness
+        resolvedProperties.harness,
+        target
       );
 
       const runtimeStepIndex =
@@ -884,6 +1500,19 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          ...(preflightMember
+            ? {
+                groupStartBoundary:
+                  preflightMember.stepIndex >= 0
+                    ? this.getParallelGroupStartBoundary(
+                        preflightMember.stepIndex
+                      )
+                    : undefined,
+                preflightSession: {
+                  sessionId: preflightMember.resolvedSessionId,
+                },
+              }
+            : {}),
           secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
@@ -891,7 +1520,7 @@ export class WorkflowExecutor {
         },
         async () => {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-            await this.promptQueue.markCurrentAsSent();
+            await this.promptQueue.markStepAsSent(target.stepIndex);
           }
         },
         "initial",
@@ -934,6 +1563,11 @@ export class WorkflowExecutor {
         attemptIndex,
         resolvedProperties.harness
       );
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
+          elapsed: duration,
+        });
+      }
       // The completed response is durable in events.jsonl before it becomes
       // visible to any active-only cache or subsequent prompt construction.
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -975,14 +1609,11 @@ export class WorkflowExecutor {
 
         if (endDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
           Log.info("Workflow stopped due to end condition failure");
-          if (
-            runtime.status === EXECUTION_STATES.RUNNING ||
-            runtime.status === EXECUTION_STATES.PAUSING ||
-            runtime.status === EXECUTION_STATES.PAUSED
-          ) {
-            this.promptQueue.finalizeFailedInFlightPrompt();
-            runtime.fail();
-            await this.promptQueue.commitRuntimeTransition();
+          if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+            await this.promptQueue.failStep(
+              target.stepIndex,
+              "End condition requested stopWorkflow"
+            );
           }
           return false;
         }
@@ -1014,19 +1645,6 @@ export class WorkflowExecutor {
               model: prompt._runtime?.model,
             }
           );
-        }
-      }
-
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        await this.promptQueue.completeCurrentAndMoveNext();
-
-        if (context.dashboardProvider) {
-          const live = this.promptQueue.getProgress();
-          context.dashboardProvider.updateProgress(live.current, live.total);
-        }
-
-        if (await this.confirmPauseAndStop("Workflow paused")) {
-          return false;
         }
       }
 
@@ -1072,11 +1690,7 @@ export class WorkflowExecutor {
           message: reason,
         });
       }
-      await this.promptQueue.skipCurrentAndMoveNext();
-      if (context.dashboardProvider) {
-        const live = this.promptQueue.getProgress();
-        context.dashboardProvider.updateProgress(live.current, live.total);
-      }
+      await this.promptQueue.skipStep(stepIndex);
       return true;
     }
 
@@ -1164,6 +1778,9 @@ export class WorkflowExecutor {
     // retry therefore re-runs the complete script step with the same budget.
     let attemptIndex = 0;
     while (true) {
+      if (context.abortSignal?.aborted) {
+        return false;
+      }
       runtime.beginAttempt(target, attemptIndex, Date.now());
 
       const timeout =
@@ -1213,6 +1830,17 @@ export class WorkflowExecutor {
           ptyExitCode = await context.spawnScriptPty({
             stepName: stepLabel,
             stepIndex: signedStepIndex,
+            parallelGroupId:
+              stepIndex >= 0
+                ? this.promptQueue
+                    .getState()
+                    .parallelGroups.find(
+                      (group) =>
+                        stepIndex >= group.startIndex &&
+                        stepIndex <= group.endIndex
+                    )?.id
+                : undefined,
+            targetKey: getExecutionTargetRunKey(target),
             script: effectiveStep.script,
             cwd: context.executionWorkspace.executionRoot,
             env: await this.resolveScriptEnvironment(
@@ -1228,6 +1856,9 @@ export class WorkflowExecutor {
             onTimeout: () => {
               ptyTimedOut = true;
             },
+            onSessionCreated: (sessionId) =>
+              context.registerTargetPtySession?.(target, sessionId),
+            onSessionEnded: () => context.clearTargetPtySession?.(target),
           });
         }
 
@@ -1237,7 +1868,8 @@ export class WorkflowExecutor {
             context.executionWorkspace.executionRoot,
             this.promptQueue.getWorkflowFile().vars,
             onOutput,
-            secretNames
+            secretNames,
+            context.getScriptProcessRunner?.(target)
           );
         }
 
@@ -1355,6 +1987,11 @@ export class WorkflowExecutor {
       const terminalStatus = shouldContinue
         ? STEP_STATUS.COMPLETED
         : STEP_STATUS.FAILED;
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
+          elapsed: evalResult.duration / 1000,
+        });
+      }
 
       if (!succeeded && onFail === CONDITION_ACTIONS.STOP_WORKFLOW) {
         Log.error(
@@ -1404,23 +2041,12 @@ export class WorkflowExecutor {
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
         if (shouldContinue) {
-          await this.promptQueue.completeCurrentAndMoveNext();
-          if (context.dashboardProvider) {
-            const live = this.promptQueue.getProgress();
-            context.dashboardProvider.updateProgress(live.current, live.total);
-          }
+          // The coordinator commits the target outcome and advances at join.
         } else {
-          this.promptQueue.finalizeFailedInFlightPrompt(
+          await this.promptQueue.failStep(
+            target.stepIndex,
             `Script exited with code ${evalResult.exitCode}`
           );
-          runtime.fail();
-          await this.promptQueue.commitRuntimeTransition();
-        }
-
-        if (
-          await this.confirmPauseAndStop("Workflow paused after script step")
-        ) {
-          return false;
         }
       }
 
@@ -1446,7 +2072,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     beforeState: RawWorkspaceState,
     strategy: "git" | "filesystem",
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    parallelGroupId?: string
   ): Promise<void> {
     if (!context.snapshotService) {
       return;
@@ -1473,6 +2100,7 @@ export class WorkflowExecutor {
       git: afterState.git,
       repos: context.snapshotService.snapshotRepoInfos(afterState),
       changedFiles,
+      ...(parallelGroupId ? { parallelGroupId } : {}),
     };
 
     snapshot = await context.snapshotService.enrichSnapshotBeforeContent(
@@ -1555,8 +2183,9 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     step: WorkflowStep,
     context: WorkflowExecutionContext,
-    snapshotStrategy: "git" | "filesystem" | undefined
-  ): Promise<boolean> {
+    snapshotStrategy: "git" | "filesystem" | undefined,
+    preflightMember?: ParallelGroupPreflightMember
+  ): Promise<StepExecutionOutcome> {
     let beforeState: RawWorkspaceState | undefined;
     if (context.snapshotService && snapshotStrategy) {
       try {
@@ -1570,26 +2199,30 @@ export class WorkflowExecutor {
       }
     }
 
-    const shouldContinue = await this.executeSinglePrompt(
-      target,
-      step,
-      context
-    );
+    try {
+      const outcome = await this.executeTarget(
+        target,
+        step,
+        context,
+        preflightMember
+      );
 
-    if (beforeState && context.snapshotService && snapshotStrategy) {
-      try {
-        await this.captureAndEmitSnapshot(
-          target,
-          beforeState,
-          snapshotStrategy,
-          context
-        );
-      } catch (e) {
-        Log.warn("Failed to capture workspace snapshot:", e);
+      if (beforeState && context.snapshotService && snapshotStrategy) {
+        try {
+          await this.captureAndEmitSnapshot(
+            target,
+            beforeState,
+            snapshotStrategy,
+            context
+          );
+        } catch (e) {
+          Log.warn("Failed to capture workspace snapshot:", e);
+        }
       }
+      return outcome;
+    } finally {
+      context.unregisterActiveTarget?.(target);
     }
-
-    return shouldContinue;
   }
 
   /**
@@ -1640,13 +2273,18 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
-    output: CliOutput
+    output: CliOutput,
+    integration: HarnessIntegration
   ): void {
     this.dispatchDashboardOutput(context, target, signedStepIndex, output);
     if (signedStepIndex !== undefined && signedStepIndex >= 0) {
-      context.captureCompletedOutput?.(signedStepIndex, output);
+      context.captureCompletedOutput?.(signedStepIndex, output, integration);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(target.loopIndex, output);
+      context.captureFinalStepCompletedOutput?.(
+        target.loopIndex,
+        output,
+        integration
+      );
     }
   }
 
@@ -1678,9 +2316,16 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
     output: CliOutput,
+    integration: HarnessIntegration,
     logContext: string
   ): Promise<void> {
-    this.dispatchCompletedOutput(context, target, signedStepIndex, output);
+    this.dispatchCompletedOutput(
+      context,
+      target,
+      signedStepIndex,
+      output,
+      integration
+    );
     await this.persistExecutionOutput(context, target, output, logContext);
   }
 
@@ -2104,7 +2749,7 @@ export class WorkflowExecutor {
           message: reason,
         });
       }
-      this.promptQueue.finalizeFailedInFlightPrompt(reason);
+      await this.promptQueue.failStep(target.stepIndex, reason);
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
@@ -2115,9 +2760,6 @@ export class WorkflowExecutor {
         completedAt: Date.now(),
       });
     }
-
-    runtime.fail();
-    await this.promptQueue.commitRuntimeTransition();
   }
 
   private getBufferedCliOutput(
@@ -2280,7 +2922,9 @@ export class WorkflowExecutor {
         return undefined;
       }
 
-      return `retry ${this.promptQueue.getCurrentRetryCount()} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+      return `retry ${this.promptQueue.getCurrentRetryCount(
+        target
+      )} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
     };
 
     await this.trackStatusMessage(
@@ -2466,23 +3110,43 @@ export class WorkflowExecutor {
    */
   private async waitForResponseComplete(
     _prompt: PromptStep,
-    integration: HarnessIntegration
-  ): Promise<string> {
-    return new Promise<string>((resolve) => {
+    integration: HarnessIntegration,
+    target: ExecutionTarget,
+    abortSignal?: AbortSignal
+  ): Promise<string | null> {
+    const targetKey = getExecutionTargetRunKey(target);
+    this.waitingResponseTargets.add(targetKey);
+    return new Promise<string | null>((resolve) => {
       let responseHandled = false;
+      let abortListener: (() => void) | undefined;
+
+      const finish = (responseText: string | null): void => {
+        if (responseHandled) {
+          return;
+        }
+        responseHandled = true;
+        disposable.dispose();
+        if (abortListener) {
+          abortSignal?.removeEventListener("abort", abortListener);
+        }
+        this.waitingResponseTargets.delete(targetKey);
+        resolve(responseText);
+      };
 
       const disposable = integration.onResponseComplete(
         (responseText: string) => {
-          if (responseHandled) {
-            return;
-          }
-          responseHandled = true;
-          disposable.dispose();
-
-          this.isWaitingForResponse = false;
-          resolve(responseText);
+          finish(responseText);
         }
       );
+
+      if (abortSignal) {
+        abortListener = () => finish(null);
+        if (abortSignal.aborted) {
+          abortListener();
+        } else {
+          abortSignal.addEventListener("abort", abortListener, { once: true });
+        }
+      }
     });
   }
 
@@ -2495,8 +3159,7 @@ export class WorkflowExecutor {
    *
    * @param onPromptSent Optional async callback invoked after a successful send
    *   but *before* awaiting the response. Use for queue bookkeeping that must
-   *   happen in that specific window (e.g. `markCurrentAsSent`,
-   *   `isWaitingForResponse = true`).
+   *   happen in that specific window (e.g. `markStepAsSent`).
    * @returns `{ responseText, duration }` on success, `null` if `sendPrompt`
    *   returns false.
    */
@@ -2557,7 +3220,9 @@ export class WorkflowExecutor {
 
     const responsePromise = this.waitForResponseComplete(
       promptStep,
-      integration
+      integration,
+      target,
+      context.abortSignal
     );
 
     let streamingDisposable: { dispose(): void } | undefined;
@@ -2584,21 +3249,44 @@ export class WorkflowExecutor {
     });
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
+      context.onTargetStreamingChunk?.({
+        target,
+        stepName:
+          promptStep.name?.trim() ||
+          (target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `Step ${target.stepIndex + 1}`
+            : `Final Step Loop ${target.loopIndex + 1}`),
+        chunk,
+      });
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         signedStepIndex !== undefined
       ) {
         context.captureChunk?.(signedStepIndex, chunk);
-        context.dashboardProvider?.updateCliStreamingChunk(
-          signedStepIndex,
-          chunk
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateCliStreamingChunk(
+            signedStepIndex,
+            chunk
+          );
+        }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepChunk?.(target.loopIndex, chunk);
-        context.dashboardProvider?.updateFinalStepStreamingChunk(
-          target.loopIndex,
-          chunk
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateFinalStepStreamingChunk(
+            target.loopIndex,
+            chunk
+          );
+        }
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -2613,25 +3301,50 @@ export class WorkflowExecutor {
     });
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
+      context.onTargetStreamingEvents?.({
+        target,
+        stepName:
+          promptStep.name?.trim() ||
+          (target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `Step ${target.stepIndex + 1}`
+            : `Final Step Loop ${target.loopIndex + 1}`),
+        events,
+      });
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         signedStepIndex !== undefined
       ) {
         context.captureEvents?.(signedStepIndex, events);
-        context.dashboardProvider?.updateCliStreamingEvents(
-          signedStepIndex,
-          events,
-          attemptIndex,
-          runIndex
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateCliStreamingEvents(
+            signedStepIndex,
+            events,
+            attemptIndex,
+            runIndex,
+            undefined
+          );
+        }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepEvents?.(target.loopIndex, events);
-        context.dashboardProvider?.updateFinalStepStreamingEvents(
-          target.loopIndex,
-          events,
-          attemptIndex,
-          runIndex
-        );
+        if (
+          !(
+            context.historyFilePath &&
+            context.outputHistoryManager?.hasOutputActivityHandler()
+          )
+        ) {
+          context.dashboardProvider?.updateFinalStepStreamingEvents(
+            target.loopIndex,
+            events,
+            attemptIndex,
+            runIndex,
+            undefined
+          );
+        }
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -2667,14 +3380,13 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
     };
 
-    this.isWaitingForResponse = true;
-    context.beginSessionActivityTargetCapture?.();
+    context.beginSessionActivityTargetCapture?.(integration, target);
     const success = await integration.sendPrompt(promptStep, true, {
       ...sendOptions,
       promptStartedAt: initTimestampMs,
     });
     if (!success) {
-      this.isWaitingForResponse = false;
+      this.waitingResponseTargets.delete(getExecutionTargetRunKey(target));
       disposeListeners();
       return null;
     }
@@ -2685,6 +3397,9 @@ export class WorkflowExecutor {
 
     const responseText = await responsePromise;
     disposeListeners();
+    if (responseText === null) {
+      return null;
+    }
 
     const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
     return { responseText, duration };
@@ -2829,6 +3544,13 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          ...(target.kind === FINAL_STEP_PHASES.QUEUE
+            ? {
+                groupStartBoundary: this.getParallelGroupStartBoundary(
+                  target.stepIndex
+                ),
+              }
+            : {}),
           secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
@@ -3084,12 +3806,23 @@ export class WorkflowExecutor {
     );
   }
 
+  private getParallelGroupStartBoundary(stepIndex: number): number {
+    return (
+      this.promptQueue
+        .getState()
+        .parallelGroups.find(
+          (group) =>
+            stepIndex >= group.startIndex && stepIndex <= group.endIndex
+        )?.startIndex ?? stepIndex
+    );
+  }
+
   clearResponseWaitState(): void {
-    this.isWaitingForResponse = false;
+    this.waitingResponseTargets.clear();
   }
 
   isAwaitingResponse(): boolean {
-    return this.isWaitingForResponse;
+    return this.waitingResponseTargets.size > 0;
   }
 
   private logWorkflowStart(
@@ -3250,6 +3983,27 @@ export class WorkflowExecutor {
     resolvedProperties?: ResolvedProperties
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
+    if (context.abortSignal?.aborted && !runtime.stopped) {
+      const attempt = runtime.getAttempt(target);
+      if (attempt) {
+        runtime.cancelAttempt(
+          target,
+          attempt.attemptIndex,
+          "Cancelled by parallel group"
+        );
+      }
+      await context.outputHistoryManager?.recordAttemptTerminal?.(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        runIndex,
+        attemptIndex,
+        "cancelled",
+        context.getDefinitionRevisionContext?.(),
+        "Cancelled by parallel group",
+        resolvedProperties?.harness
+      );
+      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+    }
     if (runtime.stopped) {
       // Workflow was stopped by the user. Flush whatever partial output is available
       // so the history file is not empty and the user can resume from the stopped state.
@@ -3274,6 +4028,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         stoppedOutput,
+        integration,
         "stopped-by-user output"
       );
       await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3308,12 +4063,8 @@ export class WorkflowExecutor {
         statusTimestampMs
       );
 
-      // The send attempt has already returned, so the process is done -
-      // finalize CANCELLING -> STOPPED now rather than waiting for the
-      // onResponseComplete listener registered by the stop request.
-      if (runtime.confirmStopped()) {
-        this.promptQueue.finalizeCancelledPromptAfterStop();
-        await this.promptQueue.commitRuntimeTransition();
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.cancelStep(target.stepIndex);
       }
 
       return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
@@ -3322,9 +4073,8 @@ export class WorkflowExecutor {
     if (integration.wasLastFailureUserCancellation()) {
       const failureReason = integration.getLastFailureReason();
       runtime.cancelAttempt(target, attemptIndex, failureReason);
-      this.promptQueue.markInFlightPromptCancelled();
-      if (runtime.requestStop()) {
-        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await this.promptQueue.cancelStep(target.stepIndex);
       }
       await context.outputHistoryManager?.recordAttemptTerminal?.(
         context.historyFilePath,
@@ -3389,9 +4139,9 @@ export class WorkflowExecutor {
     }
 
     runtime.failAttempt(target, attemptIndex, failureReason);
-    this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
-    runtime.fail();
-    await this.promptQueue.commitRuntimeTransition();
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      await this.promptQueue.failStep(target.stepIndex, failureReason);
+    }
 
     // Write a final (non-streaming) error CLI output so the failure is visible
     // in the dashboard and persisted to history. This replaces the initial
@@ -3421,6 +4171,7 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       errorCliOutput,
+      integration,
       "error output"
     );
     await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3514,6 +4265,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         failureOutputRecord,
+        integration,
         `${failureKind} output`
       );
       await context.outputHistoryManager?.recordAttemptTerminal?.(
@@ -3551,12 +4303,7 @@ export class WorkflowExecutor {
       await persistFailureOutput();
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
-        await this.promptQueue.commitRuntimeTransition();
-        if (context.dashboardProvider) {
-          const live = this.promptQueue.getProgress();
-          context.dashboardProvider.updateProgress(live.current, live.total);
-        }
+        await this.promptQueue.failStep(target.stepIndex, failureReason);
         return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
 
@@ -3583,7 +4330,7 @@ export class WorkflowExecutor {
     await persistFailureOutput();
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
+      await this.promptQueue.failStep(target.stepIndex, failureReason);
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
@@ -3596,8 +4343,6 @@ export class WorkflowExecutor {
       });
     }
 
-    runtime.fail();
-    await this.promptQueue.commitRuntimeTransition();
     return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
 
@@ -3653,6 +4398,7 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       cliOutputObj,
+      integration,
       "step output"
     );
     if (context.historyFilePath && context.outputHistoryManager) {

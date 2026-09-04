@@ -28,7 +28,10 @@ import type {
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
-import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  WorkflowStep,
+} from "../types/CtrlYokeTypes";
 import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -557,7 +560,9 @@ export class CtrlYokeWebviewProvider
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     await this.sink.updateFileSelected(
       fileName,
@@ -566,7 +571,9 @@ export class CtrlYokeWebviewProvider
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -588,7 +595,9 @@ export class CtrlYokeWebviewProvider
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -600,7 +609,9 @@ export class CtrlYokeWebviewProvider
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -634,8 +645,18 @@ export class CtrlYokeWebviewProvider
   ): void {
     this.sink.updateProgress(current, total, workflowId);
   }
-  public updateExecutionState(state: string, workflowId?: string): void {
-    this.sink.updateExecutionState(state, workflowId);
+  public updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
+    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+  }
+  public updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.sink.updateActiveStepIndices?.(activeStepIndices, workflowId);
   }
   public updateStepStatus(
     stepIndex: number,
@@ -674,23 +695,42 @@ export class CtrlYokeWebviewProvider
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
-    this.sink.updateCliStreamingChunk(stepIndex, chunk, phase, workflowId);
+    this.sink.updateCliStreamingChunk(
+      stepIndex,
+      chunk,
+      phase,
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
+    );
   }
   public updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateCliStreamingEvents(
       stepIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   public updateContextWindow(
@@ -725,22 +765,25 @@ export class CtrlYokeWebviewProvider
     finalStep?: WorkflowStep | null,
     executionState?: string,
     definitionRevision?: number,
-    workflowId?: string
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.sink.updateStepsExtended(
       steps,
       finalStep,
       executionState,
       definitionRevision,
-      workflowId
+      workflowId,
+      parallelGroups
     );
   }
   public updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
-    this.sink.updatePromptDeleted(fileName, steps, finalStep);
+    this.sink.updatePromptDeleted(fileName, steps, finalStep, parallelGroups);
   }
   public updateFinalStep(
     finalStep: WorkflowStep | null,
@@ -767,13 +810,21 @@ export class CtrlYokeWebviewProvider
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.sink.updateFinalStepStreamingChunk(
       loopIndex,
       chunk,
       phase,
-      workflowId
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
     );
   }
   public updateFinalStepStreamingEvents(
@@ -781,21 +832,28 @@ export class CtrlYokeWebviewProvider
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateFinalStepStreamingEvents(
       loopIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   public notifyPromptsReordered(
     steps: WorkflowStep[],
-    workflowId?: string
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
-    this.sink.notifyPromptsReordered(steps, workflowId);
+    this.sink.notifyPromptsReordered(steps, workflowId, parallelGroups);
   }
   public notifyUndoRedoSynced(): void {
     this.sink.notifyUndoRedoSynced();
@@ -808,13 +866,15 @@ export class CtrlYokeWebviewProvider
   public notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       workflowId,
       steps,
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 

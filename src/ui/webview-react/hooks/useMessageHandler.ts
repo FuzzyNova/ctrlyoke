@@ -537,6 +537,7 @@ export function createMessageHandlers(
         steps: data.steps,
         executionState: data.executionState as ExecutionState,
         currentStep: data.currentIndex || 0,
+        activeStepIndices: data.activeStepIndices ?? [],
         results: data.results || [],
         finalStep: data.finalStep ?? null,
         finalStepStatus: data.finalStepStatus ?? null,
@@ -786,6 +787,7 @@ export function createMessageHandlers(
       fileName: message.fileName,
       workflowName: message.workflowName,
       steps: message.steps || [],
+      parallelGroups: message.parallelGroups || [],
       finalStep: message.finalStep ?? null,
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
@@ -810,8 +812,10 @@ export function createMessageHandlers(
       fileName: message.fileName,
       workflowName: message.workflowName,
       steps: message.steps || [],
+      parallelGroups: message.parallelGroups || [],
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
+      activeStepIndices: message.activeStepIndices ?? [],
       results: message.results || [],
       finalStep: message.finalStep ?? null,
       finalStepStatus: message.finalStepStatus ?? null,
@@ -892,11 +896,17 @@ export function createMessageHandlers(
         (p: WorkflowStep, i: number) =>
           !isStepContentEqual(p, currentSteps[i] as WorkflowStep)
       );
+    const nextParallelGroups =
+      message.parallelGroups ?? workflowStore.parallelGroups;
+    const parallelGroupsChanged =
+      JSON.stringify(nextParallelGroups) !==
+      JSON.stringify(workflowStore.parallelGroups);
     // Also suppress undo recording for the initial auto-load (0 → N steps).
     // Loading from an empty state is a system-driven restore, not a user edit.
     const isInitialAutoLoad = currentSteps.length === 0;
     const shouldRecord =
-      !isInitialAutoLoad && (stepCountChanged || stepContentChanged);
+      !isInitialAutoLoad &&
+      (stepCountChanged || stepContentChanged || parallelGroupsChanged);
     WebviewLog.debug(
       `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
     );
@@ -911,6 +921,7 @@ export function createMessageHandlers(
       useWorkflowStore.temporal.getState().pause();
     }
     workflowStore.setPrompts(newSteps);
+    workflowStore.setParallelGroups(nextParallelGroups);
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().resume();
     }
@@ -935,6 +946,11 @@ export function createMessageHandlers(
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setPrompts(message.steps || []);
+    useWorkflowStore.temporal.getState().pause();
+    workflowStore.setParallelGroups(
+      message.parallelGroups ?? workflowStore.parallelGroups
+    );
+    useWorkflowStore.temporal.getState().resume();
   };
 
   // --------------------------------------------------------------------------
@@ -946,6 +962,11 @@ export function createMessageHandlers(
     rememberUndoRedoRuntime(workflowStore.steps);
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.steps || []);
+    useWorkflowStore.temporal.getState().pause();
+    workflowStore.setParallelGroups(
+      message.parallelGroups ?? workflowStore.parallelGroups
+    );
+    useWorkflowStore.temporal.getState().resume();
     // Pause around setFinalStep — the delete action is already recorded by
     // setPrompts above; a second entry from setFinalStep would require two
     // undos to restore a single deleted prompt.
@@ -1006,6 +1027,7 @@ export function createMessageHandlers(
       workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
       workflowStore.setTotalSteps(message.totalSteps);
       workflowStore.setCurrentStep(preserveStepCount);
+      workflowStore.setActiveStepIndices(message.activeStepIndices ?? []);
 
       // Reset only the new (not-yet-run) prompts to pending; preserve completed status.
       // Pause undo recording — execution start is not a user-undoable action.
@@ -1037,6 +1059,7 @@ export function createMessageHandlers(
       workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
       workflowStore.setTotalSteps(message.totalSteps);
       workflowStore.setCurrentStep(0);
+      workflowStore.setActiveStepIndices(message.activeStepIndices ?? []);
 
       const resetPrompts = workflowStore.steps.map((prompt) => ({
         ...prompt,
@@ -1127,6 +1150,21 @@ export function createMessageHandlers(
       }
     }
     applyExecutionState(message.state as ExecutionState);
+    if (message.activeStepIndices !== undefined) {
+      useWorkflowStore
+        .getState()
+        .setActiveStepIndices(message.activeStepIndices);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
+    useWorkflowStore.getState().setActiveStepIndices(message.activeStepIndices);
   };
 
   // --------------------------------------------------------------------------
@@ -1142,6 +1180,9 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setCurrentStep(message.current);
     workflowStore.setTotalSteps(message.total);
+    if (message.activeStepIndices !== undefined) {
+      workflowStore.setActiveStepIndices(message.activeStepIndices);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1156,6 +1197,9 @@ export function createMessageHandlers(
     }
     const workflowStore = useWorkflowStore.getState();
     const { stepIndex, status, details } = message;
+    if (message.activeStepIndices !== undefined) {
+      workflowStore.setActiveStepIndices(message.activeStepIndices);
+    }
 
     if (workflowStore.steps[stepIndex]) {
       // Pause around updatePrompt — step status changes are runtime events,
@@ -1309,7 +1353,12 @@ export function createMessageHandlers(
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
-      store.clearFinalStepStreamingChunk(message.loopIndex, phase);
+      store.clearFinalStepStreamingChunk(
+        message.loopIndex,
+        phase,
+        message.output.runIndex ?? 0,
+        message.output.attemptIndex ?? 0
+      );
     }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -1342,7 +1391,11 @@ export function createMessageHandlers(
       .appendFinalStepStreamingChunk(
         message.loopIndex,
         message.chunk || "",
-        message.phase
+        message.phase,
+        message.runIndex ?? 0,
+        message.attemptIndex ?? 0,
+        message.timestampMs,
+        message.sequence
       );
   };
 
@@ -1362,7 +1415,10 @@ export function createMessageHandlers(
         message.loopIndex,
         message.events || [],
         message.attemptIndex ?? 0,
-        message.runIndex ?? 0
+        message.runIndex ?? 0,
+        message.phase,
+        message.timestampMs,
+        message.sequence
       );
   };
 
@@ -1379,7 +1435,12 @@ export function createMessageHandlers(
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
-      store.clearStreamingChunk(message.stepIndex, phase);
+      store.clearStreamingChunk(
+        message.stepIndex,
+        phase,
+        message.output.runIndex ?? 0,
+        message.output.attemptIndex ?? 0
+      );
     }
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -1432,7 +1493,11 @@ export function createMessageHandlers(
     workflowStore.appendStreamingChunk(
       message.stepIndex,
       message.chunk || "",
-      message.phase
+      message.phase,
+      message.runIndex ?? 0,
+      message.attemptIndex ?? 0,
+      message.timestampMs,
+      message.sequence
     );
   };
 
@@ -1455,7 +1520,10 @@ export function createMessageHandlers(
       message.stepIndex,
       events,
       message.attemptIndex ?? 0,
-      message.runIndex ?? 0
+      message.runIndex ?? 0,
+      message.phase,
+      message.timestampMs,
+      message.sequence
     );
   };
 
@@ -1478,7 +1546,6 @@ export function createMessageHandlers(
     // CLI output token metadata, which is the durable source used by history.
     if (
       !isWorkflowRunning(workflowStore.executionState) ||
-      workflowStore.currentStep !== message.stepIndex ||
       isTerminalStepStatus(stepStatus)
     ) {
       return;
@@ -2435,6 +2502,7 @@ export function createMessageHandlers(
       fileName: workingFile.workflowName,
       workflowName: workingFile.workflowName,
       steps: workingFile.steps ?? [],
+      parallelGroups: workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,
       currentStep: runtime?.currentIndex,
       results,

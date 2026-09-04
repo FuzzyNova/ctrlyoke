@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import {
   EXECUTION_PHASES,
   EXECUTION_STATES,
+  CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
 } from "../../types/DashboardConstants";
@@ -13,6 +14,10 @@ import {
   TIMELINE_SCHEMA_VERSION,
   TIMELINE_STORAGE_KIND,
   type CliOutputRecordedEvent,
+  type CliOutputChunkAppendedEvent,
+  type CliOutputEventsAppendedEvent,
+  type ScriptExecutionRecordedEvent,
+  type StatusMessageRecordedEvent,
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
 import {
@@ -116,5 +121,116 @@ suite("OutputHistoryTimelineAdapter", () => {
       getCliEntryKey(TARGET, 0, 0, EXECUTION_PHASES.PROMPT),
       getCliEntryKey(TARGET, 0, 0, EXECUTION_PHASES.WORKTREE_SETUP)
     );
+  });
+
+  test("projects target-attributed activity entries in durable order", () => {
+    const chunk: CliOutputChunkAppendedEvent = {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 4,
+      timestampMs: 40,
+      target: TARGET,
+      runIndex: 2,
+      attemptIndex: 1,
+      payload: { chunk: "text" },
+    };
+    const structured: CliOutputEventsAppendedEvent = {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 5,
+      timestampMs: 50,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      runIndex: 2,
+      attemptIndex: 1,
+      payload: {
+        events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "structured" } }],
+      },
+    };
+    const status: StatusMessageRecordedEvent = {
+      eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 6,
+      timestampMs: 60,
+      target: TARGET,
+      payload: {
+        statusMessage: {
+          message: "waiting",
+          severity: "info",
+          timestamp: 60,
+        },
+      },
+    };
+    const script: ScriptExecutionRecordedEvent = {
+      eventType: TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
+      workflowId: "workflow",
+      runId: 1,
+      sequence: 7,
+      timestampMs: 70,
+      target: TARGET,
+      runIndex: 2,
+      attemptIndex: 1,
+      definitionRevision: 1,
+      payload: {
+        command: "npm test",
+        stdout: "out",
+        stderr: "err",
+        exitCode: 0,
+      },
+    };
+
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      script,
+      status,
+      structured,
+      chunk,
+    ]);
+
+    assert.deepStrictEqual(
+      history.activityEntries?.map((entry) => ({
+        sequence: entry.sequence,
+        target: entry.target,
+        runIndex: entry.runIndex,
+        attemptIndex: entry.attemptIndex,
+        kind: entry.kind,
+      })),
+      [
+        {
+          sequence: 4,
+          target: TARGET,
+          runIndex: 2,
+          attemptIndex: 1,
+          kind: "text",
+        },
+        {
+          sequence: 5,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+          runIndex: 2,
+          attemptIndex: 1,
+          kind: "structured",
+        },
+        {
+          sequence: 6,
+          target: TARGET,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: "status",
+        },
+        {
+          sequence: 7,
+          target: TARGET,
+          runIndex: 2,
+          attemptIndex: 1,
+          kind: "script",
+        },
+      ]
+    );
+    assert.strictEqual(history.activityEntries?.[0]?.text, "text");
+    assert.deepStrictEqual(history.activityEntries?.[1]?.events, [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "structured" } },
+    ]);
+    assert.strictEqual(history.activityEntries?.[3]?.text, "outerr");
   });
 });

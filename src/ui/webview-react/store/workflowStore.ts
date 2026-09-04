@@ -4,9 +4,9 @@ import { temporal } from "zundo";
 import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
-  EXECUTION_PHASES,
   STEP_STATUS,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
@@ -15,12 +15,14 @@ import {
   type CliOutput,
   type RetryState,
   type ExecutionPhase,
+  EXECUTION_PHASES,
   getStreamingChunkKey,
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
@@ -93,6 +95,7 @@ import type {
   OrderedHistoryEntry,
   OrderedCliHistoryEntry,
   OrderedStatusHistoryEntry,
+  OutputActivityEntry,
   OutputExecutionTarget,
   WorkflowOutputHistory,
   WorkflowRunMetadata,
@@ -226,8 +229,10 @@ interface WorkflowState {
   fileName: string | null;
   workflowName: string | null;
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   executionState: ExecutionState;
   currentStep: number;
+  activeStepIndices: number[];
   totalSteps: number;
   finalStep: WorkflowStep | null;
   finalStepStatus: StepStatus | null;
@@ -237,6 +242,8 @@ interface WorkflowState {
   // Live ordered output entries (queue + finalStep outputs and status messages)
   liveOrderedEntries: OrderedHistoryEntry[];
   liveSequence: number;
+  /** Target-attributed semantic activities shared by live output and replay. */
+  liveActivityEntries: OutputActivityEntry[];
   retryStates: Record<number, RetryState>;
 
   // Streaming state (for incremental output)
@@ -249,6 +256,7 @@ interface WorkflowState {
   // collections so a retired run remains live while its terminal is still open.
   historyOutputs: {
     orderedEntries: OrderedHistoryEntry[];
+    activityEntries?: OutputActivityEntry[];
     promptOutputs: Record<number, StepOutput>;
     finalStepOutputs?: Record<number, StepOutput>;
     runMetadata: WorkflowRunMetadata;
@@ -278,9 +286,11 @@ interface WorkflowActions {
   setFileName: (fileName: string | null) => void;
   setWorkflowName: (name: string | null) => void;
   setPrompts: (steps: WorkflowStep[]) => void;
+  setParallelGroups: (parallelGroups: ParallelGroupDefinition[]) => void;
   updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
+  setActiveStepIndices: (stepIndices: number[]) => void;
   setTotalSteps: (total: number) => void;
   setFinalStep: (finalStep: WorkflowStep | null) => void;
   setFinalStepStatus: (
@@ -295,29 +305,50 @@ interface WorkflowActions {
   appendStreamingChunk: (
     stepIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
-  clearStreamingChunk: (stepIndex: number, phase?: ExecutionPhase) => void;
+  clearStreamingChunk: (
+    stepIndex: number,
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number
+  ) => void;
   appendStreamingEvents: (
     stepIndex: number,
     events: any[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
   appendFinalStepStreamingChunk: (
     loopIndex: number,
     chunk: string,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
   clearFinalStepStreamingChunk: (
     loopIndex: number,
-    phase?: ExecutionPhase
+    phase?: ExecutionPhase,
+    runIndex?: number,
+    attemptIndex?: number
   ) => void;
   appendFinalStepStreamingEvents: (
     loopIndex: number,
     events: any[],
     attemptIndex?: number,
-    runIndex?: number
+    runIndex?: number,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ) => void;
 
   // Retry management
@@ -351,8 +382,10 @@ interface WorkflowActions {
     fileName: string;
     workflowName?: string;
     steps: WorkflowStep[];
+    parallelGroups?: ParallelGroupDefinition[];
     executionState?: ExecutionState;
     currentStep?: number;
+    activeStepIndices?: number[];
     results?: Array<{ status?: StepStatus }>;
     finalStep?: WorkflowStep | null;
     finalStepStatus?: StepStatus | null;
@@ -428,8 +461,10 @@ const initialState: WorkflowState = {
   fileName: null,
   workflowName: null,
   steps: [],
+  parallelGroups: [],
   executionState: EXECUTION_STATES.IDLE,
   currentStep: 0,
+  activeStepIndices: [],
   totalSteps: 0,
   finalStep: null,
   finalStepStatus: null,
@@ -437,6 +472,7 @@ const initialState: WorkflowState = {
   finalStepPhase: null,
   liveOrderedEntries: [],
   liveSequence: 0,
+  liveActivityEntries: [],
   retryStates: {},
   streamingChunks: {},
   finalStepStreamingChunks: {},
@@ -487,6 +523,58 @@ function findMatchingCliEntryIndex(
   cliEntry: OrderedCliHistoryEntry
 ): number {
   return findCliEntryIndexByIdentity(entries, getCliEntryIdentity(cliEntry));
+}
+
+function activityEntryKey(entry: OutputActivityEntry): string {
+  const targetIndex =
+    entry.target.kind === FINAL_STEP_PHASES.QUEUE
+      ? entry.target.stepIndex
+      : entry.target.loopIndex;
+  return `${entry.target.kind}:${targetIndex}:${entry.runIndex}:${entry.attemptIndex}:${entry.phase ?? EXECUTION_PHASES.PROMPT}:${entry.kind}`;
+}
+
+function mergeActivityEntry(
+  entries: readonly OutputActivityEntry[],
+  incoming: OutputActivityEntry
+): OutputActivityEntry[] {
+  const key = activityEntryKey(incoming);
+  const index = entries.findIndex(
+    (entry) =>
+      activityEntryKey(entry) === key && entry.sequence === incoming.sequence
+  );
+  if (index < 0) return [...entries, incoming];
+
+  const existing = entries[index];
+  const merged: OutputActivityEntry = {
+    ...existing,
+    timestampMs: Math.min(existing.timestampMs, incoming.timestampMs),
+    sequence: Math.min(existing.sequence, incoming.sequence),
+    text:
+      incoming.text === undefined
+        ? existing.text
+        : `${existing.text ?? ""}${incoming.text}`,
+    events:
+      incoming.events === undefined
+        ? existing.events
+        : mergeStreamingEvents(existing.events ?? [], incoming.events),
+  };
+  const next = [...entries];
+  next[index] = merged;
+  return next;
+}
+
+function reconcileActivityEntries(
+  durable: readonly OutputActivityEntry[],
+  live: readonly OutputActivityEntry[]
+): OutputActivityEntry[] {
+  let merged = [...durable];
+  for (const entry of live) {
+    merged = mergeActivityEntry(merged, entry);
+  }
+  return merged.sort(
+    (left, right) =>
+      left.timestampMs - right.timestampMs || left.sequence - right.sequence
+  );
 }
 
 function overlayLiveHistoryEntries(
@@ -564,16 +652,22 @@ function appendStreamingEventsToOutputState(
   target: OutputExecutionTarget,
   events: any[],
   attemptIndex: number,
-  runIndex: number
+  runIndex: number,
+  phase: ExecutionPhase | undefined,
+  timestampMs: number | undefined,
+  sequence: number | undefined
 ): Pick<
   WorkflowState,
-  "liveOrderedEntries" | "liveSequence" | "historyOutputs"
+  | "liveOrderedEntries"
+  | "liveSequence"
+  | "historyOutputs"
+  | "liveActivityEntries"
 > {
   const identity: CliEntryIdentity = {
     target,
     runIndex,
     attemptIndex,
-    phase: EXECUTION_PHASES.PROMPT,
+    phase,
   };
   const liveMerge = mergeStreamingEventsIntoEntries(
     state.liveOrderedEntries,
@@ -601,7 +695,7 @@ function appendStreamingEventsToOutputState(
       },
       elapsed: 0,
       isStreaming: true,
-      timestampMs: Date.now(),
+      timestampMs: timestampMs ?? Date.now(),
       attemptIndex,
       runIndex,
     };
@@ -614,22 +708,93 @@ function appendStreamingEventsToOutputState(
         cliOutput,
         timestampMs: cliOutput.timestampMs!,
       }),
-      sequence: liveSequence,
+      sequence: sequence ?? liveSequence,
     };
     liveOrderedEntries = [...liveOrderedEntries, entry];
-    liveSequence += 1;
+    liveSequence = Math.max(liveSequence + 1, (sequence ?? liveSequence) + 1);
   }
+
+  const activityEntry: OutputActivityEntry = {
+    timestampMs: timestampMs ?? Date.now(),
+    sequence: sequence ?? liveSequence,
+    target,
+    runIndex,
+    attemptIndex,
+    phase,
+    kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+    events,
+  };
+  const liveActivityEntries = mergeActivityEntry(
+    state.liveActivityEntries,
+    activityEntry
+  );
+  const historyActivityEntries = state.historyOutputs
+    ? mergeActivityEntry(
+        state.historyOutputs.activityEntries ?? [],
+        activityEntry
+      )
+    : undefined;
 
   return {
     liveOrderedEntries,
     liveSequence,
-    historyOutputs:
-      state.historyOutputs && historyMerge?.matchedEntry
-        ? {
-            ...state.historyOutputs,
-            orderedEntries: historyMerge.entries,
-          }
-        : state.historyOutputs,
+    liveActivityEntries,
+    historyOutputs: state.historyOutputs
+      ? {
+          ...state.historyOutputs,
+          orderedEntries:
+            historyMerge?.entries ?? state.historyOutputs.orderedEntries,
+          activityEntries:
+            historyActivityEntries ??
+            state.historyOutputs.activityEntries ??
+            [],
+        }
+      : state.historyOutputs,
+  };
+}
+
+function appendStreamingChunkToActivityState(
+  state: WorkflowState,
+  target: OutputExecutionTarget,
+  chunk: string,
+  runIndex: number,
+  attemptIndex: number,
+  phase: ExecutionPhase | undefined,
+  timestampMs: number | undefined,
+  sequence: number | undefined
+): Pick<
+  WorkflowState,
+  "liveActivityEntries" | "historyOutputs" | "liveSequence"
+> {
+  const activityEntry: OutputActivityEntry = {
+    timestampMs: timestampMs ?? Date.now(),
+    sequence: sequence ?? state.liveSequence,
+    target,
+    runIndex,
+    attemptIndex,
+    phase,
+    kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+    text: chunk,
+  };
+  const liveActivityEntries = mergeActivityEntry(
+    state.liveActivityEntries,
+    activityEntry
+  );
+  return {
+    liveActivityEntries,
+    liveSequence: Math.max(
+      state.liveSequence + 1,
+      (sequence ?? state.liveSequence) + 1
+    ),
+    historyOutputs: state.historyOutputs
+      ? {
+          ...state.historyOutputs,
+          activityEntries: mergeActivityEntry(
+            state.historyOutputs.activityEntries ?? [],
+            activityEntry
+          ),
+        }
+      : state.historyOutputs,
   };
 }
 
@@ -719,6 +884,11 @@ export const useWorkflowStore = create<
         });
       },
 
+      setParallelGroups: (parallelGroups) =>
+        set({
+          parallelGroups,
+        }),
+
       updatePrompt: (index, updates) => {
         set((state) => ({
           steps: state.steps.map((p, i) =>
@@ -751,6 +921,9 @@ export const useWorkflowStore = create<
         }
         withUndoPause(() => set({ currentStep }));
       },
+
+      setActiveStepIndices: (activeStepIndices) =>
+        withUndoPause(() => set({ activeStepIndices: [...activeStepIndices] })),
 
       setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
@@ -810,35 +983,112 @@ export const useWorkflowStore = create<
                 };
               }
             }
+            const activityEntries =
+              entry.kind === OUTPUT_HISTORY_KINDS.STATUS
+                ? mergeActivityEntry(state.liveActivityEntries, {
+                    timestampMs: entry.timestampMs,
+                    sequence: entry.sequence,
+                    target: entry.target,
+                    runIndex: 0,
+                    attemptIndex: 0,
+                    kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+                    text: entry.statusMessage.message,
+                  })
+                : state.liveActivityEntries;
             return {
               liveOrderedEntries: [...state.liveOrderedEntries, entry],
+              liveActivityEntries: activityEntries,
               liveSequence: state.liveSequence + 1,
+              historyOutputs:
+                state.historyOutputs &&
+                entry.kind === OUTPUT_HISTORY_KINDS.STATUS
+                  ? {
+                      ...state.historyOutputs,
+                      activityEntries: mergeActivityEntry(
+                        state.historyOutputs.activityEntries ?? [],
+                        {
+                          timestampMs: entry.timestampMs,
+                          sequence: entry.sequence,
+                          target: entry.target,
+                          runIndex: 0,
+                          attemptIndex: 0,
+                          kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+                          text: entry.statusMessage.message,
+                        }
+                      ),
+                    }
+                  : state.historyOutputs,
             };
           })
         ),
 
       clearLiveEntries: () =>
-        withUndoPause(() => set({ liveOrderedEntries: [], liveSequence: 0 })),
+        withUndoPause(() =>
+          set({
+            liveOrderedEntries: [],
+            liveActivityEntries: [],
+            liveSequence: 0,
+          })
+        ),
 
-      appendStreamingChunk: (stepIndex, chunk, phase) =>
+      appendStreamingChunk: (
+        stepIndex,
+        chunk,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0,
+        timestampMs,
+        sequence
+      ) =>
         withUndoPause(() =>
           set((state) => ({
+            ...appendStreamingChunkToActivityState(
+              state,
+              { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+              chunk,
+              runIndex,
+              attemptIndex,
+              phase,
+              timestampMs,
+              sequence
+            ),
             streamingChunks: {
               ...state.streamingChunks,
-              [getStreamingChunkKey(stepIndex, phase)]:
+              [getStreamingChunkKey(
+                stepIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.QUEUE
+              )]:
                 (state.streamingChunks[
-                  getStreamingChunkKey(stepIndex, phase)
+                  getStreamingChunkKey(
+                    stepIndex,
+                    phase,
+                    runIndex,
+                    attemptIndex,
+                    OUTPUT_ACTIVITY_KINDS.TEXT,
+                    FINAL_STEP_PHASES.QUEUE
+                  )
                 ] || "") + chunk,
             },
           }))
         ),
 
-      clearStreamingChunk: (stepIndex, phase) =>
+      clearStreamingChunk: (stepIndex, phase, runIndex = 0, attemptIndex = 0) =>
         withUndoPause(() =>
           set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
-              [getStreamingChunkKey(stepIndex, phase)]: "",
+              [getStreamingChunkKey(
+                stepIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.QUEUE
+              )]: "",
             },
           }))
         ),
@@ -847,7 +1097,10 @@ export const useWorkflowStore = create<
         stepIndex,
         events,
         attemptIndex = 0,
-        runIndex = 0
+        runIndex = 0,
+        phase,
+        timestampMs,
+        sequence
       ) =>
         withUndoPause(() =>
           set((state) =>
@@ -859,30 +1112,77 @@ export const useWorkflowStore = create<
               },
               events,
               attemptIndex,
-              runIndex
+              runIndex,
+              phase,
+              timestampMs,
+              sequence
             )
           )
         ),
 
-      appendFinalStepStreamingChunk: (loopIndex, chunk, phase) =>
+      appendFinalStepStreamingChunk: (
+        loopIndex,
+        chunk,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0,
+        timestampMs,
+        sequence
+      ) =>
         withUndoPause(() =>
           set((state) => ({
+            ...appendStreamingChunkToActivityState(
+              state,
+              { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+              chunk,
+              runIndex,
+              attemptIndex,
+              phase,
+              timestampMs,
+              sequence
+            ),
             finalStepStreamingChunks: {
               ...state.finalStepStreamingChunks,
-              [getStreamingChunkKey(loopIndex, phase)]:
+              [getStreamingChunkKey(
+                loopIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.FINAL_STEP
+              )]:
                 (state.finalStepStreamingChunks[
-                  getStreamingChunkKey(loopIndex, phase)
+                  getStreamingChunkKey(
+                    loopIndex,
+                    phase,
+                    runIndex,
+                    attemptIndex,
+                    OUTPUT_ACTIVITY_KINDS.TEXT,
+                    FINAL_STEP_PHASES.FINAL_STEP
+                  )
                 ] || "") + chunk,
             },
           }))
         ),
 
-      clearFinalStepStreamingChunk: (loopIndex, phase) =>
+      clearFinalStepStreamingChunk: (
+        loopIndex,
+        phase,
+        runIndex = 0,
+        attemptIndex = 0
+      ) =>
         withUndoPause(() =>
           set((state) => ({
             finalStepStreamingChunks: {
               ...state.finalStepStreamingChunks,
-              [getStreamingChunkKey(loopIndex, phase)]: "",
+              [getStreamingChunkKey(
+                loopIndex,
+                phase,
+                runIndex,
+                attemptIndex,
+                OUTPUT_ACTIVITY_KINDS.TEXT,
+                FINAL_STEP_PHASES.FINAL_STEP
+              )]: "",
             },
           }))
         ),
@@ -891,7 +1191,10 @@ export const useWorkflowStore = create<
         loopIndex,
         events,
         attemptIndex = 0,
-        runIndex = 0
+        runIndex = 0,
+        phase,
+        timestampMs,
+        sequence
       ) =>
         withUndoPause(() =>
           set((state) =>
@@ -903,7 +1206,10 @@ export const useWorkflowStore = create<
               },
               events,
               attemptIndex,
-              runIndex
+              runIndex,
+              phase,
+              timestampMs,
+              sequence
             )
           )
         ),
@@ -951,8 +1257,10 @@ export const useWorkflowStore = create<
         fileName,
         workflowName,
         steps,
+        parallelGroups = [],
         executionState = EXECUTION_STATES.IDLE,
         currentStep = 0,
+        activeStepIndices = [],
         results = [],
         finalStep = null,
         finalStepStatus = null,
@@ -993,8 +1301,13 @@ export const useWorkflowStore = create<
             // must not hand the output pane fresh step identities — that alone
             // rebuilds every rendered row (see utils/structuralSharing.ts).
             steps: preserveReferences(state.steps, promptsWithStatus),
+            parallelGroups: preserveReferences(
+              state.parallelGroups,
+              parallelGroups
+            ),
             executionState,
             currentStep,
+            activeStepIndices: [...activeStepIndices],
             totalSteps: steps.length,
             finalStep: preserveReferences(state.finalStep, finalStep),
             finalStepStatus,
@@ -1010,6 +1323,10 @@ export const useWorkflowStore = create<
                     state.liveOrderedEntries,
                     []
                   ) as OrderedHistoryEntry[],
+                  liveActivityEntries: preserveReferences(
+                    state.liveActivityEntries,
+                    []
+                  ) as OutputActivityEntry[],
                   liveSequence: 0,
                   retryStates: preserveReferences(state.retryStates, {}),
                   streamingChunks: preserveReferences(
@@ -1063,6 +1380,7 @@ export const useWorkflowStore = create<
             return {
               historyOutputs: preserveReferences(state.historyOutputs, {
                 orderedEntries: history.orderedEntries,
+                activityEntries: history.activityEntries ?? [],
                 promptOutputs: history.promptOutputs,
                 finalStepOutputs: history.finalStepOutputs,
                 runMetadata: {
@@ -1120,6 +1438,13 @@ export const useWorkflowStore = create<
               liveOrderedEntries: preserveReferences(
                 state.liveOrderedEntries,
                 overlay.entries
+              ),
+              liveActivityEntries: preserveReferences(
+                state.liveActivityEntries,
+                reconcileActivityEntries(
+                  history.activityEntries ?? [],
+                  state.liveActivityEntries
+                )
               ),
               liveSequence: overlay.nextSequence,
               workspaceSnapshots: preserveReferences(state.workspaceSnapshots, {
@@ -1221,6 +1546,10 @@ export const useWorkflowStore = create<
                       ).stepIndex >= stepCount)
                 ),
               ],
+              liveActivityEntries: reconcileActivityEntries(
+                state.historyOutputs.activityEntries ?? [],
+                state.liveActivityEntries
+              ),
             };
           })
         ),
@@ -1235,12 +1564,14 @@ export const useWorkflowStore = create<
           set({
             liveOrderedEntries: [],
             liveSequence: 0,
+            liveActivityEntries: [],
             retryStates: {},
             streamingChunks: {},
             finalStepStreamingChunks: {},
             finalStepStatus: null,
             finalStepLoopCount: 0,
             finalStepPhase: null,
+            activeStepIndices: [],
             workspaceSnapshots: {},
             finalStepWorkspaceSnapshots: {},
             undoResults: {},
@@ -1479,6 +1810,7 @@ export const useWorkflowStore = create<
     {
       partialize: (state): UndoableWorkflowState => ({
         steps: state.steps,
+        parallelGroups: state.parallelGroups,
         workflowName: state.workflowName,
         finalStep: state.finalStep,
         undoWorkflowProperties: state.undoWorkflowProperties,
@@ -1493,6 +1825,7 @@ export const useWorkflowStore = create<
         if (
           a.workflowName !== b.workflowName ||
           a.steps.length !== b.steps.length ||
+          !deepValueEqual(a.parallelGroups, b.parallelGroups) ||
           a.finalStep !== b.finalStep ||
           a.runtimeUndoGeneration !== b.runtimeUndoGeneration ||
           JSON.stringify(a.undoWorkflowProperties) !==
@@ -1538,6 +1871,7 @@ export type {
 
 export interface UndoableWorkflowState {
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   workflowName: string | null;
   finalStep: WorkflowStep | null;
   undoWorkflowProperties: WorkflowProperties;

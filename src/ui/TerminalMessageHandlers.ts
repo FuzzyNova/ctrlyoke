@@ -17,6 +17,7 @@ import {
   type UserFeedbackSink,
 } from "../core/UserFeedbackSink";
 import type { WebviewClientContext } from "./WebviewClientContext";
+import type { TerminalStartedMessage } from "../types/WebviewMessageTypes";
 
 type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
 
@@ -61,17 +62,20 @@ export class TerminalMessageHandlers {
           controllerClientId: ctx.clientId,
         });
       }
-      ctx.emit({
+      const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId: session.workflowId,
         sessionId: session.id,
         stepName: session.stepName,
+        stepIndex: session.stepIndex,
         kind: session.kind,
         promptNumber: session.promptNumber,
         harnessId: session.harnessId,
+        parallelGroupId: session.parallelGroupId,
         shellKind: session.shellKind,
         controllerClientId: session.controllerClientId,
-      });
+      };
+      ctx.emit(terminalStartedMessage);
       for (const chunk of session.reconnectBuffer) {
         ctx.emit({
           type: MESSAGE_TYPES.TERMINAL_OUTPUT,
@@ -156,15 +160,17 @@ export class TerminalMessageHandlers {
     // Register the spawning client as controller and update workflowRunControllers
     // so that subsequent restarts inherit the same controller via assignController.
     ptyManager.assignController(session.id, ctx.clientId);
-    ptyPostMessage({
+    const terminalStartedMessage: TerminalStartedMessage = {
       type: MESSAGE_TYPES.TERMINAL_STARTED,
       workflowId,
       sessionId: session.id,
       stepName: session.stepName,
+      stepIndex: session.stepIndex,
       kind: SESSION_KINDS.SHELL,
       shellKind: session.shellKind,
       controllerClientId: session.controllerClientId,
-    });
+    };
+    ptyPostMessage(terminalStartedMessage);
   }
 
   handleRestartShell(message: any): void {
@@ -188,15 +194,17 @@ export class TerminalMessageHandlers {
       return;
     }
     if (newSession) {
-      ptyPostMessage({
+      const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId,
         sessionId: newSession.id,
         stepName: newSession.stepName,
+        stepIndex: newSession.stepIndex,
         kind: SESSION_KINDS.SHELL,
         shellKind: newSession.shellKind,
         controllerClientId: newSession.controllerClientId,
-      });
+      };
+      ptyPostMessage(terminalStartedMessage);
     }
   }
 

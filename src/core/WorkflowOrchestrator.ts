@@ -81,7 +81,9 @@ import type {
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
   ExecutionPreviewScope,
+  TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
+import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import type { LicenseService } from "../license/LicenseService";
 import { Log } from "../utils/Log";
@@ -1097,16 +1099,19 @@ export class WorkflowOrchestrator {
           `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
           `reconnectBuffer=${session.reconnectBuffer.length} chunks`
       );
-      send({
+      const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId: session.workflowId,
         sessionId: session.id,
         stepName: session.stepName,
+        stepIndex: session.stepIndex,
         kind: session.kind,
         promptNumber: session.promptNumber,
         harnessId: session.harnessId,
+        parallelGroupId: session.parallelGroupId,
         controllerClientId: session.controllerClientId,
-      });
+      };
+      send(terminalStartedMessage);
       // Immediately follow with current PTY dimensions so viewers can match
       // the controller's width without waiting for the next resize event.
       send({
@@ -2616,6 +2621,7 @@ export class WorkflowOrchestrator {
       namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
       cwd: workspaceRoot,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
@@ -4301,17 +4307,20 @@ export class WorkflowOrchestrator {
   async reorderPendingPrompts(
     mutation: WorkflowDefinitionMutation | undefined,
     newPendingOrder: number[],
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    pendingGroups?: PendingParallelGroupRange[]
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).reorderPendingPrompts(
-        newPendingOrder
+        newPendingOrder,
+        pendingGroups
       );
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
-      (instance) => instance.reorderPendingPrompts(newPendingOrder),
+      (instance) =>
+        instance.reorderPendingPrompts(newPendingOrder, pendingGroups),
       (workspaceRoot) =>
         WorkingFileManager.reorderStepsAtRun(
           workspaceRoot,
@@ -4319,7 +4328,8 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           newPendingOrder,
           mutation.expectedDefinitionRevision,
-          this.lineageRepository
+          this.lineageRepository,
+          pendingGroups
         ).then(() => undefined)
     );
   }
@@ -4341,14 +4351,16 @@ export class WorkflowOrchestrator {
     mutation: WorkflowDefinitionMutation | undefined,
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null,
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
   ): Promise<
     { definitionRevision: number; descriptorRevision: number } | undefined
   > {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       await this.getInstanceForClient(clientId).syncStepsForUndoRedo(
         steps,
-        finalStep
+        finalStep,
+        parallelGroups
       );
       return undefined;
     }
@@ -4358,7 +4370,8 @@ export class WorkflowOrchestrator {
       | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
-      (instance) => instance.syncStepsForUndoRedo(steps, finalStep),
+      (instance) =>
+        instance.syncStepsForUndoRedo(steps, finalStep, parallelGroups),
       async (workspaceRoot) => {
         const stepsResult = await WorkingFileManager.syncStepsForUndoRedoAtRun(
           workspaceRoot,
@@ -4366,7 +4379,8 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           steps,
           mutation.expectedDefinitionRevision,
-          this.lineageRepository
+          this.lineageRepository,
+          parallelGroups
         );
         latest = {
           definitionRevision: stepsResult.definitionRevision,
@@ -5170,7 +5184,8 @@ export class WorkflowOrchestrator {
           workingFile.steps ?? [],
           workingFile._runtime?.pendingRewind?.fromStepIndex,
           workingFile.finalStep,
-          workingFile.worktree
+          workingFile.worktree,
+          workingFile.parallelGroups
         ),
       }
     );
@@ -5991,6 +6006,7 @@ export class WorkflowOrchestrator {
       () => this.updateStatusBar(),
       this.currentWorkspaceFolder?.uri.fsPath,
       true,
+      true,
       this.compatibilityRegistry,
       this.userFeedbackSink,
       () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
@@ -6798,6 +6814,7 @@ export class WorkflowOrchestrator {
               const wf = JSON.parse(content) as {
                 steps?: unknown[];
                 definitionRevision?: number;
+                parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[];
               };
               if (wf.steps) {
                 Log.info(
@@ -6806,7 +6823,8 @@ export class WorkflowOrchestrator {
                 provider.notifyCliPromptsExtended(
                   workflowId,
                   wf.steps,
-                  wf.definitionRevision ?? 1
+                  wf.definitionRevision ?? 1,
+                  wf.parallelGroups
                 );
               }
             })

@@ -114,6 +114,7 @@ suite("CliJsonResultBuilder", () => {
     assert.deepStrictEqual(output.steps[0], {
       index: 0,
       name: "scan",
+      parallelGroupId: null,
       type: "prompt",
       enabled: true,
       harness: "codex-cli",
@@ -488,6 +489,7 @@ function makeState(
     totalPausedDuration: 0,
     currentIndex: steps.length,
     steps,
+    parallelGroups: [],
     results,
     completedIndices: new Set(steps.map((_, index) => String(index))),
     totalExecutionTime: 4_000,

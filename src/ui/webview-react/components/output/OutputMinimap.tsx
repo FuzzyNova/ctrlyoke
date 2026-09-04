@@ -54,10 +54,15 @@ export interface MinimapStep {
   kind: FinalStepPhase;
   stepIndex: number;
   firstMessageIndex: number;
+  firstActivityRowIndex?: number;
+  latestActivityRowIndex?: number;
+  firstActivityScrollFraction?: number;
+  latestActivityScrollFraction?: number;
   /** Real pixel fraction (0–1): offsetTop of the step anchor / shared content height */
   scrollFraction: number;
   label: string;
   hidden: boolean;
+  selected?: boolean;
   hasHiddenActivity: boolean;
   /**
    * Available undo/redo actions for this step.
@@ -558,113 +563,113 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         ref={diffColumnRef}
         className="relative flex-shrink-0 w-[var(--fp-output-minimap-diff-width)] bg-sidebar-bg"
       >
-      {/* Diff overlays — rendered below thumb and markers */}
-      {steps.map((step) => (
-        <React.Fragment key={`diffs-${step.key}`}>
-          {step.diffBlocks.map((block) => {
-            const significantLines = block.addedLines + block.removedLines;
-            if (significantLines === 0) return null;
+        {/* Diff overlays — rendered below thumb and markers */}
+        {steps.map((step) => (
+          <React.Fragment key={`diffs-${step.key}`}>
+            {step.diffBlocks.map((block) => {
+              const significantLines = block.addedLines + block.removedLines;
+              if (significantLines === 0) return null;
 
-            const removedFraction = block.removedLines / significantLines;
+              const removedFraction = block.removedLines / significantLines;
 
-            if (block.isCollapsed) {
-              // Collapsed: fixed 2px horizontal line, left portion red, right green
-              return (
-                <div
-                  key={block.key}
-                  className="absolute left-0 right-0 pointer-events-none"
-                  style={{
-                    top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
-                    height: "2px",
-                    background: `linear-gradient(to right,
+              if (block.isCollapsed) {
+                // Collapsed: fixed 2px horizontal line, left portion red, right green
+                return (
+                  <div
+                    key={block.key}
+                    className="absolute left-0 right-0 pointer-events-none"
+                    style={{
+                      top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
+                      height: "2px",
+                      background: `linear-gradient(to right,
                         var(--fp-minimap-diff-removed) 0%,
                         var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
                         var(--fp-minimap-diff-added) ${removedFraction * 100}%,
                         var(--fp-minimap-diff-added) 100%
                       )`,
-                  }}
-                />
-              );
-            }
-
-            if (block.runs.length > 0) {
-              const totalRunRows = block.runs.reduce(
-                (sum, run) => sum + run.count,
-                0
-              );
-              if (totalRunRows > 0) {
-                let offsetRows = 0;
-                return (
-                  <div
-                    key={block.key}
-                    className="absolute left-0 right-0 pointer-events-none overflow-hidden"
-                    style={{
-                      top: `${block.scrollFraction * 100}%`,
-                      height: `${block.heightFraction * 100}%`,
-                      minHeight: "1px",
                     }}
-                  >
-                    {block.runs.map((run, runIndex) => {
-                      const top = (offsetRows / totalRunRows) * 100;
-                      const height = (run.count / totalRunRows) * 100;
-                      offsetRows += run.count;
+                  />
+                );
+              }
 
-                      const changedLines = run.addedLines + run.removedLines;
-                      let background = "transparent";
+              if (block.runs.length > 0) {
+                const totalRunRows = block.runs.reduce(
+                  (sum, run) => sum + run.count,
+                  0
+                );
+                if (totalRunRows > 0) {
+                  let offsetRows = 0;
+                  return (
+                    <div
+                      key={block.key}
+                      className="absolute left-0 right-0 pointer-events-none overflow-hidden"
+                      style={{
+                        top: `${block.scrollFraction * 100}%`,
+                        height: `${block.heightFraction * 100}%`,
+                        minHeight: "1px",
+                      }}
+                    >
+                      {block.runs.map((run, runIndex) => {
+                        const top = (offsetRows / totalRunRows) * 100;
+                        const height = (run.count / totalRunRows) * 100;
+                        offsetRows += run.count;
 
-                      if (changedLines > 0) {
-                        const removedPct =
-                          (run.removedLines / changedLines) * 100;
-                        background =
-                          run.addedLines > 0 && run.removedLines > 0
-                            ? `linear-gradient(to right,
+                        const changedLines = run.addedLines + run.removedLines;
+                        let background = "transparent";
+
+                        if (changedLines > 0) {
+                          const removedPct =
+                            (run.removedLines / changedLines) * 100;
+                          background =
+                            run.addedLines > 0 && run.removedLines > 0
+                              ? `linear-gradient(to right,
                                   var(--fp-minimap-diff-removed) 0%,
                                   var(--fp-minimap-diff-removed) ${removedPct}%,
                                   var(--fp-minimap-diff-added) ${removedPct}%,
                                   var(--fp-minimap-diff-added) 100%
                                 )`
-                            : run.removedLines > 0
-                              ? "var(--fp-minimap-diff-removed)"
-                              : "var(--fp-minimap-diff-added)";
-                      }
+                              : run.removedLines > 0
+                                ? "var(--fp-minimap-diff-removed)"
+                                : "var(--fp-minimap-diff-added)";
+                        }
 
-                      return (
-                        <div
-                          key={runIndex}
-                          className="absolute left-0 right-0 pointer-events-none"
-                          style={{
-                            top: `${top}%`,
-                            height: `${height}%`,
-                            background,
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                );
+                        return (
+                          <div
+                            key={runIndex}
+                            className="absolute left-0 right-0 pointer-events-none"
+                            style={{
+                              top: `${top}%`,
+                              height: `${height}%`,
+                              background,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                }
               }
-            }
 
-            return (
-              <div
-                key={block.key}
-                className="absolute left-0 right-0 pointer-events-none"
-                style={{
-                  top: `${block.scrollFraction * 100}%`,
-                  height: `${block.heightFraction * 100}%`,
-                  minHeight: "1px",
-                  background: `linear-gradient(to bottom,
+              return (
+                <div
+                  key={block.key}
+                  className="absolute left-0 right-0 pointer-events-none"
+                  style={{
+                    top: `${block.scrollFraction * 100}%`,
+                    height: `${block.heightFraction * 100}%`,
+                    minHeight: "1px",
+                    background: `linear-gradient(to bottom,
                       var(--fp-minimap-diff-removed) 0%,
                       var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
                       var(--fp-minimap-diff-added) ${removedFraction * 100}%,
                       var(--fp-minimap-diff-added) 100%
                     )`,
-                }}
-              />
-            );
-          })}
-        </React.Fragment>
-      ))}
+                  }}
+                />
+              );
+            })}
+          </React.Fragment>
+        ))}
       </div>
 
       {/* Draggable viewport thumb (replaces native scrollbar). Rests over
@@ -733,152 +738,188 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         const hasUndo = undo !== null;
         const hasRedo = redo !== null;
         const isMixed = hasUndo && hasRedo;
-        const dotColorClass = isMixed
-          ? "text-warning-fg"
-          : hasRedo
-            ? "text-terminal-ansiGreen"
-            : hasUndo
-              ? "text-link-fg"
-              : "text-description-fg";
+        const dotColorClass = step.selected
+          ? "text-focus-border"
+          : isMixed
+            ? "text-warning-fg"
+            : hasRedo
+              ? "text-terminal-ansiGreen"
+              : hasUndo
+                ? "text-link-fg"
+                : "text-description-fg";
+        const activityMarkerClass = step.selected
+          ? "bg-focus-border"
+          : "bg-output-streaming";
         const hideShowLabel = `${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`;
 
         return (
-          // Outer row: anchored to the boundary between the pills and diff
-          // tracks (not the rail's outer edge), so the marker pill lands
-          // inside the pills track while the popup grows further left,
-          // overflowing past the rail's own left edge — the overflow the
-          // top-of-file comment documents. The popup + dot are flex siblings
-          // so the hover zone covers both continuously — moving from dot to
-          // popup never leaves the container.
-          <div
-            key={step.key}
-            role="group"
-            aria-label={`Step ${step.label}`}
-            className={`group absolute right-[var(--fp-output-minimap-diff-width)] flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
-            style={{
-              top: topStyle,
-              transform: "translateY(-50%)",
-            }}
-          >
-            {/* Speech-bubble popup — visible on hover (mouse) or when pinned open (touch/click) */}
+          <React.Fragment key={step.key}>
+            {/* Activity markers share the pills track with the marker pill, so
+                they anchor to the pills/diff boundary rather than the rail's
+                outer edge — otherwise they would sit on top of the diff track. */}
+            {step.firstActivityScrollFraction !== undefined &&
+              step.latestActivityScrollFraction !== undefined &&
+              step.firstActivityScrollFraction !==
+                step.latestActivityScrollFraction && (
+                <span
+                  data-minimap-activity-marker="first"
+                  className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] h-1 w-1 rounded-full ${activityMarkerClass}`}
+                  style={{
+                    top: `${step.firstActivityScrollFraction * 100}%`,
+                    transform: "translate(0.5px, -50%)",
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            {step.latestActivityScrollFraction !== undefined &&
+              step.latestActivityScrollFraction !==
+                step.firstActivityScrollFraction && (
+                <span
+                  data-minimap-activity-marker="latest"
+                  className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] h-1.5 w-1.5 rounded-full ${activityMarkerClass}`}
+                  style={{
+                    top: `${step.latestActivityScrollFraction * 100}%`,
+                    transform: "translate(0.5px, -50%)",
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            {/* Outer row: anchored to the boundary between the pills and diff
+                tracks (not the rail's outer edge), so the marker pill lands
+                inside the pills track while the popup grows further left,
+                overflowing past the rail's own left edge — the overflow the
+                top-of-file comment documents. The popup + dot are flex siblings
+                so the hover zone covers both continuously — moving from dot to
+                popup never leaves the container. */}
             <div
-              className={`flex items-stretch mr-[3px] ${isPinned ? "" : "hidden group-hover:flex group-focus-within:flex"}`}
+              role="group"
+              aria-label={`Step ${step.label}`}
+              className={`group absolute right-[var(--fp-output-minimap-diff-width)] flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
+              style={{
+                top: topStyle,
+                transform: "translateY(-50%)",
+              }}
             >
-              {/* Bubble body */}
+              {/* Speech-bubble popup — visible on hover (mouse) or when pinned open (touch/click) */}
               <div
-                className="flex flex-col justify-center gap-1 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
-                style={{ whiteSpace: "nowrap" }}
+                className={`flex items-stretch mr-[3px] ${isPinned ? "" : "hidden group-hover:flex group-focus-within:flex"}`}
               >
-                {/* Title row: step label + hide/show toggle */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xxs font-semibold text-foreground leading-tight">
-                    {step.label}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStepToggle?.(step);
-                    }}
-                    style={{ touchAction: "manipulation" }}
-                    aria-pressed={step.hidden}
-                    aria-label={hideShowLabel}
-                    title={hideShowLabel}
-                    className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-none"
-                  >
-                    <i
-                      className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
-                      aria-hidden="true"
-                    />
-                    {step.hidden ? "Show" : "Hide"}
-                  </button>
+                {/* Bubble body */}
+                <div
+                  className="flex flex-col justify-center gap-1 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {/* Title row: step label + hide/show toggle */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xxs font-semibold text-foreground leading-tight">
+                      {step.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStepToggle?.(step);
+                      }}
+                      style={{ touchAction: "manipulation" }}
+                      aria-pressed={step.hidden}
+                      aria-label={hideShowLabel}
+                      title={hideShowLabel}
+                      className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-none"
+                    >
+                      <i
+                        className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
+                        aria-hidden="true"
+                      />
+                      {step.hidden ? "Show" : "Hide"}
+                    </button>
+                  </div>
+
+                  {/* Redo action (shown above undo in mixed state) */}
+                  {hasRedo && redo && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPinnedKey(null);
+                        redo.onTrigger();
+                      }}
+                      style={{ touchAction: "manipulation" }}
+                      className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
+                    >
+                      <i className="codicon codicon-redo text-xxs" />
+                      {redo.label}
+                    </button>
+                  )}
+
+                  {/* Undo action */}
+                  {hasUndo && undo && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPinnedKey(null);
+                        undo.onTrigger();
+                      }}
+                      style={{ touchAction: "manipulation" }}
+                      className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
+                    >
+                      <i className="codicon codicon-discard text-xxs" />
+                      {undo.label}
+                    </button>
+                  )}
                 </div>
 
-                {/* Redo action (shown above undo in mixed state) */}
-                {hasRedo && redo && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPinnedKey(null);
-                      redo.onTrigger();
-                    }}
-                    style={{ touchAction: "manipulation" }}
-                    className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
-                  >
-                    <i className="codicon codicon-redo text-xxs" />
-                    {redo.label}
-                  </button>
-                )}
-
-                {/* Undo action */}
-                {hasUndo && undo && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPinnedKey(null);
-                      undo.onTrigger();
-                    }}
-                    style={{ touchAction: "manipulation" }}
-                    className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
-                  >
-                    <i className="codicon codicon-discard text-xxs" />
-                    {undo.label}
-                  </button>
-                )}
+                {/* Tail triangle pointing right toward the dot */}
+                <div
+                  className="self-center flex-shrink-0 text-dropdown-bg"
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderTop: "5px solid transparent",
+                    borderBottom: "5px solid transparent",
+                    borderLeft: "5px solid currentColor",
+                    filter:
+                      "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
+                  }}
+                />
               </div>
 
-              {/* Tail triangle pointing right toward the dot */}
-              <div
-                className="self-center flex-shrink-0 text-dropdown-bg"
-                style={{
-                  width: 0,
-                  height: 0,
-                  borderTop: "5px solid transparent",
-                  borderBottom: "5px solid transparent",
-                  borderLeft: "5px solid currentColor",
-                  filter:
-                    "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
-                }}
-              />
-            </div>
-
-            {/* Marker pill — click scrolls to step */}
-            <button
-              type="button"
-              onClick={(e) => {
-                if (e.altKey && onStepSolo) {
-                  e.preventDefault();
+              {/* Marker pill — click scrolls to step */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (e.altKey && onStepSolo) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onStepSolo(step);
+                    return;
+                  }
+                  // Keep the popup pinned for mouse, keyboard, and touch
+                  // activation; stopping propagation protects it from the
+                  // document-level dismiss listener.
                   e.stopPropagation();
-                  onStepSolo(step);
-                  return;
-                }
-                // Keep the popup pinned for mouse, keyboard, and touch
-                // activation; stopping propagation protects it from the
-                // document-level dismiss listener.
-                e.stopPropagation();
-                handleMarkerClick(step);
-                setPinnedKey((prev) => (prev === step.key ? null : step.key));
-              }}
-              onKeyDown={(e) => {
-                if (e.key === KEYBOARD_KEYS.ESCAPE) {
-                  setPinnedKey(null);
-                }
-              }}
-              title={step.label}
-              aria-label={step.label}
-              tabIndex={0}
-              className={`h-1 w-[var(--fp-output-minimap-pills-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
-            />
-            {step.hasHiddenActivity && (
-              <span
-                data-minimap-hidden-activity
-                className="ml-0.5 h-1 w-1 rounded-full bg-output-streaming animate-pulse-streaming"
-                aria-hidden="true"
+                  handleMarkerClick(step);
+                  setPinnedKey((prev) => (prev === step.key ? null : step.key));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === KEYBOARD_KEYS.ESCAPE) {
+                    setPinnedKey(null);
+                  }
+                }}
+                title={step.label}
+                aria-label={step.label}
+                tabIndex={0}
+                className={`h-1 w-[var(--fp-output-minimap-pills-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
               />
-            )}
-          </div>
+              {step.hasHiddenActivity && (
+                <span
+                  data-minimap-hidden-activity
+                  className="ml-0.5 h-1 w-1 rounded-full bg-output-streaming animate-pulse-streaming"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          </React.Fragment>
         );
       })}
     </div>

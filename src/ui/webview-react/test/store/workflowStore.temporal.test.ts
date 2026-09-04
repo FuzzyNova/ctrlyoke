@@ -24,6 +24,7 @@ import {
   OUTPUT_HISTORY_KINDS,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -102,6 +103,21 @@ describe("tracked store actions (should record undo entries)", () => {
     loadWorkflow([makePrompt()]);
     store().setPrompts([makePrompt(), makePrompt({ prompt: "second" })]);
     expect(temporal().pastStates).toHaveLength(1);
+  });
+
+  it("group-only edits are recorded and restored by undo/redo", () => {
+    const groups: ParallelGroupDefinition[] = [
+      { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
+    ];
+    loadWorkflow([makePrompt(), makePrompt({ prompt: "second" })]);
+    store().setParallelGroups(groups);
+    expect(temporal().pastStates).toHaveLength(1);
+
+    temporal().undo();
+    expect(store().parallelGroups).toEqual([]);
+
+    temporal().redo();
+    expect(store().parallelGroups).toEqual(groups);
   });
 });
 

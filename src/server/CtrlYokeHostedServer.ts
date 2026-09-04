@@ -18,6 +18,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
+  ParallelGroupDefinition,
   WorktreeRunProjection,
   RunnerHostIdentity,
 } from "../types/CtrlYokeTypes";
@@ -341,13 +342,15 @@ export class CtrlYokeHostedServer
   notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.broadcast({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       workflowId,
       steps,
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -395,7 +398,9 @@ export class CtrlYokeHostedServer
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     return this.sink.updateFileSelected(
       fileName,
@@ -404,7 +409,9 @@ export class CtrlYokeHostedServer
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
   }
   async updateSessionRestored(
@@ -421,7 +428,9 @@ export class CtrlYokeHostedServer
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     return this.sink.updateSessionRestored(
       fileName,
@@ -433,7 +442,9 @@ export class CtrlYokeHostedServer
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
   }
   updateExecutionStarted(
@@ -458,8 +469,18 @@ export class CtrlYokeHostedServer
   updateProgress(current: number, total: number, workflowId?: string): void {
     this.sink.updateProgress(current, total, workflowId);
   }
-  updateExecutionState(state: string, workflowId?: string): void {
-    this.sink.updateExecutionState(state, workflowId);
+  public updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
+    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+  }
+  public updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.sink.updateActiveStepIndices?.(activeStepIndices, workflowId);
   }
   updateExecutionCompleted(workflowId?: string): void {
     this.sink.updateExecutionCompleted(workflowId);
@@ -527,23 +548,42 @@ export class CtrlYokeHostedServer
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
-    this.sink.updateCliStreamingChunk(stepIndex, chunk, phase, workflowId);
+    this.sink.updateCliStreamingChunk(
+      stepIndex,
+      chunk,
+      phase,
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
+    );
   }
   updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateCliStreamingEvents(
       stepIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   updateContextWindow(
@@ -613,13 +653,21 @@ export class CtrlYokeHostedServer
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.sink.updateFinalStepStreamingChunk(
       loopIndex,
       chunk,
       phase,
-      workflowId
+      workflowId,
+      timestampMs,
+      sequence,
+      attemptIndex,
+      runIndex
     );
   }
   updateFinalStepStreamingEvents(
@@ -627,14 +675,20 @@ export class CtrlYokeHostedServer
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.sink.updateFinalStepStreamingEvents(
       loopIndex,
       events,
       attemptIndex,
       runIndex,
-      workflowId
+      workflowId,
+      phase,
+      timestampMs,
+      sequence
     );
   }
   async sendTestNotification(): Promise<void> {
@@ -643,8 +697,12 @@ export class CtrlYokeHostedServer
     );
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
-    this.sink.notifyPromptsReordered(steps, workflowId);
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
+    this.sink.notifyPromptsReordered(steps, workflowId, parallelGroups);
   }
   notifyUndoRedoSynced(): void {
     this.sink.notifyUndoRedoSynced();

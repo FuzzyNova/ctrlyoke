@@ -34,8 +34,14 @@ export interface StreamingHistoryFlush {
   phase?: ExecutionPhase;
   /** Timestamp of the first delta in the batch, so ordering stays truthful. */
   timestampMs: number;
+  /** Sequence assigned by TimelineRecorder for the flushed timeline event. */
+  sequence?: number;
   chunk?: string;
   events?: CliEvent[];
+}
+
+export interface StreamingHistoryFlushResult {
+  sequences: number[];
 }
 
 interface PendingEntry {
@@ -86,8 +92,12 @@ export class StreamingHistoryBuffer {
     private readonly write: (
       historyFilePath: string,
       flush: StreamingHistoryFlush
-    ) => Promise<void>,
-    options: StreamingHistoryBufferOptions = {}
+    ) => Promise<StreamingHistoryFlushResult | void>,
+    options: StreamingHistoryBufferOptions = {},
+    private readonly onFlushed?: (
+      flush: StreamingHistoryFlush,
+      result: StreamingHistoryFlushResult
+    ) => void
   ) {
     this.maxBufferedChars =
       options.maxBufferedChars ?? DEFAULT_MAX_BUFFERED_CHARS;
@@ -243,7 +253,7 @@ export class StreamingHistoryBuffer {
       return;
     }
 
-    await this.write(entry.historyFilePath, {
+    const flush: StreamingHistoryFlush = {
       target: entry.target,
       runIndex: entry.runIndex,
       attemptIndex: entry.attemptIndex,
@@ -251,7 +261,12 @@ export class StreamingHistoryBuffer {
       timestampMs: entry.timestampMs,
       chunk: entry.chunk || undefined,
       events: entry.events.length > 0 ? entry.events : undefined,
-    });
+    };
+    const result = await this.write(entry.historyFilePath, flush);
+    if (result && result.sequences.length > 0) {
+      flush.sequence = result.sequences[0];
+      this.onFlushed?.(flush, result);
+    }
   }
 
   private getKey(

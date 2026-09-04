@@ -1,5 +1,6 @@
 import type {
   WorkflowStep,
+  ParallelGroupDefinition,
   WorkflowSummary,
   WorkflowViewAddress,
   WorktreeRunProjection,
@@ -110,10 +111,16 @@ export class DashboardBroadcastHub
   notifyCliPromptsExtended(
     workflowId: string,
     steps: any[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     for (const client of this.clients) {
-      client.notifyCliPromptsExtended(workflowId, steps, definitionRevision);
+      client.notifyCliPromptsExtended(
+        workflowId,
+        steps,
+        definitionRevision,
+        parallelGroups
+      );
     }
   }
 
@@ -206,9 +213,19 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateExecutionState(state: string, workflowId?: string): void {
+  updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
     for (const client of this.clients) {
-      client.updateExecutionState?.(state, workflowId);
+      client.updateExecutionState?.(state, workflowId, activeStepIndices);
+    }
+  }
+
+  updateActiveStepIndices(activeStepIndices: number[], workflowId?: string): void {
+    for (const client of this.clients) {
+      client.updateActiveStepIndices?.(activeStepIndices, workflowId);
     }
   }
 
@@ -264,10 +281,23 @@ export class DashboardBroadcastHub
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingChunk?.(stepIndex, chunk, phase, workflowId);
+      client.updateCliStreamingChunk?.(
+        stepIndex,
+        chunk,
+        phase,
+        workflowId,
+        timestampMs,
+        sequence,
+        attemptIndex,
+        runIndex
+      );
     }
   }
 
@@ -276,7 +306,10 @@ export class DashboardBroadcastHub
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     for (const client of this.clients) {
       client.updateCliStreamingEvents?.(
@@ -284,7 +317,10 @@ export class DashboardBroadcastHub
         events,
         attemptIndex,
         runIndex,
-        workflowId
+        workflowId,
+        phase,
+        timestampMs,
+        sequence
       );
     }
   }
@@ -377,14 +413,22 @@ export class DashboardBroadcastHub
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     for (const client of this.clients) {
       client.updateFinalStepStreamingChunk?.(
         loopIndex,
         chunk,
         phase,
-        workflowId
+        workflowId,
+        timestampMs,
+        sequence,
+        attemptIndex,
+        runIndex
       );
     }
   }
@@ -394,7 +438,10 @@ export class DashboardBroadcastHub
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     for (const client of this.clients) {
       client.updateFinalStepStreamingEvents?.(
@@ -402,14 +449,21 @@ export class DashboardBroadcastHub
         events,
         attemptIndex,
         runIndex,
-        workflowId
+        workflowId,
+        phase,
+        timestampMs,
+        sequence
       );
     }
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
     for (const client of this.clients) {
-      client.notifyPromptsReordered?.(steps, workflowId);
+      client.notifyPromptsReordered?.(steps, workflowId, parallelGroups);
     }
   }
 

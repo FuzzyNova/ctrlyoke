@@ -202,7 +202,7 @@ suite("WorkflowStateMachine", () => {
     runtime.beginAttempt(target, 0, 100);
 
     assert.strictEqual(runtime.requestStop(), true);
-    assert.strictEqual(runtime.getActiveAttempt(), undefined);
+    assert.deepStrictEqual(runtime.getActiveAttempts(), []);
 
     assert.deepStrictEqual(transitions, [
       {
@@ -214,6 +214,36 @@ suite("WorkflowStateMachine", () => {
         status: WORKFLOW_ATTEMPT_STATUS.CANCELLED,
       },
     ]);
+  });
+
+  test("tracks and cancels all active attempts", () => {
+    const runtime = new WorkflowStateMachine();
+    const firstTarget = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 };
+    const secondTarget = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 };
+
+    runtime.startExecution();
+    runtime.beginAttempt(firstTarget, 0, 100);
+    runtime.beginAttempt(secondTarget, 0, 200);
+
+    assert.deepStrictEqual(
+      runtime.getActiveAttempts().map((attempt) => attempt.target),
+      [firstTarget, secondTarget]
+    );
+
+    const cancelled = runtime.cancelActiveAttempts("Stopped", 300);
+    assert.deepStrictEqual(
+      cancelled.map((attempt) => attempt.target),
+      [firstTarget, secondTarget]
+    );
+    assert.deepStrictEqual(runtime.getActiveAttempts(), []);
+    assert.strictEqual(
+      runtime.getAttempt(firstTarget)?.status,
+      WORKFLOW_ATTEMPT_STATUS.CANCELLED
+    );
+    assert.strictEqual(
+      runtime.getAttempt(secondTarget)?.status,
+      WORKFLOW_ATTEMPT_STATUS.CANCELLED
+    );
   });
 
   test("supports pause and resume only from valid runtime states", () => {

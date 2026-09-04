@@ -46,6 +46,21 @@ export function QueueSection({
         />
       </SettingInputRow>
       <SettingInputRow
+        label="Max parallel steps"
+        id="queue-max-parallel-steps"
+        path="queue.maxParallelSteps"
+        {...rowProps}
+      >
+        <LocalNumberInput
+          id="queue-max-parallel-steps"
+          min={1}
+          value={queue.maxParallelSteps}
+          onCommit={(v) => onUpdate("queue.maxParallelSteps", v)}
+          parse={(v) => parseInt(v, 10) || 1}
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+        />
+      </SettingInputRow>
+      <SettingInputRow
         label="Max workflow execution time (seconds, -1 = unlimited)"
         id="queue-max-execution-time"
         path="queue.maxWorkflowExecutionTime"

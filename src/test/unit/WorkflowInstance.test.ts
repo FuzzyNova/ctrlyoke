@@ -134,6 +134,43 @@ async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
   await queue.commitRuntimeTransition({ persist: false });
 }
 
+suite("WorkflowInstance target resources", () => {
+  test("gives same-harness target-keyed executions isolated integrations", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    try {
+      const first = (instance as any).createIntegrationForMode(
+        HARNESS_IDS.COPILOT_CLI,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }
+      ) as HarnessIntegration;
+      const second = (instance as any).createIntegrationForMode(
+        HARNESS_IDS.COPILOT_CLI,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 }
+      ) as HarnessIntegration;
+      const sequentialFirst = (instance as any).createIntegrationForMode(
+        HARNESS_IDS.COPILOT_CLI
+      ) as HarnessIntegration;
+      const sequentialSecond = (instance as any).createIntegrationForMode(
+        HARNESS_IDS.COPILOT_CLI
+      ) as HarnessIntegration;
+
+      assert.notStrictEqual(first, second);
+      assert.strictEqual(sequentialFirst, sequentialSecond);
+    } finally {
+      instance.dispose();
+    }
+  });
+});
+
 suite("WorkflowInstance finalStep replay", () => {
   test("replays finalStep completed output, in-flight buffer, and status messages on workflow switch", async () => {
     const platform = new MockPlatform();
@@ -2214,6 +2251,7 @@ suite("WorkflowInstance secret-grant approval callback", () => {
       () => {},
       () => {},
       process.cwd(),
+      true,
       true,
       undefined,
       undefined,

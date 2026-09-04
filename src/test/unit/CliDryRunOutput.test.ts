@@ -16,6 +16,8 @@ import {
 
 function previewFixture(): WorkflowExecutionPreview {
   return {
+    parallelGroups: [],
+    parallelGroupPreflights: [],
     workflow: {
       name: "fixture",
       stepCount: 1,
@@ -86,6 +88,37 @@ function previewFixture(): WorkflowExecutionPreview {
 }
 
 suite("CLI dry-run output", () => {
+  test("keeps concurrent headless bursts identified by target", () => {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    const formatterPath = path.join(
+      repoRoot,
+      "out",
+      "cli",
+      "CliTerminalFormatter.js"
+    );
+    const constantsPath = path.join(
+      repoRoot,
+      "out",
+      "types",
+      "DashboardConstants.js"
+    );
+    const output = execFileSync(
+      process.execPath,
+      [
+        "-e",
+        `const { CliTerminalFormatter } = require(${JSON.stringify(formatterPath)});
+const { CLI_EVENT_TYPES } = require(${JSON.stringify(constantsPath)});
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "research" } }], { stepIndex: 1, stepName: "research-auth" });
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }], { stepIndex: 2, stepName: "unit-tests" });
+CliTerminalFormatter.flushStreamingBuffer();`,
+      ],
+      { encoding: "utf8" }
+    );
+
+    assert.ok(output.includes("[2 research-auth] research"));
+    assert.ok(output.includes("[3 unit-tests] done"));
+  });
+
   test("renders MCP parameters and results in terminal output", () => {
     const repoRoot = path.resolve(__dirname, "..", "..", "..");
     const formatterPath = path.join(
@@ -179,6 +212,42 @@ CliTerminalFormatter.renderEvent({
         line.includes("showing 7 of 20 bytes; reason=body-budget")
       )
     );
+  });
+
+  test("renders parallel group headings and indents members", () => {
+    const preview = previewFixture();
+    preview.workflow.stepCount = 2;
+    preview.parallelGroups = [
+      {
+        id: "group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: true,
+      },
+    ];
+    preview.parallelGroupPreflights = [
+      {
+        parallelGroupId: "group",
+        effectiveWidth: 1,
+        executableMemberCount: 2,
+      },
+    ];
+    preview.steps[0].parallelGroupId = "group";
+    preview.steps.push({
+      ...preview.steps[0],
+      stepIndex: 1,
+      parallelGroupId: "group",
+    });
+
+    const lines: string[] = [];
+    CliTerminalFormatter.renderExecutionPreview(preview, (line) =>
+      lines.push(line)
+    );
+
+    assert.ok(lines.includes("Parallel steps 1–2 (failFast)"));
+    assert.ok(lines.includes("  runs sequentially"));
+    assert.ok(lines.some((line) => line.startsWith("  Step 1")));
+    assert.ok(lines.some((line) => line.startsWith("  Step 2")));
   });
 
   test("renders not-yet-available prior context neutrally with distinct delivery copy", () => {

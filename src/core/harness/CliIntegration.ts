@@ -686,6 +686,10 @@ export class CliIntegration extends HarnessIntegration {
     this.sessionActivityResumedEmitter.fire({ events });
   }
 
+  override getActivitySessionId(): string | undefined {
+    return this.transportCoordinator.getLastPtySessionId();
+  }
+
   /**
    * Start (or resume) the Layer 1 session-activity watcher after an interactive
    * prompt has finished and the PTY is still alive. Reuses the same `ILogParser`

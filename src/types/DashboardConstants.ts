@@ -193,6 +193,7 @@ export const MESSAGE_TYPES = {
   SESSION_RESTORED: "sessionRestored", // Restore previous session with runtime state preserved
   EXECUTION_STARTED: "executionStarted",
   EXECUTION_STATE_CHANGED: "executionStateChanged",
+  ACTIVE_STEP_INDICES_CHANGED: "activeStepIndicesChanged",
   PROGRESS_UPDATE: "progressUpdate",
   STEP_STATUS_CHANGED: "stepStatusChanged",
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
@@ -545,7 +546,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_OUTPUT: "terminalOutput", // extension → webview: { workflowId, sessionId, data }
   TERMINAL_INPUT: "terminalInput", // webview → extension: { workflowId, sessionId, data }
   TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
-  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, harnessId?, promptNumber?, shellKind?, controllerClientId? } (also refreshes existing session metadata)
+  TERMINAL_STARTED: "terminalStarted", // extension → webview: TerminalStartedMessage (also refreshes existing session metadata)
   TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
@@ -807,6 +808,33 @@ export const EXECUTION_STATES = {
   COMPLETED: "completed",
   ERROR: "error",
 } as const;
+
+/** Parallel groups may fan out up to the configured global queue width. */
+export const PARALLEL_GROUP_FAN_OUT_ENABLED = true;
+
+/** Resolve the active width, retaining an explicit closed-gate override for tests. */
+export function getEffectiveParallelGroupWidth(
+  configuredWidth: number,
+  fanOutEnabled: boolean = PARALLEL_GROUP_FAN_OUT_ENABLED
+): number {
+  return Math.min(
+    configuredWidth,
+    fanOutEnabled ? Number.POSITIVE_INFINITY : 1
+  );
+}
+
+export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
+  INVALID_REFERENCE: "parallelGroup.preflight.invalidReference",
+  SESSION_COLLISION: "parallelGroup.preflight.sessionCollision",
+  DYNAMIC_QUEUE: "parallelGroup.preflight.dynamicQueue",
+  HARNESS_UNAVAILABLE: "parallelGroup.preflight.harnessUnavailable",
+  INTEGRATION_CREATION: "parallelGroup.preflight.integrationCreation",
+  INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",
+  EFFECTIVE_WIDTH: "parallelGroup.preflight.effectiveWidth",
+} as const;
+
+export type ParallelGroupPreflightDiagnosticCode =
+  (typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES)[keyof typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES];
 
 /** Commands emitted by the workflow runtime state machine. */
 export const WORKFLOW_RUNTIME_COMMANDS = {
@@ -2962,6 +2990,13 @@ export const OUTPUT_HISTORY_KINDS = {
   RUNTIME: "runtime",
 } as const;
 
+export const OUTPUT_ACTIVITY_KINDS = {
+  TEXT: "text",
+  STRUCTURED: "structured",
+  STATUS: "status",
+  SCRIPT: "script",
+} as const;
+
 /** Message types produced by the live/history output projection. */
 export const OUTPUT_MESSAGE_TYPES = {
   STATUS: "status",
@@ -3006,6 +3041,7 @@ export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
 export const OUTPUT_SCROLL_TARGET_KINDS = {
   ROW: "row",
   BOTTOM: "bottom",
+  LATEST_ACTIVITY: "latestActivity",
 } as const;
 
 export type OutputScrollTargetKind =
@@ -3040,6 +3076,7 @@ export const OUTPUT_DEFAULT_LABELS = {
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
+  STEP_SWITCH: "step-switch",
   STEP_ANCHOR: "step-anchor",
   STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",
@@ -3606,6 +3643,8 @@ export type TerminalSessionStatus =
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
 export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
+export type OutputActivityKind =
+  (typeof OUTPUT_ACTIVITY_KINDS)[keyof typeof OUTPUT_ACTIVITY_KINDS];
 export type SnapshotStrategy =
   (typeof SNAPSHOT_STRATEGIES)[keyof typeof SNAPSHOT_STRATEGIES];
 export type SnapshotBaseSource =
@@ -3640,12 +3679,18 @@ export function getExecutionPhaseForScriptOutputSource(
   }
 }
 
-/** Stable key for a live streaming buffer scoped to one target and phase. */
+/** Stable key for a live streaming buffer scoped to one full activity identity. */
 export function getStreamingChunkKey(
   targetIndex: number,
-  phase: ExecutionPhase = EXECUTION_PHASES.PROMPT
+  phase: ExecutionPhase = EXECUTION_PHASES.PROMPT,
+  runIndex = 0,
+  attemptIndex = 0,
+  kind: OutputActivityKind = OUTPUT_ACTIVITY_KINDS.TEXT,
+  targetKind:
+    | typeof FINAL_STEP_PHASES.QUEUE
+    | typeof FINAL_STEP_PHASES.FINAL_STEP = FINAL_STEP_PHASES.QUEUE
 ): string {
-  return `${targetIndex}:${phase}`;
+  return `${targetKind}:${targetIndex}:run:${runIndex}:attempt:${attemptIndex}:${phase}:${kind}`;
 }
 
 /** Preserve legacy prompt keys while separating condition execution phases. */

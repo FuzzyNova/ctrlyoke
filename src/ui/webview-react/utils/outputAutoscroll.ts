@@ -312,7 +312,7 @@ export function resolveDiffGapExpansionScrollTarget(
   insertedHeightPx: number
 ): OutputScrollTarget | null {
   if (
-    currentTarget.kind !== OUTPUT_SCROLL_TARGET_KINDS.ROW ||
+    currentTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
     currentTarget.rowKey !== rowKey
   ) {
     return null;

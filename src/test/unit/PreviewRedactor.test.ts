@@ -11,6 +11,8 @@ import {
 
 function createPreview(variableValue: string): WorkflowExecutionPreview {
   return {
+    parallelGroups: [],
+    parallelGroupPreflights: [],
     workflow: {
       name: "redaction test",
       stepCount: 1,
@@ -64,6 +66,35 @@ function redactedVariable(value: string) {
 }
 
 suite("PreviewRedactor", () => {
+  test("passes parallel group metadata through unchanged", () => {
+    const preview = createPreview("safe");
+    preview.parallelGroups = [
+      {
+        id: "group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: true,
+      },
+    ];
+    preview.parallelGroupPreflights = [
+      {
+        parallelGroupId: "group",
+        effectiveWidth: 1,
+        executableMemberCount: 2,
+      },
+    ];
+    preview.steps[0].parallelGroupId = "group";
+
+    const redacted = redactExecutionPreview(preview);
+
+    assert.deepStrictEqual(redacted.parallelGroups, preview.parallelGroups);
+    assert.deepStrictEqual(
+      redacted.parallelGroupPreflights,
+      preview.parallelGroupPreflights
+    );
+    assert.strictEqual(redacted.steps[0].parallelGroupId, "group");
+  });
+
   test("masks private key blocks", () => {
     const result = redactedVariable(
       "-----BEGIN PRIVATE KEY-----\nsecret-material\n-----END PRIVATE KEY-----"

@@ -239,6 +239,7 @@ export function useUndoRedoKeyHandler() {
       postWorkflowDefinitionMutation(getVsCodeApi(), {
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
         steps: mergedSteps,
+        parallelGroups: ws.parallelGroups,
         finalStep: ws.finalStep,
         workflowProperties,
       });

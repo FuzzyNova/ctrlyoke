@@ -31,13 +31,17 @@ export class CliSessionResolverAdapter {
         })
       : workflowContext?.resolvedProperties;
 
-    let resolvedSessionId = SessionResolver.resolve(
-      prompt,
-      workflowContext?.promptIndex ?? 0,
-      workflowContext?.allPrompts ?? [prompt],
-      workflowContext?.workflowFile,
-      workflowContext?.finalStepSessionId
-    );
+    let resolvedSessionId =
+      workflowContext?.preflightSession !== undefined
+        ? workflowContext.preflightSession.sessionId
+        : SessionResolver.resolveWithProperties(
+            prompt,
+            workflowContext?.promptIndex ?? 0,
+            workflowContext?.allPrompts ?? [prompt],
+            resolvedProperties,
+            workflowContext?.finalStepSessionId,
+            workflowContext?.groupStartBoundary
+          );
 
     if (resolvedSessionId) {
       const harness =

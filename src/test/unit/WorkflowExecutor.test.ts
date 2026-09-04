@@ -39,6 +39,11 @@ import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
+import {
+  WorkspaceSnapshotService,
+  type RawWorkspaceState,
+} from "../../utils/WorkspaceSnapshotService";
+import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
 function makeContext(
@@ -52,6 +57,7 @@ function makeContext(
     shouldShowCliCommand: false,
     dynamicQueueConfig: {
       maxQueueSize: 100,
+      maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
       unlimitedMode: false,
       notifyOnExtension: false,
@@ -88,6 +94,34 @@ function makeContext(
       }
     ),
   };
+  return context;
+}
+
+function makeParallelContext(
+  integrations: ReadonlyMap<number, MockHarnessIntegration>
+): WorkflowExecutionContext {
+  const fallback = integrations.values().next().value;
+  if (!fallback) {
+    throw new Error("Parallel test requires at least one integration");
+  }
+  const context = makeContext(fallback);
+  context.parallelGroupFanOutEnabled = true;
+  context.getIntegrationForPrompt = (_prompt, _harness, target) => {
+    if (target?.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return fallback;
+    }
+    const integration = integrations.get(target.stepIndex);
+    if (!integration) {
+      throw new Error(`Missing integration for step ${target.stepIndex}`);
+    }
+    return integration;
+  };
+  context.cancelTarget = async (target) => {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      await integrations.get(target.stepIndex)?.cancel();
+    }
+  };
+  context.releaseTargetResources = async () => undefined;
   return context;
 }
 
@@ -145,6 +179,43 @@ class FixedEvaluationEvaluator extends EndConditionEvaluator {
     _condition: ScriptProperties
   ): Promise<EvaluationResult> {
     return this.fixedResult;
+  }
+}
+
+class RecordingSnapshotService extends WorkspaceSnapshotService {
+  captureCount = 0;
+
+  override async captureWorkspaceState(
+    _executionRoot: string,
+    strategy: "git" | "filesystem"
+  ): Promise<RawWorkspaceState> {
+    this.captureCount += 1;
+    return {
+      capturedAt: this.captureCount,
+      strategy,
+      segments: [],
+    };
+  }
+
+  override snapshotRepoInfos(): undefined {
+    return undefined;
+  }
+
+  override async computeSnapshotChanges(): Promise<
+    WorkspaceSnapshot["changedFiles"]
+  > {
+    return [
+      {
+        path: `member-${this.captureCount}`,
+        changeType: "created",
+      },
+    ];
+  }
+
+  override async enrichSnapshotBeforeContent(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot> {
+    return snapshot;
   }
 }
 
@@ -281,6 +352,479 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("captures cumulative group snapshots at the group target", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        await new Promise((resolve) =>
+          setTimeout(resolve, (2 - stepIndex) * 5)
+        );
+        return { responseText: `ok-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+      parallelGroups: [
+        { id: "snapshots", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    const snapshotService = new RecordingSnapshotService();
+    const captured: Array<{
+      target: number;
+      snapshot: WorkspaceSnapshot;
+    }> = [];
+    context.snapshotService = snapshotService;
+    context.onSnapshotCaptured = (target, snapshot) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        captured.push({ target: target.stepIndex, snapshot });
+      }
+    };
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.strictEqual(snapshotService.captureCount, 4);
+    assert.strictEqual(captured.length, 3);
+    assert.deepStrictEqual(
+      captured.map(({ target }) => target),
+      [0, 0, 0]
+    );
+    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === "snapshots"));
+  });
+
+  test("keeps ordinary per-step snapshots when effective width is one", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      integrations.set(stepIndex, new MockHarnessIntegration(undefined, false));
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }],
+      parallelGroups: [
+        { id: "sequential", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 1;
+    const snapshotService = new RecordingSnapshotService();
+    const captured: Array<{ target: number; snapshot: WorkspaceSnapshot }> = [];
+    context.snapshotService = snapshotService;
+    context.onSnapshotCaptured = (target, snapshot) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        captured.push({ target: target.stepIndex, snapshot });
+      }
+    };
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(
+      captured.map(({ target }) => target),
+      [0, 1, 2]
+    );
+    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined));
+  });
+
+  test("joins parallel members completed in reverse order without advancing currentIndex early", async () => {
+    const queue = new PromptQueue();
+    const observedCurrentIndices: number[] = [];
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (const [stepIndex, delay] of [60, 30, 5].entries()) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        observedCurrentIndices.push(queue.getState().currentIndex);
+        return { responseText: `step-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "slow" }, { prompt: "medium" }, { prompt: "fast" }],
+      parallelGroups: [
+        {
+          id: "reverse",
+          startIndex: 0,
+          endIndex: 2,
+          failFast: false,
+        },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(observedCurrentIndices, [0, 0, 0]);
+    assert.strictEqual(queue.getState().currentIndex, 3);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+    );
+  });
+
+  test("failFast cancels running siblings and never launches waiting members", async () => {
+    const queue = new PromptQueue();
+    let releaseSibling: (() => void) | undefined;
+    const integrations = new Map<number, MockHarnessIntegration>();
+    const failing = new MockHarnessIntegration(undefined, false);
+    failing.onSend = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      (failing as any).lastFailureReason = "first member failed";
+      return { success: false };
+    };
+    integrations.set(0, failing);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    sibling.onSend = async () => {
+      await new Promise<void>((resolve) => {
+        releaseSibling = resolve;
+      });
+      return { success: false };
+    };
+    integrations.set(1, sibling);
+    integrations.set(2, new MockHarnessIntegration(undefined, false));
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 2;
+    context.cancelTarget = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE && target.stepIndex === 1) {
+        releaseSibling?.();
+      }
+      await integrations
+        .get(target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : 0)
+        ?.cancel();
+    };
+    queue.loadPrompts({
+      steps: [{ prompt: "fail" }, { prompt: "running" }, { prompt: "waiting" }],
+      parallelGroups: [
+        { id: "fail-fast", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+
+    await makeExecutor(queue).execute(failing, context);
+
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, []);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.FAILED, STEP_STATUS.CANCELLED, STEP_STATUS.CANCELLED]
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("fail-after-settle drains waiting members before failing the workflow", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        if (stepIndex === 0) {
+          (integration as any).lastFailureReason = "member failed";
+          return { success: false };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return { responseText: `ok-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "fail" }, { prompt: "first" }, { prompt: "waiting" }],
+      parallelGroups: [
+        { id: "settle", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 2;
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, ["waiting"]);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.FAILED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("does not fail the group when a member error policy continues", async () => {
+    const queue = new PromptQueue();
+    const continuedFailure = new MockHarnessIntegration(undefined, false);
+    continuedFailure.processExitFailure = true;
+    continuedFailure.onSend = async () => {
+      (continuedFailure as any).lastFailureReason = "resolved member failure";
+      return { success: false };
+    };
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const waiting = new MockHarnessIntegration(undefined, false);
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, continuedFailure],
+      [1, sibling],
+      [2, waiting],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "continue-after-error",
+          errorBehavior: { onError: "continue" },
+        },
+        { prompt: "sibling" },
+        { prompt: "waiting" },
+      ],
+      parallelGroups: [
+        { id: "continued-failure", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+    });
+
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 1;
+    await makeExecutor(queue).execute(continuedFailure, context);
+
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.FAILED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+    );
+    assert.deepStrictEqual(waiting.sentPrompts, ["waiting"]);
+    assert.strictEqual(
+      queue.getState().steps[0]._runtime?.terminalFailure,
+      false
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("pauses at the group join and resumes only unfinished members", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        await new Promise((resolve) =>
+          setTimeout(resolve, stepIndex === 0 ? 5 : 25)
+        );
+        return {
+          responseText: `ok-${stepIndex}`,
+          ...(stepIndex === 0
+            ? { afterResponse: () => requestQueuePause(queue) }
+            : {}),
+        };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [
+        { prompt: "pause" },
+        { prompt: "in-flight" },
+        { prompt: "later" },
+      ],
+      parallelGroups: [
+        { id: "pause", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 2;
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
+    assert.strictEqual(queue.getState().currentIndex, 0);
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, []);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.PENDING]
+    );
+
+    await resumeQueueExecution(queue);
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, ["pause"]);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, ["in-flight"]);
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, ["later"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(queue.getState().currentIndex, 3);
+  });
+
+  test("recovery schedules only members without terminal runtime", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+      [2, new MockHarnessIntegration(undefined, false)],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        { prompt: "completed" },
+        { prompt: "cancelled" },
+        { prompt: "resume" },
+      ],
+      parallelGroups: [
+        { id: "recovery", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+    await queue.completeStep(0);
+    await queue.cancelStep(1);
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, []);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, []);
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, ["resume"]);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.COMPLETED, STEP_STATUS.CANCELLED, STEP_STATUS.COMPLETED]
+    );
+    assert.strictEqual(queue.getState().currentIndex, 3);
+  });
+
+  test("joins an all-disabled parallel group as skipped", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        { prompt: "disabled-one", enabled: false },
+        { prompt: "disabled-two", enabled: false },
+      ],
+      parallelGroups: [
+        { id: "disabled", startIndex: 0, endIndex: 1, failFast: true },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, []);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, []);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.SKIPPED, STEP_STATUS.SKIPPED]
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("resolves pre-condition skip and stop outcomes before group failure", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+      [2, new MockHarnessIntegration(undefined, false)],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "skip",
+          preCondition: {
+            script: `node -e "process.exit(1)"`,
+            onFail: CONDITION_ACTIONS.SKIP_PROMPT,
+          },
+        },
+        {
+          prompt: "stop",
+          preCondition: {
+            script: `node -e "process.exit(1)"`,
+            onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+          },
+        },
+        { prompt: "complete" },
+      ],
+      parallelGroups: [
+        { id: "preconditions", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, []);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, []);
+    assert.deepStrictEqual(integrations.get(2)?.sentPrompts, ["complete"]);
+    assert.deepStrictEqual(
+      queue.getState().results.map((result) => result.status),
+      [STEP_STATUS.SKIPPED, STEP_STATUS.FAILED, STEP_STATUS.COMPLETED]
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("keeps end-condition retries inside one parallel member contract", async () => {
+    const queue = new PromptQueue();
+    const retrying = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, retrying],
+      [1, sibling],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "retry-member",
+          endCondition: {
+            script: `node -e "process.stdout.write('ok')"`,
+            compareSource: "stdout",
+            returns: "ok",
+            onPass: CONDITION_ACTIONS.RETRY,
+            onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+            maxRetries: 1,
+            passRetryPrompt: "retry-member-again",
+          },
+        },
+        { prompt: "sibling" },
+      ],
+      parallelGroups: [
+        { id: "retry", startIndex: 0, endIndex: 1, failFast: true },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      retrying,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(retrying.sentPrompts, [
+      "retry-member",
+      "retry-member-again",
+    ]);
+    assert.deepStrictEqual(sibling.sentPrompts, ["sibling"]);
+    assert.strictEqual(queue.getState().currentIndex, 2);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
+  test("preflights inherited/default session collisions before any group member launches", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      resumeSession: true,
+      sessionId: "shared-session",
+      steps: [
+        { name: "alpha", prompt: "one" },
+        { name: "beta", prompt: "two" },
+      ],
+      parallelGroups: [
+        {
+          id: "group",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    await assert.rejects(
+      makeExecutor(queue).execute(integration, makeContext(integration)),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Step 1 \("alpha"\).*Step 2 \("beta"\)/s);
+        return true;
+      }
+    );
+    assert.deepStrictEqual(integration.sentPrompts, []);
+  });
+
   test("gates unknown MCP references in fail mode but reports and continues in warn mode", async () => {
     const promptText = "Use /mcp:missing-for-strict-resolution-test";
     const failQueue = new PromptQueue();

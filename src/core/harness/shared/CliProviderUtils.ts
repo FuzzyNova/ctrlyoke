@@ -51,6 +51,22 @@ export interface CliProviderWorkflowContext {
   workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
 }
 
+/** Pure effective-property check shared by execution planning and group preflight. */
+export function hasCtrlYokeServer(
+  properties: Pick<ResolvedProperties, "mcpAvailability" | "mcpServers">
+): boolean {
+  if (properties.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED) {
+    return false;
+  }
+  return (properties.mcpServers ?? []).some(
+    (server) =>
+      server === MCP_SERVER_IDS.CTRLYOKE ||
+      (typeof server === "object" &&
+        server !== null &&
+        server.id === MCP_SERVER_IDS.CTRLYOKE)
+  );
+}
+
 export interface WorkflowExternalRootsContext {
   workspaceIdentity: string;
   identity: string;
@@ -496,17 +512,9 @@ export class CliProviderUtils {
     }
 
     const mcpServers = workflowContext.resolvedProperties?.mcpServers;
-    const ctrlyokeServerObj = (mcpServers ?? []).find(
-      (server): server is McpServerConfig =>
-        typeof server === "object" &&
-        server !== null &&
-        server.id === MCP_SERVER_IDS.CTRLYOKE
-    );
-    const hasCtrlYokeServer =
-      workflowContext.resolvedProperties?.mcpAvailability !==
-        MCP_AVAILABILITY_MODES.DISABLED &&
-      ((mcpServers != null && mcpServers.includes(MCP_SERVER_IDS.CTRLYOKE)) ||
-        !!ctrlyokeServerObj);
+    const includesCtrlYokeServer = workflowContext.resolvedProperties
+      ? hasCtrlYokeServer(workflowContext.resolvedProperties)
+      : false;
     const userServers = (mcpServers ?? []).filter(
       (server): server is McpServerConfig =>
         typeof server === "object" &&
@@ -514,14 +522,15 @@ export class CliProviderUtils {
         server.id !== MCP_SERVER_IDS.CTRLYOKE
     );
 
-    if (!hasCtrlYokeServer && userServers.length === 0) {
+    if (!includesCtrlYokeServer && userServers.length === 0) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
 
-    const mcpServerPath = hasCtrlYokeServer
+    const mcpServerPath = includesCtrlYokeServer
       ? path.join(extensionPath, "out/mcp-server.js")
       : undefined;
-    const additionalEnv: Record<string, string> | undefined = hasCtrlYokeServer
+    const additionalEnv: Record<string, string> | undefined =
+      includesCtrlYokeServer
       ? (() => {
           const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
           const env = {

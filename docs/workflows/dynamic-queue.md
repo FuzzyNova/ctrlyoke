@@ -29,3 +29,8 @@ finalStep:
   mcpServers:
     - ctrlyoke
 ```
+
+The built-in `ctrlyoke` server is rejected on a parallel-group member. A group
+has one shared queue position and joins before the next item, so members cannot
+append work concurrently. The `finalStep` may still enable `ctrlyoke`; it runs
+after the group join and can append follow-up work before running again.

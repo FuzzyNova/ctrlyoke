@@ -32,6 +32,8 @@ import type {
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
+import type { ScriptProcessRunner } from "./ScriptProcessRunner";
+import type { HarnessIntegration } from "../HarnessIntegration";
 
 export interface ScriptExecutionReporterContext {
   executionWorkspace?: ExecutionWorkspace;
@@ -40,6 +42,9 @@ export interface ScriptExecutionReporterContext {
   statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   outputHistoryManager?: OutputHistoryManager;
+  getScriptProcessRunner?: (
+    target: OutputExecutionTarget
+  ) => ScriptProcessRunner;
   getDefinitionRevisionContext?: () => DefinitionRevisionContext | undefined;
   onStatusMessage?: (
     stepIndex: number,
@@ -51,10 +56,15 @@ export interface ScriptExecutionReporterContext {
     message: string,
     severity: string
   ) => void;
-  captureCompletedOutput?: (stepIndex: number, output: CliOutput) => void;
+  captureCompletedOutput?: (
+    stepIndex: number,
+    output: CliOutput,
+    integration?: HarnessIntegration
+  ) => void;
   captureFinalStepCompletedOutput?: (
     loopIndex: number,
-    output: CliOutput
+    output: CliOutput,
+    integration?: HarnessIntegration
   ) => void;
 }
 
@@ -77,6 +87,7 @@ export interface ScriptExecutionReportRequest {
   timeoutMs?: number;
   vars?: Record<string, string>;
   secretNames?: readonly string[];
+  processRunner?: ScriptProcessRunner;
   /** Conditions let their caller place the verdict summary beside the timeline row. */
   emitStatus?: boolean;
   evaluate?: (onOutput: (chunk: string) => void) => Promise<EvaluationResult>;
@@ -220,7 +231,13 @@ export class ScriptExecutionReporter {
           phase
         );
       }
-      if (context.dashboardProvider) {
+      if (
+        context.dashboardProvider &&
+        !(
+          context.historyFilePath &&
+          history?.hasOutputActivityHandler()
+        )
+      ) {
         if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex >= 0) {
           context.dashboardProvider.updateCliStreamingChunk(
             signedStepIndex,
@@ -256,7 +273,8 @@ export class ScriptExecutionReporter {
               context.workspaceFolderPath,
             request.vars,
             onOutput,
-            request.secretNames
+            request.secretNames,
+            request.processRunner ?? context.getScriptProcessRunner?.(target)
           );
     } finally {
       // The buffered tail must land before the completed output replaces the

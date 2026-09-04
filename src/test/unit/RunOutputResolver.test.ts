@@ -32,6 +32,14 @@ suite("RunOutputResolver", () => {
       { prompt: "original queue prompt" },
       { type: "script", script: "npm test" },
     ],
+    parallelGroups: [
+      {
+        id: "original-group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: false,
+      },
+    ],
     finalStep: { prompt: "original final step" },
   };
   const revisionTwo: WorkflowDefinitionSnapshot = {
@@ -39,6 +47,14 @@ suite("RunOutputResolver", () => {
     steps: [
       { prompt: "revised queue prompt" },
       { type: "script", script: "npm test -- --runInBand" },
+    ],
+    parallelGroups: [
+      {
+        id: "revised-group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: true,
+      },
     ],
     finalStep: { prompt: "revised final step" },
   };
@@ -407,6 +423,14 @@ suite("RunOutputResolver", () => {
       (original?.definition?.step as { prompt?: string }).prompt,
       "original queue prompt"
     );
+    assert.deepStrictEqual(original?.definition?.definition.parallelGroups, [
+      {
+        id: "original-group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: false,
+      },
+    ]);
 
     const script = await resolver.resolveAttempt(
       manifestPath,
@@ -444,6 +468,14 @@ suite("RunOutputResolver", () => {
       (resumedFinal?.definition?.step as { prompt?: string }).prompt,
       "revised final step"
     );
+    assert.deepStrictEqual(resumedFinal?.definition?.definition.parallelGroups, [
+      {
+        id: "revised-group",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: true,
+      },
+    ]);
 
     const latest = await resolver.resolveLatestAttempts(manifestPath, [
       queueZero,
@@ -465,6 +497,24 @@ suite("RunOutputResolver", () => {
       ["partial retry response", "pass\n0", finalResponse],
       "prior context is resolved from timeline attempts, including scripts and final loops"
     );
+    const groupBoundaryItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous", "all", [2]],
+      revisionTwo.steps,
+      1
+    );
+    assert.deepStrictEqual(
+      groupBoundaryItems.map((item) => item.text),
+      ["partial retry response"],
+      "previous/all stop at the group start and numeric same-group references are excluded"
+    );
+    const indexZeroItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous", "all", [1]],
+      revisionTwo.steps,
+      0
+    );
+    assert.deepStrictEqual(indexZeroItems, []);
   });
 
   test("streams very large logs without readEvents or response truncation", async () => {

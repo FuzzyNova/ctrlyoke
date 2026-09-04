@@ -51,6 +51,7 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
+import { isStepExecutionLocked } from "./ParallelGroupPanel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,7 @@ interface PromptChipRailProps {
 export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const {
     steps: prompts,
+    parallelGroups,
     currentStep,
     executionState,
     finalStep,
@@ -299,6 +301,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       confirmResetOperations: globalSettings.confirmResetOperations,
       totalSteps: prompts.length,
       currentStep,
+      parallelGroups,
+      pendingGroups: parallelGroups
+        .filter((group) => group.startIndex >= currentStep)
+        .map((group) => ({
+          id: group.id,
+          start: group.startIndex - currentStep,
+          end: group.endIndex - currentStep,
+          failFast: group.failFast,
+        })),
     });
 
   const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
@@ -439,7 +450,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       setPositionTarget: i,
                       deleteIndex: i,
                       isCurrentStep: false,
-                      isExecutionTargetLocked: false,
+                      isExecutionTargetLocked: isStepExecutionLocked(
+                        prompt,
+                        i,
+                        currentStep,
+                        executionState
+                      ),
                       direction: "rewind",
                       outputText: getLatestOutput(i)?.response as
                         | string
@@ -466,7 +482,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
               // Only an in-flight step is locked; PAUSED stops at a step
               // boundary, so the current chip is the next PENDING step.
               const isExecutionTargetLocked =
-                isExecutionBusy(executionState) && isCurrentStep;
+                isStepExecutionLocked(
+                  prompt,
+                  index,
+                  currentStep,
+                  executionState
+                ) ||
+                (isExecutionBusy(executionState) && isCurrentStep);
               return (
                 <ChipContent
                   key={index}

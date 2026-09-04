@@ -12,6 +12,7 @@ import {
   OPERATION_STATUS,
   OUTPUT_HISTORY_KINDS,
   EXECUTION_PHASES,
+  getStreamingChunkKey,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
 import type {
@@ -125,6 +126,21 @@ describe("loadWorkflow", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);
   });
+
+  it("tracks active step indices independently of the group join index", () => {
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt(), makePrompt(), makePrompt()],
+      currentStep: 0,
+      activeStepIndices: [2, 1],
+    });
+
+    expect(store().currentStep).toBe(0);
+    expect(store().activeStepIndices).toEqual([2, 1]);
+
+    store().setActiveStepIndices([1]);
+    expect(store().activeStepIndices).toEqual([1]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -228,22 +244,32 @@ describe("appendStreamingChunk", () => {
   it("concatenates chunks for a step", () => {
     store().appendStreamingChunk(0, "Hello");
     store().appendStreamingChunk(0, " World");
-    expect(store().streamingChunks["0:prompt"]).toBe("Hello World");
+    expect(
+      store().streamingChunks[getStreamingChunkKey(0)]
+    ).toBe("Hello World");
   });
 
   it("does not affect other steps", () => {
     store().appendStreamingChunk(0, "step0");
     store().appendStreamingChunk(1, "step1");
-    expect(store().streamingChunks["0:prompt"]).toBe("step0");
-    expect(store().streamingChunks["1:prompt"]).toBe("step1");
+    expect(store().streamingChunks[getStreamingChunkKey(0)]).toBe("step0");
+    expect(store().streamingChunks[getStreamingChunkKey(1)]).toBe("step1");
   });
 
   it("keeps condition phases isolated for the same step", () => {
     store().appendStreamingChunk(0, "pre", EXECUTION_PHASES.PRE_CONDITION);
     store().appendStreamingChunk(0, "end", EXECUTION_PHASES.END_CONDITION);
 
-    expect(store().streamingChunks["0:preCondition"]).toBe("pre");
-    expect(store().streamingChunks["0:endCondition"]).toBe("end");
+    expect(
+      store().streamingChunks[
+        getStreamingChunkKey(0, EXECUTION_PHASES.PRE_CONDITION)
+      ]
+    ).toBe("pre");
+    expect(
+      store().streamingChunks[
+        getStreamingChunkKey(0, EXECUTION_PHASES.END_CONDITION)
+      ]
+    ).toBe("end");
   });
 });
 
@@ -251,7 +277,22 @@ describe("clearStreamingChunk", () => {
   it("resets the chunk to empty string", () => {
     store().appendStreamingChunk(0, "text");
     store().clearStreamingChunk(0);
-    expect(store().streamingChunks["0:prompt"]).toBe("");
+    expect(store().streamingChunks[getStreamingChunkKey(0)]).toBe("");
+  });
+
+  it("keeps same-target attempts in separate full streaming keys", () => {
+    store().appendStreamingChunk(0, "first", undefined, 0, 0);
+    store().appendStreamingChunk(0, "retry", undefined, 0, 1);
+
+    expect(
+      store().streamingChunks[getStreamingChunkKey(0, undefined, 0, 0)]
+    ).toBe("first");
+    expect(
+      store().streamingChunks[getStreamingChunkKey(0, undefined, 0, 1)]
+    ).toBe("retry");
+    expect(
+      getStreamingChunkKey(0, undefined, 0, 0)
+    ).not.toBe(getStreamingChunkKey(0, undefined, 0, 1));
   });
 });
 

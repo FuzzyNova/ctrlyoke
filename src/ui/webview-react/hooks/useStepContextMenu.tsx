@@ -22,8 +22,12 @@ import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
 import {
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
+  buildStepGroupingMenuItems,
+  isParallelGroupTopologyLocked,
   getPresentOutputTargetKeys,
 } from "@utils/stepContextMenuItems";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import type { CliOutput } from "@store/workflowStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import {
@@ -53,6 +57,8 @@ interface UseStepContextMenuOptions {
   totalSteps: number;
   currentStep: number;
   pendingRewind?: { fromStepIndex: number };
+  parallelGroups?: readonly ParallelGroupDefinition[];
+  pendingGroups?: ReorderPromptsMessage["pendingGroups"];
 }
 
 interface OpenContextMenuParams {
@@ -105,6 +111,8 @@ export function useStepContextMenu({
   totalSteps,
   currentStep,
   pendingRewind,
+  parallelGroups = [],
+  pendingGroups = [],
 }: UseStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
   const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
@@ -159,13 +167,14 @@ export function useStepContextMenu({
           pendingIndex,
           targetPendingIndex
         ),
+        pendingGroups,
       });
       const editorStore = useEditorStore.getState();
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
-    [totalSteps, currentStep]
+    [currentStep, pendingGroups, totalSteps]
   );
 
   const openContextMenu = useCallback(
@@ -239,6 +248,38 @@ export function useStepContextMenu({
       const allPresentTargetKeys = presentOutputTargetKeys.includes(targetKey)
         ? presentOutputTargetKeys
         : [...presentOutputTargetKeys, targetKey];
+      const containingGroup = parallelGroups.find(
+        (group) =>
+          deleteIndex >= group.startIndex && deleteIndex <= group.endIndex
+      );
+      const groupingDisabled =
+        isExternallyManaged ||
+        executionState === EXECUTION_STATES.CANCELLING ||
+        (containingGroup
+          ? isParallelGroupTopologyLocked(
+              containingGroup,
+              useWorkflowStore.getState().steps,
+              currentStep,
+              executionState
+            )
+          : false);
+      const groupingItems = buildStepGroupingMenuItems({
+        stepIndex: deleteIndex,
+        currentStep,
+        steps: useWorkflowStore.getState().steps,
+        parallelGroups,
+        disabled: groupingDisabled,
+        disabledTitle: isExternallyManaged
+          ? (externalReadOnlyLabel ?? "Read-only — external workflow")
+          : groupingDisabled
+            ? "Cannot change a settled or executing parallel group"
+            : undefined,
+        onReorder: (newPendingOrder, nextPendingGroups) =>
+          sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, {
+            newPendingOrder,
+            pendingGroups: nextPendingGroups,
+          }),
+      });
 
       setContextMenu({
         x,
@@ -342,6 +383,9 @@ export function useStepContextMenu({
                 },
               ]
             : []),
+          ...(groupingItems.length > 0
+            ? [{ type: "divider" as const }, ...groupingItems]
+            : []),
           { type: "divider" },
           {
             label: stepToggleLabel,
@@ -391,6 +435,7 @@ export function useStepContextMenu({
       soloOutputTarget,
       totalSteps,
       toggleHiddenOutputTarget,
+      parallelGroups,
     ]
   );
 

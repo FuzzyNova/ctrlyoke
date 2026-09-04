@@ -38,6 +38,7 @@ import type {
   AppendAndContinueRunMessage,
   RunExecutionControlMessage,
   SetStartPositionMessage,
+  ReorderPromptsMessage,
   DiscardContinuationMessage,
   RequestMcpConfigPreviewMessage,
   RequestMcpRegistrySearchMessage,
@@ -827,16 +828,10 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message, ctx) => {
-      await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
-      await this.getOrchestrator()?.reorderPendingPrompts(
-        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        message.newPendingOrder as number[],
-        ctx.clientId
+      await this.workflowStepHandlers.handleReorderPrompts(
+        ctx,
+        message as ReorderPromptsMessage
       );
-      // Identity-only — see the comment in WorkflowStepHandlers.handleUpdatePrompt.
-      // The reordering client already holds the post-reorder steps via its own
-      // REORDER_PROMPTS_CONFIRMED broadcast.
-      await this.mutationCoordinator.publishViewIdentity(ctx);
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message, ctx) => {

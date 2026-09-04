@@ -101,6 +101,7 @@ function makeContext(
     shouldShowCliCommand: false,
     dynamicQueueConfig: {
       maxQueueSize: 100,
+      maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
       unlimitedMode: false,
       notifyOnExtension: false,

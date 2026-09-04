@@ -23,6 +23,12 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "../WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import {
+  insertParallelGroupSteps,
+  normalizeParallelGroupTopology,
+  resolveParallelGroupInsertIndex,
+  PARALLEL_GROUP_INSERT_POSITIONS,
+} from "../ParallelGroupTopology";
 
 const RUN_CONTINUATION_ACTIONS = {
   EDIT: "edit",
@@ -235,20 +241,27 @@ export class RunContinuationService {
         // lock. Reading it earlier (or from the caller's snapshot) would let
         // the executing run advance in between and land `next` on the wrong
         // step.
-        const sourceSteps = source.steps ?? [];
-        const insertIndex = Math.max(
+        const sourceTopology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const requestedIndex = Math.max(
           resolveQueueInsertIndex(
             position,
-            source._runtime?.currentIndex ?? sourceSteps.length,
-            sourceSteps.length
+            source._runtime?.currentIndex ?? sourceTopology.steps.length,
+            sourceTopology.steps.length
           ),
-          immutablePrefixLength(sourceSteps)
+          immutablePrefixLength(sourceTopology.steps)
         );
-        const steps = [...sourceSteps];
-        steps.splice(
-          insertIndex,
-          0,
-          ...tail.map((step) =>
+        const insertIndex = resolveParallelGroupInsertIndex(
+          sourceTopology,
+          requestedIndex,
+          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+        );
+        const nextTopology = insertParallelGroupSteps(
+          sourceTopology,
+          requestedIndex,
+          tail.map((step) =>
             stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
           )
         );
@@ -256,7 +269,8 @@ export class RunContinuationService {
           ...source,
           lastModifiedAt: Date.now(),
           definitionRevision: sourceRevision + 1,
-          steps,
+          steps: nextTopology.steps,
+          parallelGroups: nextTopology.parallelGroups,
         };
         await writeWorkingFileAtomic(runFilePath, workingFile);
         return {

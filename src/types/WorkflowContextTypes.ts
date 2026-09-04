@@ -99,6 +99,8 @@ export interface WorkflowContext {
   workflowFile?: PromptFile;
   /** Whether the current host can provide a PTY for this execution. */
   hostCanProvidePty?: boolean;
+  /** Whether the host can multiplex concurrent interactive sessions. */
+  supportsConcurrentInteractiveSessions?: boolean;
   /** Extension-clock timestamp for the prompt output this context is about to start. */
   promptStartedAt?: number;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
@@ -126,8 +128,12 @@ export interface WorkflowContext {
   resolvePriorContextItems?: (
     contexts: readonly PriorContext[],
     allPrompts: readonly WorkflowStep[],
-    promptIndex: number
+    groupStartBoundary: number
   ) => Promise<PriorContextItem[]>;
+  /** Exclusive queue boundary used by grouped prior-context/session lookups. */
+  groupStartBoundary?: number;
+  /** Session resolution frozen by parallel-group preflight. */
+  preflightSession?: { readonly sessionId?: string };
   /** Session ID from the most recent finalStep execution. Consumed by SessionResolver
    *  when sessionId is the "finalStep" sentinel on any prompt (queue or finalStep phase).
    *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */

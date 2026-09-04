@@ -45,6 +45,12 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
 
+export interface CliOutputTarget {
+  stepIndex: number;
+  stepName: string;
+  key?: string;
+}
+
 const DIFF_LINE_TYPES = {
   ADDED: "added",
   REMOVED: "removed",
@@ -213,20 +219,51 @@ export class CliTerminalFormatter {
     }
 
     writeLine(chalk.bold("Steps"));
+    const renderedGroups = new Set<string>();
     for (const step of preview.steps) {
+      const group = step.parallelGroupId
+        ? preview.parallelGroups.find(
+            (candidate) => candidate.id === step.parallelGroupId
+          )
+        : undefined;
+      if (group && !renderedGroups.has(group.id)) {
+        renderedGroups.add(group.id);
+        const groupPreflight = preview.parallelGroupPreflights.find(
+          (candidate) => candidate.parallelGroupId === group.id
+        );
+        const effectiveWidth = groupPreflight?.effectiveWidth ?? 1;
+        const executableMemberCount =
+          groupPreflight?.executableMemberCount ??
+          group.endIndex - group.startIndex + 1;
+        writeLine(
+          chalk.bold(
+            `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}${group.failFast ? " (failFast)" : ""}`
+          )
+        );
+        writeLine(
+          chalk.dim(
+            effectiveWidth <= 1
+              ? "  runs sequentially"
+              : `  ${Math.min(executableMemberCount, effectiveWidth)} of ${executableMemberCount} will run concurrently (width ${effectiveWidth})`
+          )
+        );
+      }
+      const indent = group ? "  " : "";
       const name = step.stepName ? ` — ${step.stepName}` : "";
-      writeLine(`Step ${step.stepIndex + 1}${name} (${step.type})`);
-      writeLine(`  Harness: ${step.resolvedProperties.harnessId}`);
+      writeLine(`${indent}Step ${step.stepIndex + 1}${name} (${step.type})`);
+      writeLine(`${indent}  Harness: ${step.resolvedProperties.harnessId}`);
       if (step.resolvedProperties.model) {
-        writeLine(`  Model: ${step.resolvedProperties.model}`);
+        writeLine(`${indent}  Model: ${step.resolvedProperties.model}`);
       }
       if (step.command) {
         writeLine(
-          `  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
+          `${indent}  Command (${COMMAND_DISPLAY_SHELL_LABELS[step.command.displayShell]}): ${step.command.displayCommand}`
         );
       }
       for (const variable of step.variables) {
-        writeLine(`  Variable: ${variable.name}=${variable.value}`);
+        writeLine(
+          `${indent}  Variable: ${variable.name}=${variable.value}`
+        );
       }
       for (const section of step.prompt?.sections ?? []) {
         const includedBytes = section.body
@@ -234,11 +271,11 @@ export class CliTerminalFormatter {
           : 0;
         const lineInfo = section.lineCount === null ? "?" : section.lineCount;
         writeLine(
-          `  Payload: ${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
+          `${indent}  Payload: ${PREVIEW_PROMPT_CATEGORY_LABELS[section.category]} — ${section.byteCount} bytes, ${lineInfo} lines, chunk ${section.chunkIndex}`
         );
         if (section.body) {
           for (const line of section.body.split("\n")) {
-            writeLine(`    ${line}`);
+            writeLine(`${indent}    ${line}`);
           }
         }
         if (section.truncationReason) {
@@ -253,7 +290,7 @@ export class CliTerminalFormatter {
                     PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
                   ]
                 : "the full planned payload remains available to the harness";
-          const line = `    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`;
+          const line = `${indent}    [truncated: showing ${includedBytes} of ${section.byteCount} bytes; reason=${section.truncationReason}; ${delivery}]`;
           writeLine(
             section.truncationReason ===
               PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE
@@ -268,7 +305,9 @@ export class CliTerminalFormatter {
           mutation.scope === PREVIEW_MUTATION_SCOPES.SHARED && mutation.warning
             ? ` — ${mutation.warning}`
             : "";
-        writeLine(`  Mutation: ${mutation.operation}${mutationPath}${warning}`);
+        writeLine(
+          `${indent}  Mutation: ${mutation.operation}${mutationPath}${warning}`
+        );
       }
       writeLine("");
     }
@@ -279,20 +318,42 @@ export class CliTerminalFormatter {
    * print the THINKING header once and write each chunk directly to stdout as it
    * arrives (typewriter effect), rather than buffering and dumping all at once.
    */
-  private static _streaming: {
+  private static _streaming = new Map<
+    string,
+    {
     type: typeof CLI_EVENT_TYPES.TEXT | typeof CLI_EVENT_TYPES.THINKING;
     label?: string;
     /** Whether the last character written ended with a newline (for TEXT blocks). */
     endsWithNewline: boolean;
-  } | null = null;
+    }
+  >();
+
+  private static targetKey(target?: CliOutputTarget): string {
+    return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
+  }
+
+  private static writeTargetPrefix(target?: CliOutputTarget): void {
+    if (!target) return;
+    process.stdout.write(chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `));
+  }
 
   /**
    * Close the current streaming block by writing its trailing newline separator.
    * Call this when the prompt completes or when a non-TEXT/THINKING event arrives.
    */
-  static flushStreamingBuffer(): void {
-    if (!CliTerminalFormatter._streaming) return;
-    CliTerminalFormatter._streaming = null;
+  static flushStreamingBuffer(target?: CliOutputTarget): void {
+    if (target) {
+      if (!CliTerminalFormatter._streaming.has(CliTerminalFormatter.targetKey(target))) {
+        return;
+      }
+      CliTerminalFormatter._streaming.delete(
+        CliTerminalFormatter.targetKey(target)
+      );
+    } else if (CliTerminalFormatter._streaming.size === 0) {
+      return;
+    } else {
+      CliTerminalFormatter._streaming.clear();
+    }
     // End the block with a blank line separator
     process.stdout.write("\n\n");
   }
@@ -300,30 +361,58 @@ export class CliTerminalFormatter {
   /**
    * Renders an array of CLI events to stdout with chalk formatting.
    */
-  static renderEvents(events: CliEvent[]): void {
+  static renderEvents(events: CliEvent[], target?: CliOutputTarget): void {
     for (const event of events) {
-      CliTerminalFormatter.renderEvent(event);
+      CliTerminalFormatter.renderEvent(event, target);
     }
   }
 
-  static renderEvent(event: CliEvent): void {
+  static renderStreamingChunk(chunk: string, target?: CliOutputTarget): void {
+    if (!chunk) return;
+    const key = CliTerminalFormatter.targetKey(target);
+    const existing = CliTerminalFormatter._streaming.get(key);
+    if (!existing || existing.type !== CLI_EVENT_TYPES.TEXT) {
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      CliTerminalFormatter.writeTargetPrefix(target);
+      CliTerminalFormatter._streaming.set(key, {
+        type: CLI_EVENT_TYPES.TEXT,
+        endsWithNewline: false,
+      });
+    } else if (existing.endsWithNewline) {
+      CliTerminalFormatter.writeTargetPrefix(target);
+    }
+    process.stdout.write(chunk);
+    const state = CliTerminalFormatter._streaming.get(key);
+    if (state) state.endsWithNewline = chunk.endsWith("\n");
+  }
+
+  static renderEvent(event: CliEvent, target?: CliOutputTarget): void {
     event = secretRedactionService.redactValue(event);
+    const key = CliTerminalFormatter.targetKey(target);
+    if (
+      event.type !== CLI_EVENT_TYPES.TEXT &&
+      event.type !== CLI_EVENT_TYPES.THINKING
+    ) {
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      CliTerminalFormatter.writeTargetPrefix(target);
+    }
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
         if (!data.text) break;
-        const s = CliTerminalFormatter._streaming;
+        const s = CliTerminalFormatter._streaming.get(key);
         if (!s || s.type !== CLI_EVENT_TYPES.TEXT) {
           // End any prior THINKING block, then start streaming TEXT
-          CliTerminalFormatter.flushStreamingBuffer();
-          CliTerminalFormatter._streaming = {
+          CliTerminalFormatter.flushStreamingBuffer(target);
+          CliTerminalFormatter.writeTargetPrefix(target);
+          CliTerminalFormatter._streaming.set(key, {
             type: CLI_EVENT_TYPES.TEXT,
             endsWithNewline: false,
-          };
+          });
         }
         process.stdout.write(data.text);
-        CliTerminalFormatter._streaming!.endsWithNewline =
-          data.text.endsWith("\n");
+        const state = CliTerminalFormatter._streaming.get(key);
+        if (state) state.endsWithNewline = data.text.endsWith("\n");
         break;
       }
 
@@ -331,30 +420,31 @@ export class CliTerminalFormatter {
         const data = event.data as ThinkingBlock;
         if (!data.text) break;
         const label = data.label ?? "Thinking";
-        const s = CliTerminalFormatter._streaming;
+        const s = CliTerminalFormatter._streaming.get(key);
         if (
           !s ||
           s.type !== CLI_EVENT_TYPES.THINKING ||
           (s.label ?? "Thinking") !== label
         ) {
           // End any prior block, print header once, then start streaming this THINKING block
-          CliTerminalFormatter.flushStreamingBuffer();
+          CliTerminalFormatter.flushStreamingBuffer(target);
+          CliTerminalFormatter.writeTargetPrefix(target);
           process.stdout.write(chalk.dim(`● ${label}\n  `));
-          CliTerminalFormatter._streaming = {
+          CliTerminalFormatter._streaming.set(key, {
             type: CLI_EVENT_TYPES.THINKING,
             label,
             endsWithNewline: false,
-          };
+          });
         }
         // Indent newlines within the chunk to keep thinking text aligned under the header
         process.stdout.write(chalk.dim(data.text.replace(/\n/g, "\n  ")));
-        CliTerminalFormatter._streaming!.endsWithNewline =
-          data.text.endsWith("\n");
+        const state = CliTerminalFormatter._streaming.get(key);
+        if (state) state.endsWithNewline = data.text.endsWith("\n");
         break;
       }
 
       case CLI_EVENT_TYPES.BASH_COMMAND: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as BashCommandData;
         if (data.command) {
           console.log(chalk.yellow("$ " + data.command));
@@ -377,7 +467,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileEditData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -395,7 +485,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_WRITE: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileWriteData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -415,7 +505,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_READ: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileReadData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -431,7 +521,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileDeleteData;
         if (!data.path) break;
         if (data.success === false) {
@@ -445,7 +535,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
           const params = data.parameters
@@ -468,7 +558,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.WEB_SEARCH: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as WebSearchData;
         if (data.query) {
           console.log(chalk.blue('⌕ "' + data.query + '"'));
@@ -478,7 +568,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as ToolCall;
         if (data.name) {
           const params = data.parameters
@@ -501,7 +591,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_RESULT: {
-        CliTerminalFormatter.flushStreamingBuffer();
+        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as ToolResultData;
         if (data.result?.output) {
           const truncated =
@@ -523,6 +613,7 @@ export class CliTerminalFormatter {
   static renderPromptHeader(data: PromptStartData): void {
     const {
       stepIndex,
+      stepName,
       totalSteps,
       promptText,
       attemptIndex,
@@ -554,11 +645,11 @@ export class CliTerminalFormatter {
 
     if (executionLabel) {
       console.log(
-        `${border} ${chalk.yellow(`${executionLabel} — Step ${stepIndex + 1}/${totalSteps}`)}`
+        `${border} ${chalk.yellow(`${executionLabel} — Step ${stepIndex + 1}/${totalSteps} — ${stepName}`)}`
       );
     } else {
       console.log(
-        `${border} ${chalk.bold(`Step ${stepIndex + 1}/${totalSteps}`)}`
+        `${border} ${chalk.bold(`Step ${stepIndex + 1}/${totalSteps} — ${stepName}`)}`
       );
     }
 

@@ -43,6 +43,8 @@ import {
   type SecretRegistryActionState,
   type SecretRegistryState,
   type StatusLineTrackingHarnessId,
+  type SessionKind,
+  type ShellKind,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
 } from "./DashboardConstants";
@@ -64,6 +66,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeRunProjection,
   ScriptVerdict,
+  ParallelGroupDefinition,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -486,6 +489,7 @@ export interface InitMessageData {
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
+  activeStepIndices?: number[];
   globalSettings: {
     harness: HarnessId;
     model: string;
@@ -623,6 +627,7 @@ export interface FileSelectedMessage {
   type: typeof MESSAGE_TYPES.FILE_SELECTED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   workflowName?: string;
   workingFilePath?: string | null;
   finalStep?: WorkflowStep | null;
@@ -630,6 +635,7 @@ export interface FileSelectedMessage {
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
   workflowProperties?: Record<string, any>;
+  activeStepIndices?: number[];
 }
 
 /**
@@ -639,6 +645,7 @@ export interface SessionRestoredMessage {
   type: typeof MESSAGE_TYPES.SESSION_RESTORED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   results: any[];
   executionState: ExecutionState;
   currentIndex: number;
@@ -678,6 +685,8 @@ export interface ExecutionStartedMessage {
   isInjectMode?: boolean;
   /** Resolved execution mode for the step that started this execution. */
   executionMode?: ExecutionMode;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -686,6 +695,15 @@ export interface ExecutionStartedMessage {
 export interface ExecutionStateChangedMessage {
   type: typeof MESSAGE_TYPES.EXECUTION_STATE_CHANGED;
   state: ExecutionState;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
+}
+
+/** Extension → Webview: active queue targets changed. */
+export interface ActiveStepIndicesChangedMessage {
+  type: typeof MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED;
+  activeStepIndices: number[];
+  workflowId?: string;
 }
 
 /**
@@ -695,6 +713,8 @@ export interface ProgressUpdateMessage {
   type: typeof MESSAGE_TYPES.PROGRESS_UPDATE;
   current: number;
   total: number;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -705,6 +725,8 @@ export interface StepStatusChangedMessage {
   stepIndex: number;
   status: StepStatus;
   details?: any;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -734,6 +756,10 @@ export interface CliStreamingChunkMessage {
   stepIndex: number;
   chunk: string;
   phase?: ExecutionPhase;
+  attemptIndex?: number;
+  runIndex?: number;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -745,6 +771,9 @@ export interface CliStreamingEventsMessage {
   events: CliEvent[];
   attemptIndex?: number;
   runIndex?: number;
+  phase?: ExecutionPhase;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -756,6 +785,27 @@ export interface ContextWindowUpdateMessage {
   stepIndex: number;
   used: number;
   size: number;
+}
+
+/**
+ * PTY session metadata (extension -> webview).
+ *
+ * `stepIndex` is zero-based for queue steps and -1 for standalone shell
+ * sessions. A parallel group id keeps same-harness sibling sessions distinct
+ * during webview reconciliation.
+ */
+export interface TerminalStartedMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_STARTED;
+  workflowId: string;
+  sessionId: string;
+  stepName: string;
+  stepIndex: number;
+  kind: SessionKind;
+  promptNumber?: number;
+  harnessId?: string;
+  shellKind?: ShellKind;
+  parallelGroupId?: string;
+  controllerClientId?: string;
 }
 
 /**
@@ -779,6 +829,7 @@ export interface StatusMessageMessage {
 export interface StepsExtendedMessage {
   type: typeof MESSAGE_TYPES.STEPS_EXTENDED;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;
   /** The definition head that produced `steps`. Lets a following edit target
    *  the append immediately, without waiting for long-running execution to end. */
@@ -792,6 +843,7 @@ export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
   fileName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;
 }
 
@@ -830,6 +882,10 @@ export interface FinalStepStreamingChunkMessage {
   loopIndex: number;
   chunk: string;
   phase?: ExecutionPhase;
+  attemptIndex?: number;
+  runIndex?: number;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -841,6 +897,9 @@ export interface FinalStepStreamingEventsMessage {
   events: CliEvent[];
   attemptIndex?: number;
   runIndex?: number;
+  phase?: ExecutionPhase;
+  timestampMs?: number;
+  sequence?: number;
 }
 
 /**
@@ -1989,6 +2048,31 @@ export interface InsertWorkflowStepMessage {
 export interface ReorderPromptsMessage {
   type: typeof MESSAGE_TYPES.REORDER_PROMPTS;
   newPendingOrder: number[];
+  pendingGroups: Array<{
+    id?: string;
+    start: number;
+    end: number;
+    failFast: boolean;
+  }>;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+/** Extension -> webview confirmation of a pending-tail reorder. */
+export interface ReorderPromptsConfirmedMessage {
+  type: typeof MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED;
+  steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
+  workflowId?: string;
+}
+
+/** Webview -> extension: restore the complete normalized workflow topology. */
+export interface UndoRedoSyncMessage {
+  type: typeof MESSAGE_TYPES.UNDO_REDO_SYNC;
+  steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
+  finalStep: WorkflowStep | null;
+  workflowProperties: Record<string, unknown>;
+  workflowName?: string;
   mutation?: WorkflowDefinitionMutation;
 }
 
@@ -2547,6 +2631,7 @@ export type IncomingMessage =
   | SessionRestoredMessage
   | ExecutionStartedMessage
   | ExecutionStateChangedMessage
+  | ActiveStepIndicesChangedMessage
   | ProgressUpdateMessage
   | SearchIndexRebuildProgressMessage
   | StepStatusChangedMessage
@@ -2564,6 +2649,7 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | StepsExtendedMessage
   | PromptDeletedMessage
+  | ReorderPromptsConfirmedMessage
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
   | HarnessUsageUpdatedMessage

@@ -344,6 +344,8 @@ export interface PromptFile extends ExecutionProperties {
   trustedExternalRoots?: string[] | null;
   prompt?: string;
   steps?: WorkflowStep[];
+  /** Normalized flat-step topology for authored parallel groups. */
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep;
   /**
    * Workflow-level variable defaults for `{{varName}}` substitution.
@@ -638,6 +640,23 @@ export type WorkflowAttemptTarget =
   | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
   | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number };
 
+export interface StepExecutionOutcome {
+  target: WorkflowAttemptTarget;
+  status: PromptTerminalStatus;
+  failureReason?: string;
+  /** False when a per-step continue policy resolved a failed attempt. */
+  terminalFailure?: boolean;
+}
+
+export interface ParallelGroupOutcome {
+  group: ParallelGroupDefinition;
+  outcomes: StepExecutionOutcome[];
+  settledCount: number;
+  terminalFailure: boolean;
+  paused: boolean;
+  stopped: boolean;
+}
+
 export type { WorkflowAttemptStatus };
 
 export interface WorkflowAttemptState {
@@ -737,6 +756,17 @@ export interface ScriptStep extends ScriptProperties {
 
 /** Union type for all workflow steps */
 export type WorkflowStep = PromptStep | ScriptStep;
+
+/**
+ * Normalized topology for one authored `parallel:` item.
+ * Indices are inclusive and refer to the flat `PromptFile.steps` array.
+ */
+export interface ParallelGroupDefinition {
+  id: string;
+  startIndex: number;
+  endIndex: number;
+  failFast: boolean;
+}
 
 /** Type guard: returns true if the step is a ScriptStep */
 export function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -847,6 +877,9 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
   /** Human-readable failure message persisted for UI/history display. */
   failureMessage?: string;
+
+  /** False when the failed step was resolved by its per-step continue policy. */
+  terminalFailure?: boolean;
 }
 
 /**
@@ -920,6 +953,7 @@ export interface PreCondition extends ScriptProperties {
 export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   results: PromptResult[];
   completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
@@ -947,6 +981,7 @@ export interface QueueState extends WorkflowRuntimeState {
  */
 export interface DynamicQueueConfig {
   maxQueueSize: number; // 1-1000 (default: 100)
+  maxParallelSteps: number; // Active members per parallel group (default: 6)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
   unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime
   notifyOnExtension: boolean;

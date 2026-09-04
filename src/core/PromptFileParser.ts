@@ -1,13 +1,15 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { randomUUID } from "crypto";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import {
+  ExecutionProperties,
+  ParallelGroupDefinition,
   PromptFile,
   PromptStep,
   WorkflowStep,
   ScriptStep,
-  ExecutionProperties,
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   hasExecutableSteps,
@@ -22,6 +24,20 @@ import {
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
+import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
+
+type ParallelValidationProperties = Pick<
+  ExecutionProperties,
+  "priorContext" | "sessionId"
+>;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
 
 /**
  * Resolve the authored workflow path used for stable identity. Working files
@@ -152,6 +168,8 @@ export class PromptFileParser {
     parsed: any,
     contentPath: string
   ): Promise<PromptFile> {
+    this.validateAuthoredParallelStructure(parsed);
+
     if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
       const errors = this.ajv.errors
         ?.map((err) => `${err.instancePath}: ${err.message}`)
@@ -306,23 +324,75 @@ export class PromptFileParser {
 
     // Handle multiple prompts format
     if (parsed.steps && Array.isArray(parsed.steps)) {
-      const resolvedPrompts: WorkflowStep[] = await Promise.all(
-        parsed.steps.map(async (item: any) => {
-          if (item.type === STEP_TYPES.SCRIPT) {
-            return this.buildScriptStep(item);
+      const resolvedPrompts: WorkflowStep[] = [];
+      const authoredGroups: ParallelGroupDefinition[] = [];
+
+      for (const item of parsed.steps) {
+        if (isObject(item) && hasOwn(item, "parallel")) {
+          const startIndex = resolvedPrompts.length;
+          const failFast = item.failFast;
+          if (failFast !== undefined && typeof failFast !== "boolean") {
+            throw new Error(
+              `Step ${startIndex + 1}: parallel failFast must be a boolean`
+            );
           }
-          const promptValue = await this.validatePromptReference(
-            item.prompt,
-            promptFilePath
+          const resolvedMembers: WorkflowStep[] = await Promise.all(
+            (item.parallel as any[]).map(async (member) => {
+              if (member.type === STEP_TYPES.SCRIPT) {
+                return this.buildScriptStep(member);
+              }
+              const promptValue = await this.validatePromptReference(
+                member.prompt,
+                promptFilePath
+              );
+              return this.buildPromptStep(promptValue, member);
+            })
           );
-          return this.buildPromptStep(promptValue, item);
-        })
-      );
+          resolvedPrompts.push(...resolvedMembers);
+          authoredGroups.push({
+            id: randomUUID(),
+            startIndex,
+            endIndex: resolvedPrompts.length - 1,
+            failFast: failFast ?? true,
+          });
+          continue;
+        }
+
+        if (item.type === STEP_TYPES.SCRIPT) {
+          resolvedPrompts.push(this.buildScriptStep(item));
+          continue;
+        }
+        const promptValue = await this.validatePromptReference(
+          item.prompt,
+          promptFilePath
+        );
+        resolvedPrompts.push(this.buildPromptStep(promptValue, item));
+      }
+
+      const hasParallelGroups =
+        authoredGroups.length > 0 || parsed.parallelGroups !== undefined;
+      const normalizedTopology = normalizeParallelGroupTopology({
+        steps: resolvedPrompts,
+        parallelGroups:
+          parsed.parallelGroups !== undefined
+            ? parsed.parallelGroups
+            : authoredGroups,
+      });
+      if (hasParallelGroups) {
+        this.throwOnParallelReferenceErrors(
+          resolvedPrompts,
+          normalizedTopology.parallelGroups,
+          parsed
+        );
+      }
 
       // Build PromptFile with workflow-level properties and prompts array
       const promptFile: PromptFile = {
         steps: resolvedPrompts,
       };
+      if (hasParallelGroups) {
+        promptFile.parallelGroups = normalizedTopology.parallelGroups;
+      }
 
       const rawFinalStep = parsed.finalStep;
       if (rawFinalStep) {
@@ -347,6 +417,182 @@ export class PromptFileParser {
     }
 
     throw new Error("Invalid prompt file format");
+  }
+
+  /**
+   * Validate authored-only parallel syntax before AJV so structural errors
+   * remain specific instead of being reduced to a oneOf failure.
+   */
+  private validateAuthoredParallelStructure(parsed: unknown): void {
+    if (!isObject(parsed)) {
+      return;
+    }
+
+    if (hasOwn(parsed, "parallel")) {
+      throw new Error(
+        "`parallel` is only accepted as an item of the root `steps` array"
+      );
+    }
+
+    const finalStep = parsed.finalStep;
+    if (isObject(finalStep) && hasOwn(finalStep, "parallel")) {
+      throw new Error("finalStep cannot be parallel");
+    }
+
+    if (!Array.isArray(parsed.steps)) {
+      return;
+    }
+
+    const authoredGroups = parsed.steps.filter(
+      (item): item is Record<string, unknown> =>
+        isObject(item) && hasOwn(item, "parallel")
+    );
+    if (authoredGroups.length > 0 && parsed.parallelGroups !== undefined) {
+      throw new Error(
+        "A workflow cannot contain both `parallel:` items and root `parallelGroups`"
+      );
+    }
+
+    parsed.steps.forEach((item, stepIndex) => {
+      if (!isObject(item) || !hasOwn(item, "parallel")) {
+        return;
+      }
+      if (!Array.isArray(item.parallel)) {
+        throw new Error(`Step ${stepIndex + 1}: parallel must be an array`);
+      }
+      if (item.parallel.length < 2) {
+        throw new Error(
+          `Step ${stepIndex + 1}: parallel must contain at least two prompt or script steps`
+        );
+      }
+      item.parallel.forEach((member, memberIndex) => {
+        if (isObject(member) && hasOwn(member, "parallel")) {
+          throw new Error(
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} cannot be a nested parallel container`
+          );
+        }
+        if (!this.isPromptOrScriptSource(member)) {
+          throw new Error(
+            `Step ${stepIndex + 1}: parallel member ${memberIndex + 1} must be a prompt or script step`
+          );
+        }
+      });
+    });
+  }
+
+  private isPromptOrScriptSource(source: unknown): boolean {
+    if (!isObject(source)) {
+      return false;
+    }
+    if (source.type === STEP_TYPES.SCRIPT) {
+      return true;
+    }
+    return (
+      (source.type === undefined || source.type === STEP_TYPES.PROMPT) &&
+      typeof source.prompt === "string"
+    );
+  }
+
+  private getParallelReferenceErrors(
+    items: WorkflowStep[],
+    parallelGroups: ParallelGroupDefinition[],
+    workflowProperties?: ParallelValidationProperties
+  ): string[] {
+    const errors: string[] = [];
+
+    for (const group of parallelGroups) {
+      if (!group || typeof group !== "object") {
+        continue;
+      }
+      if (
+        !Number.isInteger(group.startIndex) ||
+        !Number.isInteger(group.endIndex) ||
+        group.startIndex < 0 ||
+        group.endIndex >= items.length ||
+        group.startIndex > group.endIndex
+      ) {
+        continue;
+      }
+
+      const groupStepNumbers = Array.from(
+        { length: group.endIndex - group.startIndex + 1 },
+        (_, offset) => group.startIndex + offset + 1
+      );
+      const groupStepNumberText = groupStepNumbers.join(", ");
+
+      for (
+        let stepIndex = group.startIndex;
+        stepIndex <= group.endIndex;
+        stepIndex++
+      ) {
+        const step = items[stepIndex];
+        if (isScriptStep(step)) {
+          continue;
+        }
+
+        const priorContext =
+          step.priorContext !== undefined
+            ? step.priorContext
+            : workflowProperties?.priorContext;
+        const sessionId =
+          step.sessionId !== undefined
+            ? step.sessionId
+            : workflowProperties?.sessionId;
+
+        const numericPriorContext = this.getNumericReferences(priorContext);
+        for (const reference of numericPriorContext) {
+          if (
+            groupStepNumbers.includes(reference) &&
+            reference !== stepIndex + 1
+          ) {
+            errors.push(
+              `Step ${stepIndex + 1}: Numeric priorContext reference ${reference} cannot target a sibling in parallel group (steps ${groupStepNumberText})`
+            );
+          }
+        }
+
+        const numericSessionId = this.getNumericReferences(sessionId);
+        for (const reference of numericSessionId) {
+          if (
+            groupStepNumbers.includes(reference) &&
+            reference !== stepIndex + 1
+          ) {
+            errors.push(
+              `Step ${stepIndex + 1}: Numeric sessionId reference ${reference} cannot target a sibling in parallel group (steps ${groupStepNumberText})`
+            );
+          }
+        }
+      }
+    }
+
+    return errors;
+  }
+
+  private getNumericReferences(value: unknown): number[] {
+    if (typeof value === "number") {
+      return [value];
+    }
+    if (Array.isArray(value)) {
+      return value.filter(
+        (reference): reference is number => typeof reference === "number"
+      );
+    }
+    return [];
+  }
+
+  private throwOnParallelReferenceErrors(
+    items: WorkflowStep[],
+    parallelGroups: ParallelGroupDefinition[],
+    workflowProperties?: ParallelValidationProperties
+  ): void {
+    const errors = this.getParallelReferenceErrors(
+      items,
+      parallelGroups,
+      workflowProperties
+    );
+    if (errors.length > 0) {
+      throw new Error(errors.join("; "));
+    }
   }
 
   /**
@@ -452,7 +698,11 @@ export class PromptFileParser {
    */
   validateWorkflowSteps(
     items: WorkflowStep[],
-    options?: { finalStep?: WorkflowStep | null }
+    options?: {
+      finalStep?: WorkflowStep | null;
+      parallelGroups?: ParallelGroupDefinition[];
+      workflowProperties?: ParallelValidationProperties;
+    }
   ): {
     valid: boolean;
     errors: string[];
@@ -461,6 +711,24 @@ export class PromptFileParser {
 
     if (!hasExecutableSteps({ steps: items, finalStep: options?.finalStep })) {
       errors.push("No steps found");
+    }
+
+    if (options?.parallelGroups !== undefined) {
+      try {
+        normalizeParallelGroupTopology({
+          steps: items,
+          parallelGroups: options.parallelGroups,
+        });
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+      errors.push(
+        ...this.getParallelReferenceErrors(
+          items,
+          options.parallelGroups,
+          options.workflowProperties
+        )
+      );
     }
 
     (items ?? []).forEach((item, index) => {

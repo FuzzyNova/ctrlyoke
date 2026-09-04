@@ -47,6 +47,17 @@ $step:1,3-5
 
 These let a prompt pull prior ctrlyoke output into the prompt text.
 
+## Context at a parallel boundary
+
+For a member of a parallel group, `previous` and `all` are evaluated at the
+group's pre-execution boundary. They include output from completed steps before
+the group and never include a sibling's partial or terminal output. Numeric
+prior-context references use the same boundary: a member may reference an
+earlier step before the group, but cannot reference another member in the same
+group. After the join, the following step can use numeric references to the
+flattened member step numbers (for example, `priorContext: [2, 3, 4]`) to
+consume the settled group output.
+
 ## How context reaches CLI harnesses
 
 The reference syntax above is what you author. ctrlyoke also provides a delivery layer underneath it so a complex expanded prompt does not have to become one enormous terminal command or one undifferentiated file.

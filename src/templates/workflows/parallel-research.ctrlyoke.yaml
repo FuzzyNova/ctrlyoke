@@ -1,0 +1,42 @@
+_templateMeta:
+  name: Parallel Research
+  description: "Run three independent research passes concurrently, then synthesize their findings."
+  variables:
+    researchTopic:
+      type: text
+      multiline: true
+      description: What should the research cover?
+
+resumeSession: false
+
+steps:
+  - parallel:
+      - name: research-architecture
+        prompt: |
+          {researchTopic}
+
+          Research the relevant architecture and identify the files and
+          components that matter most.
+      - name: research-behavior
+        prompt: |
+          {researchTopic}
+
+          Research the current behavior, important edge cases, and existing
+          tests that constrain a safe change.
+      - name: research-options
+        prompt: |
+          {researchTopic}
+
+          Research viable implementation approaches and call out tradeoffs or
+          risks visible in the codebase.
+    failFast: true
+
+  - name: synthesize
+    priorContext: [1, 2, 3]
+    prompt: |
+      Synthesize the independent research for this topic:
+
+      {researchTopic}
+
+      Produce a concise recommendation with the relevant files, constraints,
+      risks, and a suggested next step.

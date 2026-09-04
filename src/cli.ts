@@ -49,7 +49,10 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
-import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
+import {
+  CliTerminalFormatter,
+  type CliOutputTarget,
+} from "./cli/CliTerminalFormatter";
 import {
   buildCliJsonResult,
   buildCliPreviewJsonResult,
@@ -437,7 +440,11 @@ async function runCommand(
   Log.initializeCli(workingDir, options.verbose);
 
   // Detect execution mode: explicit flags override TTY auto-detection
-  const { executionMode, hostCanProvidePty } = resolveCliExecutionMode(
+  const {
+    executionMode,
+    hostCanProvidePty,
+    supportsConcurrentInteractiveSessions,
+  } = resolveCliExecutionMode(
     options,
     !!process.stdout.isTTY,
     !!process.stdin.isTTY
@@ -607,6 +614,7 @@ async function runCommand(
       harness,
       workingDir,
       hostCanProvidePty,
+      supportsConcurrentInteractiveSessions,
       platform,
       factory,
       userFeedbackSink
@@ -670,6 +678,7 @@ async function runCommand(
     () => {}, // no status bar update
     workingDir,
     hostCanProvidePty,
+    supportsConcurrentInteractiveSessions,
     undefined,
     userFeedbackSink,
     undefined,
@@ -690,17 +699,40 @@ async function runCommand(
     instance.onPromptStart((data) => {
       CliTerminalFormatter.renderPromptHeader(data);
     });
-    instance.onStreamingEvents((events) => {
-      CliTerminalFormatter.renderEvents(events);
+    instance.onTargetStreamingEvents((data) => {
+      CliTerminalFormatter.renderEvents(data.events, {
+        stepIndex:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? data.target.stepIndex
+            : data.target.loopIndex,
+        stepName: data.stepName,
+        key:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `queue:${data.target.stepIndex}`
+            : `final:${data.target.loopIndex}`,
+      } satisfies CliOutputTarget);
     });
-    instance.onStreamingChunk((chunk) => {
-      process.stdout.write(chunk);
+    instance.onTargetStreamingChunk((data) => {
+      CliTerminalFormatter.renderStreamingChunk(data.chunk, {
+        stepIndex:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? data.target.stepIndex
+            : data.target.loopIndex,
+        stepName: data.stepName,
+        key:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `queue:${data.target.stepIndex}`
+            : `final:${data.target.loopIndex}`,
+      } satisfies CliOutputTarget);
     });
     instance.onWorkflowStatusMessage((data) => {
       CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
     });
     instance.onPromptComplete((data) => {
-      CliTerminalFormatter.flushStreamingBuffer();
+      CliTerminalFormatter.flushStreamingBuffer({
+        stepIndex: data.stepIndex,
+        stepName: data.stepName,
+      });
       CliTerminalFormatter.renderStats(data);
     });
   }
@@ -969,6 +1001,7 @@ async function dryRunCommand(
   harness: HarnessId,
   workingDir: string,
   hostCanProvidePty: boolean,
+  supportsConcurrentInteractiveSessions: boolean,
   platform: CliAdapter,
   factory: IntegrationFactory,
   userFeedbackSink: ConsoleUserFeedbackSink
@@ -1046,6 +1079,7 @@ async function dryRunCommand(
       namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty,
+      supportsConcurrentInteractiveSessions,
       cwd: workingDir,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),

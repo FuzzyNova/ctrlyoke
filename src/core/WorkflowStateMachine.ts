@@ -48,7 +48,7 @@ export class WorkflowStateMachine {
   private readonly onAttemptTransitionEmitter =
     new TypedEmitter<WorkflowAttemptTransition>();
   private readonly attempts = new Map<string, WorkflowAttemptState>();
-  private activeAttemptKey: string | undefined;
+  private readonly activeAttemptKeys = new Set<string>();
 
   public readonly onDidTransition = this.onTransitionEmitter.event;
   public readonly onDidAttemptTransition =
@@ -93,10 +93,10 @@ export class WorkflowStateMachine {
     );
   }
 
-  getActiveAttempt(): WorkflowAttemptState | undefined {
-    return this.activeAttemptKey
-      ? this.cloneAttemptState(this.attempts.get(this.activeAttemptKey))
-      : undefined;
+  getActiveAttempts(): WorkflowAttemptState[] {
+    return Array.from(this.activeAttemptKeys)
+      .map((key) => this.cloneAttemptState(this.attempts.get(key)))
+      .filter((attempt): attempt is WorkflowAttemptState => attempt !== undefined);
   }
 
   private getAttemptKey(target: WorkflowAttemptTarget): string {
@@ -168,7 +168,7 @@ export class WorkflowStateMachine {
     };
 
     this.attempts.set(key, current);
-    this.activeAttemptKey = key;
+    this.activeAttemptKeys.add(key);
     this.emitAttemptTransition(
       WORKFLOW_ATTEMPT_COMMANDS.BEGIN,
       this.cloneAttemptState(current)!,
@@ -217,9 +217,7 @@ export class WorkflowStateMachine {
     };
 
     this.attempts.set(key, current);
-    if (this.activeAttemptKey === key) {
-      this.activeAttemptKey = undefined;
-    }
+    this.activeAttemptKeys.delete(key);
     this.emitAttemptTransition(
       WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
       this.cloneAttemptState(current)!,
@@ -260,9 +258,7 @@ export class WorkflowStateMachine {
     };
 
     this.attempts.set(key, current);
-    if (this.activeAttemptKey === key) {
-      this.activeAttemptKey = undefined;
-    }
+    this.activeAttemptKeys.delete(key);
     this.emitAttemptTransition(
       WORKFLOW_ATTEMPT_COMMANDS.COMPLETE,
       this.cloneAttemptState(current)!,
@@ -305,9 +301,7 @@ export class WorkflowStateMachine {
     };
 
     this.attempts.set(key, current);
-    if (this.activeAttemptKey === key) {
-      this.activeAttemptKey = undefined;
-    }
+    this.activeAttemptKeys.delete(key);
     this.emitAttemptTransition(
       WORKFLOW_ATTEMPT_COMMANDS.FAIL,
       this.cloneAttemptState(current)!,
@@ -350,9 +344,7 @@ export class WorkflowStateMachine {
     };
 
     this.attempts.set(key, current);
-    if (this.activeAttemptKey === key) {
-      this.activeAttemptKey = undefined;
-    }
+    this.activeAttemptKeys.delete(key);
     this.emitAttemptTransition(
       WORKFLOW_ATTEMPT_COMMANDS.CANCEL,
       this.cloneAttemptState(current)!,
@@ -362,26 +354,63 @@ export class WorkflowStateMachine {
     return this.cloneAttemptState(current)!;
   }
 
-  cancelActiveAttempt(
+  cancelActiveAttempts(
     failureReason?: string,
     timestampMs: number = Date.now()
-  ): WorkflowAttemptState | undefined {
-    if (!this.activeAttemptKey) {
-      return undefined;
-    }
-
-    const activeAttempt = this.attempts.get(this.activeAttemptKey);
-    if (!activeAttempt) {
-      this.activeAttemptKey = undefined;
-      return undefined;
-    }
-
-    return this.cancelAttempt(
-      activeAttempt.target,
-      activeAttempt.attemptIndex,
-      failureReason,
-      timestampMs
+  ): WorkflowAttemptState[] {
+    const activeAttempts = this.getActiveAttempts();
+    return activeAttempts.map((activeAttempt) =>
+      this.cancelAttempt(
+        activeAttempt.target,
+        activeAttempt.attemptIndex,
+        failureReason,
+        timestampMs
+      )
     );
+  }
+
+  getRetryCount(target: WorkflowAttemptTarget): number {
+    const attempt = this.attempts.get(this.getAttemptKey(target));
+    if (
+      !attempt ||
+      (attempt.status !== WORKFLOW_ATTEMPT_STATUS.RUNNING &&
+        attempt.status !== WORKFLOW_ATTEMPT_STATUS.RETRYING)
+    ) {
+      return 0;
+    }
+    return attempt.retryCount ?? 0;
+  }
+
+  incrementRetryCount(target: WorkflowAttemptTarget): number {
+    const key = this.getAttemptKey(target);
+    let attempt = this.attempts.get(key);
+    if (!attempt) {
+      attempt = {
+        target: { ...target },
+        attemptIndex: 0,
+        status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
+        startedAt: Date.now(),
+      };
+      this.attempts.set(key, attempt);
+      this.activeAttemptKeys.add(key);
+    }
+
+    const retryCount = (attempt?.retryCount ?? 0) + 1;
+    if (attempt) {
+      attempt.retryCount = retryCount;
+    }
+    return retryCount;
+  }
+
+  resetRetryCount(target: WorkflowAttemptTarget): void {
+    const attempt = this.attempts.get(this.getAttemptKey(target));
+    if (
+      attempt &&
+      (attempt.status === WORKFLOW_ATTEMPT_STATUS.RUNNING ||
+        attempt.status === WORKFLOW_ATTEMPT_STATUS.RETRYING)
+    ) {
+      attempt.retryCount = 0;
+    }
   }
 
   // ─── Named transitions ────────────────────────────────────────────────────────
@@ -488,7 +517,7 @@ export class WorkflowStateMachine {
     }
 
     const timestampMs = Date.now();
-    this.cancelActiveAttempt(undefined, timestampMs);
+    this.cancelActiveAttempts(undefined, timestampMs);
 
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.CANCELLING;
@@ -569,7 +598,7 @@ export class WorkflowStateMachine {
     this._totalPausedDuration = 0;
     this._executionEndTime = undefined;
     this.attempts.clear();
-    this.activeAttemptKey = undefined;
+    this.activeAttemptKeys.clear();
     return changed;
   }
 
@@ -648,7 +677,7 @@ export class WorkflowStateMachine {
     this._totalPausedDuration = snapshot.totalPausedDuration;
     this._executionEndTime = snapshot.executionEndTime;
     this.attempts.clear();
-    this.activeAttemptKey = undefined;
+    this.activeAttemptKeys.clear();
   }
 
   private finishExecutionTimer(): void {

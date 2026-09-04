@@ -1,10 +1,11 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStepContextMenu } from "@hooks/useStepContextMenu";
-import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
+import { EXECUTION_STATES, MESSAGE_TYPES, STEP_TYPES } from "@/types/messages";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 
 function TestHarness({
   step,
@@ -12,12 +13,21 @@ function TestHarness({
   direction = "forward",
   latestOutput,
   runtimeMeta,
+  parallelGroups = [],
+  totalSteps = 2,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
   direction?: "rewind" | "forward";
   latestOutput?: CliOutput | null;
   runtimeMeta?: { sessionId?: string; elapsed?: number };
+  parallelGroups?: Array<{
+    id: string;
+    startIndex: number;
+    endIndex: number;
+    failFast: boolean;
+  }>;
+  totalSteps?: number;
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
     isExternallyManaged: false,
@@ -25,9 +35,10 @@ function TestHarness({
     canPasteStep: true,
     executionState: EXECUTION_STATES.IDLE,
     confirmResetOperations: false,
-    totalSteps: 2,
+    totalSteps,
     currentStep: 0,
     pendingRewind,
+    parallelGroups,
   });
 
   return (
@@ -59,6 +70,8 @@ describe("useStepContextMenu", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
+    useWorkflowStore.getState().resetWorkflow();
+    useWorkflowStore.temporal.getState().clear();
     useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
     readText.mockReset();
@@ -240,5 +253,56 @@ describe("useStepContextMenu", () => {
     expect(
       screen.getByRole("button", { name: "Discard Continuation" })
     ).toBeInTheDocument();
+  });
+
+  it("groups an ungrouped step with its next neighbor", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
+    render(
+      <TestHarness
+        step={{ prompt: "one" }}
+        totalSteps={2}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Group with next step" })
+    );
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REORDER_PROMPTS,
+      newPendingOrder: [0, 1],
+      pendingGroups: [{ start: 0, end: 1, failFast: true }],
+    });
+  });
+
+  it("ungroups a pending group through the shared reorder message", () => {
+    const parallelGroups = [
+      { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+    ];
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      parallelGroups,
+    });
+    render(
+      <TestHarness
+        step={{ prompt: "one" }}
+        parallelGroups={parallelGroups}
+        totalSteps={2}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ungroup parallel steps" })
+    );
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REORDER_PROMPTS,
+      newPendingOrder: [0, 1],
+      pendingGroups: [],
+    });
   });
 });

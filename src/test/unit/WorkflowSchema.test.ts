@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
+import { PromptFileParser } from "../../core/PromptFileParser";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -28,6 +29,39 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("parses and validates every bundled workflow template", async () => {
+    const workflowsDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(workflowsDirectory)
+      .filter(
+        (fileName) =>
+          fileName.endsWith(".ctrlyoke.yaml") ||
+          fileName.endsWith(".ctrlyoke.yml") ||
+          fileName.endsWith(".ctrlyoke.json")
+      )
+      .sort();
+    const parser = new PromptFileParser();
+
+    for (const fileName of templateFiles) {
+      const filePath = path.join(workflowsDirectory, fileName);
+      const parsed = await parser.parsePromptFile(filePath);
+      assert.ok(parsed, `${fileName} should parse`);
+      const validation = parser.validateWorkflowSteps(parsed.steps ?? [], {
+        finalStep: parsed.finalStep,
+        parallelGroups: parsed.parallelGroups,
+        workflowProperties: parsed,
+      });
+      assert.deepStrictEqual(
+        validation,
+        { valid: true, errors: [] },
+        `${fileName}: ${validation.errors.join("; ")}`
+      );
+    }
+  });
+
   test("accepts a harness placeholder in a declared template", () => {
     const valid = validate({
       _templateMeta: {
@@ -48,6 +82,75 @@ suite("Workflow template schema", () => {
     });
 
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
+  test("accepts a harness placeholder inside a declared template group", () => {
+    const valid = validate({
+      _templateMeta: {
+        name: "Parallel harness template",
+        variables: {
+          selectedHarness: { type: "harness" },
+        },
+      },
+      steps: [
+        {
+          parallel: [
+            { prompt: "Research one", harness: "{selectedHarness}" },
+            { prompt: "Research two", harness: "{selectedHarness}" },
+          ],
+        },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
+  test("accepts flat parallel members and rejects unsupported parallel shapes", () => {
+    const valid = validate({
+      steps: [
+        { prompt: "before" },
+        {
+          parallel: [{ prompt: "one" }, { type: "script", script: "npm test" }],
+          failFast: false,
+        },
+        { prompt: "after" },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+
+    const invalidWorkflows = [
+      {
+        steps: [
+          {
+            parallel: [{ prompt: "one" }, { parallel: [{ prompt: "nested" }] }],
+          },
+        ],
+      },
+      {
+        steps: [{ parallel: [{ prompt: "only member" }] }],
+      },
+      {
+        steps: [{ prompt: "queue step" }],
+        finalStep: { parallel: [{ prompt: "one" }, { prompt: "two" }] },
+      },
+      {
+        steps: [
+          {
+            parallel: [
+              { prompt: "one", harness: "{selectedHarness}" },
+              { prompt: "two" },
+            ],
+          },
+        ],
+      },
+    ];
+
+    for (const workflow of invalidWorkflows) {
+      assert.strictEqual(
+        validate(workflow),
+        false,
+        JSON.stringify(validate.errors)
+      );
+    }
   });
 
   test("accepts valid secret grants on prompt and script steps", () => {

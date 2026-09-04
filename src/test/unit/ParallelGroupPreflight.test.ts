@@ -1,0 +1,148 @@
+import * as assert from "assert";
+import { suite, test } from "mocha";
+import {
+  HARNESS_IDS,
+  PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
+} from "../../types/DashboardConstants";
+import type {
+  ParallelGroupDefinition,
+  PromptFile,
+} from "../../types/CtrlYokeTypes";
+import type { ExecutionPropertyDefaults } from "../../types/ExecutionPropertyResolver";
+import { preflightParallelGroup } from "../../core/ParallelGroupPreflight";
+
+const group: ParallelGroupDefinition = {
+  id: "group",
+  startIndex: 1,
+  endIndex: 2,
+  failFast: true,
+};
+
+function defaults(
+  overrides: Partial<ExecutionPropertyDefaults> = {}
+): ExecutionPropertyDefaults {
+  return {
+    harness: HARNESS_IDS.COPILOT_CLI,
+    modelsByHarness: {},
+    additionalArgsByHarness: {},
+    executionMode: "headless",
+    resumeSession: false,
+    mcpAvailability: "auto",
+    mcpServers: [],
+    hooks: null,
+    ...overrides,
+  };
+}
+
+async function run(
+  workflow: PromptFile,
+  defaultsValue = defaults(),
+  supportsConcurrentInteractiveSessions = true,
+  fanOutEnabled = true
+) {
+  return preflightParallelGroup({
+    workflow,
+    group:
+      workflow.parallelGroups?.[0] ?? {
+        ...group,
+        startIndex: 0,
+        endIndex: 1,
+      },
+    defaults: defaultsValue,
+    hostCanProvidePty: true,
+    supportsConcurrentInteractiveSessions,
+    configuredWidth: 6,
+    fanOutEnabled,
+  });
+}
+
+suite("ParallelGroupPreflight", () => {
+  test("finds inherited/default explicit session collisions", async () => {
+    const result = await run(
+      {
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      defaults({ resumeSession: true, sessionId: "shared-session" })
+    );
+    const collision = result.issues.find(
+      (issue) =>
+        issue.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+    );
+    assert.deepStrictEqual(collision?.memberIndices, [0, 1]);
+    assert.match(collision?.message ?? "", /Step 1.*Step 2/);
+  });
+
+  test("finds same-harness auto-resume collisions and allows different harnesses", async () => {
+    const before = {
+      prompt: "before",
+      _runtime: {
+        harness: HARNESS_IDS.COPILOT_CLI,
+        model: "model",
+        sessionId: "prior-session",
+        startedAt: 1,
+        completedAt: 2,
+      },
+    } as const;
+    const sameHarness = await run({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      resumeSession: true,
+      steps: [
+        before,
+        { name: "alpha", prompt: "one" },
+        { name: "beta", prompt: "two" },
+      ],
+      parallelGroups: [group],
+    });
+    assert.match(
+      sameHarness.issues.find(
+        (issue) =>
+          issue.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+      )?.message ?? "",
+      /Step 2 \("alpha"\).*Step 3 \("beta"\)/
+    );
+
+    const differentHarness = await run({
+      resumeSession: true,
+      steps: [
+        before,
+        { prompt: "one", harness: HARNESS_IDS.COPILOT_CLI },
+        { prompt: "two", harness: HARNESS_IDS.CLAUDE_CLI },
+      ],
+      parallelGroups: [group],
+    });
+    assert.strictEqual(
+      differentHarness.issues.some(
+        (issue) =>
+          issue.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+      ),
+      false
+    );
+  });
+
+  test("rejects dynamic queue and interactive multiplexing at group index zero", async () => {
+    const result = await run(
+      {
+        executionMode: "interactive",
+        mcpServers: ["ctrlyoke"],
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      defaults(),
+      false,
+      false
+    );
+    assert.strictEqual(result.groupStartBoundary, 0);
+    assert.strictEqual(result.effectiveWidth, 1);
+    assert.deepStrictEqual(
+      new Set(result.issues.map((issue) => issue.code)),
+      new Set([
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
+      ])
+    );
+  });
+});

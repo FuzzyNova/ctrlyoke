@@ -132,6 +132,7 @@ function getRowHeightBucket(row: OutputRenderRow): string {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
+    case OUTPUT_ROW_KINDS.STEP_SWITCH:
     case OUTPUT_ROW_KINDS.STATUS:
     case OUTPUT_ROW_KINDS.CLI_HEADER:
     case OUTPUT_ROW_KINDS.PROMPT:
@@ -462,7 +463,8 @@ export function useOutputVirtualization({
           rowTopPx: element.getBoundingClientRect().top,
           anchorTopPx:
             scrollElement.getBoundingClientRect().top +
-            (target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+            (target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW ||
+            target.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
               ? target.viewportOffsetPx
               : 0),
         })
@@ -544,7 +546,8 @@ export function useOutputVirtualization({
         delta,
         scrollTop: outputRef.current?.scrollTop ?? 0,
         targetRowIndex:
-          target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+          target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW ||
+          target.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
             ? (rowIndexByKey.get(target.rowKey) ?? null)
             : null,
         overscan: outputOverscanRef.current,
@@ -618,7 +621,9 @@ export function useOutputVirtualization({
         mountedCount: mountedRowElementsRef.current.size,
         targetKind: scrollTargetRef.current.kind,
         targetRowKey:
-          scrollTargetRef.current.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+          scrollTargetRef.current.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW ||
+          scrollTargetRef.current.kind ===
+            OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
             ? scrollTargetRef.current.rowKey
             : undefined,
       });

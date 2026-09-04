@@ -44,6 +44,7 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
     onStatusMessage: (stepIndex, message, severity) =>
       statusMessages.push({ stepIndex, message, severity }),
     getWorkflowStep: () => undefined,
+    getParallelGroupId: () => undefined,
     getTotalSteps: () => 3,
     ...overrides,
   };
@@ -839,6 +840,47 @@ suite("OutputCaptureBuffer", () => {
           c.args[1]?.isStreaming
       );
       assert.ok(streamingOutput);
+    });
+
+    test("should replay every active in-flight step after a reconnect", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+      for (const [stepIndex, text] of [
+        [1, "first target"],
+        [3, "second target"],
+      ] as const) {
+        buffer.captureOutputInit(
+          stepIndex,
+          `prompt ${stepIndex}`,
+          undefined,
+          undefined,
+          "/ws",
+          500,
+          0,
+          false
+        );
+        buffer.captureChunk(stepIndex, text);
+      }
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.PAUSED, currentIndex: 1 },
+        null,
+        "tag",
+        new Set(["queue:1", "queue:3"])
+      );
+
+      const streamingCalls = calls.filter(
+        (c) =>
+          c.method === DASHBOARD_SINK_METHODS.UPDATE_CLI_OUTPUT &&
+          c.args[1]?.isStreaming
+      );
+      assert.deepStrictEqual(
+        streamingCalls.map((call) => call.args[0]),
+        [1, 3]
+      );
     });
 
     test("should send retryState before streaming output when attemptIndex > 0", () => {

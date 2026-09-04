@@ -314,6 +314,7 @@ suite("WorkflowOrchestrator active queue context key", () => {
       steps: Array.from({ length: stepCount }, (_, index) => ({
         prompt: `step ${index}`,
       })),
+      parallelGroups: [],
       results: [],
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
@@ -2028,7 +2029,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   // dumped all of them into whatever view the client was showing. The guard
   // cannot live in the `boundWorkflowId ?? ...` fallback: bind returns non-null
   // on every lineage switch, which is exactly when this happens.
-  test("does not overlay buffered output when the addressed run is not the executing run", async () => {
+  test("uses the historical run's groups when it differs from the draft", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-historical-run-view-")
     );
@@ -2039,7 +2040,15 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         JSON.stringify({
           workflowName: "Completed run",
           definitionRevision: 4,
-          steps: [{ prompt: "Already persisted" }],
+          steps: [{ prompt: "Already persisted" }, { prompt: "Grouped member" }],
+          parallelGroups: [
+            {
+              id: "historical-group",
+              startIndex: 0,
+              endIndex: 1,
+              failFast: true,
+            },
+          ],
         })
       );
 
@@ -2051,6 +2060,18 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const workflowKey = "completed-lineage" as never;
       const runRef = "run-2026-01-01T00-00-00-000Z" as never;
       const operations: string[] = [];
+      let loadedWorkingFile: { parallelGroups?: unknown } | undefined;
+      await fs.mkdir(WorkflowPaths.draftDir(workspace, workflowKey), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        WorkflowPaths.draftFilePath(workspace, workflowKey),
+        JSON.stringify({
+          workflowName: "Current draft",
+          definitionRevision: 1,
+          steps: [{ prompt: "Draft only" }],
+        })
+      );
       await writeRunTimeline(workspace, workflowKey, runRef, "completed");
 
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
@@ -2086,7 +2107,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       await orchestrator.loadRunViewForClient(
         { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         (message) => {
-          operations.push((message as { type?: string }).type ?? "unknown");
+          const typed = message as {
+            type?: string;
+            workingFile?: { parallelGroups?: unknown };
+          };
+          operations.push(typed.type ?? "unknown");
+          if (typed.type === MESSAGE_TYPES.RUN_VIEW_LOADED) {
+            loadedWorkingFile = typed.workingFile;
+          }
         },
         "browser:switch",
         "run-view-request-historical"
@@ -2102,6 +2130,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         !operations.includes("buffered-output"),
         "a historical run view must be described by its snapshot alone"
       );
+      assert.deepStrictEqual(loadedWorkingFile?.parallelGroups, [
+        {
+          id: "historical-group",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

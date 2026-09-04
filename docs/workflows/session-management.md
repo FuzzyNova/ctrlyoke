@@ -61,3 +61,23 @@ The schema also supports `sessionId: "finalStep"` to resume the most recent fina
 ## Provider-aware behavior
 
 ctrlyoke does not blindly reuse sessions across harnesses. If a later step switches harness, the session resume logic only reuses compatible sessions.
+
+## Sessions at a parallel group boundary
+
+Parallel members resolve their effective properties from one immutable snapshot
+at the point where the group starts. `resumeSession: true`, inherited defaults,
+and numeric `sessionId` references therefore use only sessions completed before
+the group, not a sibling that is starting in the same group. Numeric references
+to another member of the group are rejected during parsing/preflight.
+
+Every concurrently running prompt member must have a distinct effective session
+for its harness. This collision check happens after workflow defaults,
+step-level overrides, and automatic session resolution are applied, so two
+members that inherit the same session are rejected before any member launches.
+Different harnesses may use sessions with the same provider-specific ID because
+session identity includes the harness.
+
+Group members still share the workflow's workspace and one managed or named
+worktree per run. Terminal controller arbitration is workflow-scoped rather
+than session-scoped, even though each member receives its own terminal session
+when required.

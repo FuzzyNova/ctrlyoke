@@ -20,6 +20,7 @@ suite("CliExecutionMode", () => {
       {
         executionMode: EXECUTION_MODES.HEADLESS,
         hostCanProvidePty: false,
+        supportsConcurrentInteractiveSessions: false,
       }
     );
   });
@@ -30,6 +31,7 @@ suite("CliExecutionMode", () => {
       {
         executionMode: EXECUTION_MODES.INTERACTIVE,
         hostCanProvidePty: true,
+        supportsConcurrentInteractiveSessions: false,
       }
     );
   });
@@ -39,6 +41,10 @@ suite("CliExecutionMode", () => {
 
     assert.strictEqual(resolved.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(resolved.hostCanProvidePty, false);
+    assert.strictEqual(
+      resolved.supportsConcurrentInteractiveSessions,
+      false
+    );
     assert.notStrictEqual(resolved.executionMode, EXECUTION_MODES.INTERACTIVE);
   });
 
@@ -46,6 +52,7 @@ suite("CliExecutionMode", () => {
     assert.deepStrictEqual(resolveCliExecutionMode(options(), true, true), {
       executionMode: EXECUTION_MODES.INTERACTIVE,
       hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: false,
     });
   });
 });

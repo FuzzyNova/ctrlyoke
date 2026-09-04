@@ -266,6 +266,215 @@ suite("PromptFileParser Tests", () => {
     });
   });
 
+  suite("parallel groups", () => {
+    async function writeWorkflow(
+      extension: ".ctrlyoke.json" | ".ctrlyoke.yaml",
+      content: string
+    ): Promise<{ tempDir: string; filePath: string }> {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-parallel-")
+      );
+      const filePath = path.join(tempDir, `parallel${extension}`);
+      await fs.writeFile(filePath, content, "utf8");
+      return { tempDir, filePath };
+    }
+
+    test("should flatten JSON parallel containers and assign flat indices", async () => {
+      const { tempDir, filePath } = await writeWorkflow(
+        ".ctrlyoke.json",
+        JSON.stringify({
+          steps: [
+            { prompt: "before" },
+            {
+              parallel: [
+                { prompt: "parallel prompt" },
+                { type: "script", script: "echo parallel script" },
+              ],
+              failFast: false,
+            },
+            { prompt: "after" },
+          ],
+        })
+      );
+
+      try {
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result);
+        assert.deepStrictEqual(
+          result.steps?.map((step) =>
+            "prompt" in step ? step.prompt : step.script
+          ),
+          ["before", "parallel prompt", "echo parallel script", "after"]
+        );
+        assert.strictEqual(result.parallelGroups?.length, 1);
+        assert.deepStrictEqual(result.parallelGroups?.[0], {
+          id: result.parallelGroups?.[0].id,
+          startIndex: 1,
+          endIndex: 2,
+          failFast: false,
+        });
+        assert.match(result.parallelGroups?.[0].id ?? "", /^[0-9a-f-]{36}$/);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("should parse YAML groups at index zero and default failFast", async () => {
+      const { tempDir, filePath } = await writeWorkflow(
+        ".ctrlyoke.yaml",
+        [
+          "steps:",
+          "  - parallel:",
+          "      - prompt: first",
+          "      - prompt: second",
+          "  - prompt: after",
+        ].join("\n")
+      );
+
+      try {
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result);
+        assert.strictEqual(result.steps?.length, 3);
+        assert.deepStrictEqual(result.parallelGroups?.[0], {
+          id: result.parallelGroups?.[0].id,
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        });
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    const invalidCases: Array<{
+      name: string;
+      workflow: unknown;
+      message: RegExp;
+    }> = [
+      {
+        name: "root parallel property",
+        workflow: {
+          parallel: [{ prompt: "one" }, { prompt: "two" }],
+        },
+        message: /parallel.*only accepted.*root `steps` array/i,
+      },
+      {
+        name: "single-member group",
+        workflow: {
+          steps: [{ parallel: [{ prompt: "only" }] }],
+        },
+        message: /Step 1: parallel must contain at least two/i,
+      },
+      {
+        name: "nested group",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                {
+                  parallel: [
+                    { prompt: "nested one" },
+                    { prompt: "nested two" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        message: /nested parallel container/i,
+      },
+      {
+        name: "parallel final step",
+        workflow: {
+          steps: [{ prompt: "queued" }],
+          finalStep: {
+            parallel: [{ prompt: "one" }, { prompt: "two" }],
+          },
+        },
+        message: /finalStep cannot be parallel/i,
+      },
+      {
+        name: "mixed authored and normalized groups",
+        workflow: {
+          steps: [
+            {
+              parallel: [{ prompt: "one" }, { prompt: "two" }],
+            },
+          ],
+          parallelGroups: [
+            { id: "existing", startIndex: 0, endIndex: 1, failFast: true },
+          ],
+        },
+        message: /both `parallel:` items and root `parallelGroups`/i,
+      },
+      {
+        name: "invalid normalized range",
+        workflow: {
+          steps: [{ prompt: "one" }, { prompt: "two" }],
+          parallelGroups: [
+            { id: "invalid", startIndex: 0, endIndex: 0, failFast: true },
+          ],
+        },
+        message: /must contain at least two steps/i,
+      },
+      {
+        name: "numeric priorContext sibling",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one", priorContext: [2] },
+                { prompt: "two" },
+              ],
+            },
+          ],
+        },
+        message: /Step 1: Numeric priorContext reference 2.*steps 1, 2/i,
+      },
+      {
+        name: "numeric sessionId sibling",
+        workflow: {
+          steps: [
+            {
+              parallel: [{ prompt: "one", sessionId: 2 }, { prompt: "two" }],
+            },
+          ],
+        },
+        message: /Step 1: Numeric sessionId reference 2.*steps 1, 2/i,
+      },
+      {
+        name: "unsupported member type",
+        workflow: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "one" },
+                { type: "userInput", prompt: "unsupported" },
+              ],
+            },
+          ],
+        },
+        message: /parallel member 2 must be a prompt or script step/i,
+      },
+    ];
+
+    for (const invalidCase of invalidCases) {
+      test(`should reject ${invalidCase.name}`, async () => {
+        await assert.rejects(
+          () =>
+            parser.validateAndNormalize(
+              invalidCase.workflow,
+              path.join(os.tmpdir(), "parallel-validation.ctrlyoke.json")
+            ),
+          invalidCase.message
+        );
+      });
+    }
+  });
+
   suite("parseMarkdownPromptFile", () => {
     test("should parse .prompt.md file as single prompt", async () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");

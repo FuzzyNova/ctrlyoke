@@ -2,6 +2,7 @@ import type { WorkflowStep } from "@store/workflowStore";
 import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   getStreamingChunkKey,
   type ExecutionPhase,
 } from "../types/messages";
@@ -13,7 +14,10 @@ import type {
   OutputStatusMessage,
   ToolCall,
 } from "../types/cliEvents";
-import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  ScriptVerdict,
+} from "@root/types/CtrlYokeTypes";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
@@ -126,6 +130,12 @@ export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   estimateSize: number;
   groupStart?: boolean;
   groupEnd?: boolean;
+  promptUndo?: OutputRowPromptUndoMeta;
+  activityKey?: string;
+  activityFirst?: boolean;
+  activityContinuation?: boolean;
+  activityLabel?: string;
+  activityName?: string;
 }
 
 export interface AttemptGroupSummaryRow extends OutputRowBase<
@@ -136,6 +146,15 @@ export interface AttemptGroupSummaryRow extends OutputRowBase<
   attemptCount: number;
   total?: number;
   coverage: WorkflowTokenCoverage;
+}
+
+export interface StepSwitchRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.STEP_SWITCH
+> {
+  target: OutputMessageTarget;
+  fromTarget?: OutputMessageTarget;
+  stepLabel: string;
+  stepName?: string;
 }
 
 export interface StepAnchorRow extends OutputRowBase<
@@ -300,12 +319,14 @@ export type OutputRenderRow =
   | ScriptOutputRow
   | ScriptVerdictRow
   | AttemptGroupSummaryRow
+  | StepSwitchRow
   | StatsRow;
 
 export interface BuildOutputRowsInput {
   allMessages: readonly OutputMessage[];
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null | undefined;
+  parallelGroups?: readonly ParallelGroupDefinition[];
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -337,6 +358,22 @@ export interface BuildOutputRowsInput {
   outputContentWidth?: number;
   /** Approximate number of wrapped result lines shown before Bash and generic tool output collapses. */
   collapsedToolOutputLineCount?: number;
+}
+
+function getConcurrentGroupForStep(
+  input: BuildOutputRowsInput,
+  stepIndex: number
+): ParallelGroupDefinition | undefined {
+  const group = input.parallelGroups?.find(
+    (candidate) =>
+      stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
+  );
+  if (!group || group.startIndex === group.endIndex) return undefined;
+  const groupSnapshot =
+    input.isViewingHistory && input.historyOutputs
+      ? input.historyOutputs.promptOutputs[group.startIndex]?.workspaceSnapshot
+      : input.workspaceSnapshots[group.startIndex];
+  return groupSnapshot?.parallelGroupId === group.id ? group : undefined;
 }
 
 interface AttemptGroupAggregate {
@@ -380,6 +417,8 @@ export interface BuildOutputRowsResult {
   stepOutputsMap: Map<string, CliOutputType[]>;
   lastCliIndexPerStep: Map<string, number>;
   firstRowIndexByTarget: Map<string, number>;
+  anchorRowIndexByTarget: Map<string, number>;
+  latestActivityRowKey?: string;
 }
 
 function getStepName(
@@ -420,12 +459,30 @@ function getStepOutputArtifacts(
 function getStreamingChunk(
   input: BuildOutputRowsInput,
   target: OutputMessageTarget,
-  phase?: ExecutionPhase
+  phase?: ExecutionPhase,
+  runIndex = 0,
+  attemptIndex = 0
 ): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
-    ? input.streamingChunks[getStreamingChunkKey(target.index, phase)] || ""
+    ? input.streamingChunks[
+        getStreamingChunkKey(
+          target.index,
+          phase,
+          runIndex,
+          attemptIndex,
+          OUTPUT_ACTIVITY_KINDS.TEXT,
+          FINAL_STEP_PHASES.QUEUE
+        )
+      ] || ""
     : input.finalStepStreamingChunks[
-        getStreamingChunkKey(target.index, phase)
+        getStreamingChunkKey(
+          target.index,
+          phase,
+          runIndex,
+          attemptIndex,
+          OUTPUT_ACTIVITY_KINDS.TEXT,
+          FINAL_STEP_PHASES.FINAL_STEP
+        )
       ] || "";
 }
 
@@ -1552,6 +1609,8 @@ function estimateOutputRowContentHeight(
       return STEP_HIDDEN_ROW_HEIGHT;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return 24;
+    case OUTPUT_ROW_KINDS.STEP_SWITCH:
+      return 24;
     case OUTPUT_ROW_KINDS.STATUS:
       return estimateTextBlockHeight(
         row.status.message,
@@ -1750,6 +1809,7 @@ export function buildOutputRows(
   const lastCliIndexPerStep = new Map<string, number>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
   const firstRowIndexByTarget = new Map<string, number>();
+  const anchorRowIndexByTarget = new Map<string, number>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
   // OutputSection starts with an unmeasured width of 0. Treat that as unknown,
@@ -1760,8 +1820,28 @@ export function buildOutputRows(
     input.outputContentWidth >= OUTPUT_SECTION_HEADER_NARROW_THRESHOLD;
   const attemptGroups = new Map<string, AttemptGroupAggregate>();
   const attemptGroupByMessageIndex = new Map<number, string>();
+  const activityTargets = new Set(
+    input.allMessages
+      .filter(
+        (message) =>
+          message.isActivity &&
+          message.activityKind !== OUTPUT_ACTIVITY_KINDS.STATUS
+      )
+      .map((message) => getTargetKey(message.target))
+  );
+  const activityStatusTargets = new Set(
+    input.allMessages
+      .filter(
+        (message) =>
+          message.isActivity &&
+          message.activityKind === OUTPUT_ACTIVITY_KINDS.STATUS
+      )
+      .map((message) => getTargetKey(message.target))
+  );
+  let previousActivityTargetKey: string | undefined;
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
+    if (message.isActivity) continue;
     const groupKey = getAttemptGroupKey(message);
     if (!groupKey || message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
     const output = message.data as CliOutputType;
@@ -1789,7 +1869,7 @@ export function buildOutputRows(
 
     if (message.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const stepOutputs = stepOutputsMap.get(targetKey) ?? [];
-      stepOutputs.push(message.data as CliOutputType);
+      stepOutputs.push((message.aggregate ?? message.data) as CliOutputType);
       stepOutputsMap.set(targetKey, stepOutputs);
       lastCliIndexPerStep.set(targetKey, messageIndex);
     }
@@ -1801,6 +1881,7 @@ export function buildOutputRows(
     const isFirstForTarget = !firstRowIndexByTarget.has(targetKey);
     if (isFirstForTarget) {
       firstRowIndexByTarget.set(targetKey, rows.length);
+      anchorRowIndexByTarget.set(targetKey, rows.length);
       rows.push({
         key: `${targetKey}:anchor`,
         rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
@@ -1840,13 +1921,43 @@ export function buildOutputRows(
     if (input.hiddenTargetKeys?.has(targetKey)) continue;
 
     if (message.type === OUTPUT_MESSAGE_TYPES.STATUS) {
+      if (!message.isActivity && activityStatusTargets.has(targetKey)) continue;
+      const activityFirst =
+        message.isActivity && previousActivityTargetKey !== targetKey;
+      if (message.isActivity && activityFirst && previousActivityTargetKey) {
+        rows.push({
+          key: `${message.activityKey}:switch`,
+          rowKind: OUTPUT_ROW_KINDS.STEP_SWITCH,
+          target,
+          fromTarget: input.allMessages.find(
+            (candidate) =>
+              candidate.isActivity &&
+              getTargetKey(candidate.target) === previousActivityTargetKey
+          )?.target,
+          stepLabel: `Step ${target.index + 1}`,
+          stepName: undefined,
+          estimateSize: 24,
+        });
+      }
+      if (message.isActivity) previousActivityTargetKey = targetKey;
       rows.push({
         key: `${targetKey}:status:${messageIndex}`,
         rowKind: OUTPUT_ROW_KINDS.STATUS,
         target,
         status: message.data as OutputStatusMessage,
+        activityKey: message.activityKey,
+        activityFirst: message.isActivity ? activityFirst : undefined,
+        activityContinuation:
+          message.isActivity && !activityFirst ? true : undefined,
+        activityLabel: message.isActivity
+          ? `Step ${target.index + 1}`
+          : undefined,
         estimateSize: 36,
       });
+      continue;
+    }
+
+    if (!message.isActivity && activityTargets.has(targetKey)) {
       continue;
     }
 
@@ -1894,7 +2005,7 @@ export function buildOutputRows(
       continue;
     }
 
-    const output = message.data as CliOutputType;
+    let output = (message.aggregate ?? message.data) as CliOutputType;
     const groupStartIndex = rows.length;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
     const workflowStep = isFinalStep
@@ -1918,12 +2029,56 @@ export function buildOutputRows(
       lastCliIndexPerStep.get(targetKey) === messageIndex;
     const promptUndoActions =
       input.allowUndoActions && isLastCliForStep && !output.isStreaming
-        ? computePromptUndoActions(
-            allStepOutputs,
-            undoRecord,
-            workspaceSnapshot
-          )
+        ? (() => {
+            const concurrentGroup = getConcurrentGroupForStep(
+              input,
+              target.index
+            );
+            if (
+              concurrentGroup &&
+              target.index !== concurrentGroup.startIndex
+            ) {
+              return { undo: null, redo: null };
+            }
+            const effectiveSnapshot = concurrentGroup
+              ? input.isViewingHistory && input.historyOutputs
+                ? input.historyOutputs.promptOutputs[concurrentGroup.startIndex]
+                    ?.workspaceSnapshot
+                : input.workspaceSnapshots[concurrentGroup.startIndex]
+              : workspaceSnapshot;
+            const actions = computePromptUndoActions(
+              allStepOutputs,
+              undoRecord,
+              effectiveSnapshot
+            );
+            if (!concurrentGroup) return actions;
+            return {
+              undo: actions.undo
+                ? {
+                    ...actions.undo,
+                    label: `Undo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
+                  }
+                : null,
+              redo: actions.redo
+                ? {
+                    ...actions.redo,
+                    label: `Redo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
+                  }
+                : null,
+            };
+          })()
         : { undo: null, redo: null };
+    const promptUndo =
+      promptUndoActions.undo || promptUndoActions.redo
+        ? {
+            workspacePath: output.workingDirectory ?? "",
+            workspaceSnapshot,
+            undoRecord,
+            allStepOutputs,
+            undo: promptUndoActions.undo,
+            redo: promptUndoActions.redo,
+          }
+        : undefined;
 
     rows.push({
       key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:header`,
@@ -1936,23 +2091,58 @@ export function buildOutputRows(
       stepName,
       attemptIndex,
       runIndex,
-      promptUndo:
-        promptUndoActions.undo || promptUndoActions.redo
-          ? {
-              workspacePath: output.workingDirectory ?? "",
-              workspaceSnapshot,
-              undoRecord,
-              allStepOutputs,
-              undo: promptUndoActions.undo,
-              redo: promptUndoActions.redo,
-            }
-          : undefined,
+      promptUndo,
       estimateSize: 44,
     });
 
     const scriptish = isScriptOutput(output);
+    const activityFirst =
+      message.isActivity && previousActivityTargetKey !== targetKey;
+    if (message.isActivity && activityFirst && previousActivityTargetKey) {
+      rows.push({
+        key: `${message.activityKey}:switch`,
+        rowKind: OUTPUT_ROW_KINDS.STEP_SWITCH,
+        target,
+        fromTarget: input.allMessages.find(
+          (candidate) =>
+            candidate.isActivity &&
+            getTargetKey(candidate.target) === previousActivityTargetKey
+        )?.target,
+        stepLabel,
+        stepName,
+        estimateSize: 24,
+      });
+    }
+    if (message.isActivity) previousActivityTargetKey = targetKey;
+    const activityMeta = message.isActivity
+      ? {
+          activityKey: message.activityKey,
+          activityFirst,
+          activityContinuation: !activityFirst,
+          activityLabel: stepLabel,
+          activityName: stepName,
+          promptUndo,
+        }
+      : {};
 
-    if (output.prompt && !scriptish) {
+    if (message.isActivity) {
+      const activityEvents = message.activityEvents ?? [];
+      const activityOutput: CliOutputType = {
+        ...output,
+        response: message.activityText ?? "",
+        structured: {
+          ...output.structured,
+          events: activityEvents,
+          metadata: output.structured?.metadata ?? {},
+        },
+        isStreaming: false,
+      };
+      // Activity rows are already attributed to the step and intentionally do
+      // not repeat the aggregate attempt header/prompt/command.
+      output = activityOutput;
+    }
+
+    if (!message.isActivity && output.prompt && !scriptish) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:prompt`,
         rowKind: OUTPUT_ROW_KINDS.PROMPT,
@@ -1962,7 +2152,7 @@ export function buildOutputRows(
       });
     }
 
-    if (output.cliCommand) {
+    if (!message.isActivity && output.cliCommand) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:command`,
         rowKind: scriptish
@@ -1976,7 +2166,7 @@ export function buildOutputRows(
       });
     }
 
-    if (output.errorMessage) {
+    if (!message.isActivity && output.errorMessage) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:error`,
         rowKind: OUTPUT_ROW_KINDS.ERROR,
@@ -2014,7 +2204,15 @@ export function buildOutputRows(
         OUTPUT_ROW_HORIZONTAL_PADDING +
         toolResultPrefixWidth(input.outputFontSize ?? 13),
     });
-    const streamingChunk = getStreamingChunk(input, target, message.phase);
+    const streamingChunk = message.isActivity
+      ? ""
+      : getStreamingChunk(
+          input,
+          target,
+          message.phase,
+          message.runIndex,
+          message.attemptIndex
+        );
     const visibleEvents = getVisibleStructuredEvents(output.structured?.events);
     const hasStructuredEvents = visibleEvents.length > 0;
 
@@ -2026,6 +2224,7 @@ export function buildOutputRows(
         text: streamingChunk,
         rawTextOutput,
         animated: !isScriptOutput(output),
+        ...activityMeta,
         estimateSize: 120,
       });
     }
@@ -2092,6 +2291,7 @@ export function buildOutputRows(
         workspaceSnapshot,
         undoRecord,
         hideDiff: visibleEvent.hideDiff,
+        ...activityMeta,
         showParamsLabel,
         bashExpansion:
           visibleEvent.event.type === CLI_EVENT_TYPES.BASH_COMMAND
@@ -2145,6 +2345,7 @@ export function buildOutputRows(
             text: streamingChunk,
             rawTextOutput,
             animated: true,
+            ...activityMeta,
             estimateSize: 120,
           });
         }
@@ -2166,6 +2367,7 @@ export function buildOutputRows(
             text: output.response,
             rawTextOutput,
             animated: false,
+            ...activityMeta,
             estimateSize: 120,
           });
         }
@@ -2229,5 +2431,14 @@ export function buildOutputRows(
     stepOutputsMap,
     lastCliIndexPerStep,
     firstRowIndexByTarget,
+    anchorRowIndexByTarget,
+    latestActivityRowKey: (() => {
+      const latestActivity = [...input.allMessages]
+        .reverse()
+        .find((message) => message.isActivity && message.activityKey);
+      if (!latestActivity?.activityKey) return undefined;
+      return rows.find((row) => row.activityKey === latestActivity.activityKey)
+        ?.key;
+    })(),
   };
 }

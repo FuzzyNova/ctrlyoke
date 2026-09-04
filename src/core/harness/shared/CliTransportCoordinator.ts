@@ -18,6 +18,7 @@ import {
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import { getPtyProcessManager, ptyPostMessage } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
+import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
 import { CliLogEventPump } from "./CliLogEventPump";
 import {
   HeadlessLogTail,
@@ -231,9 +232,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         "unknown";
       const stepMetadata = this.getWorkflowStepMetadata(workflowContext) ?? {
         stepName: EXECUTION_MODES.INTERACTIVE,
+        stepIndex: -1,
         promptNumber: undefined,
+        parallelGroupId: undefined,
       };
-      const { stepName, promptNumber } = stepMetadata;
+      const { stepName, stepIndex, promptNumber, parallelGroupId } =
+        stepMetadata;
       const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
       // Provider-level interactive env (e.g. Copilot's OTel export path override,
       // see CopilotCliProvider.getInteractiveSpawnEnv()) must be merged in here too —
@@ -257,16 +261,19 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       // actually triggered the run.
       const controllerClientId = ptyManager.getExpectedController(workflowId);
 
-      postMessage({
+      const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId,
         sessionId: preSessionId,
         stepName,
+        stepIndex,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber,
         harnessId,
+        parallelGroupId,
         controllerClientId,
-      });
+      };
+      postMessage(terminalStartedMessage);
 
       let session: PtySession;
       try {
@@ -274,9 +281,11 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           ptyManager.spawnPty({
             workflowId,
             stepName,
+            stepIndex,
             kind: SESSION_KINDS.AI_CLI,
             promptNumber,
             harnessId,
+            parallelGroupId,
             sessionId: preSessionId,
             command: command.command,
             // A verbatim payload must reach node-pty as a single pre-escaped
@@ -351,20 +360,25 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     }
 
     this.currentPtySession.stepName = metadata.stepName;
+    this.currentPtySession.stepIndex = metadata.stepIndex;
     this.currentPtySession.promptNumber = metadata.promptNumber;
+    this.currentPtySession.parallelGroupId = metadata.parallelGroupId;
 
     const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
-    postMessage({
+    const terminalStartedMessage: TerminalStartedMessage = {
       type: MESSAGE_TYPES.TERMINAL_STARTED,
       workflowId: this.currentPtySession.workflowId,
       sessionId: this.currentPtySession.id,
       stepName: metadata.stepName,
+      stepIndex: metadata.stepIndex,
       kind: this.currentPtySession.kind,
       promptNumber: metadata.promptNumber,
       harnessId: this.currentPtySession.harnessId,
+      parallelGroupId: metadata.parallelGroupId,
       shellKind: this.currentPtySession.shellKind,
       controllerClientId: this.currentPtySession.controllerClientId,
-    });
+    };
+    postMessage(terminalStartedMessage);
 
     Log.debug(
       `[inject] refreshed PTY session metadata: session=${this.currentPtySession.id.slice(0, 8)} step="${metadata.stepName}"`
@@ -672,17 +686,29 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
   private getWorkflowStepMetadata(
     workflowContext?: WorkflowContext
-  ): { stepName: string; promptNumber: number } | undefined {
+  ): {
+    stepName: string;
+    stepIndex: number;
+    promptNumber: number;
+    parallelGroupId?: string;
+  } | undefined {
     if (!workflowContext) {
       return undefined;
     }
 
     const promptNumber = workflowContext.promptIndex + 1;
+    const parallelGroupId = workflowContext.workflowFile?.parallelGroups?.find(
+      (group) =>
+        workflowContext.promptIndex >= group.startIndex &&
+        workflowContext.promptIndex <= group.endIndex
+    )?.id;
     return {
       stepName:
         workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
         `Step ${promptNumber}`,
+      stepIndex: workflowContext.promptIndex,
       promptNumber,
+      parallelGroupId,
     };
   }
 

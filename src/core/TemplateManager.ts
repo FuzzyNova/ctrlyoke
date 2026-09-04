@@ -124,6 +124,7 @@ export class TemplateManager {
     TEMPLATE_IDS.BLANK,
     TEMPLATE_STARTER_ID,
     "simple-feature",
+    "parallel-research",
     "fix-tests",
     "full-feature",
     "spec-driven-loop",

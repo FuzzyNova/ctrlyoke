@@ -1,6 +1,7 @@
 # Workflow schema reference
 
-This page summarizes the current public workflow schema from `schemas/prompt-schema.json`.
+This page summarizes the current public workflow schema from
+`schemas/workflow-schema.json`.
 
 ## Multi-step workflow shape
 
@@ -33,6 +34,33 @@ finalStep:
 | `steps`           | array               | Required for multi-step workflows                                                                                     |
 | `finalStep`       | step                | Optional loop/review step                                                                                             |
 | `vars`            | object              | `{{name}}` substitutions                                                                                              |
+
+## Parallel queue items
+
+An item in the root `steps` array may use `parallel` instead of `prompt` or
+`script`:
+
+```yaml
+steps:
+  - parallel:
+      - name: inspect-api
+        prompt: Inspect the API surface.
+      - name: inspect-ui
+        prompt: Inspect the dashboard surface.
+    failFast: true
+```
+
+`parallel` must contain at least two prompt or script steps. It is normalized
+to the flat `steps` array and a `parallelGroups` topology in working files; the
+normalized field is runtime/storage metadata, not authored syntax. Groups are
+flat and non-nested, and `finalStep` cannot be a parallel group.
+
+Members share the workflow workspace and the single managed or named worktree
+for the run. v1 does not provide per-member isolation or automatic merging, so
+members should perform independent work. The global `queue.maxParallelSteps`
+setting bounds active members; `1` is a supported sequential mode. The built-in
+`ctrlyoke` MCP server is rejected on group members, but remains valid on
+`finalStep`.
 
 ## Prompt step fields
 

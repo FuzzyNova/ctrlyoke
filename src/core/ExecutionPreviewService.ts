@@ -20,11 +20,13 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EXECUTION_MODES,
   WORKTREE_MODES,
   type HarnessId,
   type PreviewPermissionAction,
   type PreviewPropertySource,
+  PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
 } from "../types/DashboardConstants";
 import * as path from "path";
 import type {
@@ -59,6 +61,7 @@ import {
   type McpServerPreview,
   type PermissionApplicationPreview,
   type PermissionRulePreview,
+  type ParallelGroupPreflightPreview,
   type RetryPreview,
   type StepExecutionPreview,
   type VariableResolutionPreview,
@@ -103,6 +106,15 @@ import {
   getProcessMapSecretNames,
 } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
+import {
+  parallelGroupConsumer,
+  parallelGroupIssueSeverity,
+  parallelGroupWidthMessage,
+  PARALLEL_PREFLIGHT_DIAGNOSTIC_STATE,
+  PARALLEL_PREFLIGHT_WIDTH_STATE,
+  preflightParallelGroup,
+  type ParallelGroupPreflightMember,
+} from "./ParallelGroupPreflight";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -136,6 +148,7 @@ export interface ExecutionPreviewServiceOptions {
   readonly allowWorkflowRelativeReferences?: boolean;
   readonly extensionPath: string;
   readonly hostCanProvidePty: boolean;
+  readonly supportsConcurrentInteractiveSessions?: boolean;
   readonly cwd?: string;
   readonly platform?: NodeJS.Platform;
   readonly dynamicQueueConfig?: DynamicQueueConfig;
@@ -238,12 +251,102 @@ export class ExecutionPreviewService {
     const preparedWorkflow: PromptFile = {
       ...workflow,
       steps: preparedSteps,
+      vars: variables,
       ...(preparedFinalStep ? { finalStep: preparedFinalStep } : {}),
     };
     const targets = this.selectTargets(preparedWorkflow, scope);
     const managedMcpServers = await new McpRegistryFileManager(
       this.options.workspaceRoot
     ).readAll();
+    const {
+      dto: worktreePreview,
+      executionWorkspace: worktreeExecutionWorkspace,
+    } = await this.buildWorktreePreview(preparedWorkflow);
+    const preflightMembers = new Map<number, ParallelGroupPreflightMember>();
+    const parallelDiagnostics = new Map<number, CompatibilityDiagnostic[]>();
+    const parallelGroupPreflights: ParallelGroupPreflightPreview[] = [];
+    for (const group of preparedWorkflow.parallelGroups ?? []) {
+      const result = await preflightParallelGroup({
+        workflow: preparedWorkflow,
+        group,
+        defaults: this.options.defaults,
+        hostCanProvidePty: this.options.hostCanProvidePty,
+        supportsConcurrentInteractiveSessions:
+          this.options.supportsConcurrentInteractiveSessions ?? true,
+        configuredWidth: this.options.dynamicQueueConfig?.maxParallelSteps ?? 6,
+        normalizeProperties: async (
+          properties,
+          step,
+          effectivePromptText
+        ) =>
+          isScriptStep(step)
+            ? properties
+            : (
+                await McpServerNormalizer.applyWithDiagnostics(
+                  properties,
+                  managedMcpServers,
+                  effectivePromptText
+                )
+              ).properties,
+        checkHarnessReady: (harnessId) =>
+          this.options.capabilities.harnesses[harnessId]?.available
+            ? undefined
+            : "harness is unavailable",
+        ensureIsolatedIntegration: async (member) => {
+          await this.options.getHarness(
+            member.resolvedProperties.harness,
+            worktreeExecutionWorkspace
+          );
+        },
+        finalStepSessionId: preparedWorkflow.finalStep?._runtime?.sessionId as
+          | string
+          | undefined,
+      });
+      parallelGroupPreflights.push({
+        parallelGroupId: group.id,
+        effectiveWidth: result.effectiveWidth,
+        executableMemberCount: result.executableMemberCount,
+      });
+      for (const member of result.members) {
+        preflightMembers.set(member.stepIndex, member);
+      }
+      for (const issue of result.issues) {
+        for (const stepIndex of issue.memberIndices) {
+          const member = preflightMembers.get(stepIndex);
+          const diagnostic: CompatibilityDiagnostic = {
+            code: issue.code,
+            severity: parallelGroupIssueSeverity(),
+            harnessId:
+              member?.resolvedProperties.harness ??
+              this.options.defaults.harness,
+            capability: "parallelGroup",
+            consumer: parallelGroupConsumer(stepIndex),
+            state: PARALLEL_PREFLIGHT_DIAGNOSTIC_STATE,
+            message: issue.message,
+          };
+          parallelDiagnostics.set(stepIndex, [
+            ...(parallelDiagnostics.get(stepIndex) ?? []),
+            diagnostic,
+          ]);
+        }
+      }
+      const firstMember = result.members[0];
+      if (firstMember) {
+        parallelDiagnostics.set(firstMember.stepIndex, [
+          ...(parallelDiagnostics.get(firstMember.stepIndex) ?? []),
+          {
+            code:
+              PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.EFFECTIVE_WIDTH,
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
+            harnessId: firstMember.resolvedProperties.harness,
+            capability: "parallelGroup",
+            consumer: parallelGroupConsumer(firstMember.stepIndex),
+            state: PARALLEL_PREFLIGHT_WIDTH_STATE,
+            message: parallelGroupWidthMessage(result),
+          },
+        ]);
+      }
+    }
 
     const resolvedTargets = new Map<number, ResolvedExecutionTarget>();
     const mcpNormalizationDiagnostics = new Map<
@@ -254,14 +357,12 @@ export class ExecutionPreviewService {
       if (isScriptStep(target.step)) {
         continue;
       }
-      const resolution = resolveExecutionProperties(
-        target.step,
-        preparedWorkflow,
-        {
+      const resolution =
+        preflightMembers.get(target.stepIndex)?.resolvedTarget ??
+        resolveExecutionProperties(target.step, preparedWorkflow, {
           defaults: this.options.defaults,
           hostCanProvidePty: this.options.hostCanProvidePty,
-        }
-      );
+        });
       const normalized = await McpServerNormalizer.applyWithDiagnostics(
         resolution.properties,
         managedMcpServers,
@@ -289,11 +390,6 @@ export class ExecutionPreviewService {
       workspace: { workspaceRoot: this.options.workspaceRoot },
     });
 
-    const {
-      dto: worktreePreview,
-      executionWorkspace: worktreeExecutionWorkspace,
-    } = await this.buildWorktreePreview(preparedWorkflow);
-
     const steps: StepExecutionPreview[] = [];
     for (const target of targets) {
       steps.push(
@@ -307,6 +403,8 @@ export class ExecutionPreviewService {
           managedMcpServers,
           compatibilityDiagnostics,
           mcpNormalizationDiagnostics.get(target.stepIndex) ?? [],
+          parallelDiagnostics.get(target.stepIndex) ?? [],
+          preflightMembers.get(target.stepIndex),
           worktreePreview,
           worktreeExecutionWorkspace
         )
@@ -358,6 +456,8 @@ export class ExecutionPreviewService {
       workflow: workflowSummary,
       steps,
       diagnostics: this.dedupeDiagnostics(diagnostics),
+      parallelGroups: [...(preparedWorkflow.parallelGroups ?? [])],
+      parallelGroupPreflights,
       ...(worktreePreview ? { worktree: worktreePreview } : {}),
     };
   }
@@ -372,6 +472,8 @@ export class ExecutionPreviewService {
     managedMcpServers: readonly ManagedMcpServer[],
     compatibilityDiagnostics: readonly CompatibilityDiagnostic[],
     mcpNormalizationDiagnostics: readonly CompatibilityDiagnostic[],
+    parallelDiagnostics: readonly CompatibilityDiagnostic[],
+    preflightMember: ParallelGroupPreflightMember | undefined,
     worktreePreview: WorktreeExecutionPreview | undefined,
     worktreeExecutionWorkspace: ExecutionWorkspace | undefined
   ): Promise<StepExecutionPreview> {
@@ -422,7 +524,14 @@ export class ExecutionPreviewService {
     );
     const resolvedSessionId = isScriptStep(step)
       ? undefined
-      : this.resolveSessionId(target.stepIndex, allSteps, properties);
+      : preflightMember !== undefined
+        ? preflightMember.resolvedSessionId
+        : this.resolveSessionId(
+            target.stepIndex,
+            allSteps,
+            properties,
+            this.parallelGroupStartBoundary(workflow, target.stepIndex)
+          );
     const conditionPreview = this.buildConditions(
       properties.preCondition,
       properties.endCondition,
@@ -439,6 +548,7 @@ export class ExecutionPreviewService {
     const diagnostics = [
       ...this.stepDiagnostics(target, compatibilityDiagnostics),
       ...mcpNormalizationDiagnostics,
+      ...parallelDiagnostics,
       ...secretDiagnostics,
     ];
 
@@ -446,6 +556,9 @@ export class ExecutionPreviewService {
       const scriptCommand = this.buildScriptCommand(step, worktreePreview);
       return {
         stepIndex: target.stepIndex,
+        ...(this.parallelGroupId(workflow, target.stepIndex)
+          ? { parallelGroupId: this.parallelGroupId(workflow, target.stepIndex) }
+          : {}),
         ...(step.name ? { stepName: step.name } : {}),
         type: PREVIEW_STEP_TYPES.SCRIPT,
         resolvedProperties,
@@ -471,6 +584,17 @@ export class ExecutionPreviewService {
       resolvedProperties: properties,
       workflowFile: workflow,
       hostCanProvidePty: this.options.hostCanProvidePty,
+      ...(preflightMember
+        ? {
+            groupStartBoundary: this.parallelGroupStartBoundary(
+              workflow,
+              target.stepIndex
+            ),
+            preflightSession: {
+              sessionId: preflightMember.resolvedSessionId,
+            },
+          }
+        : {}),
       ...(this.options.resolvePriorContextItems
         ? { resolvePriorContextItems: this.options.resolvePriorContextItems }
         : {}),
@@ -537,6 +661,9 @@ export class ExecutionPreviewService {
     ];
     return {
       stepIndex: target.stepIndex,
+      ...(this.parallelGroupId(workflow, target.stepIndex)
+        ? { parallelGroupId: this.parallelGroupId(workflow, target.stepIndex) }
+        : {}),
       ...(step.name ? { stepName: step.name } : {}),
       type: PREVIEW_STEP_TYPES.PROMPT,
       resolvedProperties,
@@ -579,6 +706,7 @@ export class ExecutionPreviewService {
         (target) => target.step.enabled !== false
       );
     }
+
     if (!Number.isInteger(scope.stepIndex) || scope.stepIndex < 0) {
       throw new Error(
         `Invalid execution preview step index: ${scope.stepIndex}`
@@ -593,6 +721,28 @@ export class ExecutionPreviewService {
       );
     }
     return target.step.enabled === false ? [] : [target];
+  }
+
+  private parallelGroupId(
+    workflow: PromptFile,
+    stepIndex: number
+  ): string | undefined {
+    return workflow.parallelGroups?.find(
+      (group) =>
+        stepIndex >= group.startIndex && stepIndex <= group.endIndex
+    )?.id;
+  }
+
+  private parallelGroupStartBoundary(
+    workflow: PromptFile,
+    stepIndex: number
+  ): number {
+    return (
+      workflow.parallelGroups?.find(
+        (group) =>
+          stepIndex >= group.startIndex && stepIndex <= group.endIndex
+      )?.startIndex ?? stepIndex
+    );
   }
 
   private substituteStep(
@@ -627,11 +777,12 @@ export class ExecutionPreviewService {
   private resolveSessionId(
     stepIndex: number,
     allSteps: WorkflowStep[],
-    properties: ResolvedProperties
+    properties: ResolvedProperties,
+    groupStartBoundary: number = stepIndex
   ): string | undefined {
     if (!properties.resumeSession || properties.sessionId === undefined) {
       if (!properties.resumeSession) return undefined;
-      for (let index = stepIndex - 1; index >= 0; index -= 1) {
+      for (let index = groupStartBoundary - 1; index >= 0; index -= 1) {
         const previous = allSteps[index];
         const sessionId = previous?._runtime?.sessionId;
         if (
@@ -645,8 +796,16 @@ export class ExecutionPreviewService {
       return undefined;
     }
     if (typeof properties.sessionId === "number") {
+      const referencedIndex = properties.sessionId - 1;
+      if (
+        referencedIndex < 0 ||
+        referencedIndex >= groupStartBoundary ||
+        referencedIndex >= allSteps.length
+      ) {
+        return undefined;
+      }
       const referenced =
-        allSteps[properties.sessionId - 1]?._runtime?.sessionId;
+        allSteps[referencedIndex]?._runtime?.sessionId;
       return typeof referenced === "string" &&
         SessionValidator.validate(referenced, properties.harness)
         ? referenced

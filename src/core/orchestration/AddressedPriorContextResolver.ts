@@ -27,9 +27,9 @@ export function createPriorContextResolver({
 }: PriorContextResolverOptions): (
   contexts: readonly PriorContext[],
   allPrompts: readonly WorkflowStep[],
-  promptIndex: number
+  groupStartBoundary: number
 ) => Promise<PriorContextItem[]> {
-  return async (contexts, allPrompts, promptIndex) => {
+  return async (contexts, allPrompts, groupStartBoundary) => {
     if (!workspaceRoot || !historyFilePath) {
       return [];
     }
@@ -41,7 +41,7 @@ export function createPriorContextResolver({
         historyFilePath,
         sameRunContexts,
         allPrompts,
-        promptIndex
+        groupStartBoundary
       )
     );
   };

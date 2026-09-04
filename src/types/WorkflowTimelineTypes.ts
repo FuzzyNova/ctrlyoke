@@ -10,6 +10,7 @@ import type {
   WorkflowKey,
   RunRef,
   WorkflowStep,
+  ParallelGroupDefinition,
   WorkflowTokenTotals,
   WorktreeConfig,
   WorktreeRunProjection,
@@ -243,6 +244,7 @@ export interface WorkflowRuntimeTransitionPayload {
 export interface WorkflowDefinitionSnapshot {
   workflowName: string;
   steps: WorkflowStep[];
+  parallelGroups?: ParallelGroupDefinition[];
   /** Workflow-level worktree definition that produced this revision. */
   worktree?: WorktreeConfig;
   /** The final-step definition that belongs to this revision, if configured. */

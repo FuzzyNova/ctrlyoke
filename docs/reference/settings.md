@@ -23,7 +23,7 @@ These settings apply to both the extension and the standalone CLI where relevant
 | `workflow`             | Defaults for new workflows                                        |
 | `mcp`                  | Default MCP servers                                               |
 | `hooks`                | Global user-defined hooks                                         |
-| `queue`                | Queue size and execution time limits                              |
+| `queue`                | Queue size, parallelism, and execution time limits                |
 | `history`              | Output history retention                                          |
 | `terminal`             | Embedded terminal behavior                                        |
 | `ui`                   | Webview and prompt-editor behavior                                |
@@ -63,6 +63,22 @@ These settings apply to both the extension and the standalone CLI where relevant
   },
   "defaults": {
     "executionMode": "interactive"
+  }
+}
+```
+
+### Limit parallel group execution
+
+`queue.maxParallelSteps` controls the maximum number of active members in a
+parallel step group. A group larger than this value drains through the limit;
+`1` keeps grouped steps sequential. Members share the workflow workspace and
+the one managed or named worktree for the run; this setting limits concurrency,
+but does not provide per-member isolation or merging.
+
+```json
+{
+  "queue": {
+    "maxParallelSteps": 6
   }
 }
 ```

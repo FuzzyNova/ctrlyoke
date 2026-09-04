@@ -303,6 +303,35 @@ suite("ConfigurationUtils — context resolution failure mode", () => {
   });
 });
 
+suite("ConfigurationUtils — dynamic queue settings", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("returns the default maximum parallel step count", () => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+
+    assert.strictEqual(
+      ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps,
+      6
+    );
+  });
+
+  test("reads maxParallelSteps from the merged queue settings", () => {
+    configService.setUserBackend(
+      makeBackend({ queue: { maxParallelSteps: 3 } })
+    );
+    configService.setWorkspaceBackend(makeBackend({}));
+
+    assert.strictEqual(
+      ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps,
+      3
+    );
+  });
+});
+
 suite("ConfigurationUtils — statusline tracking", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));

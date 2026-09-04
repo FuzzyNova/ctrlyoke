@@ -2,12 +2,14 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
+  OutputActivityEntry,
   OutputExecutionTarget,
   StepOutput,
   WorkflowOutputHistory,
@@ -18,6 +20,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type CliOutputChunkAppendedEvent,
   type CliOutputEventsAppendedEvent,
+  type ScriptExecutionRecordedEvent,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
@@ -151,8 +154,10 @@ export class OutputHistoryTimelineAdapter {
       executionState: manifest.executionState,
       promptOutputs: {},
       orderedEntries: [],
+      activityEntries: [],
     };
     const orderedEntries: OrderedHistoryEntry[] = [];
+    const activityEntries: OutputActivityEntry[] = [];
     const cliEntriesByKey = new Map<string, OrderedCliHistoryEntry>();
     /**
      * Attempts whose completed aggregate has already been projected. The final
@@ -214,6 +219,16 @@ export class OutputHistoryTimelineAdapter {
           break;
         }
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED: {
+          activityEntries.push({
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+            target: event.target,
+            runIndex: event.runIndex ?? 0,
+            attemptIndex: event.attemptIndex,
+            phase: event.phase,
+            kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+            text: event.payload.chunk,
+          });
           const existing = resolveStreamingEntry(event);
           if (existing) {
             existing.cliOutput = {
@@ -224,6 +239,16 @@ export class OutputHistoryTimelineAdapter {
           break;
         }
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED: {
+          activityEntries.push({
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+            target: event.target,
+            runIndex: event.runIndex ?? 0,
+            attemptIndex: event.attemptIndex,
+            phase: event.phase,
+            kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+            events: event.payload.events,
+          });
           const existing = resolveStreamingEntry(event);
           if (existing) {
             existing.cliOutput = {
@@ -241,6 +266,15 @@ export class OutputHistoryTimelineAdapter {
           break;
         }
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
+          activityEntries.push({
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+            target: event.target,
+            runIndex: 0,
+            attemptIndex: 0,
+            kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+            text: event.payload.statusMessage.message,
+          });
           orderedEntries.push({
             kind: OUTPUT_HISTORY_KINDS.STATUS,
             target: event.target,
@@ -249,6 +283,23 @@ export class OutputHistoryTimelineAdapter {
             sequence: event.sequence,
           });
           break;
+        case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED: {
+          const scriptEvent = event as ScriptExecutionRecordedEvent;
+          const text = [scriptEvent.payload.stdout, scriptEvent.payload.stderr]
+            .filter((value) => value.length > 0)
+            .join("");
+          activityEntries.push({
+            timestampMs: scriptEvent.timestampMs,
+            sequence: scriptEvent.sequence,
+            target: scriptEvent.target,
+            runIndex: scriptEvent.runIndex,
+            attemptIndex: scriptEvent.attemptIndex,
+            phase: scriptEvent.phase,
+            kind: OUTPUT_ACTIVITY_KINDS.SCRIPT,
+            ...(text ? { text } : {}),
+          });
+          break;
+        }
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED:
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED:
           this.ensureStepOutput(history, event.target).workspaceSnapshot =
@@ -267,6 +318,7 @@ export class OutputHistoryTimelineAdapter {
       ...orderedEntries,
       ...cliEntriesByKey.values(),
     ].sort(compareOrderedHistoryEntries);
+    history.activityEntries = activityEntries.sort(compareActivityEntries);
 
     if (manifest.executionState !== EXECUTION_STATES.RUNNING) {
       for (const entry of history.orderedEntries) {
@@ -327,6 +379,13 @@ export function getCliEntryKey(
 function compareOrderedHistoryEntries(
   left: OrderedHistoryEntry,
   right: OrderedHistoryEntry
+): number {
+  return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
+}
+
+function compareActivityEntries(
+  left: OutputActivityEntry,
+  right: OutputActivityEntry
 ): number {
   return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
 }

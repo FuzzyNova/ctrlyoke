@@ -203,6 +203,29 @@ finalStep:
     - ctrlyoke
 ```
 
+### Parallel queue items
+
+Use a `parallel` item for independent prompt or script steps that should run
+before a synthesis step:
+
+```yaml
+steps:
+  - parallel:
+      - name: research-api
+        prompt: Research the API implementation.
+      - name: research-tests
+        prompt: Research the existing test strategy.
+    failFast: true
+
+  - name: synthesize
+    priorContext: [1, 2]
+    prompt: Synthesize the research.
+```
+
+Members share one workspace and one managed or named worktree per run. The
+global `queue.maxParallelSteps` setting bounds concurrency; `1` keeps the
+group sequential. v1 has no per-member isolation or automatic merge.
+
 ### Hooks
 
 ```yaml

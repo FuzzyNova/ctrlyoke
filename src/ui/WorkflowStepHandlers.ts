@@ -10,6 +10,7 @@ import type {
   ExecuteDraftMessage,
   InsertWorkflowStepMessage,
   RunExecutionControlMessage,
+  ReorderPromptsMessage,
   SeedNewRunMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -214,6 +215,26 @@ export class WorkflowStepHandlers {
     }
   }
 
+  async handleReorderPrompts(
+    ctx: WebviewClientContext,
+    message: ReorderPromptsMessage
+  ): Promise<void> {
+    await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    await orchestrator.reorderPendingPrompts(
+      this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+      message.newPendingOrder,
+      ctx.clientId,
+      message.pendingGroups
+    );
+    await this.mutationCoordinator.publishViewIdentity(ctx);
+  }
+
   async handleUpdateWorkflowProperty(
     ctx: WebviewClientContext,
     message: any
@@ -294,7 +315,8 @@ export class WorkflowStepHandlers {
       mutation,
       message.steps,
       message.finalStep ?? null,
-      ctx.clientId
+      ctx.clientId,
+      message.parallelGroups
     );
     if (typeof message.workflowName === "string") {
       // Undo/redo tracks workflowName as part of its zundo-covered state

@@ -20,6 +20,7 @@ import type {
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
+import { PromptFileParser } from "../../core/PromptFileParser";
 import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
@@ -101,6 +102,7 @@ function schemaBackedFieldNames(): {
     "workflowName",
     "startedAt",
     "_runtime",
+    "parallelGroups",
   ]);
   const singleStepWorkflowFields = promptFields.filter(
     (field) => field === PROMPT_PROPERTIES.PROMPT
@@ -521,6 +523,111 @@ suite("WorkflowSerializer", () => {
         assert.strictEqual(saved.steps[1]._runtime, undefined);
         assert.strictEqual(saved.finalStep._runtime, undefined);
         assert.strictEqual((templateWorkflow as any)?._runtime, undefined);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("reconstructs authored parallel items without persisting normalized groups", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-serializer-parallel-")
+      );
+      const workingFilePath = path.join(tempDir, "input.ctrlyoke.json");
+      const outputPath = path.join(tempDir, "saved.ctrlyoke.json");
+      const address = {
+        workflowKey: "serializer-parallel-test-1",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      } as WorkflowViewAddress;
+      const parallelGroups = [
+        {
+          id: "first-group",
+          startIndex: 1,
+          endIndex: 2,
+          failFast: false,
+        },
+        {
+          id: "second-group",
+          startIndex: 4,
+          endIndex: 5,
+          failFast: true,
+        },
+      ];
+
+      try {
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({
+            workflowName: "parallel serializer test",
+            steps: [
+              { prompt: "before" },
+              { prompt: "first member" },
+              { type: "script", script: "npm test" },
+              { prompt: "between" },
+              { prompt: "second member" },
+              { prompt: "second member two" },
+            ],
+            parallelGroups,
+          }),
+          "utf8"
+        );
+
+        const serializer = new WorkflowSerializer(
+          () => undefined,
+          {} as any,
+          () =>
+            ({
+              getQueueState: () => ({ workingFilePath }),
+              getViewAddress: () => address,
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSaveWorkflow(
+          "parallel-save",
+          address,
+          outputPath,
+          "json"
+        );
+
+        const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
+          steps: Array<Record<string, unknown>>;
+          parallelGroups?: unknown;
+        };
+        assert.strictEqual(saved.parallelGroups, undefined);
+        assert.deepStrictEqual(saved.steps[1], {
+          parallel: [
+            { prompt: "first member" },
+            { type: "script", script: "npm test" },
+          ],
+          failFast: false,
+        });
+        assert.deepStrictEqual(saved.steps[3], {
+          parallel: [
+            { prompt: "second member" },
+            { prompt: "second member two" },
+          ],
+          failFast: true,
+        });
+
+        const parsed = await new PromptFileParser().parsePromptFile(outputPath);
+        assert.ok(parsed);
+        assert.deepStrictEqual(
+          parsed.parallelGroups?.map(
+            ({ startIndex, endIndex, failFast }) => ({
+              startIndex,
+              endIndex,
+              failFast,
+            })
+          ),
+          parallelGroups.map(({ startIndex, endIndex, failFast }) => ({
+            startIndex,
+            endIndex,
+            failFast,
+          }))
+        );
+        assert.notStrictEqual(parsed.parallelGroups?.[0]?.id, "first-group");
+        assert.notStrictEqual(parsed.parallelGroups?.[1]?.id, "second-group");
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
       }

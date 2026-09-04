@@ -5,6 +5,7 @@ import type { CliExecutionOptions } from "./CliRunCommandDefinitions";
 export interface CliExecutionModeResolution {
   executionMode: ExecutionMode;
   hostCanProvidePty: boolean;
+  supportsConcurrentInteractiveSessions: boolean;
 }
 
 /**
@@ -34,5 +35,6 @@ export function resolveCliExecutionMode(
   return {
     executionMode,
     hostCanProvidePty: executionMode === EXECUTION_MODES.INTERACTIVE,
+    supportsConcurrentInteractiveSessions: false,
   };
 }

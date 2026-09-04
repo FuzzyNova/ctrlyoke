@@ -135,6 +135,7 @@ export interface CliJsonScriptOutput {
 export interface CliJsonStepResult {
   index: number;
   name: string | null;
+  parallelGroupId: string | null;
   type: StepType;
   enabled: boolean;
   harness: HarnessId | null;
@@ -324,6 +325,10 @@ function buildStepResult(
   return {
     index,
     name: step.name ?? null,
+    parallelGroupId:
+      input.promptFile?.parallelGroups?.find(
+        (group) => index >= group.startIndex && index <= group.endIndex
+      )?.id ?? null,
     type: isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT,
     enabled,
     ...metadata,

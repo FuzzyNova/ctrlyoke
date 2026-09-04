@@ -197,21 +197,29 @@ export class EndConditionHandler {
 
         if (onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
           const reason = "End condition passed with onPass: stopWorkflow";
-          this.promptQueue.resetRetryCount();
           retryContext.runtime.failAttempt(
             retryContext.attemptTarget,
             currentAttemptIndex,
             reason
           );
+          this.promptQueue.resetRetryCount(retryContext.attemptTarget);
           return { shouldContinue: false, failureReason: reason };
         }
 
         if (onPass === CONDITION_ACTIONS.RETRY) {
           if (retryContext.runtime.stopped) {
-            return this.workflowStopped("Workflow stopped by user");
+            return this.workflowStopped(
+              "Workflow stopped by user",
+              retryContext.attemptTarget
+            );
           }
 
-          if (this.promptQueue.canPassRetry(prompt)) {
+          if (
+            this.promptQueue.canPassRetry(
+              prompt,
+              retryContext.attemptTarget
+            )
+          ) {
             const retryResult = await this.sendRetryPromptAndEvaluate(
               prompt,
               evaluationResult,
@@ -229,15 +237,17 @@ export class EndConditionHandler {
           }
 
           Log.info(
-            `✅ Pass-retry budget exhausted after ${this.promptQueue.getCurrentRetryCount()} retries; advancing`
+            `✅ Pass-retry budget exhausted after ${this.promptQueue.getCurrentRetryCount(
+              retryContext.attemptTarget
+            )} retries; advancing`
           );
         }
 
-        this.promptQueue.resetRetryCount();
         retryContext.runtime.completeAttempt(
           retryContext.attemptTarget,
           currentAttemptIndex
         );
+        this.promptQueue.resetRetryCount(retryContext.attemptTarget);
         return { shouldContinue: true };
       }
 
@@ -251,22 +261,29 @@ export class EndConditionHandler {
       );
       if (retryContext.runtime.stopped) {
         Log.info("⚠️ Workflow stopped, aborting retry");
-        return this.workflowStopped("Workflow stopped by user");
+        return this.workflowStopped(
+          "Workflow stopped by user",
+          retryContext.attemptTarget
+        );
       }
 
       if (onFail === CONDITION_ACTIONS.CONTINUE) {
         Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
-        this.promptQueue.resetRetryCount();
         retryContext.runtime.completeAttempt(
           retryContext.attemptTarget,
           currentAttemptIndex
         );
+        this.promptQueue.resetRetryCount(retryContext.attemptTarget);
         return { shouldContinue: true };
       }
 
-      if (!this.promptQueue.canRetry(prompt)) {
+      if (
+        !this.promptQueue.canRetry(prompt, retryContext.attemptTarget)
+      ) {
         const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
-        const retryCount = this.promptQueue.getCurrentRetryCount();
+        const retryCount = this.promptQueue.getCurrentRetryCount(
+          retryContext.attemptTarget
+        );
         const failureReason =
           maxRetries > 0
             ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
@@ -276,19 +293,16 @@ export class EndConditionHandler {
           `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
         );
         this.statusMessageReporter.report(
-          {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: this.promptQueue.getState().currentIndex,
-          },
+          retryContext.attemptTarget,
           failureReason,
           STATUS_MESSAGE_SEVERITY.ERROR
         );
-        this.promptQueue.resetRetryCount();
         retryContext.runtime.failAttempt(
           retryContext.attemptTarget,
           currentAttemptIndex,
           failureReason
         );
+        this.promptQueue.resetRetryCount(retryContext.attemptTarget);
         return { shouldContinue: false, failureReason };
       }
 
@@ -298,7 +312,7 @@ export class EndConditionHandler {
         retryContext,
         sendRetryPrompt,
         currentAttemptIndex,
-        "failure"
+        RETRY_KINDS.FAILURE
       );
       if ("handlerResult" in retryResult) {
         return retryResult.handlerResult;
@@ -339,15 +353,23 @@ export class EndConditionHandler {
   > {
     if (retryContext.runtime.stopped) {
       return {
-        handlerResult: this.workflowStopped("Workflow stopped by user"),
+        handlerResult: this.workflowStopped(
+          "Workflow stopped by user",
+          retryContext.attemptTarget
+        ),
       };
     }
 
-    this.promptQueue.incrementRetryCount();
+    this.promptQueue.incrementRetryCount(retryContext.attemptTarget);
 
-    const currentRetry = this.promptQueue.getCurrentRetryCount();
+    const currentRetry = this.promptQueue.getCurrentRetryCount(
+      retryContext.attemptTarget
+    );
     const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
-    const currentIndex = this.promptQueue.getState().currentIndex;
+    const currentIndex =
+      retryContext.attemptTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? retryContext.attemptTarget.stepIndex
+        : this.promptQueue.getState().results.length;
     const nextAttemptIndex = currentAttemptIndex + 1;
     const retryPromptText =
       retryKind === RETRY_KINDS.PASS
@@ -368,7 +390,7 @@ export class EndConditionHandler {
     );
 
     const hasQueueStep =
-      currentIndex < this.promptQueue.getState().results.length;
+      retryContext.attemptTarget.kind === FINAL_STEP_PHASES.QUEUE;
     if (hasQueueStep) {
       const retryPromptPreview = retryPromptText
         .split("\n")[0]
@@ -413,14 +435,17 @@ export class EndConditionHandler {
         "error",
         `ctrlyoke: Failed to send retry prompt: ${failureReason}`
       );
-      this.promptQueue.resetRetryCount();
+      this.promptQueue.resetRetryCount(retryContext.attemptTarget);
       return { handlerResult: { shouldContinue: false, failureReason } };
     }
 
     if (retryContext.runtime.stopped) {
       Log.info("⚠️ Workflow stopped during retry");
       return {
-        handlerResult: this.workflowStopped("Workflow stopped during retry"),
+        handlerResult: this.workflowStopped(
+          "Workflow stopped during retry",
+          retryContext.attemptTarget
+        ),
       };
     }
 
@@ -450,8 +475,11 @@ export class EndConditionHandler {
     };
   }
 
-  private workflowStopped(failureReason: string): EndConditionHandlerResult {
-    this.promptQueue.resetRetryCount();
+  private workflowStopped(
+    failureReason: string,
+    target: WorkflowAttemptTarget
+  ): EndConditionHandlerResult {
+    this.promptQueue.resetRetryCount(target);
     return { shouldContinue: false, failureReason };
   }
 

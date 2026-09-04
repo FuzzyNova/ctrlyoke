@@ -66,6 +66,8 @@ interface UseOutputScrollTargetInput {
   autoscrollEnabledRef: RefObject<boolean>;
   commitScrollTargetFromViewportRef: RefObject<(reason: string) => void>;
   defaultTarget: OutputScrollTarget;
+  isLatestActivityFollowEnabled?: boolean;
+  latestActivityRowKey?: string;
   isProgrammaticScrollRef: RefObject<boolean>;
   lastProgrammaticScrollTopRef: RefObject<number | null>;
   lastScrollEventAtRef: RefObject<number | null>;
@@ -100,11 +102,30 @@ interface OutputScrollRow {
 
 const EMPTY_OUTPUT_SCROLL_ROWS: readonly OutputScrollRow[] = [];
 
+function targetIsLatestActivityAndStillVisible(
+  scrollElement: HTMLDivElement,
+  target: OutputScrollTarget
+): boolean {
+  if (target.kind !== OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY) {
+    return false;
+  }
+  const rowElement = findRenderedRowElementByKey(
+    scrollElement,
+    target.rowKey
+  );
+  if (!rowElement) return false;
+  const scrollRect = scrollElement.getBoundingClientRect();
+  const rowRect = rowElement.getBoundingClientRect();
+  return rowRect.bottom > scrollRect.top && rowRect.top < scrollRect.bottom;
+}
+
 export function useOutputScrollTarget({
   applyScrollTargetRef,
   autoscrollEnabledRef,
   commitScrollTargetFromViewportRef,
   defaultTarget,
+  isLatestActivityFollowEnabled = false,
+  latestActivityRowKey,
   isProgrammaticScrollRef,
   lastProgrammaticScrollTopRef,
   lastScrollEventAtRef,
@@ -148,7 +169,8 @@ export function useOutputScrollTarget({
       const previousTarget = scrollTargetRef.current;
       scrollTargetRef.current = target;
       autoscrollEnabledRef.current =
-        target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM;
+        target.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
+        target.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY;
       setOutputScrollTarget(workflowScrollTargetId, target);
 
       if (isProfilingEnabled()) {
@@ -161,8 +183,8 @@ export function useOutputScrollTarget({
           // is accepting that as the new resting place — the signature of a
           // jump that never returns.
           offsetDriftPx:
-            previousTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW &&
-            target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW &&
+            previousTarget.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM &&
+            target.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM &&
             previousTarget.rowKey === target.rowKey
               ? target.viewportOffsetPx - previousTarget.viewportOffsetPx
               : undefined,
@@ -269,7 +291,28 @@ export function useOutputScrollTarget({
       // is *meant* to be at the bottom even if streaming content has temporarily
       // outgrown it, so committing a row anchor here would silently unpin the
       // pane (setCurrentScrollTarget disarms on any non-bottom target).
-      if (autoscrollEnabledRef.current || atBottom) {
+      let releasedLatestActivity = false;
+      if (
+        scrollTargetRef.current.kind ===
+        OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY
+      ) {
+        if (
+          autoscrollEnabledRef.current &&
+          targetIsLatestActivityAndStillVisible(
+            scrollElement,
+            scrollTargetRef.current
+          )
+        ) {
+          scrollTargetCommitRetryCountRef.current = 0;
+          return;
+        }
+        autoscrollEnabledRef.current = false;
+        releasedLatestActivity = true;
+      }
+      if (
+        autoscrollEnabledRef.current ||
+        (!releasedLatestActivity && atBottom)
+      ) {
         scrollTargetCommitRetryCountRef.current = 0;
         setCurrentScrollTarget(defaultTarget, reason);
         return;
@@ -381,7 +424,7 @@ export function useOutputScrollTarget({
 
       if (
         !resolved.resolved &&
-        target.kind === OUTPUT_SCROLL_TARGET_KINDS.ROW
+        target.kind !== OUTPUT_SCROLL_TARGET_KINDS.BOTTOM
       ) {
         setCurrentScrollTarget(defaultTarget, "target-missing");
       }
@@ -519,16 +562,21 @@ export function useOutputScrollTarget({
     [commitScrollTargetFromViewport, userScrollInputGraceMs]
   );
 
-  useLayoutEffect(() => {
-    void layoutApplyTrigger;
-    applyScrollTarget("layout-effect");
-  }, [applyScrollTarget, layoutApplyTrigger]);
-
   useEffect(() => {
     void restoreTrigger;
-    const nextTarget = preserveTargetForRenderedRows(
+    const restoredTarget = preserveTargetForRenderedRows(
       savedOutputScrollTarget ?? defaultTarget
     );
+    const nextTarget =
+      isLatestActivityFollowEnabled &&
+      latestActivityRowKey &&
+      restoredTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM
+        ? {
+            kind: OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY,
+            rowKey: latestActivityRowKey,
+            viewportOffsetPx: 0,
+          }
+        : restoredTarget;
     const restoreContextChanged =
       previousRestoreTriggerRef.current !== restoreTrigger ||
       previousWorkflowScrollTargetIdRef.current !== workflowScrollTargetId;
@@ -543,7 +591,8 @@ export function useOutputScrollTarget({
 
     scrollTargetRef.current = nextTarget;
     autoscrollEnabledRef.current =
-      nextTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM;
+      nextTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.BOTTOM ||
+      nextTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY;
     if (
       savedOutputScrollTarget &&
       !areOutputScrollTargetsEqual(savedOutputScrollTarget, nextTarget)
@@ -557,6 +606,8 @@ export function useOutputScrollTarget({
     applyScrollTargetRef,
     autoscrollEnabledRef,
     defaultTarget,
+    isLatestActivityFollowEnabled,
+    latestActivityRowKey,
     restoreTrigger,
     savedOutputScrollTarget,
     preserveTargetForRenderedRows,
@@ -564,6 +615,41 @@ export function useOutputScrollTarget({
     setOutputScrollTarget,
     workflowScrollTargetId,
   ]);
+
+  useLayoutEffect(() => {
+    if (
+      !isLatestActivityFollowEnabled ||
+      !latestActivityRowKey ||
+      !autoscrollEnabledRef.current
+    ) {
+      return;
+    }
+    const currentTarget = scrollTargetRef.current;
+    const nextTarget: OutputScrollTarget = {
+      kind: OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY,
+      rowKey: latestActivityRowKey,
+      viewportOffsetPx:
+        currentTarget.kind === OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY &&
+        currentTarget.rowKey === latestActivityRowKey
+          ? currentTarget.viewportOffsetPx
+          : 0,
+    };
+    if (areOutputScrollTargetsEqual(currentTarget, nextTarget)) {
+      return;
+    }
+    setCurrentScrollTarget(nextTarget, "latest-activity");
+  }, [
+    autoscrollEnabledRef,
+    isLatestActivityFollowEnabled,
+    latestActivityRowKey,
+    scrollTargetRef,
+    setCurrentScrollTarget,
+  ]);
+
+  useLayoutEffect(() => {
+    void layoutApplyTrigger;
+    applyScrollTarget("layout-effect");
+  }, [applyScrollTarget, layoutApplyTrigger]);
 
   useEffect(() => {
     if (rows) {

@@ -171,6 +171,7 @@ export function getOutputRowSearchSegments(
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
+    case OUTPUT_ROW_KINDS.STEP_SWITCH:
       return [];
     case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       return createSegments([

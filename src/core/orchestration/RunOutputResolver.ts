@@ -793,18 +793,28 @@ export class RunOutputResolver {
     manifestPath: string,
     contexts: readonly PriorContext[],
     allPrompts: readonly WorkflowStep[],
-    currentIndex: number
+    groupStartBoundary: number
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
+    const explicitQueueIndices = new Set<number>();
+    const previousCandidateIndices = new Set<number>();
+    let includeAllQueue = false;
+    let includePreviousQueue = false;
     let includeAllFinalSteps = false;
     let includePreviousFinalStep = false;
 
     for (const context of contexts) {
       if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
-        for (let index = 0; index < currentIndex; index++)
+        includeAllQueue = true;
+        for (let index = 0; index < groupStartBoundary; index++) {
           queueIndices.add(index);
+        }
       } else if (context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS) {
-        if (currentIndex > 0) queueIndices.add(currentIndex - 1);
+        includePreviousQueue = true;
+        for (let index = 0; index < groupStartBoundary; index++) {
+          queueIndices.add(index);
+          previousCandidateIndices.add(index);
+        }
       } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
         includeAllFinalSteps = true;
       } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
@@ -812,7 +822,10 @@ export class RunOutputResolver {
       } else if (Array.isArray(context)) {
         for (const oneBasedIndex of context) {
           const index = oneBasedIndex - 1;
-          if (index >= 0 && index < currentIndex) queueIndices.add(index);
+          if (index >= 0 && index < groupStartBoundary) {
+            queueIndices.add(index);
+            explicitQueueIndices.add(index);
+          }
         }
       }
     }
@@ -827,7 +840,7 @@ export class RunOutputResolver {
         : []),
     ];
     const resolved = await this.resolveLatestAttempts(manifestPath, targets);
-    const queueItems = [...queueIndices]
+    const resolvedQueueItems = [...queueIndices]
       .sort((left, right) => left - right)
       .flatMap((index): PriorContextItem[] => {
         const value = resolved.get(
@@ -856,6 +869,18 @@ export class RunOutputResolver {
           ? [{ index, name: step.name, prompt: step.prompt, text }]
           : [];
       });
+    const selectedQueueIndices = includeAllQueue
+      ? new Set(queueIndices)
+      : new Set(explicitQueueIndices);
+    if (includePreviousQueue) {
+      const previous = resolvedQueueItems
+        .filter((item) => previousCandidateIndices.has(item.index))
+        .at(-1);
+      if (previous) selectedQueueIndices.add(previous.index);
+    }
+    const queueItems = resolvedQueueItems.filter((item) =>
+      selectedQueueIndices.has(item.index)
+    );
     const finalItems = [...resolved.values()]
       .filter((value) => value.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
       .sort(

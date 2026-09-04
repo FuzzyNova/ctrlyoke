@@ -16,6 +16,7 @@ import type {
   WorkflowStep,
   WorkflowViewAddress,
   WorktreeRunProjection,
+  ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
@@ -69,7 +70,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -82,6 +85,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
     });
   }
 
@@ -99,7 +104,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -115,6 +122,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
     });
   }
 
@@ -147,10 +156,26 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  updateExecutionState(state: string, workflowId?: string): void {
+  updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
     this.send({
       type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
       state,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
+    });
+  }
+
+  updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED,
+      activeStepIndices,
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -214,13 +239,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,
       chunk,
       ...(phase !== undefined ? { phase } : {}),
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -230,7 +263,10 @@ export class PostMessageDashboardSink implements IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
@@ -238,6 +274,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       events,
       ...(attemptIndex !== undefined ? { attemptIndex } : {}),
       ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(phase !== undefined ? { phase } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -279,7 +318,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     finalStep?: WorkflowStep | null,
     executionState?: string,
     definitionRevision?: number,
-    workflowId?: string
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.send({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
@@ -288,19 +328,22 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(executionState !== undefined ? { executionState } : {}),
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[]
   ): void {
     this.send({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
       steps,
       finalStep: finalStep ?? null,
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 
@@ -344,13 +387,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     loopIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
       chunk,
       ...(phase !== undefined ? { phase } : {}),
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -360,7 +411,10 @@ export class PostMessageDashboardSink implements IDashboardSink {
     events: CliEvent[],
     attemptIndex?: number,
     runIndex?: number,
-    workflowId?: string
+    workflowId?: string,
+    phase?: ExecutionPhase,
+    timestampMs?: number,
+    sequence?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
@@ -368,15 +422,23 @@ export class PostMessageDashboardSink implements IDashboardSink {
       events,
       ...(attemptIndex !== undefined ? { attemptIndex } : {}),
       ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(phase !== undefined ? { phase } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
+  notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string,
+    parallelGroups?: ParallelGroupDefinition[]
+  ): void {
     this.send({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
       steps,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(parallelGroups !== undefined ? { parallelGroups } : {}),
     });
   }
 

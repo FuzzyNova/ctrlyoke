@@ -538,6 +538,12 @@
           "type": "number",
           "description": "Maximum number of prompts allowed in the queue."
         },
+        "maxParallelSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 6,
+          "description": "Maximum number of active members in a parallel step group."
+        },
         "maxWorkflowExecutionTime": {
           "type": "number",
           "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited."
