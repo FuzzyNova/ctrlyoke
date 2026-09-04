@@ -748,7 +748,9 @@ To keep interleaving readable:
 - A group header shows `N running / N complete / N failed` and filter chips for **All** and
   each member. Chips write the `hiddenOutputTargets` set shipped by
   `OUTPUT_STEP_FILTER_PLAN.md`; selecting one member is `soloOutputTarget` over the group's
-  member keys. It is a filter, not a second stored history.
+  member keys. Both live in `src/ui/webview-react/store/uiStore.ts` (**not**
+  `workflowStore`), keyed by view address and pruned by `uiStore.pruneHiddenOutputTargets`;
+  reuse that state as-is. It is a filter, not a second stored history.
 - Tool completion updates the original tool activity in place instead of adding a duplicate
   result at the bottom. The event's start sequence remains its location.
 - Raw/plain response streams remain one target-owned response activity per attempt and grow
@@ -816,7 +818,8 @@ Invariants:
 - `OutputHistoryManager` / `OutputHistoryTimelineAdapter`: expose activity entries in
   addition to aggregate attempt output.
 - `workflowStore`: hold live/history activity entries, the active-target set, and
-  full-key streaming updates.
+  full-key streaming updates. The step-filter state stays in `uiStore` where
+  `OUTPUT_STEP_FILTER_PLAN.md` put it; do not migrate it.
 - `outputProjection.ts` / `useOutputRowsModel.ts` / `outputRows.ts`: merge, filter,
   coalesce, and build group/activity rows; reuse `StepHiddenRow` and `hiddenTargetKeys`.
 - `OutputSection.tsx`: own live-follow navigation, minimap integration, and group header
