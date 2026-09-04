@@ -813,10 +813,13 @@ export const EXECUTION_STATES = {
 export const PARALLEL_GROUP_FAN_OUT_ENABLED = false;
 
 /** Clamp parallel group width until the fan-out gate is enabled. */
-export function getEffectiveParallelGroupWidth(configuredWidth: number): number {
+export function getEffectiveParallelGroupWidth(
+  configuredWidth: number,
+  fanOutEnabled: boolean = PARALLEL_GROUP_FAN_OUT_ENABLED
+): number {
   return Math.min(
     configuredWidth,
-    PARALLEL_GROUP_FAN_OUT_ENABLED ? Number.POSITIVE_INFINITY : 1
+    fanOutEnabled ? Number.POSITIVE_INFINITY : 1
   );
 }
 

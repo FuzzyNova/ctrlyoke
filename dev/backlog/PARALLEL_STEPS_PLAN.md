@@ -956,19 +956,19 @@ normalized groups, while Save As reconstructs authored `parallel:` items and
 omits the working-file-only `parallelGroups` root key.
 
 [x] 1. Schema: `parallelGroupItem`, root `parallelGroups`, template-branch harness
-   restriction, YAML regeneration; `NOT_AUTHORABLE` entry in the round-trip test.
+restriction, YAML regeneration; `NOT_AUTHORABLE` entry in the round-trip test.
 [x] 2. Types: `ParallelGroupDefinition`, `PromptFile.parallelGroups`, `QueueState`,
-   and `WorkflowDefinitionSnapshot`.
+and `WorkflowDefinitionSnapshot`.
 [x] 3. `src/core/ParallelGroupTopology.ts`: normalize/validate/insert/delete/reorder/
-   group/ungroup/unwrap/snap helpers with exhaustive unit tests.
+group/ungroup/unwrap/snap helpers with exhaustive unit tests.
 [x] 4. `PromptFileParser`: flatten containers, populate groups, structural validation rules.
 [x] 5. `WorkingFileManager`, `PromptQueue`, `RunContinuationService`, `WorkflowInstance`,
-   `WorkflowStepSanitizer.buildDefinitionSnapshot`, `TimelineRecorder`,
-   `RunOutputResolver`: carry and preserve groups through every mutation path listed in
-   the audit, including the insert/rewind/start-position snapping rules.
+`WorkflowStepSanitizer.buildDefinitionSnapshot`, `TimelineRecorder`,
+`RunOutputResolver`: carry and preserve groups through every mutation path listed in
+the audit, including the insert/rewind/start-position snapping rules.
 [x] 6. `WorkflowSerializer.buildCleanWorkflow`: reconstruct nested `parallel:` items.
 [x] 7. Tests: parser, schema, serializer round trip, queue mutation, revision snapshot,
-   invalid-range, every-bundled-template parse.
+invalid-range, every-bundled-template parse.
 
 Done when: grouped steps execute **sequentially** through the existing path with no
 behavior change, and every mutation path preserves ranges. No UI yet.
@@ -1025,12 +1025,16 @@ order without corrupting queue state.
 
 ### Stage 4 — Parallel coordinator, preflight, preview, and recovery
 
+**Status: in progress.** Items 1–5 are complete; group snapshots and standalone CLI
+output work remain.
+
 1. **Complete.** `ParallelGroupPreflight` (shared) and its use in
    `ExecutionPreviewService`; preview types, `DryRunModal`, CLI preview rendering.
-2. Coordinator: bounded pool, `StepExecutionOutcome` leaf contract, join commit, progress.
-3. Fail-fast / fail-after-settle and cancellation draining.
-4. Join-based pause/resume; all-target stop.
-5. Recovery: schedule only non-terminal members on resume.
+2. **Complete.** Coordinator: bounded pool, `StepExecutionOutcome` leaf contract, join
+   commit, progress.
+3. **Complete.** Fail-fast / fail-after-settle and cancellation draining.
+4. **Complete.** Join-based pause/resume; all-target stop.
+5. **Complete.** Recovery: schedule only non-terminal members on resume.
 6. Group-level before/after workspace snapshots with the `parallelGroupId` marker; hide
    per-member prompt undo when width > 1.
 7. Standalone CLI: interactive-multiplex rejection; per-target streaming buffers and

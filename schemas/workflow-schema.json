@@ -1094,6 +1094,10 @@
             "failureMessage": {
               "type": "string",
               "description": "Human-readable message describing the last harness/session failure."
+            },
+            "terminalFailure": {
+              "type": "boolean",
+              "description": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure."
             }
           },
           "required": ["startedAt"]

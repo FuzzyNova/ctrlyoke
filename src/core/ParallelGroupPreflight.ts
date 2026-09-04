@@ -59,6 +59,10 @@ export interface ParallelGroupPreflightOptions {
   readonly hostCanProvidePty: boolean;
   readonly supportsConcurrentInteractiveSessions: boolean;
   readonly configuredWidth: number;
+  /** Test-only/next-stage override; production defaults to the closed build gate. */
+  readonly fanOutEnabled?: boolean;
+  /** Recovery execution omits members whose terminal runtime is already durable. */
+  readonly excludeTerminalMembers?: boolean;
   readonly resolvePromptText?: (
     promptText: string,
     variables: Readonly<Record<string, string>>
@@ -98,18 +102,12 @@ function promptProjection(step: WorkflowStep): PromptStep {
   };
 }
 
-function memberLabel(
-  workflow: PromptFile,
-  stepIndex: number
-): string {
+function memberLabel(workflow: PromptFile, stepIndex: number): string {
   const name = workflow.steps?.[stepIndex]?.name;
   return `Step ${stepIndex + 1}${name ? ` ("${name}")` : ""}`;
 }
 
-function memberList(
-  workflow: PromptFile,
-  indices: readonly number[]
-): string {
+function memberList(workflow: PromptFile, indices: readonly number[]): string {
   return indices.map((index) => memberLabel(workflow, index)).join(", ");
 }
 
@@ -137,7 +135,8 @@ export async function preflightParallelGroup(
   } = options;
   const variables = Object.freeze({ ...(workflow.vars ?? {}) });
   const effectiveWidth = getEffectiveParallelGroupWidth(
-    options.configuredWidth
+    options.configuredWidth,
+    options.fanOutEnabled
   );
   const issues: ParallelGroupPreflightIssue[] = [];
   const members: ParallelGroupPreflightMember[] = [];
@@ -148,7 +147,14 @@ export async function preflightParallelGroup(
     stepIndex += 1
   ) {
     const step = workflow.steps?.[stepIndex];
-    if (!step || step.enabled === false) continue;
+    if (
+      !step ||
+      step.enabled === false ||
+      (options.excludeTerminalMembers &&
+        step._runtime?.completedAt !== undefined)
+    ) {
+      continue;
+    }
 
     const prompt = promptProjection(step);
     const resolvedTarget = resolveExecutionProperties(prompt, workflow, {
@@ -258,10 +264,7 @@ export async function preflightParallelGroup(
         member.resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE
     )
     .map((member) => member.stepIndex);
-  if (
-    interactiveIndices.length > 1 &&
-    !supportsConcurrentInteractiveSessions
-  ) {
+  if (interactiveIndices.length > 1 && !supportsConcurrentInteractiveSessions) {
     issues.push({
       code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
       memberIndices: interactiveIndices,
@@ -269,10 +272,11 @@ export async function preflightParallelGroup(
     });
   }
 
-  const promptMembers = members.filter(
-    (member) => !isScriptStep(member.step)
-  );
-  const harnessErrors = new Map<string, { harness: HarnessId; indices: number[] }>();
+  const promptMembers = members.filter((member) => !isScriptStep(member.step));
+  const harnessErrors = new Map<
+    string,
+    { harness: HarnessId; indices: number[] }
+  >();
   if (options.checkHarnessReady) {
     for (const member of promptMembers) {
       const reason = await options.checkHarnessReady(
@@ -306,8 +310,7 @@ export async function preflightParallelGroup(
           const previousOwner = integrationOwners.get(integration);
           if (previousOwner !== undefined) {
             issues.push({
-              code:
-                PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
+              code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
               memberIndices: [previousOwner, member.stepIndex],
               message: `${memberList(workflow, [previousOwner, member.stepIndex])} were assigned the same integration instead of isolated integrations.`,
             });
@@ -317,8 +320,7 @@ export async function preflightParallelGroup(
         }
       } catch (error) {
         issues.push({
-          code:
-            PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
+          code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
           memberIndices: [member.stepIndex],
           message: `${memberLabel(workflow, member.stepIndex)} could not create an isolated ${member.resolvedProperties.harness} integration: ${error instanceof Error ? error.message : String(error)}`,
         });

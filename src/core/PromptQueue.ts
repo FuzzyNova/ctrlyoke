@@ -284,6 +284,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     if (!this.state.steps[index]) {
       return false;
     }
+    if (
+      this.state.parallelGroups.some(
+        (group) => index >= group.startIndex && index <= group.endIndex
+      )
+    ) {
+      return false;
+    }
 
     void this.cancelStep(index);
     this.state.currentIndex++;
@@ -873,6 +880,32 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.emitStateChange();
   }
 
+  async persistStepOutcome(outcome: StepExecutionOutcome): Promise<void> {
+    if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return;
+    }
+
+    this.applyStepOutcome(outcome);
+    this.emitStateChange();
+    await this.updateWorkingFile();
+  }
+
+  async commitStepOutcomeAndAdvance(
+    outcome: StepExecutionOutcome
+  ): Promise<void> {
+    if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return;
+    }
+
+    this.applyStepOutcome(outcome);
+    this.state.currentIndex = Math.max(
+      this.state.currentIndex,
+      outcome.target.stepIndex + 1
+    );
+    this.emitStateChange();
+    await this.updateWorkingFile();
+  }
+
   async commitParallelGroupJoin(
     group: ParallelGroupDefinition,
     outcomes: readonly StepExecutionOutcome[]
@@ -889,26 +922,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         continue;
       }
 
-      switch (outcome.status) {
-        case PROMPT_TERMINAL_STATUS.COMPLETED:
-          this.completeStepState(outcome.target.stepIndex);
-          break;
-        case PROMPT_TERMINAL_STATUS.SKIPPED:
-          this.skipStepState(
-            outcome.target.stepIndex,
-            PROMPT_TERMINAL_STATUS.SKIPPED
-          );
-          break;
-        case PROMPT_TERMINAL_STATUS.FAILED:
-          this.failStepState(
-            outcome.target.stepIndex,
-            outcome.failureReason
-          );
-          break;
-        case PROMPT_TERMINAL_STATUS.CANCELLED:
-          this.cancelStepState(outcome.target.stepIndex);
-          break;
-      }
+      this.applyStepOutcome(outcome);
     }
 
     this.state.currentIndex = Math.max(
@@ -917,6 +931,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     );
     this.emitStateChange();
     await this.updateWorkingFile();
+  }
+
+  getSettledCount(): number {
+    return this.state.steps.reduce(
+      (count, step) =>
+        step._runtime?.completedAt !== undefined ? count + 1 : count,
+      0
+    );
   }
 
   /**
@@ -928,6 +950,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
 
     return { current, total, percentage };
+  }
+
+  getCurrentParallelGroup(): ParallelGroupDefinition | undefined {
+    const { currentIndex } = this.state;
+    return this.state.parallelGroups.find(
+      (group) =>
+        currentIndex >= group.startIndex && currentIndex <= group.endIndex
+    );
   }
 
   /**
@@ -1177,7 +1207,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
   }
 
-  private failStepState(stepIndex: number, error?: string): void {
+  private failStepState(
+    stepIndex: number,
+    error?: string,
+    terminalFailure: boolean = true
+  ): void {
     const currentResult = this.state.results[stepIndex];
     if (!currentResult) {
       return;
@@ -1188,7 +1222,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       currentResult.error = error;
     }
     currentResult.timestamp = new Date();
-    this.markPromptCompleted(stepIndex, PROMPT_TERMINAL_STATUS.FAILED);
+    this.markPromptCompleted(stepIndex, PROMPT_TERMINAL_STATUS.FAILED, {
+      ...(error ? { failureMessage: error } : {}),
+      terminalFailure,
+    });
     this.stateMachine.resetRetryCount({
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex,
@@ -1208,6 +1245,34 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex,
     });
+  }
+
+  private applyStepOutcome(outcome: StepExecutionOutcome): void {
+    if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return;
+    }
+
+    switch (outcome.status) {
+      case PROMPT_TERMINAL_STATUS.COMPLETED:
+        this.completeStepState(outcome.target.stepIndex);
+        break;
+      case PROMPT_TERMINAL_STATUS.SKIPPED:
+        this.skipStepState(
+          outcome.target.stepIndex,
+          PROMPT_TERMINAL_STATUS.SKIPPED
+        );
+        break;
+      case PROMPT_TERMINAL_STATUS.FAILED:
+        this.failStepState(
+          outcome.target.stepIndex,
+          outcome.failureReason,
+          outcome.terminalFailure
+        );
+        break;
+      case PROMPT_TERMINAL_STATUS.CANCELLED:
+        this.cancelStepState(outcome.target.stepIndex);
+        break;
+    }
   }
 
   /**

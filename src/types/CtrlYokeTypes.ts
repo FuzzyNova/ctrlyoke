@@ -644,6 +644,17 @@ export interface StepExecutionOutcome {
   target: WorkflowAttemptTarget;
   status: PromptTerminalStatus;
   failureReason?: string;
+  /** False when a per-step continue policy resolved a failed attempt. */
+  terminalFailure?: boolean;
+}
+
+export interface ParallelGroupOutcome {
+  group: ParallelGroupDefinition;
+  outcomes: StepExecutionOutcome[];
+  settledCount: number;
+  terminalFailure: boolean;
+  paused: boolean;
+  stopped: boolean;
 }
 
 export type { WorkflowAttemptStatus };
@@ -866,6 +877,9 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
   /** Human-readable failure message persisted for UI/history display. */
   failureMessage?: string;
+
+  /** False when the failed step was resolved by its per-step continue policy. */
+  terminalFailure?: boolean;
 }
 
 /**
@@ -967,6 +981,7 @@ export interface QueueState extends WorkflowRuntimeState {
  */
 export interface DynamicQueueConfig {
   maxQueueSize: number; // 1-1000 (default: 100)
+  maxParallelSteps: number; // Active members per parallel group (default: 6)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
   unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime
   notifyOnExtension: boolean;

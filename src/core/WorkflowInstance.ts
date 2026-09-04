@@ -187,7 +187,7 @@ export type {
  *   - EndConditionHandler / EndConditionEvaluator
  *   - PromptFileLoader / PromptFileWatcher
  *   - OutputHistoryManager
- *   - activeIntegration, currentPromptFile, startPending, lastKnownStepCount
+ *   - active target resources, currentPromptFile, startPending, lastKnownStepCount
  *
  * Dependencies that span multiple workflows (integrations, status bar, template
  * importing) remain in WorkflowOrchestrator and are injected as callbacks:
@@ -199,6 +199,14 @@ export type {
  * Phase 1: WorkflowOrchestrator holds exactly one instance.
  * Phase 2: Multiple instances run in parallel (one per open workflow).
  */
+
+interface ActiveTargetResources {
+  target: WorkflowAttemptTarget;
+  attemptIndex?: number;
+  integration?: HarnessIntegration;
+  processRunner?: ScriptProcessRunner;
+  ptySessionId?: string;
+}
 
 export class WorkflowInstance {
   /** Unique identifier — stable for this instance's lifetime */
@@ -221,8 +229,6 @@ export class WorkflowInstance {
   readonly promptQueue: PromptQueue;
   workflowExecutor: WorkflowExecutor;
   private readonly workflowRuntime: WorkflowStateMachine;
-  /** Currently-executing integration (set for the duration of startWorkflowExecution) */
-  activeIntegration?: HarnessIntegration;
   /** Immutable state/execution roots captured when this instance is created. */
   private executionWorkspace: ExecutionWorkspace;
   private readonly defaultExecutionWorkspace: ExecutionWorkspace;
@@ -312,13 +318,45 @@ export class WorkflowInstance {
    * `SessionActivityWatcher`'s resumed activity has no target of its own (it
    * fires outside any active dispatch), so it is attributed here instead.
    */
+  private readonly activityIntegrationIds = new WeakMap<
+    HarnessIntegration,
+    string
+  >();
+  private nextActivityIntegrationId = 1;
+  private readonly completedActivityTargets = new Map<
+    string,
+    {
+      target: OutputExecutionTarget;
+      runIndex: number;
+      attemptIndex: number;
+    }
+  >();
+  private readonly latestCompletedActivityBySession = new Map<
+    string,
+    {
+      target: OutputExecutionTarget;
+      runIndex: number;
+      attemptIndex: number;
+    }
+  >();
+  /** Compatibility bridge for callers that do not yet supply integration identity. */
+  private legacyCompletedActivityTarget?: {
+    target: OutputExecutionTarget;
+    runIndex: number;
+    attemptIndex: number;
+  };
+  /** @deprecated Kept only for older in-process callers during target migration. */
   private lastCompletedActivityTarget?: {
     target: OutputExecutionTarget;
     runIndex: number;
     attemptIndex: number;
   };
   /** Events that arrive in the monitor-to-session-watcher handoff window. */
-  private pendingSessionActivityEvents: CliEvent[] = [];
+  private readonly pendingSessionActivityEvents = new Map<string, CliEvent[]>();
+  private readonly pendingSessionActivityIntegrations = new Map<
+    string,
+    { integration: HarnessIntegration; sessionId: string | undefined }
+  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -341,6 +379,21 @@ export class WorkflowInstance {
   private readonly executionIntegrations = new Map<
     string,
     HarnessIntegration
+  >();
+  /** Target-keyed integrations used by a future parallel group fan-out. */
+  private readonly targetExecutionIntegrations = new Map<
+    string,
+    HarnessIntegration
+  >();
+  /** All resources currently owned by active target attempts. */
+  private readonly activeTargetResources = new Map<
+    string,
+    ActiveTargetResources
+  >();
+  /** One headless process transport per active target. */
+  private readonly targetScriptProcessRunners = new Map<
+    string,
+    ScriptProcessRunner
   >();
 
   /**
@@ -454,6 +507,7 @@ export class WorkflowInstance {
     private readonly onStatusBarUpdate: () => void,
     private readonly workspaceFolderPath: string | undefined,
     private readonly hostCanProvidePty: boolean = true,
+    private readonly supportsConcurrentInteractiveSessions: boolean = true,
     private readonly compatibilityRegistry?: HarnessCapabilityRegistry,
     /** Destination for future operational feedback migrations. */
     private readonly userFeedbackSink?: UserFeedbackSink,
@@ -712,6 +766,41 @@ export class WorkflowInstance {
     }
   }
 
+  private async releaseTargetResources(
+    target: WorkflowAttemptTarget
+  ): Promise<void> {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey);
+    const processRunner =
+      resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
+    processRunner?.dispose();
+    if (resource?.ptySessionId) {
+      getPtyProcessManager()?.killSession(resource.ptySessionId);
+    }
+    const integration = this.targetExecutionIntegrations.get(targetKey);
+    if (integration) {
+      integration.closeTerminalGracefully();
+      integration.dispose();
+      this.targetExecutionIntegrations.delete(targetKey);
+    }
+    this.targetScriptProcessRunners.delete(targetKey);
+    this.activeTargetResources.delete(targetKey);
+  }
+
+  private async cancelTarget(target: WorkflowAttemptTarget): Promise<void> {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey);
+    resource?.processRunner?.dispose();
+    if (resource?.ptySessionId) {
+      getPtyProcessManager()?.killSession(resource.ptySessionId);
+    }
+    const integration =
+      resource?.integration ?? this.targetExecutionIntegrations.get(targetKey);
+    if (integration) {
+      await integration.cancel();
+    }
+  }
+
   private reportMissingAssetWarning(
     missingDirectories: readonly string[]
   ): void {
@@ -810,13 +899,15 @@ export class WorkflowInstance {
       this.promptQueue.getFinalStepRuntime(),
       undefined,
       this.getWorkflowPropertiesForDashboard(),
-      state.parallelGroups
+      state.parallelGroups,
+      this.getActiveStepIndices()
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
       { status: executionState, currentIndex: state.currentIndex },
       this.promptQueue.getFinalStepRuntime(),
-      `[inst:${this.id.slice(0, 8)}]`
+      `[inst:${this.id.slice(0, 8)}]`,
+      this.getActiveTargetKeys()
     );
   }
 
@@ -843,13 +934,15 @@ export class WorkflowInstance {
       this.promptQueue.getFinalStepRuntime(),
       undefined,
       this.getWorkflowPropertiesForDashboard(),
-      state.parallelGroups
+      state.parallelGroups,
+      this.getActiveStepIndices()
     );
     this.outputCaptureBuffer.replayTo(
       sink,
       { status: executionState, currentIndex: state.currentIndex },
       this.promptQueue.getFinalStepRuntime(),
-      `[inst:${this.id.slice(0, 8)}]`
+      `[inst:${this.id.slice(0, 8)}]`,
+      this.getActiveTargetKeys()
     );
   }
 
@@ -868,7 +961,8 @@ export class WorkflowInstance {
         currentIndex: state.currentIndex,
       },
       this.promptQueue.getFinalStepRuntime(),
-      `[inst:${this.id.slice(0, 8)}]`
+      `[inst:${this.id.slice(0, 8)}]`,
+      this.getActiveTargetKeys()
     );
   }
 
@@ -921,6 +1015,16 @@ export class WorkflowInstance {
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
+    for (const integration of this.targetExecutionIntegrations.values()) {
+      integration.closeTerminal();
+      integration.dispose();
+    }
+    this.targetExecutionIntegrations.clear();
+    for (const runner of this.targetScriptProcessRunners.values()) {
+      runner.dispose();
+    }
+    this.targetScriptProcessRunners.clear();
+    this.activeTargetResources.clear();
     if (this.activeWorktree) {
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
       this.activeWorktree = undefined;
@@ -2375,10 +2479,9 @@ export class WorkflowInstance {
    * Stop current execution.
    */
   async stop(): Promise<void> {
-    const integration = this.activeIntegration || this.getDetectorIntegration();
     const stopReason = "Workflow stopped by user";
 
-    Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
+    Log.info(`⏹️ WorkflowInstance.stop() - stopping active target resources`);
 
     this.promptQueue.markInFlightPromptCancelled();
     const activeAttempts = this.workflowRuntime.getActiveAttempts();
@@ -2408,6 +2511,12 @@ export class WorkflowInstance {
       }
 
       confirmedStoppedCalled = true;
+      if (this.promptQueue.getCurrentParallelGroup()) {
+        Log.info(
+          "Parallel group cancellation requested; coordinator will commit member cancellations before STOPPED"
+        );
+        return;
+      }
       if (!this.workflowRuntime.confirmStopped()) {
         return;
       }
@@ -2426,29 +2535,63 @@ export class WorkflowInstance {
       }
     };
 
-    const timeoutHandle = setTimeout(() => {
-      if (!confirmedStoppedCalled) {
-        Log.warn(
-          "⏱️ Stop timeout: onResponseComplete never fired within 10s, forcing confirmedStopped()"
-        );
-        confirmStopped().catch((err) => {
-          Log.error("Failed to update working file after stop:", err);
-        });
+    const integrations = new Set<HarnessIntegration>();
+    for (const resource of this.activeTargetResources.values()) {
+      if (resource.integration) {
+        integrations.add(resource.integration);
       }
-    }, 10000);
+      resource.processRunner?.dispose();
+      if (resource.ptySessionId) {
+        getPtyProcessManager()?.killSession(resource.ptySessionId);
+      }
+    }
+    if (integrations.size === 0) {
+      integrations.add(this.getDetectorIntegration());
+    }
 
-    // Single listener handles both confirmedStopped and timeout cancellation
-    const responseCompleteDisposable = integration.onResponseComplete(() => {
-      if (!confirmedStoppedCalled) {
-        confirmStopped().catch((err) => {
-          Log.error("Failed to update working file after stop:", err);
-        });
-      }
+    const responseDisposables: Array<{ dispose(): void }> = [];
+    const responseSettled = [...integrations].map(
+      (integration) =>
+        new Promise<void>((resolve) => {
+          const disposable = integration.onResponseComplete(() => {
+            disposable.dispose();
+            resolve();
+          });
+          responseDisposables.push(disposable);
+        })
+    );
+    const cancelPromises = [...integrations].map((integration) =>
+      integration.cancel()
+    );
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.all([
+        Promise.allSettled(cancelPromises),
+        ...responseSettled,
+      ]).then(() => confirmStopped()),
+      new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(() => {
+          if (!confirmedStoppedCalled) {
+            Log.warn(
+              "⏱️ Stop timeout: cancellation did not settle within 10s, forcing confirmedStopped()"
+            );
+            confirmStopped()
+              .catch((err) => {
+                Log.error("Failed to update working file after stop:", err);
+              })
+              .finally(resolve);
+          } else {
+            resolve();
+          }
+        }, 10000);
+      }),
+    ]);
+    if (timeoutHandle !== undefined) {
       clearTimeout(timeoutHandle);
-      responseCompleteDisposable.dispose();
-    });
-
-    await integration.cancel();
+    }
+    for (const disposable of responseDisposables) {
+      disposable.dispose();
+    }
 
     this.workflowExecutor.clearResponseWaitState();
     this.startPending = false;
@@ -3191,30 +3334,108 @@ export class WorkflowInstance {
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
     this.outputCaptureBuffer.clear();
+    this.completedActivityTargets.clear();
+    this.latestCompletedActivityBySession.clear();
+    this.legacyCompletedActivityTarget = undefined;
     this.lastCompletedActivityTarget = undefined;
-    this.pendingSessionActivityEvents = [];
+    this.pendingSessionActivityEvents.clear();
+    this.pendingSessionActivityIntegrations.clear();
+  }
+
+  private getActivityIntegrationId(integration?: HarnessIntegration): string {
+    if (!integration) {
+      return "legacy";
+    }
+    let id = this.activityIntegrationIds.get(integration);
+    if (!id) {
+      id = `integration:${this.nextActivityIntegrationId++}`;
+      this.activityIntegrationIds.set(integration, id);
+    }
+    return id;
+  }
+
+  private getActivitySessionKey(
+    integration: HarnessIntegration | undefined,
+    sessionId: string | undefined
+  ): string {
+    return `${this.getActivityIntegrationId(integration)}:${sessionId ?? "unknown"}`;
+  }
+
+  private getActivityTargetKey(
+    integration: HarnessIntegration,
+    sessionId: string | undefined,
+    target: OutputExecutionTarget
+  ): string {
+    const targetKey =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? `queue:${target.stepIndex}`
+        : `final:${target.loopIndex}`;
+    return `${this.getActivitySessionKey(integration, sessionId)}:${targetKey}`;
   }
 
   private recordCompletedActivityTarget(
     target: OutputExecutionTarget,
     runIndex: number,
-    attemptIndex: number
+    attemptIndex: number,
+    integration?: HarnessIntegration
   ): void {
-    this.lastCompletedActivityTarget = { target, runIndex, attemptIndex };
-    if (this.pendingSessionActivityEvents.length === 0) {
+    const activity = { target, runIndex, attemptIndex };
+    if (!integration) {
+      this.legacyCompletedActivityTarget = activity;
+      this.lastCompletedActivityTarget = activity;
+      for (const [sessionKey, pendingEvents] of this
+        .pendingSessionActivityEvents) {
+        const pendingIntegration =
+          this.pendingSessionActivityIntegrations.get(sessionKey);
+        if (pendingIntegration) {
+          this.pendingSessionActivityEvents.delete(sessionKey);
+          this.pendingSessionActivityIntegrations.delete(sessionKey);
+          void this.handleSessionActivityResumed(
+            pendingEvents,
+            pendingIntegration.integration,
+            pendingIntegration.sessionId
+          );
+        }
+      }
       return;
     }
-    const pendingEvents = this.pendingSessionActivityEvents.splice(0);
-    void this.handleSessionActivityResumed(pendingEvents);
+    const sessionId = integration.getActivitySessionId();
+    const sessionKey = this.getActivitySessionKey(integration, sessionId);
+    this.completedActivityTargets.set(
+      this.getActivityTargetKey(integration, sessionId, target),
+      activity
+    );
+    this.latestCompletedActivityBySession.set(sessionKey, activity);
+    const pendingEvents = this.pendingSessionActivityEvents.get(sessionKey);
+    if (!pendingEvents || pendingEvents.length === 0) {
+      return;
+    }
+    this.pendingSessionActivityEvents.delete(sessionKey);
+    void this.handleSessionActivityResumed(
+      pendingEvents,
+      integration,
+      sessionId
+    );
   }
 
-  private beginActivityTargetCapture(): void {
-    this.lastCompletedActivityTarget = undefined;
-    this.pendingSessionActivityEvents = [];
+  private beginActivityTargetCapture(
+    integration?: HarnessIntegration,
+    _target?: WorkflowAttemptTarget
+  ): void {
+    // The completed target remains addressable until its watcher emits or the
+    // integration is retired. Do not clear siblings when another target starts.
+    if (integration) {
+      this.getActivityIntegrationId(integration);
+    } else {
+      this.legacyCompletedActivityTarget = undefined;
+      this.lastCompletedActivityTarget = undefined;
+      this.pendingSessionActivityEvents.clear();
+      this.pendingSessionActivityIntegrations.clear();
+    }
   }
 
   private getExecutionTargetRunKey(
-    target: OutputExecutionTarget
+    target: OutputExecutionTarget | WorkflowAttemptTarget
   ): `queue:${number}` | `final:${number}` {
     return target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue:${target.stepIndex}`
@@ -3230,17 +3451,31 @@ export class WorkflowInstance {
    * workflow/queue state.
    */
   private async handleSessionActivityResumed(
-    events: CliEvent[]
+    events: CliEvent[],
+    integration?: HarnessIntegration,
+    sessionId?: string
   ): Promise<void> {
     if (events.length === 0) {
       return;
     }
-    const activityTarget = this.lastCompletedActivityTarget;
+    const sessionKey = this.getActivitySessionKey(integration, sessionId);
+    const activityTarget =
+      this.latestCompletedActivityBySession.get(sessionKey) ??
+      this.legacyCompletedActivityTarget ??
+      this.lastCompletedActivityTarget;
     if (!activityTarget) {
       Log.trace(
         `[inst:${this.id.slice(0, 8)}] Session activity resumed before completed step attribution — buffering`
       );
-      this.pendingSessionActivityEvents.push(...events);
+      const pending = this.pendingSessionActivityEvents.get(sessionKey) ?? [];
+      pending.push(...events);
+      this.pendingSessionActivityEvents.set(sessionKey, pending);
+      if (integration) {
+        this.pendingSessionActivityIntegrations.set(sessionKey, {
+          integration,
+          sessionId,
+        });
+      }
       return;
     }
     const { target, runIndex, attemptIndex } = activityTarget;
@@ -3542,13 +3777,16 @@ export class WorkflowInstance {
     activeIntegration: HarnessIntegration,
     historyFilePath: string,
     workingFilePath: string | undefined,
-    targetRunIndices?: Map<string, number>
+    targetRunIndices?: Map<string, number>,
+    targetKeyedExecution: boolean = false
   ): WorkflowExecutionContext {
     const self = this;
     return {
       executionWorkspace: this.executionWorkspace,
       workspaceFolderPath: this.workspaceFolderPath,
       hostCanProvidePty: this.hostCanProvidePty,
+      supportsConcurrentInteractiveSessions:
+        this.supportsConcurrentInteractiveSessions,
       namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
       currentPromptFilePath: this.currentPromptFile?.filePath,
       sourceDefinitionPath: this.sourceDefinitionPath,
@@ -3573,6 +3811,7 @@ export class WorkflowInstance {
           imageFileRefs
         ),
       getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
+      getScriptProcessRunner: (target) => this.getScriptProcessRunner(target),
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.
       shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
@@ -3581,6 +3820,15 @@ export class WorkflowInstance {
       workingFilePath: workingFilePath || undefined,
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
+      targetKeyedExecution,
+      registerActiveTarget: (target, attemptIndex) =>
+        this.registerActiveTarget(target, attemptIndex),
+      unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
+      registerTargetPtySession: (target, sessionId) =>
+        this.registerTargetPtySession(target, sessionId),
+      clearTargetPtySession: (target) => this.clearTargetPtySession(target),
+      cancelTarget: (target) => this.cancelTarget(target),
+      releaseTargetResources: (target) => this.releaseTargetResources(target),
       outputHistoryManager: this.outputHistoryManager,
       secretRedactor: this.activeRunRedactor,
       resolvePriorContextItems: createPriorContextResolver({
@@ -3592,10 +3840,28 @@ export class WorkflowInstance {
       targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,
-        harnessOverride?: HarnessId
+        harnessOverride?: HarnessId,
+        target?: WorkflowAttemptTarget
       ) => {
-        const currentIntegration = this.activeIntegration ?? activeIntegration;
         const resolvedHarness = harnessOverride;
+        const targetIsGrouped =
+          target?.kind === FINAL_STEP_PHASES.QUEUE &&
+          this.promptQueue
+            .getState()
+            .parallelGroups.some(
+              (group) =>
+                target.stepIndex >= group.startIndex &&
+                target.stepIndex <= group.endIndex
+            );
+        if (target && (targetKeyedExecution || targetIsGrouped)) {
+          const targetIntegration = this.createIntegrationForMode(
+            resolvedHarness,
+            target
+          );
+          this.registerTargetIntegration(target, targetIntegration);
+          return targetIntegration;
+        }
+        const currentIntegration = activeIntegration;
         if (
           resolvedHarness &&
           resolvedHarness !== currentIntegration.getIntegrationMode()
@@ -3605,11 +3871,18 @@ export class WorkflowInstance {
           );
           const overrideIntegration =
             this.createIntegrationForMode(resolvedHarness);
-          this.activeIntegration = overrideIntegration;
+          if (target) {
+            this.registerTargetIntegration(target, overrideIntegration);
+          }
           return overrideIntegration;
+        }
+        if (target) {
+          this.registerTargetIntegration(target, currentIntegration);
         }
         return currentIntegration;
       },
+      ensureHarnessReady: (harnessId) =>
+        this.getHarnessReadinessError(harnessId),
       captureOutputInit: (
         stepIndex,
         prompt,
@@ -3642,13 +3915,16 @@ export class WorkflowInstance {
       getBufferedOutput: (stepIndex) => {
         return this.outputCaptureBuffer.getBufferedOutput(stepIndex);
       },
-      captureCompletedOutput: (stepIndex, output) => {
+      captureCompletedOutput: (stepIndex, output, integration) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
-        this.recordCompletedActivityTarget(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          output.runIndex ?? 0,
-          output.attemptIndex ?? 0
-        );
+        if (integration) {
+          this.recordCompletedActivityTarget(
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+            output.runIndex ?? 0,
+            output.attemptIndex ?? 0,
+            integration
+          );
+        }
       },
       captureFinalStepOutputInit: (
         loopIndex,
@@ -3673,8 +3949,8 @@ export class WorkflowInstance {
           runIndex
         );
       },
-      beginSessionActivityTargetCapture: () =>
-        this.beginActivityTargetCapture(),
+      beginSessionActivityTargetCapture: (integration, target) =>
+        this.beginActivityTargetCapture(integration, target),
       captureFinalStepChunk: (loopIndex, chunk) => {
         this.outputCaptureBuffer.captureFinalStepChunk(loopIndex, chunk);
       },
@@ -3684,16 +3960,19 @@ export class WorkflowInstance {
       getFinalStepBufferedOutput: (loopIndex) => {
         return this.outputCaptureBuffer.getFinalStepBufferedOutput(loopIndex);
       },
-      captureFinalStepCompletedOutput: (loopIndex, output) => {
+      captureFinalStepCompletedOutput: (loopIndex, output, integration) => {
         this.outputCaptureBuffer.captureFinalStepCompletedOutput(
           loopIndex,
           output
         );
-        this.recordCompletedActivityTarget(
-          { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
-          output.runIndex ?? 0,
-          output.attemptIndex ?? 0
-        );
+        if (integration) {
+          this.recordCompletedActivityTarget(
+            { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+            output.runIndex ?? 0,
+            output.attemptIndex ?? 0,
+            integration
+          );
+        }
       },
       onFinalStepStatusMessage: (loopIndex, message, severity) => {
         this.outputCaptureBuffer.onFinalStepStatusMessage(
@@ -3731,6 +4010,7 @@ export class WorkflowInstance {
               const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               const controllerClientId =
                 ptyManager.getExpectedController(workflowId);
+              options.onSessionCreated?.(preSessionId);
 
               // TERMINAL_STARTED must be sent before spawnPty so the webview
               // session store is populated before any TERMINAL_OUTPUT arrives.
@@ -3776,6 +4056,7 @@ export class WorkflowInstance {
                     if (timeoutHandle !== undefined) {
                       clearTimeout(timeoutHandle);
                     }
+                    options.onSessionEnded?.();
                     ptyPostMessage({
                       type: MESSAGE_TYPES.TERMINAL_ENDED,
                       workflowId: ptySession.workflowId,
@@ -3798,6 +4079,7 @@ export class WorkflowInstance {
               } catch (error) {
                 const message = getErrorMessage(error);
                 Log.warn(`[spawnScriptPty] ${message}`);
+                options.onSessionEnded?.();
                 ptyPostMessage({
                   type: MESSAGE_TYPES.TERMINAL_OUTPUT,
                   workflowId,
@@ -3827,10 +4109,116 @@ export class WorkflowInstance {
     return ConfigurationUtils.getDynamicQueueConfig();
   }
 
+  private getScriptProcessRunner(
+    target: WorkflowAttemptTarget
+  ): ScriptProcessRunner {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const existing = this.targetScriptProcessRunners.get(targetKey);
+    if (existing) {
+      this.registerTargetProcessRunner(target, existing);
+      return existing;
+    }
+    const runner = new ScriptProcessRunner(
+      this.executionWorkspace.executionRoot
+    );
+    this.targetScriptProcessRunners.set(targetKey, runner);
+    this.registerTargetProcessRunner(target, runner);
+    return runner;
+  }
+
+  private registerTargetIntegration(
+    target: WorkflowAttemptTarget,
+    integration: HarnessIntegration
+  ): void {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey) ?? { target };
+    resource.integration = integration;
+    this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private unregisterActiveTarget(target: WorkflowAttemptTarget): void {
+    this.activeTargetResources.delete(this.getExecutionTargetRunKey(target));
+  }
+
+  private registerTargetPtySession(
+    target: WorkflowAttemptTarget,
+    sessionId: string
+  ): void {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey) ?? { target };
+    resource.ptySessionId = sessionId;
+    this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private clearTargetPtySession(target: WorkflowAttemptTarget): void {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey);
+    if (resource) {
+      resource.ptySessionId = undefined;
+    }
+  }
+
+  private registerActiveTarget(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number
+  ): void {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey) ?? { target };
+    resource.attemptIndex = attemptIndex;
+    this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private registerTargetProcessRunner(
+    target: WorkflowAttemptTarget,
+    processRunner: ScriptProcessRunner
+  ): void {
+    const targetKey = this.getExecutionTargetRunKey(target);
+    const resource = this.activeTargetResources.get(targetKey) ?? { target };
+    resource.processRunner = processRunner;
+    this.activeTargetResources.set(targetKey, resource);
+  }
+
+  private getActiveTargetKeys(): ReadonlySet<string> {
+    return new Set(this.activeTargetResources.keys());
+  }
+
+  private getActiveStepIndices(): number[] {
+    return this.workflowRuntime
+      .getActiveAttempts()
+      .flatMap((attempt) =>
+        attempt.target.kind === FINAL_STEP_PHASES.QUEUE
+          ? [attempt.target.stepIndex]
+          : []
+      )
+      .sort((left, right) => left - right);
+  }
+
   private createIntegrationForMode(
-    harnessOverride?: HarnessId
+    harnessOverride?: HarnessId,
+    target?: WorkflowAttemptTarget
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
+    const targetKey = target
+      ? this.getExecutionTargetRunKey(target)
+      : undefined;
+
+    if (targetKey) {
+      const targetCached = this.targetExecutionIntegrations.get(targetKey);
+      if (targetCached) {
+        return targetCached;
+      }
+
+      if (harnessOverride) {
+        Log.info(`🔀 Using harness override: ${harnessOverride}`);
+      }
+      const targetIntegration = this.integrationFactory.createForExecution(
+        harness,
+        this.executionWorkspace
+      );
+      this.configureExecutionIntegration(targetIntegration);
+      this.targetExecutionIntegrations.set(targetKey, targetIntegration);
+      return targetIntegration;
+    }
 
     // If a live integration from the previous run is waiting in liveInjectIntegrations,
     // promote it into executionIntegrations immediately — before checking the cache or
@@ -3868,6 +4256,40 @@ export class WorkflowInstance {
       harness,
       this.executionWorkspace
     );
+    this.configureExecutionIntegration(integration);
+    this.executionIntegrations.set(harness, integration);
+    return integration;
+  }
+
+  private async getHarnessReadinessError(
+    harnessId: HarnessId
+  ): Promise<string | undefined> {
+    const integration = this.getDetectorIntegration(harnessId);
+    let status = integration.getDetailedStatus();
+    if (
+      status.initializationStatus === HarnessStatus.Initializing ||
+      status.initializationStatus === HarnessStatus.Waiting
+    ) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          subscription.dispose();
+          clearTimeout(timer);
+          resolve();
+        };
+        const subscription = integration.onDidChangeStatus(settle);
+        const timer = setTimeout(settle, 35_000);
+      });
+      status = integration.getDetailedStatus();
+    }
+    return status.initializationStatus === HarnessStatus.Ready
+      ? undefined
+      : status.message || "Harness is unavailable";
+  }
+
+  private configureExecutionIntegration(integration: HarnessIntegration): void {
     integration.setWorkflowName(this.workflowName || undefined);
     integration.setSourceDefinitionPath(this.sourceDefinitionPath);
     integration.onStreamingEvents((events) =>
@@ -3888,10 +4310,12 @@ export class WorkflowInstance {
     // persists across runs when parked in `liveInjectIntegrations`, so this
     // subscription persists with it.
     integration.onSessionActivityResumed((payload) => {
-      void this.handleSessionActivityResumed(payload.events);
+      void this.handleSessionActivityResumed(
+        payload.events,
+        integration,
+        integration.getActivitySessionId()
+      );
     });
-    this.executionIntegrations.set(harness, integration);
-    return integration;
   }
 
   private async configureExecutionWorkspace(
@@ -4437,7 +4861,13 @@ export class WorkflowInstance {
       this.liveInjectIntegrations.clear();
 
       const activeIntegration = integration || this.createIntegrationForMode();
-      this.activeIntegration = activeIntegration;
+      this.registerTargetIntegration(
+        {
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: this.promptQueue.getState().currentIndex,
+        },
+        activeIntegration
+      );
 
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: historyFilePath="${historyFilePath}"`
@@ -4464,8 +4894,6 @@ export class WorkflowInstance {
       );
 
       await this.workflowExecutor.execute(activeIntegration, workflowContext);
-
-      this.activeIntegration = undefined;
     } finally {
       const paused =
         this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
@@ -4596,6 +5024,17 @@ export class WorkflowInstance {
         }
       }
       this.executionIntegrations.clear();
+
+      for (const targetIntegration of this.targetExecutionIntegrations.values()) {
+        targetIntegration.closeTerminalGracefully();
+        targetIntegration.dispose();
+      }
+      this.targetExecutionIntegrations.clear();
+      for (const runner of this.targetScriptProcessRunners.values()) {
+        runner.dispose();
+      }
+      this.targetScriptProcessRunners.clear();
+      this.activeTargetResources.clear();
 
       // A retained entry can survive an unusual handoff path even when it was
       // not reinserted into executionIntegrations. It is still part of the
@@ -4996,7 +5435,11 @@ export class WorkflowInstance {
     const executionState = this.getAuthoritativeExecutionState();
 
     if (this.dashboardSink) {
-      this.dashboardSink.updateExecutionState(executionState);
+      this.dashboardSink.updateExecutionState(
+        executionState,
+        undefined,
+        this.getActiveStepIndices()
+      );
       if (transition.command === WORKFLOW_RUNTIME_COMMANDS.COMPLETE) {
         this.dashboardSink.updateExecutionCompleted?.();
       }
@@ -5097,6 +5540,8 @@ export class WorkflowInstance {
       default:
         break;
     }
+
+    this.dashboardSink?.updateActiveStepIndices?.(this.getActiveStepIndices());
   }
 
   private getCurrentCancellationTarget(): WorkflowAttemptTarget | undefined {
