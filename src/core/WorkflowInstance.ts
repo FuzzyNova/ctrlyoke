@@ -88,6 +88,7 @@ import type {
   CliOutput,
   ContextWindowSyncData,
   FollowUpResumedData,
+  TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -4111,14 +4112,17 @@ export class WorkflowInstance {
 
               // TERMINAL_STARTED must be sent before spawnPty so the webview
               // session store is populated before any TERMINAL_OUTPUT arrives.
-              ptyPostMessage({
+              const terminalStartedMessage: TerminalStartedMessage = {
                 type: MESSAGE_TYPES.TERMINAL_STARTED,
                 workflowId,
                 sessionId: preSessionId,
                 stepName: options.stepName,
+                stepIndex: options.stepIndex,
                 kind: SESSION_KINDS.AI_CLI,
+                parallelGroupId: options.parallelGroupId,
                 controllerClientId,
-              });
+              };
+              ptyPostMessage(terminalStartedMessage);
 
               // Wrap the script in a shell so PTY interactive input works.
               const isWindows = process.platform === "win32";
@@ -4132,8 +4136,10 @@ export class WorkflowInstance {
                 const session = ptyManager.spawnPty({
                   workflowId,
                   stepName: options.stepName,
+                  stepIndex: options.stepIndex,
                   kind: SESSION_KINDS.AI_CLI,
                   sessionId: preSessionId,
+                  parallelGroupId: options.parallelGroupId,
                   command: shell,
                   args: shellArgs,
                   cwd: options.cwd,

@@ -39,7 +39,8 @@ export interface IDashboardSink {
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void>;
 
   updateSessionRestored(
@@ -57,7 +58,8 @@ export interface IDashboardSink {
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(
@@ -77,7 +79,16 @@ export interface IDashboardSink {
 
   updateProgress(current: number, total: number, workflowId?: string): void;
 
-  updateExecutionState(state: string, workflowId?: string): void;
+  updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void;
+
+  updateActiveStepIndices?(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void;
 
   updateExecutionCompleted?(workflowId?: string): void;
 

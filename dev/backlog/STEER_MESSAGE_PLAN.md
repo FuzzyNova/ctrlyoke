@@ -111,7 +111,7 @@ This is the session currently shown in the terminal rail for the active
 workflow — i.e. "whatever interactive session the user is already looking
 at," not an independent picker. If a workflow ever has more than one
 concurrent AI-CLI session (parallel steps — see
-`dev/backlog/PARALLEL_STEPS_PLAN.md`), steering always targets the
+`dev/implemented/PARALLEL_STEPS_PLAN.md`), steering always targets the
 rail-active one; a session picker is out of scope for this plan (see Not In
 Scope).
 

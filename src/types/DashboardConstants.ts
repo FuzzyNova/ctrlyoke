@@ -546,7 +546,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_OUTPUT: "terminalOutput", // extension → webview: { workflowId, sessionId, data }
   TERMINAL_INPUT: "terminalInput", // webview → extension: { workflowId, sessionId, data }
   TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
-  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, harnessId?, promptNumber?, shellKind?, controllerClientId? } (also refreshes existing session metadata)
+  TERMINAL_STARTED: "terminalStarted", // extension → webview: TerminalStartedMessage (also refreshes existing session metadata)
   TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
@@ -809,10 +809,10 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
-/** Stage 3 keeps grouped steps on the existing sequential execution path. */
-export const PARALLEL_GROUP_FAN_OUT_ENABLED = false;
+/** Parallel groups may fan out up to the configured global queue width. */
+export const PARALLEL_GROUP_FAN_OUT_ENABLED = true;
 
-/** Clamp parallel group width until the fan-out gate is enabled. */
+/** Resolve the active width, retaining an explicit closed-gate override for tests. */
 export function getEffectiveParallelGroupWidth(
   configuredWidth: number,
   fanOutEnabled: boolean = PARALLEL_GROUP_FAN_OUT_ENABLED

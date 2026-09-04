@@ -172,6 +172,7 @@ export interface CtrlYokeGlobalSettings {
   // Queue
   queue: {
     maxSize: number;
+    maxParallelSteps: number;
     maxWorkflowExecutionTime: number; // seconds; -1 = unlimited
     unlimitedMode: boolean;
     notifyOnExtension: boolean;
@@ -447,6 +448,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   queue: {
     maxSize: 100,
+    maxParallelSteps: 6,
     maxWorkflowExecutionTime: -1,
     unlimitedMode: false,
     notifyOnExtension: true,

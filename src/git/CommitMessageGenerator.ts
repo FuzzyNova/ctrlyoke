@@ -374,6 +374,7 @@ export class CommitMessageGenerator {
         () => {},
         cwd,
         true,
+        false,
         undefined,
         undefined,
         undefined,

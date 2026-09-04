@@ -71,7 +71,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -85,6 +86,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
     });
   }
 
@@ -103,7 +105,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -120,6 +123,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
     });
   }
 
@@ -152,10 +156,26 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  updateExecutionState(state: string, workflowId?: string): void {
+  updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
     this.send({
       type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
       state,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
+    });
+  }
+
+  updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED,
+      activeStepIndices,
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -219,13 +239,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,
       chunk,
       ...(phase !== undefined ? { phase } : {}),
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
+      ...(timestampMs !== undefined ? { timestampMs } : {}),
+      ...(sequence !== undefined ? { sequence } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

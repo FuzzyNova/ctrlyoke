@@ -81,6 +81,7 @@ import type {
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
   ExecutionPreviewScope,
+  TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { StatusBarManager } from "../ui/StatusBarManager";
@@ -1098,16 +1099,19 @@ export class WorkflowOrchestrator {
           `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
           `reconnectBuffer=${session.reconnectBuffer.length} chunks`
       );
-      send({
+      const terminalStartedMessage: TerminalStartedMessage = {
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId: session.workflowId,
         sessionId: session.id,
         stepName: session.stepName,
+        stepIndex: session.stepIndex,
         kind: session.kind,
         promptNumber: session.promptNumber,
         harnessId: session.harnessId,
+        parallelGroupId: session.parallelGroupId,
         controllerClientId: session.controllerClientId,
-      });
+      };
+      send(terminalStartedMessage);
       // Immediately follow with current PTY dimensions so viewers can match
       // the controller's width without waiting for the next resize event.
       send({
@@ -2617,6 +2621,7 @@ export class WorkflowOrchestrator {
       namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
       cwd: workspaceRoot,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
@@ -6000,6 +6005,7 @@ export class WorkflowOrchestrator {
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
       this.currentWorkspaceFolder?.uri.fsPath,
+      true,
       true,
       this.compatibilityRegistry,
       this.userFeedbackSink,

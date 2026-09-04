@@ -398,7 +398,9 @@ export class CtrlYokeHostedServer
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     return this.sink.updateFileSelected(
       fileName,
@@ -407,7 +409,9 @@ export class CtrlYokeHostedServer
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
   }
   async updateSessionRestored(
@@ -424,7 +428,9 @@ export class CtrlYokeHostedServer
       phase: FinalStepPhase;
     },
     workflowId?: string,
-    workflowProperties?: Record<string, unknown>
+    workflowProperties?: Record<string, unknown>,
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     return this.sink.updateSessionRestored(
       fileName,
@@ -436,7 +442,9 @@ export class CtrlYokeHostedServer
       finalStep,
       finalStepRuntime,
       workflowId,
-      workflowProperties
+      workflowProperties,
+      parallelGroups,
+      activeStepIndices
     );
   }
   updateExecutionStarted(
@@ -461,8 +469,18 @@ export class CtrlYokeHostedServer
   updateProgress(current: number, total: number, workflowId?: string): void {
     this.sink.updateProgress(current, total, workflowId);
   }
-  updateExecutionState(state: string, workflowId?: string): void {
-    this.sink.updateExecutionState(state, workflowId);
+  public updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
+    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+  }
+  public updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.sink.updateActiveStepIndices?.(activeStepIndices, workflowId);
   }
   updateExecutionCompleted(workflowId?: string): void {
     this.sink.updateExecutionCompleted(workflowId);

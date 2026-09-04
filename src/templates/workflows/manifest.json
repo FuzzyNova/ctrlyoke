@@ -19,6 +19,14 @@
       "icon": "$(lightbulb)"
     },
     {
+      "id": "parallel-research",
+      "label": "Parallel Research",
+      "description": "Run independent research prompts concurrently, then synthesize their findings",
+      "file": "parallel-research.ctrlyoke.yaml",
+      "tags": ["parallel", "research", "independent"],
+      "icon": "$(split-horizontal)"
+    },
+    {
       "id": "fix-tests",
       "label": "Fix Tests",
       "description": "Fix failing tests with validation retry loop until they pass",

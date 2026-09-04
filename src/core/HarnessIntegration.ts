@@ -251,6 +251,11 @@ export abstract class HarnessIntegration {
   public readonly onSessionActivityResumed =
     this.sessionActivityResumedEmitter.event;
 
+  /** Stable transport session identity used for post-completion attribution. */
+  getActivitySessionId(): string | undefined {
+    return undefined;
+  }
+
   constructor(
     context: SubscriptionContainer | undefined,
     registerWithContext: boolean = true

@@ -16,6 +16,7 @@ describe("usePromptStatus", () => {
       steps: [{ prompt: "first" }, { prompt: "second" }, { prompt: "third" }],
       executionState: EXECUTION_STATES.RUNNING,
       currentStep: 0,
+      activeStepIndices: [1],
       parallelGroups: [
         { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
       ],
@@ -30,7 +31,7 @@ describe("usePromptStatus", () => {
       STEP_STATUS.COMPLETED
     );
     expect(getStatus(useWorkflowStore.getState().steps[1], 1)).toBe(
-      STEP_STATUS.SENT
+      STEP_STATUS.RUNNING
     );
     expect(getStatus(useWorkflowStore.getState().steps[2], 2)).toBe(
       STEP_STATUS.PENDING

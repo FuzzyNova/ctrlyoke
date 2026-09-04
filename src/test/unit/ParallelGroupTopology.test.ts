@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { getEffectiveParallelGroupWidth } from "../../types/DashboardConstants";
 import {
   groupParallelGroupSteps,
   insertParallelGroupStep,
@@ -42,6 +43,14 @@ function names(value: ParallelGroupTopology): string[] {
 }
 
 suite("ParallelGroupTopology", () => {
+  test("clamps effective group width to one when fan-out is explicitly disabled", () => {
+    assert.strictEqual(getEffectiveParallelGroupWidth(12, false), 1);
+  });
+
+  test("uses the configured width when fan-out is enabled", () => {
+    assert.strictEqual(getEffectiveParallelGroupWidth(12, true), 12);
+  });
+
   suite("validation", () => {
     test("accepts empty, sorted, non-overlapping groups", () => {
       assert.doesNotThrow(() =>

@@ -2,18 +2,16 @@
 
 > **Last Updated:** September 3, 2026
 >
-> **Status:** Ready to implement in the staged order below. Audited against `main` on this
-> date; every symbol named in "Current-Code Audit" was verified. Concurrent fan-out stays
-> behind the gate in Decision 4 until Stages 1–5 are complete and verified. Recommended
-> precursor: [`OUTPUT_STEP_FILTER_PLAN.md`](../implemented/OUTPUT_STEP_FILTER_PLAN.md),
-> which has shipped and whose state and row primitives Stage 5 reuses.
+> **Status:** SHIPPED. Stages 1–6 are implemented, reviewed, and committed. The
+> implementation was corrected during Stage 6 to use the enabled global fan-out width,
+> remove closed-gate copy from the UI and previews, and preserve an explicit disabled-gate
+> override in tests. The remaining deferred work is the human-facing dev-host checklist
+> below; headless coverage and the required repository gates have been run.
+> Recommended precursor: [`OUTPUT_STEP_FILTER_PLAN.md`](../implemented/OUTPUT_STEP_FILTER_PLAN.md),
+> which shipped with the state and row primitives Stage 5 reuses.
 >
-> **Staging note:** this doc is written to be handed to the Spec-Driven Loop orchestrator as
-> its `specFile`. Each stage's numbered items are the intended queue-step granularity;
-> Stages 3 and 5 are large enough that the orchestrator should split them into two or three
-> steps each along the numbered items. Every step must leave `npm run typecheck`,
-> `npm run lint`, and `npm test` green and commit its own work. `npm run test:harness` is
-> never part of this plan's verification.
+> **Staging note:** this document records the shipped implementation and its verification
+> history. `npm run test:harness` was never part of the verification.
 
 ## Outcome
 
@@ -529,11 +527,10 @@ maximum group length; a larger group drains through a bounded worker pool with o
 `settingsSchemaUiParity.integration.test.ts` requires a settings UI control for every
 schema key; add it to the Queue settings section.
 
-The gate: because the codebase has no feature-flag mechanism, add
-`PARALLEL_GROUP_FAN_OUT_ENABLED = false` to `src/types/DashboardConstants.ts`. The
-coordinator clamps effective width to `1` while it is `false`, regardless of the setting.
-Stage 6 flips it to `true` and removes the sequential-fallback label. Until then the UI
-labels grouped steps "runs sequentially in this build" so no one infers concurrency.
+The staged implementation used an explicit `PARALLEL_GROUP_FAN_OUT_ENABLED` gate while the
+coordinator was being verified. Stage 6 flips it to `true`; the coordinator now uses the
+configured `queue.maxParallelSteps` width in production. The helper still accepts an
+explicit `false` override so tests can preserve coverage for the closed-gate behavior.
 
 With `failFast: true`, members that have not entered the pool are cancelled without
 starting after the first terminal failure.
@@ -1062,21 +1059,27 @@ the filter chips isolate one writer.
 
 ### Stage 6 — Terminal reconciliation and enablement
 
-1. Typed `TerminalStartedMessage`; `stepIndex`/`parallelGroupId` on PTY sessions and
+**Status:** complete. Terminal metadata now carries flat step and parallel-group identity
+through PTY spawn, replay, and reconnect; the dashboard preserves same-harness parallel
+sessions as separate labeled tabs while keeping workflow-scoped controller arbitration.
+The requested docs, bundled template, fan-out enablement, and gate-specific test updates
+are also complete.
+
+[x] 1. Typed `TerminalStartedMessage`; `stepIndex`/`parallelGroupId` on PTY sessions and
    all six producers.
-2. Preserve same-harness parallel AI sessions and parallel script sessions as distinct
+[x] 2. Preserve same-harness parallel AI sessions and parallel script sessions as distinct
    tabs; label with step number/name.
-3. Exercise controller arbitration and reconnect replay with several simultaneous
+[x] 3. Exercise controller arbitration and reconnect replay with several simultaneous
    sessions.
-4. Docs: `docs/workflows/yaml-format.md` (new "Parallel steps" section),
+[x] 4. Docs: `docs/workflows/yaml-format.md` (new "Parallel steps" section),
    `docs/reference/workflow-schema.md` (also fix its stale `prompt-schema.json` reference),
    `docs/workflows/json-format.md`, `docs/workflows/session-management.md`,
    `docs/workflows/context-files.md`, `docs/workflows/dynamic-queue.md`,
    `docs/guide/concepts.md`, `docs/reference/settings.md`, `README.md` if it shows step
    syntax. Add a bundled "Parallel Research" template only if the every-template test from
    Stage 1 exists.
-5. Flip `PARALLEL_GROUP_FAN_OUT_ENABLED` to `true`, remove the sequential-fallback label,
-   and run the full manual checklist below.
+[x] 5. Flip `PARALLEL_GROUP_FAN_OUT_ENABLED` to `true`, remove the sequential-fallback
+   label, and run the full manual checklist below.
 
 ## Manual Test Checklist (after Stage 6)
 
@@ -1098,6 +1101,24 @@ step; repeat once with one member set to `enabled: false` and once with
 8. Save As, reopen the saved file, and confirm the `parallel:` block round-tripped.
 9. Standalone CLI: headless run prefixes each burst with the step; `--interactive` with
    two interactive members fails preflight with the documented message.
+
+### Manual verification results
+
+The repository gates passed: `npm run typecheck`, `npm run lint`, and `npm test` (the
+full suite was rerun with the malformed inherited `GIT_CONFIG_VALUE_2` environment entry
+removed). The bundled-template parser covers the new Parallel Research template, and
+existing unit/integration coverage exercises preview diagnostics, session collisions,
+dynamic-queue rejection, bounded execution, pause/stop/recovery, output projection,
+terminal replay, and CLI formatting.
+
+The following checklist items remain deferred because they require a human-driven VS Code
+dev host and hosted-browser or native terminal interaction: 1 (interactive diagnostic
+editing and dry-run inspection), 2 (three live terminal tabs, interleaving, chips, and
+live-follow), 3 (pause timing and edit locks), 4 (resume and synthesis observation),
+5 (live stop/tab teardown), 6 (extension-host kill and reopen), 7 (interactive group
+undo affordance), and 8 (Save As/reopen UI round trip). Item 9 is covered by automated
+standalone CLI and preflight tests, but the exact headless burst and interactive CLI
+transcript were not manually run in this session.
 
 ## File Map
 
@@ -1152,7 +1173,8 @@ Required cases:
 - Virtualized output remains measured and navigable when an earlier activity row grows.
 - Group undo restores the group-wide snapshot; per-step prompt undo is absent for
   concurrent members and present at width 1.
-- `PARALLEL_GROUP_FAN_OUT_ENABLED = false` clamps width to 1 regardless of the setting.
+- An explicit `PARALLEL_GROUP_FAN_OUT_ENABLED = false` override still clamps width to 1;
+  production defaults to `true` and uses `queue.maxParallelSteps`.
 
 ## Decisions to Revisit Only After the First Release
 
@@ -1161,7 +1183,7 @@ Required cases:
 - Per-group concurrency overrides; use the global scheduler width first.
 - Isolated worktrees and automatic merge for precise per-step filesystem ownership.
 - Per-step pause/resume controls inside a running group.
-- Per-session terminal controller arbitration.
+- Per-session terminal controller arbitration; v1 remains workflow-scoped.
 - Group creation through `ctrlyoke_append_queue`.
 - A side-by-side lane/grid view; add only if the chronological stream plus chips proves
   insufficient.
@@ -1176,8 +1198,8 @@ Required cases:
   definition revisions and dry-run preview; authored form is always `parallel:`.
 - **Execution:** explicit target-scoped leaf plus fork/join coordinator; one shared
   preflight for executor and preview.
-- **Concurrency:** bounded worker pool, `queue.maxParallelSteps` default 6, constant gate
-  until Stage 6.
+- **Concurrency:** bounded worker pool, `queue.maxParallelSteps` default 6, fan-out gate
+  enabled; an explicit disabled-gate override remains covered by tests.
 - **Pause/stop:** pause at a durable join; stop cancels all targets; partially settled
   groups have explicit edit locks.
 - **Sessions/context:** resolve from one immutable pre-group snapshot and preflight
@@ -1188,4 +1210,4 @@ Required cases:
   tabs using typed step/group metadata; standalone inherited stdio rejects concurrent
   interactive members.
 
-Implementation can begin with Stage 1.
+The implementation is shipped. Deferred manual verification is listed above.

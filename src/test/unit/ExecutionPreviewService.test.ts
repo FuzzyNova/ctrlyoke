@@ -259,7 +259,7 @@ suite("ExecutionPreviewService", () => {
       },
     });
 
-    assert.strictEqual(preview.parallelGroupPreflights[0].effectiveWidth, 1);
+    assert.strictEqual(preview.parallelGroupPreflights[0].effectiveWidth, 6);
     assert.deepStrictEqual(
       preview.steps.map((step) => step.parallelGroupId),
       ["group", "group"]

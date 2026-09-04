@@ -285,6 +285,8 @@ export interface WorkflowExecutionContext {
     stepName: string;
     /** Signed step index used as the CLI output slot. */
     stepIndex: number;
+    /** Parallel group identity for grouped queue steps. */
+    parallelGroupId?: string;
     /** Resource-registry key for the owning execution target. */
     targetKey: string;
     /** Raw script string from the step definition (e.g. ".ctrlyoke/scripts/check.py arg"). */
@@ -1828,6 +1830,16 @@ export class WorkflowExecutor {
           ptyExitCode = await context.spawnScriptPty({
             stepName: stepLabel,
             stepIndex: signedStepIndex,
+            parallelGroupId:
+              stepIndex >= 0
+                ? this.promptQueue
+                    .getState()
+                    .parallelGroups.find(
+                      (group) =>
+                        stepIndex >= group.startIndex &&
+                        stepIndex <= group.endIndex
+                    )?.id
+                : undefined,
             targetKey: getExecutionTargetRunKey(target),
             script: effectiveStep.script,
             cwd: context.executionWorkspace.executionRoot,

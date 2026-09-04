@@ -5,7 +5,7 @@
 > **Status:** SHIPPED. Steps 1–7 are implemented, reviewed, and committed; nothing was
 > deferred. The "Manual Test Script" section below is the remaining manual verification
 > and is worth running once in the dev host. This was the precursor to
-> [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md) Stage 5, which reuses the
+> [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md) Stage 5, which reuses the
 > state and row-building primitives shipped here.
 >
 > **Correction made during planning:** Decision 3 originally keyed the hidden set by

@@ -5,7 +5,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
-  PARALLEL_GROUP_FAN_OUT_ENABLED,
   STEP_STATUS,
   type ExecutionState,
   type StepStatus,
@@ -111,6 +110,7 @@ type ParallelGroupPanelProps = {
   group: ParallelGroupDefinition;
   steps: WorkflowStep[];
   currentStep: number;
+  activeStepIndices?: readonly number[];
   executionState: ExecutionState;
   statuses: StepStatus[];
   retryStates: Record<number, WorkflowStepComponentProps["retryState"]>;
@@ -145,6 +145,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   group,
   steps,
   currentStep,
+  activeStepIndices = [],
   executionState,
   statuses,
   retryStates,
@@ -200,6 +201,11 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       enabled: step.enabled !== false,
     }))
   );
+  const isStepActive = (index: number): boolean =>
+    isWorkflowRunning(executionState) &&
+    (activeStepIndices.length > 0
+      ? activeStepIndices.includes(index)
+      : index === currentStep);
 
   return (
     <section
@@ -229,14 +235,6 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
           />
           fail fast
         </label>
-        {!PARALLEL_GROUP_FAN_OUT_ENABLED && (
-          <span
-            className="basis-full text-xxs text-description-fg"
-            data-testid="parallel-group-sequential-label"
-          >
-            runs sequentially in this build
-          </span>
-        )}
       </header>
       <div>
         {memberIds ? (
@@ -263,9 +261,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                 retryState={retryStates[index]}
                 latestOutput={getLatestOutput(index)}
                 liveContextWindow={liveContextWindow[index]}
-                isCurrent={
-                  index === currentStep && isWorkflowRunning(executionState)
-                }
+                isCurrent={isStepActive(index)}
                 isSelected={selectedIndex === index}
                 canSetStartPosition={canSetStartPosition}
                 startPositionDirection={
@@ -311,9 +307,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                 retryState={retryStates[index]}
                 latestOutput={getLatestOutput(index)}
                 liveContextWindow={liveContextWindow[index]}
-                isCurrent={
-                  index === currentStep && isWorkflowRunning(executionState)
-                }
+                isCurrent={isStepActive(index)}
                 isSelected={selectedIndex === index}
                 canSetStartPosition={canSetStartPosition}
                 startPositionDirection={

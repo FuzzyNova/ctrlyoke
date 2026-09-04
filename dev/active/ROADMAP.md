@@ -266,7 +266,7 @@ Start these after real launch feedback and the P1 safety contracts exist.
 6. **Parallel steps** — valuable for independent research/test branches, but
    only after worktree isolation and a feature-owned global concurrency cap
    define safe concurrency.
-   ([plan](../backlog/PARALLEL_STEPS_PLAN.md))
+   ([plan](../implemented/PARALLEL_STEPS_PLAN.md))
 7. **Cumulative prompt and workflow usage** — distinguish current context
    fullness from total usage across compactions, then surface each run's
    observed workflow total in the workflow list for lightweight comparison.
@@ -483,7 +483,7 @@ criteria matter more than speculative dates.
 | [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)                                      | P2                                                                  |
 | [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                 | P2                                                                  |
 | [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                     | P2                                                                  |
-| [`PARALLEL_STEPS_PLAN.md`](../backlog/PARALLEL_STEPS_PLAN.md)                                           | P2                                                                  |
+| [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                         | Shipped                                                             |
 | [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)               | P1 (foundation for standalone server)                               |
 | [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                   | P2 (ships with redaction)                                           |
 | [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                                                                  |

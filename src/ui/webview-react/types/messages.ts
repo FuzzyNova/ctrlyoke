@@ -133,6 +133,7 @@ export {
   type RecentWorkflowsMessage,
   type ActiveTerminalWorkflowRef,
   type ActiveTerminalWorkflowsMessage,
+  type TerminalStartedMessage,
   type PromptEditorInsertRequest,
   type PromptEditorInsertMessage,
   type ValidateFileRefMessage,

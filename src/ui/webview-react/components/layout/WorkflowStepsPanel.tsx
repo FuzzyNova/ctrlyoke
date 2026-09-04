@@ -311,6 +311,7 @@ const WorkflowStepsPanelInner: React.FC<{
     steps,
     parallelGroups,
     currentStep,
+    activeStepIndices,
     executionState,
     retryStates,
     finalStep,
@@ -755,6 +756,7 @@ const WorkflowStepsPanelInner: React.FC<{
         group={group}
         steps={steps}
         currentStep={currentStep}
+        activeStepIndices={activeStepIndices}
         executionState={executionState}
         statuses={steps
           .slice(group.startIndex, group.endIndex + 1)
@@ -796,6 +798,7 @@ const WorkflowStepsPanelInner: React.FC<{
     [
       canChangeStartPosition,
       currentStep,
+      activeStepIndices,
       executionState,
       getLatestOutput,
       getPromptStatus,

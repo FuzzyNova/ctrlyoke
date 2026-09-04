@@ -106,8 +106,8 @@ describe("ParallelGroupPanel", () => {
 
     expect(screen.getByLabelText("Parallel steps 1 to 2")).toBeInTheDocument();
     expect(
-      screen.getByText("runs sequentially in this build")
-    ).toBeInTheDocument();
+      screen.queryByText("runs sequentially in this build")
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("parallel-group-status")).toHaveTextContent(
       "pending"
     );

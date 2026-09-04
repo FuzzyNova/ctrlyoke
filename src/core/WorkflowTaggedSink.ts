@@ -53,7 +53,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     },
     workflowIdOrProperties?: string | Record<string, unknown>,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -67,7 +68,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       finalStepRuntime,
       this.workflowId,
       properties,
-      parallelGroups
+      parallelGroups,
+      activeStepIndices
     );
   }
 
@@ -86,7 +88,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     },
     workflowIdOrProperties?: string | Record<string, unknown>,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -103,7 +106,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       finalStepRuntime,
       this.workflowId,
       properties,
-      parallelGroups
+      parallelGroups,
+      activeStepIndices
     );
   }
 
@@ -159,8 +163,22 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateProgress(current, total, this.workflowId);
   }
 
-  updateExecutionState(state: string): void {
-    this.inner.updateExecutionState(state, this.workflowId);
+  updateExecutionState(
+    state: string,
+    workflowIdOrActive?: string | number[],
+    activeStepIndices?: number[]
+  ): void {
+    this.inner.updateExecutionState(
+      state,
+      this.workflowId,
+      Array.isArray(workflowIdOrActive)
+        ? workflowIdOrActive
+        : activeStepIndices
+    );
+  }
+
+  updateActiveStepIndices(activeStepIndices: number[]): void {
+    this.inner.updateActiveStepIndices?.(activeStepIndices, this.workflowId);
   }
 
   updateExecutionCompleted?(): void {

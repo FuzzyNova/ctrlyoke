@@ -43,6 +43,8 @@ import {
   type SecretRegistryActionState,
   type SecretRegistryState,
   type StatusLineTrackingHarnessId,
+  type SessionKind,
+  type ShellKind,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
 } from "./DashboardConstants";
@@ -487,6 +489,7 @@ export interface InitMessageData {
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
+  activeStepIndices?: number[];
   globalSettings: {
     harness: HarnessId;
     model: string;
@@ -632,6 +635,7 @@ export interface FileSelectedMessage {
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
   workflowProperties?: Record<string, any>;
+  activeStepIndices?: number[];
 }
 
 /**
@@ -681,6 +685,8 @@ export interface ExecutionStartedMessage {
   isInjectMode?: boolean;
   /** Resolved execution mode for the step that started this execution. */
   executionMode?: ExecutionMode;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -689,6 +695,15 @@ export interface ExecutionStartedMessage {
 export interface ExecutionStateChangedMessage {
   type: typeof MESSAGE_TYPES.EXECUTION_STATE_CHANGED;
   state: ExecutionState;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
+}
+
+/** Extension → Webview: active queue targets changed. */
+export interface ActiveStepIndicesChangedMessage {
+  type: typeof MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED;
+  activeStepIndices: number[];
+  workflowId?: string;
 }
 
 /**
@@ -698,6 +713,8 @@ export interface ProgressUpdateMessage {
   type: typeof MESSAGE_TYPES.PROGRESS_UPDATE;
   current: number;
   total: number;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -708,6 +725,8 @@ export interface StepStatusChangedMessage {
   stepIndex: number;
   status: StepStatus;
   details?: any;
+  /** Queue step indices with an active attempt. */
+  activeStepIndices?: number[];
 }
 
 /**
@@ -766,6 +785,27 @@ export interface ContextWindowUpdateMessage {
   stepIndex: number;
   used: number;
   size: number;
+}
+
+/**
+ * PTY session metadata (extension -> webview).
+ *
+ * `stepIndex` is zero-based for queue steps and -1 for standalone shell
+ * sessions. A parallel group id keeps same-harness sibling sessions distinct
+ * during webview reconciliation.
+ */
+export interface TerminalStartedMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_STARTED;
+  workflowId: string;
+  sessionId: string;
+  stepName: string;
+  stepIndex: number;
+  kind: SessionKind;
+  promptNumber?: number;
+  harnessId?: string;
+  shellKind?: ShellKind;
+  parallelGroupId?: string;
+  controllerClientId?: string;
 }
 
 /**
@@ -2591,6 +2631,7 @@ export type IncomingMessage =
   | SessionRestoredMessage
   | ExecutionStartedMessage
   | ExecutionStateChangedMessage
+  | ActiveStepIndicesChangedMessage
   | ProgressUpdateMessage
   | SearchIndexRebuildProgressMessage
   | StepStatusChangedMessage

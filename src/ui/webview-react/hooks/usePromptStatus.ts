@@ -13,7 +13,7 @@ import { isWorkflowRunning } from "../utils/status";
  * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function usePromptStatus() {
-  const { currentStep, executionState } = useWorkflowStore();
+  const { currentStep, executionState, activeStepIndices } = useWorkflowStore();
   const parallelGroups = useWorkflowStore((state) => state.parallelGroups);
   const isRunning = isWorkflowRunning(executionState);
 
@@ -25,6 +25,9 @@ export function usePromptStatus() {
     // This prevents stale RUNNING icons when currentStep advances without
     // an explicit STEP_STATUS_CHANGED being sent (e.g., CLI watch mode).
     if (isRunning) {
+      if (activeStepIndices.length > 0 && activeStepIndices.includes(index)) {
+        return STEP_STATUS.RUNNING;
+      }
       const currentGroup = parallelGroups.find(
         (group) =>
           currentStep >= group.startIndex &&

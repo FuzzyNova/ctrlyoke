@@ -65,7 +65,7 @@ export interface EvaluationComparison {
 export class EndConditionEvaluator {
   private readonly platform: PlatformAdapter;
   private readonly executionWorkspace: ExecutionWorkspace;
-  private readonly scriptProcessRunner: ScriptProcessRunner;
+  private readonly processRunners = new Set<ScriptProcessRunner>();
 
   constructor(
     platform: PlatformAdapter,
@@ -75,9 +75,6 @@ export class EndConditionEvaluator {
   ) {
     this.platform = platform;
     this.executionWorkspace = executionWorkspace;
-    this.scriptProcessRunner = new ScriptProcessRunner(
-      executionWorkspace.executionRoot
-    );
   }
 
   /**
@@ -162,7 +159,8 @@ export class EndConditionEvaluator {
     workingDirectory?: string,
     vars?: Record<string, string>,
     onOutput?: (chunk: string) => void,
-    secretNames: readonly string[] = []
+    secretNames: readonly string[] = [],
+    processRunner?: ScriptProcessRunner
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
     const executionRoot =
@@ -233,7 +231,8 @@ export class EndConditionEvaluator {
         onOutput,
         command.viaShell ?? false,
         secretNames,
-        condition.env
+        condition.env,
+        processRunner
       );
 
       if (result.errored) {
@@ -589,7 +588,8 @@ export class EndConditionEvaluator {
     onOutput?: (chunk: string) => void,
     viaShell: boolean = false,
     secretNames: readonly string[] = [],
-    processEnv?: Record<string, string>
+    processEnv?: Record<string, string>,
+    processRunner?: ScriptProcessRunner
   ): Promise<ScriptProcessResult> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
       workspaceRoot: this.platform.getWorkspaceRoot(),
@@ -600,15 +600,31 @@ export class EndConditionEvaluator {
       resolvedSecrets,
       secretNames
     );
-    return this.scriptProcessRunner.run({
-      cwd: workingDirectory ?? this.executionWorkspace.executionRoot,
-      timeout,
-      argv: [executable, ...args],
-      vars,
-      env,
-      onOutput,
-      viaShell,
-    });
+    const ownsRunner = !processRunner;
+    const runner =
+      processRunner ??
+      new ScriptProcessRunner(
+        workingDirectory ?? this.executionWorkspace.executionRoot
+      );
+    if (ownsRunner) {
+      this.processRunners.add(runner);
+    }
+    try {
+      return await runner.run({
+        cwd: workingDirectory ?? this.executionWorkspace.executionRoot,
+        timeout,
+        argv: [executable, ...args],
+        vars,
+        env,
+        onOutput,
+        viaShell,
+      });
+    } finally {
+      if (ownsRunner) {
+        this.processRunners.delete(runner);
+        runner.dispose();
+      }
+    }
   }
 
   /**
@@ -976,7 +992,10 @@ export class EndConditionEvaluator {
    * Kill all running processes
    */
   killAllProcesses(): void {
-    this.scriptProcessRunner.dispose();
+    for (const runner of this.processRunners) {
+      runner.dispose();
+    }
+    this.processRunners.clear();
     Log.info("Killed all running end condition processes");
   }
 

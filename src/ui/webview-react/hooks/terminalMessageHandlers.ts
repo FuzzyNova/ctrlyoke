@@ -17,6 +17,7 @@ import { useUiStore } from "../store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
+import type { TerminalStartedMessage } from "@root/types/WebviewMessageTypes";
 import {
   clearPanelReconnectReloadWatchdog,
   clearFreshPageReadySent,
@@ -27,6 +28,7 @@ function isScriptPtySession(session: {
   kind?: string;
   harnessId?: string;
   promptNumber?: number;
+  parallelGroupId?: string;
 }): boolean {
   return (
     session.kind === SESSION_KINDS.AI_CLI &&
@@ -153,7 +155,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // --------------------------------------------------------------------------
   // TERMINAL_STARTED - New PTY session created; register in store and rail
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
+  handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (
+    message: TerminalStartedMessage
+  ) => {
     const {
       workflowId,
       sessionId,
@@ -161,6 +165,8 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       kind,
       promptNumber,
       harnessId,
+      stepIndex,
+      parallelGroupId,
       shellKind,
       controllerClientId,
     } = message;
@@ -217,8 +223,10 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       const termStore = useTerminalStore.getState();
       termStore.updateSessionMetadata(workflowId, sessionId, {
         ...(stepName !== undefined ? { stepName } : {}),
+        stepIndex,
         ...(promptNumber !== undefined ? { promptNumber } : {}),
         ...(harnessId !== undefined ? { harnessId } : {}),
+        parallelGroupId,
         ...(shellKind !== undefined ? { shellKind } : {}),
         status: TERMINAL_SESSION_STATUS.RUNNING,
       });
@@ -235,18 +243,30 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       return;
     }
 
-    // Keep one AI terminal per live harness PTY. Different harnesses can stay
-    // visible together for inject-mode workflows, while same-harness restarts
-    // replace the old xterm. Script PTYs do not carry a harnessId, so they reuse
-    // a single script terminal tab.
+    // Keep one AI terminal per live harness PTY for sequential execution.
+    // Different harnesses can stay visible together, and parallel siblings
+    // stay distinct even when they share a harness (or are script PTYs).
     if (kind === SESSION_KINDS.AI_CLI) {
       const termStore = useTerminalStore.getState();
       const prevSessionIds = (termStore.sessions[workflowId] ?? [])
         .filter((s) => {
           if (harnessId) {
-            return s.kind === SESSION_KINDS.AI_CLI && s.harnessId === harnessId;
+            return (
+              s.kind === SESSION_KINDS.AI_CLI &&
+              s.harnessId === harnessId &&
+              !(
+                parallelGroupId !== undefined &&
+                s.parallelGroupId === parallelGroupId
+              )
+            );
           }
-          return isScriptPtySession(s);
+          return (
+            isScriptPtySession(s) &&
+            !(
+              parallelGroupId !== undefined &&
+              s.parallelGroupId === parallelGroupId
+            )
+          );
         })
         .map((s) => s.id);
       for (const prevSessionId of prevSessionIds) {
@@ -259,9 +279,11 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       id: sessionId,
       workflowId,
       stepName: stepName ?? "terminal",
+      stepIndex,
       kind: kind ?? SESSION_KINDS.AI_CLI,
       promptNumber,
       harnessId,
+      parallelGroupId,
       shellKind,
       status: TERMINAL_SESSION_STATUS.RUNNING,
       isController,

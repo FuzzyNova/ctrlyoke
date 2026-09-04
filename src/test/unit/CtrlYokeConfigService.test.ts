@@ -48,6 +48,10 @@ suite("CtrlYokeConfigService", () => {
       CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSize
     );
     assert.strictEqual(
+      all.queue.maxParallelSteps,
+      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
+    );
+    assert.strictEqual(
       all.enableDiagnosticLogs,
       CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
     );

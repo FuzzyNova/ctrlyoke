@@ -37,7 +37,8 @@ function defaults(
 async function run(
   workflow: PromptFile,
   defaultsValue = defaults(),
-  supportsConcurrentInteractiveSessions = true
+  supportsConcurrentInteractiveSessions = true,
+  fanOutEnabled = true
 ) {
   return preflightParallelGroup({
     workflow,
@@ -51,6 +52,7 @@ async function run(
     hostCanProvidePty: true,
     supportsConcurrentInteractiveSessions,
     configuredWidth: 6,
+    fanOutEnabled,
   });
 }
 
@@ -130,6 +132,7 @@ suite("ParallelGroupPreflight", () => {
         parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
       },
       defaults(),
+      false,
       false
     );
     assert.strictEqual(result.groupStartBoundary, 0);

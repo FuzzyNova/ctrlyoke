@@ -39,6 +39,16 @@ import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameR
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
 
+function getTerminalStepLabel(session: TerminalSession): string {
+  if (session.stepIndex === undefined || session.stepIndex < 0) {
+    return session.stepName;
+  }
+  const stepNumber = session.stepIndex + 1;
+  return session.stepName === `Step ${stepNumber}`
+    ? session.stepName
+    : `${stepNumber}. ${session.stepName}`;
+}
+
 interface TerminalViewProps {
   workflowId: string;
 }
@@ -426,7 +436,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     <CompactRailEntry
                       key={session.id}
                       session={session}
-                      label={String(session.promptNumber ?? idx + 1)}
+                      label={
+                        session.stepIndex !== undefined &&
+                        session.stepIndex >= 0
+                          ? String(session.stepIndex + 1)
+                          : String(session.promptNumber ?? idx + 1)
+                      }
                       isActive={session.id === activeSessionId}
                       onClick={() => setActiveSession(workflowId, session.id)}
                     />
@@ -518,10 +533,10 @@ const RailEntry: React.FC<RailEntryProps> = ({
           onClick();
         }
       }}
-      title={session.stepName}
+      title={getTerminalStepLabel(session)}
     >
       <SessionIcon session={session} />
-      <span className="truncate flex-1">{session.stepName}</span>
+      <span className="truncate flex-1">{getTerminalStepLabel(session)}</span>
       {onClose && (
         <button
           className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
@@ -565,10 +580,10 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
           onClick();
         }
       }}
-      title={session.stepName}
+      title={getTerminalStepLabel(session)}
     >
       <SessionIcon session={session} />
-      <span className="truncate flex-1">{session.stepName}</span>
+      <span className="truncate flex-1">{getTerminalStepLabel(session)}</span>
       <button
         className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
         title="Close terminal"
@@ -602,7 +617,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
     className={`flex flex-col items-center justify-center gap-0.5 py-2 w-full flex-shrink-0 transition-colors
       ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}`}
     onClick={onClick}
-    title={session.stepName}
+    title={getTerminalStepLabel(session)}
   >
     <SessionIcon session={session} />
     <span className="text-xxs font-mono">{label}</span>

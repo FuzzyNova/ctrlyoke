@@ -59,7 +59,7 @@ export interface ParallelGroupPreflightOptions {
   readonly hostCanProvidePty: boolean;
   readonly supportsConcurrentInteractiveSessions: boolean;
   readonly configuredWidth: number;
-  /** Test-only/next-stage override; production defaults to the closed build gate. */
+  /** Explicit override used by tests or compatibility simulations. */
   readonly fanOutEnabled?: boolean;
   /** Recovery execution omits members whose terminal runtime is already durable. */
   readonly excludeTerminalMembers?: boolean;
@@ -374,7 +374,7 @@ export function parallelGroupWidthMessage(
 ): string {
   const range = `${result.group.startIndex + 1}–${result.group.endIndex + 1}`;
   return result.effectiveWidth <= 1
-    ? `Parallel steps ${range} run sequentially in this build (effective width 1).`
+    ? `Parallel steps ${range} run sequentially (effective width 1).`
     : `Parallel steps ${range} run up to ${result.effectiveWidth} members concurrently.`;
 }
 

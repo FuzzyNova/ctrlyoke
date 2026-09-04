@@ -550,6 +550,7 @@ line two`,
       workflowId?: string;
       sessionId?: string;
       stepName?: string;
+      stepIndex?: number;
       promptNumber?: number;
       kind?: string;
     }> = [];
@@ -558,6 +559,7 @@ line two`,
       workflowId?: string;
       kind?: string;
       stepName?: string;
+      stepIndex?: number;
       promptNumber?: number;
       reconnectBuffer: string[];
     } = { reconnectBuffer: [] };
@@ -618,6 +620,7 @@ line two`,
             workflowId: string;
             kind: string;
             stepName: string;
+            stepIndex: number;
             promptNumber?: number;
           }) => {
             Object.assign(spawnedSession, {
@@ -625,6 +628,7 @@ line two`,
               workflowId: config.workflowId,
               kind: config.kind,
               stepName: config.stepName,
+              stepIndex: config.stepIndex,
               promptNumber: config.promptNumber,
             });
             return spawnedSession;
@@ -647,12 +651,14 @@ line two`,
 
     assert.strictEqual(refreshed, true);
     assert.strictEqual(spawnedSession.stepName, "second");
+    assert.strictEqual(spawnedSession.stepIndex, 1);
     assert.strictEqual(spawnedSession.promptNumber, 2);
     assert.strictEqual(postedMessages.length, 1);
     assert.strictEqual(postedMessages[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
     assert.strictEqual(postedMessages[0].workflowId, "workflow-1");
     assert.strictEqual(postedMessages[0].sessionId, spawnedSession.id);
     assert.strictEqual(postedMessages[0].stepName, "second");
+    assert.strictEqual(postedMessages[0].stepIndex, 1);
     assert.strictEqual(postedMessages[0].promptNumber, 2);
     assert.strictEqual(postedMessages[0].kind, SESSION_KINDS.AI_CLI);
   });

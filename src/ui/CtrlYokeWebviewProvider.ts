@@ -561,7 +561,8 @@ export class CtrlYokeWebviewProvider
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     await this.sink.updateFileSelected(
       fileName,
@@ -571,7 +572,8 @@ export class CtrlYokeWebviewProvider
       finalStepRuntime,
       workflowId,
       workflowProperties,
-      parallelGroups
+      parallelGroups,
+      activeStepIndices
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -594,7 +596,8 @@ export class CtrlYokeWebviewProvider
     },
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    activeStepIndices?: number[]
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -607,7 +610,8 @@ export class CtrlYokeWebviewProvider
       finalStepRuntime,
       workflowId,
       workflowProperties,
-      parallelGroups
+      parallelGroups,
+      activeStepIndices
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -641,8 +645,18 @@ export class CtrlYokeWebviewProvider
   ): void {
     this.sink.updateProgress(current, total, workflowId);
   }
-  public updateExecutionState(state: string, workflowId?: string): void {
-    this.sink.updateExecutionState(state, workflowId);
+  public updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
+    this.sink.updateExecutionState(state, workflowId, activeStepIndices);
+  }
+  public updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
+    this.sink.updateActiveStepIndices?.(activeStepIndices, workflowId);
   }
   public updateStepStatus(
     stepIndex: number,

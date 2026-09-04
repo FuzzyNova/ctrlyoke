@@ -3300,6 +3300,7 @@ describe("EXECUTION_STARTED", () => {
         workflowId: "workflow-1",
         sessionId: "session-1",
         stepName: "Step 1",
+        stepIndex: 0,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber: 1,
         controllerClientId: "controller-1",
@@ -3515,6 +3516,7 @@ describe("TERMINAL_STARTED", () => {
         workflowId: "workflow-1",
         sessionId: "session-1",
         stepName: "Step 2",
+        stepIndex: 1,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber: 2,
         controllerClientId: "controller-1",
@@ -3524,6 +3526,7 @@ describe("TERMINAL_STARTED", () => {
     const sessions = useTerminalStore.getState().sessions["workflow-1"];
     expect(sessions).toHaveLength(1);
     expect(sessions[0].stepName).toBe("Step 2");
+    expect(sessions[0].stepIndex).toBe(1);
     expect(sessions[0].promptNumber).toBe(2);
     expect(sessions[0].status).toBe(TERMINAL_SESSION_STATUS.RUNNING);
   });
@@ -3595,6 +3598,51 @@ describe("TERMINAL_STARTED", () => {
     expect(sessions[0].id).toBe("new-claude-session");
   });
 
+  it("preserves same-harness parallel sessions as separate labeled tabs", () => {
+    renderHook(() => useMessageHandler());
+
+    for (const session of [
+      {
+        sessionId: "parallel-1",
+        stepIndex: 1,
+        stepName: "Research auth",
+      },
+      {
+        sessionId: "parallel-2",
+        stepIndex: 2,
+        stepName: "Research database",
+      },
+      {
+        sessionId: "parallel-3",
+        stepIndex: 3,
+        stepName: "Research performance",
+      },
+    ]) {
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+          workflowId: "workflow-1",
+          sessionId: session.sessionId,
+          stepIndex: session.stepIndex,
+          stepName: session.stepName,
+          kind: SESSION_KINDS.AI_CLI,
+          promptNumber: session.stepIndex + 1,
+          harnessId: "claude-cli",
+          parallelGroupId: "group-1",
+          controllerClientId: "controller-1",
+        });
+      });
+    }
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(3);
+    expect(sessions.map((session) => [session.stepIndex, session.stepName])).toEqual([
+      [1, "Research auth"],
+      [2, "Research database"],
+      [3, "Research performance"],
+    ]);
+    expect(sessions.every((session) => session.isController)).toBe(false);
+  });
+
   it("reuses a single script PTY terminal tab", () => {
     renderHook(() => useMessageHandler());
 
@@ -3621,6 +3669,73 @@ describe("TERMINAL_STARTED", () => {
     const sessions = useTerminalStore.getState().sessions["workflow-1"];
     expect(sessions).toHaveLength(1);
     expect(sessions[0].id).toBe("script-session-2");
+  });
+
+  it("preserves parallel script PTYs as separate tabs", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "script-session-1",
+        stepIndex: 1,
+        stepName: "Check auth",
+        kind: SESSION_KINDS.AI_CLI,
+        parallelGroupId: "group-1",
+        controllerClientId: "controller-1",
+      });
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "script-session-2",
+        stepIndex: 2,
+        stepName: "Check database",
+        kind: SESSION_KINDS.AI_CLI,
+        parallelGroupId: "group-1",
+        controllerClientId: "controller-1",
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(2);
+    expect(sessions.map((session) => session.parallelGroupId)).toEqual([
+      "group-1",
+      "group-1",
+    ]);
+  });
+
+  it("keeps workflow-scoped controller arbitration for every replayed parallel session", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      for (const sessionId of ["parallel-1", "parallel-2"]) {
+        dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+          workflowId: "workflow-1",
+          sessionId,
+          stepIndex: sessionId.endsWith("1") ? 1 : 2,
+          stepName: sessionId,
+          kind: SESSION_KINDS.AI_CLI,
+          harnessId: "claude-cli",
+          parallelGroupId: "group-1",
+          controllerClientId: "controller-1",
+        });
+      }
+      dispatch(MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED, {
+        workflowId: "workflow-1",
+        sessionId: "parallel-1",
+        controllerClientId: "browser:2",
+      });
+      dispatch(MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED, {
+        workflowId: "workflow-1",
+        sessionId: "parallel-2",
+        controllerClientId: "browser:2",
+      });
+    });
+
+    expect(
+      useTerminalStore
+        .getState()
+        .sessions["workflow-1"].map((session) => session.isController)
+    ).toEqual([false, false]);
   });
 
   it("reclaims control when a stale replay arrives after control was already reassigned", () => {

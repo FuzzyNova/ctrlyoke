@@ -167,10 +167,13 @@ export class PtySession {
   readonly id: string;
   readonly workflowId: string;
   stepName: string;
+  stepIndex: number;
   readonly kind: SessionKind;
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   readonly harnessId?: string;
+  /** Parallel group identity used to keep sibling terminal tabs separate. */
+  parallelGroupId?: string;
   /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   readonly shellKind?: ShellKind;
   readonly pty: IPty;
@@ -198,19 +201,23 @@ export class PtySession {
     id: string,
     workflowId: string,
     stepName: string,
+    stepIndex: number,
     kind: SessionKind,
     ptyInstance: IPty,
     promptNumber?: number,
     harnessId?: string,
+    parallelGroupId?: string,
     shellKind?: ShellKind,
     reconnectBufferMaxBytes = 50_000
   ) {
     this.id = id;
     this.workflowId = workflowId;
     this.stepName = stepName;
+    this.stepIndex = stepIndex;
     this.kind = kind;
     this.promptNumber = promptNumber;
     this.harnessId = harnessId;
+    this.parallelGroupId = parallelGroupId;
     this.shellKind = shellKind;
     this.pty = ptyInstance;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
@@ -242,10 +249,14 @@ export class PtySession {
 export interface SpawnPtyOptions {
   workflowId: string;
   stepName: string;
+  /** Zero-based queue step index, or -1 for standalone shell sessions. */
+  stepIndex: number;
   kind: SessionKind;
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Omit for shell sessions. */
   harnessId?: string;
+  /** Parallel group identity for grouped queue steps. */
+  parallelGroupId?: string;
   /** Shell variant for SHELL sessions. Omit for ai-cli sessions. */
   shellKind?: ShellKind;
   /**
@@ -296,7 +307,9 @@ export class PtyProcessManager {
    * Persists across steps within a single run so that step 2, 3, etc. inherit
    * the same controller as step 1 without another race. Overwritten when a
    * fresh setPendingController call arrives (new run) or when a client claims
-   * control via TERMINAL_CLAIM_CONTROL.
+   * control via TERMINAL_CLAIM_CONTROL. Parallel sibling sessions intentionally
+   * share this workflow-scoped controller in v1; arbitration remains keyed by
+   * workflowId rather than introducing per-session controllers.
    */
   private workflowRunControllers = new Map<string, string>();
 
@@ -502,10 +515,12 @@ export class PtyProcessManager {
       sessionId,
       options.workflowId,
       options.stepName,
+      options.stepIndex,
       options.kind,
       ptyInstance,
       options.promptNumber,
       options.harnessId,
+      options.parallelGroupId,
       options.shellKind,
       reconnectBufferMaxBytes
     );
@@ -582,6 +597,7 @@ export class PtyProcessManager {
     return this.spawnPty({
       workflowId: opts.workflowId,
       stepName: shellDisplayName(shell),
+      stepIndex: -1,
       kind: SESSION_KINDS.SHELL,
       shellKind: resolveShellKind(shell),
       command: shell,

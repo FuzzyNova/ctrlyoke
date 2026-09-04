@@ -213,9 +213,19 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateExecutionState(state: string, workflowId?: string): void {
+  updateExecutionState(
+    state: string,
+    workflowId?: string,
+    activeStepIndices?: number[]
+  ): void {
     for (const client of this.clients) {
-      client.updateExecutionState?.(state, workflowId);
+      client.updateExecutionState?.(state, workflowId, activeStepIndices);
+    }
+  }
+
+  updateActiveStepIndices(activeStepIndices: number[], workflowId?: string): void {
+    for (const client of this.clients) {
+      client.updateActiveStepIndices?.(activeStepIndices, workflowId);
     }
   }
 
@@ -271,10 +281,23 @@ export class DashboardBroadcastHub
     stepIndex: number,
     chunk: string,
     phase?: ExecutionPhase,
-    workflowId?: string
+    workflowId?: string,
+    timestampMs?: number,
+    sequence?: number,
+    attemptIndex?: number,
+    runIndex?: number
   ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingChunk?.(stepIndex, chunk, phase, workflowId);
+      client.updateCliStreamingChunk?.(
+        stepIndex,
+        chunk,
+        phase,
+        workflowId,
+        timestampMs,
+        sequence,
+        attemptIndex,
+        runIndex
+      );
     }
   }
 

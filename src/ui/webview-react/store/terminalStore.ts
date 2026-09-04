@@ -14,10 +14,14 @@ export interface TerminalSession {
   id: string;
   workflowId: string;
   stepName: string;
+  /** Zero-based queue step index; -1 is used for standalone shell sessions. */
+  stepIndex?: number;
   kind: SessionKind;
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   harnessId?: string;
+  /** Parallel group identity used to preserve sibling tabs. */
+  parallelGroupId?: string;
   /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   shellKind?: ShellKind;
   status: TerminalSessionStatus;
@@ -65,7 +69,13 @@ interface TerminalActions {
     metadata: Partial<
       Pick<
         TerminalSession,
-        "stepName" | "promptNumber" | "harnessId" | "shellKind" | "status"
+        | "stepName"
+        | "stepIndex"
+        | "promptNumber"
+        | "harnessId"
+        | "parallelGroupId"
+        | "shellKind"
+        | "status"
       >
     >
   ) => void;

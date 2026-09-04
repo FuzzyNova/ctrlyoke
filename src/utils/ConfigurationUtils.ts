@@ -314,6 +314,7 @@ export const ConfigurationUtils = {
     const queue = configService.get(CONFIG_KEYS.QUEUE);
     return {
       maxQueueSize: queue.maxSize,
+      maxParallelSteps: queue.maxParallelSteps,
       maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
       unlimitedMode: queue.unlimitedMode,
       notifyOnExtension: queue.notifyOnExtension,
