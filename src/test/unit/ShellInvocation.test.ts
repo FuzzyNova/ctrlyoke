@@ -4,6 +4,7 @@ import { suite, test } from "mocha";
 import {
   buildShellWrapArgs,
   shellNeedsVerbatimArguments,
+  toPtySpawnArgs,
 } from "../../core/harness/PtyProcessManager";
 import { SHELL_KINDS } from "../../types/DashboardConstants";
 
@@ -61,6 +62,49 @@ suite("Shell invocation", () => {
         assert.ok(script.trimEnd().endsWith("exit 0"));
       });
     }
+  });
+
+  suite("toPtySpawnArgs", () => {
+    test("passes an array through when standard quoting is correct", () => {
+      const args = ["-NoProfile", "-Command", 'echo "hi"'];
+      assert.deepStrictEqual(toPtySpawnArgs(args, false), args);
+    });
+
+    test("does not alias the caller's array", () => {
+      const args = ["-c", "true"];
+      const result = toPtySpawnArgs(args, false);
+      assert.notStrictEqual(result, args);
+      assert.deepStrictEqual(result, args);
+    });
+
+    test("joins into one verbatim command line for cmd payloads", () => {
+      // node-pty appends a string `args` after the command untouched; an array
+      // would be re-quoted as \" and reach cmd.exe mangled.
+      assert.strictEqual(
+        toPtySpawnArgs(["/d", "/c", 'node -e "process.exit(7)"'], true),
+        '/d /c node -e "process.exit(7)"'
+      );
+    });
+
+    test("matches the shell resolution it is meant to pair with", () => {
+      const cmdArgs = buildShellWrapArgs(SHELL_KINDS.CMD, 'echo "x"');
+      assert.strictEqual(
+        typeof toPtySpawnArgs(
+          cmdArgs,
+          shellNeedsVerbatimArguments(SHELL_KINDS.CMD)
+        ),
+        "string"
+      );
+      const bashArgs = buildShellWrapArgs(SHELL_KINDS.BASH, 'echo "x"');
+      assert.ok(
+        Array.isArray(
+          toPtySpawnArgs(
+            bashArgs,
+            shellNeedsVerbatimArguments(SHELL_KINDS.BASH)
+          )
+        )
+      );
+    });
   });
 
   suite("shellNeedsVerbatimArguments", () => {

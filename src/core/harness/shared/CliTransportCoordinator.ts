@@ -16,7 +16,11 @@ import {
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
 import type { ICliProvider } from "./interfaces/ICliProvider";
-import { getPtyProcessManager, ptyPostMessage } from "../PtyProcessManager";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+  toPtySpawnArgs,
+} from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
 import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
 import { CliLogEventPump } from "./CliLogEventPump";
@@ -288,11 +292,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             parallelGroupId,
             sessionId: preSessionId,
             command: command.command,
-            // A verbatim payload must reach node-pty as a single pre-escaped
-            // string, not an array — see SpawnPtyOptions.args.
-            args: command.requiresShellVerbatimArgs
-              ? command.args.join(" ")
-              : command.args,
+            args: toPtySpawnArgs(
+              command.args,
+              command.requiresShellVerbatimArgs ?? false
+            ),
             cwd,
             env: mergedEnv,
             onData: (ptySession, chunk) => {
@@ -684,14 +687,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     return (await this.deps.resolveSecretEnvironment?.(names ?? [])) ?? {};
   }
 
-  private getWorkflowStepMetadata(
-    workflowContext?: WorkflowContext
-  ): {
-    stepName: string;
-    stepIndex: number;
-    promptNumber: number;
-    parallelGroupId?: string;
-  } | undefined {
+  private getWorkflowStepMetadata(workflowContext?: WorkflowContext):
+    | {
+        stepName: string;
+        stepIndex: number;
+        promptNumber: number;
+        parallelGroupId?: string;
+      }
+    | undefined {
     if (!workflowContext) {
       return undefined;
     }

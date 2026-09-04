@@ -184,6 +184,25 @@ export function shellNeedsVerbatimArguments(shellKind: ShellKind): boolean {
 }
 
 /**
+ * Shape argv for `spawnPty`, the node-pty counterpart of
+ * `child_process`'s `windowsVerbatimArguments`.
+ *
+ * node-pty re-quotes an `args` **array** with the MSVC escaping convention
+ * (`"` becomes `\"`), which is right for anything parsing its command line the
+ * way `CommandLineToArgvW` does and wrong for `cmd.exe`, which has no such
+ * escape. A **string** is appended after the command untouched instead — see
+ * `SpawnPtyOptions.args` and node-pty's `argsToCommandLine`. Use this wherever
+ * a verbatim payload reaches a PTY, so an inline `cmd /c` script is not
+ * corrupted the way the headless path was.
+ */
+export function toPtySpawnArgs(
+  args: readonly string[],
+  windowsVerbatimArguments: boolean
+): string[] | string {
+  return windowsVerbatimArguments ? args.join(" ") : [...args];
+}
+
+/**
  * Resolve the shell executable + wrap-args to run an arbitrary script string
  * (an interactive script step, or a headless precondition/end-condition/script
  * step's inline command). Single source for "which shell runs this text" —

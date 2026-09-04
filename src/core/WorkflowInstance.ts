@@ -172,6 +172,7 @@ import {
   getPtyProcessManager,
   ptyPostMessage,
   resolveShellInvocation,
+  toPtySpawnArgs,
 } from "./harness/PtyProcessManager";
 export type {
   PromptStartData,
@@ -4133,6 +4134,7 @@ export class WorkflowInstance {
                 executable: shell,
                 args: shellArgs,
                 shellKind,
+                windowsVerbatimArguments,
               } = resolveShellInvocation(options.script);
               Log.debug(
                 `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
@@ -4150,7 +4152,9 @@ export class WorkflowInstance {
                   sessionId: preSessionId,
                   parallelGroupId: options.parallelGroupId,
                   command: shell,
-                  args: shellArgs,
+                  // cmd.exe cannot read node-pty's array re-quoting; a verbatim
+                  // payload must arrive as one pre-joined command line.
+                  args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
                   cwd: options.cwd,
                   env: { ...process.env, ...(options.env ?? {}) },
                   onData: (ptySession, chunk) => {
