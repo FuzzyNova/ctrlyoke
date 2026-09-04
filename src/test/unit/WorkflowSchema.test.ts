@@ -50,6 +50,75 @@ suite("Workflow template schema", () => {
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
 
+  test("accepts a harness placeholder inside a declared template group", () => {
+    const valid = validate({
+      _templateMeta: {
+        name: "Parallel harness template",
+        variables: {
+          selectedHarness: { type: "harness" },
+        },
+      },
+      steps: [
+        {
+          parallel: [
+            { prompt: "Research one", harness: "{selectedHarness}" },
+            { prompt: "Research two", harness: "{selectedHarness}" },
+          ],
+        },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
+  test("accepts flat parallel members and rejects unsupported parallel shapes", () => {
+    const valid = validate({
+      steps: [
+        { prompt: "before" },
+        {
+          parallel: [{ prompt: "one" }, { type: "script", script: "npm test" }],
+          failFast: false,
+        },
+        { prompt: "after" },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+
+    const invalidWorkflows = [
+      {
+        steps: [
+          {
+            parallel: [{ prompt: "one" }, { parallel: [{ prompt: "nested" }] }],
+          },
+        ],
+      },
+      {
+        steps: [{ parallel: [{ prompt: "only member" }] }],
+      },
+      {
+        steps: [{ prompt: "queue step" }],
+        finalStep: { parallel: [{ prompt: "one" }, { prompt: "two" }] },
+      },
+      {
+        steps: [
+          {
+            parallel: [
+              { prompt: "one", harness: "{selectedHarness}" },
+              { prompt: "two" },
+            ],
+          },
+        ],
+      },
+    ];
+
+    for (const workflow of invalidWorkflows) {
+      assert.strictEqual(
+        validate(workflow),
+        false,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
   test("accepts valid secret grants on prompt and script steps", () => {
     const valid = validate({
       secrets: ["SUPABASE_PAT", "API_2"],

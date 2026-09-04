@@ -344,6 +344,8 @@ export interface PromptFile extends ExecutionProperties {
   trustedExternalRoots?: string[] | null;
   prompt?: string;
   steps?: WorkflowStep[];
+  /** Normalized flat-step topology for authored parallel groups. */
+  parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep;
   /**
    * Workflow-level variable defaults for `{{varName}}` substitution.
@@ -738,6 +740,17 @@ export interface ScriptStep extends ScriptProperties {
 /** Union type for all workflow steps */
 export type WorkflowStep = PromptStep | ScriptStep;
 
+/**
+ * Normalized topology for one authored `parallel:` item.
+ * Indices are inclusive and refer to the flat `PromptFile.steps` array.
+ */
+export interface ParallelGroupDefinition {
+  id: string;
+  startIndex: number;
+  endIndex: number;
+  failFast: boolean;
+}
+
 /** Type guard: returns true if the step is a ScriptStep */
 export function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -920,6 +933,7 @@ export interface PreCondition extends ScriptProperties {
 export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
   steps: WorkflowStep[];
+  parallelGroups: ParallelGroupDefinition[];
   results: PromptResult[];
   completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)

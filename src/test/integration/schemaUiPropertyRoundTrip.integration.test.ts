@@ -102,6 +102,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["workflowName", "working-file bookkeeping, renamed via its own message"],
   ["startedAt", "engine-written timestamp"],
   ["steps", "the step list itself, not a property of a step"],
+  [
+    "parallelGroups",
+    "normalized working-file topology; authored as `parallel:` items",
+  ],
   ["finalStep", "covered as its own surface below"],
   ["type", "step-kind discriminator carried by the message"],
   ["prompt", "step content carried by the message's `text`"],

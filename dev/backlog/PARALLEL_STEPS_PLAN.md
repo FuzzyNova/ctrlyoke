@@ -950,11 +950,11 @@ Each of these must have a test or an explicit "not supported" message.
 
 ### Stage 1 — Topology, schema, and round-trip persistence
 
-1. Schema: `parallelGroupItem`, root `parallelGroups`, template-branch harness
+[x] 1. Schema: `parallelGroupItem`, root `parallelGroups`, template-branch harness
    restriction, YAML regeneration; `NOT_AUTHORABLE` entry in the round-trip test.
-2. Types: `ParallelGroupDefinition`, `PromptFile.parallelGroups`, `QueueState`,
-   `WorkflowDefinitionSnapshot`, message payloads.
-3. `src/core/ParallelGroupTopology.ts`: normalize/validate/insert/delete/reorder/
+[x] 2. Types: `ParallelGroupDefinition`, `PromptFile.parallelGroups`, `QueueState`,
+   and `WorkflowDefinitionSnapshot`.
+[x] 3. `src/core/ParallelGroupTopology.ts`: normalize/validate/insert/delete/reorder/
    group/ungroup/unwrap/snap helpers with exhaustive unit tests.
 4. `PromptFileParser`: flatten containers, populate groups, structural validation rules.
 5. `WorkingFileManager`, `PromptQueue`, `RunContinuationService`, `WorkflowInstance`,

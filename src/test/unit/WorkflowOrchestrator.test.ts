@@ -314,6 +314,7 @@ suite("WorkflowOrchestrator active queue context key", () => {
       steps: Array.from({ length: stepCount }, (_, index) => ({
         prompt: `step ${index}`,
       })),
+      parallelGroups: [],
       results: [],
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,

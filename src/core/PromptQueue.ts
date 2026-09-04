@@ -131,6 +131,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state = {
       currentIndex: 0,
       steps: [],
+      parallelGroups: [],
       results: [],
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
@@ -200,6 +201,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state = {
       currentIndex: 0,
       steps: [],
+      parallelGroups: [],
       results: [],
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
@@ -339,6 +341,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state = {
       currentIndex: 0,
       steps: [...prompts],
+      parallelGroups: promptFile.parallelGroups ?? [],
       results: prompts.map((step) => ({
         prompt: isScriptStep(step) ? step.script : step.prompt,
         status: STEP_STATUS.PENDING,
@@ -465,6 +468,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           // Backward compatibility: _runtime is optional, old files won't have it
           // The spread operator preserves _runtime if it exists
         })),
+        parallelGroups: workingFile.parallelGroups ?? [],
         results: [],
         completedIndices,
         totalExecutionTime: 0,

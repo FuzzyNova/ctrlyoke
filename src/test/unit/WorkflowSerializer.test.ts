@@ -101,6 +101,7 @@ function schemaBackedFieldNames(): {
     "workflowName",
     "startedAt",
     "_runtime",
+    "parallelGroups",
   ]);
   const singleStepWorkflowFields = promptFields.filter(
     (field) => field === PROMPT_PROPERTIES.PROMPT

@@ -36,6 +36,18 @@ allOf:
                 properties:
                   harness:
                     $ref: '#/definitions/harnessId'
+              parallel:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    harness:
+                      $ref: '#/definitions/harnessId'
+                    _runtime:
+                      type: object
+                      properties:
+                        harness:
+                          $ref: '#/definitions/harnessId'
         finalStep:
           type: object
           properties:
@@ -57,7 +69,9 @@ oneOf:
           steps:
             type: array
             items:
-              $ref: '#/definitions/workflowStep'
+              oneOf:
+                - $ref: '#/definitions/workflowStep'
+                - $ref: '#/definitions/parallelGroupItem'
           finalStep:
             $ref: '#/definitions/workflowStep'
             description: >-
@@ -66,6 +80,11 @@ oneOf:
               those prompts run before finalStep executes again. Working files store resolved
               harness/model/session metadata on finalStep._runtime; workflow phase/status remains in
               the root _runtime.finalStep block.
+          parallelGroups:
+            type: array
+            description: Normalized working-file topology for authored parallel groups.
+            items:
+              $ref: '#/definitions/parallelGroupDefinition'
           originalFile:
             type: string
             description: Path to original prompt file (working files only)
@@ -648,6 +667,49 @@ definitions:
           type: object
           required:
             - trustedExternalRoots
+  parallelGroupItem:
+    type: object
+    description: >-
+      An authored group of prompt or script steps. Groups are flattened into steps plus
+      parallelGroups when loaded.
+    properties:
+      parallel:
+        type: array
+        items:
+          allOf:
+            - $ref: '#/definitions/workflowStep'
+            - not:
+                type: object
+                required:
+                  - parallel
+        minItems: 2
+      failFast:
+        type: boolean
+        default: true
+    required:
+      - parallel
+    additionalProperties: false
+  parallelGroupDefinition:
+    type: object
+    description: Normalized working-file topology for one authored parallel group.
+    properties:
+      id:
+        type: string
+        minLength: 1
+      startIndex:
+        type: integer
+        minimum: 0
+      endIndex:
+        type: integer
+        minimum: 0
+      failFast:
+        type: boolean
+    required:
+      - id
+      - startIndex
+      - endIndex
+      - failFast
+    additionalProperties: false
   promptStep:
     type: object
     allOf:
