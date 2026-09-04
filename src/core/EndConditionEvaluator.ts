@@ -185,7 +185,12 @@ export class EndConditionEvaluator {
         condition.compareSource
       );
 
-      let command: { executable: string; args: string[]; viaShell?: boolean };
+      let command: {
+        executable: string;
+        args: string[];
+        viaShell?: boolean;
+        windowsVerbatimArguments?: boolean;
+      };
 
       if (resolvedScriptPath) {
         // File found - determine script type and command
@@ -232,6 +237,7 @@ export class EndConditionEvaluator {
           executable: shellInvocation.executable,
           args: shellInvocation.args,
           viaShell: false,
+          windowsVerbatimArguments: shellInvocation.windowsVerbatimArguments,
         };
       }
 
@@ -248,7 +254,8 @@ export class EndConditionEvaluator {
         command.viaShell ?? false,
         secretNames,
         condition.env,
-        processRunner
+        processRunner,
+        command.windowsVerbatimArguments ?? false
       );
 
       if (result.errored) {
@@ -605,7 +612,8 @@ export class EndConditionEvaluator {
     viaShell: boolean = false,
     secretNames: readonly string[] = [],
     processEnv?: Record<string, string>,
-    processRunner?: ScriptProcessRunner
+    processRunner?: ScriptProcessRunner,
+    windowsVerbatimArguments: boolean = false
   ): Promise<ScriptProcessResult> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
       workspaceRoot: this.platform.getWorkspaceRoot(),
@@ -634,6 +642,7 @@ export class EndConditionEvaluator {
         env,
         onOutput,
         viaShell,
+        windowsVerbatimArguments,
       });
     } finally {
       if (ownsRunner) {

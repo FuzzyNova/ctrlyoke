@@ -112,15 +112,53 @@ export function resolveShellKind(shellPath: string): ShellKind {
 }
 
 /**
+ * Makes `powershell -Command` report the script's real exit code.
+ *
+ * Unlike `sh -c` and `cmd /c`, PowerShell does not propagate a child process's
+ * exit status: `-Command` exits 0 or 1 from `$?` alone, so `node -e
+ * "process.exit(7)"` reports 1 and any multi-line script reports 1 as soon as
+ * its last native command is non-zero. Exit-code end conditions cannot work
+ * without this epilogue.
+ *
+ * The naive `; exit $LASTEXITCODE` is wrong in the other direction: a script
+ * whose failure was a *cmdlet* error leaves `$LASTEXITCODE` unset, and exiting
+ * on `$null` reports success for a script that visibly failed. So capture both
+ * signals and prefer the native exit code when one exists.
+ *
+ * Note this deliberately lets a non-zero `$LASTEXITCODE` win over a trailing
+ * successful cmdlet, rather than copying `sh -c`'s "status of the last command"
+ * rule. For a gate, surfacing a failed native command is the safer error —
+ * `npm test` followed by a `Write-Output` must not report success.
+ */
+const POWERSHELL_EXIT_CODE_EPILOGUE = [
+  "$__ctrlyokeOk = $?",
+  "if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }",
+  "if (-not $__ctrlyokeOk) { exit 1 }",
+  "exit 0",
+].join("\n");
+
+/**
  * Build the argv that runs `script` as a single command line under the given
  * shell kind. Each shell has its own "run this string" flag, so the same
  * script text needs different wrapping depending on which shell resolves.
+ *
+ * Exported for tests: exit-code propagation is shell-specific and easy to
+ * regress, and it is what end conditions compare against.
  */
-function buildShellWrapArgs(shellKind: ShellKind, script: string): string[] {
+export function buildShellWrapArgs(
+  shellKind: ShellKind,
+  script: string
+): string[] {
   switch (shellKind) {
     case SHELL_KINDS.PWSH:
     case SHELL_KINDS.POWERSHELL:
-      return ["-NoProfile", "-Command", script];
+      // Newline, not `;` — a script ending in a comment would swallow the
+      // epilogue on the same line.
+      return [
+        "-NoProfile",
+        "-Command",
+        `${script}\n${POWERSHELL_EXIT_CODE_EPILOGUE}`,
+      ];
     case SHELL_KINDS.CMD:
       return ["/d", "/c", script];
     case SHELL_KINDS.WSL:
@@ -129,6 +167,20 @@ function buildShellWrapArgs(shellKind: ShellKind, script: string): string[] {
       // bash/zsh/sh/fish/nu, and anything unrecognized — universal POSIX -c.
       return ["-c", script];
   }
+}
+
+/**
+ * Whether the resolved argv must be handed to Windows verbatim.
+ *
+ * `cmd.exe` does not understand the `\"` escaping Node applies when it builds a
+ * command line from an args array, so a quoted inline script reaches it
+ * mangled — `cmd /d /c 'node -e "process.exit(7)"'` silently exits 0. Node's
+ * own `shell: true` sets this flag for exactly this reason; resolving the shell
+ * ourselves means setting it ourselves. Every other shell here accepts Node's
+ * standard quoting, and WSL/POSIX argv would be corrupted by verbatim joining.
+ */
+export function shellNeedsVerbatimArguments(shellKind: ShellKind): boolean {
+  return shellKind === SHELL_KINDS.CMD;
 }
 
 /**
@@ -144,6 +196,7 @@ export function resolveShellInvocation(script: string): {
   executable: string;
   args: string[];
   shellKind: ShellKind;
+  windowsVerbatimArguments: boolean;
 } {
   const terminalSettings = ConfigurationUtils.getTerminalSettings();
   const shellOverride = terminalSettings.shellExecutable.trim();
@@ -151,7 +204,12 @@ export function resolveShellInvocation(script: string): {
     shellOverride ||
     (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
   const shellKind = resolveShellKind(executable);
-  return { executable, args: buildShellWrapArgs(shellKind, script), shellKind };
+  return {
+    executable,
+    args: buildShellWrapArgs(shellKind, script),
+    shellKind,
+    windowsVerbatimArguments: shellNeedsVerbatimArguments(shellKind),
+  };
 }
 
 let _nodePtyModule: NodePtyModule | null | undefined;

@@ -17,6 +17,8 @@ export interface ScriptProcessRunnerOptions {
   onOutput?: (chunk: string) => void;
   /** Run the command through the platform shell. */
   viaShell?: boolean;
+  /** Pass argv to Windows verbatim (cmd.exe payloads — see resolveShellInvocation). */
+  windowsVerbatimArguments?: boolean;
 }
 
 export interface ScriptProcessResult {
@@ -90,6 +92,7 @@ export class ScriptProcessRunner {
         env: cleanEnv,
         onStdout: options.onOutput,
         shell: options.viaShell ?? false,
+        windowsVerbatimArguments: options.windowsVerbatimArguments,
         // Headless scripts never receive user input. A pipe preserves the
         // historical stdin behavior for scripts that probe the handle.
         stdin: "pipe",
