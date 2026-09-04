@@ -73,6 +73,7 @@ import {
   TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME,
   TOOL_CALL_BLOCK_VERTICAL_CHROME,
   estimateFileOperationHeaderLines,
+  outputRowActivityChrome,
   outputRowGroupPadding,
   resolveOutputContentWidth,
   toolCallGutterWidth,
@@ -374,6 +375,41 @@ function getConcurrentGroupForStep(
       ? input.historyOutputs.promptOutputs[group.startIndex]?.workspaceSnapshot
       : input.workspaceSnapshots[group.startIndex];
   return groupSnapshot?.parallelGroupId === group.id ? group : undefined;
+}
+
+/** Identity of one attempt's row block: `<target>:run<n>:attempt<n>`. */
+function getAttemptRowKeyBase(
+  targetKey: string,
+  runIndex: number,
+  attemptIndex: number
+): string {
+  return `${targetKey}:run${runIndex}:attempt${attemptIndex}`;
+}
+
+/**
+ * Row-key namespace for the rows a single message contributes.
+ *
+ * **Every row key must be unique across the whole list.** The virtualizer keys
+ * its measurement cache by `row.key` (`getItemKey`) and React keys the DOM by
+ * it, so two rows sharing a key each adopt the other's measured height: the
+ * pane renders large gaps, jumps while scrolling, and the measure -> setState
+ * -> re-measure cycle can fail to converge until React throws #185 ("Maximum
+ * update depth exceeded") and takes the whole dashboard down.
+ *
+ * The attempt identity alone stopped being unique once the chronological
+ * activity projection landed. It slices one attempt into many messages, and
+ * each slice's `activityEvents` is its own array whose `originalIndex` restarts
+ * at 0 — so every slice of an attempt produced the same `:header`, `:event:0`
+ * and `:stats` keys. Slices are therefore namespaced by their `activityKey`,
+ * which `mapOrderedHistoryEntriesToMessages` already assigns uniquely.
+ */
+function getRowKeyBase(
+  attemptRowKeyBase: string,
+  message: OutputMessage
+): string {
+  return message.isActivity && message.activityKey
+    ? `${attemptRowKeyBase}:activity:${message.activityKey}`
+    : attemptRowKeyBase;
 }
 
 interface AttemptGroupAggregate {
@@ -1582,13 +1618,16 @@ export function estimateOutputRowHeight(
     return cached.height;
   }
 
-  // Rows at a CLI group's edges get extra padding from OutputRow's wrapper.
-  // Only rows that carry the flags are wrapped, so this is safe to add
-  // unconditionally — and it is the whole story behind the persistent bias on
-  // `stats` (always a group's last row) and `cli-header` (always its first).
+  // Rows at a CLI group's edges get extra padding from OutputRow's wrapper, and
+  // a row that opens an activity slice gets ActivityAttribution's label above
+  // it. Only rows that carry the flags are wrapped, so both are safe to add
+  // unconditionally — and the group padding is the whole story behind the
+  // persistent bias on `stats` (always a group's last row) and `cli-header`
+  // (always its first).
   const height =
     estimateOutputRowContentHeight(row, outputFontSize, outputContentWidth) +
-    outputRowGroupPadding(row);
+    outputRowGroupPadding(row) +
+    outputRowActivityChrome(row);
   rowHeightEstimateCache.set(row, {
     contentWidth: outputContentWidth,
     fontSize: outputFontSize,
@@ -1839,6 +1878,27 @@ export function buildOutputRows(
       .map((message) => getTargetKey(message.target))
   );
   let previousActivityTargetKey: string | undefined;
+  // An attempt's chrome belongs to the attempt, not to each activity slice
+  // inside it: the header/prompt/command/error open the block and the
+  // verdict/stats close it. Emitting them per slice repeated a full CLI header
+  // and token footer around every interleaved fragment. Leading chrome goes on
+  // the attempt's first slice, trailing chrome on its last.
+  const lastActivityMessageIndexByAttempt = new Map<string, number>();
+  for (const [messageIndex, message] of input.allMessages.entries()) {
+    if (!message.isActivity || message.type !== OUTPUT_MESSAGE_TYPES.CLI) {
+      continue;
+    }
+    const output = (message.aggregate ?? message.data) as CliOutputType;
+    lastActivityMessageIndexByAttempt.set(
+      getAttemptRowKeyBase(
+        getTargetKey(message.target),
+        message.runIndex ?? output.runIndex ?? 0,
+        message.attemptIndex ?? 0
+      ),
+      messageIndex
+    );
+  }
+  const attemptsWithLeadingChrome = new Set<string>();
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
     if (message.isActivity) continue;
@@ -2005,7 +2065,9 @@ export function buildOutputRows(
       continue;
     }
 
-    let output = (message.aggregate ?? message.data) as CliOutputType;
+    const aggregateOutput = (message.aggregate ??
+      message.data) as CliOutputType;
+    let output = aggregateOutput;
     const groupStartIndex = rows.length;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
     const workflowStep = isFinalStep
@@ -2019,6 +2081,18 @@ export function buildOutputRows(
       : `Step ${target.index + 1}`;
     const attemptIndex = message.attemptIndex ?? 0;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;
+    const attemptRowKeyBase = getAttemptRowKeyBase(
+      targetKey,
+      runIndex,
+      attemptIndex
+    );
+    const rowKeyBase = getRowKeyBase(attemptRowKeyBase, message);
+    const emitsLeadingChrome =
+      !message.isActivity || !attemptsWithLeadingChrome.has(attemptRowKeyBase);
+    const emitsTrailingChrome =
+      !message.isActivity ||
+      lastActivityMessageIndexByAttempt.get(attemptRowKeyBase) === messageIndex;
+    if (message.isActivity) attemptsWithLeadingChrome.add(attemptRowKeyBase);
     const outputText = getCliTextForCopy(output);
     const { workspaceSnapshot, undoRecord } = getStepOutputArtifacts(
       input,
@@ -2080,20 +2154,22 @@ export function buildOutputRows(
           }
         : undefined;
 
-    rows.push({
-      key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:header`,
-      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
-      target,
-      output,
-      stepIndex: target.index,
-      isFinalStep,
-      stepLabel,
-      stepName,
-      attemptIndex,
-      runIndex,
-      promptUndo,
-      estimateSize: 44,
-    });
+    if (emitsLeadingChrome) {
+      rows.push({
+        key: `${attemptRowKeyBase}:header`,
+        rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+        target,
+        output: aggregateOutput,
+        stepIndex: target.index,
+        isFinalStep,
+        stepLabel,
+        stepName,
+        attemptIndex,
+        runIndex,
+        promptUndo,
+        estimateSize: 44,
+      });
+    }
 
     const scriptish = isScriptOutput(output);
     const activityFirst =
@@ -2142,9 +2218,9 @@ export function buildOutputRows(
       output = activityOutput;
     }
 
-    if (!message.isActivity && output.prompt && !scriptish) {
+    if (emitsLeadingChrome && output.prompt && !scriptish) {
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:prompt`,
+        key: `${attemptRowKeyBase}:prompt`,
         rowKind: OUTPUT_ROW_KINDS.PROMPT,
         target,
         text: output.prompt,
@@ -2152,9 +2228,9 @@ export function buildOutputRows(
       });
     }
 
-    if (!message.isActivity && output.cliCommand) {
+    if (emitsLeadingChrome && output.cliCommand) {
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:command`,
+        key: `${attemptRowKeyBase}:command`,
         rowKind: scriptish
           ? OUTPUT_ROW_KINDS.SCRIPT_COMMAND
           : OUTPUT_ROW_KINDS.CLI_COMMAND,
@@ -2166,9 +2242,9 @@ export function buildOutputRows(
       });
     }
 
-    if (!message.isActivity && output.errorMessage) {
+    if (emitsLeadingChrome && output.errorMessage) {
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:error`,
+        key: `${attemptRowKeyBase}:error`,
         rowKind: OUTPUT_ROW_KINDS.ERROR,
         target,
         timestamp: output.timestampMs
@@ -2218,7 +2294,7 @@ export function buildOutputRows(
 
     if (hasStructuredEvents && output.isStreaming && streamingChunk) {
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:streaming-text`,
+        key: `${rowKeyBase}:streaming-text`,
         rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
         target,
         text: streamingChunk,
@@ -2230,14 +2306,19 @@ export function buildOutputRows(
     }
 
     for (const visibleEvent of visibleEvents) {
-      const rowKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}:event:${visibleEvent.originalIndex}`;
-      const diffKeyBase = getOutputDiffKey(
+      const rowKey = `${rowKeyBase}:event:${visibleEvent.originalIndex}`;
+      // The diff key is both the collapse/expansion state key and the diff
+      // row's DOM anchor id, so it needs the same per-slice uniqueness as
+      // `rowKey` — see `getRowKeyBase`. Two diffs sharing it shared one
+      // collapsed/expanded state, and a diff row's height is baked in from
+      // that state at build time.
+      const diffKeyBase = `${getOutputDiffKey(
         target,
         target.index,
         runIndex,
         attemptIndex,
         visibleEvent.originalIndex
-      );
+      )}${message.isActivity && message.activityKey ? `-s${message.activityKey}` : ""}`;
       const diffExpandedGaps = input.diffExpansionState.get(diffKeyBase);
       const isDiffCollapsed =
         input.diffCollapseState.get(diffKeyBase) ?? input.defaultDiffCollapsed;
@@ -2326,7 +2407,7 @@ export function buildOutputRows(
     }
 
     if (!hasStructuredEvents) {
-      const attemptKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}`;
+      const attemptKey = rowKeyBase;
       if (output.isStreaming && streamingChunk) {
         if (isScriptOutput(output)) {
           pushScriptOutputRows({
@@ -2374,42 +2455,47 @@ export function buildOutputRows(
       }
     }
 
-    if (output.scriptVerdict) {
-      const verdictKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}:verdict`;
+    if (emitsTrailingChrome && aggregateOutput.scriptVerdict) {
+      const verdictKey = `${attemptRowKeyBase}:verdict`;
       rows.push({
         key: verdictKey,
         rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
         target,
-        verdict: output.scriptVerdict,
+        verdict: aggregateOutput.scriptVerdict,
         expanded: input.scriptVerdictExpansionState?.get(verdictKey) ?? false,
         estimateSize: 36,
       });
     }
 
-    const hasStatsRow = isScriptOutput(output)
-      ? !output.isStreaming &&
-        (output.exitCode !== undefined ||
-          output.elapsed !== undefined ||
+    const hasStatsRow = isScriptOutput(aggregateOutput)
+      ? !aggregateOutput.isStreaming &&
+        (aggregateOutput.exitCode !== undefined ||
+          aggregateOutput.elapsed !== undefined ||
           !!outputText)
-      : !!output.tokens ||
-        output.elapsed !== undefined ||
-        !!output.structured?.metadata?.sessionId ||
-        (!!outputText && !output.isStreaming);
+      : !!aggregateOutput.tokens ||
+        aggregateOutput.elapsed !== undefined ||
+        !!aggregateOutput.structured?.metadata?.sessionId ||
+        (!!outputText && !aggregateOutput.isStreaming);
 
-    if (hasStatsRow) {
+    if (emitsTrailingChrome && hasStatsRow) {
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:stats`,
+        key: `${attemptRowKeyBase}:stats`,
         rowKind: OUTPUT_ROW_KINDS.STATS,
         target,
-        output,
+        output: aggregateOutput,
         outputText,
         estimateSize: 24,
       });
     }
 
     if (rows.length > groupStartIndex) {
-      rows[groupStartIndex].groupStart = true;
-      rows[rows.length - 1].groupEnd = true;
+      // The block's top padding and bottom border belong to the attempt, not to
+      // each activity slice inside it: `cli-header` is always the first row and
+      // `stats` the last, which is what `outputRowGroupPadding` estimates
+      // against. Flagging every slice drew a rule under each interleaved
+      // fragment and charged the padding to rows that never render it.
+      if (emitsLeadingChrome) rows[groupStartIndex].groupStart = true;
+      if (emitsTrailingChrome) rows[rows.length - 1].groupEnd = true;
     }
   }
 

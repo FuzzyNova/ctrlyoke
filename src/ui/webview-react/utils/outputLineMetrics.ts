@@ -46,6 +46,16 @@ export const OUTPUT_ROW_GROUP_START_PADDING = 6;
 /** `pb-[var(--spacing-sm)]` plus the 1px `border-b` on the last row of a CLI output group. */
 export const OUTPUT_ROW_GROUP_END_PADDING = 7;
 
+/**
+ * `ActivityAttribution`'s "⚡ Step N · name" label above the first row of an
+ * activity slice: a `text-xs` line (16px, measured) plus `mb-1`. It is a fixed
+ * cost the row's own content estimate cannot see, so it is charged here.
+ *
+ * The continuation variant renders no label — just an 8px `pl-2` indent, which
+ * stays inside the calibrated horizontal allowance.
+ */
+export const OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT = 20;
+
 /** Fallback output font size when a caller has no `uiStore.outputFontSize` to hand. */
 export const DEFAULT_OUTPUT_FONT_SIZE = 13;
 /** Fallback pane width when the output pane has not been measured yet. */
@@ -255,4 +265,11 @@ export function outputRowGroupPadding(row: {
     (row.groupStart ? OUTPUT_ROW_GROUP_START_PADDING : 0) +
     (row.groupEnd ? OUTPUT_ROW_GROUP_END_PADDING : 0)
   );
+}
+
+/** Height `ActivityAttribution` adds above a row that opens an activity slice. */
+export function outputRowActivityChrome(row: {
+  activityFirst?: boolean;
+}): number {
+  return row.activityFirst ? OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT : 0;
 }

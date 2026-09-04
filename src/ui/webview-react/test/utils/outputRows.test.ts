@@ -24,7 +24,10 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   getStreamingChunkKey,
 } from "@/types/messages";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_ROW_KINDS,
+  type OutputRowKind,
+} from "@root/types/DashboardConstants";
 
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
@@ -351,6 +354,82 @@ describe("outputRows", () => {
     ]);
     expect(activityRows[0]?.activityFirst).toBe(true);
     expect(activityRows[1]?.activityContinuation).toBe(true);
+  });
+
+  it("gives every row a unique key and opens each attempt's chrome once across activity slices", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    // Four slices of the SAME (target, run, attempt): the shape the
+    // chronological projection produces for one streaming step.
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "thinking",
+        },
+        ...[1, 2, 3].map((offset) => ({
+          timestampMs: 1000 + offset,
+          sequence: 1 + offset,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: `echo ${offset}`, output: `${offset}` },
+            },
+          ],
+        })),
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "One" }] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    // A duplicate key makes two rows share one virtualizer measurement and one
+    // React DOM node: the pane then renders gaps, jumps while scrolling, and
+    // can loop measurement updates into React #185.
+    const keys = result.rows.map((row) => row.key);
+    expect(new Set(keys).size).toBe(keys.length);
+
+    // The attempt's chrome opens and closes the block exactly once, no matter
+    // how many slices it was projected into.
+    const countOf = (kind: OutputRowKind) =>
+      result.rows.filter((row) => row.rowKind === kind).length;
+    expect(countOf(OUTPUT_ROW_KINDS.CLI_HEADER)).toBe(1);
+    expect(countOf(OUTPUT_ROW_KINDS.STATS)).toBeLessThanOrEqual(1);
+    expect(result.rows.filter((row) => row.groupStart)).toHaveLength(1);
+    expect(result.rows.filter((row) => row.groupEnd)).toHaveLength(1);
+
+    // ActivityAttribution paints a `text-xs` label (16px measured) plus `mb-1`
+    // above the row that opens a slice. It is chrome the content estimate
+    // cannot see, so the estimate has to carry it.
+    const opener = result.rows.find((row) => row.activityFirst);
+    if (!opener) throw new Error("Expected a row opening an activity slice");
+    expect(estimateOutputRowHeight(opener, 13, 760)).toBe(
+      estimateOutputRowHeight({ ...opener, activityFirst: false }, 13, 760) + 20
+    );
   });
 
   it("threads the collapsed tool output line count into Bash and generic tool rows", () => {
