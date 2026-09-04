@@ -10,7 +10,7 @@
 
 ### Recommended tagline
 
-> **One workflow engine for every AI coding CLI.**
+> **One workflow engine for every CLI coding agent**
 
 ### Recommended supporting line
 
