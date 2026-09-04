@@ -26,6 +26,15 @@ export interface StatuslineInstallResult {
   readonly captured: boolean;
   /** True when a configured non-command statusline caused the install veto. */
   readonly collision?: boolean;
+  /**
+   * True when the pre-existing statusLine value was already recognized as a
+   * ctrlyoke wrapper for this provider before this call (e.g. its absolute
+   * path moved after an extension update). The write still happens to keep
+   * the installed command current, but the user has already seen the
+   * one-time install notification for this provider, so callers must not
+   * notify again for this result.
+   */
+  readonly alreadyCtrlyoke?: boolean;
 }
 
 export interface StatuslineManagerLike {
@@ -139,6 +148,7 @@ export class StatuslineManager implements StatuslineManagerLike {
   ): Promise<StatuslineInstallResult> {
     let captured = false;
     let collision = false;
+    let alreadyCtrlyoke = false;
     const result = await this.definition.tracker.installPersistentValue(
       workspaceRoot,
       this.getPersistentValueKey(),
@@ -149,6 +159,7 @@ export class StatuslineManager implements StatuslineManagerLike {
         const isCtrlyokeCommand =
           customCommand !== undefined &&
           this.isCtrlyokeStatuslineCommand(customCommand);
+        alreadyCtrlyoke = isCtrlyokeCommand;
         const enabledSettingPath = `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${this.provider}.enabled`;
         // The automatic veto materializes a user-scoped disabled setting. A later
         // user-scoped re-enable is the explicit opt-in that permits replacement,
@@ -195,9 +206,11 @@ export class StatuslineManager implements StatuslineManagerLike {
     );
 
     // A wrapper path changes when an extension update moves the installed
-    // files. Updating that owned command is still a real write, but the
-    // notification must reflect an already-preserved custom output rather
-    // than claim ctrlyoke styling will become visible.
+    // files, producing a real write even though the command was already
+    // ctrlyoke's own (see alreadyCtrlyoke below, which suppresses the
+    // install notification for this case). Keep `captured` itself accurate
+    // regardless, since it still reflects whether a custom command is being
+    // preserved underneath the refreshed path.
     if (result.kind === SETTINGS_JSON_INSTALL_KIND_WRITTEN && !captured) {
       const settings = this.getSettings();
       captured =
@@ -208,6 +221,7 @@ export class StatuslineManager implements StatuslineManagerLike {
       kind: result.kind,
       captured,
       ...(collision ? { collision: true } : {}),
+      ...(alreadyCtrlyoke ? { alreadyCtrlyoke: true } : {}),
     };
   }
 

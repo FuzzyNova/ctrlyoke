@@ -1238,6 +1238,13 @@ export class CliIntegration extends HarnessIntegration {
     if (result.kind !== SETTINGS_JSON_INSTALL_KIND_WRITTEN) {
       return;
     }
+    if (result.alreadyCtrlyoke) {
+      // The pre-existing value was already ctrlyoke's own wrapper (e.g. its
+      // absolute path moved after an extension update). The command still
+      // needed refreshing, but the user has already seen this provider's
+      // one-time install notification, so don't show it again.
+      return;
+    }
     const harness = this.provider.config.terminalName;
     const message = result.captured
       ? `ctrlyoke is now managing your ${harness} statusline and forwarding to your existing script unchanged. Settings → Status Line to change this.`

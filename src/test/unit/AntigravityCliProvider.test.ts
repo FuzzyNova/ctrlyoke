@@ -423,6 +423,7 @@ suite("AntigravityCliProvider", () => {
     assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
       kind: "written",
       captured: false,
+      alreadyCtrlyoke: true,
     });
     assert.deepStrictEqual(
       configService.get("permissions").statusLineTracking[
@@ -469,6 +470,7 @@ suite("AntigravityCliProvider", () => {
     assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
       kind: "written",
       captured: true,
+      alreadyCtrlyoke: true,
     });
     assert.strictEqual(
       configService.get("permissions").statusLineTracking[
