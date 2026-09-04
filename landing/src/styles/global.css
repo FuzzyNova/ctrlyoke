@@ -14,6 +14,42 @@
   --color-brand-800: #123b4d;
   --color-brand-900: #07222e;
   --color-brand-950: #03151e;
+  --color-brand-ink: #051923;
   --font-sans: system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-wordmark: "Sixtyfour", var(--font-mono);
+}
+
+@font-face {
+  font-family: "Sixtyfour";
+  src: url("/fonts/sixtyfour-variable-bled-scan.ttf") format("truetype-variations");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  font-variation-settings:
+    "BLED" 0,
+    "SCAN" -15;
+}
+
+/* Sixtyfour is all-caps by design; text-transform is a fallback for the font substitution.
+   No width/stretch axis on this font, so the horizontal squish is a CSS scaleX transform. */
+.wordmark {
+  font-family: var(--font-wordmark);
+  font-variation-settings:
+    "BLED" 0,
+    "SCAN" -15;
+  text-transform: uppercase;
+  color: var(--color-brand-500);
+  -webkit-text-stroke: 2px var(--color-brand-ink);
+  paint-order: stroke fill;
+  text-shadow: 0 0 10px rgba(57, 148, 188, 0.45);
+  letter-spacing: 0.02em;
+  display: inline-block;
+  transform: scaleX(0.82);
+}
+
+/* Anchors the squish to the left edge instead of the center, so the wordmark stays flush
+   against an adjacent icon (header/footer) instead of drifting off true-center. */
+.wordmark--flush-left {
+  transform-origin: left center;
 }
