@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
@@ -6,6 +6,7 @@ import {
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -53,7 +54,12 @@ import {
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+  type DragOverEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -73,6 +79,216 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
+import {
+  isParallelGroupTopologyLocked,
+} from "@utils/stepContextMenuItems";
+
+type PendingDragContainer = {
+  id: string;
+  items: string[];
+  groupId?: string;
+};
+
+type PendingDragState = {
+  order: string[];
+  containers: Record<string, PendingDragContainer>;
+};
+
+function stepDragId(index: number): string {
+  return `step-pending-${index}`;
+}
+
+function groupDragId(id: string): string {
+  return `group-${id}`;
+}
+
+function absoluteIndexFromStepDragId(id: string): number {
+  return Number.parseInt(id.replace("step-pending-", ""), 10);
+}
+
+export function buildPendingDragState(
+  steps: WorkflowStep[],
+  currentStep: number,
+  parallelGroups: ParallelGroupDefinition[]
+): PendingDragState {
+  const order: string[] = [];
+  const containers: Record<string, PendingDragContainer> = {};
+  const groupsByStart = new Map(
+    parallelGroups
+      .filter((group) => group.startIndex >= currentStep)
+      .map((group) => [group.startIndex, group])
+  );
+  const groupedIndices = new Set(
+    parallelGroups
+      .filter((group) => group.startIndex >= currentStep)
+      .flatMap((group) =>
+        Array.from(
+          { length: group.endIndex - group.startIndex + 1 },
+          (_, offset) => group.startIndex + offset
+        )
+      )
+  );
+
+  for (let index = currentStep; index < steps.length; index++) {
+    const group = groupsByStart.get(index);
+    if (group) {
+      const id = groupDragId(group.id);
+      const items = Array.from(
+        { length: group.endIndex - group.startIndex + 1 },
+        (_, offset) => stepDragId(group.startIndex + offset)
+      );
+      order.push(id);
+      containers[id] = { id, items, groupId: group.id };
+    } else if (!groupedIndices.has(index)) {
+      const id = stepDragId(index);
+      order.push(id);
+      containers[id] = { id, items: [id] };
+    }
+  }
+  return { order, containers };
+}
+
+function findPendingDragContainer(
+  state: PendingDragState,
+  id: string
+): string | undefined {
+  if (state.containers[id]) return id;
+  return state.order.find((containerId) =>
+    state.containers[containerId]?.items.includes(id)
+  );
+}
+
+function clonePendingDragState(state: PendingDragState): PendingDragState {
+  return {
+    order: [...state.order],
+    containers: Object.fromEntries(
+      Object.entries(state.containers).map(([id, container]) => [
+        id,
+        { ...container, items: [...container.items] },
+      ])
+    ),
+  };
+}
+
+export function movePendingDragItem(
+  state: PendingDragState,
+  activeId: string,
+  overId: string
+): PendingDragState {
+  const sourceId = findPendingDragContainer(state, activeId);
+  const destinationId = findPendingDragContainer(state, overId);
+  if (!sourceId || !destinationId || sourceId === destinationId) return state;
+
+  const next = clonePendingDragState(state);
+  const source = next.containers[sourceId];
+  source.items = source.items.filter((id) => id !== activeId);
+
+  if (source.groupId && source.items.length < 2) {
+    const sourcePosition = next.order.indexOf(sourceId);
+    next.order.splice(sourcePosition, 1);
+    delete next.containers[sourceId];
+    for (const item of source.items) {
+      const standalone = { id: item, items: [item] };
+      next.order.splice(sourcePosition, 0, item);
+      next.containers[item] = standalone;
+    }
+  } else if (!source.groupId) {
+    next.order = next.order.filter((id) => id !== sourceId);
+    delete next.containers[sourceId];
+  }
+
+  const refreshedDestinationId = findPendingDragContainer(next, overId);
+  if (!refreshedDestinationId) return state;
+  const refreshedDestination = next.containers[refreshedDestinationId];
+  if (refreshedDestination.groupId) {
+    const overIndex = refreshedDestination.items.indexOf(overId);
+    refreshedDestination.items.splice(
+      overIndex < 0 ? refreshedDestination.items.length : overIndex,
+      0,
+      activeId
+    );
+  } else {
+    const standalone = { id: activeId, items: [activeId] };
+    const overIndex = next.order.indexOf(overId);
+    next.order.splice(overIndex < 0 ? next.order.length : overIndex, 0, activeId);
+    next.containers[activeId] = standalone;
+  }
+  return next;
+}
+
+function movePendingDragItemWithinContainer(
+  state: PendingDragState,
+  activeId: string,
+  overId: string
+): PendingDragState {
+  const containerId = findPendingDragContainer(state, activeId);
+  if (!containerId || containerId !== findPendingDragContainer(state, overId)) {
+    return state;
+  }
+  const next = clonePendingDragState(state);
+  const container = next.containers[containerId];
+  if (container.groupId) {
+    const fromIndex = container.items.indexOf(activeId);
+    const toIndex = container.items.indexOf(overId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+      return state;
+    }
+    container.items = arrayMove(container.items, fromIndex, toIndex);
+  } else {
+    const fromIndex = next.order.indexOf(activeId);
+    const toIndex = next.order.indexOf(overId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+      return state;
+    }
+    next.order = arrayMove(next.order, fromIndex, toIndex);
+  }
+  return next;
+}
+
+export function buildPendingReorderPayload(
+  state: PendingDragState,
+  currentStep: number,
+  parallelGroups: ParallelGroupDefinition[]
+): {
+  newPendingOrder: number[];
+  pendingGroups: Array<{
+    id?: string;
+    start: number;
+    end: number;
+    failFast: boolean;
+  }>;
+} {
+  const newPendingOrder: number[] = [];
+  const pendingGroups: Array<{
+    id?: string;
+    start: number;
+    end: number;
+    failFast: boolean;
+  }> = [];
+
+  for (const containerId of state.order) {
+    const container = state.containers[containerId];
+    if (!container) continue;
+    const start = newPendingOrder.length;
+    for (const item of container.items) {
+      newPendingOrder.push(
+        absoluteIndexFromStepDragId(item) - currentStep
+      );
+    }
+    if (container.groupId) {
+      const group = parallelGroups.find(
+        (candidate) => candidate.id === container.groupId
+      );
+      pendingGroups.push({
+        id: container.groupId,
+        start,
+        end: newPendingOrder.length - 1,
+        failFast: group?.failFast ?? true,
+      });
+    }
+  }
+  return { newPendingOrder, pendingGroups };
+}
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -138,6 +354,18 @@ const WorkflowStepsPanelInner: React.FC<{
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
+  const pendingGroupRanges = useMemo(
+    () =>
+      parallelGroups
+        .filter((group) => group.startIndex >= currentStep)
+        .map((group) => ({
+          id: group.id,
+          start: group.startIndex - currentStep,
+          end: group.endIndex - currentStep,
+          failFast: group.failFast,
+        })),
+    [currentStep, parallelGroups]
+  );
   const {
     openContextMenu,
     handleSetStartPosition,
@@ -153,6 +381,8 @@ const WorkflowStepsPanelInner: React.FC<{
     totalSteps: steps.length,
     currentStep,
     pendingRewind: pendingRewind ?? undefined,
+    parallelGroups,
+    pendingGroups: pendingGroupRanges,
   });
 
   const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
@@ -476,21 +706,50 @@ const WorkflowStepsPanelInner: React.FC<{
     selectPrompt,
   ]);
 
+  const sensors = useSortableDndSensors();
+  const executionOwnsCurrentStep = isExecutionBusy(executionState);
+  const reorderableStepCount = executionOwnsCurrentStep
+    ? steps.length - currentStep - 1
+    : steps.length - currentStep;
+  const canReorder =
+    executionState !== EXECUTION_STATES.CANCELLING && reorderableStepCount > 1;
+  const [pendingDragState, setPendingDragState] = useState<PendingDragState>(
+    () => buildPendingDragState(steps, currentStep, parallelGroups)
+  );
+
+  useEffect(() => {
+    setPendingDragState(
+      buildPendingDragState(steps, currentStep, parallelGroups)
+    );
+  }, [currentStep, parallelGroups, steps]);
+
   const handleFailFastChange = useCallback(
     (group: (typeof parallelGroups)[number], failFast: boolean) => {
-      useWorkflowStore
-        .getState()
-        .setParallelGroups(
-          parallelGroups.map((candidate) =>
-            candidate.id === group.id ? { ...candidate, failFast } : candidate
-          )
-        );
+      if (
+        isParallelGroupTopologyLocked(
+          group,
+          steps,
+          currentStep,
+          executionState
+        )
+      ) {
+        return;
+      }
+      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, {
+        newPendingOrder: Array.from(
+          { length: steps.length - currentStep },
+          (_, index) => index
+        ),
+        pendingGroups: pendingGroupRanges.map((candidate) =>
+          candidate.id === group.id ? { ...candidate, failFast } : candidate
+        ),
+      });
     },
-    [parallelGroups]
+    [currentStep, executionState, pendingGroupRanges, steps]
   );
 
   const renderParallelGroup = useCallback(
-    (group: (typeof parallelGroups)[number]) => (
+    (group: (typeof parallelGroups)[number], isPending = false) => (
       <ParallelGroupPanel
         key={`parallel-${group.id}`}
         group={group}
@@ -517,6 +776,21 @@ const WorkflowStepsPanelInner: React.FC<{
         onSetStartPosition={handleSetStartPosition}
         onOpenContextMenu={openContextMenu}
         onFailFastChange={handleFailFastChange}
+        containerId={groupDragId(group.id)}
+        memberIds={
+          isPending
+            ? pendingDragState.containers[groupDragId(group.id)]?.items
+            : undefined
+        }
+        dragDisabled={
+          !canReorder ||
+          isParallelGroupTopologyLocked(
+            group,
+            steps,
+            currentStep,
+            executionState
+          )
+        }
       />
     ),
     [
@@ -530,6 +804,8 @@ const WorkflowStepsPanelInner: React.FC<{
       handleFailFastChange,
       handleSetStartPosition,
       handleStepClick,
+      canReorder,
+      pendingDragState,
       liveContextWindow,
       openContextMenu,
       retryStates,
@@ -649,76 +925,46 @@ const WorkflowStepsPanelInner: React.FC<{
     ? getStepOverrides(finalStep)
     : undefined;
 
-  const sensors = useSortableDndSensors();
-  // While a step is in flight (RUNNING/PAUSING/CANCELLING), the step at
-  // `currentStep` is the running step: it stays pinned at pending-slice position
-  // 0 and is not draggable, but the pending tail after it can still be reordered.
-  // PAUSED is not in flight — a pause is confirmed at a step boundary, so
-  // `currentStep` is the next PENDING step and the whole pending slice is
-  // reorderable, matching `PromptQueue.hasInFlightStep`. Idle keeps today's
-  // behavior (the whole pending slice is reorderable).
-  const executionOwnsCurrentStep = isExecutionBusy(executionState);
-  const reorderableStepCount = executionOwnsCurrentStep
-    ? steps.length - currentStep - 1
-    : steps.length - currentStep;
-  const canReorder =
-    executionState !== EXECUTION_STATES.CANCELLING && reorderableStepCount > 1;
-
-  // Local sortable ID state — dnd-kit owns this for smooth drop animations.
-  // IDs are stable absolute indices ("step-pending-N") so dnd-kit can track
-  // items by identity across re-renders.
-  const [sortableIds, setSortableIds] = useState<string[]>(() =>
-    steps.slice(currentStep).map((_, i) => `step-pending-${currentStep + i}`)
-  );
-
-  // Sync local IDs when steps/currentStep change due to external events
-  // (session load, set-position confirmed, etc.).
-  useEffect(() => {
-    setSortableIds(
-      steps.slice(currentStep).map((_, i) => `step-pending-${currentStep + i}`)
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : undefined;
+    if (!overId || !activeId.startsWith("step-pending-")) return;
+    setPendingDragState((state) =>
+      movePendingDragItem(state, activeId, overId)
     );
-  }, [steps, currentStep]);
+  }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
+      const activeId = String(event.active.id);
+      const overId = event.over ? String(event.over.id) : undefined;
+      if (!overId || !activeId.startsWith("step-pending-")) return;
 
-      const oldIdx = sortableIds.indexOf(String(active.id));
-      let newIdx = sortableIds.indexOf(String(over.id));
-      if (oldIdx === -1 || newIdx === -1) return;
-
-      // While execution owns the queue, keep the running step pinned at slice
-      // position 0: it can't be dragged (defensive — its handle is disabled) and
-      // nothing can be dropped above it. This preserves `newPendingOrder[0] === 0`,
-      // which the backend also enforces.
-      if (executionOwnsCurrentStep) {
-        if (oldIdx === 0) return;
-        if (newIdx === 0) newIdx = 1;
+      let nextState = pendingDragState;
+      const sourceId = findPendingDragContainer(nextState, activeId);
+      const destinationId = findPendingDragContainer(nextState, overId);
+      if (sourceId && sourceId === destinationId) {
+        nextState = movePendingDragItemWithinContainer(
+          nextState,
+          activeId,
+          overId
+        );
       }
-
-      // Update local state first so dnd-kit animates to the new position (not back)
-      const newSortableIds = arrayMove(sortableIds, oldIdx, newIdx);
-      setSortableIds(newSortableIds);
-
-      // Send positions within the current pending slice (0-based), not original
-      // absolute indices. The stable IDs (e.g. "step-pending-4") encode the
-      // original absolute index, but state.steps may have been reordered by a
-      // prior drag — so the backend must index into the pending slice it holds,
-      // not into the full steps array by original position.
-      const newPendingOrder = newSortableIds.map((id) =>
-        sortableIds.indexOf(id)
+      if (nextState === pendingDragState) return;
+      setPendingDragState(nextState);
+      const payload = buildPendingReorderPayload(
+        nextState,
+        currentStep,
+        parallelGroups
       );
-      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, { newPendingOrder });
+      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, payload);
 
-      // Cancel any active queue-step selection — the selected index may now
-      // refer to a different step after reorder.
       const editorStore = useEditorStore.getState();
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
-    [sortableIds, executionOwnsCurrentStep]
+    [currentStep, parallelGroups, pendingDragState]
   );
 
   // In mobile mode (onRequestClose present), disable all collapse interactions —
@@ -968,87 +1214,87 @@ const WorkflowStepsPanelInner: React.FC<{
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={sortableIds}
+                items={pendingDragState.order}
                 strategy={verticalListSortingStrategy}
               >
-                {sortableIds.map((id, visualIdx) => {
-                  const index = parseInt(id.replace("step-pending-", ""));
-                  const step = steps[index];
-                  if (!step) return null;
-                  const group = parallelGroups.find(
-                    (candidate) =>
-                      candidate.startIndex === index &&
-                      candidate.endIndex >= currentStep
-                  );
-                  if (group) return renderParallelGroup(group);
-                  if (
-                    parallelGroups.some(
-                      (candidate) =>
-                        candidate.endIndex >= currentStep &&
-                        index > candidate.startIndex &&
-                        index <= candidate.endIndex
-                    )
-                  ) {
-                    return null;
-                  }
-                  // Use visual position, not absolute index, so isCurrentStep
-                  // stays correct after local reorders (before backend confirms).
-                  const isCurrentStep = visualIdx === 0;
-                  const status = getPromptStatus(step, index);
-                  const retryState = retryStates[index];
-                  const latestOutput = getLatestOutput(index);
-                  const isCurrent = isRunning && isCurrentStep;
-                  const isSelected =
-                    selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
-                    selectionTarget.index === index;
-                  // Target index for set-position is currentStep + visual offset,
-                  // matching the post-reorder backend index for this slot.
-                  const setPositionTarget = currentStep + visualIdx;
-                  const slotNumber = currentStep + visualIdx + 1;
-                  const isExecutionTargetLocked =
-                    isStepExecutionLocked(
-                      step,
-                      index,
-                      currentStep,
-                      executionState
-                    ) ||
-                    (isExecutionBusy(executionState) && isCurrentStep);
-                  return (
-                    <SortableWorkflowStepWrapper
-                      key={id}
-                      id={id}
-                      disabled={!canReorder || isExecutionTargetLocked}
-                      slotNumber={slotNumber}
-                      showPauseBoundaryBefore={
-                        isPaused && currentStep > 0 && visualIdx === 0
-                      }
-                      step={step}
-                      index={index}
-                      currentStep={currentStep}
-                      executionState={executionState}
-                      status={status}
-                      retryState={retryState}
-                      latestOutput={latestOutput}
-                      liveContextWindow={liveContextWindow?.[index]}
-                      isCurrent={isCurrent}
-                      isSelected={isSelected}
-                      canSetStartPosition={
-                        canChangeStartPosition && !isCurrentStep
-                      }
-                      startPositionDirection="forward"
-                      setPositionTarget={setPositionTarget}
-                      isExecutionTargetLocked={isExecutionTargetLocked}
-                      getStepHarnessModel={getStepHarnessModel}
-                      getStepOverrides={getStepOverrides}
-                      onStepClick={handleStepClick}
-                      onSetStartPosition={handleSetStartPosition}
-                      onOpenContextMenu={openContextMenu}
-                    />
-                  );
-                })}
+                {(() => {
+                  let pendingOffset = 0;
+                  return pendingDragState.order.map((containerId) => {
+                    const container = pendingDragState.containers[containerId];
+                    if (!container) return null;
+                    if (container.groupId) {
+                      pendingOffset += container.items.length;
+                      const group = parallelGroups.find(
+                        (candidate) =>
+                          candidate.id === container.groupId
+                      );
+                      return group
+                        ? renderParallelGroup(group, true)
+                        : null;
+                    }
+
+                    const id = container.items[0];
+                    if (!id) return null;
+                    const index = absoluteIndexFromStepDragId(id);
+                    const step = steps[index];
+                    if (!step) return null;
+                    const visualIdx = pendingOffset++;
+                    const isCurrentStep = visualIdx === 0;
+                    const status = getPromptStatus(step, index);
+                    const retryState = retryStates[index];
+                    const latestOutput = getLatestOutput(index);
+                    const isCurrent = isRunning && isCurrentStep;
+                    const isSelected =
+                      selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+                      selectionTarget.index === index;
+                    const setPositionTarget = currentStep + visualIdx;
+                    const slotNumber = currentStep + visualIdx + 1;
+                    const isExecutionTargetLocked =
+                      isStepExecutionLocked(
+                        step,
+                        index,
+                        currentStep,
+                        executionState
+                      ) ||
+                      (isExecutionBusy(executionState) && isCurrentStep);
+                    return (
+                      <SortableWorkflowStepWrapper
+                        key={id}
+                        id={id}
+                        disabled={!canReorder || isExecutionTargetLocked}
+                        slotNumber={slotNumber}
+                        showPauseBoundaryBefore={
+                          isPaused && currentStep > 0 && visualIdx === 0
+                        }
+                        step={step}
+                        index={index}
+                        currentStep={currentStep}
+                        executionState={executionState}
+                        status={status}
+                        retryState={retryState}
+                        latestOutput={latestOutput}
+                        liveContextWindow={liveContextWindow?.[index]}
+                        isCurrent={isCurrent}
+                        isSelected={isSelected}
+                        canSetStartPosition={
+                          canChangeStartPosition && !isCurrentStep
+                        }
+                        startPositionDirection="forward"
+                        setPositionTarget={setPositionTarget}
+                        isExecutionTargetLocked={isExecutionTargetLocked}
+                        getStepHarnessModel={getStepHarnessModel}
+                        getStepOverrides={getStepOverrides}
+                        onStepClick={handleStepClick}
+                        onSetStartPosition={handleSetStartPosition}
+                        onOpenContextMenu={openContextMenu}
+                      />
+                    );
+                  });
+                })()}
               </SortableContext>
             </DndContext>
           </div>

@@ -1,4 +1,9 @@
 import React, { useMemo } from "react";
+import { useDroppable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import {
   PARALLEL_GROUP_FAN_OUT_ENABLED,
   STEP_STATUS,
@@ -9,6 +14,7 @@ import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   WorkflowStepRow,
+  SortableWorkflowStepWrapper,
   type StepContextMenuRequest,
   type StepHarnessModel,
 } from "./WorkflowStepRow";
@@ -130,6 +136,9 @@ type ParallelGroupPanelProps = {
     request: StepContextMenuRequest
   ) => void;
   onFailFastChange: (group: ParallelGroupDefinition, failFast: boolean) => void;
+  containerId?: string;
+  memberIds?: string[];
+  dragDisabled?: boolean;
 };
 
 export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
@@ -149,7 +158,13 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   onSetStartPosition,
   onOpenContextMenu,
   onFailFastChange,
+  containerId,
+  memberIds,
+  dragDisabled = false,
 }) => {
+  const { setNodeRef } = useDroppable({
+    id: containerId ?? `group-${group.id}`,
+  });
   const members = useMemo(
     () =>
       steps.slice(group.startIndex, group.endIndex + 1).map((step, offset) => ({
@@ -159,8 +174,28 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       })),
     [group.endIndex, group.startIndex, steps, statuses]
   );
+  const displayedMembers = useMemo(() => {
+    if (!memberIds) return members;
+    return memberIds
+      .map((id) => Number.parseInt(id.replace("step-pending-", ""), 10))
+      .map((index) => ({
+        step: steps[index],
+        index,
+        status:
+          statuses[index - group.startIndex] ?? STEP_STATUS.PENDING,
+      }))
+      .filter(
+        (
+          member
+        ): member is {
+          step: WorkflowStep;
+          index: number;
+          status: StepStatus;
+        } => member.step !== undefined
+      );
+  }, [group.startIndex, memberIds, members, statuses, steps]);
   const status = deriveParallelGroupStatus(
-    members.map(({ step, status }) => ({
+    displayedMembers.map(({ step, status }) => ({
       status,
       enabled: step.enabled !== false,
     }))
@@ -168,6 +203,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
 
   return (
     <section
+      ref={setNodeRef}
       className="mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"
       data-testid={`parallel-group-${group.id}`}
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
@@ -187,6 +223,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
           <input
             type="checkbox"
             checked={group.failFast}
+            disabled={dragDisabled}
             onChange={(event) => onFailFastChange(group, event.target.checked)}
             aria-label="Fail fast"
           />
@@ -202,7 +239,56 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         )}
       </header>
       <div>
-        {members.map(({ step, index, status: memberStatus }, offset) => (
+        {memberIds ? (
+          <SortableContext
+            items={memberIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {displayedMembers.map(({ step, index, status: memberStatus }, offset) => (
+              <SortableWorkflowStepWrapper
+                key={index}
+                id={memberIds[offset]}
+                disabled={dragDisabled || isStepExecutionLocked(
+                  step,
+                  index,
+                  currentStep,
+                  executionState
+                )}
+                slotNumber={index + 1}
+                step={step}
+                index={index}
+                currentStep={currentStep}
+                executionState={executionState}
+                status={memberStatus}
+                retryState={retryStates[index]}
+                latestOutput={getLatestOutput(index)}
+                liveContextWindow={liveContextWindow[index]}
+                isCurrent={
+                  index === currentStep && isWorkflowRunning(executionState)
+                }
+                isSelected={selectedIndex === index}
+                canSetStartPosition={canSetStartPosition}
+                startPositionDirection={
+                  index < currentStep ? "rewind" : "forward"
+                }
+                setPositionTarget={index}
+                isExecutionTargetLocked={isStepExecutionLocked(
+                  step,
+                  index,
+                  currentStep,
+                  executionState
+                )}
+                hideBorderBottom={offset === displayedMembers.length - 1}
+                dimmed={index < currentStep}
+                getStepHarnessModel={getStepHarnessModel}
+                getStepOverrides={getStepOverrides}
+                onStepClick={onStepClick}
+                onSetStartPosition={onSetStartPosition}
+                onOpenContextMenu={onOpenContextMenu}
+              />
+            ))}
+          </SortableContext>
+        ) : displayedMembers.map(({ step, index, status: memberStatus }, offset) => (
           <div
             key={index}
             className="relative flex items-stretch"
@@ -240,7 +326,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   currentStep,
                   executionState
                 )}
-                hideBorderBottom={offset === members.length - 1}
+                hideBorderBottom={offset === displayedMembers.length - 1}
                 dimmed={index < currentStep}
                 getStepHarnessModel={getStepHarnessModel}
                 getStepOverrides={getStepOverrides}

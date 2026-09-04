@@ -49,6 +49,7 @@ import {
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
+  type PendingParallelGroupRange,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
   snapParallelGroupStartPosition,
@@ -1505,7 +1506,8 @@ export class WorkingFileManager {
     runRef: RunRef,
     newPendingOrder: number[],
     expectedDefinitionRevision: number,
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    pendingGroups?: PendingParallelGroupRange[]
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
@@ -1525,7 +1527,11 @@ export class WorkingFileManager {
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
           currentIndex,
-          newPendingOrder
+          newPendingOrder,
+          pendingGroups,
+          source._runtime?.executionState === EXECUTION_STATES.RUNNING ||
+            source._runtime?.executionState === EXECUTION_STATES.PAUSING ||
+            source._runtime?.executionState === EXECUTION_STATES.CANCELLING
         );
         return {
           workingFile: {

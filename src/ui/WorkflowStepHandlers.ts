@@ -10,6 +10,7 @@ import type {
   ExecuteDraftMessage,
   InsertWorkflowStepMessage,
   RunExecutionControlMessage,
+  ReorderPromptsMessage,
   SeedNewRunMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -212,6 +213,26 @@ export class WorkflowStepHandlers {
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
     }
+  }
+
+  async handleReorderPrompts(
+    ctx: WebviewClientContext,
+    message: ReorderPromptsMessage
+  ): Promise<void> {
+    await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    await orchestrator.reorderPendingPrompts(
+      this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+      message.newPendingOrder,
+      ctx.clientId,
+      message.pendingGroups
+    );
+    await this.mutationCoordinator.publishViewIdentity(ctx);
   }
 
   async handleUpdateWorkflowProperty(

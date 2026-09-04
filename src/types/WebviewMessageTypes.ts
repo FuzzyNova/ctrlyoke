@@ -1994,6 +1994,12 @@ export interface InsertWorkflowStepMessage {
 export interface ReorderPromptsMessage {
   type: typeof MESSAGE_TYPES.REORDER_PROMPTS;
   newPendingOrder: number[];
+  pendingGroups: Array<{
+    id?: string;
+    start: number;
+    end: number;
+    failFast: boolean;
+  }>;
   mutation?: WorkflowDefinitionMutation;
 }
 

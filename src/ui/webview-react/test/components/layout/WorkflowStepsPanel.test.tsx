@@ -8,6 +8,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
+import {
+  buildPendingDragState,
+  buildPendingReorderPayload,
+  movePendingDragItem,
+} from "@components/layout/WorkflowStepsPanel";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -29,6 +34,7 @@ function resetStores() {
     activeWorkflowId: null,
     isViewingHistory: false,
   });
+
 }
 
 function loadSelectedWorkflow() {
@@ -545,6 +551,94 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
 
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.NEW_WORKFLOW,
+    });
+  });
+});
+
+describe("WorkflowStepsPanel grouped drag model", () => {
+  const steps = [
+    { prompt: "one" },
+    { prompt: "two" },
+    { prompt: "three" },
+    { prompt: "four" },
+  ];
+  const groups = [
+    { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+  ];
+
+  it("moves a step between outer containers", () => {
+    const initial = buildPendingDragState(steps, 0, []);
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-0",
+      "step-pending-3"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, [])).toEqual({
+      newPendingOrder: [1, 2, 0, 3],
+      pendingGroups: [],
+    });
+  });
+
+  it("moves a step into a group container", () => {
+    const initial = buildPendingDragState(steps, 0, groups);
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-0",
+      "group-group-1"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
+      newPendingOrder: [1, 2, 0, 3],
+      pendingGroups: [
+        { id: "group-1", start: 0, end: 2, failFast: false },
+      ],
+    });
+  });
+
+  it("moves a member between group containers", () => {
+    const initial = buildPendingDragState(
+      [
+        { prompt: "one" },
+        { prompt: "two" },
+        { prompt: "three" },
+        { prompt: "four" },
+        { prompt: "five" },
+      ],
+      0,
+      [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+        { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
+      ]
+    );
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-1",
+      "group-group-2"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, [
+      { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+      { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
+    ])).toEqual({
+      newPendingOrder: [0, 2, 3, 4, 1],
+      pendingGroups: [
+        { id: "group-2", start: 2, end: 4, failFast: false },
+      ],
+    });
+  });
+
+  it("moves a member out of a group and unwraps the remainder", () => {
+    const initial = buildPendingDragState(steps, 0, groups);
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-1",
+      "step-pending-3"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
+      newPendingOrder: [0, 2, 1, 3],
+      pendingGroups: [],
     });
   });
 });

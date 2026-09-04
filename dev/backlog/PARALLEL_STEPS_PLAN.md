@@ -975,6 +975,9 @@ behavior change, and every mutation path preserves ranges. No UI yet.
 
 ### Stage 2 — Group editing and sequential UI
 
+**Status: complete.** Grouped workflows can be authored, edited, saved, and run
+sequentially from the dashboard with undo/redo support.
+
 1. **Complete.** `workflowStore` carries `parallelGroups` through state,
    `partialize`, `equality`, and the `REORDER_PROMPTS_CONFIRMED`,
    `STEPS_EXTENDED`, `PROMPT_DELETED`, and `RUN_VIEW_LOADED` handlers.
@@ -983,14 +986,14 @@ behavior change, and every mutation path preserves ranges. No UI yet.
    `SortableWorkflowStepWrapper` now live in their own module. The panel derives
    group status, exposes the `failFast` toggle, and labels the gated build as
    sequential.
-3. Extended `REORDER_PROMPTS` payload, group/ungroup context-menu items, multi-container
-   drag; extension-side validation through the topology helper.
+3. **Complete.** Extended `REORDER_PROMPTS` payload, group/ungroup context-menu items,
+   multi-container drag, and extension-side validation through the topology helper.
 4. **Complete.** `usePromptStatus` uses recorded member statuses while a group
    is at `currentStep`, and terminal runtime members are locked while an active
    group is paused or settling.
-5. Tests: store temporal (group edits are undoable), panel render/status/drag, context
-   menu, `WorkflowStepsPanel.test.tsx` (currently keyboard-shortcuts only; add a drag
-   suite), extension-side reorder validation.
+5. **Complete.** Store temporal (group edits are undoable), panel render/status/drag,
+   context menu, `WorkflowStepsPanel.test.tsx` drag coverage, and extension-side
+   reorder validation including partially settled groups.
 
 Done when: a user can author, edit, save, and run grouped workflows (sequentially) from the
 dashboard with undo/redo.

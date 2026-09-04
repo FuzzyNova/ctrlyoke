@@ -82,6 +82,7 @@ import type {
   WorkflowViewIdentityMessage,
   ExecutionPreviewScope,
 } from "../types/WebviewMessageTypes";
+import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import type { LicenseService } from "../license/LicenseService";
 import { Log } from "../utils/Log";
@@ -4301,17 +4302,20 @@ export class WorkflowOrchestrator {
   async reorderPendingPrompts(
     mutation: WorkflowDefinitionMutation | undefined,
     newPendingOrder: number[],
-    clientId: string = this.PANEL_CLIENT_ID
+    clientId: string = this.PANEL_CLIENT_ID,
+    pendingGroups?: PendingParallelGroupRange[]
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).reorderPendingPrompts(
-        newPendingOrder
+        newPendingOrder,
+        pendingGroups
       );
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
-      (instance) => instance.reorderPendingPrompts(newPendingOrder),
+      (instance) =>
+        instance.reorderPendingPrompts(newPendingOrder, pendingGroups),
       (workspaceRoot) =>
         WorkingFileManager.reorderStepsAtRun(
           workspaceRoot,
@@ -4319,7 +4323,8 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           newPendingOrder,
           mutation.expectedDefinitionRevision,
-          this.lineageRepository
+          this.lineageRepository,
+          pendingGroups
         ).then(() => undefined)
     );
   }

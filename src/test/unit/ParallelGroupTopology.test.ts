@@ -207,6 +207,69 @@ suite("ParallelGroupTopology", () => {
       assert.strictEqual(ranges(result), "g1:1-3");
     });
 
+    test("applies slice-relative group ranges and creates a new group", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(),
+        1,
+        [2, 0, 1, 3],
+        [{ start: 0, end: 1, failFast: false }]
+      );
+      assert.deepStrictEqual(names(result), ["a", "d", "b", "c", "e"]);
+      assert.strictEqual(result.parallelGroups.length, 1);
+      assert.strictEqual(result.parallelGroups[0].startIndex, 1);
+      assert.strictEqual(result.parallelGroups[0].endIndex, 2);
+      assert.strictEqual(result.parallelGroups[0].failFast, false);
+      assert.match(result.parallelGroups[0].id, /^[0-9a-f-]{36}$/);
+    });
+
+    test("ungroups an existing pending group when its range is omitted", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(),
+        0,
+        [0, 1, 2, 3, 4],
+        []
+      );
+      assert.deepStrictEqual(result.parallelGroups, []);
+    });
+
+    test("rejects moving a member out of a partially settled group", () => {
+      const partiallySettled = {
+        steps: [
+          { prompt: "a", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "b" },
+          { prompt: "c" },
+          { prompt: "d" },
+        ],
+        parallelGroups: [
+          { id: "settled", startIndex: 0, endIndex: 2, failFast: true },
+        ],
+      };
+      assert.throws(
+        () =>
+          reorderParallelGroupPendingSteps(
+            partiallySettled,
+            1,
+            [0, 1, 2],
+            []
+          ),
+        /settled or in-flight/
+      );
+    });
+
+    test("rejects changing membership of an in-flight group", () => {
+      assert.throws(
+        () =>
+          reorderParallelGroupPendingSteps(
+            topology(),
+            1,
+            [0, 1, 2, 3],
+            [{ start: 0, end: 1, failFast: true }],
+            true
+          ),
+        /settled or in-flight/
+      );
+    });
+
     test("creates, ungroups, and unwraps groups", () => {
       const created = groupParallelGroupSteps(
         { steps: [step("a"), step("b"), step("c")], parallelGroups: [] },

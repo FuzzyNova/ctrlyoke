@@ -136,6 +136,7 @@ import {
 } from "./orchestration/OutputHistoryManager";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -2986,8 +2987,14 @@ export class WorkflowInstance {
     }
   }
 
-  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
-    await this.promptQueue.reorderPendingPrompts(newPendingOrder);
+  async reorderPendingPrompts(
+    newPendingOrder: number[],
+    pendingGroups?: PendingParallelGroupRange[]
+  ): Promise<void> {
+    await this.promptQueue.reorderPendingPrompts(
+      newPendingOrder,
+      pendingGroups
+    );
     if (this.dashboardSink) {
       const state = this.promptQueue.getState();
       this.dashboardSink.notifyPromptsReordered(

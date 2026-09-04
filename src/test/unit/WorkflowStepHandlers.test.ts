@@ -127,6 +127,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     const orchestrator = makeOrchestrator({
       deletePromptFromQueue: async () => undefined,
     });
+
     const handlers = new WorkflowStepHandlers(
       () => orchestrator,
       {} as WebviewSettingsSync,
@@ -135,6 +136,37 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
 
     await handlers.handleDeletePrompt(makeCtx(), { index: 0 } as any);
 
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+
+  test("handleReorderPrompts forwards the complete pending topology", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    let received: unknown[] = [];
+    const orchestrator = makeOrchestrator({
+      reorderPendingPrompts: async (...args: unknown[]) => {
+        received = args;
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+    const pendingGroups = [
+      { id: "group-1", start: 1, end: 2, failFast: false },
+    ];
+
+    await handlers.handleReorderPrompts(makeCtx(), {
+      newPendingOrder: [0, 2, 1, 3],
+      pendingGroups,
+    } as any);
+
+    assert.deepStrictEqual(received[1], [0, 2, 1, 3]);
+    assert.strictEqual(received[2], "panel");
+    assert.strictEqual(received[3], pendingGroups);
     assert.deepStrictEqual(coordinator.calls, [
       "prepareDefinitionMutation",
       "publishViewIdentity",

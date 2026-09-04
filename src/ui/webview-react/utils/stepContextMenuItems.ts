@@ -1,6 +1,12 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import type { StepContextMenuItem } from "../components/shared/StepContextMenu";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
+import {
+  EXECUTION_STATES,
+  type ExecutionState,
+} from "@root/types/DashboardConstants";
 import { getTargetKey, toOutputMessageTarget } from "./outputProjection";
 import {
   getWorkflowStepRawText,
@@ -131,4 +137,175 @@ export function getPresentOutputTargetKeys(
     }
   }
   return [...keys];
+}
+
+type PendingGroupRange = ReorderPromptsMessage["pendingGroups"][number];
+
+export interface StepGroupingMenuItemsInput {
+  stepIndex: number;
+  currentStep: number;
+  steps: readonly WorkflowStep[];
+  parallelGroups: readonly ParallelGroupDefinition[];
+  disabled: boolean;
+  disabledTitle?: string;
+  onReorder: (
+    newPendingOrder: number[],
+    pendingGroups: PendingGroupRange[]
+  ) => void;
+}
+
+export function isParallelGroupTopologyLocked(
+  group: ParallelGroupDefinition,
+  steps: readonly WorkflowStep[],
+  currentStep: number,
+  executionState: ExecutionState
+): boolean {
+  return (
+    group.startIndex < currentStep ||
+    steps
+      .slice(group.startIndex, group.endIndex + 1)
+      .some((step) => step._runtime?.completedAt !== undefined) ||
+    ((executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSING ||
+      executionState === EXECUTION_STATES.CANCELLING) &&
+      currentStep >= group.startIndex &&
+      currentStep <= group.endIndex)
+  );
+}
+
+function pendingGroupRanges(
+  currentStep: number,
+  parallelGroups: readonly ParallelGroupDefinition[]
+): PendingGroupRange[] {
+  return parallelGroups
+    .filter((group) => group.startIndex >= currentStep)
+    .map((group) => ({
+      id: group.id,
+      start: group.startIndex - currentStep,
+      end: group.endIndex - currentStep,
+      failFast: group.failFast,
+    }));
+}
+
+function rangeForPendingPosition(
+  pendingPosition: number,
+  groups: PendingGroupRange[]
+): PendingGroupRange | undefined {
+  return groups.find(
+    (group) =>
+      pendingPosition >= group.start && pendingPosition <= group.end
+  );
+}
+
+function buildGroupingMutation(
+  stepIndex: number,
+  neighborIndex: number,
+  currentStep: number,
+  parallelGroups: readonly ParallelGroupDefinition[]
+): PendingGroupRange[] | undefined {
+  const pendingStart = Math.min(stepIndex, neighborIndex) - currentStep;
+  const pendingEnd = Math.max(stepIndex, neighborIndex) - currentStep;
+  if (pendingStart < 0) return undefined;
+
+  const groups = pendingGroupRanges(currentStep, parallelGroups);
+  const first = rangeForPendingPosition(pendingStart, groups);
+  const second = rangeForPendingPosition(pendingEnd, groups);
+  const merged = new Map<string, PendingGroupRange>();
+  const additions: PendingGroupRange[] = [];
+  for (const group of groups) {
+    if (group !== first && group !== second) {
+      merged.set(group.id!, { ...group });
+    }
+  }
+
+  if (first && second && first.id === second.id) {
+    return undefined;
+  }
+  if (first) {
+    merged.set(first.id!, {
+      ...first,
+      start: Math.min(first.start, pendingStart),
+      end: Math.max(first.end, pendingEnd),
+    });
+  } else if (second) {
+    merged.set(second.id!, {
+      ...second,
+      start: Math.min(second.start, pendingStart),
+      end: Math.max(second.end, pendingEnd),
+    });
+  } else {
+    additions.push({
+      start: pendingStart,
+      end: pendingEnd,
+      failFast: true,
+    });
+  }
+
+  return [...merged.values(), ...additions].sort(
+    (left, right) => left.start - right.start
+  );
+}
+
+/** Build context-menu actions that mutate the pending-tail group topology. */
+export function buildStepGroupingMenuItems({
+  stepIndex,
+  currentStep,
+  steps,
+  parallelGroups,
+  disabled,
+  disabledTitle,
+  onReorder,
+}: StepGroupingMenuItemsInput): StepContextMenuItem[] {
+  const pendingPosition = stepIndex - currentStep;
+  if (pendingPosition < 0 || stepIndex >= steps.length) return [];
+
+  const groups = pendingGroupRanges(currentStep, parallelGroups);
+  const containing = rangeForPendingPosition(pendingPosition, groups);
+  if (containing) {
+    return [
+      {
+        label: "Ungroup parallel steps",
+        icon: "codicon-type-hierarchy-sub",
+        disabled,
+        disabledTitle,
+        onClick: () => {
+          onReorder(
+            Array.from({ length: steps.length - currentStep }, (_, index) => index),
+            groups.filter((group) => group.id !== containing.id)
+          );
+        },
+      },
+    ];
+  }
+
+  const items: StepContextMenuItem[] = [];
+  const makeGroupItem = (neighborIndex: number, label: string) => {
+    const nextGroups = buildGroupingMutation(
+      stepIndex,
+      neighborIndex,
+      currentStep,
+      parallelGroups
+    );
+    if (!nextGroups) return;
+    items.push({
+      label,
+      icon: "codicon-type-hierarchy",
+      disabled,
+      disabledTitle,
+      onClick: () => {
+        onReorder(
+          Array.from({ length: steps.length - currentStep }, (_, index) => index),
+          nextGroups
+        );
+      },
+    });
+  };
+
+  if (stepIndex > currentStep) {
+    makeGroupItem(stepIndex - 1, "Group with previous step");
+  }
+  if (stepIndex < steps.length - 1) {
+    makeGroupItem(stepIndex + 1, "Group with next step");
+  }
+  return items;
 }

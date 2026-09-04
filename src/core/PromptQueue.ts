@@ -46,6 +46,7 @@ import {
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
+  type PendingParallelGroupRange,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
   snapParallelGroupStartPosition,
@@ -1959,7 +1960,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    *   indices into the full prompts array. Using absolute indices would break on
    *   the second reorder because state.steps has already been mutated.
    */
-  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
+  async reorderPendingPrompts(
+    newPendingOrder: number[],
+    pendingGroups?: PendingParallelGroupRange[]
+  ): Promise<void> {
     // While a step is in flight (and not in a pending rewind, where the whole
     // suffix — including slice position 0 — is reorderable), the running step is
     // pending-slice position 0 and must stay first so the executor's currentIndex
@@ -1987,7 +1991,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           parallelGroups: this.state.parallelGroups,
         },
         currentIndex,
-        newPendingOrder
+        newPendingOrder,
+        pendingGroups,
+        this.hasInFlightStep
       );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {
