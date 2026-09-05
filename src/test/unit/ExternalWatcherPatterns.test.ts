@@ -21,6 +21,7 @@ import type {
 import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import { RUNNER_IDS, STEP_TYPES } from "../../types/DashboardConstants";
 import type { ActiveExternalLockInspection } from "../../core/orchestration/ExternalExecutionResolver";
+import type { IDashboardSink } from "../../types/IDashboardSink";
 
 function makeInspection(
   workflowKey: WorkflowKey,
@@ -106,9 +107,7 @@ suite("external watcher patterns", () => {
       await fs.writeFile(
         replacementPath,
         JSON.stringify({
-          steps: [
-            { type: STEP_TYPES.PROMPT, prompt: "after atomic rename" },
-          ],
+          steps: [{ type: STEP_TYPES.PROMPT, prompt: "after atomic rename" }],
         })
       );
       await fs.rename(replacementPath, workingFilePath);
@@ -229,18 +228,10 @@ suite("external watcher patterns", () => {
         () => undefined
       );
 
-      const promoted = await queue.promoteToNewRun(
-        workspaceRoot,
-        Date.now()
-      );
+      const promoted = await queue.promoteToNewRun(workspaceRoot, Date.now());
       assert.ok(promoted);
       assert.strictEqual(patterns.length, 2);
-      assert.ok(
-        pathsEqual(
-          getBasePath(patterns[0]),
-          path.dirname(draftPath)
-        )
-      );
+      assert.ok(pathsEqual(getBasePath(patterns[0]), path.dirname(draftPath)));
       assert.ok(
         pathsEqual(
           getBasePath(patterns[1]),
@@ -250,6 +241,115 @@ suite("external watcher patterns", () => {
       assert.strictEqual(
         patterns[1].pattern,
         path.basename(promoted.workingFilePath)
+      );
+    } finally {
+      promptWatcher?.dispose();
+      Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
+        configurable: true,
+        value: originalCreateFileSystemWatcher,
+      });
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps following the working file after a superseded draft delete", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prompt-watcher-stale-delete-")
+    );
+    const originalCreateFileSystemWatcher =
+      vscode.workspace.createFileSystemWatcher;
+    const patterns: vscode.RelativePattern[] = [];
+    const deleteHandlers: ((uri: vscode.Uri) => unknown)[] = [];
+    const steps: WorkflowStep[] = [
+      { type: STEP_TYPES.PROMPT, prompt: "run this" },
+    ];
+    const disposable = { dispose: () => undefined };
+
+    Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
+      configurable: true,
+      value: (pattern: vscode.GlobPattern) => {
+        patterns.push(pattern as vscode.RelativePattern);
+        return {
+          onDidCreate: () => disposable,
+          onDidChange: () => disposable,
+          onDidDelete: (handler: (uri: vscode.Uri) => unknown) => {
+            deleteHandlers.push(handler);
+            return disposable;
+          },
+          dispose: () => undefined,
+        } as unknown as vscode.FileSystemWatcher;
+      },
+    });
+
+    let promptWatcher: PromptFileWatcher | undefined;
+    try {
+      const queue = new PromptQueue();
+      const draftPath = await queue.createWorkingFile(
+        "watcher-stale-delete",
+        steps,
+        workspaceRoot
+      );
+      queue.loadPrompts({ steps }, draftPath);
+
+      let fileSelectedCleared = 0;
+      promptWatcher = new PromptFileWatcher(
+        queue,
+        () =>
+          ({
+            updateFileSelected: () => {
+              fileSelectedCleared += 1;
+            },
+          }) as unknown as IDashboardSink
+      );
+
+      let deletedPaths: string[] = [];
+      promptWatcher.setupFileWatcher(
+        draftPath,
+        async () => undefined,
+        (deletedPath) => {
+          deletedPaths.push(deletedPath);
+        }
+      );
+
+      const promoted = await queue.promoteToNewRun(workspaceRoot, Date.now());
+      assert.ok(promoted);
+      assert.strictEqual(patterns.length, 2);
+
+      // finalizeRun deletes the promoted draft, and that event can arrive after
+      // the queue already switched to the run file. It must be ignored: it is
+      // not the active working file.
+      assert.ok(deleteHandlers.length >= 1);
+      for (const handler of deleteHandlers) {
+        handler(vscode.Uri.file(draftPath));
+      }
+      assert.deepStrictEqual(
+        deletedPaths,
+        [],
+        "a delete for the superseded draft must not report a deleted working file"
+      );
+      assert.strictEqual(
+        fileSelectedCleared,
+        0,
+        "a superseded draft delete must not blank the dashboard mid-run"
+      );
+
+      // The state subscription must have survived, so a later working-file
+      // change still re-points the watcher.
+      const secondPromotion = await queue.promoteToNewRun(
+        workspaceRoot,
+        Date.now() + 1
+      );
+      assert.ok(secondPromotion);
+      assert.strictEqual(
+        patterns.length,
+        3,
+        "watcher must still follow workingFilePath after a superseded delete"
+      );
+      assert.ok(
+        pathsEqual(
+          getBasePath(patterns[2]),
+          path.dirname(secondPromotion.workingFilePath)
+        )
       );
     } finally {
       promptWatcher?.dispose();

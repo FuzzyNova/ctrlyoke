@@ -73,7 +73,7 @@ suite("PromptFileLoader Tests", () => {
   });
 
   suite("working file merge", () => {
-    test("threads the restored definition revision through SESSION_RESTORED", async () => {
+    test("omits the definition revision from a session-replace SESSION_RESTORED", async () => {
       const dashboardCalls: unknown[][] = [];
       let restored = false;
       const dashboard = {
@@ -115,7 +115,13 @@ suite("PromptFileLoader Tests", () => {
       );
 
       assert.strictEqual(dashboardCalls.length, 1);
-      assert.strictEqual(dashboardCalls[0][12], 9);
+      // The REPLACE branch loads a *different* session, so its SESSION_RESTORED
+      // must not be classified as a replay of the workflow being navigated away
+      // from. The webview keys that off the presence of definitionRevision on an
+      // untagged message: sending it here would preserve the outgoing
+      // workflow's view address and compare two unrelated workflows' revisions,
+      // silently dropping a lower-revision workflow. Keep this slot undefined.
+      assert.strictEqual(dashboardCalls[0][12], undefined);
     });
 
     test("forwards merged parallelGroups in the STEPS_EXTENDED push", async () => {

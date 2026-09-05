@@ -833,13 +833,22 @@ export function createMessageHandlers(
         ? message.definitionRevision
         : undefined;
     const currentUiState = useUiStore.getState();
-    const currentDefinitionRevision =
-      currentUiState.appliedDefinitionRevision;
+    const currentDefinitionRevision = currentUiState.appliedDefinitionRevision;
     const currentStepCount = useWorkflowStore.getState().steps.length;
     const incomingStepCount = message.steps?.length ?? 0;
-    // WorkflowTaggedSink supplies workflowId for live updates. The direct,
-    // untagged SESSION_RESTORED sent by replayWorkflowStateTo follows the
-    // addressed RUN_VIEW_LOADED and must not clear that view's identity.
+    // Replay of the *currently displayed* workflow, versus a load that replaces
+    // it. WorkflowTaggedSink supplies workflowId for live updates; the direct,
+    // untagged SESSION_RESTORED that replayWorkflowStateTo sends follows the
+    // addressed RUN_VIEW_LOADED for the same workflow, so it must not clear
+    // that view's identity and may be guarded against regressing it.
+    //
+    // The revision is what separates the two, and that makes this an
+    // omission-based contract: a producer whose SESSION_RESTORED *replaces* the
+    // displayed workflow must not send definitionRevision (see the comment in
+    // PromptFileLoader's restore branch). This message carries no address, so
+    // the guard below cannot tell two workflows' revisions apart — classifying
+    // a replacement as a replay would compare unrelated revision numbers and
+    // silently drop the incoming workflow.
     const isReplay =
       message.workflowId === undefined &&
       incomingDefinitionRevision !== undefined;

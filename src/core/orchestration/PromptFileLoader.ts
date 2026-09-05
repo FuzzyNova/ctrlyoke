@@ -341,13 +341,18 @@ export class PromptFileLoader {
             restoredState.currentIndex,
             restoredState.workflowName || undefined,
             workingFile.finalStep ?? null,
-            this.promptQueue.getFinalStepRuntime(),
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            restoredState.definitionRevision
+            this.promptQueue.getFinalStepRuntime()
           );
+          // Deliberately no `definitionRevision`: this branch is a session
+          // *replace* (resume/auto-load of a different session), not a replay.
+          // The webview treats an untagged SESSION_RESTORED that carries a
+          // revision as a replay of the currently displayed workflow — it then
+          // preserves the view address and applies the regressive-snapshot
+          // guard. Both are wrong here: the address belongs to the workflow
+          // being navigated away from, and the revisions being compared come
+          // from two unrelated workflows, so loading a lower-revision workflow
+          // would be silently discarded. This path already reads its steps
+          // straight from disk, so it has no staleness for a guard to catch.
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)

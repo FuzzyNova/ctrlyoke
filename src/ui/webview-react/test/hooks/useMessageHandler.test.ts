@@ -480,6 +480,47 @@ describe("SESSION_RESTORED", () => {
     expect(useUiStore.getState().appliedDefinitionRevision).toBe(3);
   });
 
+  it("applies a revisionless session replace even when it looks regressive", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-being-left" as never,
+      kind: "run" as const,
+      runRef: "run-being-left" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: address,
+      appliedViewAddress: address,
+      displayedDefinitionRevision: 5,
+      appliedDefinitionRevision: 5,
+    });
+    useWorkflowStore.setState({
+      steps: [makePrompt("a"), makePrompt("b"), makePrompt("c")],
+    });
+
+    // PromptFileLoader's restore branch replaces the displayed workflow with a
+    // different one and deliberately sends no definitionRevision. Its revision
+    // and step count are unrelated to the workflow being navigated away from,
+    // so the regressive-snapshot guard must not apply and the stale view
+    // address must be cleared.
+    act(() => {
+      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+        fileName: "other-workflow.ctrlyoke.yaml",
+        steps: [makePrompt("other workflow step")],
+        results: [],
+        executionState: EXECUTION_STATES.IDLE,
+        currentIndex: 0,
+      });
+    });
+
+    expect(
+      useWorkflowStore
+        .getState()
+        .steps.map((step) => ("prompt" in step ? step.prompt : undefined))
+    ).toEqual(["other workflow step"]);
+    expect(useUiStore.getState().appliedViewAddress).toBeNull();
+    expect(useUiStore.getState().appliedDefinitionRevision).toBeNull();
+  });
+
   it("loads workflow properties included with the restored session payload", () => {
     renderHook(() => useMessageHandler());
 
@@ -3705,7 +3746,9 @@ describe("TERMINAL_STARTED", () => {
 
     const sessions = useTerminalStore.getState().sessions["workflow-1"];
     expect(sessions).toHaveLength(3);
-    expect(sessions.map((session) => [session.stepIndex, session.stepName])).toEqual([
+    expect(
+      sessions.map((session) => [session.stepIndex, session.stepName])
+    ).toEqual([
       [1, "Research auth"],
       [2, "Research database"],
       [3, "Research performance"],

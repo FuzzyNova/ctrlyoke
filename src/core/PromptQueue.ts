@@ -1391,12 +1391,47 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       immutablePrefixLength(diskTopology.steps),
       immutablePrefixLength(memorySteps)
     );
+    // Completed steps are index-stable, and so are the steps executing right
+    // now: `RunContinuationService` clamps every cross-process splice past the
+    // completed boundary, and the positions MCP can request resolve to either
+    // `next` (after the execution head) or `end`. Nothing can renumber the
+    // running step, and its in-memory state is the *newest* copy — disk has
+    // not seen its session ID or its condition summaries yet. Stopping the
+    // merge at the completed boundary therefore threw away live execution
+    // state: the running step lost its `_runtime` (session ID, startedAt) and
+    // its `results` entry, which is where `getPreConditionSummary` /
+    // `getEndConditionSummary` read the gate output that `$preCondition:*` and
+    // `$endCondition:*` substitute into the dispatched prompt.
+    const executionHead = Math.min(
+      diskTopology.steps.length,
+      Math.max(immutablePrefix, this.state.currentIndex + 1)
+    );
 
-    // Disk owns order and topology. Memory contributes _runtime only for the
-    // index-stable completed prefix, so duplicate prompt text cannot alias two
-    // different steps' sessions.
+    // Per-index sanity check, not an identity search: state is only ever reused
+    // for the *same* index, and only while the step there still matches. This
+    // never relocates state by content the way the removed hash lookup did.
+    const stepMatchesMemory = (
+      diskStep: WorkflowStep,
+      index: number
+    ): boolean => {
+      const memoryStep = memorySteps[index];
+      return (
+        memoryStep !== undefined &&
+        isDeepStrictEqual(
+          stripStepRuntime([diskStep])[0],
+          stripStepRuntime([memoryStep])[0]
+        )
+      );
+    };
+
+    // Disk owns order and topology. Memory contributes _runtime only across the
+    // index-stable prefix, so duplicate prompt text cannot alias two different
+    // steps' sessions.
     const mergedSteps = diskTopology.steps.map((diskStep, index) => {
-      if (index >= immutablePrefix || !memorySteps[index]) {
+      if (index >= executionHead || !memorySteps[index]) {
+        return diskStep;
+      }
+      if (index >= immutablePrefix && !stepMatchesMemory(diskStep, index)) {
         return diskStep;
       }
 
@@ -1423,22 +1458,25 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         );
       });
 
-    // Rebuild results by index across the same immutable prefix. Results for
+    // Rebuild results on the same index basis as the runtime merge, so the
+    // running step keeps its condition summaries and status. Results for
     // shifted or newly introduced suffix steps must not follow prompt text.
-    const newResults: PromptResult[] = diskTopology.steps.map(
-      (step, index) => {
-        if (index < immutablePrefix && this.state.results[index]) {
-          return this.state.results[index];
-        }
-
-        const content = isScriptStep(step) ? step.script : step.prompt;
-        return {
-          prompt: content,
-          status: STEP_STATUS.PENDING,
-          timestamp: new Date(),
-        };
+    const newResults: PromptResult[] = diskTopology.steps.map((step, index) => {
+      const canReuse =
+        index < executionHead &&
+        this.state.results[index] !== undefined &&
+        (index < immutablePrefix || stepMatchesMemory(step, index));
+      if (canReuse) {
+        return this.state.results[index];
       }
-    );
+
+      const content = isScriptStep(step) ? step.script : step.prompt;
+      return {
+        prompt: content,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      };
+    });
 
     this.state.steps = mergedSteps;
     this.state.parallelGroups = diskTopology.parallelGroups;

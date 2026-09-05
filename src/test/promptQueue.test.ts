@@ -728,18 +728,21 @@ suite("PromptQueue State Machine Tests", () => {
 
         assert.strictEqual(queue.getRetryCount(firstTarget), 2);
         assert.strictEqual(queue.getRetryCount(secondTarget), 1);
-        assert.strictEqual(queue.canRetry(
-          queue.getState().steps[0] as PromptStep,
-          firstTarget
-        ), false);
-        assert.strictEqual(queue.canPassRetry(
-          queue.getState().steps[0] as PromptStep,
-          firstTarget
-        ), false);
-        assert.strictEqual(queue.canRetry(
-          queue.getState().steps[1] as PromptStep,
-          secondTarget
-        ), true);
+        assert.strictEqual(
+          queue.canRetry(queue.getState().steps[0] as PromptStep, firstTarget),
+          false
+        );
+        assert.strictEqual(
+          queue.canPassRetry(
+            queue.getState().steps[0] as PromptStep,
+            firstTarget
+          ),
+          false
+        );
+        assert.strictEqual(
+          queue.canRetry(queue.getState().steps[1] as PromptStep, secondTarget),
+          true
+        );
       });
 
       test("joins reverse-order target completion without advancing early", async () => {
@@ -1593,7 +1596,10 @@ suite("PromptQueue State Machine Tests", () => {
       // Disk has the completed boundary and a new MCP prompt, but its session
       // metadata has not been flushed yet.
       const diskPrompts: PromptStep[] = [
-        { prompt: "prompt-0", _runtime: { startedAt: 1000, completedAt: 2000 } },
+        {
+          prompt: "prompt-0",
+          _runtime: { startedAt: 1000, completedAt: 2000 },
+        },
         { prompt: "prompt-1-mcp" }, // new from MCP
       ];
 
@@ -1719,6 +1725,52 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("preserves the running step's runtime and condition summaries", () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "first" }, { prompt: "second" }])
+      );
+      (queue as any).state.steps[0]._runtime = {
+        sessionId: "first-session",
+        startedAt: 1,
+        completedAt: 2,
+      };
+      // The running step: started, not completed, so it sits past the completed
+      // boundary — and disk has not seen its session or gate output yet.
+      (queue as any).state.steps[1]._runtime = {
+        sessionId: "running-session",
+        startedAt: 5,
+      };
+      (queue as any).state.currentIndex = 1;
+      (queue as any).state.results[1] = {
+        prompt: "second",
+        status: STEP_STATUS.RUNNING,
+        timestamp: new Date(),
+        preCondition: { passed: true, stdout: "gate-output" },
+      };
+
+      const newSteps = (queue as any).mergeDiskSteps([
+        { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "second" },
+        { prompt: "appended mid-run" },
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(newSteps.length, 1, "the append must be detected");
+      assert.strictEqual(
+        state.steps[1]._runtime?.sessionId,
+        "running-session",
+        "a mid-run merge must not drop the running step's session ID"
+      );
+      assert.strictEqual(
+        (state.results[1] as { preCondition?: { stdout?: string } })
+          .preCondition?.stdout,
+        "gate-output",
+        "condition summaries feed $preCondition substitution and must survive a merge"
+      );
+      assert.strictEqual(state.results[1].status, STEP_STATUS.RUNNING);
+      assert.strictEqual(state.results[2].status, STEP_STATUS.PENDING);
+    });
+
     test("mergeStepsFromDisk returns a positive count for a real append", async () => {
       const tempRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-prompt-queue-merge-")
@@ -1731,7 +1783,9 @@ suite("PromptQueue State Machine Tests", () => {
         );
         await fs.writeFile(
           workingFilePath,
-          JSON.stringify({ steps: [{ prompt: "existing" }, { prompt: "existing" }] }),
+          JSON.stringify({
+            steps: [{ prompt: "existing" }, { prompt: "existing" }],
+          }),
           "utf8"
         );
 

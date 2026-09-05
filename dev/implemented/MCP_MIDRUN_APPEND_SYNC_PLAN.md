@@ -11,7 +11,8 @@ and `ctrlyoke_queue_status` reported the new step immediately. But `WorkflowStep
 showing the old step count for the rest of the running step. Navigating away and back flashed the
 correct count, then reverted. The count corrected itself at the next step transition.
 
-Defects 1–5 are now implemented. Line references were originally taken against `b1223284` and re-verified
+Defects 1–5 are implemented, and a review pass corrected three defects the fixes introduced (see the
+closing section). Line references were originally taken against `b1223284` and re-verified
 against `560957d0` on 2026-09-05, which corrected defect 5's scope, added the merge-novelty and
 prefix-agreement constraints under defect 4, and moved defect 5 to the front of the sequencing.
 
@@ -217,7 +218,12 @@ Two constraints on that rewrite, both verified and both easy to miss:
   which can lag memory when a step has just finished and its runtime has not been flushed. Deriving
   the merge prefix from memory alone would let an append that legitimately spliced at disk's
   (shorter) boundary shift a step memory believes is completed, and index-merge `_runtime` onto the
-  wrong step. Take `min` of the two boundaries and merge only there.
+  wrong step. Take `min` of the two boundaries.
+  **Corrected during review:** "and merge only there" was wrong, and following it caused a
+  regression — see review item 1 in the closing section. The completed boundary is the right _shared_
+  prefix, but the index-stable region extends to the execution head
+  (`max(completedBoundary, currentIndex + 1)`), because the running step cannot be renumbered either
+  and its in-memory `_runtime` and `results` entry are newer than disk's.
 - **Removing the hash removes the novelty signal, so a replacement is required.**
   `mergeDiskSteps` returns "new steps", `mergeStepsFromDisk` (`PromptQueue.ts:1496-1517`) turns that
   into a count, and `PromptFileLoader.ts:360` sends `STEPS_EXTENDED` **only when that count is > 0**.
@@ -305,6 +311,45 @@ terms that this investigation happened to surface.
 The full plan shipped: file watching now follows promoted runs, append merges preserve topology and
 duplicate-text steps, and replay snapshots carry revision-aware protection across extension and hosted
 clients.
+
+## Review pass — three defects introduced by the fixes (2026-09-05)
+
+Found by inspecting the landed diffs rather than the step summaries, and by noticing that the
+aggregate `npm test` run reported a failure the shell's exit code had masked. All three are fixed and
+covered by regression tests.
+
+1. **The merge boundary was too short, and it destroyed live execution state.** Defect 4's rewrite
+   stopped merging in-memory state at the _completed_ boundary, per this document's own guidance. That
+   is wrong: the step executing right now is equally index-stable, and its in-memory copy is the newest
+   one. Taking disk wholesale for it dropped its `_runtime` (session ID, `startedAt`) and rebuilt its
+   `state.results` entry as PENDING — and `getPreConditionSummary`/`getEndConditionSummary` read gate
+   output out of `results[stepIndex]`, so `$preCondition:*` substitution silently stopped resolving.
+   `preConditionFlow.integration.test.ts` caught it. The boundary is now
+   `max(completedBoundary, currentIndex + 1)`, applied to `_runtime` and `results` alike, with a
+   per-index structural check that declines to reuse state when the step at that index changed. The
+   guidance under defect 4 above was the source of the error and has been corrected in
+   `core.instructions.md`.
+2. **The watcher's delete handler tore down the mechanism defect 1 installed.**
+   `PromptFileWatcher.onFileDeleted` called `dispose()`, which now also drops the
+   `onDidChangeState` subscription — so a single delete event permanently stopped the watcher from
+   following `workingFilePath`, reinstating defect 1 on the same delivery timing that made it
+   intermittent. It also blanked the panel. The promoted draft's delete routinely arrives after the
+   queue has switched to the run file, which is exactly when this fires. `onFileDeleted` now honors a
+   delete only for the queue's current working file, and tears down the watcher (`disposeWatcher`)
+   rather than the subscription.
+3. **A session _replace_ was misclassified as a replay.** Defect 3 threaded `definitionRevision` into
+   `PromptFileLoader`'s REPLACE branch, which made its untagged `SESSION_RESTORED` satisfy the
+   webview's replay predicate. That branch loads a _different_ session, so preserving the view address
+   holds an address belonging to the workflow being navigated away from, and the guard then compares
+   two unrelated workflows' revisions — silently dropping a lower-revision workflow. The revision is
+   no longer sent there, and the omission is now commented at both ends and recorded in
+   `core.instructions.md`.
+
+Reviewer's note on defect 5's arity gotcha: it generalizes. Positional-parameter growth on
+`IDashboardSink` is invisible to the compiler in _both_ directions — a missing trailing parameter in an
+implementation, and a call site that fills the wrong slot. Every one of the nine `updateSessionRestored`
+sites was verified by hand here; that check is not optional, and the added
+`types-core.instructions.md` bullet now says so.
 
 ## Testing notes
 

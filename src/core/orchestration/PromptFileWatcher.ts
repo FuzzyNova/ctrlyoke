@@ -147,7 +147,10 @@ export class PromptFileWatcher {
       }
       this.pollingFileSignature = signature;
       if (this.onFileChangedCallback) {
-        await this.onFileChanged(vscode.Uri.file(filePath), this.onFileChangedCallback);
+        await this.onFileChanged(
+          vscode.Uri.file(filePath),
+          this.onFileChangedCallback
+        );
       }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -202,11 +205,32 @@ export class PromptFileWatcher {
   ): void {
     Log.trace(`Working file deleted: ${uri.fsPath}`);
 
+    // A promoted draft is moved, not lost: `WorkingFileManager.finalizeRun`
+    // removes `draft/workflow.ctrlyoke.json` once its content lives on in
+    // `run-<ts>/workflow.ctrlyoke.json`. That delete is delivered
+    // asynchronously and routinely lands after the queue has already switched
+    // to the run file, so a delete for anything other than the queue's
+    // *current* working file means the definition moved rather than
+    // disappeared. Acting on it would blank the panel mid-run and — because
+    // `dispose()` also drops the `onDidChangeState` subscription — would
+    // permanently stop the watcher from following `workingFilePath`,
+    // reinstating the exact defect that subscription exists to fix.
+    const activeWorkingFile = this.promptQueue.getState().workingFilePath;
+    if (activeWorkingFile && !pathsEqual(activeWorkingFile, uri.fsPath)) {
+      Log.trace(
+        `Ignoring delete for superseded working file (active: ${activeWorkingFile})`
+      );
+      return;
+    }
+
     // Cleanup file references
     onDelete(uri.fsPath);
 
-    // Dispose the watcher since file no longer exists
-    this.dispose();
+    // The watched file really is gone. Drop the watcher and its polling
+    // fallback, but keep the state subscription so a later working-file change
+    // can still re-point the watcher.
+    this.disposeWatcher();
+    this.watchedFilePath = undefined;
 
     // Update dashboard to show no file selected
     const dashboard = this.getDashboard();
