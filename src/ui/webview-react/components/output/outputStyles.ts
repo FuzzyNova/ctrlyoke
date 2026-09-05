@@ -28,7 +28,19 @@ export const OUTPUT_BLOCK_BASE =
   "py-[var(--spacing-sm)] px-[var(--spacing-sm)] my-[var(--spacing-sm)] border-l-[3px] whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[length:var(--fp-output-font-size-sm)] bg-transparent";
 
 /** Width of the per-row step identity bar painted by `getStepIdentityBarStyle`. */
-export const STEP_IDENTITY_BAR_WIDTH_PX = 3;
+export const STEP_IDENTITY_BAR_WIDTH_PX = 2;
+
+/**
+ * Gap between the pane's true left edge and the start of the identity bar.
+ *
+ * The pane's left edge is also where the Output/Steps panel resize splitter
+ * hit-tests, so painting color all the way to x=0 makes the splitter's own
+ * hover/drag highlight read as if the step color were bleeding into it. A
+ * 1px transparent margin keeps the boundary pixel free for the splitter.
+ * `OFFSET + WIDTH` (3px) is the total reserved region, matching the
+ * `pl-[3px]` content offset used on the non-CLI-group row path.
+ */
+export const STEP_IDENTITY_BAR_OFFSET_PX = 1;
 
 /**
  * Background for a row's step identity bar.
@@ -48,7 +60,8 @@ export const STEP_IDENTITY_BAR_WIDTH_PX = 3;
 export function getStepIdentityBarStyle(color: string): {
   backgroundImage: string;
 } {
+  const barEnd = STEP_IDENTITY_BAR_OFFSET_PX + STEP_IDENTITY_BAR_WIDTH_PX;
   return {
-    backgroundImage: `linear-gradient(to right, ${color} 0, ${color} ${STEP_IDENTITY_BAR_WIDTH_PX}px, transparent ${STEP_IDENTITY_BAR_WIDTH_PX}px)`,
+    backgroundImage: `linear-gradient(to right, transparent 0, transparent ${STEP_IDENTITY_BAR_OFFSET_PX}px, ${color} ${STEP_IDENTITY_BAR_OFFSET_PX}px, ${color} ${barEnd}px, transparent ${barEnd}px)`,
   };
 }
