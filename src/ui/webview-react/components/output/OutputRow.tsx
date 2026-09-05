@@ -1095,6 +1095,31 @@ const CliHeaderRowView: React.FC<{
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
   const stepDisplayName =
     row.stepName?.trim() ?? getFirstWords(output.prompt, 4);
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
+  const toggleHiddenOutputTarget = useUiStore(
+    (state) => state.toggleHiddenOutputTarget
+  );
+  const workflowKey = displayedViewAddress
+    ? workflowViewAddressKey(displayedViewAddress)
+    : SHELL_WORKFLOW_ID;
+  const targetKey = getTargetKey(row.target);
+  const handleHide = useCallback(() => {
+    toggleHiddenOutputTarget(workflowKey, targetKey);
+  }, [targetKey, toggleHiddenOutputTarget, workflowKey]);
+  const hideButton = (
+    <button
+      type="button"
+      onClick={handleHide}
+      style={{ touchAction: "manipulation" }}
+      title="Hide output for this step"
+      aria-label="Hide output for this step"
+      className="inline-flex min-w-0 max-w-full items-center gap-1 text-description-fg hover:text-foreground transition-colors"
+    >
+      <i className="codicon codicon-eye-closed shrink-0" />
+    </button>
+  );
   const structuredMetadata = output.structured?.metadata;
   const harnessId = structuredMetadata?.harness;
   const harnessShortName = harnessId
@@ -1162,6 +1187,9 @@ const CliHeaderRowView: React.FC<{
           )}
         </span>
         {streamingIndicator}
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
+          {hideButton}
+        </div>
       </div>
     );
   }
@@ -1192,38 +1220,37 @@ const CliHeaderRowView: React.FC<{
         )}
       </span>
       {streamingIndicator}
-      {row.promptUndo && (row.promptUndo.undo || row.promptUndo.redo) && (
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
-          {row.promptUndo.undo && (
-            <button
-              type="button"
-              onClick={() => onPromptUndo?.(row)}
-              style={{ touchAction: "manipulation" }}
-              title={row.promptUndo.undo.label}
-              className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
-            >
-              <i className="codicon codicon-discard shrink-0" />
-              <span className="min-w-0 truncate">
-                {row.promptUndo.undo.label}
-              </span>
-            </button>
-          )}
-          {row.promptUndo.redo && (
-            <button
-              type="button"
-              onClick={() => onPromptRedo?.(row)}
-              style={{ touchAction: "manipulation" }}
-              title={row.promptUndo.redo.label}
-              className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
-            >
-              <i className="codicon codicon-redo shrink-0" />
-              <span className="min-w-0 truncate">
-                {row.promptUndo.redo.label}
-              </span>
-            </button>
-          )}
-        </div>
-      )}
+      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
+        {hideButton}
+        {row.promptUndo?.undo && (
+          <button
+            type="button"
+            onClick={() => onPromptUndo?.(row)}
+            style={{ touchAction: "manipulation" }}
+            title={row.promptUndo.undo.label}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
+          >
+            <i className="codicon codicon-discard shrink-0" />
+            <span className="min-w-0 truncate">
+              {row.promptUndo.undo.label}
+            </span>
+          </button>
+        )}
+        {row.promptUndo?.redo && (
+          <button
+            type="button"
+            onClick={() => onPromptRedo?.(row)}
+            style={{ touchAction: "manipulation" }}
+            title={row.promptUndo.redo.label}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+          >
+            <i className="codicon codicon-redo shrink-0" />
+            <span className="min-w-0 truncate">
+              {row.promptUndo.redo.label}
+            </span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

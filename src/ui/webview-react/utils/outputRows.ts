@@ -1871,6 +1871,7 @@ export function buildOutputRows(
   const rows: OutputRenderRow[] = [];
   const stepOutputsMap = new Map<string, CliOutputType[]>();
   const lastCliIndexPerStep = new Map<string, number>();
+  const lastAttemptRowKeyBasePerStep = new Map<string, string>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
   const stepColorByTargetKey = new Map<string, string | undefined>();
   const firstRowIndexByTarget = new Map<string, number>();
@@ -1996,6 +1997,16 @@ export function buildOutputRows(
       stepOutputs.push((message.aggregate ?? message.data) as CliOutputType);
       stepOutputsMap.set(targetKey, stepOutputs);
       lastCliIndexPerStep.set(targetKey, messageIndex);
+      // Keyed by attempt (not raw message index) so a multi-activity attempt's
+      // *header* — emitted at the attempt's first message, not its last — can
+      // still recognize itself as the step's latest attempt below.
+      const cliOutput = (message.aggregate ?? message.data) as CliOutputType;
+      const runIndex = message.runIndex ?? cliOutput.runIndex ?? 0;
+      const attemptIndex = message.attemptIndex ?? 0;
+      lastAttemptRowKeyBasePerStep.set(
+        targetKey,
+        getAttemptRowKeyBase(targetKey, runIndex, attemptIndex)
+      );
     }
   }
 
@@ -2153,10 +2164,16 @@ export function buildOutputRows(
       target
     );
     const allStepOutputs = stepOutputsMap.get(targetKey) ?? [];
-    const isLastCliForStep =
-      lastCliIndexPerStep.get(targetKey) === messageIndex;
+    // Whether *this attempt* (not this message) is the step's latest attempt.
+    // A multi-activity attempt spans several messages, and the header row is
+    // built from the first of them — comparing raw message indices against
+    // the step's overall last message would almost always fail, since that
+    // last message usually belongs to a later activity slice of this same
+    // attempt (see lastAttemptRowKeyBasePerStep above).
+    const isLastAttemptForStep =
+      lastAttemptRowKeyBasePerStep.get(targetKey) === attemptRowKeyBase;
     const promptUndoActions =
-      input.allowUndoActions && isLastCliForStep && !output.isStreaming
+      input.allowUndoActions && isLastAttemptForStep && !output.isStreaming
         ? (() => {
             const concurrentGroup = getConcurrentGroupForStep(
               input,
