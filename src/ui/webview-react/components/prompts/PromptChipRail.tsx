@@ -141,14 +141,14 @@ function ChipContent({
       {/* Slot number spans both rows (enlarged); status icon (enlarged) sits
           beside it on row 1, type icon (unchanged size) sits beside it on
           row 2 — swapped from the prior status-icon-on-its-own-row layout. */}
-      <div className="grid grid-cols-[auto_1fr] grid-rows-2 items-center w-full gap-x-1">
+      <div className="grid grid-cols-[auto_1fr] grid-rows-2 items-center w-full gap-x-0.5">
         <span className="row-span-2 text-sm font-semibold text-description-fg leading-none select-none justify-self-start">
           {slotNumber}
         </span>
-        <div className="flex h-4 items-center justify-end w-full">
+        <div className="flex h-4 items-center justify-start">
           <StatusIcon status={status} className="!text-base" />
         </div>
-        <div className="flex h-3 items-center justify-end w-full">
+        <div className="flex h-3 items-center justify-start">
           <i
             className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-xs text-description-fg`}
           />
