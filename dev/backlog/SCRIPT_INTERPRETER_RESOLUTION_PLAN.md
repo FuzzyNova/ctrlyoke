@@ -37,12 +37,15 @@ that for both interpreter probes.
 
 Two constraints worth stating, because they are why this is not a one-liner:
 
-- `resolvePowerShellExecutable` is `protected` and overridden by the test
-  double in `src/test/endConditionEvaluator.test.ts`. A module-level cache must
-  not defeat that override, and must not leak a value resolved under one faked
-  `process.platform` into a later test that fakes another. Cache per resolved
-  platform, or expose a reset used in `teardown` — the dispatch suite already
-  fakes `process.platform` per case.
+- `resolvePowerShellExecutable` is `protected`, but no subclass in
+  `src/test/endConditionEvaluator.test.ts` actually overrides it — the
+  `getScriptCommand - File Dispatch` suite instead fakes `process.platform`
+  directly (`setPlatform()`) and lets the real method run against that faked
+  value, alternating `"win32"`/`"linux"` across sibling `test()` cases in the
+  same process. A naive single-slot module-level cache would leak a value
+  resolved under one faked platform into a later test that fakes the other.
+  Cache per resolved platform value (not a single slot), or expose a reset
+  used in `teardown`.
 - `resolveTypeScriptCommand()` performs up to two `require.resolve` calls per
   dispatch. Those are cheap and filesystem-cached by Node, but they are keyed
   on `path.dirname(scriptPath)`, so a naive single-slot cache would be wrong
