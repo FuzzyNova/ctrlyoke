@@ -138,19 +138,21 @@ function ChipContent({
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
-      {/* Row 1: slot number + type icon */}
-      <div className="flex h-3 items-center justify-between w-full">
-        <span className="text-xxs text-description-fg leading-none select-none">
+      {/* Slot number spans both rows (enlarged); status icon (enlarged) sits
+          beside it on row 1, type icon (unchanged size) sits beside it on
+          row 2 — swapped from the prior status-icon-on-its-own-row layout. */}
+      <div className="grid grid-cols-[auto_1fr] grid-rows-2 items-center w-full gap-x-1">
+        <span className="row-span-2 text-sm font-semibold text-description-fg leading-none select-none justify-self-start">
           {slotNumber}
         </span>
-        <i
-          className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-xs text-description-fg`}
-        />
-      </div>
-
-      {/* Row 2: status icon on its own row to fit the narrow rail. */}
-      <div className="flex h-3 items-center justify-center w-full">
-        <StatusIcon status={status} className="!text-xxs" />
+        <div className="flex h-4 items-center justify-end w-full">
+          <StatusIcon status={status} className="!text-base" />
+        </div>
+        <div className="flex h-3 items-center justify-end w-full">
+          <i
+            className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-xs text-description-fg`}
+          />
+        </div>
       </div>
 
       {/* Row 3: context % on its own row */}
