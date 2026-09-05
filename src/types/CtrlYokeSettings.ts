@@ -64,6 +64,13 @@ export interface StatusLineTrackingSettings {
   format: StatusLineSegment[];
 }
 
+/** Dashboard-only identity colors for correlating workflow steps across panes. */
+export interface StepColorSettings {
+  enabled: boolean;
+  byHarness: Partial<Record<HarnessId, string>>;
+  script: string;
+}
+
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
   general: {
@@ -232,6 +239,8 @@ export interface CtrlYokeGlobalSettings {
     offerTrustForUntrustedFileLinks: boolean;
     /** Hide token cost estimates from dashboard and CLI presentation. */
     hideCost: boolean;
+    /** Dashboard-only step identity color controls. */
+    stepColors: StepColorSettings;
   };
 
   // Server (new)
@@ -492,6 +501,11 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     hideCost: false,
+    stepColors: {
+      enabled: true,
+      byHarness: {},
+      script: "#808080",
+    },
   },
   server: {
     enabled: false,

@@ -26,6 +26,70 @@ function groupMember(
 }
 
 describe("resolveStepColor", () => {
+  const customSettings = {
+    enabled: true,
+    byHarness: { [HARNESS_IDS.CLAUDE_CLI]: "#123456" },
+    script: "#654321",
+  };
+
+  it("uses enabled harness and script overrides", () => {
+    expect(
+      resolveStepColor({
+        step: { prompt: "Use Claude" },
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        settings: customSettings,
+      })
+    ).toBe("#123456");
+    expect(
+      resolveStepColor({
+        step: { type: "script", script: "npm test" },
+        settings: customSettings,
+      })
+    ).toBe("#654321");
+  });
+
+  it("keeps authored colors above settings overrides", () => {
+    expect(
+      resolveStepColor({
+        step: { prompt: "authored", color: "#abcdef" } as WorkflowStep,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        settings: customSettings,
+      })
+    ).toBe("#abcdef");
+  });
+
+  it("keeps tie-break colors above a matching harness override", () => {
+    const firstStep: WorkflowStep = { prompt: "first" };
+    const secondStep: WorkflowStep = { prompt: "second" };
+    const groupMembers = [
+      groupMember(firstStep, 0),
+      groupMember(secondStep, 1),
+    ];
+    const firstColor = resolveStepColor({
+      step: firstStep,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      group,
+      offsetInGroup: 0,
+      settings: customSettings,
+      groupMembers,
+    });
+
+    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(firstColor);
+    expect(firstColor).not.toBe(
+      customSettings.byHarness[HARNESS_IDS.CLAUDE_CLI]
+    );
+  });
+
+  it("disables identity colors when the setting is false", () => {
+    expect(
+      resolveStepColor({
+        step: { prompt: "disabled" },
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        settings: { ...customSettings, enabled: false },
+      })
+    ).toBeUndefined();
+  });
+
   it("uses the built-in harness color by default", () => {
     expect(
       resolveStepColor({

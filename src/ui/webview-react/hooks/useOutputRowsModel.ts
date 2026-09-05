@@ -11,6 +11,7 @@ import { getTargetKey } from "@utils/outputProjection";
 import { measurePhase } from "@utils/performanceProfiler";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
+import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   type ToolCallExpansionSection,
@@ -54,6 +55,7 @@ interface UseOutputRowsModelInput {
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
   effectiveHarness: HarnessId;
+  stepColorSettings?: StepColorSettings;
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -95,6 +97,7 @@ export function useOutputRowsModel({
   finalStep,
   parallelGroups,
   effectiveHarness,
+  stepColorSettings,
   streamingChunks,
   finalStepStreamingChunks,
   isExecutionActive,
@@ -216,6 +219,7 @@ export function useOutputRowsModel({
             finalStep,
             parallelGroups,
             effectiveHarness,
+            stepColorSettings,
             streamingChunks,
             finalStepStreamingChunks,
             isExecutionActive,
@@ -246,6 +250,7 @@ export function useOutputRowsModel({
       finalStep,
       parallelGroups,
       effectiveHarness,
+      stepColorSettings,
       streamingChunks,
       finalStepStreamingChunks,
       isExecutionActive,

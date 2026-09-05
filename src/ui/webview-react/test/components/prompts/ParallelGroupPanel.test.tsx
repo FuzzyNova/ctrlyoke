@@ -118,6 +118,42 @@ describe("ParallelGroupPanel", () => {
     expect(onFailFastChange).toHaveBeenCalledWith(group, false);
   });
 
+  it("restores status rails when identity colors are disabled", () => {
+    render(
+      <ParallelGroupPanel
+        group={group}
+        steps={steps}
+        currentStep={0}
+        executionState={EXECUTION_STATES.IDLE}
+        statuses={[STEP_STATUS.FAILED, STEP_STATUS.PENDING]}
+        retryStates={{}}
+        liveContextWindow={{}}
+        canSetStartPosition
+        stepColorSettings={{ enabled: false, byHarness: {}, script: "#808080" }}
+        getLatestOutput={() => null}
+        getStepHarnessModel={() => ({
+          harnessId: undefined,
+          harnessLabel: undefined,
+          harnessIsDefault: true,
+          modelLabel: undefined,
+          modelIsDefault: true,
+        })}
+        getStepOverrides={() => []}
+        onStepClick={vi.fn()}
+        onSetStartPosition={vi.fn()}
+        onOpenContextMenu={vi.fn()}
+        onFailFastChange={vi.fn()}
+      />
+    );
+
+    const rails = document.querySelectorAll(
+      "[data-workflow-step-index] > div:first-child"
+    );
+    expect(rails).toHaveLength(2);
+    expect(rails[0]).toHaveClass("bg-indicator-error");
+    expect(rails[1]).toHaveClass("bg-indicator-success");
+  });
+
   it("locks terminal members of an active partially settled group only", () => {
     const terminalStep: WorkflowStep = {
       prompt: "done",

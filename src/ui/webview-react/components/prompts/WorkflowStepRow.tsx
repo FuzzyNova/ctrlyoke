@@ -18,7 +18,9 @@ import {
   PauseBoundary,
 } from "./ExecutingStepHighlight";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import { getStepAccentClass } from "@utils/status";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
@@ -69,6 +71,7 @@ export type WorkflowStepRowProps = {
   colorGroup?: ParallelGroupDefinition;
   colorGroupMembers?: readonly StepColorGroupMember[];
   offsetInGroup?: number;
+  stepColorSettings?: StepColorSettings;
   dragHandleProps?: WorkflowStepDragHandleProps;
   getStepHarnessModel: (
     step: WorkflowStep,
@@ -247,6 +250,7 @@ export const SortableWorkflowStepWrapper = React.memo(
       harnessId: harnessModel.harnessId,
       group: stepItemProps.colorGroup,
       offsetInGroup: stepItemProps.offsetInGroup,
+      settings: stepItemProps.stepColorSettings,
       groupMembers: stepItemProps.colorGroupMembers,
     });
     return (
@@ -256,8 +260,8 @@ export const SortableWorkflowStepWrapper = React.memo(
       >
         {showPauseBoundaryBefore && <PauseBoundary />}
         <div
-          className="w-[2px] flex-shrink-0 self-stretch"
-          style={{ backgroundColor: stepColor }}
+          className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(stepItemProps.status)}`}
+          style={stepColor ? { backgroundColor: stepColor } : undefined}
         />
         <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
           {slotNumber}

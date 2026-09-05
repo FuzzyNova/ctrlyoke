@@ -86,7 +86,7 @@ type ChipProps = {
   isExecuting: boolean;
   showPauseBoundaryBefore: boolean;
   isScript: boolean;
-  stepColor: string;
+  stepColor?: string;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -135,8 +135,8 @@ function ChipContent({
       {/* Left identity bar; status is carried by the icon below. */}
       <div
         data-chip-identity-bar
-        className="absolute left-0 top-0 bottom-0 w-[2px]"
-        style={{ backgroundColor: stepColor }}
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
+        style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
       {/* Row 1: slot number + type icon */}
       <div className="flex h-3 items-center justify-between w-full">
@@ -362,7 +362,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     step: WorkflowStep,
     index: number,
     status: StepStatus
-  ): string => {
+  ): string | undefined => {
     const group = parallelGroups.find(
       (candidate) =>
         index >= candidate.startIndex && index <= candidate.endIndex
@@ -384,6 +384,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     return resolveStepColor({
       step,
       harnessId: getChipHarnessId(step, status),
+      settings: globalSettings.stepColors,
       group,
       offsetInGroup,
       groupMembers,

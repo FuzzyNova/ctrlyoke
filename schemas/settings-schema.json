@@ -733,6 +733,53 @@
         "offerTrustForUntrustedFileLinks": {
           "type": "boolean",
           "description": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears."
+        },
+        "stepColors": {
+          "type": "object",
+          "description": "Controls the identity colors used to correlate workflow steps across the dashboard.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Show step identity colors in the workflow steps, chip rail, and output pane."
+            },
+            "byHarness": {
+              "type": "object",
+              "description": "Optional hex color overrides for each harness. Remove an override to follow the built-in theme-aware chart color.",
+              "additionalProperties": false,
+              "properties": {
+                "copilot-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "claude-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "codex-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "opencode-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "qwen-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "antigravity-cli": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                }
+              }
+            },
+            "script": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Hex color used for script steps."
+            }
+          }
         }
       }
     },

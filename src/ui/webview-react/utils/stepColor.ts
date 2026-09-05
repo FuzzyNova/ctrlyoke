@@ -1,4 +1,5 @@
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   HARNESS_CHART_COLORS,
   SCRIPT_STEP_DEFAULT_COLOR,
@@ -20,10 +21,17 @@ export interface ResolveStepColorOptions {
   harnessId?: HarnessId;
   group?: ParallelGroupDefinition;
   offsetInGroup?: number;
-  /** Reserved for the settings-backed color overrides added in a later step. */
-  settings?: unknown;
+  /** Effective dashboard settings for identity colors. */
+  settings?: StepColorSettings;
   /** Group members let the resolver identify a genuine baseline-color collision. */
   groupMembers?: readonly StepColorGroupMember[];
+}
+
+/** Return the theme fallback as a valid value for an HTML color input. */
+export function getHarnessStepColorPickerValue(harnessId: HarnessId): string {
+  return (
+    /#[0-9a-fA-F]{6}/.exec(HARNESS_CHART_COLORS[harnessId])?.[0] ?? "#808080"
+  );
 }
 
 function getAuthoredStepColor(step: WorkflowStep): string | undefined {
@@ -35,17 +43,28 @@ function getAuthoredStepColor(step: WorkflowStep): string | undefined {
   return undefined;
 }
 
-function getHarnessOrScriptColor(harnessId: HarnessId | undefined): string {
+function getHarnessOrScriptColor(
+  harnessId: HarnessId | undefined,
+  settings?: StepColorSettings
+): string {
+  const configuredColor = harnessId
+    ? settings?.byHarness[harnessId]
+    : settings?.script;
   return (
-    (harnessId && HARNESS_CHART_COLORS[harnessId]) || SCRIPT_STEP_DEFAULT_COLOR
+    configuredColor ??
+    (harnessId && HARNESS_CHART_COLORS[harnessId]) ??
+    SCRIPT_STEP_DEFAULT_COLOR
   );
 }
 
 function getBaseStepColor(
   step: WorkflowStep,
-  harnessId: HarnessId | undefined
+  harnessId: HarnessId | undefined,
+  settings?: StepColorSettings
 ): string {
-  return getAuthoredStepColor(step) ?? getHarnessOrScriptColor(harnessId);
+  return (
+    getAuthoredStepColor(step) ?? getHarnessOrScriptColor(harnessId, settings)
+  );
 }
 
 function hashSeed(seed: string): number {
@@ -83,20 +102,23 @@ function getTieBreakColor(
  *
  * The caller supplies the effective harness because the webview has no shared
  * workflow/global harness resolver. Authored colors are read defensively for
- * the persistence step; settings are accepted as a forward-compatible slot
- * but intentionally unused until settings-backed overrides land.
+ * the persistence step, while dashboard settings provide the optional
+ * user-controlled overrides.
  */
 export function resolveStepColor({
   step,
   harnessId,
   group,
   offsetInGroup,
+  settings,
   groupMembers,
-}: ResolveStepColorOptions): string {
+}: ResolveStepColorOptions): string | undefined {
+  if (settings?.enabled === false) return undefined;
+
   const authoredColor = getAuthoredStepColor(step);
   if (authoredColor) return authoredColor;
 
-  const baseColor = getHarnessOrScriptColor(harnessId);
+  const baseColor = getHarnessOrScriptColor(harnessId, settings);
   const hasParallelMembers =
     group !== undefined && group.endIndex - group.startIndex + 1 >= 2;
   if (!hasParallelMembers || offsetInGroup === undefined) {
@@ -112,7 +134,7 @@ export function resolveStepColor({
 
   const siblingBaseColors = groupMembers
     .filter((member) => member.offsetInGroup !== offsetInGroup)
-    .map((member) => getBaseStepColor(member.step, member.harnessId));
+    .map((member) => getBaseStepColor(member.step, member.harnessId, settings));
   if (!siblingBaseColors.includes(baseColor)) return baseColor;
 
   return getTieBreakColor(group, offsetInGroup, baseColor, siblingBaseColors);

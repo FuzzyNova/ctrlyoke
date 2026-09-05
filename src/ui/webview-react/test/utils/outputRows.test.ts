@@ -457,6 +457,46 @@ describe("outputRows", () => {
     ]);
   });
 
+  it("omits output identity bars when step colors are disabled", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "output",
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "auth" }] as WorkflowStep[],
+      finalStep: null,
+      effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
+      stepColorSettings: { enabled: false, byHarness: {}, script: "#808080" },
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    expect(result.rows.some((row) => row.stepColor !== undefined)).toBe(false);
+  });
+
   it("stamps activity labels once per contiguous run in parallel output", () => {
     const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;

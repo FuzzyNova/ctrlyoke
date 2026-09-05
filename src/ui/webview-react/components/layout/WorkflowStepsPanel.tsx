@@ -63,7 +63,11 @@ import {
 } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { ExitButton } from "../shared";
-import { isExecutionBusy, isWorkflowRunning } from "../../utils/status";
+import {
+  getStepAccentClass,
+  isExecutionBusy,
+  isWorkflowRunning,
+} from "../../utils/status";
 import { resolveStepColor } from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
@@ -761,6 +765,7 @@ const WorkflowStepsPanelInner: React.FC<{
         canSetStartPosition={canChangeStartPosition}
         getLatestOutput={getLatestOutput}
         getStepHarnessModel={getStepHarnessModel}
+        stepColorSettings={globalSettings.stepColors}
         getStepOverrides={getStepOverrides}
         onStepClick={handleStepClick}
         onSetStartPosition={handleSetStartPosition}
@@ -792,6 +797,7 @@ const WorkflowStepsPanelInner: React.FC<{
       getPromptStatus,
       getStepHarnessModel,
       getStepOverrides,
+      globalSettings.stepColors,
       handleFailFastChange,
       handleSetStartPosition,
       handleStepClick,
@@ -1159,6 +1165,11 @@ const WorkflowStepsPanelInner: React.FC<{
                     executionState
                   ) ||
                   (isExecutionBusy(executionState) && index === currentStep);
+                const stepColor = resolveStepColor({
+                  step,
+                  harnessId: getStepHarnessModel(step, status).harnessId,
+                  settings: globalSettings.stepColors,
+                });
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -1167,14 +1178,10 @@ const WorkflowStepsPanelInner: React.FC<{
                   >
                     {/* Keep the identity rail separate from the consistently sized number column. */}
                     <div
-                      className="w-[2px] flex-shrink-0 self-stretch"
-                      style={{
-                        backgroundColor: resolveStepColor({
-                          step,
-                          harnessId: getStepHarnessModel(step, status)
-                            .harnessId,
-                        }),
-                      }}
+                      className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
+                      style={
+                        stepColor ? { backgroundColor: stepColor } : undefined
+                      }
                     />
                     <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
                       {slotNumber}
@@ -1182,6 +1189,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     <div className="flex-1 min-w-0">
                       <WorkflowStepRow
                         step={step}
+                        stepColorSettings={globalSettings.stepColors}
                         index={index}
                         slotNumber={slotNumber}
                         currentStep={currentStep}

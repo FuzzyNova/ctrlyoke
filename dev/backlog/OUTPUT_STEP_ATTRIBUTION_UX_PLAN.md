@@ -644,9 +644,10 @@ Worth stating because this pane is unusually sensitive to it (see
    identical without adding `pl-[3px]` or shifting the existing chrome rows. `activityContinuation`,
    the shared streaming rail, and its `pl-2` content indent are removed; step colors are resolved
    once per target using runtime harness metadata first, then the configured/effective harness.
-7. `ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
+7. ~~`ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
-   chrome.
+   chrome.~~ **Done (2026-09-04).** Added persisted enabled/script/per-harness controls,
+   resolver precedence, settings UI, and status/no-bar fallbacks across all attribution surfaces.
 8. The authored `color?` field on a shared `StepDisplayProperties` — schema, parser, export,
    templates, mutations — plus all three editor mounts from §6 together: the header
    `StepColorQuickPicker`, the `PropertiesDrawer` slot, and the `StepColorField` in the script-step

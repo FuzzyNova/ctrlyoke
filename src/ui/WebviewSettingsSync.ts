@@ -907,6 +907,7 @@ export class WebviewSettingsSync {
         ConfigurationUtils.shouldConfirmContinuationDiscardOperations(),
       hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
       hideCost: ConfigurationUtils.shouldHideCost(),
+      stepColors: ConfigurationUtils.getStepColorSettings(),
       isMultiRoot: isMultiRootWorkspace(),
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,

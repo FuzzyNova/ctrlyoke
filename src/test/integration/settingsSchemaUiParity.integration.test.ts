@@ -90,6 +90,7 @@ function isPlainObjectSchema(node: SchemaNode): boolean {
 const DYNAMIC_TEMPLATE_PARENTS = new Set([
   "defaults.models",
   "defaults.additionalArgs",
+  "ui.stepColors.byHarness",
   "notifications.events.hookEvents",
 ]);
 

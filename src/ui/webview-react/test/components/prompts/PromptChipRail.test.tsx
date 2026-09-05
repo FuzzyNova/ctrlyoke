@@ -67,6 +67,40 @@ describe("PromptChipRail", () => {
     expect(scriptChip?.querySelector('[aria-label="pending"]')).not.toBeNull();
   });
 
+  it("restores the status border when identity colors are disabled", () => {
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      stepColors: {
+        ...useSettingsStore.getState().globalSettings.stepColors!,
+        enabled: false,
+      },
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Failed prompt" }],
+      executionState: EXECUTION_STATES.IDLE,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(
+      <PromptChipRail
+        onExpand={vi.fn()}
+        getStepHarnessModel={getStepHarnessModel}
+      />
+    );
+
+    expect(
+      document.querySelector(
+        '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
+      )
+    ).toHaveClass("bg-indicator-error");
+    expect(
+      document.querySelector(
+        '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
+      )
+    ).not.toHaveAttribute("style");
+  });
+
   it("renders the status row before the context row in the three-row layout", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
