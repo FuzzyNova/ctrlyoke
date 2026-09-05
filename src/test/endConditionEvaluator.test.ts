@@ -11,9 +11,18 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
+class TestableEndConditionEvaluator extends EndConditionEvaluator {
+  commandFor(
+    scriptPath: string
+  ): { executable: string; args: string[] } | null {
+    return this.getScriptCommand(scriptPath);
+  }
+}
+
 suite("EndConditionEvaluator Tests", () => {
-  let evaluator: EndConditionEvaluator;
+  let evaluator: TestableEndConditionEvaluator;
   let workspaceRoot: string;
+  const originalPlatform = process.platform;
 
   setup(() => {
     // Create a minimal mock PlatformAdapter for testing
@@ -27,12 +36,16 @@ suite("EndConditionEvaluator Tests", () => {
       getExtensionPath: () => "",
     };
 
-    evaluator = new EndConditionEvaluator(mockPlatform);
+    evaluator = new TestableEndConditionEvaluator(mockPlatform);
   });
 
   teardown(() => {
     evaluator.dispose();
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    Object.defineProperty(process, "platform", {
+      value: originalPlatform,
+      configurable: true,
+    });
   });
 
   suite("parseScriptCommand - Tokenization", () => {
@@ -99,6 +112,126 @@ suite("EndConditionEvaluator Tests", () => {
         EndConditionEvaluator.parseScriptCommand("   ");
       assert.strictEqual(scriptPath, "");
       assert.deepStrictEqual(args, []);
+    });
+  });
+
+  suite("getScriptCommand - File Dispatch", () => {
+    const scriptPath = path.join("workspace", "check");
+    const extensions = [
+      ".py",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".ts",
+      ".sh",
+      ".bat",
+      ".cmd",
+      ".ps1",
+    ] as const;
+
+    function setPlatform(platform: NodeJS.Platform): void {
+      Object.defineProperty(process, "platform", {
+        value: platform,
+        configurable: true,
+      });
+    }
+
+    for (const platform of ["win32", "linux"] as const) {
+      test(`routes every supported extension on ${platform}`, () => {
+        setPlatform(platform);
+
+        for (const extension of extensions) {
+          const command = evaluator.commandFor(`${scriptPath}${extension}`);
+
+          if (extension === ".bat" || extension === ".cmd") {
+            if (platform === "win32") {
+              assert.ok(command);
+              assert.strictEqual(command.executable, "cmd");
+              assert.deepStrictEqual(command.args, [
+                "/c",
+                `${scriptPath}${extension}`,
+              ]);
+            } else {
+              assert.strictEqual(command, null);
+            }
+            continue;
+          }
+
+          assert.ok(command, extension);
+          switch (extension) {
+            case ".py":
+              assert.ok(
+                platform === "win32"
+                  ? command.executable === "python"
+                  : command.executable === "python" ||
+                      command.executable === "python3"
+              );
+              break;
+            case ".js":
+            case ".mjs":
+            case ".cjs":
+              assert.strictEqual(command.executable, "node");
+              break;
+            case ".ts":
+              assert.strictEqual(command.executable, "node");
+              assert.deepStrictEqual(command.args, [
+                "--experimental-strip-types",
+                `${scriptPath}${extension}`,
+              ]);
+              break;
+            case ".sh":
+              assert.strictEqual(
+                command.executable,
+                platform === "win32" ? "bash" : "sh"
+              );
+              break;
+            case ".ps1":
+              assert.ok(
+                platform === "win32"
+                  ? command.executable === "pwsh" ||
+                      command.executable === "powershell.exe"
+                  : command.executable === "pwsh"
+              );
+              assert.deepStrictEqual(command.args, [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                `${scriptPath}${extension}`,
+              ]);
+              break;
+          }
+          assert.deepStrictEqual(command.args, [
+            ...(extension === ".ps1"
+              ? ["-ExecutionPolicy", "Bypass", "-File"]
+              : extension === ".ts"
+                ? ["--experimental-strip-types"]
+                : []),
+            `${scriptPath}${extension}`,
+          ]);
+        }
+      });
+    }
+
+    test("executes an executable file directly", () => {
+      setPlatform("win32");
+      const executablePath = path.join(workspaceRoot, "tool.exe");
+      fs.writeFileSync(executablePath, "not a real executable", "utf8");
+
+      const command = evaluator.commandFor(executablePath);
+      assert.deepStrictEqual(command, {
+        executable: executablePath,
+        args: [],
+      });
+    });
+
+    test("rejects unsupported non-executable files on every platform", () => {
+      const unsupportedPath = path.join(workspaceRoot, "data.txt");
+      fs.writeFileSync(unsupportedPath, "not executable", "utf8");
+
+      for (const platform of ["win32", "linux"] as const) {
+        setPlatform(platform);
+        assert.strictEqual(evaluator.commandFor(unsupportedPath), null);
+      }
     });
   });
 
@@ -389,13 +522,14 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject unsupported script types", async () => {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
-        return;
-      }
+      const scriptPath = path.join(workspaceRoot, "unsupported.txt");
+      fs.writeFileSync(scriptPath, "not executable", "utf8");
 
-      // Test with an unsupported extension
-      // We need an actual file for this, so this is a limited test
+      const result = await evaluator.validateScript(scriptPath);
+      assert.deepStrictEqual(result, {
+        valid: false,
+        error: "Unsupported script type",
+      });
     });
   });
 
@@ -632,17 +766,13 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("marks unsupported script types as errored", async function () {
-      if (process.platform === "win32") {
-        return;
-      }
-
       const scriptPath = path.join(
         workspaceRoot,
         ".ctrlyoke",
-        "unsupported-condition.ps1"
+        "unsupported-condition.txt"
       );
       fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
-      fs.writeFileSync(scriptPath, "Write-Output unsupported");
+      fs.writeFileSync(scriptPath, "unsupported");
       try {
         const result = await evaluate({ script: scriptPath });
         assert.strictEqual(result.passed, false);

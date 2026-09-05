@@ -780,6 +780,40 @@ export const END_CONDITION_SCRIPT_TYPES = {
 export type EndConditionScriptType =
   (typeof END_CONDITION_SCRIPT_TYPES)[keyof typeof END_CONDITION_SCRIPT_TYPES];
 
+/** Interpreter families used when dispatching script files by extension. */
+export const SCRIPT_FILE_INTERPRETER_KINDS = {
+  PYTHON: "python",
+  NODE: "node",
+  TYPESCRIPT: "typescript",
+  SHELL: "shell",
+  CMD: "cmd",
+  POWERSHELL: "powershell",
+} as const;
+
+export type ScriptFileInterpreterKind =
+  (typeof SCRIPT_FILE_INTERPRETER_KINDS)[keyof typeof SCRIPT_FILE_INTERPRETER_KINDS];
+
+/** Static extension-to-interpreter dispatch for condition/script files. */
+export const SCRIPT_FILE_INTERPRETERS = {
+  ".py": SCRIPT_FILE_INTERPRETER_KINDS.PYTHON,
+  ".js": SCRIPT_FILE_INTERPRETER_KINDS.NODE,
+  ".mjs": SCRIPT_FILE_INTERPRETER_KINDS.NODE,
+  ".cjs": SCRIPT_FILE_INTERPRETER_KINDS.NODE,
+  ".ts": SCRIPT_FILE_INTERPRETER_KINDS.TYPESCRIPT,
+  ".sh": SCRIPT_FILE_INTERPRETER_KINDS.SHELL,
+  ".bat": SCRIPT_FILE_INTERPRETER_KINDS.CMD,
+  ".cmd": SCRIPT_FILE_INTERPRETER_KINDS.CMD,
+  ".ps1": SCRIPT_FILE_INTERPRETER_KINDS.POWERSHELL,
+} as const;
+
+export type ScriptFileExtension = keyof typeof SCRIPT_FILE_INTERPRETERS;
+
+/** Windows executable extensions that may be launched without an interpreter. */
+export const DIRECT_EXECUTABLE_EXTENSIONS = {
+  EXE: ".exe",
+  COM: ".com",
+} as const;
+
 export type UserFeedbackSeverity =
   (typeof USER_FEEDBACK_SEVERITY)[keyof typeof USER_FEEDBACK_SEVERITY];
 

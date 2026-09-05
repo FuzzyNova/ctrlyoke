@@ -1,7 +1,6 @@
 # Multi-Line Script Authoring and Script Type Coverage
 
-> **Status:** Deliverable A complete — A.1–A.5 are landed; deliverable B
-> remains open.
+> **Status:** Complete — deliverables A and B are landed.
 >
 > **Priority:** P2 for the multi-line authoring half (a file-format capability
 > the dashboard cannot reach, plus one silent-misexecution hazard); P3 for the
@@ -147,7 +146,7 @@ can land independently.
 
 3. **Serializer round trip — already correct; add regression coverage only.**
    Verified against the current `yaml.dump(..., { lineWidth: -1, noRefs: true,
-   quoteStyle: "double" })` call in `src/ui/WorkflowSerializer.ts:669` (the
+quoteStyle: "double" })` call in `src/ui/WorkflowSerializer.ts:669` (the
    only non-trust-prompt `yaml.dump` in the codebase): js-yaml already emits
    `|` / `|-` block scalars and round-trips losslessly for every shape tested
    — `"a\nb"`, `"a\nb\n"`, a line with a trailing space, a leading-indent
@@ -202,6 +201,10 @@ can land independently.
 5. Optionally read a shebang for extensionless files and dispatch on it, which
    is the only way that shape works on Windows.
 
+Shebang dispatch is explicitly deferred. Extensionless files continue to use
+direct execution only when the host recognizes them as executable; adding
+cross-platform shebang parsing is a separate follow-up.
+
 Extension-to-interpreter dispatch is data, not control flow — it belongs in a
 `const` map in `DashboardConstants.ts` keyed by extension, per the
 no-hardcoded-flow-control rule, with `getScriptCommand` reduced to a lookup plus
@@ -228,12 +231,12 @@ the two platform guards.
 ## Acceptance Criteria
 
 - [x] A multi-line script can be authored in the dashboard, saved, reloaded,
-  and executed with the same text and exit code as the equivalent YAML file.
+      and executed with the same text and exit code as the equivalent YAML file.
 - [x] No script containing a newline is ever dispatched as a file path with
-  arguments.
-- [ ] `.ps1` conditions run on macOS and Linux. (Deliverable B)
-- [ ] An unsupported script extension produces an "unsupported script type"
-  error instead of an attempt to execute the file. (Deliverable B)
+      arguments.
+- [x] `.ps1` conditions run on macOS and Linux. (Deliverable B)
+- [x] An unsupported script extension produces an "unsupported script type"
+      error instead of an attempt to execute the file. (Deliverable B)
 
 ## Non-goals
 
