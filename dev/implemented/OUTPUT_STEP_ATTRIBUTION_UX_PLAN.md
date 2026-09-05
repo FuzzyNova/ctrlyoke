@@ -664,6 +664,72 @@ Worth stating because this pane is unusually sensitive to it (see
    interleaved activity fraction, while the pill retains its undo/redo-status colour and the hidden
    activity pulse remains a filter affordance.
 
+
+---
+
+## Review pass (2026-09-05)
+
+All nine sequencing items landed. Full gate green: **3905 passing** in the extension-host suite,
+**2442 tests across 217 files** in Vitest, 7/7 structure tests, `npm run typecheck` and
+`npm run lint` clean.
+
+Two things were found and fixed during review:
+
+### `WorkflowStepsPanel` resolved group members without group context
+
+`WorkflowStepsPanel`'s completed-step branch called `resolveStepColor` with no `group`,
+`offsetInGroup`, or `groupMembers`, while the output pane, `ParallelGroupPanel`, `WorkflowStepRow`
+and `PromptChipRail` all supplied them.
+
+This looked safe because the completed-steps loop delegates parallel groups to
+`ParallelGroupPanel` — but only when `candidate.endIndex < doneStepCount`, i.e. once **every**
+member is done. While a group is still running, its already-finished members fall through to the
+inline branch, and the interior-member skip check is gated on the same condition so they are not
+skipped either. Those members therefore resolved to their bare harness colour in the steps panel
+while the output pane, which always has the group, resolved the same step to a tie-break colour.
+Two different colours for one step, inside a parallel group — precisely the case the colour exists
+to disambiguate, and a direct break of the bar-to-bar correlation §5 rests on.
+
+Fixed by supplying the group context at that call site, using the exported snapshot-free
+`getParallelGroupForStep`. Regression test added in
+`test/components/layout/WorkflowStepsPanel.test.tsx` ("applies group tie-break colors to a
+completed member of an unfinished parallel group"); it was verified to fail before the fix, with
+the rail rendering `var(--vscode-charts-orange, #d18616)` instead of the expected tie-break entry.
+
+Note the three surface-local `groupMembers` constructions are **not** DRY violations: each resolves
+its harness from a different source (`displayedMembers`, `prompts` + `getPromptStatus`,
+`input.steps` + `effectiveHarness`), which is the documented "caller supplies the harness"
+contract from §4. A shared builder would need a harness callback and would not remove real
+duplication.
+
+### The tie-break palette length must stay a power of two
+
+`getTieBreakColor` seeds each member with `hashSeed(`${group.id}:${offsetInGroup}`) % length`.
+Distinct offsets are only *guaranteed* distinct starts when the modulus is a power of two —
+FNV-1a's final multiply by an odd constant is a bijection mod 2^k, and consecutive offsets differ
+in exactly the low bits that multiply preserves. At the current 8 entries every member of a
+same-harness group provably gets its own colour, measured at 0 duplicates over 20k random group
+ids for groups of 2 through 8.
+
+This is load-bearing and was accidental rather than designed, so it is now documented on the
+constant. §4 above suggests a palette of "8–10 hues"; **9 or 10 would silently regress it** —
+measured, ~1.5% of same-harness groups would hand two members the same colour. Grow the palette
+8 → 16, or switch the seed to `(hashSeed(group.id) + offsetInGroup) % length` first.
+
+### Verified clean, no action needed
+
+- `activityContinuation`, the shared streaming rail and its `pl-2` indent are fully removed; no
+  references remain anywhere in `src/`.
+- The `step-switch` row kind is gone, including its case arms in `useOutputVirtualization` and
+  `outputFind`.
+- The escape hatch works: with `ui.stepColors.enabled: false` every surface falls back —
+  `OutputRow` returns its original bare `<>{content}</>` for non-CLI-group rows and drops the
+  `pl-[3px]`, and the rails revert to `getStepAccentClass`.
+- The reset-to-inherited affordance writes `undefined`, not a hex equal to the default, which is
+  the distinction §6 required so a step keeps following its harness.
+- `getStepAccentClass` is correctly retained: it still serves the final-step chip and every
+  colours-disabled fallback, so §5's "delete it if nothing else claims it" does not apply.
+
 Step 3 is worth doing regardless of whether the colour work ever happens. Steps 4–6 are the colour
 work proper; 7 and 8 are persistence and can lag indefinitely. Step 8 is large enough to split in
 two — the data layer (schema, parser, export, templates, mutations) and the three editor mounts —

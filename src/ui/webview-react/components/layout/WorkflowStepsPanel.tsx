@@ -68,7 +68,11 @@ import {
   isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
-import { resolveStepColor } from "../../utils/stepColor";
+import { getParallelGroupForStep } from "../../utils/outputRows";
+import {
+  resolveStepColor,
+  type StepColorGroupMember,
+} from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -1165,10 +1169,41 @@ const WorkflowStepsPanelInner: React.FC<{
                     executionState
                   ) ||
                   (isExecutionBusy(executionState) && index === currentStep);
+                // A group only renders through ParallelGroupPanel once every
+                // member is done. While it is still finishing, its completed
+                // members fall through to this branch, so the group context has
+                // to be supplied here too — otherwise a member resolves to its
+                // bare harness colour here while the output pane, which always
+                // has the group, resolves the same step to a tie-break colour.
+                const colorGroup = getParallelGroupForStep(
+                  parallelGroups,
+                  index
+                );
+                const colorGroupMembers: StepColorGroupMember[] | undefined =
+                  colorGroup
+                    ? steps
+                        .slice(colorGroup.startIndex, colorGroup.endIndex + 1)
+                        .map((member, offsetInGroup) => ({
+                          step: member,
+                          harnessId: getStepHarnessModel(
+                            member,
+                            getPromptStatus(
+                              member,
+                              colorGroup.startIndex + offsetInGroup
+                            )
+                          ).harnessId,
+                          offsetInGroup,
+                        }))
+                    : undefined;
                 const stepColor = resolveStepColor({
                   step,
                   harnessId: getStepHarnessModel(step, status).harnessId,
                   settings: globalSettings.stepColors,
+                  group: colorGroup,
+                  offsetInGroup: colorGroup
+                    ? index - colorGroup.startIndex
+                    : undefined,
+                  groupMembers: colorGroupMembers,
                 });
                 return (
                   <div

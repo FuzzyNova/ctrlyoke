@@ -1548,7 +1548,20 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
 /** Neutral identity color for script steps, which have no harness. */
 export const SCRIPT_STEP_DEFAULT_COLOR = "var(--vscode-charts-gray, #808080)";
 
-/** Stable, curated colors used only to break same-harness group collisions. */
+/**
+ * Stable, curated colors used only to break same-harness group collisions.
+ *
+ * **Keep the length a power of two.** `resolveStepColor` seeds each member's
+ * starting index with `hashSeed(`${group.id}:${offsetInGroup}`) % length`, and
+ * distinct offsets are only *guaranteed* distinct starts when the modulus is a
+ * power of two: FNV-1a's final multiply by an odd constant is a bijection mod
+ * 2^k, and consecutive offsets differ in the low bits the multiply preserves.
+ * At 8 entries every member of a same-harness group gets its own color. Measured
+ * over 20k random group ids, growing the palette to 9 or 10 entries makes ~1.5%
+ * of groups hand two members the same color — silently defeating the one job the
+ * tie-break exists for. Add colors four at a time (8 -> 16), or switch the seed
+ * to `(hashSeed(group.id) + offsetInGroup) % length` first.
+ */
 export const STEP_COLOR_TIE_BREAK_PALETTE = [
   "#4ec9b0",
   "#c586c0",

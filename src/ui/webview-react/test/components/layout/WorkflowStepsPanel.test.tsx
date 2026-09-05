@@ -20,6 +20,12 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
+import {
+  HARNESS_CHART_COLORS,
+  HARNESS_IDS,
+  STEP_COLOR_TIE_BREAK_PALETTE,
+} from "@root/types/DashboardConstants";
+import { resolveStepColor } from "@utils/stepColor";
 
 function resetStores() {
   useWorkflowStore.getState().resetWorkflow();
@@ -656,5 +662,76 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       newPendingOrder: [0, 2, 1, 3],
       pendingGroups: [],
     });
+  });
+});
+
+describe("WorkflowStepsPanel identity rails", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  /** Resolve a CSS colour to the form jsdom stores on an inline style. */
+  function normalizeColor(value: string): string {
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = value;
+    return probe.style.backgroundColor;
+  }
+
+  it("applies group tie-break colors to a completed member of an unfinished parallel group", () => {
+    // ParallelGroupPanel only takes over once every member is done, so a group
+    // that is still running renders its finished members through the panel's
+    // own completed-step branch. That branch must still supply group context,
+    // or the same step is coloured differently here than in the output pane.
+    const group = {
+      id: "group-identity-rails",
+      startIndex: 0,
+      endIndex: 1,
+      failFast: false,
+    };
+    const runtime = { harness: HARNESS_IDS.CLAUDE_CLI };
+    const steps = [
+      { prompt: "first member", _runtime: runtime },
+      { prompt: "second member", _runtime: runtime },
+      { prompt: "after the group" },
+    ];
+
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps,
+      parallelGroups: [group],
+      currentStep: 1,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    const rail = document.querySelector(
+      '[data-workflow-step-index="0"] > div:first-child'
+    ) as HTMLElement | null;
+    expect(rail).not.toBeNull();
+
+    const withGroupContext = resolveStepColor({
+      step: steps[0],
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      group,
+      offsetInGroup: 0,
+      groupMembers: [
+        { step: steps[0], harnessId: HARNESS_IDS.CLAUDE_CLI, offsetInGroup: 0 },
+        { step: steps[1], harnessId: HARNESS_IDS.CLAUDE_CLI, offsetInGroup: 1 },
+      ],
+    });
+
+    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(withGroupContext);
+    expect(rail?.style.backgroundColor).toBe(
+      normalizeColor(withGroupContext as string)
+    );
+    // Without the group the resolver would hand back the bare harness colour,
+    // which is exactly the mismatch this call site used to produce.
+    expect(rail?.style.backgroundColor).not.toBe(
+      normalizeColor(HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI])
+    );
   });
 });
