@@ -10,7 +10,8 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 
 - `src/test/runTest.ts` launches `@vscode/test-electron`; `src/test/suite/index.ts` discovers compiled `**/**.test.js` files under `out/test`.
 - `src/test/suite/index.ts` ignores only `harness/**`. `src/test/suite/harness/LogParsers.test.ts` is still part of normal `npm test`; only `src/test/harness/**` is excluded.
-- `package.json`: `npm test` runs the extension-host suite **and** `npm run test:ui`; `npm run test:harness` runs only `out/test/harness/**/*.test.js` with a 15-minute timeout; `test:unit` is a narrow grep target, not the full unit suite.
+- `package.json`: `npm test` runs `test:extension` (the extension-host suite), `test:ui`, and `test:packaging`; `npm run test:harness` runs only `out/test/harness/**/*.test.js` with a 15-minute timeout; `test:unit` is a narrow `MOCHA_GREP` target, not the full unit suite.
+- **`compile-tests` is `tsc -p . && node esbuild.js`, and the two halves must stay together.** `tsc` emits unbundled output over esbuild's bundles; the trailing esbuild run restores them. Those bundles alias `vscode` to `src/platform/vscode-shim.ts`, so without it `out/mcp-server.js` and `out/cli.js` die with `MODULE_NOT_FOUND: vscode` when a test spawns them — which reads like an import leak and is not one.
 
 </entryPoints>
 
@@ -33,7 +34,6 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 <pathAndFixtureGotchas>
 
 - Tests execute from compiled `out/test`, not directly from `src/test`. Resolve fixture paths from `__dirname` accordingly instead of assuming `process.cwd()`.
-- **`npm run compile:extension` does not build the tests** — it runs `esbuild.js`, which bundles the extension only. Tests are compiled by `npm run compile-tests` (`tsc -p .`), which `pretest` runs for you. Running `node ./out/test/runTest.js` after only `compile:extension` silently executes the _previous_ build of your test file: it passes, the suite total doesn't move, and nothing reports that your new test never ran. Compile tests (or just use `npm test`) before trusting a green run.
 - Use repo-relative resolution only when the code under test truly depends on repository layout (for example compiled CLI paths or workspace-scoped config files).
 - Never hardcode absolute, OS-specific paths (e.g. `C:\dev\ctrlyoke\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely _represent_ CLI output and never touch the filesystem may stay realistic.
 
@@ -43,7 +43,7 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 
 - `src/test/harness/helpers/harnessRunner.ts` is the shared helper for new real-harness tests: compiled CLI path, cheapest-model defaults, `runWorkflowFile()`, and exit-code-3 skip handling already live there.
 - Real harness tests are correctness checks, not fast unit tests. Keep generous timeouts, require compiled output, and treat CLI exit code `3` as "harness not installed" (skip) rather than a failure.
-- Do **not** run `npm run test:harness` to verify ordinary code changes: it drives **live** AI CLIs, takes ~30 minutes, and individual harnesses can be unavailable (e.g. a vendor pulling CLI support). For verification use `npm test` / `npm run test:ui`, and target specific cases by grep (extension host: set `MOCHA_GREP="<pattern>"` then run `node ./out/test/runTest.js` after compiling — `runTest.js` accepts no `--grep` flag, only the env var read by `src/test/suite/index.ts`; Vitest: pass a file path).
+- Do **not** run `npm run test:harness` to verify ordinary code changes: it drives **live** AI CLIs, takes ~30 minutes, and individual harnesses can be unavailable (e.g. a vendor pulling CLI support). For verification use `npm test` / `npm run test:ui`, and target specific cases by grep (extension host: `MOCHA_GREP="<pattern>" npm run test:extension`, which compiles first — `runTest.js` accepts no `--grep` flag, only the env var read by `src/test/suite/index.ts`; Vitest: pass a file path).
 - Keep real-harness coverage focused on flows that mocks cannot prove: hook delivery, multi-step execution, retry/end-condition behavior, MCP queue extension, and other harness-specific end-to-end contracts.
 
 </harnessTests>
