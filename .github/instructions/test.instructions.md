@@ -24,7 +24,7 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 
 <stateIsolation>
 
-- Many tests mutate process-wide state (`RuntimeMode`, `HOME`/`USERPROFILE`/`APPDATA`, config singletons, temp workspace roots). Always restore globals in `teardown`/`afterEach` to avoid cross-test pollution.
+- Many tests mutate process-wide state (`RuntimeMode`, `HOME`/`USERPROFILE`/`APPDATA`, `process.platform`, config singletons, temp workspace roots). Always restore globals in `teardown`/`afterEach` to avoid cross-test pollution. `process.platform` is the sharpest of these: a suite that fakes it per case without restoring leaves every later test in the run seeing the last value set, so a Windows host silently exercises POSIX branches and the damage surfaces far from its cause.
 - Temporary directories are commonly created with `os.tmpdir()`; cleanup is part of the contract. Do not leave harness workspaces, temp JSONL files, or exported config files behind.
 - Integration tests that need the real extension should activate it via `vscode.extensions.all`/`extension.activate()` and keep that scope narrow; most behavior should stay in unit tests with lightweight fakes.
 
@@ -61,5 +61,6 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 
 - The most important unit-test seams in this tree are runtime state ownership (`WorkflowStateMachine`, `WorkflowInstance`, `WorkflowExecutor`), working/history file persistence, CLI transport/parsing coordinators, property/session resolution, MCP/hooks config file mutation, and path/security validation.
 - When changing workflow persistence or replay behavior, update tests around timeline-backed history (`OutputHistoryManager`, `TimelineRecorder`, `OutputCaptureBuffer`) because those pieces encode cross-file data flow that is easy to break.
+- `schemaUiPropertyRoundTrip.integration.test.ts` and the `WorkflowSerializer` round-trip suite enumerate schema properties and assert each one survives save and has a live editor control. **Never add an opt-out entry (`UI_CONTROL_OPTOUTS`, or a local deferred-field set) just to make a partially-staged step go green.** These suites are the only thing that catches a per-step field missing from `WorkflowSerializer.PROMPT_FIELDS` — that allowlist silently drops anything absent from it, so the field appears editable and is discarded on save. An opt-out added "until the next step" reliably outlives the step that added it and converts a loud failure into a silent data-loss bug; a per-step field is not done until it is in `PROMPT_PROPERTIES`, in `PROMPT_FIELDS`, and registered in the control-id map.
 
 </highValueCoverage>
