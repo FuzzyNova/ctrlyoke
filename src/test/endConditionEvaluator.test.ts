@@ -354,6 +354,88 @@ suite("EndConditionEvaluator Tests", () => {
         assert.strictEqual(evaluator.commandFor(unsupportedPath), null);
       }
     });
+
+    const shebangCases = [
+      { name: "sh", line: "#!/bin/sh", expectedExecutable: "sh" },
+      { name: "bash", line: "#!/bin/bash", expectedExecutable: "bash" },
+      {
+        name: "python3 through env",
+        line: "#!/usr/bin/env python3",
+        expectedExecutable: "python",
+      },
+      {
+        name: "node through env",
+        line: "#!/usr/bin/env node",
+        expectedExecutable: "node",
+      },
+      {
+        name: "extra arguments",
+        line: "#!/usr/bin/env node --experimental-modules",
+        expectedExecutable: "node",
+      },
+      { name: "no shebang", line: "echo no shebang", expectedExecutable: null },
+      { name: "unparseable shebang", line: "#!", expectedExecutable: null },
+      {
+        name: "env -S shebang",
+        line: "#!/usr/bin/env -S node --flag",
+        expectedExecutable: null,
+      },
+      {
+        name: "unsupported interpreter",
+        line: "#!/usr/bin/not-an-interpreter",
+        expectedExecutable: null,
+      },
+      { name: "unreadable file", line: null, expectedExecutable: null },
+    ] as const;
+
+    for (const platform of ["win32", "linux"] as const) {
+      for (const shebangCase of shebangCases) {
+        test(`resolves ${shebangCase.name} shebang on ${platform}`, () => {
+          setPlatform(platform);
+          const scriptPath = path.join(
+            workspaceRoot,
+            `${shebangCase.name.replace(/\s+/g, "-")}-${platform}`
+          );
+          if (shebangCase.line !== null) {
+            fs.writeFileSync(
+              scriptPath,
+              `${shebangCase.line}\necho body`,
+              "utf8"
+            );
+          }
+
+          const command = evaluator.commandFor(scriptPath);
+          if (shebangCase.expectedExecutable === null) {
+            assert.strictEqual(command, null);
+            return;
+          }
+
+          assert.ok(command);
+          if (shebangCase.expectedExecutable === "python") {
+            assert.ok(
+              command.executable === "python" ||
+                command.executable === "python3"
+            );
+          } else {
+            assert.strictEqual(
+              command.executable,
+              shebangCase.expectedExecutable
+            );
+          }
+          assert.deepStrictEqual(command.args, [scriptPath]);
+        });
+      }
+
+      test(`does not read mapped extension files on ${platform}`, () => {
+        setPlatform(platform);
+        for (const extension of [".py", ".ps1", ".sh"] as const) {
+          const command = evaluator.commandFor(
+            path.join(workspaceRoot, `does-not-exist${extension}`)
+          );
+          assert.ok(command, extension);
+        }
+      });
+    }
   });
 
   suite("evaluateCondition - Integration", () => {

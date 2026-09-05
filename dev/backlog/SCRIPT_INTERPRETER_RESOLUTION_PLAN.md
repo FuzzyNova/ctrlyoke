@@ -1,6 +1,6 @@
 # Script Interpreter Resolution Follow-ups
 
-> **Status:** Proposed
+> **Status:** Complete — both follow-up items are landed.
 >
 > **Priority:** P3 — neither item blocks a release. The memoization item is a
 > real (small) extension-host stall; the shebang item is a portability gap that
@@ -57,7 +57,7 @@ Two constraints worth stating, because they are why this is not a one-liner:
   directory or leave this one uncached; do not fold it into the same slot as
   the other two.
 
-## 2. Shebang dispatch for extensionless scripts (deferred B.5)
+## 2. Shebang dispatch for extensionless scripts (deferred B.5) ✅ Completed
 
 **What it is.** A Unix script's first line may be `#!/usr/bin/env python3` (or
 `#!/bin/bash`, `#!/usr/bin/env node`). On Unix the *kernel* reads that line and
@@ -97,11 +97,11 @@ on it instead of returning `null`. Notes:
   `getScriptCommand` calls.
 - [x] Interpreter probes: faking `process.platform` between cases still
   yields that platform's answer (no stale cross-platform cache).
-- Shebang: table-driven over `#!/bin/sh`, `#!/bin/bash`,
+- [x] Shebang: table-driven over `#!/bin/sh`, `#!/bin/bash`,
   `#!/usr/bin/env python3`, `#!/usr/bin/env node`, a shebang with extra
   arguments, a file with no shebang, and an unreadable file — asserted on both
   platforms.
-- Regression: a mapped extension (`.py`, `.ps1`, `.sh`) never reads the file,
+- [x] Regression: a mapped extension (`.py`, `.ps1`, `.sh`) never reads the file,
   so extension dispatch stays a pure path-string decision.
 
 ## Acceptance Criteria

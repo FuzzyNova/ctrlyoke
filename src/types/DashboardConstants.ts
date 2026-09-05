@@ -808,6 +808,14 @@ export const SCRIPT_FILE_INTERPRETERS = {
 
 export type ScriptFileExtension = keyof typeof SCRIPT_FILE_INTERPRETERS;
 
+/** Interpreter names recognized in extensionless script shebangs. */
+export const SCRIPT_SHEBANG_INTERPRETER_NAMES = {
+  ENV: "env",
+  PYTHON: "python",
+  PYTHON3: "python3",
+  NODE: "node",
+} as const;
+
 /** Windows executable extensions that may be launched without an interpreter. */
 export const DIRECT_EXECUTABLE_EXTENSIONS = {
   EXE: ".exe",

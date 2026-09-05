@@ -16,7 +16,10 @@ import {
   END_CONDITION_SCRIPT_TYPES,
   SCRIPT_FILE_INTERPRETER_KINDS,
   SCRIPT_FILE_INTERPRETERS,
+  SCRIPT_SHEBANG_INTERPRETER_NAMES,
   DIRECT_EXECUTABLE_EXTENSIONS,
+  SHELL_KINDS,
+  SHELL_TYPES,
   type ScriptFileExtension,
   type ScriptFileInterpreterKind,
   type EndConditionScriptType,
@@ -37,6 +40,7 @@ import {
 } from "./orchestration/ScriptProcessRunner";
 import {
   getShellInvocationError,
+  resolveShellKind,
   resolveShellInvocation,
 } from "./harness/PtyProcessManager";
 import {
@@ -46,6 +50,11 @@ import {
 
 const pythonExecutables = new Map<string, string>();
 const powerShellExecutables = new Map<string, string>();
+const SHEBANG_SHELL_NAMES = new Set<string>([
+  ...Object.values(SHELL_TYPES),
+  SHELL_KINDS.PWSH,
+  SHELL_KINDS.POWERSHELL,
+]);
 
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
@@ -610,9 +619,11 @@ export class EndConditionEvaluator {
       : undefined;
 
     if (!interpreter) {
-      return this.isDirectlyExecutable(scriptPath, ext)
-        ? { executable: scriptPath, args: [] }
-        : null;
+      if (this.isDirectlyExecutable(scriptPath, ext)) {
+        return { executable: scriptPath, args: [] };
+      }
+
+      return this.getShebangCommand(scriptPath);
     }
 
     // cmd.exe is a Windows-only interpreter. PowerShell 7, unlike cmd.exe, is
@@ -654,6 +665,84 @@ export class EndConditionEvaluator {
     };
 
     return commandByInterpreter[interpreter]();
+  }
+
+  /**
+   * Resolve an extensionless, non-executable script from its shebang. The
+   * interpreter is reduced to the same executable vocabulary used by the
+   * extension dispatcher so POSIX paths are never passed to Windows spawn.
+   */
+  private getShebangCommand(
+    scriptPath: string
+  ): { executable: string; args: string[] } | null {
+    const interpreter = this.readShebangInterpreter(scriptPath);
+    if (!interpreter) {
+      return null;
+    }
+
+    const interpreterName = this.getInterpreterName(interpreter);
+    if (
+      interpreterName === SCRIPT_SHEBANG_INTERPRETER_NAMES.PYTHON ||
+      interpreterName === SCRIPT_SHEBANG_INTERPRETER_NAMES.PYTHON3
+    ) {
+      return {
+        executable: this.resolvePythonExecutable(),
+        args: [scriptPath],
+      };
+    }
+
+    if (interpreterName === SCRIPT_SHEBANG_INTERPRETER_NAMES.NODE) {
+      return {
+        executable: SCRIPT_FILE_INTERPRETER_KINDS.NODE,
+        args: [scriptPath],
+      };
+    }
+
+    if (!SHEBANG_SHELL_NAMES.has(interpreterName)) {
+      return null;
+    }
+
+    return {
+      executable: resolveShellKind(interpreter),
+      args: [scriptPath],
+    };
+  }
+
+  /** Read and parse only the interpreter portion of the file's first line. */
+  private readShebangInterpreter(scriptPath: string): string | null {
+    try {
+      const firstLine = fs
+        .readFileSync(scriptPath, { encoding: "utf8" })
+        .split(/\r?\n/, 1)[0];
+      if (!firstLine.startsWith("#!")) {
+        return null;
+      }
+
+      const tokens = firstLine.slice(2).trim().split(/\s+/);
+      const firstToken = tokens[0];
+      if (!firstToken || firstToken.startsWith("-")) {
+        return null;
+      }
+
+      if (
+        this.getInterpreterName(firstToken) ===
+        SCRIPT_SHEBANG_INTERPRETER_NAMES.ENV
+      ) {
+        const envInterpreter = tokens[1];
+        return envInterpreter && !envInterpreter.startsWith("-")
+          ? envInterpreter
+          : null;
+      }
+
+      return firstToken;
+    } catch {
+      return null;
+    }
+  }
+
+  private getInterpreterName(interpreter: string): string {
+    const baseName = interpreter.split(/[\\/]/).pop() ?? "";
+    return baseName.replace(/\.exe$/i, "").toLowerCase();
   }
 
   private isScriptFileExtension(value: string): value is ScriptFileExtension {
