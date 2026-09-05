@@ -1,5 +1,5 @@
-import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 
@@ -7,8 +7,12 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
  * Resolve one CLI run selector to its durable RunRef exactly once. Numeric
  * selectors are manifest display IDs, never positions in a run list.
  */
+export interface CliRunSummaryProvider {
+  getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]>;
+}
+
 export async function resolveCliRunRef(
-  outputHistoryManager: OutputHistoryManager,
+  outputHistoryManager: CliRunSummaryProvider,
   workflowKey: WorkflowKey,
   selector: string | undefined,
   optionName: "--from" | "--run"
@@ -62,7 +66,7 @@ export async function resolveCliRunRef(
 /** Resolve a selector under the lineage metadata lock before any CLI mutation. */
 export async function resolveCliRunRefAtLineage(
   workspaceRoot: string,
-  outputHistoryManager: OutputHistoryManager,
+  outputHistoryManager: CliRunSummaryProvider,
   workflowKey: WorkflowKey,
   selector: string | undefined,
   optionName: "--from" | "--run"

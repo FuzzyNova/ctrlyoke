@@ -1,6 +1,6 @@
 # MCP/CLI Step Mutation Plan
 
-**Status:** Corrections 1–3 addressed 2026-09-05; MCP scope implemented 2026-09-05; CLI surface remains proposed
+**Status:** Corrections 1–5 addressed 2026-09-05; MCP and CLI scopes implemented 2026-09-05
 **Priority:** P2
 
 Grew out of a discussion of [`MCP_OUTPUT_PAGING_PLAN.md`](MCP_OUTPUT_PAGING_PLAN.md) and the
@@ -89,6 +89,8 @@ mirroring `assertEditableDuringExecution`. The shared Node-only continuation lay
 boundary — see Corrections 1 and 2.
 
 ### CLI — named-run, external caller
+
+**Implemented 2026-09-05.**
 
 `cli.ts` has no step-mutation surface today: `validateCliContinuationTarget` (`cli.ts:1389-1408`)
 already plumbs into the same `RunContinuationService`, but only with action `"continue"`.
@@ -308,13 +310,16 @@ with the `edit_step`/`remove_step`/`reorder_steps` MCP names.
 
 ## Acceptance criteria
 
-- A workflow step can edit, remove, or reorder any not-yet-executed step in its own run via MCP.
-- An external caller can edit, remove, or reorder any not-yet-executed step of a named run via the
-  CLI, including while that run is actively executing (as long as the target step is not the one in
-  flight).
-- Neither surface can touch a completed step or the step currently in flight — enforced once, in the
-  shared `RunContinuationService` methods (Corrections 1 and 2), and covered by tests asserting both
-  a completed-step target and an in-flight-step target are rejected.
-- No new lifecycle control (start/pause/cancel) is introduced on either surface.
-- All 6 existing MCP tools are renamed per the table above, every reference site in the audited
-  blast radius is updated, and no harness's auto-approval/permission behavior regresses.
+- [x] A workflow step can edit, remove, or reorder any not-yet-executed step in its own run via MCP.
+  The three tools use the shared addressed transactions and remain pinned to the server's own run.
+- [x] An external caller can edit, remove, or reorder any not-yet-executed step of a named run via
+  the CLI, including while that run is actively executing (as long as the target step is not the one
+  in flight). `ctrlyoke step` resolves `--run` through `CliRunSelector`, validates with `action:
+  "edit"`, and writes without starting a harness.
+- [x] Neither surface can touch a completed step or the step currently in flight. The shared
+  `RunContinuationService` methods enforce this once; CLI tests cover both rejection cases.
+- [x] No new lifecycle control (start/pause/cancel) is introduced on either surface. CLI step
+  mutations are registered outside `CLI_RUN_OPERATION_KINDS` and never call `runCommand`.
+- [x] All 6 existing MCP tools are renamed per the table above, every reference site in the audited
+  blast radius is updated, and no harness's auto-approval/permission behavior regresses. The MCP
+  and harness test suites already cover this implemented scope.

@@ -20,7 +20,7 @@ For a long workflow this means a step that wants "what did the previous step
 conclude" pulls back the entire response history into its context window. There is
 no way to read a bounded tail, and no way to resume where a previous read stopped.
 
-**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](../backlog/MCP_STEP_MUTATION_PLAN.md)
+**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md)
 completed the naming pass and moved every tool name behind an exported constant. This plan was
 implemented against the final `read_output` tool, so the schema was edited once. Names below use
 the final names.

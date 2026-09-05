@@ -88,11 +88,23 @@ import {
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
+import { registerStepCommands } from "./cli/StepCommandDefinitions";
 import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
 import {
   pruneHistoryCommand,
   relinkHistoryCommand,
 } from "./cli/HistoryCommands";
+import {
+  createStepCommandContext,
+  editStepCommand,
+  removeStepCommand,
+  reorderStepsCommand,
+} from "./cli/StepCommands";
+import type {
+  StepEditOptions,
+  StepRemoveOptions,
+  StepReorderOptions,
+} from "./cli/StepCommandDefinitions";
 import {
   checkSecretsCommand,
   createCliSecretCommandDependencies,
@@ -115,7 +127,10 @@ import {
   getStateHomeWarning,
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
-import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import {
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "./utils/RunHistoryStoragePolicy";
 import { secretRedactionService } from "./utils/SecretRedactionService";
 import {
   analyzeCliCompatibility,
@@ -181,6 +196,36 @@ registerHistoryCommands(program, {
         isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
         confirm: promptYesNo,
       })
+    ),
+});
+
+registerStepCommands(program, {
+  edit: (file, options) =>
+    handleStepCommand(
+      prepareStepCommand(options).then((context) =>
+        editStepCommand(file, options, context, {
+          writeOut: (message) => console.log(message),
+        })
+      ),
+      options.json === true
+    ),
+  remove: (options) =>
+    handleStepCommand(
+      prepareStepCommand(options).then((context) =>
+        removeStepCommand(options, context, {
+          writeOut: (message) => console.log(message),
+        })
+      ),
+      options.json === true
+    ),
+  reorder: (options) =>
+    handleStepCommand(
+      prepareStepCommand(options).then((context) =>
+        reorderStepsCommand(options, context, {
+          writeOut: (message) => console.log(message),
+        })
+      ),
+      options.json === true
     ),
 });
 
@@ -896,6 +941,49 @@ function handleHistoryCommand(operation: Promise<void>): Promise<void> {
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);
   });
+}
+
+function handleStepCommand(
+  operation: Promise<void>,
+  json: boolean
+): Promise<void> {
+  return operation.catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({ schemaVersion: 1, success: false, error: message }) +
+          "\n"
+      );
+    } else {
+      console.error(chalk.red(`Error: ${message}`));
+    }
+    process.exit(2);
+  });
+}
+
+async function prepareStepCommand(
+  options: StepEditOptions | StepRemoveOptions | StepReorderOptions
+) {
+  const workspaceRoot = path.resolve(options.cwd ?? process.cwd());
+  Log.initializeCli(workspaceRoot, false);
+
+  const userBackend = createUserConfigBackend();
+  const workspaceBackend = createWorkspaceConfigBackend(workspaceRoot);
+  configService.setUserBackend(userBackend);
+  configService.setWorkspaceBackend(workspaceBackend);
+  configService.setCliOverlay({});
+
+  if (!isRunHistoryLocationInitialized()) {
+    initializeRunHistoryLocation(configService.get("storage").runHistoryLocation);
+  }
+
+  const gitToplevel = await repoToplevel(workspaceRoot);
+  await new ProjectStateRegistry().initialize(
+    workspaceRoot,
+    gitToplevel ?? undefined
+  );
+
+  return createStepCommandContext(workspaceRoot, cliRunnerHostIdentity);
 }
 
 function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
