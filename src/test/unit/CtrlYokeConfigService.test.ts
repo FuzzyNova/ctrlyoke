@@ -576,4 +576,29 @@ suite("FileConfigBackend", () => {
       hidden: [],
     });
   });
+
+  test("round-trips step color settings through the config hierarchy", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const backend = new FileConfigBackend(configPath);
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend(backend);
+
+    await service.set("ui.stepColors.enabled", false, "user");
+    await service.set("ui.stepColors.byHarness.claude-cli", "#123456", "user");
+    await service.set("ui.stepColors.script", "#654321", "user");
+
+    assert.deepStrictEqual(service.get("ui").stepColors, {
+      enabled: false,
+      byHarness: { "claude-cli": "#123456" },
+      script: "#654321",
+    });
+    assert.deepStrictEqual(
+      JSON.parse(fs.readFileSync(configPath, "utf-8")).ui.stepColors,
+      {
+        enabled: false,
+        byHarness: { "claude-cli": "#123456" },
+        script: "#654321",
+      }
+    );
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowStep } from "@store/workflowStore";
-import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
+import {
+  buildOutputRows,
+  estimateOutputRowHeight,
+  getConcurrentGroupForStep,
+  getParallelGroupForStep,
+} from "@utils/outputRows";
 import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
@@ -25,6 +30,8 @@ import {
   getStreamingChunkKey,
 } from "@/types/messages";
 import {
+  HARNESS_CHART_COLORS,
+  HARNESS_IDS,
   OUTPUT_ROW_KINDS,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
@@ -345,6 +352,14 @@ describe("outputRows", () => {
       diffExpansionState: new Map(),
       toolCallExpansionState: new Map(),
       defaultDiffCollapsed: false,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
     });
 
     const eventRows = result.rows.filter(
@@ -360,18 +375,11 @@ describe("outputRows", () => {
       false,
     ]);
 
-    // The rail is a continuous left edge down a continuation slice's content,
-    // so unlike the label it stays on every one of that slice's rows —
-    // stamping it per slice would break it into scattered dashes.
-    expect(eventRows.map((row) => row.activityContinuation === true)).toEqual([
-      false,
-      false,
-      true,
-      true,
-    ]);
+    // The identity bar is carried by every row, including continuation slices.
+    expect(eventRows.every((row) => row.stepColor !== undefined)).toBe(true);
   });
 
-  it("renders semantic activity switches and continuation rails", () => {
+  it("paints sequential activity rows without sequential activity labels", () => {
     const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
     const allMessages = mapOrderedHistoryEntriesToMessages(
@@ -428,22 +436,157 @@ describe("outputRows", () => {
       diffExpansionState: new Map(),
       toolCallExpansionState: new Map(),
       defaultDiffCollapsed: false,
+      effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
     });
 
     const activityRows = result.rows.filter(
       (row) =>
         row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
-        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
-        row.rowKind === OUTPUT_ROW_KINDS.STEP_SWITCH
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
     );
     expect(activityRows.map((row) => row.rowKind)).toEqual([
       OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
-      OUTPUT_ROW_KINDS.STEP_SWITCH,
       OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
     ]);
-    expect(activityRows[0]?.activityFirst).toBe(true);
-    expect(activityRows[1]?.activityContinuation).toBe(true);
+    expect(activityRows.some((row) => row.activityFirst)).toBe(false);
+    expect(activityRows.map((row) => row.stepColor)).toEqual([
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+    ]);
+  });
+
+  it("omits output identity bars when step colors are disabled", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "output",
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "auth" }] as WorkflowStep[],
+      finalStep: null,
+      effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
+      stepColorSettings: { enabled: false, byHarness: {}, script: "#808080" },
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    expect(result.rows.some((row) => row.stepColor !== undefined)).toBe(false);
+  });
+
+  it("stamps activity labels once per contiguous run in parallel output", () => {
+    const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A1",
+        },
+        {
+          timestampMs: 1001,
+          sequence: 2,
+          target: targetB,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "B1",
+        },
+        {
+          timestampMs: 1002,
+          sequence: 3,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A2",
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
+      finalStep: null,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: true,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const activityRows = result.rows.filter(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+    );
+    expect(activityRows.map((row) => row.activityFirst === true)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it("separates the parallel-group predicate from the snapshot-gated undo predicate", () => {
+    const parallelGroups = [
+      {
+        id: "parallel-0-1",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: false,
+      },
+    ];
+    const input = {
+      parallelGroups,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+    };
+
+    expect(getParallelGroupForStep(parallelGroups, 1)).toBe(parallelGroups[0]);
+    expect(getConcurrentGroupForStep(input, 1)).toBeUndefined();
   });
 
   it("gives every row a unique key and opens each attempt's chrome once across activity slices", () => {
@@ -480,8 +623,16 @@ describe("outputRows", () => {
     );
     const result = buildOutputRows({
       allMessages,
-      steps: [{ name: "One" }] as WorkflowStep[],
+      steps: [{ name: "One" }, { name: "Two" }] as WorkflowStep[],
       finalStep: null,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
       streamingChunks: {},
       finalStepStreamingChunks: {},
       isExecutionActive: false,

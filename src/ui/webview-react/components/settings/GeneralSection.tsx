@@ -3,6 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { useEffect, useState } from "react";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
@@ -28,12 +29,18 @@ export function GeneralSection({
 }: Props) {
   const general = settings.settings.general;
   const ui = settings.settings.ui;
+  const stepColors = ui.stepColors;
   const exec = settings.settings.execution;
   const runs = settings.settings.runs;
   const sources = settings.sources as Record<string, SettingSource>;
   const isMultiRoot = settings.isMultiRoot;
 
   const rowProps = { sources, onReset, activeScope };
+  const [localScriptColor, setLocalScriptColor] = useState(stepColors.script);
+
+  useEffect(() => {
+    setLocalScriptColor(stepColors.script);
+  }, [stepColors.script]);
 
   return (
     <div className="space-y-1">
@@ -107,6 +114,31 @@ export function GeneralSection({
           path="ui.showCliCommand"
           {...rowProps}
         />
+        <SettingToggleRow
+          label="Show step identity colors"
+          description="Show the same step color across the steps panel, chip rail, and output pane."
+          checked={stepColors.enabled}
+          onChange={(v) => onUpdate("ui.stepColors.enabled", v)}
+          path="ui.stepColors.enabled"
+          {...rowProps}
+        />
+        <SettingInputRow
+          label="Script step color"
+          description="Identity color used for script steps when step colors are enabled."
+          id="ui-step-colors-script"
+          path="ui.stepColors.script"
+          {...rowProps}
+        >
+          <input
+            id="ui-step-colors-script"
+            type="color"
+            value={localScriptColor}
+            onChange={(e) => setLocalScriptColor(e.target.value)}
+            onBlur={(e) => onUpdate("ui.stepColors.script", e.target.value)}
+            className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+            title="Script step color"
+          />
+        </SettingInputRow>
         <SettingToggleRow
           label="Show token cost estimates"
           description="Show source-labelled token cost estimates. These are not incremental subscription spend."

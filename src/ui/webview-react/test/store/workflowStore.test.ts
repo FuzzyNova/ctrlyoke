@@ -83,6 +83,29 @@ describe("loadWorkflow", () => {
     expect(store().totalSteps).toBe(3);
   });
 
+  it("preserves authored colors through step-list replacement and edits", () => {
+    const first = makePrompt({ prompt: "first", color: "#123456" });
+    const second = makePrompt({ prompt: "second", color: "#abcdef" });
+    store().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [first, second],
+    });
+
+    // The extension uses this action for insert, delete, and reorder results.
+    store().setPrompts([second, first]);
+    expect(store().steps.map((step) => step.color)).toEqual([
+      "#abcdef",
+      "#123456",
+    ]);
+
+    // Same-index property updates must retain fields not mentioned by the edit.
+    store().updatePrompt(0, { prompt: "edited" });
+    expect(store().steps[0]).toMatchObject({
+      prompt: "edited",
+      color: "#abcdef",
+    });
+  });
+
   it("defaults all prompts to PENDING status", () => {
     store().loadWorkflow({
       fileName: "wf.ctrlyoke.yaml",

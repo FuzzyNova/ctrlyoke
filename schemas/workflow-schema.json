@@ -378,6 +378,9 @@
         "enabled": {
           "$ref": "#/definitions/scriptStep/properties/enabled"
         },
+        "color": {
+          "$ref": "#/definitions/scriptStep/properties/color"
+        },
         "executionMode": {
           "$ref": "#/definitions/scriptStep/properties/executionMode"
         },
@@ -827,6 +830,11 @@
               "type": "boolean",
               "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
             },
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Optional authored identity colour for this step."
+            },
             "prompt": {
               "type": "string",
               "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
@@ -855,6 +863,11 @@
         "enabled": {
           "type": "boolean",
           "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Optional authored identity colour for this step."
         },
         "executionMode": {
           "type": "string",

@@ -127,6 +127,7 @@ function authorableProperties(node: SchemaObject): string[] {
  * schema changes.
  */
 const SAMPLES: Record<string, unknown> = {
+  color: "#123456",
   additionalArgs: "--effort high",
   agent: "seeded-agent",
   compareSource: "stdout",
@@ -377,12 +378,15 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
 ]);
 
 /**
- * Deliberately CLI-only properties may be listed here, but every entry needs
- * a reason. Keep this empty: all currently authorable properties have a
- * dashboard control. A future opt-out must explain why it is safe to leave a
- * schema property unreachable from the UI.
+ * Properties temporarily reachable only through persisted/hand-authored data
+ * may be listed here with an explanation while their editor control is staged.
  */
-const UI_CONTROL_OPTOUTS = new Map<string, string>();
+const UI_CONTROL_OPTOUTS = new Map<string, string>([
+  [
+    "color",
+    "data layer landed in sequencing item 8; editor mounts are the follow-up",
+  ],
+]);
 
 const WEBVIEW_SOURCE_ROOT = path.resolve(
   __dirname,

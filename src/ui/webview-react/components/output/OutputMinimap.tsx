@@ -64,6 +64,8 @@ export interface MinimapStep {
   hidden: boolean;
   selected?: boolean;
   hasHiddenActivity: boolean;
+  /** Resolved by buildOutputRows through the shared step-color resolver. */
+  stepColor?: string;
   /**
    * Available undo/redo actions for this step.
    * Both can be non-null in mixed state (some files undone, others not).
@@ -107,8 +109,8 @@ interface OutputMinimapProps {
  * metric from OutputSection so the rail overlays, viewport thumb, and scroll
  * navigation all operate in the same coordinate space.
  *
- * Hover fix: the popup and dot are siblings inside a single flex-row container,
- * so moving the mouse from the dot to the popup never leaves the container and
+ * Hover fix: the popup and pill are siblings inside a single flex-row container,
+ * so moving the mouse from the pill to the popup never leaves the container and
  * never triggers onMouseLeave.
  */
 const MIN_THUMB_PX = 24;
@@ -747,43 +749,44 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               : hasUndo
                 ? "text-link-fg"
                 : "text-description-fg";
-        const activityMarkerClass = step.selected
-          ? "bg-focus-border"
-          : "bg-output-streaming";
         const hideShowLabel = `${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`;
+        const hasActivitySpan =
+          step.firstActivityScrollFraction !== undefined &&
+          step.latestActivityScrollFraction !== undefined &&
+          step.firstActivityScrollFraction !==
+            step.latestActivityScrollFraction;
+        const activitySpanTop = hasActivitySpan
+          ? Math.min(
+              step.firstActivityScrollFraction ?? 0,
+              step.latestActivityScrollFraction ?? 0
+            )
+          : 0;
+        const activitySpanHeight = hasActivitySpan
+          ? Math.abs(
+              (step.latestActivityScrollFraction ?? 0) -
+                (step.firstActivityScrollFraction ?? 0)
+            )
+          : 0;
 
         return (
           <React.Fragment key={step.key}>
-            {/* Activity markers share the pills track with the marker pill, so
-                they anchor to the pills/diff boundary rather than the rail's
-                outer edge — otherwise they would sit on top of the diff track. */}
-            {step.firstActivityScrollFraction !== undefined &&
-              step.latestActivityScrollFraction !== undefined &&
-              step.firstActivityScrollFraction !==
-                step.latestActivityScrollFraction && (
-                <span
-                  data-minimap-activity-marker="first"
-                  className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] h-1 w-1 rounded-full ${activityMarkerClass}`}
-                  style={{
-                    top: `${step.firstActivityScrollFraction * 100}%`,
-                    transform: "translate(0.5px, -50%)",
-                  }}
-                  aria-hidden="true"
-                />
-              )}
-            {step.latestActivityScrollFraction !== undefined &&
-              step.latestActivityScrollFraction !==
-                step.firstActivityScrollFraction && (
-                <span
-                  data-minimap-activity-marker="latest"
-                  className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] h-1.5 w-1.5 rounded-full ${activityMarkerClass}`}
-                  style={{
-                    top: `${step.latestActivityScrollFraction * 100}%`,
-                    transform: "translate(0.5px, -50%)",
-                  }}
-                  aria-hidden="true"
-                />
-              )}
+            {/* The activity span uses the channel formerly occupied by the
+                first/latest dots. It stays beside the pill so the pill's
+                undo/redo color remains independent of step identity. */}
+            {hasActivitySpan && (
+              <span
+                data-minimap-activity-band
+                className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] w-1 ${step.stepColor ? "" : step.selected ? "bg-focus-border" : "bg-output-streaming"}`}
+                style={{
+                  top: `${Math.round(activitySpanTop * 1_000_000) / 10_000}%`,
+                  height: `${Math.round(activitySpanHeight * 1_000_000) / 10_000}%`,
+                  ...(step.stepColor
+                    ? { backgroundColor: step.stepColor }
+                    : {}),
+                }}
+                aria-hidden="true"
+              />
+            )}
             {/* Outer row: anchored to the boundary between the pills and diff
                 tracks (not the rail's outer edge), so the marker pill lands
                 inside the pills track while the popup grows further left,

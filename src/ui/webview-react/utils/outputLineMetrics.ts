@@ -51,8 +51,8 @@ export const OUTPUT_ROW_GROUP_END_PADDING = 7;
  * activity slice: a `text-xs` line (16px, measured) plus `mb-1`. It is a fixed
  * cost the row's own content estimate cannot see, so it is charged here.
  *
- * The continuation variant renders no label — just an 8px `pl-2` indent, which
- * stays inside the calibrated horizontal allowance.
+ * The identity bar is an inset box shadow, so it adds no measured geometry and
+ * does not need an estimator allowance.
  */
 export const OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT = 20;
 

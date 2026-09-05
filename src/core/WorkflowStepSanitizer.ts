@@ -452,6 +452,7 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
   const commonFields = {
     ...(typeof step.name === "string" && { name: step.name }),
     ...(step.enabled === false && { enabled: false }),
+    ...(typeof step.color === "string" && { color: step.color }),
   };
 
   if (step.type === STEP_TYPES.SCRIPT) {
@@ -601,6 +602,7 @@ export function buildScriptStepFromProperties(
       executionMode: props.executionMode as ExecutionMode,
     }),
     ...(name?.trim() ? { name: name.trim() } : {}),
+    ...(typeof props.color === "string" && { color: props.color }),
     ...((secrets !== undefined || props.secrets === null) && {
       secrets: secrets ?? null,
     }),
@@ -689,6 +691,7 @@ export function buildPromptStepProperties(
     ...(props?.enabled !== undefined && {
       enabled: props.enabled as boolean,
     }),
+    ...(typeof props?.color === "string" && { color: props.color }),
     ...(props?.resumeSession !== undefined && {
       resumeSession: coerce<boolean>(props.resumeSession),
     }),

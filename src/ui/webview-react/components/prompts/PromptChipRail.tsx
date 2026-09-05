@@ -9,7 +9,7 @@
  * available space — no fixed width is applied here.
  */
 import React, { useCallback } from "react";
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -34,14 +34,18 @@ import {
   MESSAGE_TYPES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
+  type HarnessId,
   type StepStatus,
 } from "../../types/messages";
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
+import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import {
   getStepAccentClass,
   isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
+import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import type { StepHarnessModel } from "./WorkflowStepRow";
 import {
   buildWorkflowStepEnabledState,
   isScriptWorkflowStep,
@@ -55,7 +59,7 @@ import { isStepExecutionLocked } from "./ParallelGroupPanel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isScriptStep(step: { type?: string }): boolean {
+function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
 }
 
@@ -82,6 +86,7 @@ type ChipProps = {
   isExecuting: boolean;
   showPauseBoundaryBefore: boolean;
   isScript: boolean;
+  stepColor?: string;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -94,10 +99,10 @@ function ChipContent({
   isExecuting,
   showPauseBoundaryBefore,
   isScript,
+  stepColor,
   onChipClick,
   onOpenContextMenu,
 }: ChipProps) {
-  const borderBarClass = getChipBorderClass(status);
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <div
@@ -127,12 +132,14 @@ function ChipContent({
           testId="executing-chip-highlight"
         />
       )}
-      {/* Left status border bar */}
+      {/* Left identity bar; status is carried by the icon below. */}
       <div
-        className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
+        data-chip-identity-bar
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
+        style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
       {/* Row 1: slot number + type icon */}
-      <div className="flex items-center justify-between w-full">
+      <div className="flex h-3 items-center justify-between w-full">
         <span className="text-xxs text-description-fg leading-none select-none">
           {slotNumber}
         </span>
@@ -141,9 +148,14 @@ function ChipContent({
         />
       </div>
 
-      {/* Row 2: context % on its own row */}
+      {/* Row 2: status icon on its own row to fit the narrow rail. */}
+      <div className="flex h-3 items-center justify-center w-full">
+        <StatusIcon status={status} className="!text-xxs" />
+      </div>
+
+      {/* Row 3: context % on its own row */}
       {contextPct !== undefined && (
-        <div className="flex items-center justify-end w-full mt-0.5">
+        <div className="flex h-3 items-center justify-end w-full">
           <span className="text-xxs text-description-fg leading-none">
             {contextPct}%
           </span>
@@ -240,6 +252,11 @@ function FinalStepChip({
 interface PromptChipRailProps {
   /** Called when the user taps the header to expand to the full panel view. */
   onExpand: () => void;
+  /** Shared effective harness resolution used by the expanded step surfaces. */
+  getStepHarnessModel?: (
+    step: WorkflowStep,
+    status: StepStatus
+  ) => StepHarnessModel;
 }
 
 /**
@@ -252,7 +269,10 @@ interface PromptChipRailProps {
  * with position-management options. A final step chip is rendered at the
  * bottom.
  */
-export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
+export const PromptChipRail: React.FC<PromptChipRailProps> = ({
+  onExpand,
+  getStepHarnessModel,
+}) => {
   const {
     steps: prompts,
     parallelGroups,
@@ -265,7 +285,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   } = useWorkflowStore();
   const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
-  const { globalSettings } = useSettingsStore();
+  const { globalSettings, workflowProperties } = useSettingsStore();
 
   const activeExternalOwner = useActiveWorkflowExternalOwner();
   const isExternallyManaged = activeExternalOwner != null;
@@ -323,6 +343,53 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   );
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
+
+  const getChipHarnessId = (
+    step: WorkflowStep,
+    status: StepStatus
+  ): HarnessId | undefined => {
+    if (isScriptStep(step)) return undefined;
+    if (getStepHarnessModel) return getStepHarnessModel(step, status).harnessId;
+    return (
+      (step._runtime?.harness as HarnessId | undefined) ??
+      (step.harness as HarnessId | undefined) ??
+      (workflowProperties.harness as HarnessId | undefined) ??
+      globalSettings.harness
+    );
+  };
+
+  const getChipStepColor = (
+    step: WorkflowStep,
+    index: number,
+    status: StepStatus
+  ): string | undefined => {
+    const group = parallelGroups.find(
+      (candidate) =>
+        index >= candidate.startIndex && index <= candidate.endIndex
+    );
+    const offsetInGroup = group ? index - group.startIndex : undefined;
+    const groupMembers: StepColorGroupMember[] | undefined = group
+      ? prompts
+          .slice(group.startIndex, group.endIndex + 1)
+          .map((memberStep, offset) => ({
+            step: memberStep,
+            harnessId: getChipHarnessId(
+              memberStep,
+              getPromptStatus(memberStep, group.startIndex + offset)
+            ),
+            offsetInGroup: offset,
+          }))
+      : undefined;
+
+    return resolveStepColor({
+      step,
+      harnessId: getChipHarnessId(step, status),
+      settings: globalSettings.stepColors,
+      group,
+      offsetInGroup,
+      groupMembers,
+    });
+  };
 
   // Final step derived state
   const hasFinalStep = !!finalStep;
@@ -440,6 +507,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   slotNumber={i + 1}
                   status={status}
                   contextPct={contextPct}
+                  stepColor={getChipStepColor(prompt, i, status)}
                   isExecuting={false}
                   showPauseBoundaryBefore={false}
                   isScript={isScriptStep(prompt)}
@@ -496,6 +564,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   slotNumber={slotNumber}
                   status={status}
                   contextPct={contextPct}
+                  stepColor={getChipStepColor(prompt, index, status)}
                   isExecuting={isRunning && isCurrentStep}
                   showPauseBoundaryBefore={
                     isPaused && currentStep > 0 && visualIdx === 0

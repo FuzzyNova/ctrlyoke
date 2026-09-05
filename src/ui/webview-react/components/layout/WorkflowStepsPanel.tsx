@@ -27,15 +27,11 @@ import {
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
-import {
-  type PromptOverride,
-} from "../prompts/WorkflowStep";
+import { type PromptOverride } from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
-import {
-  PauseBoundary,
-} from "../prompts/ExecutingStepHighlight";
+import { PauseBoundary } from "../prompts/ExecutingStepHighlight";
 import {
   WorkflowStepRow,
   SortableWorkflowStepWrapper,
@@ -72,6 +68,11 @@ import {
   isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
+import { getParallelGroupForStep } from "../../utils/outputRows";
+import {
+  resolveStepColor,
+  type StepColorGroupMember,
+} from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -79,9 +80,7 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-import {
-  isParallelGroupTopologyLocked,
-} from "@utils/stepContextMenuItems";
+import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 
 type PendingDragContainer = {
   id: string;
@@ -283,9 +282,7 @@ export function buildPendingReorderPayload(
     if (!container) continue;
     const start = newPendingOrder.length;
     for (const item of container.items) {
-      newPendingOrder.push(
-        absoluteIndexFromStepDragId(item) - currentStep
-      );
+      newPendingOrder.push(absoluteIndexFromStepDragId(item) - currentStep);
     }
     if (container.groupId) {
       const group = parallelGroups.find(
@@ -739,12 +736,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const handleFailFastChange = useCallback(
     (group: (typeof parallelGroups)[number], failFast: boolean) => {
       if (
-        isParallelGroupTopologyLocked(
-          group,
-          steps,
-          currentStep,
-          executionState
-        )
+        isParallelGroupTopologyLocked(group, steps, currentStep, executionState)
       ) {
         return;
       }
@@ -785,6 +777,7 @@ const WorkflowStepsPanelInner: React.FC<{
         canSetStartPosition={canChangeStartPosition}
         getLatestOutput={getLatestOutput}
         getStepHarnessModel={getStepHarnessModel}
+        stepColorSettings={globalSettings.stepColors}
         getStepOverrides={getStepOverrides}
         onStepClick={handleStepClick}
         onSetStartPosition={handleSetStartPosition}
@@ -816,6 +809,7 @@ const WorkflowStepsPanelInner: React.FC<{
       getPromptStatus,
       getStepHarnessModel,
       getStepOverrides,
+      globalSettings.stepColors,
       handleFailFastChange,
       handleSetStartPosition,
       handleStepClick,
@@ -993,7 +987,12 @@ const WorkflowStepsPanelInner: React.FC<{
   }
 
   if (stepsCollapsed && !isMobileMode) {
-    return <PromptChipRail onExpand={handleToggle} />;
+    return (
+      <PromptChipRail
+        onExpand={handleToggle}
+        getStepHarnessModel={getStepHarnessModel}
+      />
+    );
   }
 
   return (
@@ -1178,15 +1177,54 @@ const WorkflowStepsPanelInner: React.FC<{
                     executionState
                   ) ||
                   (isExecutionBusy(executionState) && index === currentStep);
+                // A group only renders through ParallelGroupPanel once every
+                // member is done. While it is still finishing, its completed
+                // members fall through to this branch, so the group context has
+                // to be supplied here too — otherwise a member resolves to its
+                // bare harness colour here while the output pane, which always
+                // has the group, resolves the same step to a tie-break colour.
+                const colorGroup = getParallelGroupForStep(
+                  parallelGroups,
+                  index
+                );
+                const colorGroupMembers: StepColorGroupMember[] | undefined =
+                  colorGroup
+                    ? steps
+                        .slice(colorGroup.startIndex, colorGroup.endIndex + 1)
+                        .map((member, offsetInGroup) => ({
+                          step: member,
+                          harnessId: getStepHarnessModel(
+                            member,
+                            getPromptStatus(
+                              member,
+                              colorGroup.startIndex + offsetInGroup
+                            )
+                          ).harnessId,
+                          offsetInGroup,
+                        }))
+                    : undefined;
+                const stepColor = resolveStepColor({
+                  step,
+                  harnessId: getStepHarnessModel(step, status).harnessId,
+                  settings: globalSettings.stepColors,
+                  group: colorGroup,
+                  offsetInGroup: colorGroup
+                    ? index - colorGroup.startIndex
+                    : undefined,
+                  groupMembers: colorGroupMembers,
+                });
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
                     className="relative flex items-stretch"
                     data-workflow-step-index={index}
                   >
-                    {/* Keep the status accent separate from the consistently sized number column. */}
+                    {/* Keep the identity rail separate from the consistently sized number column. */}
                     <div
-                      className={`w-[2px] flex-shrink-0 self-stretch ${getStepAccentClass(status)}`}
+                      className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
+                      style={
+                        stepColor ? { backgroundColor: stepColor } : undefined
+                      }
                     />
                     <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
                       {slotNumber}
@@ -1194,6 +1232,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     <div className="flex-1 min-w-0">
                       <WorkflowStepRow
                         step={step}
+                        stepColorSettings={globalSettings.stepColors}
                         index={index}
                         slotNumber={slotNumber}
                         currentStep={currentStep}
@@ -1244,12 +1283,9 @@ const WorkflowStepsPanelInner: React.FC<{
                     if (container.groupId) {
                       pendingOffset += container.items.length;
                       const group = parallelGroups.find(
-                        (candidate) =>
-                          candidate.id === container.groupId
+                        (candidate) => candidate.id === container.groupId
                       );
-                      return group
-                        ? renderParallelGroup(group, true)
-                        : null;
+                      return group ? renderParallelGroup(group, true) : null;
                     }
 
                     const id = container.items[0];

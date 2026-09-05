@@ -3,8 +3,12 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
-import type { HarnessId } from "@root/types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  HARNESS_INFO,
+  type HarnessId,
+} from "@root/types/DashboardConstants";
+import { useEffect, useState } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import {
@@ -15,6 +19,7 @@ import {
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { getHarnessStepColorPickerValue } from "@utils/stepColor";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -42,12 +47,37 @@ export function HarnessesSection({
 }: Props) {
   const models = settings.settings.defaults.models;
   const additionalArgs = settings.settings.defaults.additionalArgs;
+  const stepColors = settings.settings.ui.stepColors;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
   const hideHarness = useUiStore((s) => s.hideDropdownOption);
   const unhideHarness = useUiStore((s) => s.unhideDropdownOption);
   const rowProps = { sources, onReset, activeScope };
+  const [localHarnessColors, setLocalHarnessColors] = useState<
+    Record<HarnessId, string>
+  >(
+    () =>
+      Object.fromEntries(
+        CLI_HARNESSES.map((harnessId) => [
+          harnessId,
+          stepColors.byHarness[harnessId] ??
+            getHarnessStepColorPickerValue(harnessId),
+        ])
+      ) as Record<HarnessId, string>
+  );
+
+  useEffect(() => {
+    setLocalHarnessColors(
+      Object.fromEntries(
+        CLI_HARNESSES.map((harnessId) => [
+          harnessId,
+          stepColors.byHarness[harnessId] ??
+            getHarnessStepColorPickerValue(harnessId),
+        ])
+      ) as Record<HarnessId, string>
+    );
+  }, [stepColors]);
   const hiddenHarnesses =
     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
   return (
@@ -149,6 +179,36 @@ export function HarnessesSection({
                     )
                   }
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                />
+              </SettingInputRow>
+              <SettingInputRow
+                label="Step color"
+                description="Identity color used for this harness when step colors are enabled. Reset to follow the built-in theme-aware chart color."
+                id={`step-color-${harnessId}`}
+                path={`ui.stepColors.byHarness.${harnessId}`}
+                {...rowProps}
+              >
+                <input
+                  id={`step-color-${harnessId}`}
+                  type="color"
+                  value={
+                    localHarnessColors[harnessId] ??
+                    getHarnessStepColorPickerValue(harnessId)
+                  }
+                  onChange={(e) =>
+                    setLocalHarnessColors((previous) => ({
+                      ...previous,
+                      [harnessId]: e.target.value,
+                    }))
+                  }
+                  onBlur={(e) =>
+                    onUpdate(
+                      `ui.stepColors.byHarness.${harnessId}`,
+                      e.target.value
+                    )
+                  }
+                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  title={`${info.name} step color`}
                 />
               </SettingInputRow>
             </div>

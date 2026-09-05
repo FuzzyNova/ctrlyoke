@@ -531,6 +531,44 @@ describe("PromptEditor — script-step properties", () => {
     );
   });
 
+  it("writes script-step color through the shared property path", async () => {
+    prepareScriptEditor();
+    const { container } = render(<PromptEditor />);
+
+    const color = screen.getByLabelText("Step color");
+    fireEvent.change(color, { target: { value: "#2468ac" } });
+    fireEvent.blur(color);
+
+    expect(useEditorStore.getState().properties.color).toBe("#2468ac");
+    expect(useEditorStore.getState().scriptCommand).toBe("npm run deploy");
+
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      properties: { color: "#2468ac" },
+    });
+  });
+
+  it("clears an inherited script-step color instead of writing the default hex", () => {
+    prepareScriptEditor({ color: "#2468ac" });
+    render(<PromptEditor />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reset step color to inherit",
+      })
+    );
+
+    expect(useEditorStore.getState().properties.color).toBeUndefined();
+  });
+
   it("clears empty env, secrets, and error behavior overrides", async () => {
     prepareScriptEditor({
       secrets: ["DEPLOY_TOKEN"],

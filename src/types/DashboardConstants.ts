@@ -1539,11 +1539,39 @@ export const HARNESS_INFO = {
 export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CLI]: "var(--vscode-charts-blue, #59a4f9)",
   [HARNESS_IDS.CLAUDE_CLI]: "var(--vscode-charts-orange, #d18616)",
-  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-editor-foreground, #ffffff)",
-  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-gray, #808080)",
+  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-charts-red, #f14c4c)",
+  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-yellow, #d19a66)",
   [HARNESS_IDS.QWEN_CLI]: "var(--vscode-charts-purple, #b180d7)",
   [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-green, #89d185)",
 };
+
+/** Neutral identity color for script steps, which have no harness. */
+export const SCRIPT_STEP_DEFAULT_COLOR = "var(--vscode-charts-gray, #808080)";
+
+/**
+ * Stable, curated colors used only to break same-harness group collisions.
+ *
+ * **Keep the length a power of two.** `resolveStepColor` seeds each member's
+ * starting index with `hashSeed(`${group.id}:${offsetInGroup}`) % length`, and
+ * distinct offsets are only *guaranteed* distinct starts when the modulus is a
+ * power of two: FNV-1a's final multiply by an odd constant is a bijection mod
+ * 2^k, and consecutive offsets differ in the low bits the multiply preserves.
+ * At 8 entries every member of a same-harness group gets its own color. Measured
+ * over 20k random group ids, growing the palette to 9 or 10 entries makes ~1.5%
+ * of groups hand two members the same color — silently defeating the one job the
+ * tie-break exists for. Add colors four at a time (8 -> 16), or switch the seed
+ * to `(hashSeed(group.id) + offsetInGroup) % length` first.
+ */
+export const STEP_COLOR_TIE_BREAK_PALETTE = [
+  "#4ec9b0",
+  "#c586c0",
+  "#9cdcfe",
+  "#ce9178",
+  "#dcdcaa",
+  "#d7ba7d",
+  "#b5cea8",
+  "#569cd6",
+] as const;
 
 // ============================================================================
 // HOOK EVENT - Logical hook event names and metadata
@@ -2665,6 +2693,7 @@ export const PROMPT_PROPERTIES = {
   ID: "id",
   NAME: "name",
   ENABLED: "enabled",
+  COLOR: "color",
 
   // Workflow-level properties (multi-step format)
   STEPS: "steps",
@@ -3076,7 +3105,6 @@ export const OUTPUT_DEFAULT_LABELS = {
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
-  STEP_SWITCH: "step-switch",
   STEP_ANCHOR: "step-anchor",
   STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",

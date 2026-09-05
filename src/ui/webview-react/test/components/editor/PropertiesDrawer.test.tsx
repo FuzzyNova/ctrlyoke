@@ -149,6 +149,24 @@ describe("PropertiesDrawer execution mode", () => {
       expect.stringContaining("TUI continuity")
     );
   });
+
+  it("writes and resets the full step color control", () => {
+    renderHarnessDrawer();
+
+    const color = screen.getByLabelText("Step color");
+    const reset = screen.getByRole("button", {
+      name: "Reset step color to inherit",
+    });
+    expect(color).toHaveValue("#59a4f9");
+    expect(reset).toBeDisabled();
+
+    fireEvent.change(color, { target: { value: "#abcdef" } });
+    fireEvent.blur(color);
+    expect(useEditorStore.getState().properties.color).toBe("#abcdef");
+
+    fireEvent.click(reset);
+    expect(useEditorStore.getState().properties.color).toBeUndefined();
+  });
 });
 
 describe("PropertiesDrawer Dry Run entry point", () => {

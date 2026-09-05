@@ -227,11 +227,11 @@ suite("PromptQueue State Machine Tests", () => {
     suite("parallel topology mutations", () => {
       const grouped = {
         steps: [
-          { prompt: "before" },
-          { prompt: "member-a" },
-          { prompt: "member-b" },
-          { prompt: "member-c" },
-          { prompt: "after" },
+          { prompt: "before", color: "#111111" },
+          { prompt: "member-a", color: "#222222" },
+          { prompt: "member-b", color: "#333333" },
+          { prompt: "member-c", color: "#444444" },
+          { prompt: "after", color: "#555555" },
         ],
         parallelGroups: [
           { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
@@ -252,7 +252,10 @@ suite("PromptQueue State Machine Tests", () => {
       });
 
       test("snaps insertion inside a group after the group", async () => {
-        await queue.insertStepAfterIndex(1, { prompt: "inserted" });
+        await queue.insertStepAfterIndex(1, {
+          prompt: "inserted",
+          color: "#abcdef",
+        });
         const state = queue.getState();
         assert.deepStrictEqual(
           state.steps.map((step) => (step as PromptStep).prompt),
@@ -261,10 +264,18 @@ suite("PromptQueue State Machine Tests", () => {
         assert.deepStrictEqual(state.parallelGroups, [
           { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },
         ]);
+        assert.deepStrictEqual(
+          state.steps.map((step) => step.color),
+          ["#111111", "#222222", "#333333", "#444444", "#abcdef", "#555555"]
+        );
       });
 
       test("shrinks and unwraps groups when members are deleted", async () => {
         await queue.deletePrompt(2);
+        assert.deepStrictEqual(
+          queue.getState().steps.map((step) => step.color),
+          ["#111111", "#222222", "#444444", "#555555"]
+        );
         assert.deepStrictEqual(queue.getState().parallelGroups, [
           { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
         ]);
@@ -278,6 +289,10 @@ suite("PromptQueue State Machine Tests", () => {
         assert.deepStrictEqual(
           state.steps.map((step) => (step as PromptStep).prompt),
           ["before", "member-b", "member-a", "member-c", "after"]
+        );
+        assert.deepStrictEqual(
+          state.steps.map((step) => step.color),
+          ["#111111", "#333333", "#222222", "#444444", "#555555"]
         );
         assert.deepStrictEqual(state.parallelGroups, [
           { id: "group-1", startIndex: 1, endIndex: 3, failFast: false },

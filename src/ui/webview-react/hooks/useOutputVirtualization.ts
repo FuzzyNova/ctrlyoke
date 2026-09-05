@@ -132,7 +132,6 @@ function getRowHeightBucket(row: OutputRenderRow): string {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
-    case OUTPUT_ROW_KINDS.STEP_SWITCH:
     case OUTPUT_ROW_KINDS.STATUS:
     case OUTPUT_ROW_KINDS.CLI_HEADER:
     case OUTPUT_ROW_KINDS.PROMPT:

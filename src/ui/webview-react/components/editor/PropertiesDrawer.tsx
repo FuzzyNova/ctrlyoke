@@ -79,6 +79,7 @@ import {
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { HooksEditor } from "./HooksEditor";
+import { StepColorField } from "./StepColorField";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -143,6 +144,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setProperty(PROMPT_PROPERTIES.SECRETS, undefined);
     setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
     setProperty(PROMPT_PROPERTIES.EXECUTION_MODE, undefined);
+    setProperty(PROMPT_PROPERTIES.COLOR, undefined);
     setProperty(PROMPT_PROPERTIES.RESUME_SESSION, undefined);
     setProperty(PROMPT_PROPERTIES.SESSION_ID, "");
     setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, undefined);
@@ -802,7 +804,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                 />
               </div>
-              <div />
+              <StepColorField idPrefix="prop-step" />
             </DrawerRow>
           </div>
         )}

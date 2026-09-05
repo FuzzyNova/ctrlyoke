@@ -17,6 +17,10 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
+import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import { getStepAccentClass } from "@utils/status";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
@@ -64,6 +68,10 @@ export type WorkflowStepRowProps = {
   isExecutionTargetLocked: boolean;
   hideBorderBottom?: boolean;
   dimmed?: boolean;
+  colorGroup?: ParallelGroupDefinition;
+  colorGroupMembers?: readonly StepColorGroupMember[];
+  offsetInGroup?: number;
+  stepColorSettings?: StepColorSettings;
   dragHandleProps?: WorkflowStepDragHandleProps;
   getStepHarnessModel: (
     step: WorkflowStep,
@@ -233,13 +241,28 @@ export const SortableWorkflowStepWrapper = React.memo(
       transition,
       opacity: isDragging ? 0.5 : 1,
     };
+    const harnessModel = stepItemProps.getStepHarnessModel(
+      stepItemProps.step,
+      stepItemProps.status
+    );
+    const stepColor = resolveStepColor({
+      step: stepItemProps.step,
+      harnessId: harnessModel.harnessId,
+      group: stepItemProps.colorGroup,
+      offsetInGroup: stepItemProps.offsetInGroup,
+      settings: stepItemProps.stepColorSettings,
+      groupMembers: stepItemProps.colorGroupMembers,
+    });
     return (
       <div
         className="relative flex items-stretch"
         data-workflow-step-index={stepItemProps.index}
       >
         {showPauseBoundaryBefore && <PauseBoundary />}
-        <div className="w-[2px] flex-shrink-0 self-stretch" />
+        <div
+          className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(stepItemProps.status)}`}
+          style={stepColor ? { backgroundColor: stepColor } : undefined}
+        />
         <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
           {slotNumber}
         </div>

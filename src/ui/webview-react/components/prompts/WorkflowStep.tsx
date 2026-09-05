@@ -85,8 +85,8 @@ interface WorkflowStepProps {
   /** When true, renders the script step variant (terminal icon, Script badge, command text) */
   isScript?: boolean;
   /**
-   * When true, applies completed-section styling: slight dim + green left
-   * accent to visually distinguish locked/done prompts from pending ones.
+   * When true, applies completed-section styling with slight dimming. The
+   * parent panel renders the 2px left rail, whose color identifies the step.
    */
   dimmed?: boolean;
   /** Live context window usage (updated during running step; falls back to latestOutput for completed) */

@@ -721,12 +721,25 @@ export interface WorkingFile extends PromptFile {
 /** Discriminant type for workflow steps */
 export type WorkflowStepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
 
-export interface PromptStep extends ExecutionProperties {
-  /** Step type discriminant — defaults to "prompt" when absent */
-  type?: typeof STEP_TYPES.PROMPT;
-  name?: string; // Optional human-readable display label
+/**
+ * Display properties shared by every authored workflow step.
+ *
+ * These fields belong to the step itself rather than to either execution
+ * property family, so prompt and script steps keep the same authored identity
+ * when they are parsed, exported, or mutated.
+ */
+export interface StepDisplayProperties {
+  /** Optional human-readable display label. */
+  name?: string;
   /** When false, the step remains in the workflow but never executes. */
   enabled?: boolean;
+  /** Optional authored identity colour in six-digit RGB hex form. */
+  color?: string;
+}
+
+export interface PromptStep extends ExecutionProperties, StepDisplayProperties {
+  /** Step type discriminant — defaults to "prompt" when absent */
+  type?: typeof STEP_TYPES.PROMPT;
   prompt: string;
   sessionId?: string | number; // Session ID for resuming conversations (string session ID, or number = resume from that prompt index)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
@@ -736,15 +749,12 @@ export interface PromptStep extends ExecutionProperties {
  * Script step — runs a shell command with no AI harness interaction.
  * Shares _runtime with PromptRuntimeMetadata for startedAt/completedAt tracking.
  */
-export interface ScriptStep extends ScriptProperties {
+export interface ScriptStep extends ScriptProperties, StepDisplayProperties {
   type: typeof STEP_TYPES.SCRIPT;
-  name?: string;
   /** Execution mode for this script step; undefined inherits from settings. */
   executionMode?: ExecutionMode;
   /** Secret environment-variable names granted to this script step. */
   secrets?: string[] | null;
-  /** When false, the step remains in the workflow but never executes. */
-  enabled?: boolean;
   /** Internal-error policy; undefined inherits the workflow policy. */
   errorBehavior?: ErrorBehavior | null;
   /** What to do when the script passes. Default: "continue". */

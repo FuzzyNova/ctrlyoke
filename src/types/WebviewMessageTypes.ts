@@ -67,9 +67,11 @@ import type {
   WorktreeRunProjection,
   ScriptVerdict,
   ParallelGroupDefinition,
+  StepDisplayProperties,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
+  StepColorSettings,
   TerminalSettings,
 } from "./CtrlYokeSettings";
 import type {
@@ -361,11 +363,9 @@ export interface EndConditionConfig {
  * Prompt item shape (used in workflowStore and throughout webview)
  * Matches CtrlYokeTypes.PromptStep
  */
-export interface PromptStep {
+export interface PromptStep extends StepDisplayProperties {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
-  name?: string;
-  enabled?: boolean;
   prompt: string;
   harness?: string;
   model?: string;
@@ -507,6 +507,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColors?: StepColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
@@ -1540,6 +1541,7 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColors?: StepColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
     externalFileRootsByScope?: ExternalFileRootsByScope;

@@ -13,26 +13,25 @@ This doc is a design brainstorm, not an approved plan. Nothing here is implement
 
 ## What currently draws step attribution
 
-| #   | Surface           | Where                                                 | Renders                                                              | Added by     |
-| --- | ----------------- | ----------------------------------------------------- | -------------------------------------------------------------------- | ------------ |
-| 1   | `cli-header` row  | `OutputRow.tsx` (~line 1190)                          | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b` | pre-existing |
-| 2   | `step-switch` row | `StepSwitchRowView` in `OutputRow.tsx`                | full-width `border-y` bar: `→ Step 4  name`                          | parallel     |
-| 3   | activity label    | `ActivityAttribution` when `row.activityFirst`        | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`)   | parallel     |
-| 4   | activity rail     | `ActivityAttribution` when `row.activityContinuation` | `border-l-2 border-output-streaming/40` + `pl-2` on the content      | parallel     |
-| 5   | minimap pills     | `OutputMinimap.tsx`                                   | one pill per step on the right rail                                  | pre-existing |
+| #   | Surface             | Where                                          | Renders                                                                                                     | Added by     |
+| --- | ------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | `cli-header` row    | `OutputRow.tsx` (~line 1190)                   | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b`                                        | pre-existing |
+| 3   | activity label      | `ActivityAttribution` when `row.activityFirst` | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`), parallel groups only                    | parallel     |
+| 4   | output identity bar | `OutputRow`'s step wrapper                     | `box-shadow: inset 3px 0 0 <step colour>`, every row and every run                                          | item 6       |
+| 5   | minimap pills       | `OutputMinimap.tsx`                            | one undo/redo-status pill per step plus a separate step-colour activity band spanning first → latest output | item 9       |
 
-Rows 1–3 are all emitted from `buildOutputRows` and all say the same thing.
+Rows 1 and 3 are emitted from `buildOutputRows` and both identify the step.
 
-### What the rail (4) actually means today
+### What the rail (4) meant before item 6
 
-`ActivityAttribution` renders **either** the label **or** the rail, never both, keyed off two
+`ActivityAttribution` rendered **either** the label **or** the rail, never both, keyed off two
 mutually exclusive flags on the row:
 
 - `activityFirst` → the 20px `⚡ Step N · name` label above the row.
 - `activityContinuation` → a `border-l-2 border-output-streaming/40` at the row's left edge plus
   `pl-2` on the content.
 
-So the rail's intended meaning is **"the step that was already writing is still the one writing"** —
+So the old rail's intended meaning was **"the step that was already writing is still the one writing"** —
 a _same-step-continues_ marker, not a step identifier. Two consequences follow, and both are why it
 reads as noise:
 
@@ -58,7 +57,7 @@ spread sites (~2303 streaming text, ~2375 per structured event, ~2429 streaming 
 response). A slice carrying _n_ visible events therefore stamps `activityFirst: true` on all _n_
 rows and paints the label _n_ times.
 
-The rail shares the spread but **not** the defect: `activityContinuation` is a continuous left edge
+The old rail shared the spread but **not** the defect: `activityContinuation` was a continuous left edge
 down a slice's content, so per-row is what it wants. Its problem is scope, not stamping — it is on
 for every slice after the first, which on a sequential run is essentially the whole attempt. That is
 what §1 and §5 address, not the stamping fix.
@@ -281,6 +280,28 @@ look incompatible until you notice `indicator-success`/`-error`/`-running` are t
 rails switch from `className={...}` to `style={{ backgroundColor }}`. One shape, no branching, and
 the status fallback stays expressible if it is ever needed again.
 
+#### The resolver takes the effective harness as an argument — it cannot compute one
+
+Verified 2026-09-04, and it changes the signature §5 sketches. There is **no shared effective-harness
+helper on the webview side**: `getStepHarnessModel` is a `useCallback` defined inside
+`WorkflowStepsPanel.tsx` (~409) and passed down as a prop to `WorkflowStepRow` and
+`ParallelGroupPanel`; the only reusable three-tier resolver, `PropertyResolver.resolveHarnessValue`,
+lives in `src/core` and is not reachable from the webview. `BuildOutputRowsInput` carries `steps` and
+`parallelGroups` but **no workflow-level or global harness defaults**, so `buildOutputRows` cannot
+resolve a harness either.
+
+So the signature is `resolveStepColor({ step, harnessId, group, offsetInGroup, settings })` — the
+caller supplies the already-resolved harness, exactly as each surface resolves it today. Two
+consequences:
+
+- The output pane needs `effectiveHarness` (or the workflow/global defaults) added to
+  `BuildOutputRowsInput`, which is a real plumbing change and belongs in the same step as the bar.
+- Prefer `step._runtime.harness` for any step that has started, mirroring `getStepHarnessModel`'s
+  rule — otherwise a step's colour would shift when workflow-level settings change after it ran.
+
+Lifting `getStepHarnessModel` into `utils/` as a plain function is the obvious cleanup and would let
+every surface share one path, but it is not a prerequisite; do it only if it falls out naturally.
+
 ### 5. Correlation surfaces must single-source the colour
 
 If colour is the attribution channel it has to appear in every place the user looks:
@@ -384,10 +405,19 @@ collide with diffs, which render full-bleed within that same padding.
 
 **The one real implementation trap: keep the bar continuous.** `OutputRow` has two return paths, and
 only the CLI-group path has the padded wrapper — `step-anchor`, `status`, `step-hidden`,
-`final-step-label` and friends return bare (`OutputRow.tsx` ~1897). Those rows interleave with
-content, so applying the shadow only on the CLI-group path leaves gaps and the bar reads as dashed —
-the same failure mode that ruled out stamping the continuation rail per slice. Paint it on both
-paths, or hoist it to a shared wrapper.
+`final-step-label` and friends return bare `<>{content}</>` (`OutputRow.tsx` ~1897). Those rows
+interleave with content, so applying the shadow only on the CLI-group path leaves gaps and the bar
+reads as dashed — the same failure mode that ruled out stamping the continuation rail per slice.
+Paint it on both paths, or hoist it to a shared wrapper.
+
+The non-CLI-group path needs an explicit offset: it has **no horizontal padding to paint into**, and
+`StatusMessage` already draws a 3px severity border at x=0. Without an offset, the identity bar
+occludes that load-bearing info completely. Apply `pl-[3px]` uniformly when a step colour exists,
+so the identity bar occupies x=0–3 and the status severity border follows at x=3–6. The other
+non-CLI rows remain acceptable under the same rule: the anchor is invisible, while the final-step
+label and hidden-row band begin beside the identity bar. This costs 3px of content width but adds
+no height; the status row's existing flat 36px estimate remains the initial estimate for long
+messages, with realized rows correcting any wrap difference.
 
 #### An escape hatch, since this is now always-on chrome
 
@@ -561,9 +591,14 @@ Worth stating because this pane is unusually sensitive to it (see
 - The stamping fix and `outputRowActivityChrome` must land together — see "Consequences for the fix"
   above. Today's +20-per-`activityFirst`-row charge is correct for today's (wrong) render, so it
   stays correct only if the flag and the label move in lockstep.
-- If the activity label goes away for sequential runs, `outputRowActivityChrome` /
-  `OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT` must be gated the same way or it will over-estimate every
-  opener row by 20px.
+- **Gating the label at build time gates the estimator for free — do it that way.**
+  `outputRowActivityChrome` charges +20px per row carrying `activityFirst` and nothing else
+  (`outputLineMetrics.ts` ~272). So if the sequential gate is applied by _not stamping_
+  `activityFirst` in `buildOutputRows`, rather than by branching inside `ActivityAttribution`, the
+  estimator stays correct with no change at all. Gating in the component instead would leave a 20px
+  over-estimate on every opener row of every sequential run, and would need a matching gate threaded
+  into `outputLineMetrics`. Stamp-side gating is the only one of the two that keeps the flag and the
+  render in lockstep, which is the invariant the stamping fix established.
 - An inset box-shadow bar adds **no** height and **no** width, so it needs no estimator support at
   all. This is a concrete reason to prefer it over `border-l` + padding.
 
@@ -574,31 +609,129 @@ Worth stating because this pane is unusually sensitive to it (see
 1. ~~Settle the open question~~ — done: the predicate is right, the per-row stamping is wrong.
 2. ~~Fix the stamping~~ — done: the label lands on the slice's first content row only; the rail
    stays per-row. Removed the duplicate `⚡ Step 1`; the rail is untouched and still needs 3/5.
-3. Gate **markers 2 and 3 only** behind "step ran in a parallel group with ≥2 members", via a new
-   snapshot-free `getParallelGroupForStep`. Marker 4 is not gated — it becomes the always-on colour
-   bar in step 7. Largest remaining win, smallest change.
-4. Delete the `step-switch` row kind.
-5. **Land `resolveStepColor` on built-in harness defaults only** — no schema, no settings yet. Fix
+3. ~~Delete the `step-switch` row kind outright, and gate the `⚡ Step N` label behind "step ran in
+   a parallel group with ≥2 members".~~ — done: removed the row kind and both emission sites, and
+   gated `activityFirst` stamping with the snapshot-free `getParallelGroupForStep`. The snapshot
+   check remains on the undo-only `getConcurrentGroupForStep` path. Marker 4 is not gated; it
+   becomes the always-on colour bar in step 5. Largest remaining win, smallest change.
+4. ~~**Land `resolveStepColor` on built-in harness defaults only** — no schema, no settings yet. Fix
    the two unusable `HARNESS_CHART_COLORS` entries (`codex-cli`, `opencode-cli`) and add the script
    default, then switch the three steps-panel rails from `getStepAccentClass` to
-   `style={{ backgroundColor }}`. This is the whole visual payoff and it needs no persisted state.
-6. **Add the status icon to the chip rail, then flip its border to identity.** In that order — the
+   `style={{ backgroundColor }}`. This is the whole visual payoff and it needs no persisted state.~~
+   **Done (2026-09-04).** The final signature is
+   `resolveStepColor({ step, harnessId, group, offsetInGroup, settings })`; callers supply the
+   already-resolved harness. Optional `groupMembers` context lets the resolver detect genuine
+   baseline-color collisions without moving tie-breaking into a surface. The built-in defaults
+   and the fixed tie-break palette live beside `HARNESS_CHART_COLORS` in
+   `src/types/DashboardConstants.ts`.
+5. ~~**Add the status icon to the chip rail, then flip its border to identity.** In that order — the
    chip's border is its only status signal, so flipping first loses information for one commit.
-   Prototype the three-row and two-row layouts here (§5).
-7. Replace the output pane's continuation rail with the zero-width inset gutter bar reading the same
+   Prototype the three-row and two-row layouts here (§5).~~ **Done (2026-09-04).** Added the
+   status icon before moving the step-chip left edge to the shared identity resolver. The selected
+   layout is three rows: type/slot, status, context. The two-row prototype was rejected because
+   the available ~20px content width cannot reliably fit the 14px status glyph alongside the slot
+   label (or the type glyph alongside a percentage). With `py-1`, three `h-3` rows, and the
+   existing bottom divider, the measured chip height is **45px** when context is available (33px
+   when it is not). This is the accepted density cost: about 45% fewer chips fit before scrolling.
+   Prompt and script shape remains distinct, and the running ring, context fill, and pause boundary
+   are unchanged. `getStepAccentClass` remains in use for the final-step chip's status edge; it has
+   no remaining step-chip callers.
+6. ~~Replace the output pane's continuation rail with the zero-width inset gutter bar reading the same
    resolver, painted on every row of every run. Watch the continuity trap: `OutputRow`'s non-CLI-group
-   return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.
-8. `ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
+   return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.~~
+   **Done (2026-09-04).** `OutputRow` now paints `box-shadow: inset 3px 0 0 <step colour>` on
+   every row wrapper, including sequential output and the bare non-CLI-group return path. The
+   non-CLI-group path offsets coloured content with `pl-[3px]` so `StatusMessage`'s severity border
+   remains visible immediately beside the identity bar. `activityContinuation`, the shared streaming
+   rail, and its `pl-2` content indent are removed; step colors are resolved once per target using
+   runtime harness metadata first, then the configured/effective harness.
+7. ~~`ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
-   chrome.
-9. The authored `color?` field on a shared `StepDisplayProperties` — schema, parser, export,
-   templates, mutations — plus all three editor mounts from §6 together: the header
-   `StepColorQuickPicker`, the `PropertiesDrawer` slot, and the `StepColorField` in the script-step
-   sibling properties block beside Secrets and Error Behavior. Shipping
-   only some of them leaves one step type unable to set what the other can, which is exactly the gap
-   `executionMode` already closed.
-10. Independently of the colour work: delete the minimap's two activity dots and paint the step
-    colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
+   chrome.~~ **Done (2026-09-04).** Added persisted enabled/script/per-harness controls,
+   resolver precedence, settings UI, and status/no-bar fallbacks across all attribution surfaces.
+8. ~~**Data layer done (2026-09-04).** The authored `color?` field now lives on the shared
+   `StepDisplayProperties` contract and round-trips through the schema, parser, export, templates,
+   and mutations, including parallel-safe insert/reorder/delete/clipboard paths. The editor mounts
+   remain: the header `StepColorQuickPicker`, the `PropertiesDrawer` slot, and the `StepColorField`
+   in the script-step sibling properties block beside Secrets and Error Behavior. Shipping only
+   some of those mounts leaves one step type unable to set what the other can, which is exactly the
+   gap `executionMode` already closed.~~ **Done (2026-09-04).** Added all three editor mounts,
+   including the shared full field for prompt and script steps, the inherited-state reset affordance,
+   and editor-store/mutation wiring for authored colors.
+9. ~~Independently of the colour work: delete the minimap's two activity dots and paint the step
+   colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.~~ **Done
+   (2026-09-04).** The minimap now renders a separate step-colour band from the first to latest
+   interleaved activity fraction, while the pill retains its undo/redo-status colour and the hidden
+   activity pulse remains a filter affordance.
 
-Steps 2, 3 and 4 are worth doing regardless of whether the colour work ever happens. Steps 5–7 are
-the colour work proper; 8 and 9 are persistence and can lag indefinitely.
+
+---
+
+## Review pass (2026-09-05)
+
+All nine sequencing items landed. Full gate green: **3905 passing** in the extension-host suite,
+**2442 tests across 217 files** in Vitest, 7/7 structure tests, `npm run typecheck` and
+`npm run lint` clean.
+
+Two things were found and fixed during review:
+
+### `WorkflowStepsPanel` resolved group members without group context
+
+`WorkflowStepsPanel`'s completed-step branch called `resolveStepColor` with no `group`,
+`offsetInGroup`, or `groupMembers`, while the output pane, `ParallelGroupPanel`, `WorkflowStepRow`
+and `PromptChipRail` all supplied them.
+
+This looked safe because the completed-steps loop delegates parallel groups to
+`ParallelGroupPanel` — but only when `candidate.endIndex < doneStepCount`, i.e. once **every**
+member is done. While a group is still running, its already-finished members fall through to the
+inline branch, and the interior-member skip check is gated on the same condition so they are not
+skipped either. Those members therefore resolved to their bare harness colour in the steps panel
+while the output pane, which always has the group, resolved the same step to a tie-break colour.
+Two different colours for one step, inside a parallel group — precisely the case the colour exists
+to disambiguate, and a direct break of the bar-to-bar correlation §5 rests on.
+
+Fixed by supplying the group context at that call site, using the exported snapshot-free
+`getParallelGroupForStep`. Regression test added in
+`test/components/layout/WorkflowStepsPanel.test.tsx` ("applies group tie-break colors to a
+completed member of an unfinished parallel group"); it was verified to fail before the fix, with
+the rail rendering `var(--vscode-charts-orange, #d18616)` instead of the expected tie-break entry.
+
+Note the three surface-local `groupMembers` constructions are **not** DRY violations: each resolves
+its harness from a different source (`displayedMembers`, `prompts` + `getPromptStatus`,
+`input.steps` + `effectiveHarness`), which is the documented "caller supplies the harness"
+contract from §4. A shared builder would need a harness callback and would not remove real
+duplication.
+
+### The tie-break palette length must stay a power of two
+
+`getTieBreakColor` seeds each member with `hashSeed(`${group.id}:${offsetInGroup}`) % length`.
+Distinct offsets are only *guaranteed* distinct starts when the modulus is a power of two —
+FNV-1a's final multiply by an odd constant is a bijection mod 2^k, and consecutive offsets differ
+in exactly the low bits that multiply preserves. At the current 8 entries every member of a
+same-harness group provably gets its own colour, measured at 0 duplicates over 20k random group
+ids for groups of 2 through 8.
+
+This is load-bearing and was accidental rather than designed, so it is now documented on the
+constant. §4 above suggests a palette of "8–10 hues"; **9 or 10 would silently regress it** —
+measured, ~1.5% of same-harness groups would hand two members the same colour. Grow the palette
+8 → 16, or switch the seed to `(hashSeed(group.id) + offsetInGroup) % length` first.
+
+### Verified clean, no action needed
+
+- `activityContinuation`, the shared streaming rail and its `pl-2` indent are fully removed; no
+  references remain anywhere in `src/`.
+- The `step-switch` row kind is gone, including its case arms in `useOutputVirtualization` and
+  `outputFind`.
+- The escape hatch works: with `ui.stepColors.enabled: false` every surface falls back —
+  `OutputRow` returns its original bare `<>{content}</>` for non-CLI-group rows and drops the
+  `pl-[3px]`, and the rails revert to `getStepAccentClass`.
+- The reset-to-inherited affordance writes `undefined`, not a hex equal to the default, which is
+  the distinction §6 required so a step keeps following its harness.
+- `getStepAccentClass` is correctly retained: it still serves the final-step chip and every
+  colours-disabled fallback, so §5's "delete it if nothing else claims it" does not apply.
+
+Step 3 is worth doing regardless of whether the colour work ever happens. Steps 4–6 are the colour
+work proper; 7 and 8 are persistence and can lag indefinitely. Step 8 is large enough to split in
+two — the data layer (schema, parser, export, templates, mutations) and the three editor mounts —
+but neither half ships alone: the field is unreachable without the editors, and the editors have
+nothing to write without the field.

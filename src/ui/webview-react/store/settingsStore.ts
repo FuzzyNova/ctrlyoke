@@ -40,7 +40,9 @@ import type {
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
   DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
+  type StepColorSettings,
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
@@ -123,6 +125,7 @@ export interface GlobalSettings {
   atomicContextReferences: boolean;
   outputVirtualizationRowThreshold: number;
   collapsedToolOutputLineCount: number;
+  stepColors?: StepColorSettings;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   confirmContinuationDiscardOperations: boolean;
@@ -413,6 +416,7 @@ const initialGlobalSettings: GlobalSettings = {
   atomicContextReferences: false,
   outputVirtualizationRowThreshold: 200,
   collapsedToolOutputLineCount: DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
+  stepColors: CTRLYOKE_SETTINGS_DEFAULTS.ui.stepColors,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   confirmContinuationDiscardOperations: true,
