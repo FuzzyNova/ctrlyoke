@@ -16,6 +16,7 @@ import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
+import { StepColorField } from "./StepColorField";
 import { EditorFooter } from "./EditorFooter";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
@@ -392,6 +393,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         result.executionMode = properties.executionMode;
       } else if (includeNullsForDefaults) {
         clearProperties.push("executionMode");
+      }
+
+      // Step color — undefined inherits from the harness/script default.
+      if (properties.color !== undefined) {
+        result.color = properties.color;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("color");
       }
 
       // Agent
@@ -911,6 +919,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             ...(scriptExecutionMode !== undefined && {
               executionMode: scriptExecutionMode,
             }),
+            ...(properties.color !== undefined && { color: properties.color }),
             ...(!stepEnabled && { enabled: false }),
           },
           action: finalAction,
@@ -1011,6 +1020,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(scriptExecutionMode !== undefined && {
           executionMode: scriptExecutionMode,
         }),
+        ...(properties.color !== undefined && { color: properties.color }),
         ...(!stepEnabled && { enabled: false }),
       };
       const clearProperties = [
@@ -1028,6 +1038,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           : []),
         ...(!scriptReturns ? ["returns"] : []),
         ...(scriptExecutionMode === undefined ? ["executionMode"] : []),
+        ...(properties.color === undefined ? ["color"] : []),
         ...(stepEnabled ? ["enabled"] : []),
         ...(!promptName.trim() ? ["name"] : []),
       ];
@@ -1311,6 +1322,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             idPrefix="script-step"
           />
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
+            <StepColorField idPrefix="script-step" />
             <SecretGrantsEditor
               value={properties.secrets}
               inheritedValue={inheritedScriptSecrets}

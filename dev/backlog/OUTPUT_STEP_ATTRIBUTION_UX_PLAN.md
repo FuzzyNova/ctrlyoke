@@ -649,13 +649,15 @@ Worth stating because this pane is unusually sensitive to it (see
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
    chrome.~~ **Done (2026-09-04).** Added persisted enabled/script/per-harness controls,
    resolver precedence, settings UI, and status/no-bar fallbacks across all attribution surfaces.
-8. **Data layer done (2026-09-04).** The authored `color?` field now lives on the shared
+8. ~~**Data layer done (2026-09-04).** The authored `color?` field now lives on the shared
    `StepDisplayProperties` contract and round-trips through the schema, parser, export, templates,
    and mutations, including parallel-safe insert/reorder/delete/clipboard paths. The editor mounts
    remain: the header `StepColorQuickPicker`, the `PropertiesDrawer` slot, and the `StepColorField`
    in the script-step sibling properties block beside Secrets and Error Behavior. Shipping only
    some of those mounts leaves one step type unable to set what the other can, which is exactly the
-   gap `executionMode` already closed.
+   gap `executionMode` already closed.~~ **Done (2026-09-04).** Added all three editor mounts,
+   including the shared full field for prompt and script steps, the inherited-state reset affordance,
+   and editor-store/mutation wiring for authored colors.
 9. Independently of the colour work: delete the minimap's two activity dots and paint the step
    colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
 

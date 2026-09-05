@@ -61,6 +61,7 @@ export interface PropertyValues {
   harness: Inheritable<string>; // undefined = inherit, string = harness ID
   model: Inheritable<string>; // undefined = inherit, string = model ID
   executionMode: Inheritable<ExecutionMode>; // undefined = inherit, interactive/headless = override
+  color: Inheritable<string>; // undefined = inherit, six-digit hex = override
   agent: Disableable<string>; // undefined = inherit, null = none, string = agent filename slug
   skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
   secrets: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific
@@ -84,6 +85,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   harness: undefined,
   model: undefined,
   executionMode: undefined,
+  color: undefined,
   agent: undefined,
   skills: undefined,
   secrets: undefined,
@@ -516,6 +518,7 @@ export const useEditorStore = create<
       // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
       const propertiesFromScriptData: PropertyValues = {
         ...PROPERTY_DEFAULTS,
+        color: promptData.color,
         secrets: promptData.secrets,
         errorBehavior: normalizePromptErrorBehavior(promptData.errorBehavior),
       };
@@ -570,6 +573,7 @@ export const useEditorStore = create<
         harness: promptData.harness,
         model: promptData.model,
         executionMode: promptData.executionMode,
+        color: promptData.color,
         agent: promptData.agent,
         skills: promptData.skills,
         secrets: promptData.secrets,
@@ -1201,6 +1205,11 @@ export const useEditorStore = create<
     // Add execution mode if overridden
     if (properties.executionMode !== undefined) {
       result.executionMode = properties.executionMode;
+    }
+
+    // Add authored step color if overridden
+    if (properties.color !== undefined) {
+      result.color = properties.color;
     }
 
     // Add agent when explicitly overridden

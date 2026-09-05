@@ -221,4 +221,28 @@ describe("EditorSection", () => {
     expect(picker).toHaveClass("text-widget-highlight-fg");
     expect(picker.querySelector(".codicon-terminal")).not.toBeNull();
   });
+
+  it("lets both step types override and reset the header step color", () => {
+    render(<EditorSection />);
+
+    const color = screen.getByLabelText("Step color");
+    const reset = screen.getByRole("button", {
+      name: "Reset step color to inherit",
+    });
+    expect(color).toHaveValue("#59a4f9");
+    expect(reset).toBeDisabled();
+
+    fireEvent.change(color, { target: { value: "#123456" } });
+    fireEvent.blur(color);
+    expect(useEditorStore.getState().properties.color).toBe("#123456");
+    expect(reset).not.toBeDisabled();
+
+    fireEvent.click(reset);
+    expect(useEditorStore.getState().properties.color).toBeUndefined();
+
+    act(() => {
+      useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    });
+    expect(screen.getByLabelText("Step color")).toHaveValue("#808080");
+  });
 });

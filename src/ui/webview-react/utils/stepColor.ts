@@ -34,6 +34,25 @@ export function getHarnessStepColorPickerValue(harnessId: HarnessId): string {
   );
 }
 
+/**
+ * Resolve the inherited step color to a value accepted by an HTML color input.
+ * Theme-aware built-ins contain a CSS variable with a hex fallback, while
+ * configured colors are already validated hex strings.
+ */
+export function getInheritedStepColor(
+  harnessId: HarnessId | undefined,
+  settings?: StepColorSettings
+): string {
+  const configuredColor = harnessId
+    ? settings?.byHarness[harnessId]
+    : settings?.script;
+  if (configuredColor) return configuredColor;
+
+  return harnessId
+    ? getHarnessStepColorPickerValue(harnessId)
+    : /#[0-9a-fA-F]{6}/.exec(SCRIPT_STEP_DEFAULT_COLOR)?.[0] ?? "#808080";
+}
+
 function getHarnessOrScriptColor(
   harnessId: HarnessId | undefined,
   settings?: StepColorSettings

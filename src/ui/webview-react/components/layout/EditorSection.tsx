@@ -9,6 +9,7 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { formatMagnitude } from "../../utils/number";
 import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
+import { StepColorQuickPicker } from "../editor/StepColorQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_STEP_PHASES,
@@ -297,7 +298,7 @@ const EditorSectionInner: React.FC = () => {
           </span>
         </div>
 
-        {/* Right: prompt-file action, execution mode override, and Git ignore toggle */}
+        {/* Right: prompt-file action, step overrides, and Git ignore toggle */}
         {!isExternallyManaged && !isScriptMode && promptFileAction && (
           <button
             type="button"
@@ -313,6 +314,7 @@ const EditorSectionInner: React.FC = () => {
           </button>
         )}
         {!isExternallyManaged && <ExecutionModeQuickPicker />}
+        {!isExternallyManaged && <StepColorQuickPicker />}
         {!isExternallyManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}
