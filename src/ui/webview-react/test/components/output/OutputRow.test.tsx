@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
+import { getStepIdentityBarStyle } from "@components/output/outputStyles";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
@@ -301,7 +302,7 @@ describe("OutputRow hidden steps", () => {
 });
 
 describe("OutputRow step identity bar", () => {
-  it("paints the inset bar on both row wrapper paths without changing height estimates", () => {
+  it("paints the bar on both row wrapper paths without changing height estimates", () => {
     const stepColor = "#123456";
     const cliRow = {
       ...buildStatsRow({ prompt: 0, completion: 0, total: 1 }),
@@ -318,15 +319,14 @@ describe("OutputRow step identity bar", () => {
     );
 
     const cliBar = container.querySelector("[data-step-color-bar]");
-    expect(cliBar).toHaveStyle({ boxShadow: `inset 3px 0 0 ${stepColor}` });
+    expect(cliBar).toHaveStyle(getStepIdentityBarStyle(stepColor));
+    expect(cliBar).not.toHaveStyle({ boxShadow: `inset 3px 0 0 ${stepColor}` });
 
     rerender(
       <OutputRow row={{ ...nonCliRow, stepColor }} isExecutionActive={false} />
     );
     const nonCliBar = container.querySelector("[data-step-color-bar]");
-    expect(nonCliBar).toHaveStyle({
-      boxShadow: `inset 3px 0 0 ${stepColor}`,
-    });
+    expect(nonCliBar).toHaveStyle(getStepIdentityBarStyle(stepColor));
     expect(nonCliRow.estimateSize).toBe(1);
     expect(estimateOutputRowHeight(cliRow, 13, 760)).toBe(
       estimateOutputRowHeight(
@@ -344,7 +344,8 @@ describe("OutputRow step identity bar", () => {
       estimateSize: 36,
       rowKind: OUTPUT_ROW_KINDS.STATUS,
       status: {
-        message: "A warning message long enough to wrap in a narrow output pane",
+        message:
+          "A warning message long enough to wrap in a narrow output pane",
         severity: "warning",
         timestamp: "12:00:00",
         timestampMs: 0,
@@ -361,9 +362,7 @@ describe("OutputRow step identity bar", () => {
       ".border-l-severity-warning"
     );
     expect(identityBar).toHaveClass("pl-[3px]");
-    expect(identityBar).toHaveStyle({
-      boxShadow: "inset 3px 0 0 #123456",
-    });
+    expect(identityBar).toHaveStyle(getStepIdentityBarStyle("#123456"));
     expect(severityBorder).not.toBeNull();
     expect(identityBar).not.toHaveClass("border-l-severity-warning");
     expect(severityBorder).not.toBe(identityBar);
@@ -391,9 +390,7 @@ describe("OutputRow step identity bar", () => {
 
     expect(container.querySelector("[data-step-color-bar]")).toBeNull();
     expect(container.children).toHaveLength(1);
-    expect(container.firstElementChild).toHaveClass(
-      "border-l-severity-info"
-    );
+    expect(container.firstElementChild).toHaveClass("border-l-severity-info");
   });
 });
 

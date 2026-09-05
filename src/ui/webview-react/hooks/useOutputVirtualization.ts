@@ -293,7 +293,18 @@ export function useOutputVirtualization({
         (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
         zeroHeightReason == null
       ) {
-        return measuredHeight;
+        // A row that legitimately renders nothing is handled below; anything
+        // else reading 0 is a transient measurement — the pane is collapsed
+        // (`display: none` zeroes every row), or the element was observed
+        // before its first layout. Returning the raw 0 handed it straight to
+        // `resizeItem`, which adopts whatever `measureElement` returns: the row
+        // collapsed to nothing and its neighbours overlapped it until some
+        // unrelated pass happened to remeasure. Report the size the row already
+        // has instead, so a bogus read is a no-op rather than a regression.
+        return (
+          measurementCacheRef.current.get(row.key) ??
+          getEstimatedRowHeightRef.current(row)
+        );
       }
 
       const nextHeight =
@@ -324,7 +335,17 @@ export function useOutputVirtualization({
         return nextHeight;
       }
 
+      // Deferring during a scroll is what keeps a measurement from reflowing the
+      // pane under the user's finger — but a measurement taken *by the flush*
+      // must never re-enter that queue. The flush is the only thing that drains
+      // it, and it can legitimately run inside the grace window (its rAF chain
+      // writes scrollTop, and the user can start scrolling again mid-flush), so
+      // a re-pended row would be dropped and never offered again: its DOM size
+      // has not changed, so no ResizeObserver entry is coming. That row then
+      // keeps its *estimate* for as long as it stays mounted, which is exactly
+      // the gap-above / clipped-below pair that survives after scrolling stops.
       const isScrolling =
+        !isMeasurementFlushInProgressRef.current &&
         lastScrollEventAtRef.current != null &&
         performance.now() - lastScrollEventAtRef.current <
           OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
@@ -611,6 +632,19 @@ export function useOutputVirtualization({
     [updateRowMeasurementCache]
   );
 
+  // TanStack's `measureElement` silently skips its own `resizeItem` whenever it
+  // believes a scroll is in flight — which is exactly the state the flush exists
+  // to recover from. Feed the measurement to `resizeItem` directly instead, the
+  // same path the live-row layout effect above uses, so a flush always lands.
+  const applyRowMeasurement = useCallback(
+    (element: HTMLDivElement) => {
+      const index = Number(element.dataset.index ?? -1);
+      if (index < 0 || index >= rowsRef.current.length) return;
+      rowVirtualizer.resizeItem(index, measureOutputRowElement(element));
+    },
+    [measureOutputRowElement, rowVirtualizer]
+  );
+
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
     isMeasurementFlushInProgressRef.current = true;
@@ -628,17 +662,39 @@ export function useOutputVirtualization({
       });
     }
 
-    for (const [key, height] of pendingMeasurementCacheRef.current) {
-      const element = Array.from(mountedRowElementsRef.current).find(
-        (candidate) => candidate.dataset.rowKey === key
-      );
+    // Drain before iterating, not after: the loop below re-enters
+    // `updateRowMeasurementCache`, and clearing afterwards would discard
+    // anything it queued while the flush was running.
+    const pending = Array.from(pendingMeasurementCacheRef.current);
+    pendingMeasurementCacheRef.current.clear();
+
+    const elementsByRowKey = new Map<string, HTMLDivElement>();
+    for (const element of mountedRowElementsRef.current) {
+      const rowKey = element.dataset.rowKey;
+      if (rowKey) elementsByRowKey.set(rowKey, element);
+    }
+
+    for (const [key, height] of pending) {
+      const element = elementsByRowKey.get(key);
       if (element) {
-        rowVirtualizer.measureElement(element);
+        applyRowMeasurement(element);
       } else {
         measurementCacheRef.current.set(key, height);
       }
     }
-    pendingMeasurementCacheRef.current.clear();
+
+    // Settling the scroll is also the moment to close the gap the deferral can
+    // leave open. A row that mounted mid-scroll is observed by TanStack but not
+    // measured (`measureElement` skips its own `resizeItem` while `isScrolling`),
+    // and if its first ResizeObserver entry landed inside the grace window the
+    // value went to the pending map rather than the cache. Either way the row is
+    // on screen at an estimated height. Measuring the mounted rows that still
+    // have no recorded measurement is bounded by the overscan window and makes
+    // "rendered implies measured" true again by the time the pane comes to rest.
+    for (const [rowKey, element] of elementsByRowKey) {
+      if (measurementCacheRef.current.has(rowKey)) continue;
+      applyRowMeasurement(element);
+    }
     // Don't correct scrollTop on this synchronous path. measureElement above has
     // updated the virtualizer's measurementsCache, but the new row transforms
     // only paint on React's next commit — writing scrollTop now shifts the
@@ -680,10 +736,10 @@ export function useOutputVirtualization({
       });
     });
   }, [
+    applyRowMeasurement,
     applyScrollTargetRef,
     isMeasurementFlushInProgressRef,
     outputRef,
-    rowVirtualizer,
     scrollTargetRef,
   ]);
 

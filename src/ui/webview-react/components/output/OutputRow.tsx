@@ -84,6 +84,7 @@ import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
   TOOL_RESULT_STANDALONE_INDENT,
+  getStepIdentityBarStyle,
 } from "./outputStyles";
 import { AtomicReferenceChip } from "./AtomicReferenceChip";
 import {
@@ -1867,7 +1868,7 @@ function OutputRowComponent({
     row.rowKind === OUTPUT_ROW_KINDS.STATS ||
     row.rowKind === OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY;
   const stepColorBarStyle = row.stepColor
-    ? { boxShadow: `inset 3px 0 0 ${row.stepColor}` }
+    ? getStepIdentityBarStyle(row.stepColor)
     : undefined;
 
   if (!isCliGroupRow) {
