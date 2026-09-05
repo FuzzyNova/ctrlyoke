@@ -181,7 +181,9 @@ class DashboardSinkDouble implements IDashboardSink {
   updateFileSelected(): Promise<void> {
     return Promise.resolve();
   }
-  updateSessionRestored(): Promise<void> {
+  updateSessionRestored(
+    ..._args: Parameters<IDashboardSink["updateSessionRestored"]>
+  ): Promise<void> {
     return Promise.resolve();
   }
   updateExecutionStarted(): void {}

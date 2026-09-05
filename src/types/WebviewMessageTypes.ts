@@ -657,6 +657,8 @@ export interface SessionRestoredMessage {
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
   workflowProperties?: Record<string, any>;
+  /** The definition head that produced `steps`; absent for legacy producers. */
+  definitionRevision?: number;
 }
 
 /**

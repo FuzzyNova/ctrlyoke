@@ -11,7 +11,7 @@ and `ctrlyoke_queue_status` reported the new step immediately. But `WorkflowStep
 showing the old step count for the rest of the running step. Navigating away and back flashed the
 correct count, then reverted. The count corrected itself at the next step transition.
 
-Nothing here is implemented. Line references were originally taken against `b1223284` and re-verified
+Defects 1–5 are now implemented. Line references were originally taken against `b1223284` and re-verified
 against `560957d0` on 2026-09-05, which corrected defect 5's scope, added the merge-novelty and
 prefix-agreement constraints under defect 4, and moved defect 5 to the front of the sequencing.
 
@@ -125,6 +125,11 @@ mode while running (`:311-315`, `:347`) → `PromptQueue.mergeStepsFromDisk` →
 (`:364`) → `STEPS_EXTENDED`.
 
 ### 3. `SESSION_RESTORED` clobbers fresh disk state on remount
+
+**Status: Implemented (2026-09-05).** `SESSION_RESTORED` now carries the queue's
+`definitionRevision` and shares the requestless regressive-snapshot guard with
+`RUN_VIEW_LOADED`. Replays preserve the addressed view state while genuine
+workflow changes continue to clear it.
 
 This is the flash. `WorkflowOrchestrator.replayWorkflowStateTo` (`:945`) does three things in order:
 
@@ -289,11 +294,17 @@ the push path defects 1–2 restore, so it is a prerequisite rather than an unor
    Independent of 1–2, and worth doing even if 1–2 slip: the disk merge at the next step transition is
    the safety net that currently makes the count self-correct, and this defect is a hole _in that
    safety net_.
-4. **Defect 3** — the `SESSION_RESTORED` guard. Largest blast radius (it touches every remount and
-   every hosted-client rebind, not just the MCP path), so land it last and on its own.
+4. **Defect 3** — the `SESSION_RESTORED` guard, implemented above. Largest blast radius (it touches
+   every remount and every hosted-client rebind, not just the MCP path), so it landed last and on its own.
 
 Defects 1–2 and 4 are the ones that matter for MCP mid-run appends. Defect 3 is a real bug on its own
 terms that this investigation happened to surface.
+
+## Closing note
+
+The full plan shipped: file watching now follows promoted runs, append merges preserve topology and
+duplicate-text steps, and replay snapshots carry revision-aware protection across extension and hosted
+clients.
 
 ## Testing notes
 

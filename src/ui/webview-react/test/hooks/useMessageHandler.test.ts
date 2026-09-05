@@ -410,6 +410,76 @@ describe("FILE_SELECTED", () => {
 // ---------------------------------------------------------------------------
 
 describe("SESSION_RESTORED", () => {
+  it.each([3, 4])(
+    "applies a replay snapshot at an equal-or-higher definition revision (%s)",
+    (definitionRevision) => {
+      renderHook(() => useMessageHandler());
+      const address = {
+        workflowKey: "wf-session-replay" as never,
+        kind: "run" as const,
+        runRef: "run-session-replay" as never,
+      };
+      useUiStore.setState({
+        displayedViewAddress: address,
+        appliedViewAddress: address,
+        displayedDefinitionRevision: 3,
+        appliedDefinitionRevision: 3,
+      });
+      useWorkflowStore.setState({ steps: [makePrompt("old step")] });
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+          fileName: "replayed.ctrlyoke.yaml",
+          steps: [makePrompt("replayed step")],
+          results: [],
+          executionState: EXECUTION_STATES.RUNNING,
+          currentIndex: 0,
+          definitionRevision,
+        });
+      });
+
+      expect(
+        useWorkflowStore
+          .getState()
+          .steps.map((step) => ("prompt" in step ? step.prompt : undefined))
+      ).toEqual(["replayed step"]);
+      expect(useUiStore.getState().appliedDefinitionRevision).toBe(
+        definitionRevision
+      );
+    }
+  );
+
+  it("does not let a lower-revision replay replace newer steps or disarm the guard", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-session-replay" as never,
+      kind: "run" as const,
+      runRef: "run-session-replay" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: address,
+      appliedViewAddress: address,
+      displayedDefinitionRevision: 3,
+      appliedDefinitionRevision: 3,
+    });
+    const currentSteps = [makePrompt("newer step")];
+    useWorkflowStore.setState({ steps: currentSteps });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+        fileName: "replayed.ctrlyoke.yaml",
+        steps: [makePrompt("stale step"), makePrompt("also stale")],
+        results: [],
+        executionState: EXECUTION_STATES.RUNNING,
+        currentIndex: 0,
+        definitionRevision: 2,
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toBe(currentSteps);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(3);
+  });
+
   it("loads workflow properties included with the restored session payload", () => {
     renderHook(() => useMessageHandler());
 

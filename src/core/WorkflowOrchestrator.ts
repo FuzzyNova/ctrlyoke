@@ -6893,10 +6893,12 @@ export class WorkflowOrchestrator {
           phase: FinalStepPhase;
         }
       | undefined;
+    let definitionRevision: number | undefined;
 
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as WorkingFile;
+      definitionRevision = workingFile.definitionRevision ?? 1;
       steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
         ...p,
         // Strip any existing status so loadWorkflow sets it from the results array
@@ -6941,7 +6943,12 @@ export class WorkflowOrchestrator {
       currentIndex,
       externalEntry.summary.workflowName,
       finalStep,
-      finalStepRuntime
+      finalStepRuntime,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      definitionRevision
     );
 
     // Replay all captured CLI outputs from the active history file

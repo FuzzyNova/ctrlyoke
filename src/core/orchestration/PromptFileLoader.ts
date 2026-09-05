@@ -341,7 +341,12 @@ export class PromptFileLoader {
             restoredState.currentIndex,
             restoredState.workflowName || undefined,
             workingFile.finalStep ?? null,
-            this.promptQueue.getFinalStepRuntime()
+            this.promptQueue.getFinalStepRuntime(),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            restoredState.definitionRevision
           );
         }
       } else {

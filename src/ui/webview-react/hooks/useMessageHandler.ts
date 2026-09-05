@@ -327,6 +327,26 @@ function applyWorkflowPropertiesFromMessage(message: {
   useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
 }
 
+/**
+ * Return whether a requestless definition snapshot would move the client
+ * backwards. Equal revisions must also retain a longer step list because an
+ * append can reach the client before a snapshot that started reading disk.
+ */
+function isRegressiveDefinitionSnapshot(
+  incomingDefinitionRevision: number | undefined,
+  currentDefinitionRevision: number | null,
+  incomingStepCount: number,
+  currentStepCount: number
+): boolean {
+  return (
+    incomingDefinitionRevision !== undefined &&
+    currentDefinitionRevision !== null &&
+    (incomingDefinitionRevision < currentDefinitionRevision ||
+      (incomingDefinitionRevision === currentDefinitionRevision &&
+        incomingStepCount < currentStepCount))
+  );
+}
+
 // ============================================================================
 // Shared Helpers
 // ============================================================================
@@ -808,6 +828,37 @@ export function createMessageHandlers(
         return;
       }
     }
+    const incomingDefinitionRevision =
+      typeof message.definitionRevision === "number"
+        ? message.definitionRevision
+        : undefined;
+    const currentUiState = useUiStore.getState();
+    const currentDefinitionRevision =
+      currentUiState.appliedDefinitionRevision;
+    const currentStepCount = useWorkflowStore.getState().steps.length;
+    const incomingStepCount = message.steps?.length ?? 0;
+    // WorkflowTaggedSink supplies workflowId for live updates. The direct,
+    // untagged SESSION_RESTORED sent by replayWorkflowStateTo follows the
+    // addressed RUN_VIEW_LOADED and must not clear that view's identity.
+    const isReplay =
+      message.workflowId === undefined &&
+      incomingDefinitionRevision !== undefined;
+    if (
+      isReplay &&
+      isRegressiveDefinitionSnapshot(
+        incomingDefinitionRevision,
+        currentDefinitionRevision,
+        incomingStepCount,
+        currentStepCount
+      )
+    ) {
+      WebviewLog.debug(
+        `[SESSION_RESTORED] ignoring regressive snapshot: ` +
+          `revision ${incomingDefinitionRevision}/${currentDefinitionRevision}, ` +
+          `steps ${incomingStepCount}/${currentStepCount}`
+      );
+      return;
+    }
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
@@ -823,7 +874,12 @@ export function createMessageHandlers(
       finalStepPhase: message.finalStepPhase ?? null,
     });
     persistViewedWorkingFilePath(message.workingFilePath);
-    applyWorkflowChange();
+    applyWorkflowChange({ preserveViewAddress: isReplay });
+    if (isReplay && incomingDefinitionRevision !== undefined) {
+      useUiStore
+        .getState()
+        .markAppliedDefinitionRevision(incomingDefinitionRevision);
+    }
     applyWorkflowPropertiesFromMessage(message);
   };
 
@@ -2380,10 +2436,12 @@ export function createMessageHandlers(
     if (
       !message.requestId &&
       isCurrentAddress &&
-      currentDefinitionRevision !== null &&
-      (incomingDefinitionRevision < currentDefinitionRevision ||
-        (incomingDefinitionRevision === currentDefinitionRevision &&
-          incomingStepCount < currentStepCount)) &&
+      isRegressiveDefinitionSnapshot(
+        incomingDefinitionRevision,
+        currentDefinitionRevision,
+        incomingStepCount,
+        currentStepCount
+      ) &&
       !isAuthorizedDefinitionRollback
     ) {
       WebviewLog.debug(

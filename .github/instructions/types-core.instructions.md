@@ -12,7 +12,7 @@ applyTo: "src/types/{DashboardConstants.ts,CtrlYokeTypes.ts,WorkflowContextTypes
 <workflowRuntimeGotchas>
 - `WorkflowStateMachine` owns runtime status transitions; `PromptQueue` and history code project from those types. Avoid introducing parallel status enums or ad-hoc transition payloads.
 - `WorkflowContextTypes.ts` is the harness-facing seam. If a harness needs more context, add it there instead of inventing local inline shapes in `HarnessIntegration` subclasses.
-- `IDashboardSink.ts` intentionally stays VS Code-free and does not own message payload construction. `PostMessageDashboardSink` is the place where sink calls become concrete webview/server messages.
+- `IDashboardSink.ts` intentionally stays VS Code-free and does not own message payload construction. `PostMessageDashboardSink` is the place where sink calls become concrete webview/server messages. Its positional methods are structurally checked: adding a trailing parameter does not make TypeScript catch implementations that declare fewer parameters, so update every implementation by hand and grep for the method name.
 </workflowRuntimeGotchas>
 
 <settingsAndCliContracts>

@@ -59,7 +59,8 @@ export interface IDashboardSink {
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    definitionRevision?: number
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(

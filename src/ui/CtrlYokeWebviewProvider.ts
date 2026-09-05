@@ -597,7 +597,8 @@ export class CtrlYokeWebviewProvider
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    definitionRevision?: number
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -611,7 +612,8 @@ export class CtrlYokeWebviewProvider
       workflowId,
       workflowProperties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      definitionRevision
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,

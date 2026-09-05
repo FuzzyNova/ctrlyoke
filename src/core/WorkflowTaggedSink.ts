@@ -89,7 +89,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     workflowIdOrProperties?: string | Record<string, unknown>,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    definitionRevision?: number
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -107,7 +108,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       this.workflowId,
       properties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      definitionRevision
     );
   }
 

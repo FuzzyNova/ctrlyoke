@@ -300,6 +300,49 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
   });
 });
 
+suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
+  test("threads the working-file definition revision for external replays", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-session-revision-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "external workflow",
+          startedAt: 0,
+          definitionRevision: 11,
+          steps: [{ prompt: "step" }],
+        })
+      );
+      const calls: unknown[][] = [];
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.dashboardBroadcastHub = {
+        updateSessionRestored: (...args: unknown[]) => calls.push(args),
+      };
+
+      await internal.sendExternalRunFullStateToDashboard("external-run", {
+        session: { getActiveHistoryFilePath: () => undefined },
+        summary: {
+          workingFilePath,
+          workflowName: "external workflow",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+        },
+      });
+
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0][12], 11);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
 suite("WorkflowOrchestrator active queue context key", () => {
   test("sets and clears the queue context key as the active queue changes", () => {
     const orchestrator = Object.create(

@@ -283,6 +283,11 @@ suite("WorkflowInstance finalStep replay", () => {
       EXECUTION_STATES.RUNNING,
       "session restore should reflect running state"
     );
+    assert.strictEqual(
+      sessionRestoredCalls[0][12],
+      instance.promptQueue.getState().definitionRevision,
+      "session restore should carry the queue definition revision"
+    );
 
     assert.strictEqual(finalStepOutputCalls.length, 2);
     assert.ok(

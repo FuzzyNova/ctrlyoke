@@ -430,7 +430,8 @@ export class CtrlYokeHostedServer
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    definitionRevision?: number
   ): Promise<void> {
     return this.sink.updateSessionRestored(
       fileName,
@@ -444,7 +445,8 @@ export class CtrlYokeHostedServer
       workflowId,
       workflowProperties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      definitionRevision
     );
   }
   updateExecutionStarted(

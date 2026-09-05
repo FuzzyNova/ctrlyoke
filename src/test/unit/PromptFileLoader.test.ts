@@ -73,6 +73,51 @@ suite("PromptFileLoader Tests", () => {
   });
 
   suite("working file merge", () => {
+    test("threads the restored definition revision through SESSION_RESTORED", async () => {
+      const dashboardCalls: unknown[][] = [];
+      let restored = false;
+      const dashboard = {
+        updateSessionRestored: (...args: unknown[]) =>
+          dashboardCalls.push(args),
+      } as any;
+      const queue = {
+        readWorkingFile: async () => ({
+          steps: [{ prompt: "restored" }],
+          workflowName: "workflow",
+          startedAt: 0,
+          definitionRevision: 9,
+          originalFile: "workflow.yaml",
+        }),
+        getState: () =>
+          restored
+            ? {
+                status: EXECUTION_STATES.PAUSED,
+                steps: [{ prompt: "restored" }],
+                results: [],
+                currentIndex: 1,
+                workflowName: "workflow",
+                definitionRevision: 9,
+              }
+            : { status: EXECUTION_STATES.IDLE, steps: [] },
+        restoreFromWorkingFile: async () => {
+          restored = true;
+        },
+        getFinalStepRuntime: () => undefined,
+      } as any;
+      const parser = {
+        validateWorkflowSteps: () => ({ valid: true, errors: [] }),
+      } as any;
+      const loader = new PromptFileLoader(parser, queue, () => dashboard);
+
+      await loader.reloadFromWorkingFile(
+        "working-file.json",
+        PROMPT_FILE_RELOAD_MODES.REPLACE
+      );
+
+      assert.strictEqual(dashboardCalls.length, 1);
+      assert.strictEqual(dashboardCalls[0][12], 9);
+    });
+
     test("forwards merged parallelGroups in the STEPS_EXTENDED push", async () => {
       const parallelGroups = [
         { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
