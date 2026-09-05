@@ -1,8 +1,8 @@
 # MCP Run Path Fields: Absolute `workingFile`, plus `runDirectory`
 
-> **Status:** Proposed — verified still unfixed against current `main` on
-> 2026-09-05. All four emission sites below still call `path.relative`, and
-> `WorkflowPaths` still has no run-directory helper.
+> **Status:** Implemented — absolute `workingFile` and `runDirectory` are now
+> emitted by all four MCP response sites, with coverage for promoted and
+> draft-only workflows.
 >
 > **Priority:** P2 — small, self-contained correctness fix. No new tool, no new
 > reach.

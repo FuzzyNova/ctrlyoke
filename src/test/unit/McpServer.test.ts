@@ -101,15 +101,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       responseText?: string;
       worktree?: WorkingFileWorktreeRuntime;
       stepCount?: number;
+      draftOnly?: boolean;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
     const runRef = `run-${runTime}` as RunRef;
-    const runFilePath = WorkflowPaths.runFilePath(
-      workspaceRoot,
-      workflowKey,
-      runRef
-    );
+    const runFilePath = options.draftOnly
+      ? WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
+      : WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef);
     const descriptor: WorkflowLineageDescriptor = {
       schemaVersion: 1,
       workflowKey,
@@ -117,8 +116,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       isFavorite: false,
       createdAt: 1,
       lastModifiedAt: 1,
-      latestRunRef: runRef,
-      nextRunId: 2,
+      ...(options.draftOnly ? {} : { latestRunRef: runRef }),
+      nextRunId: options.draftOnly ? 1 : 2,
       revision: 3,
     };
     const stepCount = options.stepCount ?? 1;
@@ -153,35 +152,37 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "utf8"
     );
     await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
-    const recorder = new TimelineRecorder();
-    const manifestPath = await recorder.initializeRunAt(
-      path.dirname(runFilePath),
-      workflowKey,
-      1,
-      1,
-      EXECUTION_STATES.COMPLETED,
-      1,
-      { workflowName: descriptor.workflowName, steps: workingFile.steps ?? [] }
-    );
-    await recorder.appendEvents(manifestPath, [
-      {
-        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
-        timestampMs: 2,
-        target: { kind: "queue", stepIndex: 0 },
-        runIndex: 0,
-        attemptIndex: 0,
-        definitionRevision: 1,
-        responseKind: "ai",
-        payload: {
-          cliOutput: {
-            prompt: options.prompt ?? `prompt-${suffix}`,
-            response: options.responseText ?? `output-${suffix}`,
-            elapsed: 1,
-            isStreaming: false,
+    if (!options.draftOnly) {
+      const recorder = new TimelineRecorder();
+      const manifestPath = await recorder.initializeRunAt(
+        path.dirname(runFilePath),
+        workflowKey,
+        1,
+        1,
+        EXECUTION_STATES.COMPLETED,
+        1,
+        { workflowName: descriptor.workflowName, steps: workingFile.steps ?? [] }
+      );
+      await recorder.appendEvents(manifestPath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: 2,
+          target: { kind: "queue", stepIndex: 0 },
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          responseKind: "ai",
+          payload: {
+            cliOutput: {
+              prompt: options.prompt ?? `prompt-${suffix}`,
+              response: options.responseText ?? `output-${suffix}`,
+              elapsed: 1,
+              isStreaming: false,
+            },
           },
         },
-      },
-    ]);
+      ]);
+    }
     return { workflowKey, runRef, runFilePath };
   }
 
@@ -402,6 +403,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     assert.strictEqual(status.metadata.workflowKey, own.workflowKey);
     assert.strictEqual(status.metadata.runRef, own.runRef);
+    assert.strictEqual(status.metadata.workingFile, own.runFilePath);
+    assert.strictEqual(
+      status.metadata.runDirectory,
+      path.dirname(own.runFilePath)
+    );
+    assert.strictEqual(path.isAbsolute(status.metadata.workingFile), true);
+    assert.strictEqual(path.isAbsolute(status.metadata.runDirectory), true);
+    assert.strictEqual(status.metadata.workingFile.startsWith(".."), false);
+    assert.strictEqual(status.metadata.runDirectory.startsWith(".."), false);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
   });
@@ -606,13 +616,34 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         updatedAt: 2,
       },
     });
+    const draft = await createRun("draft", "2026-01-03T00-00-00-000Z", {
+      draftOnly: true,
+    });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const all = responseJson(await server.invokeTool("global_status", {}));
     assert.deepStrictEqual(
       all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
-      [other.workflowKey, own.workflowKey].sort()
+      [draft.workflowKey, other.workflowKey, own.workflowKey].sort()
     );
+    const expectedWorkingFiles = new Map([
+      [own.workflowKey, own.runFilePath],
+      [other.workflowKey, other.runFilePath],
+      [draft.workflowKey, draft.runFilePath],
+    ]);
+    for (const workflow of all.workflows) {
+      const expectedWorkingFile = expectedWorkingFiles.get(workflow.workflowKey);
+      assert.ok(expectedWorkingFile);
+      assert.strictEqual(workflow.workingFile, expectedWorkingFile);
+      assert.strictEqual(
+        workflow.runDirectory,
+        path.dirname(expectedWorkingFile)
+      );
+      assert.strictEqual(path.isAbsolute(workflow.workingFile), true);
+      assert.strictEqual(path.isAbsolute(workflow.runDirectory), true);
+      assert.strictEqual(workflow.workingFile.startsWith(".."), false);
+      assert.strictEqual(workflow.runDirectory.startsWith(".."), false);
+    }
 
     const narrowed = responseJson(
       await server.invokeTool("global_status", {
@@ -698,6 +729,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.index, 2);
       assert.strictEqual(result.definitionRevision, 5);
+      assert.strictEqual(result.workingFile, run.runFilePath);
+      assert.strictEqual(result.runDirectory, path.dirname(run.runFilePath));
+      assert.strictEqual(path.isAbsolute(result.workingFile), true);
+      assert.strictEqual(path.isAbsolute(result.runDirectory), true);
+      assert.strictEqual(result.workingFile.startsWith(".."), false);
+      assert.strictEqual(result.runDirectory.startsWith(".."), false);
       assert.deepStrictEqual(persisted.steps?.[2], {
         prompt: "pending-a (corrected)",
         model: "model-x",
@@ -862,6 +899,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     assert.strictEqual(result.workflowKey, run.workflowKey);
     assert.strictEqual(result.runRef, run.runRef);
+    assert.strictEqual(result.workingFile, run.runFilePath);
+    assert.strictEqual(result.runDirectory, path.dirname(run.runFilePath));
+    assert.strictEqual(path.isAbsolute(result.workingFile), true);
+    assert.strictEqual(path.isAbsolute(result.runDirectory), true);
+    assert.strictEqual(result.workingFile.startsWith(".."), false);
+    assert.strictEqual(result.runDirectory.startsWith(".."), false);
     assert.strictEqual(result.definitionRevision, 5);
     // The descriptor is untouched by an ordinary append: it stays at the
     // fixture's starting revision rather than bumping alongside content.

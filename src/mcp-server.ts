@@ -364,7 +364,8 @@ export class CtrlYokeMCPServer {
         executionState: runtime.executionState,
         maxQueueSize: unlimited ? "unlimited" : maxSize,
         remainingSlots: unlimited ? "unlimited" : maxSize - allSteps.length,
-        workingFile: path.relative(this.workspaceRoot, workingFile),
+        workingFile,
+        runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
         descriptorRevision: selected.descriptorRevision,
       },
@@ -482,6 +483,7 @@ export class CtrlYokeMCPServer {
       newQueueSize: number;
       insertIndex: number;
       workingFile: string;
+      runDirectory: string;
       workflowKey: WorkflowKey;
       runRef: RunRef;
       definitionRevision: number;
@@ -531,7 +533,10 @@ export class CtrlYokeMCPServer {
         // Resolved inside the run-file lock; with 'next' it can differ from the
         // caller's view if the run advanced between its status read and this write.
         insertIndex: appended.insertIndex,
-        workingFile: path.relative(this.workspaceRoot, selected.filePath),
+        workingFile: selected.filePath,
+        runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
+          selected.filePath
+        ),
         workflowKey: selected.workflowKey,
         runRef: selected.runRef,
         definitionRevision: appended.definitionRevision,
@@ -677,7 +682,10 @@ export class CtrlYokeMCPServer {
               operation,
               ...details,
               newQueueSize: mutation.workingFile.steps?.length ?? 0,
-              workingFile: path.relative(this.workspaceRoot, selected.filePath),
+              workingFile: selected.filePath,
+              runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
+                selected.filePath
+              ),
               workflowKey: selected.workflowKey,
               runRef: selected.runRef,
               definitionRevision: mutation.definitionRevision,
@@ -991,7 +999,8 @@ export class CtrlYokeMCPServer {
               completedSteps: completedCount,
               startedAt: data.startedAt ?? null,
               lastModifiedAt: data.lastModifiedAt ?? null,
-              workingFile: path.relative(this.workspaceRoot, filePath),
+              workingFile: filePath,
+              runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),
               ...(runtime.worktree
                 ? {
                     worktree: {
