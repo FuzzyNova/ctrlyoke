@@ -1,28 +1,32 @@
 # MCP Run Path Fields: Absolute `workingFile`, plus `runDirectory`
 
-> **Status:** Proposed
+> **Status:** Proposed — verified still unfixed against current `main` on
+> 2026-09-05. All four emission sites below still call `path.relative`, and
+> `WorkflowPaths` still has no run-directory helper.
 >
 > **Priority:** P2 — small, self-contained correctness fix. No new tool, no new
 > reach.
 >
 > **Related:** `dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md` (the change that
-> broke this), `WORKFLOW_CONTEXT_MENU_PLAN.md` (the dashboard-side answer to the
-> same "where is this run?" question)
+> broke this), `dev/implemented/WORKFLOW_CONTEXT_MENU_PLAN.md` (the
+> dashboard-side answer to the same "where is this run?" question)
 
 ---
 
 ## Problem
 
-`src/mcp-server.ts` reports a run's working file in three places, all the same
-way:
+`src/mcp-server.ts` reports a run's working file in four places, all the same
+way — `path.relative(this.workspaceRoot, filePath)`:
 
-| Site                 | Field                      | Line (approx) |
-| -------------------- | -------------------------- | ------------- |
-| `handleQueueStatus`  | `metadata.workingFile`     | 434           |
-| `handleQueueAppend`  | `response.workingFile`     | 619           |
-| `handleGlobalStatus` | per-workflow `workingFile` | 882           |
+| Site                 | Field                      | Line | Tools served                             |
+| -------------------- | -------------------------- | ---- | ---------------------------------------- |
+| `handleQueueStatus`  | `metadata.workingFile`     | 367  | `workflow_status`                        |
+| `handleQueueAppend`  | `response.workingFile`     | 534  | `append_step`                            |
+| `mutationResponse`   | `workingFile`              | 680  | `edit_step`, `remove_step`, `reorder_steps` |
+| `handleGlobalStatus` | per-workflow `workingFile` | 994  | `global_status`                          |
 
-Each computes `path.relative(this.workspaceRoot, filePath)`.
+`mutationResponse` is a shared response builder, so six agent-facing tools emit
+the field across four code sites.
 
 That was correct when run storage lived at `<workspaceRoot>/.ctrlyoke/.runs/`.
 It is not correct now. `USER_SCOPED_RUN_HISTORY_PLAN.md` redirected
@@ -51,9 +55,9 @@ Three concrete harms:
 
 ### `handleGlobalStatus` is already internally inconsistent
 
-That same response object emits an absolute `workspaceRoot` and an absolute
-`worktree.worktreePath` alongside the relative `workingFile`, so a caller cannot
-even infer a convention from one payload.
+That same response object emits an absolute `workspaceRoot` (line 1021) and an
+absolute `worktree.worktreePath` alongside the relative `workingFile`, so a
+caller cannot even infer a convention from one payload.
 
 > **Historical note.** Until the LM tools were removed, `QueueOperations`
 > (the shared module behind the four `vscode.lm` twins) returned `workingFile`
@@ -61,7 +65,9 @@ even infer a convention from one payload.
 > outright contract split between two tools of the same name. Those twins and
 > `QueueOperations` are now deleted, so `mcp-server.ts` is the sole owner of
 > these fields and this change has no second implementation to coordinate with.
-> That is why the plan below touches only one file.
+> That is why the plan below touches only one file. Confirmed still true: no
+> other module emits a `workingFile` **path** string — every other
+> `workingFile:` in `src/core/**` is the `WorkingFile` object, not a path.
 
 ---
 
@@ -112,7 +118,13 @@ worth mitigating.
 
 `WorkflowPaths.ts` declares itself "the _only_ module allowed to construct a
 `.runs` path from raw parts." Keep that true: add the derivation there rather
-than calling `path.dirname` at three call sites.
+than calling `path.dirname` at four call sites.
+
+Place it beside `parseWorkingFileAddressFromPath` (`src/utils/WorkflowPaths.ts`,
+~line 455), which already establishes the precedent of deriving identity from a
+working-file path by directory shape alone, with no `workspaceRoot` and no
+containment check, on the grounds that the path is one ctrlyoke itself
+persisted:
 
 ```ts
 /**
@@ -126,23 +138,29 @@ export function runDirectoryForWorkingFile(workingFilePath: string): string {
 }
 ```
 
-`mcp-server.ts` may import it — `WorkflowPaths` is already in its allowed
-dependency set and is vscode-free.
+`mcp-server.ts` may import it — it already imports `WorkflowPaths` (for
+`manifestPath`, `runFilePath`, `draftFilePath`), and the module is vscode-free
+as `extension.instructions.md` requires.
 
 ### Call sites
 
-**`src/mcp-server.ts`** — three sites:
+**`src/mcp-server.ts`** — four sites:
 
-- `handleQueueStatus`: `workingFile: selected.filePath`, add
-  `runDirectory: WorkflowPaths.runDirectoryForWorkingFile(selected.filePath)`.
-- `handleQueueAppend`: same substitution on `selected.filePath`.
-- `handleGlobalStatus`: same on the per-workflow `filePath`, which is already
-  resolved through `runFilePath`/`draftFilePath` in both branches — so drafts
-  get their draft directory and no branch is special-cased.
+- `handleQueueStatus` (367): `workingFile: workingFile` (the local already holds
+  `selected.filePath`), add
+  `runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile)`.
+- `handleQueueAppend` (534): same substitution on `selected.filePath`. Add
+  `runDirectory: string` to the local `response` type literal declared just
+  above (~line 484), which lists `workingFile: string` explicitly.
+- `mutationResponse` (680): same on `selected.filePath`. This is the shared
+  builder for `edit_step`/`remove_step`/`reorder_steps`, so one edit covers all
+  three — do **not** push the change out to the three callers.
+- `handleGlobalStatus` (994): same on the per-workflow `filePath`, which is
+  already resolved through `runFilePath`/`draftFilePath` in both branches — so
+  drafts get their draft directory and no branch is special-cased.
 
-Drop the now-unused `path.relative` calls; check whether `path` remains needed
-in each scope before removing the import (it is — `handleQueueStatus` and others
-still use it).
+Drop the now-unused `path.relative` calls; `path` stays imported (still used by
+`readCapabilities`, `manifestPath` call sites, and others).
 
 That is the whole code change. `src/mcp-server.ts` plus one helper in
 `WorkflowPaths` — there is no second consumer to update now that the LM tools
@@ -150,30 +168,35 @@ and `QueueOperations` are gone.
 
 ### Documentation
 
-`docs/reference/mcp-tools.md` does not document response shapes at all, so
-nothing there is invalidated. It is separately stale — it omits
-`global_status` and `submit_commit_message`, and lists
-`append_queue`'s parameters as `prompts`/`reason` when the actual schema is
-`steps`/`position`/`source`. Fixing that is adjacent, optional, and explicitly
-not required by this change.
+`docs/reference/mcp-tools.md` was rewritten since this plan was first drafted:
+it now documents `append_step`'s real `steps`/`position`/`source` schema and the
+three step-mutation tools. It still documents no response shapes at all, so
+nothing there is invalidated by this change. It still omits `global_status` and
+`submit_commit_message` from its tool table; fixing that is adjacent, optional,
+and explicitly not required here.
 
-Tool _descriptions_ in `getToolDefinitions()` stay untouched: response fields
+Tool _descriptions_ in `McpToolDefinitions.ts` stay untouched: response fields
 are not described there, and per the instruction file they should not be.
 
 ---
 
 ## Tests
 
-`src/test/unit/McpServer.test.ts` already builds a real run under a temp
-workspace via its `createRun` helper and reads responses with `responseJson`, so
-these are additions to an existing harness rather than new scaffolding. No
-existing assertion covers the emitted path value, so nothing needs updating.
+`src/test/unit/McpServer.test.ts` builds a real run under a temp workspace via
+its `createRun` helper — which returns a `RunFixture` carrying the absolute
+`runFilePath` — and reads responses with `responseJson`. These are additions to
+an existing harness rather than new scaffolding. No existing assertion covers
+the emitted path value, so nothing needs updating.
 
-- `workflow_status` emits an absolute `workingFile` equal to the run file
-  on disk, and a `runDirectory` that is its parent.
+Assert against `run.runFilePath` and `path.dirname(run.runFilePath)`:
+
+- `workflow_status` emits an absolute `workingFile` equal to the run file on
+  disk, and a `runDirectory` that is its parent.
 - `append_step` emits the same two fields with the same values.
-- `global_status` emits both fields for every listed workflow,
-  including one that has never been promoted (draft branch → draft directory).
+- One step-mutation tool (`edit_step` suffices — the other two share
+  `mutationResponse`) emits both fields.
+- `global_status` emits both fields for every listed workflow, including one
+  that has never been promoted (draft branch → draft directory).
 - Neither field ever begins with `..` — the direct regression guard, and the
   one assertion that would have caught this at the time.
 
@@ -181,9 +204,9 @@ existing assertion covers the emitted path value, so nothing needs updating.
 
 ## Acceptance Criteria
 
-- `workingFile` is absolute in all three MCP sites and resolves, unmodified, to
-  the run file on disk.
-- `runDirectory` is present beside it in all three, and is the directory that
+- `workingFile` is absolute in all four MCP sites (six tools) and resolves,
+  unmodified, to the run file on disk.
+- `runDirectory` is present beside it in all four, and is the directory that
   actually contains `workflow.ctrlyoke.json`, `manifest.json`, and
   `events.jsonl`.
 - Draft-only lineages in `global_status` report their draft directory
@@ -199,6 +222,7 @@ existing assertion covers the emitted path value, so nothing needs updating.
   selector.
 - Exposing `manifest.json` / `events.jsonl` paths individually — `runDirectory`
   covers them.
-- Rewriting `docs/reference/mcp-tools.md` (stale for unrelated reasons).
+- Adding `global_status` / `submit_commit_message` to
+  `docs/reference/mcp-tools.md` (missing for unrelated reasons).
 - Any change to `CTRLYOKE_WORKING_FILE` addressing or to the "one attached run"
   model.
