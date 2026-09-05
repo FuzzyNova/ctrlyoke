@@ -170,6 +170,7 @@ import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor
 import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
+  getShellInvocationError,
   ptyPostMessage,
   resolveShellInvocation,
   toPtySpawnArgs,
@@ -4107,23 +4108,6 @@ export class WorkflowInstance {
 
               const workflowId = self.id;
               const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-              const controllerClientId =
-                ptyManager.getExpectedController(workflowId);
-              options.onSessionCreated?.(preSessionId);
-
-              // TERMINAL_STARTED must be sent before spawnPty so the webview
-              // session store is populated before any TERMINAL_OUTPUT arrives.
-              const terminalStartedMessage: TerminalStartedMessage = {
-                type: MESSAGE_TYPES.TERMINAL_STARTED,
-                workflowId,
-                sessionId: preSessionId,
-                stepName: options.stepName,
-                stepIndex: options.stepIndex,
-                kind: SESSION_KINDS.AI_CLI,
-                parallelGroupId: options.parallelGroupId,
-                controllerClientId,
-              };
-              ptyPostMessage(terminalStartedMessage);
 
               // Wrap the script in its per-script override, the user's configured
               // shell, or the auto-detected shell so PTY interactive input works.
@@ -4141,6 +4125,34 @@ export class WorkflowInstance {
                   .map((a) => JSON.stringify(a))
                   .join(" ")}`
               );
+              const shellError = getShellInvocationError(
+                options.script,
+                shellKind
+              );
+              if (shellError) {
+                Log.warn(`[spawnScriptPty] ${shellError}`);
+                options.onOutput(shellError);
+                resolve(1);
+                return;
+              }
+
+              const controllerClientId =
+                ptyManager.getExpectedController(workflowId);
+              options.onSessionCreated?.(preSessionId);
+
+              // TERMINAL_STARTED must be sent before spawnPty so the webview
+              // session store is populated before any TERMINAL_OUTPUT arrives.
+              const terminalStartedMessage: TerminalStartedMessage = {
+                type: MESSAGE_TYPES.TERMINAL_STARTED,
+                workflowId,
+                sessionId: preSessionId,
+                stepName: options.stepName,
+                stepIndex: options.stepIndex,
+                kind: SESSION_KINDS.AI_CLI,
+                parallelGroupId: options.parallelGroupId,
+                controllerClientId,
+              };
+              ptyPostMessage(terminalStartedMessage);
 
               try {
                 let timeoutHandle: ReturnType<typeof setTimeout> | undefined;

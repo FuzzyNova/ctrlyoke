@@ -134,7 +134,8 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("uses an inline shell override for a direct command", async () => {
-      const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+      const originalGetTerminalSettings =
+        ConfigurationUtils.getTerminalSettings;
       ConfigurationUtils.getTerminalSettings = () => ({
         ...originalGetTerminalSettings(),
         shellExecutable:
@@ -162,7 +163,8 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("preserves direct-command behavior when shell is omitted", async () => {
-      const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+      const originalGetTerminalSettings =
+        ConfigurationUtils.getTerminalSettings;
       ConfigurationUtils.getTerminalSettings = () => ({
         ...originalGetTerminalSettings(),
         shellExecutable: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
@@ -185,6 +187,89 @@ suite("EndConditionEvaluator Tests", () => {
       } finally {
         ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
       }
+    });
+
+    test("treats package.json and setup.sh newline shapes as inline scripts", async () => {
+      fs.mkdirSync(path.join(workspaceRoot, "scripts"), { recursive: true });
+      fs.writeFileSync(path.join(workspaceRoot, "package.json"), "{}", "utf8");
+      fs.writeFileSync(
+        path.join(workspaceRoot, "scripts", "setup.sh"),
+        "exit 0\n",
+        "utf8"
+      );
+
+      const shell = process.platform === "win32" ? "powershell.exe" : "/bin/sh";
+      for (const script of [
+        'package.json\nnode -e "process.exit(7)"',
+        'scripts/setup.sh\nnode -e "process.exit(7)"',
+      ]) {
+        const result = await evaluator.evaluateCondition(
+          {
+            script,
+            shell,
+            compareSource: "exitCode",
+            returns: "7",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.errored, false, script);
+        assert.strictEqual(result.exitCode, 7, script);
+        assert.strictEqual(result.passed, true, script);
+      }
+    });
+
+    test("keeps single-line file paths with arguments on the file route", async () => {
+      fs.writeFileSync(
+        path.join(workspaceRoot, "args.js"),
+        "process.stdout.write(process.argv[2] ?? '')",
+        "utf8"
+      );
+
+      const result = await evaluator.evaluateCondition(
+        {
+          script: "args.js expected-argument",
+          compareSource: "stdout",
+          returns: "expected-argument",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.actual, "expected-argument");
+    });
+
+    test("runs a multiline inline script and compares its last command exit code", async () => {
+      const result = await evaluator.evaluateCondition(
+        {
+          script: 'echo first\nnode -e "process.exit(7)"',
+          compareSource: "exitCode",
+          returns: "7",
+          shell: process.platform === "win32" ? "powershell.exe" : "/bin/sh",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.exitCode, 7);
+      assert.strictEqual(result.passed, true);
+    });
+
+    test("rejects a multiline script under cmd before execution", async () => {
+      const result = await evaluator.evaluateCondition(
+        {
+          script: "echo first\necho last",
+          shell: "cmd",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, true);
+      assert.strictEqual(
+        result.error,
+        "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`."
+      );
     });
 
     test("should return timeout result when script takes too long", async function () {

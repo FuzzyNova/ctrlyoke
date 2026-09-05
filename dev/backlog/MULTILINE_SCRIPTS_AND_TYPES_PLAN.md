@@ -1,6 +1,7 @@
 # Multi-Line Script Authoring and Script Type Coverage
 
-> **Status:** Proposed
+> **Status:** Partially implemented — the A.1 routing safety and A.4 `cmd`
+> preflight landed before editor work; A.2/A.3/A.5 and all of B remain open.
 >
 > **Priority:** P2 for the multi-line authoring half (a file-format capability
 > the dashboard cannot reach, plus one silent-misexecution hazard); P3 for the
@@ -170,6 +171,22 @@ can land independently.
    path — `renderCommandForDisplay` output as consumed by `DryRunModal.tsx`
    (the `command.executable`/`command.args` render), where the whole script
    text is one argument and would otherwise blow out the modal's command row.
+
+### Landed safety work (A.1/A.4)
+
+- **A.1 is implemented.** `EndConditionEvaluator.evaluateCondition` now treats
+  a script with any meaningful line after its first as inline text, so paths
+  such as `package.json\nnpm test` and `scripts/setup.sh\nnpm test` cannot be
+  dispatched as files with arguments. A first line followed only by blank lines
+  keeps the existing file-path behavior, and `parseScriptCommand` remains
+  unchanged.
+- **A.4 is implemented.** `PtyProcessManager.getShellInvocationError()` is the
+  shared preflight used by headless evaluation and interactive PTY spawning.
+  It rejects any newline-containing script resolved to `SHELL_KINDS.CMD` with
+  an actionable message pointing to the per-script `shell` field (for example,
+  `shell: pwsh`).
+- The editor, preview display treatment, serializer regression coverage, and
+  script-type coverage are intentionally deferred to later steps.
 
 ### B. Script type coverage
 

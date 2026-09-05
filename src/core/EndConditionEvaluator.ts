@@ -30,7 +30,10 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
-import { resolveShellInvocation } from "./harness/PtyProcessManager";
+import {
+  getShellInvocationError,
+  resolveShellInvocation,
+} from "./harness/PtyProcessManager";
 import {
   buildSecretProcessEnvironment,
   resolveSecretEnvironment,
@@ -170,15 +173,21 @@ export class EndConditionEvaluator {
     try {
       Log.info(`Evaluating end condition script: ${condition.script}`);
 
-      // Parse script command to separate path from arguments
+      // A meaningful newline makes the entire value inline script text. Only a
+      // first line followed by blank lines may still use file-path routing.
+      const hasMeaningfulNewline = condition.script
+        .split(/\r\n?|\n/)
+        .slice(1)
+        .some((line) => /\S/.test(line));
       const { scriptPath: rawScriptPath, args: additionalArgs } =
-        EndConditionEvaluator.parseScriptCommand(condition.script);
+        hasMeaningfulNewline
+          ? { scriptPath: "", args: [] }
+          : EndConditionEvaluator.parseScriptCommand(condition.script);
 
       // Resolve script path
-      const resolvedScriptPath = await this.resolveScriptPath(
-        rawScriptPath,
-        workingDirectory
-      );
+      const resolvedScriptPath = hasMeaningfulNewline
+        ? null
+        : await this.resolveScriptPath(rawScriptPath, workingDirectory);
 
       const actualSource = this.resolveActualSource(
         condition.returns,
@@ -232,6 +241,13 @@ export class EndConditionEvaluator {
           condition.script,
           condition.shell
         );
+        const shellError = getShellInvocationError(
+          condition.script,
+          shellInvocation.shellKind
+        );
+        if (shellError) {
+          throw new Error(shellError);
+        }
         Log.debug(
           `Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
             .map((a) => JSON.stringify(a))

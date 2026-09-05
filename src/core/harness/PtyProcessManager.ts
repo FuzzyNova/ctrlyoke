@@ -183,6 +183,26 @@ export function shellNeedsVerbatimArguments(shellKind: ShellKind): boolean {
   return shellKind === SHELL_KINDS.CMD;
 }
 
+const MULTILINE_SCRIPT_NEWLINE = /\r\n?|\n/;
+
+export const MULTILINE_CMD_SCRIPT_ERROR =
+  "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`.";
+
+/**
+ * Return the actionable preflight error for a script/shell combination, if any.
+ * Keep this next to shell resolution so headless and PTY execution enforce the
+ * same shell-specific script contract.
+ */
+export function getShellInvocationError(
+  script: string,
+  shellKind: ShellKind
+): string | undefined {
+  if (shellKind === SHELL_KINDS.CMD && MULTILINE_SCRIPT_NEWLINE.test(script)) {
+    return MULTILINE_CMD_SCRIPT_ERROR;
+  }
+  return undefined;
+}
+
 /**
  * Shape argv for `spawnPty`, the node-pty counterpart of
  * `child_process`'s `windowsVerbatimArguments`.
