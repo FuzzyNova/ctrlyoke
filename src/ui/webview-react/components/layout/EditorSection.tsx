@@ -240,6 +240,7 @@ const EditorSectionInner: React.FC = () => {
               />
             </button>
           )}
+          {!isExternallyManaged && <StepColorQuickPicker />}
           <span className="editor-mode-indicator text-center text-xs text-description-fg truncate min-w-0">
             {isExternallyManaged ? (
               (externalReadOnlyLabel ?? "Read-only — external run in progress")
@@ -314,7 +315,6 @@ const EditorSectionInner: React.FC = () => {
           </button>
         )}
         {!isExternallyManaged && <ExecutionModeQuickPicker />}
-        {!isExternallyManaged && <StepColorQuickPicker />}
         {!isExternallyManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}

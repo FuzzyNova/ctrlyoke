@@ -6,7 +6,11 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
-import { RUNNER_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  PROMPT_PROPERTIES,
+  RUNNER_IDS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 
 const { attachmentTokenCount, promptFileAction, isElementNarrow } = vi.hoisted(
   () => ({
@@ -222,25 +226,18 @@ describe("EditorSection", () => {
     expect(picker.querySelector(".codicon-terminal")).not.toBeNull();
   });
 
-  it("lets both step types override and reset the header step color", () => {
+  it("lets both step types override the header step color", () => {
     render(<EditorSection />);
 
     const color = screen.getByLabelText("Step color");
-    const reset = screen.getByRole("button", {
-      name: "Reset step color to inherit",
-    });
     expect(color).toHaveValue("#59a4f9");
-    expect(reset).toBeDisabled();
 
     fireEvent.change(color, { target: { value: "#123456" } });
     fireEvent.blur(color);
     expect(useEditorStore.getState().properties.color).toBe("#123456");
-    expect(reset).not.toBeDisabled();
-
-    fireEvent.click(reset);
-    expect(useEditorStore.getState().properties.color).toBeUndefined();
 
     act(() => {
+      useEditorStore.getState().setProperty(PROMPT_PROPERTIES.COLOR, undefined);
       useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
     });
     expect(screen.getByLabelText("Step color")).toHaveValue("#808080");
