@@ -172,6 +172,14 @@ hand: `promptQueue.getState().definitionRevision`, the same source
 
 ### 4. Content hash as step identity — remove it
 
+**Status: Implemented (2026-09-05).** `PromptQueue.mergeDiskSteps` now merges `_runtime` by index
+only across the shared completed prefix and takes disk wholesale beyond it. The shared prefix rule
+lives in the exported `immutablePrefixLength` helper in `RunContinuationService.ts`; the queue uses
+the minimum disk/memory boundary. Novelty is detected structurally from disk steps beyond that
+prefix (missing indices or differing step structures), preserving the count used by
+`mergeStepsFromDisk` and the proactive `STEPS_EXTENDED` push. The MCP completed-text rejection was
+removed, so repeated prompts are accepted while the queue-size limit remains enforced.
+
 `PromptQueue.mergeDiskSteps` (`:1380-1470`) keys step identity on `hashPromptContent(prompt|script)`
 in four places, and every one of them misbehaves when two steps share text:
 

@@ -311,7 +311,7 @@ export class RunContinuationService {
  * steps past the execution head stay editable, matching the in-process rule in
  * `PromptQueue.assertEditableDuringExecution`.
  */
-function immutablePrefixLength(steps: WorkflowStep[]): number {
+export function immutablePrefixLength(steps: WorkflowStep[]): number {
   let boundary = 0;
   steps.forEach((step, index) => {
     if (step._runtime?.completedAt !== undefined) {

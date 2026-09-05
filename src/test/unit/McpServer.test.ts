@@ -449,6 +449,32 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(persisted.steps?.[1]._runtime, undefined);
   });
 
+  test("accepts an append whose prompt matches a completed step", async () => {
+    const server = await setup();
+    const run = await createRun("repeat-completed", "2026-01-01T00-00-00-000Z", {
+      prompt: "repeat this gate",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool("ctrlyoke_append_queue", {
+        position: "end",
+        steps: [{ prompt: "repeat this gate" }],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.stepsAdded, 1);
+    assert.strictEqual(result.stepsRejected, 0);
+    assert.strictEqual(persisted.steps?.length, 2);
+    assert.strictEqual(
+      (persisted.steps?.[1] as { prompt: string }).prompt,
+      "repeat this gate"
+    );
+  });
+
   test("cannot append to any run but its own", async () => {
     const server = await setup();
     const own = await createRun("own", "2026-01-01T00-00-00-000Z");

@@ -427,11 +427,6 @@ export class CtrlYokeMCPServer {
       runRef: RunRef;
       definitionRevision: number;
       descriptorRevision: number;
-      rejectionDetails?: Array<{
-        prompt: string;
-        name?: string;
-        reason?: string;
-      }>;
     } | null = null;
 
     {
@@ -440,44 +435,21 @@ export class CtrlYokeMCPServer {
       );
       log("Current queue size:", queueData.steps?.length || 0);
 
-      // Validate prompts (check for already-completed only)
-      log("Starting deduplication validation...");
-      const validationResults = this.validatePrompts(
-        steps,
-        (queueData.steps || []) as WorkflowStep[]
-      );
-      log("Validation results:", validationResults);
-
-      const validPrompts = validationResults
-        .filter((r) => r.accepted)
-        .map((r) => r.prompt);
-      const rejectedPrompts = validationResults.filter((r) => !r.accepted);
-
-      if (validPrompts.length === 0) {
-        log("All prompts rejected, returning error response");
-        const rejectionReasons = rejectedPrompts
-          .map((r) => `"${r.prompt.prompt.substring(0, 50)}...": ${r.reason}`)
-          .join("; ");
-        throw new Error(
-          `All ${steps.length} prompts rejected. Reasons: ${rejectionReasons}`
-        );
-      }
-
       // Validate queue size limit (only for prompts that will actually be added)
       const unlimited = isUnlimitedMode();
       const maxQueueSize = getMaxQueueSize();
-      const newTotalSize = (queueData.steps || []).length + validPrompts.length;
+      const newTotalSize = (queueData.steps || []).length + steps.length;
       log("Queue size check:", {
         current: (queueData.steps || []).length,
-        adding: validPrompts.length,
-        rejected: rejectedPrompts.length,
+        adding: steps.length,
+        rejected: 0,
         newTotal: newTotalSize,
         max: unlimited ? "unlimited" : maxQueueSize,
       });
 
       if (!unlimited && newTotalSize > maxQueueSize) {
         throw new Error(
-          `Queue size limit exceeded. Current: ${(queueData.steps || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
+          `Queue size limit exceeded. Current: ${(queueData.steps || []).length}, Adding: ${steps.length}, Max: ${maxQueueSize}`
         );
       }
 
@@ -485,7 +457,7 @@ export class CtrlYokeMCPServer {
         this.workspaceRoot,
         selected.workflowKey,
         selected.runRef,
-        validPrompts,
+        steps,
         target.definitionRevision,
         lineageRepository,
         target.allowInterruptedRun,
@@ -494,8 +466,8 @@ export class CtrlYokeMCPServer {
 
       response = {
         success: true,
-        stepsAdded: validPrompts.length,
-        stepsRejected: rejectedPrompts.length,
+        stepsAdded: steps.length,
+        stepsRejected: 0,
         newQueueSize: appended.workingFile.steps?.length ?? 0,
         // Resolved inside the run-file lock; with 'next' it can differ from the
         // caller's view if the run advanced between its status read and this write.
@@ -505,15 +477,6 @@ export class CtrlYokeMCPServer {
         runRef: selected.runRef,
         definitionRevision: appended.definitionRevision,
         descriptorRevision: appended.descriptorRevision,
-        ...(rejectedPrompts.length > 0 && {
-          rejectionDetails: rejectedPrompts.map((r) => ({
-            prompt:
-              r.prompt.prompt.substring(0, 100) +
-              (r.prompt.prompt.length > 100 ? "..." : ""),
-            name: r.prompt.name,
-            reason: r.reason,
-          })),
-        }),
       };
     }
 
@@ -650,45 +613,6 @@ export class CtrlYokeMCPServer {
         },
       ],
     };
-  }
-
-  /**
-   * Validate prompts before appending.
-   * Only check 1 remains: reject prompts that have already been completed.
-   * Completion is determined by per-prompt _runtime.completedAt (source of truth).
-   */
-  private validatePrompts(
-    newPrompts: PromptStep[],
-    existingPrompts: WorkflowStep[]
-  ): Array<{ prompt: PromptStep; accepted: boolean; reason?: string }> {
-    const results: Array<{
-      prompt: PromptStep;
-      accepted: boolean;
-      reason?: string;
-    }> = [];
-
-    for (const newPrompt of newPrompts) {
-      // Check 1: Already completed (per-prompt _runtime.completedAt is authoritative)
-      const alreadyCompleted = existingPrompts.some(
-        (p) =>
-          p._runtime?.completedAt !== undefined &&
-          !isScriptStep(p) &&
-          p.prompt === newPrompt.prompt
-      );
-
-      if (alreadyCompleted) {
-        results.push({
-          prompt: newPrompt,
-          accepted: false,
-          reason: "Prompt already completed",
-        });
-        continue;
-      }
-
-      results.push({ prompt: newPrompt, accepted: true });
-    }
-
-    return results;
   }
 
   /**

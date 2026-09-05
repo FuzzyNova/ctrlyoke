@@ -1590,9 +1590,10 @@ suite("PromptQueue State Machine Tests", () => {
         completedAt: 2000,
       };
 
-      // Disk has both prompt-0 (without _runtime — not written yet) and a new MCP prompt
+      // Disk has the completed boundary and a new MCP prompt, but its session
+      // metadata has not been flushed yet.
       const diskPrompts: PromptStep[] = [
-        { prompt: "prompt-0" }, // matches memory, but no _runtime on disk copy
+        { prompt: "prompt-0", _runtime: { startedAt: 1000, completedAt: 2000 } },
         { prompt: "prompt-1-mcp" }, // new from MCP
       ];
 
@@ -1627,7 +1628,11 @@ suite("PromptQueue State Machine Tests", () => {
       };
 
       (queue as any).mergeDiskSteps([
-        { prompt: "prompt-0", enabled: false },
+        {
+          prompt: "prompt-0",
+          enabled: false,
+          _runtime: { startedAt: 1000, completedAt: 2000 },
+        },
         { prompt: "prompt-1-mcp" },
       ]);
 
@@ -1635,6 +1640,106 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[0].enabled, false);
       assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
       assert.strictEqual((state.steps[1] as PromptStep).prompt, "prompt-1-mcp");
+    });
+
+    test("should merge an appended duplicate prompt and keep runtime by index", () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "repeat" }, { prompt: "repeat" }])
+      );
+      (queue as any).state.steps[0]._runtime = {
+        sessionId: "first-session",
+        startedAt: 1000,
+        completedAt: 2000,
+      };
+      (queue as any).state.steps[1]._runtime = {
+        sessionId: "second-session",
+        startedAt: 3000,
+        completedAt: 4000,
+      };
+
+      const mergedCount = (queue as any).mergeDiskSteps([
+        { prompt: "repeat", _runtime: { startedAt: 10, completedAt: 20 } },
+        { prompt: "repeat", _runtime: { startedAt: 30, completedAt: 40 } },
+        { prompt: "repeat" },
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(mergedCount.length, 1);
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["repeat", "repeat", "repeat"]
+      );
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "first-session");
+      assert.strictEqual(
+        state.steps[0]._runtime?.completedAt,
+        2000,
+        "runtime must stay attached to the first index"
+      );
+      assert.strictEqual(
+        state.steps[1]._runtime?.sessionId,
+        "second-session",
+        "identical prompts must not share a session ID"
+      );
+      assert.strictEqual(state.steps[1]._runtime?.completedAt, 4000);
+      assert.strictEqual(state.steps[2]._runtime, undefined);
+      assert.strictEqual(state.results.length, 3);
+    });
+
+    test("should use the shorter disk/memory immutable boundary", () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "completed", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "shifted" },
+        ])
+      );
+      (queue as any).state.steps[0]._runtime = {
+        sessionId: "completed-session",
+        completedAt: 2,
+      };
+      (queue as any).state.steps[1]._runtime = {
+        sessionId: "memory-only-session",
+        completedAt: 4,
+      };
+
+      (queue as any).mergeDiskSteps([
+        { prompt: "completed", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "inserted" },
+        { prompt: "shifted" },
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(
+        state.steps[0]._runtime?.sessionId,
+        "completed-session"
+      );
+      assert.strictEqual(
+        state.steps[2]._runtime,
+        undefined,
+        "a disk-spliced step must not inherit runtime from a shifted index"
+      );
+    });
+
+    test("mergeStepsFromDisk returns a positive count for a real append", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-merge-")
+      );
+      const workingFilePath = path.join(tempRoot, "workflow.json");
+      try {
+        queue.loadPrompts(
+          createPromptFile([{ prompt: "existing" }]),
+          workingFilePath
+        );
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({ steps: [{ prompt: "existing" }, { prompt: "existing" }] }),
+          "utf8"
+        );
+
+        assert.strictEqual(await queue.mergeStepsFromDisk(), 1);
+        assert.strictEqual(queue.getState().steps.length, 2);
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
     });
   });
 

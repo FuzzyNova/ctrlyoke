@@ -1,5 +1,6 @@
 import * as path from "path";
 import { TypedEmitter } from "../utils/TypedEmitter";
+import { isDeepStrictEqual } from "util";
 import {
   PromptStep,
   PromptFile,
@@ -55,7 +56,6 @@ import {
   snapParallelGroupStartPosition,
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
-import { hashPromptContent } from "../utils/PromptIdentity";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
@@ -65,6 +65,7 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
+import { immutablePrefixLength } from "./orchestration/RunContinuationService";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -1368,8 +1369,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /**
    * Merge prompts from disk into the in-memory queue.
-   * Identifies new prompts by content hash, adopts disk ordering as source of truth,
-   * and preserves existing results for prompts already in memory.
+   * Adopts disk ordering as source of truth and preserves runtime metadata only
+   * for the completed prefix whose boundary both copies agree on.
    *
    * @param diskSteps Steps read from the working file on disk
    * @returns Array of newly-discovered steps (empty if none)
@@ -1382,81 +1383,62 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: diskSteps,
       parallelGroups,
     });
-    // Build map of steps we have in memory (by content hash)
-    const memoryPromptMap = new Map<string, WorkflowStep>();
-    for (const step of this.state.steps) {
-      const content = isScriptStep(step) ? step.script : step.prompt;
-      const hash = hashPromptContent(content);
-      memoryPromptMap.set(hash, step);
-    }
+    const memorySteps = this.state.steps;
+    // The disk boundary can lag the in-memory boundary while a just-completed
+    // step is waiting for its runtime flush. Only the shared prefix is safe to
+    // merge by index; a later disk insertion may have shifted the rest.
+    const immutablePrefix = Math.min(
+      immutablePrefixLength(diskTopology.steps),
+      immutablePrefixLength(memorySteps)
+    );
 
-    // Find steps on disk that don't exist in memory
-    const newStepsFromDisk: WorkflowStep[] = [];
-    for (const diskStep of diskSteps) {
-      const content = isScriptStep(diskStep)
-        ? diskStep.script
-        : diskStep.prompt;
-      const hash = hashPromptContent(content);
-      if (!memoryPromptMap.has(hash)) {
-        newStepsFromDisk.push(diskStep);
-      }
-    }
-
-    if (newStepsFromDisk.length === 0) {
-      this.state.parallelGroups = diskTopology.parallelGroups;
-      if (this.workflowFile) {
-        this.workflowFile = {
-          ...this.workflowFile,
-          parallelGroups: diskTopology.parallelGroups,
-        };
-      }
-      return [];
-    }
-
-    // CRITICAL: Use disk order and topology as source of truth
-    // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-    // But preserve in-memory state for existing steps — specifically _runtime (session IDs,
-    // completedAt, etc.) that may not have been persisted to disk yet at the time of this merge.
-    const mergedSteps = diskTopology.steps.map((diskStep) => {
-      const content = isScriptStep(diskStep)
-        ? diskStep.script
-        : diskStep.prompt;
-      const hash = hashPromptContent(content);
-      const memoryStep = memoryPromptMap.get(hash);
-      if (!memoryStep) {
+    // Disk owns order and topology. Memory contributes _runtime only for the
+    // index-stable completed prefix, so duplicate prompt text cannot alias two
+    // different steps' sessions.
+    const mergedSteps = diskTopology.steps.map((diskStep, index) => {
+      if (index >= immutablePrefix || !memorySteps[index]) {
         return diskStep;
       }
 
-      return {
-        ...diskStep,
-        ...(memoryStep._runtime ? { _runtime: memoryStep._runtime } : {}),
-      };
+      const memoryRuntime = memorySteps[index]._runtime;
+      return memoryRuntime
+        ? { ...diskStep, _runtime: memoryRuntime }
+        : diskStep;
     });
 
-    // Rebuild results array to match new step order
-    // Preserve existing results where we have them, add pending for new steps
-    const newResults: PromptResult[] = diskSteps.map((step) => {
-      const content = isScriptStep(step) ? step.script : step.prompt;
-      const hash = hashPromptContent(content);
-
-      // Find existing result for this step
-      const existingResultIndex = this.state.results.findIndex((r) => {
-        const resultHash = hashPromptContent(r.prompt);
-        return resultHash === hash || r.prompt === content;
+    // The novelty signal is structural rather than content identity: disk
+    // steps beyond the shared prefix are new when their index is absent from
+    // memory or their structure differs. This keeps the existing array/count
+    // contract used by WorkingFileManager and the proactive dashboard push.
+    const newStepsFromDisk = diskTopology.steps
+      .slice(immutablePrefix)
+      .filter((diskStep, offset) => {
+        const memoryStep = memorySteps[immutablePrefix + offset];
+        return (
+          !memoryStep ||
+          !isDeepStrictEqual(
+            stripStepRuntime([diskStep])[0],
+            stripStepRuntime([memoryStep])[0]
+          )
+        );
       });
 
-      if (existingResultIndex >= 0) {
-        // Use existing result (preserves completion status)
-        return this.state.results[existingResultIndex];
-      } else {
-        // New step - create pending result
+    // Rebuild results by index across the same immutable prefix. Results for
+    // shifted or newly introduced suffix steps must not follow prompt text.
+    const newResults: PromptResult[] = diskTopology.steps.map(
+      (step, index) => {
+        if (index < immutablePrefix && this.state.results[index]) {
+          return this.state.results[index];
+        }
+
+        const content = isScriptStep(step) ? step.script : step.prompt;
         return {
           prompt: content,
           status: STEP_STATUS.PENDING,
           timestamp: new Date(),
         };
       }
-    });
+    );
 
     this.state.steps = mergedSteps;
     this.state.parallelGroups = diskTopology.parallelGroups;
@@ -1597,8 +1579,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         : this.workflowFile;
       this.emitStateChange();
 
-      // Update working file if it exists (direct call since we're already in the operation queue)
-      await this.workingFileManager.updateWorkingFileDirect();
+      // This is an intentional local definition mutation. The in-memory queue
+      // already contains the append, so do not reconcile against the stale
+      // pre-append disk snapshot and let disk-authoritative merge replace it.
+      await this.workingFileManager.updateWorkingFileDirect(true);
       Log.info(
         `Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
       );
