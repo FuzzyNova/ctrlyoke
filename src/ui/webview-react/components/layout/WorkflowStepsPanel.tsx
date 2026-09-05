@@ -179,6 +179,16 @@ export function movePendingDragItem(
   const destinationId = findPendingDragContainer(state, overId);
   if (!sourceId || !destinationId || sourceId === destinationId) return state;
 
+  // Capture the target's index from the pre-mutation state (mirroring
+  // dnd-kit's own arrayMove). Recomputing this after removing the dragged
+  // item would under-count by one whenever the item being dragged sits
+  // before the drop target in the same order/items array (i.e. dragging
+  // downward), since the removal shifts everything after it left by one.
+  const destinationContainer = state.containers[destinationId];
+  const originalOverIndex = destinationContainer.groupId
+    ? destinationContainer.items.indexOf(overId)
+    : state.order.indexOf(overId);
+
   const next = clonePendingDragState(state);
   const source = next.containers[sourceId];
   source.items = source.items.filter((id) => id !== activeId);
@@ -201,16 +211,18 @@ export function movePendingDragItem(
   if (!refreshedDestinationId) return state;
   const refreshedDestination = next.containers[refreshedDestinationId];
   if (refreshedDestination.groupId) {
-    const overIndex = refreshedDestination.items.indexOf(overId);
-    refreshedDestination.items.splice(
-      overIndex < 0 ? refreshedDestination.items.length : overIndex,
-      0,
-      activeId
-    );
+    const insertIndex =
+      originalOverIndex < 0
+        ? refreshedDestination.items.length
+        : Math.min(originalOverIndex, refreshedDestination.items.length);
+    refreshedDestination.items.splice(insertIndex, 0, activeId);
   } else {
     const standalone = { id: activeId, items: [activeId] };
-    const overIndex = next.order.indexOf(overId);
-    next.order.splice(overIndex < 0 ? next.order.length : overIndex, 0, activeId);
+    const insertIndex =
+      originalOverIndex < 0
+        ? next.order.length
+        : Math.min(originalOverIndex, next.order.length);
+    next.order.splice(insertIndex, 0, activeId);
     next.containers[activeId] = standalone;
   }
   return next;

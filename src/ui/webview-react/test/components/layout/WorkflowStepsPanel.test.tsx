@@ -591,7 +591,7 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     );
 
     expect(buildPendingReorderPayload(next, 0, [])).toEqual({
-      newPendingOrder: [1, 2, 0, 3],
+      newPendingOrder: [1, 2, 3, 0],
       pendingGroups: [],
     });
   });
