@@ -932,6 +932,37 @@ describe("DryRunModal", () => {
     );
   });
 
+  it("summarizes multiline command previews while keeping the full text in the title", async () => {
+    const user = userEvent.setup();
+    const script = "echo first\necho second";
+    const displayCommand = "/bin/sh -c 'echo first\necho second'";
+    const multilinePreview: WorkflowExecutionPreview = {
+      ...preview,
+      steps: preview.steps.map((step) =>
+        step.stepIndex === 1
+          ? {
+              ...step,
+              command: {
+                ...step.command!,
+                args: ["-c", script],
+                displayCommand,
+              },
+            }
+          : step
+      ),
+    };
+    openPreview({ kind: "step", stepIndex: 1 }, multilinePreview);
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 1 }} />);
+
+    await user.click(screen.getByTitle("Command"));
+
+    const command = document.querySelector("pre[title]");
+    expect(command).not.toBeNull();
+    expect(command?.getAttribute("title")).toBe(displayCommand);
+    expect(command).toHaveTextContent("/bin/sh -c 'echo first …");
+    expect(command).not.toHaveTextContent("echo second");
+  });
+
   it("does not offer a shell toggle for a script step's POSIX command", async () => {
     const user = userEvent.setup();
     openPreview({ kind: "step", stepIndex: 1 });

@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import * as os from "os";
 import * as path from "path";
+import * as yaml from "js-yaml";
 import * as vscode from "vscode";
 import { suite, test } from "mocha";
 import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
@@ -391,6 +392,69 @@ suite("WorkflowSerializer", () => {
           messages.some(
             (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED
           )
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("preserves multiline scripts as YAML block scalars", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-serializer-multiline-")
+      );
+      const workingFilePath = path.join(tempDir, "input.ctrlyoke.json");
+      const outputPath = path.join(tempDir, "saved.ctrlyoke.yaml");
+      const address = {
+        workflowKey: "serializer-multiline-test-1",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      } as WorkflowViewAddress;
+      const scripts = [
+        "a\nb",
+        "a\nb\n",
+        "line with trailing space \nnext",
+        "first\n  indented",
+        "first\n\nthird",
+      ];
+
+      try {
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify({
+            steps: scripts.map((script) => ({ type: "script", script })),
+          }),
+          "utf8"
+        );
+
+        const serializer = new WorkflowSerializer(
+          () => undefined,
+          {} as any,
+          () =>
+            ({
+              getQueueState: () => ({ workingFilePath }),
+              getViewAddress: () => address,
+            }) as any,
+          () => undefined,
+          fakeWorkspaceState()
+        );
+
+        await serializer.handleSaveWorkflow(
+          "multiline-save",
+          address,
+          outputPath,
+          "yaml"
+        );
+
+        const serialized = await fs.readFile(outputPath, "utf8");
+        assert.strictEqual(
+          [...serialized.matchAll(/^    script: \|[-+]?\r?$/gm)].length,
+          scripts.length
+        );
+        const parsed = yaml.load(serialized) as {
+          steps: Array<{ script: string }>;
+        };
+        assert.deepStrictEqual(
+          parsed.steps.map((step) => step.script),
+          scripts
         );
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });

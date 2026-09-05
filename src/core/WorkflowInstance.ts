@@ -170,6 +170,7 @@ import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor
 import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
+  getShellInvocationError,
   ptyPostMessage,
   resolveShellInvocation,
   toPtySpawnArgs,
@@ -4109,6 +4110,34 @@ export class WorkflowInstance {
 
               const workflowId = self.id;
               const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+              // Wrap the script in its per-script override, the user's configured
+              // shell, or the auto-detected shell so PTY interactive input works.
+              // Same resolution headless inline script/condition execution uses
+              // (resolveShellInvocation), so the same script text runs under the
+              // same shell whether the step is interactive or headless.
+              const {
+                executable: shell,
+                args: shellArgs,
+                shellKind,
+                windowsVerbatimArguments,
+              } = resolveShellInvocation(options.script, options.shell);
+              Log.debug(
+                `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
+                  .map((a) => JSON.stringify(a))
+                  .join(" ")}`
+              );
+              const shellError = getShellInvocationError(
+                options.script,
+                shellKind
+              );
+              if (shellError) {
+                Log.warn(`[spawnScriptPty] ${shellError}`);
+                options.onOutput(shellError);
+                resolve(1);
+                return;
+              }
+
               const controllerClientId =
                 ptyManager.getExpectedController(workflowId);
               options.onSessionCreated?.(preSessionId);
@@ -4126,23 +4155,6 @@ export class WorkflowInstance {
                 controllerClientId,
               };
               ptyPostMessage(terminalStartedMessage);
-
-              // Wrap the script in the user's configured (or auto-detected) shell
-              // so PTY interactive input works. Same resolution headless inline
-              // script/condition execution uses (resolveShellInvocation), so the
-              // same script text runs under the same shell whether the step is
-              // interactive or headless.
-              const {
-                executable: shell,
-                args: shellArgs,
-                shellKind,
-                windowsVerbatimArguments,
-              } = resolveShellInvocation(options.script);
-              Log.debug(
-                `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
-                  .map((a) => JSON.stringify(a))
-                  .join(" ")}`
-              );
 
               try {
                 let timeoutHandle: ReturnType<typeof setTimeout> | undefined;

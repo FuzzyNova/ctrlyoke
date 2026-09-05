@@ -1,12 +1,12 @@
 # Multi-Line Script Authoring and Script Type Coverage
 
-> **Status:** Proposed
+> **Status:** Complete — deliverables A and B are landed.
 >
 > **Priority:** P2 for the multi-line authoring half (a file-format capability
 > the dashboard cannot reach, plus one silent-misexecution hazard); P3 for the
 > script-type half (incremental interpreter coverage).
 >
-> **Related:** `dev/backlog/SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md` — that plan pins
+> **Related:** `dev/implemented/SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md` — that plan pins
 > _which shell_ runs an inline script; this one covers _what text you can put in
 > the field_ and _which interpreters a script file can reach_. They touch the
 > same call sites (`EndConditionEvaluator.getScriptCommand`,
@@ -128,8 +128,12 @@ can land independently.
    hope", and is one condition in `evaluateCondition` before
    `parseScriptCommand` is consulted.
 
-2. **Give the script field a multi-line mode.** `ScriptCommandEditor` gains a
-   `multiline` passthrough; `ScriptConditionEditor` adopts it. Keep Enter's
+2. **Give the script field a multi-line mode.** `ScriptCommandEditor` already
+   forwards `multiline`/`wrapSingleLine` — it is typed
+   `Omit<SingleLineCompletionEditorProps, "completionSource">` and spreads
+   `{...props}` straight into `SingleLineCompletionEditor`, so **no
+   passthrough work is needed**; the only change is the call site opting in.
+   `ScriptConditionEditor` adopts it. Keep Enter's
    single-line behavior where the field is genuinely a command
    (`WorkflowPropertiesPanel`'s worktree setup, `HooksEditor`'s hook command)
    unless there is demand, so this is opt-in per call site rather than a global
@@ -140,11 +144,16 @@ can land independently.
    keeping single-line Enter semantics — but it does not let a user type a
    newline, so it does not deliver the feature on its own.
 
-3. **Serializer round trip.** Confirm `WorkflowSerializer.buildCleanWorkflow`
-   emits a block scalar (`|`) rather than a quoted string with `\n` escapes,
-   so a multi-line script saved from the dashboard stays readable in the file.
-   This is the one place where "already works in YAML" needs verifying rather
-   than assuming.
+3. **Serializer round trip — already correct; add regression coverage only.**
+   Verified against the current `yaml.dump(..., { lineWidth: -1, noRefs: true,
+quoteStyle: "double" })` call in `src/ui/WorkflowSerializer.ts:669` (the
+   only non-trust-prompt `yaml.dump` in the codebase): js-yaml already emits
+   `|` / `|-` block scalars and round-trips losslessly for every shape tested
+   — `"a\nb"`, `"a\nb\n"`, a line with a trailing space, a leading-indent
+   line, and internal blank lines. So this needs a **regression test**, not an
+   implementation change. Lock the behavior in so a future serializer option
+   change (e.g. adding `forceQuotes`) cannot silently turn scripts back into
+   `"a\nb"` escapes.
 
 4. **cmd cannot do this, and should say so.** A `cmd /d /c` invocation is a
    single command line; a multi-line script cannot survive it. When the
@@ -153,9 +162,43 @@ can land independently.
    This is the natural place for `SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md`'s
    per-script `shell` to be the fix the message points at.
 
-5. **Display.** Terminal tab labels, dry-run preview, and any
-   `formatCommandForDisplay` output need a first-line-plus-ellipsis treatment;
-   a raw multi-line string in a tab title is not viable.
+5. **Display.** Narrower than first written. Terminal tab labels are **already
+   safe**: `WorkflowExecutor.executeScriptStep` derives
+   `stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0]`, which
+   yields the first whitespace token and can never produce a multi-line title.
+   What does need first-line-plus-ellipsis treatment is the dry-run preview
+   path — `renderCommandForDisplay` output as consumed by `DryRunModal.tsx`
+   (the `command.executable`/`command.args` render), where the whole script
+   text is one argument and would otherwise blow out the modal's command row.
+
+### Landed safety work (A.1/A.4)
+
+- **A.1 is implemented.** `EndConditionEvaluator.evaluateCondition` now treats
+  a script with any meaningful line after its first as inline text, so paths
+  such as `package.json\nnpm test` and `scripts/setup.sh\nnpm test` cannot be
+  dispatched as files with arguments. A first line followed only by blank lines
+  keeps the existing file-path behavior, and `parseScriptCommand` remains
+  unchanged.
+- **A.4 is implemented.** `PtyProcessManager.getShellInvocationError()` is the
+  shared preflight used by headless evaluation and interactive PTY spawning.
+  It rejects any newline-containing script resolved to `SHELL_KINDS.CMD` with
+  an actionable message pointing to the per-script `shell` field (for example,
+  `shell: pwsh`).
+
+### A dotfile script name was executed as a program (fixed by B.4)
+
+Worth recording because the symptom was mystifying: `path.extname(".sh")` is
+`""`, not `".sh"` — Node treats a leading-dot name as a dotfile with no
+extension. Under the old dispatcher, `.sh` therefore missed the `".sh"` case
+and fell into the default "execute the path directly" branch, so the step tried
+to *run* a file named `.sh` as a program. On Windows that surfaces as the OS
+"How do you want to open this file?" association dialog naming just `.sh`,
+which blocks a headless run until someone dismisses it. A template such as
+`{{name}}.sh` resolving to an empty `name` produces exactly this shape.
+
+B.4's replacement of the silent default branch fixes it: an unmapped extension
+that is not host-executable now returns `null`, which `evaluateCondition`
+reports as "Unsupported script type" instead of attempting execution.
 
 ### B. Script type coverage
 
@@ -170,6 +213,10 @@ can land independently.
    the error path for `null`.
 5. Optionally read a shebang for extensionless files and dispatch on it, which
    is the only way that shape works on Windows.
+
+Shebang dispatch is explicitly deferred. Extensionless files continue to use
+direct execution only when the host recognizes them as executable; adding
+cross-platform shebang parsing is a separate follow-up.
 
 Extension-to-interpreter dispatch is data, not control flow — it belongs in a
 `const` map in `DashboardConstants.ts` keyed by extension, per the
@@ -196,13 +243,13 @@ the two platform guards.
 
 ## Acceptance Criteria
 
-- A multi-line script can be authored in the dashboard, saved, reloaded, and
-  executed with the same text and exit code as the equivalent YAML file.
-- No script containing a newline is ever dispatched as a file path with
-  arguments.
-- `.ps1` conditions run on macOS and Linux.
-- An unsupported script extension produces an "unsupported script type" error
-  instead of an attempt to execute the file.
+- [x] A multi-line script can be authored in the dashboard, saved, reloaded,
+      and executed with the same text and exit code as the equivalent YAML file.
+- [x] No script containing a newline is ever dispatched as a file path with
+      arguments.
+- [x] `.ps1` conditions run on macOS and Linux. (Deliverable B)
+- [x] An unsupported script extension produces an "unsupported script type"
+      error instead of an attempt to execute the file. (Deliverable B)
 
 ## Non-goals
 

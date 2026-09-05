@@ -9,10 +9,20 @@ import {
 } from "../core/EndConditionEvaluator";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+
+class TestableEndConditionEvaluator extends EndConditionEvaluator {
+  commandFor(
+    scriptPath: string
+  ): { executable: string; args: string[] } | null {
+    return this.getScriptCommand(scriptPath);
+  }
+}
 
 suite("EndConditionEvaluator Tests", () => {
-  let evaluator: EndConditionEvaluator;
+  let evaluator: TestableEndConditionEvaluator;
   let workspaceRoot: string;
+  const originalPlatform = process.platform;
 
   setup(() => {
     // Create a minimal mock PlatformAdapter for testing
@@ -26,12 +36,16 @@ suite("EndConditionEvaluator Tests", () => {
       getExtensionPath: () => "",
     };
 
-    evaluator = new EndConditionEvaluator(mockPlatform);
+    evaluator = new TestableEndConditionEvaluator(mockPlatform);
   });
 
   teardown(() => {
     evaluator.dispose();
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    Object.defineProperty(process, "platform", {
+      value: originalPlatform,
+      configurable: true,
+    });
   });
 
   suite("parseScriptCommand - Tokenization", () => {
@@ -101,6 +115,141 @@ suite("EndConditionEvaluator Tests", () => {
     });
   });
 
+  suite("getScriptCommand - File Dispatch", () => {
+    const scriptPath = path.join("workspace", "check");
+    const extensions = [
+      ".py",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".ts",
+      ".sh",
+      ".bat",
+      ".cmd",
+      ".ps1",
+    ] as const;
+
+    // `process.platform` is process-wide state. Without restoring it, every
+    // later test in this run sees the last value set here (linux), so Windows
+    // hosts silently exercise POSIX branches — including direct execution of
+    // files the platform cannot actually run.
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
+
+    function setPlatform(platform: NodeJS.Platform): void {
+      Object.defineProperty(process, "platform", {
+        value: platform,
+        configurable: true,
+      });
+    }
+
+    teardown(() => {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    });
+
+    for (const platform of ["win32", "linux"] as const) {
+      test(`routes every supported extension on ${platform}`, () => {
+        setPlatform(platform);
+
+        for (const extension of extensions) {
+          const command = evaluator.commandFor(`${scriptPath}${extension}`);
+
+          if (extension === ".bat" || extension === ".cmd") {
+            if (platform === "win32") {
+              assert.ok(command);
+              assert.strictEqual(command.executable, "cmd");
+              assert.deepStrictEqual(command.args, [
+                "/c",
+                `${scriptPath}${extension}`,
+              ]);
+            } else {
+              assert.strictEqual(command, null);
+            }
+            continue;
+          }
+
+          assert.ok(command, extension);
+          switch (extension) {
+            case ".py":
+              assert.ok(
+                platform === "win32"
+                  ? command.executable === "python"
+                  : command.executable === "python" ||
+                      command.executable === "python3"
+              );
+              break;
+            case ".js":
+            case ".mjs":
+            case ".cjs":
+              assert.strictEqual(command.executable, "node");
+              break;
+            case ".ts":
+              assert.strictEqual(command.executable, "node");
+              assert.deepStrictEqual(command.args, [
+                "--experimental-strip-types",
+                `${scriptPath}${extension}`,
+              ]);
+              break;
+            case ".sh":
+              assert.strictEqual(
+                command.executable,
+                platform === "win32" ? "bash" : "sh"
+              );
+              break;
+            case ".ps1":
+              assert.ok(
+                platform === "win32"
+                  ? command.executable === "pwsh" ||
+                      command.executable === "powershell.exe"
+                  : command.executable === "pwsh"
+              );
+              assert.deepStrictEqual(command.args, [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                `${scriptPath}${extension}`,
+              ]);
+              break;
+          }
+          assert.deepStrictEqual(command.args, [
+            ...(extension === ".ps1"
+              ? ["-ExecutionPolicy", "Bypass", "-File"]
+              : extension === ".ts"
+                ? ["--experimental-strip-types"]
+                : []),
+            `${scriptPath}${extension}`,
+          ]);
+        }
+      });
+    }
+
+    test("executes an executable file directly", () => {
+      setPlatform("win32");
+      const executablePath = path.join(workspaceRoot, "tool.exe");
+      fs.writeFileSync(executablePath, "not a real executable", "utf8");
+
+      const command = evaluator.commandFor(executablePath);
+      assert.deepStrictEqual(command, {
+        executable: executablePath,
+        args: [],
+      });
+    });
+
+    test("rejects unsupported non-executable files on every platform", () => {
+      const unsupportedPath = path.join(workspaceRoot, "data.txt");
+      fs.writeFileSync(unsupportedPath, "not executable", "utf8");
+
+      for (const platform of ["win32", "linux"] as const) {
+        setPlatform(platform);
+        assert.strictEqual(evaluator.commandFor(unsupportedPath), null);
+      }
+    });
+  });
+
   suite("evaluateCondition - Integration", () => {
     // These tests require actual script execution, so they're more integration-style
     // but test core behavior
@@ -130,6 +279,145 @@ suite("EndConditionEvaluator Tests", () => {
       assert.strictEqual(result.errored, false);
       assert.strictEqual(result.matchRule, "exact");
       assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("uses an inline shell override for a direct command", async () => {
+      const originalGetTerminalSettings =
+        ConfigurationUtils.getTerminalSettings;
+      ConfigurationUtils.getTerminalSettings = () => ({
+        ...originalGetTerminalSettings(),
+        shellExecutable:
+          process.platform === "win32"
+            ? "missing-shell-for-override-test.exe"
+            : "/missing-shell-for-override-test",
+      });
+
+      try {
+        const windows = process.platform === "win32";
+        const result = await evaluator.evaluateCondition(
+          {
+            script: windows ? "echo shell-override" : "printf shell-override",
+            returns: "shell-override",
+            shell: windows ? "cmd.exe" : "/bin/sh",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.passed, true);
+        assert.strictEqual(result.errored, false);
+      } finally {
+        ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+      }
+    });
+
+    test("preserves direct-command behavior when shell is omitted", async () => {
+      const originalGetTerminalSettings =
+        ConfigurationUtils.getTerminalSettings;
+      ConfigurationUtils.getTerminalSettings = () => ({
+        ...originalGetTerminalSettings(),
+        shellExecutable: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
+      });
+
+      try {
+        const result = await evaluator.evaluateCondition(
+          {
+            script:
+              process.platform === "win32"
+                ? "echo no-shell-override"
+                : "printf no-shell-override",
+            returns: "no-shell-override",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.passed, true);
+        assert.strictEqual(result.errored, false);
+      } finally {
+        ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+      }
+    });
+
+    test("treats package.json and setup.sh newline shapes as inline scripts", async () => {
+      fs.mkdirSync(path.join(workspaceRoot, "scripts"), { recursive: true });
+      fs.writeFileSync(path.join(workspaceRoot, "package.json"), "{}", "utf8");
+      fs.writeFileSync(
+        path.join(workspaceRoot, "scripts", "setup.sh"),
+        "exit 0\n",
+        "utf8"
+      );
+
+      const shell = process.platform === "win32" ? "powershell.exe" : "/bin/sh";
+      for (const script of [
+        'package.json\nnode -e "process.exit(7)"',
+        'scripts/setup.sh\nnode -e "process.exit(7)"',
+      ]) {
+        const result = await evaluator.evaluateCondition(
+          {
+            script,
+            shell,
+            compareSource: "exitCode",
+            returns: "7",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.errored, false, script);
+        assert.strictEqual(result.exitCode, 7, script);
+        assert.strictEqual(result.passed, true, script);
+      }
+    });
+
+    test("keeps single-line file paths with arguments on the file route", async () => {
+      fs.writeFileSync(
+        path.join(workspaceRoot, "args.js"),
+        "process.stdout.write(process.argv[2] ?? '')",
+        "utf8"
+      );
+
+      const result = await evaluator.evaluateCondition(
+        {
+          script: "args.js expected-argument",
+          compareSource: "stdout",
+          returns: "expected-argument",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.actual, "expected-argument");
+    });
+
+    test("runs a multiline inline script and compares its last command exit code", async () => {
+      const result = await evaluator.evaluateCondition(
+        {
+          script: 'echo first\nnode -e "process.exit(7)"',
+          compareSource: "exitCode",
+          returns: "7",
+          shell: process.platform === "win32" ? "powershell.exe" : "/bin/sh",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, false);
+      assert.strictEqual(result.exitCode, 7);
+      assert.strictEqual(result.passed, true);
+    });
+
+    test("rejects a multiline script under cmd before execution", async () => {
+      const result = await evaluator.evaluateCondition(
+        {
+          script: "echo first\necho last",
+          shell: "cmd",
+        },
+        workspaceRoot
+      );
+
+      assert.strictEqual(result.errored, true);
+      assert.strictEqual(
+        result.error,
+        "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`."
+      );
     });
 
     test("should return timeout result when script takes too long", async function () {
@@ -249,13 +537,14 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject unsupported script types", async () => {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
-        return;
-      }
+      const scriptPath = path.join(workspaceRoot, "unsupported.txt");
+      fs.writeFileSync(scriptPath, "not executable", "utf8");
 
-      // Test with an unsupported extension
-      // We need an actual file for this, so this is a limited test
+      const result = await evaluator.validateScript(scriptPath);
+      assert.deepStrictEqual(result, {
+        valid: false,
+        error: "Unsupported script type",
+      });
     });
   });
 
@@ -492,17 +781,13 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("marks unsupported script types as errored", async function () {
-      if (process.platform === "win32") {
-        return;
-      }
-
       const scriptPath = path.join(
         workspaceRoot,
         ".ctrlyoke",
-        "unsupported-condition.ps1"
+        "unsupported-condition.txt"
       );
       fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
-      fs.writeFileSync(scriptPath, "Write-Output unsupported");
+      fs.writeFileSync(scriptPath, "unsupported");
       try {
         const result = await evaluate({ script: scriptPath });
         assert.strictEqual(result.passed, false);

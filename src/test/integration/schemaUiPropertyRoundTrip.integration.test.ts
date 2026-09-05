@@ -163,6 +163,7 @@ const SAMPLES: Record<string, unknown> = {
   returns: "OK",
   secrets: ["DEPLOY_TOKEN"],
   sessionId: "seeded-session-id",
+  shell: "bash",
   skills: ["seeded-skill"],
   timeout: 45000,
   toolPermissions: {
@@ -369,6 +370,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["returns", ["${idPrefix}-returns"]],
   ["secrets", ["${idPrefix}-control"]],
   ["sessionId", ["settings-session-id"]],
+  ["shell", ["${idPrefix}-shell"]],
   ["skills", ["settings-skills"]],
   ["timeout", ["${idPrefix}-timeout"]],
   ["toolPermissions", ["settings-permission-mode"]],

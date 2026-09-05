@@ -1,6 +1,6 @@
 # Per-Script `shell` Override
 
-> **Status:** Proposed
+> **Status:** Implemented end to end
 >
 > **Priority:** P3 — small authoring convenience. Not a bug fix (the shell
 > inconsistency it's adjacent to is already fixed) and not a release gate.
@@ -16,12 +16,12 @@
 
 ## Problem
 
-`resolveShellInvocation(script)` (`src/core/harness/PtyProcessManager.ts:143`)
+`resolveShellInvocation(script)` (`src/core/harness/PtyProcessManager.ts:214`)
 is now the single source for "which shell runs this inline script text,"
 consulted by both interactive script-step PTY spawning
-(`WorkflowInstance.ts:3723`) and the headless inline-command fallback shared by
+(`WorkflowInstance.ts:4138`) and the headless inline-command fallback shared by
 script steps, preconditions, and end-conditions
-(`EndConditionEvaluator.ts:227`). It resolves `terminal.shellExecutable` if the
+(`EndConditionEvaluator.ts:230`). It resolves `terminal.shellExecutable` if the
 user set it, else auto-detects per platform.
 
 That closes the original bug (same script text silently ran under a different
@@ -53,7 +53,7 @@ path.
 
 Dry-run preview has its own, third, independent "which shell" answer for
 script steps — `ExecutionPreviewService.buildScriptCommand()`
-(`src/core/ExecutionPreviewService.ts:1153-1180`) hardcodes
+(`src/core/ExecutionPreviewService.ts:1312-1340`) hardcodes
 `process.env.ComSpec ?? "cmd.exe"` on Windows / `process.env.SHELL ?? "/bin/sh"`
 elsewhere, wrapped as `["/d", "/s", "/c", script]` / `["-c", script]`, and
 always renders it with the `cmd` or `posix` `CommandDisplayShell` dialect. It
@@ -140,6 +140,8 @@ covers.
 
 ### Schema
 
+**Landed in the foundation step.**
+
 `schemas/workflow-schema.json`, `definitions.scriptProperties.properties`:
 
 ```json
@@ -166,6 +168,8 @@ Reference it the same way the sibling fields are already referenced:
 
 ### Types
 
+**Landed in the foundation step.**
+
 `src/types/CtrlYokeTypes.ts` — one field on the shared shape, inherited by all
 three consumers for free:
 
@@ -186,7 +190,18 @@ already, so no change is needed at those three declarations.
 
 ### Resolver signature
 
-`src/core/harness/PtyProcessManager.ts:143`:
+**Landed in the foundation step.** The resolver also accepts the optional
+platform injection described below, so its signature is settled before the
+preview work.
+
+`src/core/harness/PtyProcessManager.ts:214`. **The change is purely additive —
+one new optional parameter slotted ahead of the existing setting lookup. Every
+existing return field stays**, in particular `windowsVerbatimArguments`, which
+both call sites already consume and which is what keeps a quoted inline `cmd
+/d /c` payload from reaching cmd.exe mangled (see the
+`shellNeedsVerbatimArguments` doc comment immediately above the resolver).
+Dropping it would silently reintroduce the "cmd script exits 0 regardless"
+bug:
 
 ```ts
 export function resolveShellInvocation(
@@ -196,6 +211,7 @@ export function resolveShellInvocation(
   executable: string;
   args: string[];
   shellKind: ShellKind;
+  windowsVerbatimArguments: boolean; // unchanged — do not drop
 } {
   const pinned = shellOverride?.trim();
   const terminalSettings = ConfigurationUtils.getTerminalSettings();
@@ -205,41 +221,60 @@ export function resolveShellInvocation(
     settingOverride ||
     (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
   const shellKind = resolveShellKind(executable);
-  return { executable, args: buildShellWrapArgs(shellKind, script), shellKind };
+  return {
+    executable,
+    args: buildShellWrapArgs(shellKind, script),
+    shellKind,
+    windowsVerbatimArguments: shellNeedsVerbatimArguments(shellKind),
+  };
 }
 ```
 
 ### Call sites
 
-- **`WorkflowExecutor.executeScriptStep`** (`src/core/WorkflowExecutor.ts:1199`)
-  — add `shell: effectiveStep.shell` to the `resolvedProperties` object built
-  there. It already flows into
-  `endConditionEvaluator.evaluateCondition(resolvedProperties, ...)`
-  (line 1235) for free, since that call takes the whole `ScriptProperties`
-  object. Also pass it into the `context.spawnScriptPty({...})` call
-  (line 1213).
-- **`spawnScriptPty` option type** (`src/core/WorkflowExecutor.ts:228-245`) —
+**Landed in the foundation step**, except for the explicitly deferred
+`ExecutionPreviewService` item below.
+
+- **`WorkflowExecutor.executeScriptStep`** (`src/core/WorkflowExecutor.ts`,
+  the `resolvedProperties` literal at ~line 1816) — add
+  `shell: effectiveStep.shell`. It already flows into
+  `endConditionEvaluator.evaluateCondition(resolvedProperties, ...)` for free,
+  since that call takes the whole `ScriptProperties` object. Also pass it into
+  the `context.spawnScriptPty({...})` call (~line 1830).
+- **`spawnScriptPty` option type** (`src/core/WorkflowExecutor.ts:283-306`) —
   add `shell?: string;` beside `script`.
-- **`WorkflowInstance.ts:3723`** (the `spawnScriptPty` implementation) — change
+- **`WorkflowInstance.ts:4138`** (the `spawnScriptPty` implementation) — change
   `resolveShellInvocation(options.script)` to
   `resolveShellInvocation(options.script, options.shell)`.
-- **`EndConditionEvaluator.ts:227`** (the inline-command fallback shared by
+- **`EndConditionEvaluator.ts:230`** (the inline-command fallback shared by
   headless script steps, preconditions, and end-conditions) — change
   `resolveShellInvocation(condition.script)` to
   `resolveShellInvocation(condition.script, condition.shell)`. `condition` is
   already typed `ScriptProperties`, so this is a one-line change.
-- **`ExecutionPreviewService.buildScriptCommand`**
-  (`src/core/ExecutionPreviewService.ts:1153-1180`) — replace the hardcoded
-  `ComSpec`/`SHELL` branch with a call to the same
-  `resolveShellInvocation(step.script, step.shell)`, so preview both fixes its
-  preexisting wrong-shell display and reflects the new override. Map the
+- **`ExecutionPreviewService.buildScriptCommand`** *(landed in the preview step)*
+  (`src/core/ExecutionPreviewService.ts:1312-1340`) — routes through
+  `resolveShellInvocation(step.script, step.shell,
+  this.options.platform ?? process.platform)`, so preview both fixes its
+  preexisting wrong-shell display and reflects the new override. It maps the
   returned `shellKind` to `CommandDisplayShell`: `pwsh`/`powershell` →
   `COMMAND_DISPLAY_SHELLS.POWERSHELL` (finally used), `cmd` →
   `COMMAND_DISPLAY_SHELLS.CMD`, everything else → `COMMAND_DISPLAY_SHELLS.POSIX`
   — the same three-way simplification `renderCommandForDisplay` already
   supports, just driven by the real resolved kind instead of a platform guess.
-  `requiresShellVerbatimArgs` becomes `shellKind === SHELL_KINDS.CMD` (was
-  `isWindows`).
+  `requiresShellVerbatimArgs` is `shellKind === SHELL_KINDS.CMD` (rather than
+  a platform check).
+
+  **Platform-injection gap (resolve this while implementing).**
+  `buildScriptCommand` currently branches on
+  `this.options.platform ?? process.platform` — an injected platform that
+  `ExecutionPreviewService` tests rely on to assert both platforms' previews
+  from one host. `resolveShellInvocation` reads `process.platform` directly
+  and has no such seam, so a naive swap makes preview host-platform-only and
+  silently weakens that existing coverage. The resolver now accepts an
+  optional `platform?: NodeJS.Platform` parameter defaulting to
+  `process.platform`, and preview passes its injected platform through — a
+  small, honest seam rather than new indirection. Existing cross-platform
+  preview coverage remains intact.
 - `{{vars}}` substitution stays untouched. `VarSubstitutor` deliberately
   substitutes only `script` and `env` (see its file header) — `shell` is a
   static interpreter selector like `timeout`/`compareSource`, not text meant
@@ -264,6 +299,18 @@ call sites beyond whatever prop plumbing each already does for the rest of
 
 Placeholder/help text: `"Auto (terminal.shellExecutable, or platform default)"`,
 mirroring the Settings page's own `shellExecutable` description.
+
+**Save-path allowlist (found in review).** Adding the field to the editor is
+not sufficient on its own: `WorkflowSerializer.buildCleanWorkflow` strips a
+working file down to the `PROMPT_FIELDS` allowlist, so any per-step field
+missing from that list is silently dropped on save. `shell` needs
+`PROMPT_PROPERTIES.SHELL` added to both `PROMPT_PROPERTIES`
+(`src/types/DashboardConstants.ts`) and `WorkflowSerializer.PROMPT_FIELDS`.
+Treat this as the standing rule for any future per-step field — the
+`schemaUiPropertyRoundTrip` and `WorkflowSerializer` round-trip suites are what
+catch it, so never silence them with an opt-out entry to make a staged step go
+green; the opt-out outlives the step that added it and hides a real save-path
+bug.
 
 ### Documentation
 
@@ -300,21 +347,23 @@ mirroring the Settings page's own `shellExecutable` description.
 
 ## Acceptance Criteria
 
-- `scriptStep`, `preCondition`, and `endCondition` accept an optional `shell`
+- [x] `scriptStep`, `preCondition`, and `endCondition` accept an optional `shell`
   string field in the schema and `ScriptProperties` type.
-- A pinned `shell` takes effect only on the inline/no-file-match execution
+- [x] A pinned `shell` takes effect only on the inline/no-file-match execution
   path; extension-based script *file* dispatch (`.ps1`, `.sh`, etc.) is
   unaffected.
-- Precedence is per-script `shell` → `terminal.shellExecutable` →
+- [x] Precedence is per-script `shell` → `terminal.shellExecutable` →
   platform auto-detect, identical across interactive script-step PTYs and
   headless script steps/preconditions/end-conditions.
-- Dry-run preview's script-step command reflects the same resolved shell
+- [x] Dry-run preview's script-step command reflects the same resolved shell
   (including the override) that execution actually uses — no third,
   independent shell guess remains in `ExecutionPreviewService`.
-- No new `CapabilityDomain`, capability declaration, or portability-report row
+- [x] No new `CapabilityDomain`, capability declaration, or portability-report row
   is added for shell selection.
-- No workflow-root `shell` property or `executionProperties` inheritance is
+- [x] No workflow-root `shell` property or `executionProperties` inheritance is
   added.
+
+All acceptance criteria are met; there are no known exceptions.
 
 ## Non-goals
 

@@ -137,4 +137,60 @@ describe("ScriptCommandEditor", () => {
       expect(screen.getByText("git status")).toBeInTheDocument();
     });
   });
+
+  it("inserts a newline and keeps focus in multiline mode", async () => {
+    const user = userEvent.setup();
+    const onBlur = vi.fn();
+    const onChange = vi.fn();
+    const { content } = renderEditor({
+      multiline: true,
+      onBlur,
+      onChange,
+    });
+
+    await user.click(content);
+    await user.type(content, "echo one");
+    await user.keyboard("{Enter}echo two");
+
+    expect(onChange).toHaveBeenLastCalledWith("echo one\necho two");
+    expect(onBlur).not.toHaveBeenCalled();
+    expect(content.querySelectorAll(".cm-line")).toHaveLength(2);
+    expect(
+      [...content.querySelectorAll(".cm-line")].map((line) => line.textContent)
+    ).toEqual(["echo one", "echo two"]);
+  });
+
+  it("blurs and keeps the command single-line when Enter is pressed", async () => {
+    const user = userEvent.setup();
+    const onBlur = vi.fn();
+    const { content } = renderEditor({ onBlur });
+
+    await user.click(content);
+    await user.type(content, "echo one");
+    await user.keyboard("{Enter}");
+
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    expect(content).not.toHaveTextContent("\n");
+    expect(content).not.toHaveFocus();
+  });
+
+  it("preserves pasted newlines only in multiline mode", () => {
+    const multiline = renderEditor({ multiline: true });
+    fireEvent.paste(multiline.content, {
+      clipboardData: { getData: () => "echo one\necho two" },
+    });
+    expect(multiline.content.querySelectorAll(".cm-line")).toHaveLength(2);
+    expect(
+      [...multiline.content.querySelectorAll(".cm-line")].map(
+        (line) => line.textContent
+      )
+    ).toEqual(["echo one", "echo two"]);
+    multiline.unmount();
+
+    const singleLine = renderEditor();
+    fireEvent.paste(singleLine.content, {
+      clipboardData: { getData: () => "echo one\necho two" },
+    });
+    expect(singleLine.content).toHaveTextContent("echo oneecho two");
+  });
 });

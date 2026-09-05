@@ -325,6 +325,8 @@ definitions:
         $ref: '#/definitions/scriptStep/properties/returns'
       timeout:
         $ref: '#/definitions/scriptStep/properties/timeout'
+      shell:
+        $ref: '#/definitions/scriptStep/properties/shell'
       errorBehavior:
         $ref: '#/definitions/scriptStep/properties/errorBehavior'
       secrets:
@@ -792,6 +794,8 @@ definitions:
         $ref: '#/definitions/scriptProperties/properties/returns'
       timeout:
         $ref: '#/definitions/scriptProperties/properties/timeout'
+      shell:
+        $ref: '#/definitions/scriptProperties/properties/shell'
       errorBehavior:
         oneOf:
           - $ref: '#/definitions/errorBehavior'
@@ -933,6 +937,21 @@ definitions:
       timeout:
         type: number
         description: Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting.
+      shell:
+        type: string
+        description: >-
+          Pin the shell that runs this script's inline text (used only when `script` is not a file
+          path that resolves to a known extension — see scriptProperties description). Free-form
+          executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the workspace's
+          terminal.shellExecutable setting for this one script; falls back to it, then platform
+          auto-detect, when omitted.
+        examples:
+          - pwsh
+          - powershell
+          - bash
+          - zsh
+          - sh
+          - cmd
     required:
       - script
   preCondition:

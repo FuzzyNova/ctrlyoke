@@ -14,6 +14,11 @@ import {
   SCRIPT_BOOLEAN_OUTPUT_VALUES,
   COMPARE_SOURCES,
   END_CONDITION_SCRIPT_TYPES,
+  SCRIPT_FILE_INTERPRETER_KINDS,
+  SCRIPT_FILE_INTERPRETERS,
+  DIRECT_EXECUTABLE_EXTENSIONS,
+  type ScriptFileExtension,
+  type ScriptFileInterpreterKind,
   type EndConditionScriptType,
 } from "../types/DashboardConstants";
 import {
@@ -30,7 +35,10 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
-import { resolveShellInvocation } from "./harness/PtyProcessManager";
+import {
+  getShellInvocationError,
+  resolveShellInvocation,
+} from "./harness/PtyProcessManager";
 import {
   buildSecretProcessEnvironment,
   resolveSecretEnvironment,
@@ -170,15 +178,21 @@ export class EndConditionEvaluator {
     try {
       Log.info(`Evaluating end condition script: ${condition.script}`);
 
-      // Parse script command to separate path from arguments
+      // A meaningful newline makes the entire value inline script text. Only a
+      // first line followed by blank lines may still use file-path routing.
+      const hasMeaningfulNewline = condition.script
+        .split(/\r\n?|\n/)
+        .slice(1)
+        .some((line) => /\S/.test(line));
       const { scriptPath: rawScriptPath, args: additionalArgs } =
-        EndConditionEvaluator.parseScriptCommand(condition.script);
+        hasMeaningfulNewline
+          ? { scriptPath: "", args: [] }
+          : EndConditionEvaluator.parseScriptCommand(condition.script);
 
       // Resolve script path
-      const resolvedScriptPath = await this.resolveScriptPath(
-        rawScriptPath,
-        workingDirectory
-      );
+      const resolvedScriptPath = hasMeaningfulNewline
+        ? null
+        : await this.resolveScriptPath(rawScriptPath, workingDirectory);
 
       const actualSource = this.resolveActualSource(
         condition.returns,
@@ -220,14 +234,25 @@ export class EndConditionEvaluator {
         // not a .exe (npm/npx/yarn are .cmd shims; echo is a builtin), and a
         // shell is also what gives PATH lookup, quoting, and pipes the
         // semantics a user's terminal would. Resolving the shell explicitly
-        // (honoring `terminal.shellExecutable`) instead of Node's own
+        // (honoring the per-condition override and `terminal.shellExecutable`)
+        // instead of Node's own
         // `shell:true`/ComSpec fallback is what keeps this consistent with
         // interactive script steps — the same script text no longer runs
         // under a different, silently-chosen shell depending on execution mode.
         Log.info(
           `Script file not found, treating as direct command: ${condition.script}`
         );
-        const shellInvocation = resolveShellInvocation(condition.script);
+        const shellInvocation = resolveShellInvocation(
+          condition.script,
+          condition.shell
+        );
+        const shellError = getShellInvocationError(
+          condition.script,
+          shellInvocation.shellKind
+        );
+        if (shellError) {
+          throw new Error(shellError);
+        }
         Log.debug(
           `Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
             .map((a) => JSON.stringify(a))
@@ -559,42 +584,111 @@ export class EndConditionEvaluator {
   /**
    * Get command and arguments for script execution
    */
-  private getScriptCommand(
+  protected getScriptCommand(
     scriptPath: string
   ): { executable: string; args: string[] } | null {
     const ext = path.extname(scriptPath).toLowerCase();
 
-    switch (ext) {
-      case ".py":
-        return {
-          executable: this.resolvePythonExecutable(),
-          args: [scriptPath],
-        };
-      case ".js":
-        return { executable: "node", args: [scriptPath] };
-      case ".ts":
-        // Try to use ts-node if available, otherwise compile first
-        return { executable: "npx", args: ["ts-node", scriptPath] };
-      case ".sh":
-        return process.platform === "win32"
-          ? { executable: "bash", args: [scriptPath] }
-          : { executable: "sh", args: [scriptPath] };
-      case ".bat":
-      case ".cmd":
-        return process.platform === "win32"
-          ? { executable: "cmd", args: ["/c", scriptPath] }
-          : null;
-      case ".ps1":
-        return process.platform === "win32"
-          ? {
-              executable: this.resolvePowerShellExecutable(),
-              args: ["-ExecutionPolicy", "Bypass", "-File", scriptPath],
-            }
-          : null;
-      default:
-        // Try to execute directly (for executable files)
-        return { executable: scriptPath, args: [] };
+    const interpreter = this.isScriptFileExtension(ext)
+      ? SCRIPT_FILE_INTERPRETERS[ext]
+      : undefined;
+
+    if (!interpreter) {
+      return this.isDirectlyExecutable(scriptPath, ext)
+        ? { executable: scriptPath, args: [] }
+        : null;
     }
+
+    // cmd.exe is a Windows-only interpreter. PowerShell 7, unlike cmd.exe, is
+    // portable and its resolver supplies the Windows 5.1 fallback when needed.
+    if (
+      interpreter === SCRIPT_FILE_INTERPRETER_KINDS.CMD &&
+      process.platform !== "win32"
+    ) {
+      return null;
+    }
+
+    const commandByInterpreter: {
+      [kind in ScriptFileInterpreterKind]: {
+        (): { executable: string; args: string[] };
+      };
+    } = {
+      [SCRIPT_FILE_INTERPRETER_KINDS.PYTHON]: () => ({
+        executable: this.resolvePythonExecutable(),
+        args: [scriptPath],
+      }),
+      [SCRIPT_FILE_INTERPRETER_KINDS.NODE]: () => ({
+        executable: "node",
+        args: [scriptPath],
+      }),
+      [SCRIPT_FILE_INTERPRETER_KINDS.TYPESCRIPT]: () =>
+        this.resolveTypeScriptCommand(scriptPath),
+      [SCRIPT_FILE_INTERPRETER_KINDS.SHELL]: () => ({
+        executable: process.platform === "win32" ? "bash" : "sh",
+        args: [scriptPath],
+      }),
+      [SCRIPT_FILE_INTERPRETER_KINDS.CMD]: () => ({
+        executable: "cmd",
+        args: ["/c", scriptPath],
+      }),
+      [SCRIPT_FILE_INTERPRETER_KINDS.POWERSHELL]: () => ({
+        executable: this.resolvePowerShellExecutable(),
+        args: ["-ExecutionPolicy", "Bypass", "-File", scriptPath],
+      }),
+    };
+
+    return commandByInterpreter[interpreter]();
+  }
+
+  private isScriptFileExtension(value: string): value is ScriptFileExtension {
+    return Object.prototype.hasOwnProperty.call(
+      SCRIPT_FILE_INTERPRETERS,
+      value
+    );
+  }
+
+  /**
+   * Preserve direct execution only for files the host can execute without an
+   * interpreter. Windows recognizes executable extensions; POSIX uses mode
+   * bits because access(X_OK) is not meaningful on Windows.
+   */
+  private isDirectlyExecutable(scriptPath: string, ext: string): boolean {
+    if (process.platform === "win32") {
+      return Object.values(DIRECT_EXECUTABLE_EXTENSIONS).some(
+        (extension) => extension === ext
+      );
+    }
+
+    try {
+      return (fs.statSync(scriptPath).mode & 0o111) !== 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private resolveTypeScriptCommand(scriptPath: string): {
+    executable: string;
+    args: string[];
+  } {
+    for (const entryPoint of ["tsx/cli", "ts-node/dist/bin.js"] as const) {
+      try {
+        const runnerPath = require.resolve(entryPoint, {
+          paths: [
+            path.dirname(scriptPath),
+            this.executionWorkspace.executionRoot,
+            __dirname,
+          ],
+        });
+        return { executable: "node", args: [runnerPath, scriptPath] };
+      } catch {
+        // Try the next local runner.
+      }
+    }
+
+    return {
+      executable: "node",
+      args: ["--experimental-strip-types", scriptPath],
+    };
   }
 
   /**
@@ -669,15 +763,20 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Resolve PowerShell executable — prefer `pwsh` (PowerShell 7+), fall back to `powershell`.
+   * Resolve PowerShell executable — prefer `pwsh` (PowerShell 7+), fall back to
+   * `powershell.exe` on Windows PowerShell 5.1.
    */
-  private resolvePowerShellExecutable(): string {
+  protected resolvePowerShellExecutable(): string {
+    if (process.platform !== "win32") {
+      return "pwsh";
+    }
+
     try {
       const { execSync } = require("child_process");
       execSync("pwsh -Version", { stdio: "ignore", timeout: 5000 });
       return "pwsh";
     } catch {
-      return "powershell";
+      return "powershell.exe";
     }
   }
 

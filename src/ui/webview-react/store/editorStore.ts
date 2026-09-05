@@ -45,6 +45,7 @@ export interface EndConditionConfig {
   returns?: string;
   compareSource?: EndConditionCompareSource;
   timeout?: number;
+  shell?: string;
   maxRetries?: number;
   retryPrompt?: string;
   passRetryPrompt?: string;
@@ -135,6 +136,7 @@ export interface SavedNewStepState {
   scriptReturns?: string;
   scriptEnv?: Record<string, string>;
   scriptExecutionMode?: ExecutionMode;
+  scriptShell?: string;
 }
 
 /** @deprecated Use SavedNewStepState */
@@ -190,6 +192,7 @@ interface EditorState {
   scriptReturns: string;
   scriptEnv: Record<string, string> | undefined;
   scriptExecutionMode: ExecutionMode | undefined;
+  scriptShell: string | undefined;
 
   // Property values
   properties: PropertyValues;
@@ -235,6 +238,7 @@ interface EditorActions {
   setScriptReturns: (value: string) => void;
   setScriptEnv: (value: Record<string, string> | undefined) => void;
   setScriptExecutionMode: (value: ExecutionMode | undefined) => void;
+  setScriptShell: (value: string | undefined) => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -320,6 +324,7 @@ const initialState: EditorState = {
   scriptReturns: "",
   scriptEnv: undefined,
   scriptExecutionMode: undefined,
+  scriptShell: undefined,
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
   validationErrors: {},
@@ -402,6 +407,7 @@ export const useEditorStore = create<
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
+        scriptShell: savedNewPromptState.scriptShell,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -432,6 +438,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -452,6 +459,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           savedNewPromptState: null,
         });
       }
@@ -480,6 +488,7 @@ export const useEditorStore = create<
         scriptReturns: state.scriptReturns,
         scriptEnv: state.scriptEnv,
         scriptExecutionMode: state.scriptExecutionMode,
+        scriptShell: state.scriptShell,
       };
     }
 
@@ -502,6 +511,7 @@ export const useEditorStore = create<
             scriptReturns: state.scriptReturns,
             scriptEnv: state.scriptEnv,
             scriptExecutionMode: state.scriptExecutionMode,
+            scriptShell: state.scriptShell,
           }
         : state.savedNewPromptState;
 
@@ -556,6 +566,9 @@ export const useEditorStore = create<
         scriptExecutionMode: pendingEdit
           ? pendingEdit.scriptExecutionMode
           : promptData.executionMode,
+        scriptShell: pendingEdit
+          ? pendingEdit.scriptShell
+          : promptData.shell,
         properties: pendingEdit
           ? pendingEdit.properties
           : propertiesFromScriptData,
@@ -613,6 +626,7 @@ export const useEditorStore = create<
         scriptReturns: pendingEdit?.scriptReturns ?? "",
         scriptEnv: pendingEdit?.scriptEnv,
         scriptExecutionMode: pendingEdit?.scriptExecutionMode,
+        scriptShell: pendingEdit?.scriptShell,
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
@@ -654,6 +668,7 @@ export const useEditorStore = create<
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
+        scriptShell: savedNewPromptState.scriptShell,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -686,6 +701,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -707,6 +723,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -736,6 +753,7 @@ export const useEditorStore = create<
       scriptReturns: state.scriptReturns,
       scriptEnv: state.scriptEnv,
       scriptExecutionMode: state.scriptExecutionMode,
+      scriptShell: state.scriptShell,
     };
 
     const { savedNewPromptState } = state;
@@ -759,6 +777,7 @@ export const useEditorStore = create<
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
+        scriptShell: savedNewPromptState.scriptShell,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -787,6 +806,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -807,6 +827,7 @@ export const useEditorStore = create<
           scriptReturns: "",
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
+          scriptShell: undefined,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -881,6 +902,12 @@ export const useEditorStore = create<
   setScriptExecutionMode: (value) =>
     set({
       scriptExecutionMode: value,
+      isDirty: true,
+    }),
+
+  setScriptShell: (value) =>
+    set({
+      scriptShell: value,
       isDirty: true,
     }),
 
@@ -1136,6 +1163,7 @@ export const useEditorStore = create<
       scriptReturns: "",
       scriptEnv: undefined,
       scriptExecutionMode: undefined,
+      scriptShell: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
@@ -1157,6 +1185,7 @@ export const useEditorStore = create<
       scriptReturns: "",
       scriptEnv: undefined,
       scriptExecutionMode: undefined,
+      scriptShell: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},

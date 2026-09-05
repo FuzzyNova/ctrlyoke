@@ -924,6 +924,8 @@ export interface ScriptProperties {
   /** Expected result to compare against. When absent, exit code 0 = pass. */
   returns?: string;
   timeout?: number;
+  /** Pins the shell for this script's inline-text execution path. See scriptProperties description. */
+  shell?: string;
 }
 
 export interface EndCondition extends ScriptProperties {

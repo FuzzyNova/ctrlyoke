@@ -114,6 +114,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptReturns,
     scriptEnv,
     scriptExecutionMode,
+    scriptShell,
     setScriptCommand,
     setScriptTimeout,
     setScriptOnPass,
@@ -122,6 +123,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptReturns,
     setScriptEnv,
     setScriptExecutionMode,
+    setScriptShell,
     pendingPromptEditorInserts,
     consumePromptEditorInsert,
   } = useEditorStore();
@@ -919,6 +921,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             ...(scriptExecutionMode !== undefined && {
               executionMode: scriptExecutionMode,
             }),
+            ...(scriptShell?.trim() && { shell: scriptShell }),
             ...(properties.color !== undefined && { color: properties.color }),
             ...(!stepEnabled && { enabled: false }),
           },
@@ -974,6 +977,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptReturns,
       scriptEnv,
       scriptExecutionMode,
+      scriptShell,
       properties,
       stepEnabled,
       promptText,
@@ -1020,6 +1024,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(scriptExecutionMode !== undefined && {
           executionMode: scriptExecutionMode,
         }),
+        ...(scriptShell?.trim() && { shell: scriptShell }),
         ...(properties.color !== undefined && { color: properties.color }),
         ...(!stepEnabled && { enabled: false }),
       };
@@ -1038,6 +1043,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           : []),
         ...(!scriptReturns ? ["returns"] : []),
         ...(scriptExecutionMode === undefined ? ["executionMode"] : []),
+        ...(!scriptShell?.trim() ? ["shell"] : []),
         ...(properties.color === undefined ? ["color"] : []),
         ...(stepEnabled ? ["enabled"] : []),
         ...(!promptName.trim() ? ["name"] : []),
@@ -1113,6 +1119,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptReturns,
     scriptEnv,
     scriptExecutionMode,
+    scriptShell,
     properties,
     stepEnabled,
     selectionTarget,
@@ -1207,6 +1214,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptReturns(updated.returns ?? "");
       setScriptEnv(updated.env);
       setScriptExecutionMode(updated.executionMode);
+      setScriptShell(updated.shell);
     },
     [
       setScriptCommand,
@@ -1217,6 +1225,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptReturns,
       setScriptEnv,
       setScriptExecutionMode,
+      setScriptShell,
     ]
   );
 
@@ -1315,6 +1324,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               returns: scriptReturns,
               env: scriptEnv,
               executionMode: scriptExecutionMode,
+              shell: scriptShell,
             }}
             onChange={handleScriptChange}
             scriptLabel="Script command"

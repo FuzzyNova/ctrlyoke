@@ -55,6 +55,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
     placeholder,
     disabled,
     className,
+    multiline,
   }: {
     id: string;
     value: string;
@@ -63,6 +64,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
     placeholder?: string;
     disabled?: boolean;
     className?: string;
+    multiline?: boolean;
   }) => (
     <input
       type="text"
@@ -73,6 +75,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      data-multiline={multiline ? "true" : "false"}
     />
   ),
 }));
@@ -244,6 +247,24 @@ describe("ScriptConditionEditor", () => {
           expect.objectContaining({ script: "npm test && npm run lint" })
         );
       });
+    }
+  );
+
+  it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+    "%s opts its script field into multiline mode",
+    (variant) => {
+      render(
+        <ScriptConditionEditor
+          variant={variant}
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix={`test-${variant}`}
+        />
+      );
+
+      expect(
+        document.getElementById(`test-${variant}-script`)
+      ).toHaveAttribute("data-multiline", "true");
     }
   );
 
@@ -459,6 +480,83 @@ describe("ScriptConditionEditor", () => {
         );
       }
     );
+  });
+
+  describe("shell override", () => {
+    it("commits a shell override on blur", () => {
+      const onChange = vi.fn();
+
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={onChange}
+          idPrefix="test-script"
+        />
+      );
+
+      const shell = screen.getByLabelText("Shell");
+      fireEvent.change(shell, { target: { value: "bash" } });
+      fireEvent.blur(shell);
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ shell: "bash" })
+      );
+    });
+
+    it("clears a shell override as undefined", () => {
+      const onChange = vi.fn();
+
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{ script: "npm test", shell: "pwsh" }}
+          onChange={onChange}
+          idPrefix="test-end"
+        />
+      );
+
+      const shell = screen.getByLabelText("Shell");
+      fireEvent.change(shell, { target: { value: "" } });
+      fireEvent.blur(shell);
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ shell: undefined })
+      );
+      expect(onChange.mock.lastCall?.[0]).not.toHaveProperty("shell", "");
+    });
+
+    it.each(["scriptStep", "preCondition", "endCondition"] as const)(
+      "%s renders the shell field",
+      (variant) => {
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test" }}
+            onChange={vi.fn()}
+            idPrefix={`test-${variant}`}
+          />
+        );
+
+        expect(screen.getByLabelText("Shell")).toHaveAttribute(
+          "placeholder",
+          "Auto (terminal.shellExecutable, or platform default)"
+        );
+      }
+    );
+
+    it("round-trips an existing shell override into the input", () => {
+      render(
+        <ScriptConditionEditor
+          variant="preCondition"
+          value={{ script: "npm test", shell: "/bin/zsh" }}
+          onChange={vi.fn()}
+          idPrefix="test-pre"
+        />
+      );
+
+      expect(screen.getByLabelText("Shell")).toHaveValue("/bin/zsh");
+    });
   });
 
   describe("scriptStep execution mode override", () => {
