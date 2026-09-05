@@ -94,6 +94,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       prompt?: string;
       responseText?: string;
       worktree?: WorkingFileWorktreeRuntime;
+      stepCount?: number;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
@@ -114,23 +115,27 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       nextRunId: 2,
       revision: 3,
     };
+    const stepCount = options.stepCount ?? 1;
+    const steps = Array.from({ length: stepCount }, (_, index) => ({
+      prompt:
+        index === 0
+          ? (options.prompt ?? `prompt-${suffix}`)
+          : `prompt-${suffix}-${index}`,
+      _runtime: {
+        startedAt: 1,
+        completedAt: 2,
+        sessionId:
+          index === 0 ? `session-${suffix}` : `session-${suffix}-${index}`,
+      },
+    }));
     const workingFile: WorkingFile = {
       workflowName: descriptor.workflowName,
       startedAt: 1,
       lastModifiedAt: 1,
       definitionRevision: 4,
-      steps: [
-        {
-          prompt: options.prompt ?? `prompt-${suffix}`,
-          _runtime: {
-            startedAt: 1,
-            completedAt: 2,
-            sessionId: `session-${suffix}`,
-          },
-        },
-      ],
+      steps,
       _runtime: {
-        currentIndex: 1,
+        currentIndex: stepCount,
         executionState: EXECUTION_STATES.COMPLETED,
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
@@ -311,6 +316,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "steps",
     ]);
     assert.deepStrictEqual(append.properties.position.enum, ["next", "end"]);
+
+    const readOutput: any = server
+      .getToolDefinitions()
+      .find((tool) => tool.name === "read_output")!.inputSchema;
+    assert.deepStrictEqual(Object.keys(readOutput.properties).sort(), [
+      "cursor",
+      "indices",
+      "limit",
+      "tail",
+    ]);
   });
 
   test("answers only for its own run, ignoring any address in the arguments", async () => {
@@ -326,14 +341,189 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const status = responseJson(
       await server.invokeTool("workflow_status", other)
     );
-    const output = responseJson(
-      await server.invokeTool("read_output", other)
-    );
+    const output = responseJson(await server.invokeTool("read_output", other));
 
     assert.strictEqual(status.metadata.workflowKey, own.workflowKey);
     assert.strictEqual(status.metadata.runRef, own.runRef);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
+  });
+
+  test("preserves the read_output response when paging is omitted", async () => {
+    const server = await setup();
+    const run = await createRun("no-paging", "2026-01-01T00-00-00-000Z", {
+      responseText: "plain output",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = await server.invokeTool("read_output", {});
+    const text = (result as { content: Array<{ text: string }> }).content[0]
+      .text;
+
+    assert.strictEqual(
+      text,
+      JSON.stringify(
+        {
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+          outputs: [
+            {
+              index: 0,
+              prompt: "prompt-no-paging",
+              status: "completed",
+              responseText: "plain output",
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+  });
+
+  test("returns a next cursor for a forward page", async () => {
+    const server = await setup();
+    const run = await createRun("forward-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], limit: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "abc");
+    assert.strictEqual(output.outputs[0].nextCursor, "3");
+  });
+
+  test("resumes from a cursor through the end without another cursor", async () => {
+    const server = await setup();
+    const run = await createRun("resume-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", {
+        indices: [0],
+        cursor: "3",
+      })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "def");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
+  });
+
+  test("returns a bounded tail without a next cursor", async () => {
+    const server = await setup();
+    const run = await createRun("tail-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], tail: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "def");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
+  });
+
+  test("reads the first page when limit is supplied without a cursor", async () => {
+    const server = await setup();
+    const run = await createRun("limit-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], limit: 2 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "ab");
+    assert.strictEqual(output.outputs[0].nextCursor, "2");
+  });
+
+  test("rejects paging for multiple selected steps", async () => {
+    const server = await setup();
+    const run = await createRun("multi-page", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0, 1], limit: 1 }),
+      /require indices to name exactly one step/
+    );
+  });
+
+  test("rejects paging when no step is selected", async () => {
+    const server = await setup();
+    const run = await createRun("zero-page", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [], limit: 1 }),
+      /require indices to name exactly one step/
+    );
+  });
+
+  test("rejects tail combined with cursor", async () => {
+    const server = await setup();
+    const run = await createRun("tail-cursor", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          indices: [0],
+          tail: 1,
+          cursor: "0",
+        }),
+      /tail is mutually exclusive/
+    );
+  });
+
+  test("rejects tail combined with limit", async () => {
+    const server = await setup();
+    const run = await createRun("tail-limit", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          indices: [0],
+          tail: 1,
+          limit: 1,
+        }),
+      /tail is mutually exclusive/
+    );
+  });
+
+  test("rejects malformed paging values and returns an empty past-end page", async () => {
+    const server = await setup();
+    const run = await createRun("invalid-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0], limit: -1 }),
+      /limit must be a non-negative integer/
+    );
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0], tail: "2" }),
+      /tail must be a non-negative integer/
+    );
+
+    const output = responseJson(
+      await server.invokeTool("read_output", {
+        indices: [0],
+        cursor: "999",
+      })
+    );
+    assert.strictEqual(output.outputs[0].responseText, "");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
   });
 
   test("global_status reports sibling workflows and narrows on request", async () => {
@@ -361,9 +551,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
-    const all = responseJson(
-      await server.invokeTool("global_status", {})
-    );
+    const all = responseJson(await server.invokeTool("global_status", {}));
     assert.deepStrictEqual(
       all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
       [other.workflowKey, own.workflowKey].sort()
@@ -451,9 +639,13 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("accepts an append whose prompt matches a completed step", async () => {
     const server = await setup();
-    const run = await createRun("repeat-completed", "2026-01-01T00-00-00-000Z", {
-      prompt: "repeat this gate",
-    });
+    const run = await createRun(
+      "repeat-completed",
+      "2026-01-01T00-00-00-000Z",
+      {
+        prompt: "repeat this gate",
+      }
+    );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(

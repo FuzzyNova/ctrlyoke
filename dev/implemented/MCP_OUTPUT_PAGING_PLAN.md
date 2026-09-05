@@ -1,6 +1,6 @@
 # MCP Output Paging Plan
 
-**Status:** Proposed
+**Status:** Implemented 2026-09-05
 **Priority:** P2
 
 Harvested from the rejected [`MCP_CONTROL_SURFACE_PLAN.md`](../rejected/MCP_CONTROL_SURFACE_PLAN.md),
@@ -10,6 +10,8 @@ within the current run's scope.
 
 ## Problem
 
+The following describes the behavior before paging was implemented.
+
 `read_output` in `src/mcp-server.ts` has no paging. A caller either names
 explicit indices or gets every prompt in the run. For each requested index it
 returns the full `responseText` from `RunOutputResolver.resolveLatestAttempts`.
@@ -18,13 +20,14 @@ For a long workflow this means a step that wants "what did the previous step
 conclude" pulls back the entire response history into its context window. There is
 no way to read a bounded tail, and no way to resume where a previous read stopped.
 
-**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md) has
-completed the naming pass and moved every tool name behind an exported constant. Apply this plan
-against the final `read_output` tool so the schema is edited once. Names below use the final names.
+**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](../backlog/MCP_STEP_MUTATION_PLAN.md)
+completed the naming pass and moved every tool name behind an exported constant. This plan was
+implemented against the final `read_output` tool, so the schema was edited once. Names below use
+the final names.
 
 ## Scope
 
-Add cursor-based reads to `read_output` only.
+The implementation adds cursor-based reads to `read_output` only.
 
 - An opaque cursor plus a caller-supplied limit, returning a `nextCursor` when
   more output remains.
@@ -37,7 +40,7 @@ Add cursor-based reads to `read_output` only.
   workflows are unaffected.
 
 `RunOutputResolver` already streams the run timeline in a single bounded-memory
-pass; the cursor should ride that existing traversal rather than introducing a
+pass; the cursor rides that existing traversal rather than introducing a
 second read path or materializing the JSONL history.
 
 ## Design

@@ -71,6 +71,12 @@ const CTRLYOKE_DIR = ".ctrlyoke";
 const LOGS_DIR = "logs";
 const CAPABILITIES_FILE = "capabilities.json";
 
+interface ReadOutputPaging {
+  cursor?: string;
+  limit?: number;
+  tail?: number;
+}
+
 const lineageRepository = new WorkflowLineageRepository();
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
@@ -559,7 +565,7 @@ export class CtrlYokeMCPServer {
    * Returns AI response text from completed prompts.
    */
   private async handleReadOutput(args: any) {
-    const selected = await this.resolveRun("read_output");
+    const selected = await this.resolveRun(MCP_READ_OUTPUT_TOOL_NAME);
     const workingFile = selected.filePath;
 
     const fileContent = await fs.readFile(workingFile, "utf8");
@@ -575,6 +581,7 @@ export class CtrlYokeMCPServer {
       Array.isArray(args?.indices) && args.indices.length > 0
         ? args.indices
         : allSteps.map((_: any, i: number) => i);
+    const paging = this.parseReadOutputPaging(args, requestedIndices, allSteps);
 
     const resolver = new RunOutputResolver();
     const resolved = selected.runRef
@@ -593,11 +600,38 @@ export class CtrlYokeMCPServer {
       .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
         const p = allSteps[i];
-        return {
+        const resolvedOutput = resolved.get(`queue:${i}`);
+        const fullResponseText = resolvedOutput?.responseText ?? null;
+        const baseOutput = {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
           status: this.getStepStatus(i, runtime, allSteps),
-          responseText: resolved.get(`queue:${i}`)?.responseText ?? null,
+          responseText: fullResponseText,
+        };
+
+        if (!paging || fullResponseText === null) {
+          return baseOutput;
+        }
+
+        if (paging.tail !== undefined) {
+          return {
+            ...baseOutput,
+            responseText:
+              paging.tail === 0 ? "" : fullResponseText.slice(-paging.tail),
+          };
+        }
+
+        const offset = paging.cursor === undefined ? 0 : Number(paging.cursor);
+        const end =
+          paging.limit === undefined ? undefined : offset + paging.limit;
+        const responseText = fullResponseText.slice(offset, end);
+        const hasNextCursor =
+          paging.limit !== undefined && end! < fullResponseText.length;
+
+        return {
+          ...baseOutput,
+          responseText,
+          ...(hasNextCursor ? { nextCursor: String(end) } : {}),
         };
       });
 
@@ -616,6 +650,85 @@ export class CtrlYokeMCPServer {
           ),
         },
       ],
+    };
+  }
+
+  private parseReadOutputPaging(
+    args: unknown,
+    requestedIndices: readonly number[],
+    allSteps: readonly WorkflowStep[]
+  ): ReadOutputPaging | undefined {
+    const value =
+      args !== null && typeof args === "object"
+        ? (args as Record<string, unknown>)
+        : {};
+    const hasCursor = value.cursor !== undefined;
+    const hasLimit = value.limit !== undefined;
+    const hasTail = value.tail !== undefined;
+
+    if (!hasCursor && !hasLimit && !hasTail) {
+      return undefined;
+    }
+
+    if (hasTail && (hasCursor || hasLimit)) {
+      throw new Error(
+        "read_output: tail is mutually exclusive with cursor and limit"
+      );
+    }
+
+    const singleStepPagingError =
+      "read_output: cursor, limit, and tail require indices to name exactly one step";
+    const suppliedIndices = value.indices;
+    if (
+      suppliedIndices !== undefined &&
+      (!Array.isArray(suppliedIndices) ||
+        suppliedIndices.length !== 1 ||
+        typeof suppliedIndices[0] !== "number" ||
+        !Number.isSafeInteger(suppliedIndices[0]))
+    ) {
+      throw new Error(singleStepPagingError);
+    }
+    if (
+      requestedIndices.length !== 1 ||
+      requestedIndices[0] < 0 ||
+      requestedIndices[0] >= allSteps.length
+    ) {
+      throw new Error(singleStepPagingError);
+    }
+
+    let cursor: string | undefined;
+    if (hasCursor) {
+      if (
+        typeof value.cursor !== "string" ||
+        !/^\d+$/.test(value.cursor) ||
+        !Number.isSafeInteger(Number(value.cursor))
+      ) {
+        throw new Error(
+          "read_output: cursor must be a non-negative integer cursor returned by read_output"
+        );
+      }
+      cursor = value.cursor;
+    }
+
+    const parseCount = (name: "limit" | "tail"): number | undefined => {
+      const count = value[name];
+      if (count === undefined) {
+        return undefined;
+      }
+      if (
+        typeof count !== "number" ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      ) {
+        throw new Error(`read_output: ${name} must be a non-negative integer`);
+      }
+      return count;
+    };
+
+    return {
+      ...(cursor !== undefined ? { cursor } : {}),
+      ...(hasLimit ? { limit: parseCount("limit")! } : {}),
+      ...(hasTail ? { tail: parseCount("tail")! } : {}),
     };
   }
 

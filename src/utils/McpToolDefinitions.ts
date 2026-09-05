@@ -116,7 +116,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
-      "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work.",
+      "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work; for a large output, page one selected step with limit and cursor or inspect its tail.",
     inputSchema: {
       type: "object",
       properties: {
@@ -124,7 +124,22 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "array",
           items: { type: "number" },
           description:
-            "Zero-based step numbers to read. Omit to read them all.",
+            "Zero-based step numbers to read. Omit to read them all; paging arguments require exactly one.",
+        },
+        cursor: {
+          type: "string",
+          description:
+            "Continue reading the selected step from the nextCursor returned by an earlier read_output call.",
+        },
+        limit: {
+          type: "number",
+          description:
+            "Maximum number of characters to return from the selected step. Omit to read through the end.",
+        },
+        tail: {
+          type: "number",
+          description:
+            "Return the last N characters of the selected step instead of reading forward. Do not combine with cursor or limit.",
         },
       },
     },
