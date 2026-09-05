@@ -3,10 +3,12 @@ import { spawn } from "child_process";
 import { suite, test } from "mocha";
 import {
   buildShellWrapArgs,
+  resolveShellInvocation,
   shellNeedsVerbatimArguments,
   toPtySpawnArgs,
 } from "../../core/harness/PtyProcessManager";
 import { SHELL_KINDS } from "../../types/DashboardConstants";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Exit-code propagation is the contract end conditions compare against, and it
@@ -15,6 +17,65 @@ import { SHELL_KINDS } from "../../types/DashboardConstants";
  * behave the same way.
  */
 suite("Shell invocation", () => {
+  function withTerminalShell<T>(
+    shellExecutable: string,
+    callback: () => T
+  ): T {
+    const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+    ConfigurationUtils.getTerminalSettings = () => ({
+      ...originalGetTerminalSettings(),
+      shellExecutable,
+    });
+    try {
+      return callback();
+    } finally {
+      ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+    }
+  }
+
+  suite("resolveShellInvocation", () => {
+    test("prefers a pinned override over terminal.shellExecutable", () => {
+      const invocation = withTerminalShell("cmd.exe", () =>
+        resolveShellInvocation("echo hello", "  bash  ")
+      );
+
+      assert.strictEqual(invocation.executable, "bash");
+      assert.strictEqual(invocation.shellKind, SHELL_KINDS.BASH);
+      assert.strictEqual(invocation.windowsVerbatimArguments, false);
+    });
+
+    test("falls through to terminal.shellExecutable for empty overrides", () => {
+      const invocation = withTerminalShell("  cmd.exe  ", () =>
+        resolveShellInvocation("echo hello", " \t ")
+      );
+
+      assert.strictEqual(invocation.executable, "cmd.exe");
+      assert.strictEqual(invocation.shellKind, SHELL_KINDS.CMD);
+      assert.strictEqual(invocation.windowsVerbatimArguments, true);
+    });
+
+    test("falls through to platform auto-detection when neither override is set", () => {
+      const invocation = withTerminalShell("  ", () =>
+        resolveShellInvocation("echo hello", undefined, "win32")
+      );
+
+      assert.ok(invocation.executable.length > 0);
+      assert.ok(
+        invocation.shellKind === SHELL_KINDS.PWSH ||
+          invocation.shellKind === SHELL_KINDS.POWERSHELL
+      );
+    });
+
+    test("keeps cmd verbatim arguments enabled for a pinned cmd shell", () => {
+      const invocation = withTerminalShell("powershell.exe", () =>
+        resolveShellInvocation('node -e "process.exit(7)"', "cmd")
+      );
+
+      assert.strictEqual(invocation.shellKind, SHELL_KINDS.CMD);
+      assert.strictEqual(invocation.windowsVerbatimArguments, true);
+    });
+  });
+
   suite("buildShellWrapArgs", () => {
     test("wraps POSIX shells with a bare -c and no epilogue", () => {
       assert.deepStrictEqual(buildShellWrapArgs(SHELL_KINDS.BASH, "exit 7"), [

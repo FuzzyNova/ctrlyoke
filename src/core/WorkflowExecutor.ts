@@ -291,6 +291,8 @@ export interface WorkflowExecutionContext {
     targetKey: string;
     /** Raw script string from the step definition (e.g. ".ctrlyoke/scripts/check.py arg"). */
     script: string;
+    /** Optional shell executable for inline script execution. */
+    shell?: string;
     /** Working directory for the script process. */
     cwd: string;
     /** Environment overrides for the script process. */
@@ -1819,6 +1821,7 @@ export class WorkflowExecutor {
         compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
         returns: step.returns ?? "0",
         timeout,
+        shell: effectiveStep.shell,
       };
       const outputChunks: string[] = [];
       let ptyExitCode: number | undefined;
@@ -1842,6 +1845,7 @@ export class WorkflowExecutor {
                 : undefined,
             targetKey: getExecutionTargetRunKey(target),
             script: effectiveStep.script,
+            shell: effectiveStep.shell,
             cwd: context.executionWorkspace.executionRoot,
             env: await this.resolveScriptEnvironment(
               effectiveStep.env,

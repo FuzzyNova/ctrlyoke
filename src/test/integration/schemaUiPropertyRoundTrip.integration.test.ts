@@ -163,6 +163,7 @@ const SAMPLES: Record<string, unknown> = {
   returns: "OK",
   secrets: ["DEPLOY_TOKEN"],
   sessionId: "seeded-session-id",
+  shell: "bash",
   skills: ["seeded-skill"],
   timeout: 45000,
   toolPermissions: {
@@ -385,6 +386,10 @@ const UI_CONTROL_OPTOUTS = new Map<string, string>([
   [
     "color",
     "data layer landed in sequencing item 8; editor mounts are the follow-up",
+  ],
+  [
+    "shell",
+    "schema and execution support landed in the foundation step; the editor control is the follow-up",
   ],
 ]);
 

@@ -613,6 +613,7 @@ export function buildScriptStepFromProperties(
       props.timeout !== null && {
         timeout: props.timeout as number,
       }),
+    ...(typeof props.shell === "string" && { shell: props.shell }),
     ...(props.onPass !== undefined &&
       props.onPass !== null && {
         onPass: props.onPass as

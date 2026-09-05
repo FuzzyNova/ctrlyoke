@@ -220,14 +220,18 @@ export class EndConditionEvaluator {
         // not a .exe (npm/npx/yarn are .cmd shims; echo is a builtin), and a
         // shell is also what gives PATH lookup, quoting, and pipes the
         // semantics a user's terminal would. Resolving the shell explicitly
-        // (honoring `terminal.shellExecutable`) instead of Node's own
+        // (honoring the per-condition override and `terminal.shellExecutable`)
+        // instead of Node's own
         // `shell:true`/ComSpec fallback is what keeps this consistent with
         // interactive script steps — the same script text no longer runs
         // under a different, silently-chosen shell depending on execution mode.
         Log.info(
           `Script file not found, treating as direct command: ${condition.script}`
         );
-        const shellInvocation = resolveShellInvocation(condition.script);
+        const shellInvocation = resolveShellInvocation(
+          condition.script,
+          condition.shell
+        );
         Log.debug(
           `Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
             .map((a) => JSON.stringify(a))

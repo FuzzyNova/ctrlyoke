@@ -4125,17 +4125,17 @@ export class WorkflowInstance {
               };
               ptyPostMessage(terminalStartedMessage);
 
-              // Wrap the script in the user's configured (or auto-detected) shell
-              // so PTY interactive input works. Same resolution headless inline
-              // script/condition execution uses (resolveShellInvocation), so the
-              // same script text runs under the same shell whether the step is
-              // interactive or headless.
+              // Wrap the script in its per-script override, the user's configured
+              // shell, or the auto-detected shell so PTY interactive input works.
+              // Same resolution headless inline script/condition execution uses
+              // (resolveShellInvocation), so the same script text runs under the
+              // same shell whether the step is interactive or headless.
               const {
                 executable: shell,
                 args: shellArgs,
                 shellKind,
                 windowsVerbatimArguments,
-              } = resolveShellInvocation(options.script);
+              } = resolveShellInvocation(options.script, options.shell);
               Log.debug(
                 `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
                   .map((a) => JSON.stringify(a))

@@ -1,6 +1,6 @@
 # Per-Script `shell` Override
 
-> **Status:** Proposed
+> **Status:** Foundation landed (schema/types/resolver/call sites); preview and UI remain
 >
 > **Priority:** P3 — small authoring convenience. Not a bug fix (the shell
 > inconsistency it's adjacent to is already fixed) and not a release gate.
@@ -140,6 +140,8 @@ covers.
 
 ### Schema
 
+**Landed in the foundation step.**
+
 `schemas/workflow-schema.json`, `definitions.scriptProperties.properties`:
 
 ```json
@@ -166,6 +168,8 @@ Reference it the same way the sibling fields are already referenced:
 
 ### Types
 
+**Landed in the foundation step.**
+
 `src/types/CtrlYokeTypes.ts` — one field on the shared shape, inherited by all
 three consumers for free:
 
@@ -185,6 +189,10 @@ export interface ScriptProperties {
 already, so no change is needed at those three declarations.
 
 ### Resolver signature
+
+**Landed in the foundation step.** The resolver also accepts the optional
+platform injection described below, so its signature is settled before the
+preview work.
 
 `src/core/harness/PtyProcessManager.ts:214`. **The change is purely additive —
 one new optional parameter slotted ahead of the existing setting lookup. Every
@@ -224,6 +232,9 @@ export function resolveShellInvocation(
 
 ### Call sites
 
+**Landed in the foundation step**, except for the explicitly deferred
+`ExecutionPreviewService` item below.
+
 - **`WorkflowExecutor.executeScriptStep`** (`src/core/WorkflowExecutor.ts`,
   the `resolvedProperties` literal at ~line 1816) — add
   `shell: effectiveStep.shell`. It already flows into
@@ -240,7 +251,7 @@ export function resolveShellInvocation(
   `resolveShellInvocation(condition.script)` to
   `resolveShellInvocation(condition.script, condition.shell)`. `condition` is
   already typed `ScriptProperties`, so this is a one-line change.
-- **`ExecutionPreviewService.buildScriptCommand`**
+- **`ExecutionPreviewService.buildScriptCommand`** *(deferred to the preview step)*
   (`src/core/ExecutionPreviewService.ts:1312-1340`) — replace the hardcoded
   `ComSpec`/`SHELL` branch with a call to the same
   `resolveShellInvocation(step.script, step.shell)`, so preview both fixes its

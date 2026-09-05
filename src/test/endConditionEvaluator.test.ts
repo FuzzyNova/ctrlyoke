@@ -9,6 +9,7 @@ import {
 } from "../core/EndConditionEvaluator";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 suite("EndConditionEvaluator Tests", () => {
   let evaluator: EndConditionEvaluator;
@@ -130,6 +131,60 @@ suite("EndConditionEvaluator Tests", () => {
       assert.strictEqual(result.errored, false);
       assert.strictEqual(result.matchRule, "exact");
       assert.strictEqual(result.actualSource, "stdout");
+    });
+
+    test("uses an inline shell override for a direct command", async () => {
+      const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+      ConfigurationUtils.getTerminalSettings = () => ({
+        ...originalGetTerminalSettings(),
+        shellExecutable:
+          process.platform === "win32"
+            ? "missing-shell-for-override-test.exe"
+            : "/missing-shell-for-override-test",
+      });
+
+      try {
+        const windows = process.platform === "win32";
+        const result = await evaluator.evaluateCondition(
+          {
+            script: windows ? "echo shell-override" : "printf shell-override",
+            returns: "shell-override",
+            shell: windows ? "cmd.exe" : "/bin/sh",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.passed, true);
+        assert.strictEqual(result.errored, false);
+      } finally {
+        ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+      }
+    });
+
+    test("preserves direct-command behavior when shell is omitted", async () => {
+      const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+      ConfigurationUtils.getTerminalSettings = () => ({
+        ...originalGetTerminalSettings(),
+        shellExecutable: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
+      });
+
+      try {
+        const result = await evaluator.evaluateCondition(
+          {
+            script:
+              process.platform === "win32"
+                ? "echo no-shell-override"
+                : "printf no-shell-override",
+            returns: "no-shell-override",
+          },
+          workspaceRoot
+        );
+
+        assert.strictEqual(result.passed, true);
+        assert.strictEqual(result.errored, false);
+      } finally {
+        ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+      }
     });
 
     test("should return timeout result when script takes too long", async function () {

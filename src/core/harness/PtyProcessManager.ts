@@ -206,22 +206,28 @@ export function toPtySpawnArgs(
  * Resolve the shell executable + wrap-args to run an arbitrary script string
  * (an interactive script step, or a headless precondition/end-condition/script
  * step's inline command). Single source for "which shell runs this text" —
- * honors the user's `terminal.shellExecutable` override exactly like
- * `spawnShell()` does, falling back to the platform auto-detected shell
- * otherwise, so a script step and a manually opened terminal never disagree
- * about which shell interprets the same text.
+ * honors the per-script override, then the user's `terminal.shellExecutable`
+ * override exactly like `spawnShell()` does, falling back to the platform
+ * auto-detected shell otherwise, so a script step and a manually opened
+ * terminal never disagree about which shell interprets the same text.
  */
-export function resolveShellInvocation(script: string): {
+export function resolveShellInvocation(
+  script: string,
+  shellOverride?: string,
+  platform: NodeJS.Platform = process.platform
+): {
   executable: string;
   args: string[];
   shellKind: ShellKind;
   windowsVerbatimArguments: boolean;
 } {
+  const pinned = shellOverride?.trim();
   const terminalSettings = ConfigurationUtils.getTerminalSettings();
-  const shellOverride = terminalSettings.shellExecutable.trim();
+  const settingOverride = terminalSettings.shellExecutable.trim();
   const executable =
-    shellOverride ||
-    (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
+    pinned ||
+    settingOverride ||
+    (platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
   const shellKind = resolveShellKind(executable);
   return {
     executable,
