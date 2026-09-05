@@ -11,8 +11,9 @@ and `ctrlyoke_queue_status` reported the new step immediately. But `WorkflowStep
 showing the old step count for the rest of the running step. Navigating away and back flashed the
 correct count, then reverted. The count corrected itself at the next step transition.
 
-Nothing here is implemented. All line references below were verified against the tree at
-`b1223284`.
+Nothing here is implemented. Line references were originally taken against `b1223284` and re-verified
+against `560957d0` on 2026-09-05, which corrected defect 5's scope, added the merge-novelty and
+prefix-agreement constraints under defect 4, and moved defect 5 to the front of the sequencing.
 
 ---
 
@@ -29,11 +30,11 @@ favorites, other runs).
 
 The two counters version two different documents and are both load-bearing:
 
-|            | `definitionRevision`                                                                 | `descriptorRevision`                                          |
-| ---------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| Lives in   | the run's `workflow.ctrlyoke.json` (`CtrlYokeTypes.ts:707-717`)                      | the lineage's `workflow.json` (`CtrlYokeTypes.ts:457-458`)    |
-| Versions   | this run's step list                                                                 | descriptor metadata and run allocation                        |
-| Bumped by  | `PromptQueue.bumpDefinitionRevision` (9 sites), `RunContinuationService.ts:271`      | `WorkflowLineageRepository` :270, :429, :451, :487            |
+|           | `definitionRevision`                                                            | `descriptorRevision`                                       |
+| --------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Lives in  | the run's `workflow.ctrlyoke.json` (`CtrlYokeTypes.ts:707-717`)                 | the lineage's `workflow.json` (`CtrlYokeTypes.ts:457-458`) |
+| Versions  | this run's step list                                                            | descriptor metadata and run allocation                     |
+| Bumped by | `PromptQueue.bumpDefinitionRevision` (9 sites), `RunContinuationService.ts:271` | `WorkflowLineageRepository` :270, :429, :451, :487         |
 
 The webview uses `definitionRevision` alone for step-list staleness
 (`uiStore.appliedDefinitionRevision`, `useMessageHandler.ts:2380-2403`). `descriptorRevision` is only
@@ -49,13 +50,13 @@ the filesystem is the only channel. `RunContinuationService.appendStepsToRun` wr
 touches the host's in-memory `PromptQueue`. So the host learns about an append only by watching that
 file. Five defects sit on that path.
 
-| #   | Defect                                                       | Effect                                                        |
-| --- | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| 1   | `promoteToNewRun` never re-points `PromptFileWatcher`        | the proactive push never fires at all                         |
-| 2   | `PromptFileWatcher` registers no `onDidCreate`               | Windows `rename` writes missed even once #1 is fixed          |
-| 3   | `SESSION_RESTORED` overwrites fresh disk state, unguarded    | the correct count flashes then reverts on remount             |
-| 4   | `mergeDiskSteps` uses content hash as step identity          | an appended step with duplicate text is **silently dropped**  |
-| 5   | `DashboardBroadcastHub.updateStepsExtended` drops `parallelGroups` | broadcast clients lose parallel-group topology          |
+| #   | Defect                                                            | Effect                                                                                                   |
+| --- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | `promoteToNewRun` never re-points `PromptFileWatcher`             | the proactive push never fires at all                                                                    |
+| 2   | `PromptFileWatcher` registers no `onDidCreate`                    | Windows `rename` writes missed even once #1 is fixed                                                     |
+| 3   | `SESSION_RESTORED` overwrites fresh disk state, unguarded         | the correct count flashes then reverts on remount                                                        |
+| 4   | `mergeDiskSteps` uses content hash as step identity               | an appended step with duplicate text is **silently dropped**                                             |
+| 5   | Three `updateStepsExtended` call/impl sites drop `parallelGroups` | broadcast + hosted clients lose parallel-group topology, and the MCP-append push never carries it at all |
 
 ### 1. The watcher is pointed at the draft, not the run
 
@@ -143,6 +144,18 @@ bug rather than one instance of it. Separately, reconsider whether `applyWorkflo
 nulling the applied revision on a _replay_ at all; that side effect disarming the other guard is its
 own defect.
 
+**Cost of carrying the revision.** `IDashboardSink.updateSessionRestored` (`:46-63`) already takes
+**twelve** positional parameters; a `definitionRevision` makes thirteen, and defect 5's gotcha applies
+in full — an implementation that declares fewer parameters compiles clean. Every site must be updated
+by hand: producers `WorkflowInstance.ts:923` and `:958`, `PromptFileLoader.ts:336`,
+`WorkflowOrchestrator.ts:6936`; forwarders `WorkflowTaggedSink.ts:76`, `CtrlYokeHostedServer.ts:417`,
+`CtrlYokeWebviewProvider.ts:584`, `PostMessageDashboardSink.ts:93`; plus the deliberate no-op
+`DashboardBroadcastHub.ts:167`, which stays a no-op. Thirteen positional parameters is past the point
+where an options object is the right shape, but converting this signature is a separate refactor with
+its own blast radius — do not fold it into the guard fix. Note the producers already have the value to
+hand: `promptQueue.getState().definitionRevision`, the same source
+`getDefinitionRevisionContext` uses.
+
 ### 4. Content hash as step identity — remove it
 
 `PromptQueue.mergeDiskSteps` (`:1380-1470`) keys step identity on `hashPromptContent(prompt|script)`
@@ -170,6 +183,24 @@ so an append can never renumber a completed step. So: **merge `_runtime` by inde
 immutable prefix, take disk wholesale beyond it.** No hashing, no identity ambiguity, and the results
 array rebuilds on the same index basis.
 
+Two constraints on that rewrite, both verified and both easy to miss:
+
+- **The prefix must be the one disk and memory agree on.** `immutablePrefixLength`
+  (`RunContinuationService.ts:307-316`) is computed from the _disk_ file's `_runtime.completedAt`,
+  which can lag memory when a step has just finished and its runtime has not been flushed. Deriving
+  the merge prefix from memory alone would let an append that legitimately spliced at disk's
+  (shorter) boundary shift a step memory believes is completed, and index-merge `_runtime` onto the
+  wrong step. Take `min` of the two boundaries and merge only there.
+- **Removing the hash removes the novelty signal, so a replacement is required.**
+  `mergeDiskSteps` returns "new steps", `mergeStepsFromDisk` (`PromptQueue.ts:1496-1517`) turns that
+  into a count, and `PromptFileLoader.ts:360` sends `STEPS_EXTENDED` **only when that count is > 0**.
+  The count is currently derived from precisely the hash test being deleted. Replace it with a
+  structural comparison against the merge prefix — disk length vs. memory length, plus any difference
+  in the steps beyond the shared prefix — and keep returning a count so the existing logging, the
+  `queueExtensions` counter, and that push guard all still work. A rewrite that drops the hash and
+  leaves the guard reading a now-always-zero count silently disables the proactive push, converting
+  defect 4 into defect 1 by another route.
+
 There is a second, separate dedupe in the MCP server itself: `validatePrompts`
 (`mcp-server.ts:660-692`) rejects a new prompt when any existing step with `_runtime.completedAt` has
 identical `prompt` text, and `handleQueueAppend` throws if that rejects everything (`:452-462`).
@@ -184,16 +215,29 @@ severity — but it is the same mistaken premise, that prompt text is a step ide
 go in the same change. Keep the loud-rejection shape for the queue-size limit at `:471-478`; that one
 is real.
 
-### 5. `DashboardBroadcastHub` drops `parallelGroups`
+### 5. Three sites drop `parallelGroups`
 
 `IDashboardSink.updateStepsExtended` takes six parameters, the sixth being
-`parallelGroups?: ParallelGroupDefinition[]` (`IDashboardSink.ts:159-166`).
-`DashboardBroadcastHub.updateStepsExtended` (`:357-372`) declares **five** and forwards five, so
-parallel-group topology is silently dropped for every broadcast client. `PostMessageDashboardSink`
-(`:316`) and `CtrlYokeHostedServer` (`:612`) forward it correctly, so this affects the broadcast path
-only.
+`parallelGroups?: ParallelGroupDefinition[]` (`IDashboardSink.ts:159-166`). Three sites ignore it:
 
-**Fix.** Add the parameter and forward it.
+| Site                               | Shape                                   | Effect                                            |
+| ---------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| `DashboardBroadcastHub.ts:357-372` | declares **five** params, forwards five | every broadcast client loses topology             |
+| `CtrlYokeHostedServer.ts:612-626`  | declares **five** params, forwards five | every hosted browser client loses topology        |
+| `PromptFileLoader.ts:364-369`      | **caller** passes four args             | the MCP-append push never carries topology at all |
+
+Only `PostMessageDashboardSink` (`:316-333`) and `WorkflowTaggedSink` (`:282-298`) handle the
+parameter correctly.
+
+The third row is the one that matters here and was missed on the first pass: `PromptFileLoader`'s
+merge branch is the _proactive MCP-append push_ — the exact code path defects 1–2 exist to restore.
+Fixing 1–2 without fixing this site restores a push that still delivers stale parallel-group
+topology, so this must land **before** 1–2 can be meaningfully verified. It also drops `workflowId`
+(positional arg 5), which is only harmless because the sink reaching it is a `WorkflowTaggedSink`
+that substitutes its own; pass `undefined` explicitly rather than relying on that.
+
+**Fix.** Add the parameter to both implementations and forward it; pass it at the `PromptFileLoader`
+call site from the post-merge queue state.
 
 **Worth recording as a convention gotcha:** `implements IDashboardSink` does **not** catch this.
 TypeScript accepts a method with fewer parameters as satisfying a signature with more, so an arity
@@ -206,13 +250,19 @@ this recurs, consider a single options-object parameter, which _would_ be checke
 
 ## Sequencing
 
-1. **Defects 1 + 2 together** — re-point the watcher on promotion, add `onDidCreate`. This is the
+Revised after verification — defect 5 moved to the front. Its `PromptFileLoader` call site sits _on_
+the push path defects 1–2 restore, so it is a prerequisite rather than an unordered one-liner.
+
+1. **Defect 5** — thread `parallelGroups` through `DashboardBroadcastHub`, `CtrlYokeHostedServer`, and
+   the `PromptFileLoader` merge call site. Small, no dependencies, and it makes the push that step 2
+   revives actually correct.
+2. **Defects 1 + 2 together** — re-point the watcher on promotion, add `onDidCreate`. This is the
    actual fix for the reported symptom and restores the proactive push. Neither works alone.
-2. **Defect 5** — one-line forward, no dependencies, do it whenever.
-3. **Defect 4** — replace hash identity with index-based `_runtime` merge in `mergeDiskSteps`, and
-   remove the `validatePrompts` completed-text rejection. Independent of 1–2, and worth doing even if
-   1–2 slip: the disk merge at the next step transition is the safety net that currently makes the
-   count self-correct, and this defect is a hole _in that safety net_.
+3. **Defect 4** — replace hash identity with index-based `_runtime` merge in `mergeDiskSteps`, supply
+   the replacement novelty signal, and remove the `validatePrompts` completed-text rejection.
+   Independent of 1–2, and worth doing even if 1–2 slip: the disk merge at the next step transition is
+   the safety net that currently makes the count self-correct, and this defect is a hole _in that
+   safety net_.
 4. **Defect 3** — the `SESSION_RESTORED` guard. Largest blast radius (it touches every remount and
    every hosted-client rebind, not just the MCP path), so land it last and on its own.
 
