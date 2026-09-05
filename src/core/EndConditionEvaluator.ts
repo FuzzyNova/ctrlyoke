@@ -87,6 +87,23 @@ export class EndConditionEvaluator {
   }
 
   /**
+   * Whether a script value is inline text rather than a file path with
+   * arguments. Any meaningful line after the first makes it inline, full stop —
+   * nobody writes a file path containing a newline, and `parseScriptCommand`
+   * treats newlines as ordinary whitespace, so without this guard
+   * `package.json\nnpm test` would resolve `package.json` as the script and
+   * silently drop the second line's intent into argv.
+   *
+   * A first line followed only by blank lines keeps file-path routing.
+   */
+  static isMultilineInlineScript(script: string): boolean {
+    return script
+      .split(/\r\n?|\n/)
+      .slice(1)
+      .some((line) => /\S/.test(line));
+  }
+
+  /**
    * Parse script command to separate script path from arguments.
    * Handles both space-separated and quoted arguments.
    * @returns { scriptPath: string, args: string[] }
@@ -178,12 +195,8 @@ export class EndConditionEvaluator {
     try {
       Log.info(`Evaluating end condition script: ${condition.script}`);
 
-      // A meaningful newline makes the entire value inline script text. Only a
-      // first line followed by blank lines may still use file-path routing.
-      const hasMeaningfulNewline = condition.script
-        .split(/\r\n?|\n/)
-        .slice(1)
-        .some((line) => /\S/.test(line));
+      const hasMeaningfulNewline =
+        EndConditionEvaluator.isMultilineInlineScript(condition.script);
       const { scriptPath: rawScriptPath, args: additionalArgs } =
         hasMeaningfulNewline
           ? { scriptPath: "", args: [] }

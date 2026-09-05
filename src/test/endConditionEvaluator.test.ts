@@ -337,33 +337,39 @@ suite("EndConditionEvaluator Tests", () => {
       }
     });
 
-    test("treats package.json and setup.sh newline shapes as inline scripts", async () => {
-      fs.mkdirSync(path.join(workspaceRoot, "scripts"), { recursive: true });
-      fs.writeFileSync(path.join(workspaceRoot, "package.json"), "{}", "utf8");
-      fs.writeFileSync(
-        path.join(workspaceRoot, "scripts", "setup.sh"),
-        "exit 0\n",
-        "utf8"
-      );
-
-      const shell = process.platform === "win32" ? "powershell.exe" : "/bin/sh";
+    // Asserted on the routing decision rather than by executing these shapes.
+    // Running them would make the resolved shell invoke `package.json` /
+    // `setup.sh` directly, and Windows answers that with the modal "How do you
+    // want to open this file?" association dialog — which hangs the suite until
+    // a human dismisses it and leaves the temp workspace locked (EPERM) on
+    // teardown. Multi-line *execution* is covered separately with commands that
+    // are safe to run.
+    test("treats package.json and setup.sh newline shapes as inline scripts", () => {
       for (const script of [
         'package.json\nnode -e "process.exit(7)"',
         'scripts/setup.sh\nnode -e "process.exit(7)"',
+        "package.json\r\nnpm test",
       ]) {
-        const result = await evaluator.evaluateCondition(
-          {
-            script,
-            shell,
-            compareSource: "exitCode",
-            returns: "7",
-          },
-          workspaceRoot
+        assert.strictEqual(
+          EndConditionEvaluator.isMultilineInlineScript(script),
+          true,
+          script
         );
+      }
+    });
 
-        assert.strictEqual(result.errored, false, script);
-        assert.strictEqual(result.exitCode, 7, script);
-        assert.strictEqual(result.passed, true, script);
+    test("keeps a single line, or a first line padded with blanks, on the file route", () => {
+      for (const script of [
+        "args.js expected-argument",
+        "package.json",
+        "scripts/setup.sh\n",
+        "scripts/setup.sh\n   \n\n",
+      ]) {
+        assert.strictEqual(
+          EndConditionEvaluator.isMultilineInlineScript(script),
+          false,
+          script
+        );
       }
     });
 
