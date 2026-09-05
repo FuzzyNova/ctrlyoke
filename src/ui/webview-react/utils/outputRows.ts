@@ -2190,13 +2190,19 @@ export function buildOutputRows(
       });
     }
     if (message.isActivity) previousActivityTargetKey = targetKey;
+    // What belongs to *every* row the slice emits. `activityKey` is looked up
+    // per row by the minimap and the streaming anchor. The continuation rail is
+    // a continuous left edge down the slice's content, so it is per-row too —
+    // stamping it once per slice would break it into scattered dashes.
+    //
+    // The `⚡ Step N` label is the opposite: it describes the slice, not each
+    // row in it, so it is stamped on the opening row alone (below). Spreading
+    // it from here painted it once per event — the duplicate `⚡ Step 1` above
+    // both halves of a `[text, bashCommand]` batch.
     const activityMeta = message.isActivity
       ? {
           activityKey: message.activityKey,
-          activityFirst,
-          activityContinuation: !activityFirst,
-          activityLabel: stepLabel,
-          activityName: stepName,
+          activityContinuation: activityFirst ? undefined : true,
           promptUndo,
         }
       : {};
@@ -2259,6 +2265,12 @@ export function buildOutputRows(
         estimateSize: 32,
       });
     }
+
+    // Where this slice's own content begins. The leading chrome pushed above
+    // (header/prompt/command/error) belongs to the *attempt*, not the slice, so
+    // attribution must not land on it — the label goes above the first content
+    // row and nowhere else.
+    const contentRowStart = rows.length;
 
     const rawTextOutput = getRawTextOutput(output);
     // Tool call bodies sit in ToolCallBlock's content column, right of the ●
@@ -2453,6 +2465,20 @@ export function buildOutputRows(
           });
         }
       }
+    }
+
+    // The label lands on the slice's first content row and nowhere else, so it
+    // appears once per contiguous run of a step's rows rather than once per
+    // event. `outputRowActivityChrome` charges 20px per flagged row, so this is
+    // also what keeps the estimate matched to what actually renders.
+    const sliceOpener =
+      message.isActivity && activityFirst && rows.length > contentRowStart
+        ? rows[contentRowStart]
+        : undefined;
+    if (sliceOpener) {
+      sliceOpener.activityFirst = true;
+      sliceOpener.activityLabel = stepLabel;
+      sliceOpener.activityName = stepName;
     }
 
     if (emitsTrailingChrome && aggregateOutput.scriptVerdict) {

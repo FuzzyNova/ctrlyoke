@@ -281,6 +281,96 @@ describe("outputRows", () => {
     expect(hiddenVisibleRowKeys).toEqual(visibleRowKeys);
   });
 
+  it("labels a multi-event opening slice once, not once per event", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    // One `cliOutputEventsAppended` batch routinely carries several events —
+    // `[text, bashCommand]` is the harness's most common shape. The label
+    // describes the slice, so it must appear once above the batch; stamping it
+    // per row painted `⚡ Step 1` above both halves.
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "I'll read the plan." },
+            },
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: "wc -l plan.md", output: "1220 plan.md" },
+            },
+          ],
+        },
+        {
+          timestampMs: 1001,
+          sequence: 2,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: "sed -n 1,5p plan.md", output: "---" },
+            },
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: "sed -n 6,9p plan.md", output: "applyTo" },
+            },
+          ],
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "plan" }] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const eventRows = result.rows.filter(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+    );
+    expect(eventRows).toHaveLength(4);
+
+    // The label opens the slice and stops there.
+    expect(eventRows.map((row) => row.activityFirst === true)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+
+    // The rail is a continuous left edge down a continuation slice's content,
+    // so unlike the label it stays on every one of that slice's rows —
+    // stamping it per slice would break it into scattered dashes.
+    expect(eventRows.map((row) => row.activityContinuation === true)).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
   it("renders semantic activity switches and continuation rails", () => {
     const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
