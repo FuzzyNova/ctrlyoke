@@ -193,6 +193,24 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(removeButton.querySelector(".codicon-trash")).toBeInTheDocument();
   });
 
+  it("keeps hook commands single-line and blurs on Enter", async () => {
+    const user = userEvent.setup();
+    render(
+      <HooksEditor
+        value={[{ event: "stop", command: "node ./hook.js" }]}
+        onChange={() => undefined}
+      />
+    );
+
+    const command = screen.getByLabelText("hook-0-command");
+    await user.click(command);
+    await user.keyboard("{Enter}");
+
+    expect(command).toHaveTextContent("node ./hook.js");
+    expect(command).not.toHaveTextContent("\n");
+    expect(command).not.toHaveFocus();
+  });
+
   it("clears hook environment and timeout overrides", () => {
     const onChange = vi.fn();
     render(

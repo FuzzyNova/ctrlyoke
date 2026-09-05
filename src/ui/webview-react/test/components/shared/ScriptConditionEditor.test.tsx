@@ -55,6 +55,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
     placeholder,
     disabled,
     className,
+    multiline,
   }: {
     id: string;
     value: string;
@@ -63,6 +64,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
     placeholder?: string;
     disabled?: boolean;
     className?: string;
+    multiline?: boolean;
   }) => (
     <input
       type="text"
@@ -73,6 +75,7 @@ vi.mock("@components/shared/ScriptCommandEditor", () => ({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      data-multiline={multiline ? "true" : "false"}
     />
   ),
 }));
@@ -244,6 +247,24 @@ describe("ScriptConditionEditor", () => {
           expect.objectContaining({ script: "npm test && npm run lint" })
         );
       });
+    }
+  );
+
+  it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+    "%s opts its script field into multiline mode",
+    (variant) => {
+      render(
+        <ScriptConditionEditor
+          variant={variant}
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix={`test-${variant}`}
+        />
+      );
+
+      expect(
+        document.getElementById(`test-${variant}-script`)
+      ).toHaveAttribute("data-multiline", "true");
     }
   );
 

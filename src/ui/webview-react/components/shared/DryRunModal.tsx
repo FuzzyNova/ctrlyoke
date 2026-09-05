@@ -959,6 +959,13 @@ function resolveCommandDisplayText(
   });
 }
 
+function summarizeCommandDisplayText(displayText: string): string {
+  const firstNewline = displayText.search(/\r?\n/);
+  return firstNewline === -1
+    ? displayText
+    : `${displayText.slice(0, firstNewline)} …`;
+}
+
 /** Windows commands can be rendered for either terminal; POSIX ones and the
  * rare `.cmd`/`.bat` verbatim fallback have exactly one valid rendering. */
 function canToggleCommandShell(command: CommandPreview): boolean {
@@ -988,6 +995,7 @@ function CommandPanel({
   }
   const activeShell = selectedShell ?? command.displayShell;
   const displayText = resolveCommandDisplayText(command, activeShell);
+  const summarizedDisplayText = summarizeCommandDisplayText(displayText);
 
   return (
     <div className="flex flex-col gap-5 p-4">
@@ -1019,8 +1027,11 @@ function CommandPanel({
             </div>
           )}
         </div>
-        <pre className="overflow-auto whitespace-pre-wrap break-words rounded bg-input-bg p-3 font-mono text-xs text-editor-fg">
-          {displayText}
+        <pre
+          className="overflow-auto whitespace-pre-wrap break-words rounded bg-input-bg p-3 font-mono text-xs text-editor-fg"
+          title={displayText}
+        >
+          {summarizedDisplayText}
         </pre>
         {command.requiresShellVerbatimArgs && (
           <p className="mt-2 text-xxs text-description-fg">

@@ -356,6 +356,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           value={scriptInput}
           onChange={setScriptInput}
           onBlur={() => update({ script: scriptInput })}
+          multiline
           placeholder="npm test"
           disabled={disabled}
           className="w-full bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"

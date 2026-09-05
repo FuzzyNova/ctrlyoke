@@ -1,7 +1,7 @@
 # Multi-Line Script Authoring and Script Type Coverage
 
-> **Status:** Partially implemented — the A.1 routing safety and A.4 `cmd`
-> preflight landed before editor work; A.2/A.3/A.5 and all of B remain open.
+> **Status:** Deliverable A complete — A.1–A.5 are landed; deliverable B
+> remains open.
 >
 > **Priority:** P2 for the multi-line authoring half (a file-format capability
 > the dashboard cannot reach, plus one silent-misexecution hazard); P3 for the
@@ -227,13 +227,13 @@ the two platform guards.
 
 ## Acceptance Criteria
 
-- A multi-line script can be authored in the dashboard, saved, reloaded, and
-  executed with the same text and exit code as the equivalent YAML file.
-- No script containing a newline is ever dispatched as a file path with
+- [x] A multi-line script can be authored in the dashboard, saved, reloaded,
+  and executed with the same text and exit code as the equivalent YAML file.
+- [x] No script containing a newline is ever dispatched as a file path with
   arguments.
-- `.ps1` conditions run on macOS and Linux.
-- An unsupported script extension produces an "unsupported script type" error
-  instead of an attempt to execute the file.
+- [ ] `.ps1` conditions run on macOS and Linux. (Deliverable B)
+- [ ] An unsupported script extension produces an "unsupported script type"
+  error instead of an attempt to execute the file. (Deliverable B)
 
 ## Non-goals
 

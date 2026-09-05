@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import {
   act,
   cleanup,
@@ -637,6 +638,27 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
         },
       })
     );
+  });
+
+  it("keeps worktree setup single-line and blurs on Enter", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "ui-work",
+      base: "main",
+      setup: "npm ci",
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Named");
+
+    const setup = screen.getByLabelText("Worktree setup");
+    await user.click(setup);
+    await user.keyboard("{Enter}");
+
+    expect(setup).toHaveTextContent("npm ci");
+    expect(setup).not.toHaveTextContent("\n");
+    expect(setup).not.toHaveFocus();
   });
 
   it("surfaces an empty named branch as a field diagnostic", () => {
