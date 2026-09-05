@@ -969,7 +969,12 @@ const WorkflowStepsPanelInner: React.FC<{
   }
 
   if (stepsCollapsed && !isMobileMode) {
-    return <PromptChipRail onExpand={handleToggle} />;
+    return (
+      <PromptChipRail
+        onExpand={handleToggle}
+        getStepHarnessModel={getStepHarnessModel}
+      />
+    );
   }
 
   return (

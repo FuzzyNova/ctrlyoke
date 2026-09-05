@@ -623,9 +623,18 @@ Worth stating because this pane is unusually sensitive to it (see
    baseline-color collisions without moving tie-breaking into a surface. The built-in defaults
    and the fixed tie-break palette live beside `HARNESS_CHART_COLORS` in
    `src/types/DashboardConstants.ts`.
-5. **Add the status icon to the chip rail, then flip its border to identity.** In that order — the
+5. ~~**Add the status icon to the chip rail, then flip its border to identity.** In that order — the
    chip's border is its only status signal, so flipping first loses information for one commit.
-   Prototype the three-row and two-row layouts here (§5).
+   Prototype the three-row and two-row layouts here (§5).~~ **Done (2026-09-04).** Added the
+   status icon before moving the step-chip left edge to the shared identity resolver. The selected
+   layout is three rows: type/slot, status, context. The two-row prototype was rejected because
+   the available ~20px content width cannot reliably fit the 14px status glyph alongside the slot
+   label (or the type glyph alongside a percentage). With `py-1`, three `h-3` rows, and the
+   existing bottom divider, the measured chip height is **45px** when context is available (33px
+   when it is not). This is the accepted density cost: about 45% fewer chips fit before scrolling.
+   Prompt and script shape remains distinct, and the running ring, context fill, and pause boundary
+   are unchanged. `getStepAccentClass` remains in use for the final-step chip's status edge; it has
+   no remaining step-chip callers.
 6. Replace the output pane's continuation rail with the zero-width inset gutter bar reading the same
    resolver, painted on every row of every run. Watch the continuity trap: `OutputRow`'s non-CLI-group
    return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.
