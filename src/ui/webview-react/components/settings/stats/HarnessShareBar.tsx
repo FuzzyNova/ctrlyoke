@@ -1,5 +1,4 @@
 import {
-  HARNESS_CHART_COLORS,
   HARNESS_INFO,
   HARNESS_SHARE_METRICS,
 } from "@root/types/DashboardConstants";
@@ -7,6 +6,8 @@ import type {
   HarnessId,
   HarnessShareMetric,
 } from "@root/types/DashboardConstants";
+import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
+import { resolveHarnessColor } from "@utils/stepColor";
 
 export interface HarnessShareSegment {
   harnessId: HarnessId;
@@ -26,9 +27,11 @@ export function getHarnessShareMetricLabel(metric: HarnessShareMetric): string {
 export function HarnessShareBar({
   segments,
   metric,
+  harnessColorSettings,
 }: {
   segments: readonly HarnessShareSegment[];
   metric: HarnessShareMetric;
+  harnessColorSettings?: HarnessColorSettings;
 }) {
   const label = getHarnessShareMetricLabel(metric);
 
@@ -45,7 +48,10 @@ export function HarnessShareBar({
               className="h-full min-w-0"
               style={{
                 width: `${percentage}%`,
-                backgroundColor: HARNESS_CHART_COLORS[harnessId],
+                backgroundColor: resolveHarnessColor(
+                  harnessId,
+                  harnessColorSettings
+                ),
               }}
               title={`${HARNESS_INFO[harnessId].name}: ${formatHarnessSharePercentage(percentage)} ${label}`}
             />

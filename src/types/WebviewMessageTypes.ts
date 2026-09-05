@@ -71,7 +71,7 @@ import type {
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
-  StepColorSettings,
+  HarnessColorSettings,
   TerminalSettings,
 } from "./CtrlYokeSettings";
 import type {
@@ -507,7 +507,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
-    stepColors?: StepColorSettings;
+    harnessColors?: HarnessColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
     isMultiRoot: boolean;
@@ -1543,7 +1543,7 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
-    stepColors?: StepColorSettings;
+    harnessColors?: HarnessColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
     externalFileRootsByScope?: ExternalFileRootsByScope;

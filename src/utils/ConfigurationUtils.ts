@@ -9,10 +9,10 @@ import {
 } from "../types/CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
+  HarnessColorSettings,
   ModelPricingOverride,
   RunHistoryLocation,
   StatusLineTrackingSettings,
-  StepColorSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
 import type { StatusLineSegment } from "./StatuslineFormat";
@@ -261,9 +261,9 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).showCliCommand;
   },
 
-  /** Get the dashboard-only step identity color settings. */
-  getStepColorSettings(): StepColorSettings {
-    return configService.get(CONFIG_KEYS.UI).stepColors;
+  /** Get the dashboard-only per-harness identity color settings. */
+  getHarnessColorSettings(): HarnessColorSettings {
+    return configService.get(CONFIG_KEYS.UI).harnessColors;
   },
 
   /**

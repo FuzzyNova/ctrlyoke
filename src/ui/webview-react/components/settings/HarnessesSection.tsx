@@ -47,7 +47,7 @@ export function HarnessesSection({
 }: Props) {
   const models = settings.settings.defaults.models;
   const additionalArgs = settings.settings.defaults.additionalArgs;
-  const stepColors = settings.settings.ui.stepColors;
+  const harnessColors = settings.settings.ui.harnessColors;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
   const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
@@ -61,7 +61,7 @@ export function HarnessesSection({
       Object.fromEntries(
         CLI_HARNESSES.map((harnessId) => [
           harnessId,
-          stepColors.byHarness[harnessId] ??
+          harnessColors.byHarness[harnessId] ??
             getHarnessStepColorPickerValue(harnessId),
         ])
       ) as Record<HarnessId, string>
@@ -72,12 +72,12 @@ export function HarnessesSection({
       Object.fromEntries(
         CLI_HARNESSES.map((harnessId) => [
           harnessId,
-          stepColors.byHarness[harnessId] ??
+          harnessColors.byHarness[harnessId] ??
             getHarnessStepColorPickerValue(harnessId),
         ])
       ) as Record<HarnessId, string>
     );
-  }, [stepColors]);
+  }, [harnessColors]);
   const hiddenHarnesses =
     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
   return (
@@ -182,10 +182,10 @@ export function HarnessesSection({
                 />
               </SettingInputRow>
               <SettingInputRow
-                label="Step color"
-                description="Identity color used for this harness when step colors are enabled. Reset to follow the built-in theme-aware chart color."
+                label="Harness color"
+                description="Identity color used for this harness across the steps panel, chip rail, output pane, and harness share bar when step colors are enabled. Reset to follow the built-in theme-aware chart color."
                 id={`step-color-${harnessId}`}
-                path={`ui.stepColors.byHarness.${harnessId}`}
+                path={`ui.harnessColors.byHarness.${harnessId}`}
                 {...rowProps}
               >
                 <input
@@ -203,12 +203,12 @@ export function HarnessesSection({
                   }
                   onBlur={(e) =>
                     onUpdate(
-                      `ui.stepColors.byHarness.${harnessId}`,
+                      `ui.harnessColors.byHarness.${harnessId}`,
                       e.target.value
                     )
                   }
                   className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-                  title={`${info.name} step color`}
+                  title={`${info.name} color`}
                 />
               </SettingInputRow>
             </div>

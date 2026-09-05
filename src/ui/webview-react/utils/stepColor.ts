@@ -1,5 +1,5 @@
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
+import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   HARNESS_CHART_COLORS,
   SCRIPT_STEP_DEFAULT_COLOR,
@@ -22,7 +22,7 @@ export interface ResolveStepColorOptions {
   group?: ParallelGroupDefinition;
   offsetInGroup?: number;
   /** Effective dashboard settings for identity colors. */
-  settings?: StepColorSettings;
+  settings?: HarnessColorSettings;
   /** Group members let the resolver identify a genuine baseline-color collision. */
   groupMembers?: readonly StepColorGroupMember[];
 }
@@ -41,7 +41,7 @@ export function getHarnessStepColorPickerValue(harnessId: HarnessId): string {
  */
 export function getInheritedStepColor(
   harnessId: HarnessId | undefined,
-  settings?: StepColorSettings
+  settings?: HarnessColorSettings
 ): string {
   const configuredColor = harnessId
     ? settings?.byHarness[harnessId]
@@ -53,9 +53,17 @@ export function getInheritedStepColor(
     : /#[0-9a-fA-F]{6}/.exec(SCRIPT_STEP_DEFAULT_COLOR)?.[0] ?? "#808080";
 }
 
-function getHarnessOrScriptColor(
+/**
+ * Resolve the identity color for a harness (or script steps, when `harnessId`
+ * is undefined) from the user's overrides, falling back to the built-in
+ * theme-aware chart colors. This is the single source every surface that
+ * paints a harness color — the steps panel, chip rail, output pane, and the
+ * workspace stats harness-share bar — must read through, so they can never
+ * drift from each other or from a step's own resolved color.
+ */
+export function resolveHarnessColor(
   harnessId: HarnessId | undefined,
-  settings?: StepColorSettings
+  settings?: HarnessColorSettings
 ): string {
   const configuredColor = harnessId
     ? settings?.byHarness[harnessId]
@@ -70,11 +78,9 @@ function getHarnessOrScriptColor(
 function getBaseStepColor(
   step: WorkflowStep,
   harnessId: HarnessId | undefined,
-  settings?: StepColorSettings
+  settings?: HarnessColorSettings
 ): string {
-  return (
-    step.color ?? getHarnessOrScriptColor(harnessId, settings)
-  );
+  return step.color ?? resolveHarnessColor(harnessId, settings);
 }
 
 function hashSeed(seed: string): number {
@@ -127,7 +133,7 @@ export function resolveStepColor({
   const authoredColor = step.color;
   if (authoredColor) return authoredColor;
 
-  const baseColor = getHarnessOrScriptColor(harnessId, settings);
+  const baseColor = resolveHarnessColor(harnessId, settings);
   const hasParallelMembers =
     group !== undefined && group.endIndex - group.startIndex + 1 >= 2;
   if (!hasParallelMembers || offsetInGroup === undefined) {

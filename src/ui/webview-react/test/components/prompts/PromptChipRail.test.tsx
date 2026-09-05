@@ -70,8 +70,8 @@ describe("PromptChipRail", () => {
   it("restores the status border when identity colors are disabled", () => {
     useSettingsStore.getState().setGlobalSettings({
       ...useSettingsStore.getState().globalSettings,
-      stepColors: {
-        ...useSettingsStore.getState().globalSettings.stepColors!,
+      harnessColors: {
+        ...useSettingsStore.getState().globalSettings.harnessColors!,
         enabled: false,
       },
     });

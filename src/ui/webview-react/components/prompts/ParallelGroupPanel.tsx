@@ -10,7 +10,7 @@ import {
   type StepStatus,
 } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
+import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   WorkflowStepRow,
@@ -141,7 +141,7 @@ type ParallelGroupPanelProps = {
   containerId?: string;
   memberIds?: string[];
   dragDisabled?: boolean;
-  stepColorSettings?: StepColorSettings;
+  harnessColorSettings?: HarnessColorSettings;
 };
 
 export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
@@ -165,7 +165,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   containerId,
   memberIds,
   dragDisabled = false,
-  stepColorSettings,
+  harnessColorSettings,
 }) => {
   const { setNodeRef } = useDroppable({
     id: containerId ?? `group-${group.id}`,
@@ -295,7 +295,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   colorGroup={group}
                   colorGroupMembers={colorGroupMembers}
                   offsetInGroup={offset}
-                  stepColorSettings={stepColorSettings}
+                  harnessColorSettings={harnessColorSettings}
                   getStepHarnessModel={getStepHarnessModel}
                   getStepOverrides={getStepOverrides}
                   onStepClick={onStepClick}
@@ -313,7 +313,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                 harnessId: getStepHarnessModel(step, memberStatus).harnessId,
                 group,
                 offsetInGroup: offset,
-                settings: stepColorSettings,
+                settings: harnessColorSettings,
                 groupMembers: colorGroupMembers,
               });
               return (
@@ -360,7 +360,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                       colorGroup={group}
                       colorGroupMembers={colorGroupMembers}
                       offsetInGroup={offset}
-                      stepColorSettings={stepColorSettings}
+                      harnessColorSettings={harnessColorSettings}
                       getStepHarnessModel={getStepHarnessModel}
                       getStepOverrides={getStepOverrides}
                       onStepClick={onStepClick}

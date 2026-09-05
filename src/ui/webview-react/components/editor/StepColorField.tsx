@@ -18,7 +18,7 @@ export function useStepColorInput(): StepColorInputState {
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
     stepType === STEP_TYPES.SCRIPT ? undefined : getEffectiveHarness(),
-    globalSettings.stepColors
+    globalSettings.harnessColors
   );
   const hasOverride = properties.color !== undefined;
   const [color, setColor] = useState(properties.color ?? inheritedColor);

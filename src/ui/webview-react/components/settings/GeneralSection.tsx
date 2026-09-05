@@ -29,18 +29,20 @@ export function GeneralSection({
 }: Props) {
   const general = settings.settings.general;
   const ui = settings.settings.ui;
-  const stepColors = ui.stepColors;
+  const harnessColors = ui.harnessColors;
   const exec = settings.settings.execution;
   const runs = settings.settings.runs;
   const sources = settings.sources as Record<string, SettingSource>;
   const isMultiRoot = settings.isMultiRoot;
 
   const rowProps = { sources, onReset, activeScope };
-  const [localScriptColor, setLocalScriptColor] = useState(stepColors.script);
+  const [localScriptColor, setLocalScriptColor] = useState(
+    harnessColors.script
+  );
 
   useEffect(() => {
-    setLocalScriptColor(stepColors.script);
-  }, [stepColors.script]);
+    setLocalScriptColor(harnessColors.script);
+  }, [harnessColors.script]);
 
   return (
     <div className="space-y-1">
@@ -117,16 +119,16 @@ export function GeneralSection({
         <SettingToggleRow
           label="Show step identity colors"
           description="Show the same step color across the steps panel, chip rail, and output pane."
-          checked={stepColors.enabled}
-          onChange={(v) => onUpdate("ui.stepColors.enabled", v)}
-          path="ui.stepColors.enabled"
+          checked={harnessColors.enabled}
+          onChange={(v) => onUpdate("ui.harnessColors.enabled", v)}
+          path="ui.harnessColors.enabled"
           {...rowProps}
         />
         <SettingInputRow
           label="Script step color"
           description="Identity color used for script steps when step colors are enabled."
           id="ui-step-colors-script"
-          path="ui.stepColors.script"
+          path="ui.harnessColors.script"
           {...rowProps}
         >
           <input
@@ -134,7 +136,7 @@ export function GeneralSection({
             type="color"
             value={localScriptColor}
             onChange={(e) => setLocalScriptColor(e.target.value)}
-            onBlur={(e) => onUpdate("ui.stepColors.script", e.target.value)}
+            onBlur={(e) => onUpdate("ui.harnessColors.script", e.target.value)}
             className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
             title="Script step color"
           />

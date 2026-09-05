@@ -85,7 +85,7 @@ import {
 } from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
-import type { StepColorSettings } from "@root/types/CtrlYokeSettings";
+import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 
 export interface OutputRowPromptUndoAction {
   label: string;
@@ -325,8 +325,8 @@ export interface BuildOutputRowsInput {
   parallelGroups?: readonly ParallelGroupDefinition[];
   /** Workflow-level fallback for prompt-step harness resolution. */
   effectiveHarness?: HarnessId;
-  /** Dashboard-only identity color settings. */
-  stepColorSettings?: StepColorSettings;
+  /** Dashboard-only per-harness identity color settings. */
+  harnessColorSettings?: HarnessColorSettings;
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -1932,7 +1932,7 @@ export function buildOutputRows(
     const color = resolveStepColor({
       step,
       harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
-      settings: input.stepColorSettings,
+      settings: input.harnessColorSettings,
       group,
       offsetInGroup:
         group === undefined ? undefined : target.index - group.startIndex,

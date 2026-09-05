@@ -14,6 +14,7 @@ import type {
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   HarnessIcon,
   ModelPricingEditor,
@@ -326,6 +327,7 @@ export function StatsUsageSection({
           metric={shareMetric}
           onMetricChange={setShareMetric}
           hideCost={hideCost}
+          harnessColorSettings={settings?.settings.ui.harnessColors}
         />
       )}
       <div className="space-y-4">
@@ -390,11 +392,13 @@ function HarnessShare({
   metric,
   onMetricChange,
   hideCost,
+  harnessColorSettings,
 }: {
   snapshot: WorkspaceStatsSnapshot;
   metric: HarnessShareMetric;
   onMetricChange: (metric: HarnessShareMetric) => void;
   hideCost: boolean;
+  harnessColorSettings?: HarnessColorSettings;
 }) {
   const contributions = ALL_HARNESS_IDS.map((harnessId, index) => ({
     harnessId,
@@ -467,7 +471,11 @@ function HarnessShare({
           ]}
         />
       </div>
-      <HarnessShareBar segments={segments} metric={metric} />
+      <HarnessShareBar
+        segments={segments}
+        metric={metric}
+        harnessColorSettings={harnessColorSettings}
+      />
       <div className="space-y-2">
         {ranked.map(({ harnessId, contribution }) => (
           <HarnessShareRow

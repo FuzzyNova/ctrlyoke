@@ -734,9 +734,9 @@
           "type": "boolean",
           "description": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears."
         },
-        "stepColors": {
+        "harnessColors": {
           "type": "object",
-          "description": "Controls the identity colors used to correlate workflow steps across the dashboard.",
+          "description": "Controls the per-harness identity colors used to correlate workflow steps across the dashboard.",
           "additionalProperties": false,
           "properties": {
             "enabled": {

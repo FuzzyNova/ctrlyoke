@@ -478,7 +478,7 @@ describe("outputRows", () => {
       steps: [{ name: "auth" }] as WorkflowStep[],
       finalStep: null,
       effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
-      stepColorSettings: { enabled: false, byHarness: {}, script: "#808080" },
+      harnessColorSettings: { enabled: false, byHarness: {}, script: "#808080" },
       streamingChunks: {},
       finalStepStreamingChunks: {},
       isExecutionActive: false,
