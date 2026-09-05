@@ -365,7 +365,9 @@ export class PromptFileLoader {
             updatedState.steps,
             this.promptQueue.getWorkflowFile().finalStep ?? null,
             undefined,
-            updatedState.definitionRevision
+            updatedState.definitionRevision,
+            undefined,
+            updatedState.parallelGroups
           );
         } else if (newStepsCount === 0) {
           Log.trace("Working file changed but no new steps detected");

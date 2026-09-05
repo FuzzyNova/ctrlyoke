@@ -10,6 +10,8 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   PERMISSION_MODES,
+  EXECUTION_STATES,
+  PROMPT_FILE_RELOAD_MODES,
 } from "../../types/DashboardConstants";
 import type { UserFeedback } from "../../core/UserFeedbackSink";
 import {
@@ -67,6 +69,52 @@ suite("PromptFileLoader Tests", () => {
           message: "ctrlyoke: Failed to parse prompt file",
         },
       ]);
+    });
+  });
+
+  suite("working file merge", () => {
+    test("forwards merged parallelGroups in the STEPS_EXTENDED push", async () => {
+      const parallelGroups = [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
+      ];
+      const steps: WorkflowStep[] = [
+        { prompt: "existing" },
+        { prompt: "appended" },
+      ];
+      const dashboardCalls: unknown[][] = [];
+      const dashboard = {
+        updateStepsExtended: (...args: unknown[]) => dashboardCalls.push(args),
+      } as any;
+      const queue = {
+        readWorkingFile: async () => ({
+          steps,
+          parallelGroups,
+          workflowName: "workflow",
+          startedAt: 0,
+          definitionRevision: 7,
+        }),
+        getState: () => ({
+          status: EXECUTION_STATES.RUNNING,
+          steps,
+          parallelGroups,
+          definitionRevision: 7,
+        }),
+        mergeStepsFromDisk: async () => 1,
+        getWorkflowFile: () => ({ steps, parallelGroups }),
+      } as any;
+      const parser = {
+        validateWorkflowSteps: () => ({ valid: true, errors: [] }),
+      } as any;
+      const loader = new PromptFileLoader(parser, queue, () => dashboard);
+
+      await loader.reloadFromWorkingFile(
+        "working-file.json",
+        PROMPT_FILE_RELOAD_MODES.MERGE
+      );
+
+      assert.strictEqual(dashboardCalls.length, 1);
+      assert.strictEqual(dashboardCalls[0][4], undefined);
+      assert.deepStrictEqual(dashboardCalls[0][5], parallelGroups);
     });
   });
 

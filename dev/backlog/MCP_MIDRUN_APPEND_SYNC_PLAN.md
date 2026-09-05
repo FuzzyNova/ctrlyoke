@@ -217,6 +217,11 @@ is real.
 
 ### 5. Three sites drop `parallelGroups`
 
+**Status: Implemented (2026-09-05).** `parallelGroups` now flows through the broadcast hub and
+hosted server delegates, and the `PromptFileLoader` MCP-append push passes the post-merge topology
+with its workflow-id slot explicitly set to `undefined`. Regression coverage verifies both the
+broadcast forwarding and proactive `STEPS_EXTENDED` payload.
+
 `IDashboardSink.updateStepsExtended` takes six parameters, the sixth being
 `parallelGroups?: ParallelGroupDefinition[]` (`IDashboardSink.ts:159-166`). Three sites ignore it:
 
