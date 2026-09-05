@@ -16,12 +16,12 @@
 
 ## Problem
 
-`resolveShellInvocation(script)` (`src/core/harness/PtyProcessManager.ts:143`)
+`resolveShellInvocation(script)` (`src/core/harness/PtyProcessManager.ts:214`)
 is now the single source for "which shell runs this inline script text,"
 consulted by both interactive script-step PTY spawning
-(`WorkflowInstance.ts:3723`) and the headless inline-command fallback shared by
+(`WorkflowInstance.ts:4138`) and the headless inline-command fallback shared by
 script steps, preconditions, and end-conditions
-(`EndConditionEvaluator.ts:227`). It resolves `terminal.shellExecutable` if the
+(`EndConditionEvaluator.ts:230`). It resolves `terminal.shellExecutable` if the
 user set it, else auto-detects per platform.
 
 That closes the original bug (same script text silently ran under a different
@@ -53,7 +53,7 @@ path.
 
 Dry-run preview has its own, third, independent "which shell" answer for
 script steps — `ExecutionPreviewService.buildScriptCommand()`
-(`src/core/ExecutionPreviewService.ts:1153-1180`) hardcodes
+(`src/core/ExecutionPreviewService.ts:1312-1340`) hardcodes
 `process.env.ComSpec ?? "cmd.exe"` on Windows / `process.env.SHELL ?? "/bin/sh"`
 elsewhere, wrapped as `["/d", "/s", "/c", script]` / `["-c", script]`, and
 always renders it with the `cmd` or `posix` `CommandDisplayShell` dialect. It
@@ -186,7 +186,14 @@ already, so no change is needed at those three declarations.
 
 ### Resolver signature
 
-`src/core/harness/PtyProcessManager.ts:143`:
+`src/core/harness/PtyProcessManager.ts:214`. **The change is purely additive —
+one new optional parameter slotted ahead of the existing setting lookup. Every
+existing return field stays**, in particular `windowsVerbatimArguments`, which
+both call sites already consume and which is what keeps a quoted inline `cmd
+/d /c` payload from reaching cmd.exe mangled (see the
+`shellNeedsVerbatimArguments` doc comment immediately above the resolver).
+Dropping it would silently reintroduce the "cmd script exits 0 regardless"
+bug:
 
 ```ts
 export function resolveShellInvocation(
@@ -196,6 +203,7 @@ export function resolveShellInvocation(
   executable: string;
   args: string[];
   shellKind: ShellKind;
+  windowsVerbatimArguments: boolean; // unchanged — do not drop
 } {
   const pinned = shellOverride?.trim();
   const terminalSettings = ConfigurationUtils.getTerminalSettings();
@@ -205,31 +213,35 @@ export function resolveShellInvocation(
     settingOverride ||
     (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
   const shellKind = resolveShellKind(executable);
-  return { executable, args: buildShellWrapArgs(shellKind, script), shellKind };
+  return {
+    executable,
+    args: buildShellWrapArgs(shellKind, script),
+    shellKind,
+    windowsVerbatimArguments: shellNeedsVerbatimArguments(shellKind),
+  };
 }
 ```
 
 ### Call sites
 
-- **`WorkflowExecutor.executeScriptStep`** (`src/core/WorkflowExecutor.ts:1199`)
-  — add `shell: effectiveStep.shell` to the `resolvedProperties` object built
-  there. It already flows into
-  `endConditionEvaluator.evaluateCondition(resolvedProperties, ...)`
-  (line 1235) for free, since that call takes the whole `ScriptProperties`
-  object. Also pass it into the `context.spawnScriptPty({...})` call
-  (line 1213).
-- **`spawnScriptPty` option type** (`src/core/WorkflowExecutor.ts:228-245`) —
+- **`WorkflowExecutor.executeScriptStep`** (`src/core/WorkflowExecutor.ts`,
+  the `resolvedProperties` literal at ~line 1816) — add
+  `shell: effectiveStep.shell`. It already flows into
+  `endConditionEvaluator.evaluateCondition(resolvedProperties, ...)` for free,
+  since that call takes the whole `ScriptProperties` object. Also pass it into
+  the `context.spawnScriptPty({...})` call (~line 1830).
+- **`spawnScriptPty` option type** (`src/core/WorkflowExecutor.ts:283-306`) —
   add `shell?: string;` beside `script`.
-- **`WorkflowInstance.ts:3723`** (the `spawnScriptPty` implementation) — change
+- **`WorkflowInstance.ts:4138`** (the `spawnScriptPty` implementation) — change
   `resolveShellInvocation(options.script)` to
   `resolveShellInvocation(options.script, options.shell)`.
-- **`EndConditionEvaluator.ts:227`** (the inline-command fallback shared by
+- **`EndConditionEvaluator.ts:230`** (the inline-command fallback shared by
   headless script steps, preconditions, and end-conditions) — change
   `resolveShellInvocation(condition.script)` to
   `resolveShellInvocation(condition.script, condition.shell)`. `condition` is
   already typed `ScriptProperties`, so this is a one-line change.
 - **`ExecutionPreviewService.buildScriptCommand`**
-  (`src/core/ExecutionPreviewService.ts:1153-1180`) — replace the hardcoded
+  (`src/core/ExecutionPreviewService.ts:1312-1340`) — replace the hardcoded
   `ComSpec`/`SHELL` branch with a call to the same
   `resolveShellInvocation(step.script, step.shell)`, so preview both fixes its
   preexisting wrong-shell display and reflects the new override. Map the
@@ -240,6 +252,21 @@ export function resolveShellInvocation(
   supports, just driven by the real resolved kind instead of a platform guess.
   `requiresShellVerbatimArgs` becomes `shellKind === SHELL_KINDS.CMD` (was
   `isWindows`).
+
+  **Platform-injection gap (resolve this while implementing).**
+  `buildScriptCommand` currently branches on
+  `this.options.platform ?? process.platform` — an injected platform that
+  `ExecutionPreviewService` tests rely on to assert both platforms' previews
+  from one host. `resolveShellInvocation` reads `process.platform` directly
+  and has no such seam, so a naive swap makes preview host-platform-only and
+  silently weakens that existing coverage. Preferred fix: give
+  `resolveShellInvocation` an optional `platform?: NodeJS.Platform` parameter
+  defaulting to `process.platform`, and pass `this.options.platform` through
+  from preview — the resolver already isolates the platform decision to one
+  ternary, so this is a small, honest seam rather than new indirection. If
+  that proves awkward, the fallback is to accept host-platform-only preview
+  and update the affected tests deliberately — but do not delete
+  cross-platform preview assertions silently.
 - `{{vars}}` substitution stays untouched. `VarSubstitutor` deliberately
   substitutes only `script` and `env` (see its file header) — `shell` is a
   static interpreter selector like `timeout`/`compareSource`, not text meant

@@ -128,8 +128,12 @@ can land independently.
    hope", and is one condition in `evaluateCondition` before
    `parseScriptCommand` is consulted.
 
-2. **Give the script field a multi-line mode.** `ScriptCommandEditor` gains a
-   `multiline` passthrough; `ScriptConditionEditor` adopts it. Keep Enter's
+2. **Give the script field a multi-line mode.** `ScriptCommandEditor` already
+   forwards `multiline`/`wrapSingleLine` — it is typed
+   `Omit<SingleLineCompletionEditorProps, "completionSource">` and spreads
+   `{...props}` straight into `SingleLineCompletionEditor`, so **no
+   passthrough work is needed**; the only change is the call site opting in.
+   `ScriptConditionEditor` adopts it. Keep Enter's
    single-line behavior where the field is genuinely a command
    (`WorkflowPropertiesPanel`'s worktree setup, `HooksEditor`'s hook command)
    unless there is demand, so this is opt-in per call site rather than a global
@@ -140,11 +144,16 @@ can land independently.
    keeping single-line Enter semantics — but it does not let a user type a
    newline, so it does not deliver the feature on its own.
 
-3. **Serializer round trip.** Confirm `WorkflowSerializer.buildCleanWorkflow`
-   emits a block scalar (`|`) rather than a quoted string with `\n` escapes,
-   so a multi-line script saved from the dashboard stays readable in the file.
-   This is the one place where "already works in YAML" needs verifying rather
-   than assuming.
+3. **Serializer round trip — already correct; add regression coverage only.**
+   Verified against the current `yaml.dump(..., { lineWidth: -1, noRefs: true,
+   quoteStyle: "double" })` call in `src/ui/WorkflowSerializer.ts:669` (the
+   only non-trust-prompt `yaml.dump` in the codebase): js-yaml already emits
+   `|` / `|-` block scalars and round-trips losslessly for every shape tested
+   — `"a\nb"`, `"a\nb\n"`, a line with a trailing space, a leading-indent
+   line, and internal blank lines. So this needs a **regression test**, not an
+   implementation change. Lock the behavior in so a future serializer option
+   change (e.g. adding `forceQuotes`) cannot silently turn scripts back into
+   `"a\nb"` escapes.
 
 4. **cmd cannot do this, and should say so.** A `cmd /d /c` invocation is a
    single command line; a multi-line script cannot survive it. When the
@@ -153,9 +162,14 @@ can land independently.
    This is the natural place for `SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md`'s
    per-script `shell` to be the fix the message points at.
 
-5. **Display.** Terminal tab labels, dry-run preview, and any
-   `formatCommandForDisplay` output need a first-line-plus-ellipsis treatment;
-   a raw multi-line string in a tab title is not viable.
+5. **Display.** Narrower than first written. Terminal tab labels are **already
+   safe**: `WorkflowExecutor.executeScriptStep` derives
+   `stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0]`, which
+   yields the first whitespace token and can never produce a multi-line title.
+   What does need first-line-plus-ellipsis treatment is the dry-run preview
+   path — `renderCommandForDisplay` output as consumed by `DryRunModal.tsx`
+   (the `command.executable`/`command.args` render), where the whole script
+   text is one argument and would otherwise blow out the modal's command row.
 
 ### B. Script type coverage
 
