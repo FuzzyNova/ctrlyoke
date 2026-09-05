@@ -355,13 +355,33 @@ suite("EndConditionEvaluator Tests", () => {
       }
     });
 
-    const shebangCases = [
-      { name: "sh", line: "#!/bin/sh", expectedExecutable: "sh" },
+    type ShebangCase = {
+      name: string;
+      line: string | null;
+      expectedExecutable: string | null;
+      /** Override for win32 when the resolved executable legitimately
+       * differs by platform (e.g. POSIX shells fall back to "bash" on
+       * Windows, since Windows has no standalone sh/dash/zsh). */
+      win32Executable?: string;
+      /** Use when either of several executables is an acceptable resolution
+       * (e.g. the interpreter probes may resolve to either binary). */
+      expectedExecutableChoices?: readonly string[];
+    };
+
+    const shebangCases: ShebangCase[] = [
+      { name: "sh", line: "#!/bin/sh", expectedExecutable: "sh", win32Executable: "bash" },
       { name: "bash", line: "#!/bin/bash", expectedExecutable: "bash" },
+      {
+        name: "dash preserves interpreter identity",
+        line: "#!/bin/dash",
+        expectedExecutable: "dash",
+        win32Executable: "bash",
+      },
       {
         name: "python3 through env",
         line: "#!/usr/bin/env python3",
-        expectedExecutable: "python",
+        expectedExecutable: null,
+        expectedExecutableChoices: ["python", "python3"],
       },
       {
         name: "node through env",
@@ -372,6 +392,12 @@ suite("EndConditionEvaluator Tests", () => {
         name: "extra arguments",
         line: "#!/usr/bin/env node --experimental-modules",
         expectedExecutable: "node",
+      },
+      {
+        name: "pwsh through env routes through the PowerShell resolver",
+        line: "#!/usr/bin/env pwsh",
+        expectedExecutable: null,
+        expectedExecutableChoices: ["pwsh", "powershell.exe"],
       },
       { name: "no shebang", line: "echo no shebang", expectedExecutable: null },
       { name: "unparseable shebang", line: "#!", expectedExecutable: null },
@@ -386,7 +412,7 @@ suite("EndConditionEvaluator Tests", () => {
         expectedExecutable: null,
       },
       { name: "unreadable file", line: null, expectedExecutable: null },
-    ] as const;
+    ];
 
     for (const platform of ["win32", "linux"] as const) {
       for (const shebangCase of shebangCases) {
@@ -405,23 +431,24 @@ suite("EndConditionEvaluator Tests", () => {
           }
 
           const command = evaluator.commandFor(scriptPath);
-          if (shebangCase.expectedExecutable === null) {
+          const isNullCase =
+            shebangCase.expectedExecutable === null &&
+            !shebangCase.expectedExecutableChoices;
+          if (isNullCase) {
             assert.strictEqual(command, null);
             return;
           }
 
           assert.ok(command);
-          if (shebangCase.expectedExecutable === "python") {
-            assert.ok(
-              command.executable === "python" ||
-                command.executable === "python3"
-            );
-          } else {
-            assert.strictEqual(
-              command.executable,
-              shebangCase.expectedExecutable
-            );
-          }
+          const choices =
+            shebangCase.expectedExecutableChoices ??
+            (platform === "win32" && shebangCase.win32Executable !== undefined
+              ? [shebangCase.win32Executable]
+              : [shebangCase.expectedExecutable as string]);
+          assert.ok(
+            choices.includes(command.executable),
+            `expected one of [${choices.join(", ")}], got "${command.executable}"`
+          );
           assert.deepStrictEqual(command.args, [scriptPath]);
         });
       }

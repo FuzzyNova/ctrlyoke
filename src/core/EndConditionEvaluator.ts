@@ -702,8 +702,22 @@ export class EndConditionEvaluator {
       return null;
     }
 
+    const shellKind = resolveShellKind(interpreter);
+    if (shellKind === SHELL_KINDS.PWSH || shellKind === SHELL_KINDS.POWERSHELL) {
+      return {
+        executable: this.resolvePowerShellExecutable(),
+        args: [scriptPath],
+      };
+    }
+
+    // resolveShellKind() is a UI-icon discriminant (dash/ksh collapse into
+    // "sh", nu collapses into "nushell", which is not nu's real binary name)
+    // — it must not be spawned directly. POSIX hosts run the literal
+    // interpreter the shebang named; Windows has no standalone sh/dash/zsh,
+    // so fall back to "bash" the same way the .sh extension dispatch above
+    // does.
     return {
-      executable: resolveShellKind(interpreter),
+      executable: process.platform === "win32" ? "bash" : interpreterName,
       args: [scriptPath],
     };
   }

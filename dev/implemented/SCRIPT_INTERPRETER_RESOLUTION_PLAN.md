@@ -59,6 +59,18 @@ Two constraints worth stating, because they are why this is not a one-liner:
 
 ## 2. Shebang dispatch for extensionless scripts (deferred B.5) ✅ Completed
 
+**Completed, with one correction found in review:** the first implementation
+used `resolveShellKind()`'s return value directly as the spawned executable.
+`resolveShellKind()` is a UI-icon discriminant, not an executable resolver —
+it collapses `dash`/`ksh` into a generic `"sh"` kind and `nu` into
+`"nushell"` (not nu's real binary name), and it doesn't know about the
+`pwsh`/`powershell.exe` probe-and-fallback item 1 added. The landed version:
+uses `resolveShellKind()` only to detect a PowerShell shebang and route it
+through `resolvePowerShellExecutable()`; otherwise runs the literal
+interpreter name the shebang gave on POSIX (preserving `dash`/`ksh`/`nu`
+identity) and falls back to `"bash"` on Windows, mirroring the `.sh`
+extension dispatch immediately above it in the same file.
+
 **What it is.** A Unix script's first line may be `#!/usr/bin/env python3` (or
 `#!/bin/bash`, `#!/usr/bin/env node`). On Unix the *kernel* reads that line and
 launches the named interpreter, so an executable file with no extension runs
@@ -107,8 +119,8 @@ on it instead of returning `null`. Notes:
 ## Acceptance Criteria
 
 - Python and PowerShell interpreter probes run at most once per process per
-  platform, and the existing test override of `resolvePowerShellExecutable`
-  still works.
+  platform, and `resolvePowerShellExecutable` keeps resolving correctly when
+  the dispatch test suite fakes `process.platform` between cases.
 - An extensionless script with a recognized shebang runs on Windows.
 - A file with no mapped extension, no `+x` bit, and no parseable shebang still
   produces "Unsupported script type".
