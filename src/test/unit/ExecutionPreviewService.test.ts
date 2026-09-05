@@ -10,7 +10,10 @@ import {
   type ExecutionPreviewHarness,
 } from "../../core/ExecutionPreviewService";
 import type { PromptSections } from "../../core/HarnessIntegration";
-import { renderCommandForDisplay } from "../../types/CommandDisplayFormatter";
+import {
+  COMMAND_DISPLAY_SHELLS,
+  renderCommandForDisplay,
+} from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
@@ -33,7 +36,10 @@ import {
 } from "../../types/ExecutionPropertyResolver";
 import type { ExecutionPlan } from "../../core/harness/shared/ExecutionPlanBuilder";
 import type { PreparedMutation } from "../../core/harness/shared/interfaces/PreparedMutation";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../utils/ConfigurationUtils";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
@@ -189,7 +195,8 @@ function createService(
   plannedMutations?: PreparedMutation[],
   namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[],
   buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
-  capabilities: HarnessCapabilityRegistrySnapshot = createCapabilities()
+  capabilities: HarnessCapabilityRegistrySnapshot = createCapabilities(),
+  platform: NodeJS.Platform = "linux"
 ): ExecutionPreviewService {
   const harness = createHarness(workspaceRoot, buildPromptSections);
   if (plannedMutations) {
@@ -205,8 +212,24 @@ function createService(
     namedWorkspaceRoots,
     extensionPath: "extension",
     hostCanProvidePty: false,
-    platform: "linux",
+    platform,
   });
+}
+
+async function withTerminalShell<T>(
+  shellExecutable: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  const originalGetTerminalSettings = ConfigurationUtils.getTerminalSettings;
+  ConfigurationUtils.getTerminalSettings = () => ({
+    ...originalGetTerminalSettings(),
+    shellExecutable,
+  });
+  try {
+    return await callback();
+  } finally {
+    ConfigurationUtils.getTerminalSettings = originalGetTerminalSettings;
+  }
 }
 
 async function initGitRepo(repository: string): Promise<void> {
@@ -755,6 +778,77 @@ suite("ExecutionPreviewService", () => {
     );
     assert.ok(posix.includes("'a path/file.ts'"));
     assert.ok(posix.includes(`'it'"'"'s ready'`));
+  });
+
+  test("previews script steps with the resolved shell and display dialect", async () => {
+    const script = "echo preview";
+
+    const pinned = await withTerminalShell("powershell.exe", () =>
+      createService(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "linux"
+      ).build({
+        workflow: { steps: [{ type: "script", script, shell: "cmd.exe" }] },
+      })
+    );
+    assert.strictEqual(pinned.steps[0].command?.executable, "cmd.exe");
+    assert.deepStrictEqual(pinned.steps[0].command?.args, ["/d", "/c", script]);
+    assert.strictEqual(
+      pinned.steps[0].command?.displayShell,
+      COMMAND_DISPLAY_SHELLS.CMD
+    );
+    assert.strictEqual(pinned.steps[0].command?.requiresShellVerbatimArgs, true);
+
+    const configured = await withTerminalShell("bash", () =>
+      createService(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "win32"
+      ).build({
+        workflow: { steps: [{ type: "script", script }] },
+      })
+    );
+    assert.strictEqual(configured.steps[0].command?.executable, "bash");
+    assert.deepStrictEqual(configured.steps[0].command?.args, ["-c", script]);
+    assert.strictEqual(
+      configured.steps[0].command?.displayShell,
+      COMMAND_DISPLAY_SHELLS.POSIX
+    );
+    assert.strictEqual(
+      configured.steps[0].command?.requiresShellVerbatimArgs,
+      false
+    );
+
+    const autoDetected = await withTerminalShell(" ", () =>
+      createService(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "win32"
+      ).build({
+        workflow: { steps: [{ type: "script", script }] },
+      })
+    );
+    const command = autoDetected.steps[0].command;
+    assert.ok(command);
+    assert.ok(
+      command.executable.toLowerCase().endsWith("pwsh.exe") ||
+        command.executable.toLowerCase() === "powershell.exe"
+    );
+    assert.strictEqual(command.displayShell, COMMAND_DISPLAY_SHELLS.POWERSHELL);
+    assert.strictEqual(command.requiresShellVerbatimArgs, false);
+    assert.strictEqual(command.args[0], "-NoProfile");
+    assert.strictEqual(command.args[1], "-Command");
+    assert.ok(command.args[2]?.startsWith(script));
   });
 
   test("does not execute conditions or resolve external session state", async () => {

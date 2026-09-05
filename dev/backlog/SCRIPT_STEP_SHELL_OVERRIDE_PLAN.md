@@ -1,6 +1,6 @@
 # Per-Script `shell` Override
 
-> **Status:** Foundation landed (schema/types/resolver/call sites); preview and UI remain
+> **Status:** Foundation and preview landed; UI remains
 >
 > **Priority:** P3 — small authoring convenience. Not a bug fix (the shell
 > inconsistency it's adjacent to is already fixed) and not a release gate.
@@ -251,18 +251,18 @@ export function resolveShellInvocation(
   `resolveShellInvocation(condition.script)` to
   `resolveShellInvocation(condition.script, condition.shell)`. `condition` is
   already typed `ScriptProperties`, so this is a one-line change.
-- **`ExecutionPreviewService.buildScriptCommand`** *(deferred to the preview step)*
-  (`src/core/ExecutionPreviewService.ts:1312-1340`) — replace the hardcoded
-  `ComSpec`/`SHELL` branch with a call to the same
-  `resolveShellInvocation(step.script, step.shell)`, so preview both fixes its
-  preexisting wrong-shell display and reflects the new override. Map the
+- **`ExecutionPreviewService.buildScriptCommand`** *(landed in the preview step)*
+  (`src/core/ExecutionPreviewService.ts:1312-1340`) — routes through
+  `resolveShellInvocation(step.script, step.shell,
+  this.options.platform ?? process.platform)`, so preview both fixes its
+  preexisting wrong-shell display and reflects the new override. It maps the
   returned `shellKind` to `CommandDisplayShell`: `pwsh`/`powershell` →
   `COMMAND_DISPLAY_SHELLS.POWERSHELL` (finally used), `cmd` →
   `COMMAND_DISPLAY_SHELLS.CMD`, everything else → `COMMAND_DISPLAY_SHELLS.POSIX`
   — the same three-way simplification `renderCommandForDisplay` already
   supports, just driven by the real resolved kind instead of a platform guess.
-  `requiresShellVerbatimArgs` becomes `shellKind === SHELL_KINDS.CMD` (was
-  `isWindows`).
+  `requiresShellVerbatimArgs` is `shellKind === SHELL_KINDS.CMD` (rather than
+  a platform check).
 
   **Platform-injection gap (resolve this while implementing).**
   `buildScriptCommand` currently branches on
@@ -270,14 +270,11 @@ export function resolveShellInvocation(
   `ExecutionPreviewService` tests rely on to assert both platforms' previews
   from one host. `resolveShellInvocation` reads `process.platform` directly
   and has no such seam, so a naive swap makes preview host-platform-only and
-  silently weakens that existing coverage. Preferred fix: give
-  `resolveShellInvocation` an optional `platform?: NodeJS.Platform` parameter
-  defaulting to `process.platform`, and pass `this.options.platform` through
-  from preview — the resolver already isolates the platform decision to one
-  ternary, so this is a small, honest seam rather than new indirection. If
-  that proves awkward, the fallback is to accept host-platform-only preview
-  and update the affected tests deliberately — but do not delete
-  cross-platform preview assertions silently.
+  silently weakens that existing coverage. The resolver now accepts an
+  optional `platform?: NodeJS.Platform` parameter defaulting to
+  `process.platform`, and preview passes its injected platform through — a
+  small, honest seam rather than new indirection. Existing cross-platform
+  preview coverage remains intact.
 - `{{vars}}` substitution stays untouched. `VarSubstitutor` deliberately
   substitutes only `script` and `env` (see its file header) — `shell` is a
   static interpreter selector like `timeout`/`compareSource`, not text meant

@@ -23,6 +23,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   EXECUTION_MODES,
   WORKTREE_MODES,
+  SHELL_KINDS,
   type HarnessId,
   type PreviewPermissionAction,
   type PreviewPropertySource,
@@ -70,7 +71,10 @@ import {
   type WorkspaceMutationPreview,
   type WorktreeExecutionPreview,
 } from "../types/ExecutionPreviewTypes";
-import { renderCommandForDisplay } from "../types/CommandDisplayFormatter";
+import {
+  COMMAND_DISPLAY_SHELLS,
+  renderCommandForDisplay,
+} from "../types/CommandDisplayFormatter";
 import {
   redactExecutionPreview,
   redactPreviewText,
@@ -81,6 +85,7 @@ import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SessionValidator } from "../utils/SessionValidator";
 import { CliPromptPreparer } from "./harness/shared/CliPromptPreparer";
 import { CliExecutionSession } from "./harness/shared/CliExecutionSession";
+import { resolveShellInvocation } from "./harness/PtyProcessManager";
 import {
   ExecutionPlanBuilder,
   type ExecutionPlan,
@@ -1313,29 +1318,31 @@ export class ExecutionPreviewService {
     step: ScriptStep,
     worktreePreview: WorktreeExecutionPreview | undefined
   ): CommandPreview {
-    const isWindows = (this.options.platform ?? process.platform) === "win32";
-    const executable = isWindows
-      ? (process.env.ComSpec ?? "cmd.exe")
-      : (process.env.SHELL ?? "/bin/sh");
-    const args = isWindows
-      ? ["/d", "/s", "/c", step.script]
-      : ["-c", step.script];
-    // The whole script text is one verbatim argument to the shell
-    // interpreter, not a per-arg-quoted command line, on either platform —
-    // there is no other dialect to toggle to.
-    const displayShell: CommandDisplayShell = isWindows ? "cmd" : "posix";
+    const invocation = resolveShellInvocation(
+      step.script,
+      step.shell,
+      this.options.platform ?? process.platform
+    );
+    const { executable, args, shellKind } = invocation;
+    const displayShell: CommandDisplayShell =
+      shellKind === SHELL_KINDS.PWSH || shellKind === SHELL_KINDS.POWERSHELL
+        ? COMMAND_DISPLAY_SHELLS.POWERSHELL
+        : shellKind === SHELL_KINDS.CMD
+          ? COMMAND_DISPLAY_SHELLS.CMD
+          : COMMAND_DISPLAY_SHELLS.POSIX;
+    const requiresShellVerbatimArgs = shellKind === SHELL_KINDS.CMD;
     const displayCommand = renderCommandForDisplay(
       executable,
       args,
       displayShell,
-      { requiresShellVerbatimArgs: isWindows }
+      { requiresShellVerbatimArgs }
     );
     return {
       executable,
       args,
       displayCommand,
       displayShell,
-      requiresShellVerbatimArgs: isWindows,
+      requiresShellVerbatimArgs,
       cwd: this.resolveCwd(worktreePreview),
       environmentKeys: [],
     };
