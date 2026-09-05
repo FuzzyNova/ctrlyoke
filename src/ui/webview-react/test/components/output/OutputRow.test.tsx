@@ -336,6 +336,65 @@ describe("OutputRow step identity bar", () => {
       )
     );
   });
+
+  it("keeps a status severity border beside the identity bar", () => {
+    const statusRow: OutputRenderRow = {
+      key: "queue:0:status",
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: OUTPUT_ROW_KINDS.STATUS,
+      status: {
+        message: "A warning message long enough to wrap in a narrow output pane",
+        severity: "warning",
+        timestamp: "12:00:00",
+        timestampMs: 0,
+      },
+      stepColor: "#123456",
+    };
+
+    const { container } = render(
+      <OutputRow row={statusRow} isExecutionActive={false} />
+    );
+
+    const identityBar = container.querySelector("[data-step-color-bar]");
+    const severityBorder = container.querySelector(
+      ".border-l-severity-warning"
+    );
+    expect(identityBar).toHaveClass("pl-[3px]");
+    expect(identityBar).toHaveStyle({
+      boxShadow: "inset 3px 0 0 #123456",
+    });
+    expect(severityBorder).not.toBeNull();
+    expect(identityBar).not.toHaveClass("border-l-severity-warning");
+    expect(severityBorder).not.toBe(identityBar);
+    expect(severityBorder?.parentElement).toBe(identityBar);
+    expect(statusRow.estimateSize).toBe(36);
+  });
+
+  it("keeps the pre-existing bare render when no step color is set", () => {
+    const statusRow: OutputRenderRow = {
+      key: "queue:0:status-no-color",
+      target: TARGET,
+      estimateSize: 36,
+      rowKind: OUTPUT_ROW_KINDS.STATUS,
+      status: {
+        message: "Informational status",
+        severity: "info",
+        timestamp: "12:00:00",
+        timestampMs: 0,
+      },
+    };
+
+    const { container } = render(
+      <OutputRow row={statusRow} isExecutionActive={false} />
+    );
+
+    expect(container.querySelector("[data-step-color-bar]")).toBeNull();
+    expect(container.children).toHaveLength(1);
+    expect(container.firstElementChild).toHaveClass(
+      "border-l-severity-info"
+    );
+  });
 });
 
 describe("OutputRow auto-expand on hidden active match", () => {

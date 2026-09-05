@@ -1877,7 +1877,12 @@ function OutputRowComponent({
     }
     return (
       <div
-        className={isActiveRow ? "rounded-sm ring-1 ring-focus-border" : ""}
+        className={[
+          row.stepColor ? "pl-[3px]" : "",
+          isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         style={stepColorBarStyle}
         data-step-color-bar={row.stepColor ? "true" : undefined}
       >

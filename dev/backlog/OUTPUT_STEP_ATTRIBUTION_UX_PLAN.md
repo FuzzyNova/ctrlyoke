@@ -410,13 +410,14 @@ interleave with content, so applying the shadow only on the CLI-group path leave
 reads as dashed — the same failure mode that ruled out stamping the continuation rail per slice.
 Paint it on both paths, or hoist it to a shared wrapper.
 
-The non-CLI-group path needs one extra decision the padded path does not: it has **no horizontal
-padding to paint into**, so an `inset 3px 0 0` there overlaps the first 3px of the row's own content.
-Do **not** fix that by giving it `px-[var(--spacing-md)]` — that shifts those rows 8px right and
-changes existing layout. Either accept the 3px overlap (these rows are chrome — anchors, status
-lines, labels — and none of them start with content at x=0 that 3px would obscure) or add
-`pl-[3px]`, which costs 3px of width on chrome rows only. Verify visually before choosing; the
-default should be the overlap, since it keeps the bar geometrically identical on both paths.
+The non-CLI-group path needs an explicit offset: it has **no horizontal padding to paint into**, and
+`StatusMessage` already draws a 3px severity border at x=0. Without an offset, the identity bar
+occludes that load-bearing info completely. Apply `pl-[3px]` uniformly when a step colour exists,
+so the identity bar occupies x=0–3 and the status severity border follows at x=3–6. The other
+non-CLI rows remain acceptable under the same rule: the anchor is invisible, while the final-step
+label and hidden-row band begin beside the identity bar. This costs 3px of content width but adds
+no height; the status row's existing flat 36px estimate remains the initial estimate for long
+messages, with realized rows correcting any wrap difference.
 
 #### An escape hatch, since this is now always-on chrome
 
@@ -640,10 +641,10 @@ Worth stating because this pane is unusually sensitive to it (see
    return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.~~
    **Done (2026-09-04).** `OutputRow` now paints `box-shadow: inset 3px 0 0 <step colour>` on
    every row wrapper, including sequential output and the bare non-CLI-group return path. The
-   non-CLI-group path uses the spec's default **3px overlap** treatment: it keeps the bar's geometry
-   identical without adding `pl-[3px]` or shifting the existing chrome rows. `activityContinuation`,
-   the shared streaming rail, and its `pl-2` content indent are removed; step colors are resolved
-   once per target using runtime harness metadata first, then the configured/effective harness.
+   non-CLI-group path offsets coloured content with `pl-[3px]` so `StatusMessage`'s severity border
+   remains visible immediately beside the identity bar. `activityContinuation`, the shared streaming
+   rail, and its `pl-2` content indent are removed; step colors are resolved once per target using
+   runtime harness metadata first, then the configured/effective harness.
 7. ~~`ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
    chrome.~~ **Done (2026-09-04).** Added persisted enabled/script/per-harness controls,
