@@ -34,15 +34,6 @@ export function getHarnessStepColorPickerValue(harnessId: HarnessId): string {
   );
 }
 
-function getAuthoredStepColor(step: WorkflowStep): string | undefined {
-  // `color` is intentionally read defensively until the authored step field is
-  // added to the shared workflow contracts in the persistence step.
-  if ("color" in step && typeof step.color === "string") {
-    return step.color;
-  }
-  return undefined;
-}
-
 function getHarnessOrScriptColor(
   harnessId: HarnessId | undefined,
   settings?: StepColorSettings
@@ -63,7 +54,7 @@ function getBaseStepColor(
   settings?: StepColorSettings
 ): string {
   return (
-    getAuthoredStepColor(step) ?? getHarnessOrScriptColor(harnessId, settings)
+    step.color ?? getHarnessOrScriptColor(harnessId, settings)
   );
 }
 
@@ -101,9 +92,8 @@ function getTieBreakColor(
  * Resolve the identity color for a workflow step.
  *
  * The caller supplies the effective harness because the webview has no shared
- * workflow/global harness resolver. Authored colors are read defensively for
- * the persistence step, while dashboard settings provide the optional
- * user-controlled overrides.
+ * workflow/global harness resolver. Authored colors take precedence over
+ * dashboard settings and parallel-group tie-break colors.
  */
 export function resolveStepColor({
   step,
@@ -115,7 +105,7 @@ export function resolveStepColor({
 }: ResolveStepColorOptions): string | undefined {
   if (settings?.enabled === false) return undefined;
 
-  const authoredColor = getAuthoredStepColor(step);
+  const authoredColor = step.color;
   if (authoredColor) return authoredColor;
 
   const baseColor = getHarnessOrScriptColor(harnessId, settings);

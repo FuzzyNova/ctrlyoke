@@ -37,6 +37,37 @@ suite("PromptFileParser Tests", () => {
   });
 
   suite("parsePromptFile - JSON Format", () => {
+    test("round-trips authored colors for prompt and script steps", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-step-color-")
+      );
+      const filePath = path.join(tempDir, "colors.ctrlyoke.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [
+              { prompt: "prompt", color: "#A1b2C3" },
+              { type: "script", script: "npm test", color: "#123456" },
+            ],
+            finalStep: { prompt: "final", color: "#abcdef" },
+          }),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result);
+        assert.ok(result.steps);
+        assert.strictEqual(result.steps[0].color, "#A1b2C3");
+        assert.strictEqual(result.steps[1].color, "#123456");
+        assert.strictEqual(result.finalStep?.color, "#abcdef");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("should parse single prompt format", async () => {
       const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);

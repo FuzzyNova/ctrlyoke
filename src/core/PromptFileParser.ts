@@ -10,6 +10,7 @@ import {
   PromptStep,
   WorkflowStep,
   ScriptStep,
+  StepDisplayProperties,
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   hasExecutableSteps,
@@ -247,8 +248,7 @@ export class PromptFileParser {
    */
   private buildScriptStep(source: any): ScriptStep {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
-    if (source.name !== undefined) step.name = source.name;
-    if (source.enabled !== undefined) step.enabled = source.enabled;
+    this.copyStepDisplayProperties(source, step);
     if (source.executionMode !== undefined)
       step.executionMode = source.executionMode;
     if (source.secrets !== undefined) step.secrets = source.secrets;
@@ -275,11 +275,19 @@ export class PromptFileParser {
 
     // Only include properties that are explicitly set
     if (source.type !== undefined) promptStep.type = source.type;
-    if (source.name !== undefined) promptStep.name = source.name;
-    if (source.enabled !== undefined) promptStep.enabled = source.enabled;
+    this.copyStepDisplayProperties(source, promptStep);
     this.copyExecutionProperties(source, promptStep);
 
     return promptStep;
+  }
+
+  private copyStepDisplayProperties(
+    source: Record<string, unknown>,
+    step: StepDisplayProperties
+  ): void {
+    if (source.name !== undefined) step.name = source.name as string;
+    if (source.enabled !== undefined) step.enabled = source.enabled as boolean;
+    if (source.color !== undefined) step.color = source.color as string;
   }
 
   /**

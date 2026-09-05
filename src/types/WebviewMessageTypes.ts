@@ -67,6 +67,7 @@ import type {
   WorktreeRunProjection,
   ScriptVerdict,
   ParallelGroupDefinition,
+  StepDisplayProperties,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -362,11 +363,9 @@ export interface EndConditionConfig {
  * Prompt item shape (used in workflowStore and throughout webview)
  * Matches CtrlYokeTypes.PromptStep
  */
-export interface PromptStep {
+export interface PromptStep extends StepDisplayProperties {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
-  name?: string;
-  enabled?: boolean;
   prompt: string;
   harness?: string;
   model?: string;

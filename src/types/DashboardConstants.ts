@@ -2680,6 +2680,7 @@ export const PROMPT_PROPERTIES = {
   ID: "id",
   NAME: "name",
   ENABLED: "enabled",
+  COLOR: "color",
 
   // Workflow-level properties (multi-step format)
   STEPS: "steps",

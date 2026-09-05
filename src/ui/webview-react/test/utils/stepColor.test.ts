@@ -51,7 +51,7 @@ describe("resolveStepColor", () => {
   it("keeps authored colors above settings overrides", () => {
     expect(
       resolveStepColor({
-        step: { prompt: "authored", color: "#abcdef" } as WorkflowStep,
+        step: { prompt: "authored", color: "#abcdef" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
         settings: customSettings,
       })
@@ -78,6 +78,29 @@ describe("resolveStepColor", () => {
     expect(firstColor).not.toBe(
       customSettings.byHarness[HARNESS_IDS.CLAUDE_CLI]
     );
+  });
+
+  it("keeps an authored color above a parallel tie-break", () => {
+    const authoredStep: WorkflowStep = {
+      prompt: "authored member",
+      color: "#abcdef",
+    };
+    const sibling: WorkflowStep = { prompt: "sibling" };
+    const groupMembers = [
+      groupMember(authoredStep, 0),
+      groupMember(sibling, 1),
+    ];
+
+    expect(
+      resolveStepColor({
+        step: authoredStep,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        group,
+        offsetInGroup: 0,
+        settings: customSettings,
+        groupMembers,
+      })
+    ).toBe("#abcdef");
   });
 
   it("disables identity colors when the setting is false", () => {
