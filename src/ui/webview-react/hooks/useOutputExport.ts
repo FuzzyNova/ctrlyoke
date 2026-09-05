@@ -5,13 +5,12 @@ import {
   generateMarkdownExport,
   type ExportOptions,
 } from "@utils/markdownExport";
-import type { OutputMessage } from "@utils/outputProjection";
+import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@/utils/logger";
-import { getTargetKey } from "@utils/outputProjection";
 
 interface UseOutputExportInput {
   allMessages: OutputMessage[];
@@ -100,7 +99,7 @@ export function useOutputExport({
     const seen = new Set<string>();
     for (const msg of allMessages) {
       if (msg.type === OUTPUT_MESSAGE_TYPES.CLI) {
-        seen.add(`${msg.target.kind}:${msg.target.index}`);
+        seen.add(getTargetKey(msg.target));
       }
     }
     return seen.size;

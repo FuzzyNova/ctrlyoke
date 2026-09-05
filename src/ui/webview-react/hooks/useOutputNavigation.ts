@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
-import type { OutputMessageTarget } from "@utils/outputProjection";
+import { getTargetKey, type OutputMessageTarget } from "@utils/outputProjection";
 import type { OutputRowBase } from "@utils/outputRows";
 import {
   alignRowElementToViewport,
@@ -381,7 +381,7 @@ export function useOutputNavigation({
         target: OutputMessageTarget,
         options?: OutputNavigationOptions
       ) => {
-        const targetKey = `${target.kind}:${target.index}`;
+        const targetKey = getTargetKey(target);
         const firstRowIndex = (
           anchorRowIndexByTarget ?? firstRowIndexByTarget
         ).get(targetKey);
@@ -403,9 +403,7 @@ export function useOutputNavigation({
         scrollToRowIndex(rowIndex, options);
       },
       getTargetScrollFraction: (target: OutputMessageTarget) => {
-        const rowIndex = firstRowIndexByTarget.get(
-          `${target.kind}:${target.index}`
-        );
+        const rowIndex = firstRowIndexByTarget.get(getTargetKey(target));
         const totalSize = Math.max(1, rowLayout.totalSize);
         if (rowIndex === undefined || totalSize <= 0) {
           return null;

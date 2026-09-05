@@ -5,7 +5,7 @@ import type {
 } from "@components/output/OutputMinimap";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import type { OutputMessage } from "@utils/outputProjection";
+import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import {
   estimateOutputDiffBlockHeight,
   type OutputRenderRow,
@@ -100,7 +100,7 @@ function getStepScrollFractions(
       const totalSize = Math.max(1, rowLayout.totalSize);
 
       for (const target of uniqueStepTargets) {
-        const targetKey = `${target.kind}:${target.index}`;
+        const targetKey = getTargetKey(target);
         const rowIndex = anchorRowIndexByTarget.get(targetKey);
         if (rowIndex === undefined) continue;
         fractions.set(
@@ -168,13 +168,13 @@ export function useOutputMinimapModel({
         const newestTimestampByTarget = new Map<string, number>();
         const stepColorByTargetKey = new Map<string, string | undefined>();
         for (const row of rows) {
-          const targetKey = `${row.target.kind}:${row.target.index}`;
+          const targetKey = getTargetKey(row.target);
           if (!stepColorByTargetKey.has(targetKey)) {
             stepColorByTargetKey.set(targetKey, row.stepColor);
           }
         }
         for (const message of allMessages) {
-          const key = `${message.target.kind}:${message.target.index}`;
+          const key = getTargetKey(message.target);
           const previous = newestTimestampByTarget.get(key);
           if (previous === undefined || message.timestamp > previous) {
             newestTimestampByTarget.set(key, message.timestamp);
@@ -182,7 +182,7 @@ export function useOutputMinimapModel({
         }
 
         return uniqueStepTargets.flatMap((msgTarget) => {
-          const key = `${msgTarget.kind}:${msgTarget.index}`;
+          const key = getTargetKey(msgTarget);
           const firstRowIndex = (
             anchorRowIndexByTarget ?? firstRowIndexByTarget
           ).get(key);

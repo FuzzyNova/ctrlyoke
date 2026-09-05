@@ -6,7 +6,7 @@ import type {
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { OutputRowFileUndoRequest } from "@components/output/OutputRow";
 import { generateId } from "@utils/string";
-import type { OutputMessage } from "@utils/outputProjection";
+import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import {
   buildUndoCandidatesForOutputs,
@@ -111,7 +111,7 @@ export function useOutputUndoActions({
     const redoEntries: WorkflowStepEntry[] = [];
 
     for (const msgTarget of uniqueStepTargets) {
-      const key = `${msgTarget.kind}:${msgTarget.index}`;
+      const key = getTargetKey(msgTarget);
       const lastCliIdx = lastCliIndexPerStep.get(key);
       if (lastCliIdx === undefined) continue;
 
@@ -311,9 +311,7 @@ export function useOutputUndoActions({
         row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
-      const stepOutputs = stepOutputsMap.get(
-        `${row.target.kind}:${row.target.index}`
-      );
+      const stepOutputs = stepOutputsMap.get(getTargetKey(row.target));
       const workspacePath =
         stepOutputs && stepOutputs.length > 0
           ? (stepOutputs[stepOutputs.length - 1]?.workingDirectory ?? "")

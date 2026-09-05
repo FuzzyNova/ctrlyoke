@@ -65,7 +65,7 @@ export function getCliEntryIdentity(
   };
 }
 
-function cliEntryIdentityKey(identity: CliEntryIdentity): string {
+export function cliEntryIdentityKey(identity: CliEntryIdentity): string {
   const targetIndex =
     identity.target.kind === FINAL_STEP_PHASES.QUEUE
       ? identity.target.stepIndex
@@ -74,11 +74,10 @@ function cliEntryIdentityKey(identity: CliEntryIdentity): string {
 }
 
 function activityIdentityKey(entry: OutputActivityEntry): string {
-  const targetIndex =
-    entry.target.kind === FINAL_STEP_PHASES.QUEUE
-      ? entry.target.stepIndex
-      : entry.target.loopIndex;
-  return `${entry.target.kind}:${targetIndex}:run:${entry.runIndex}:attempt:${entry.attemptIndex}:${entry.phase ?? EXECUTION_PHASES.PROMPT}`;
+  // Must match `cliEntryIdentityKey`'s format exactly: `aggregateByIdentity` is
+  // keyed by the latter and looked up by the former, so a diverging format
+  // silently orphans every activity's aggregate lookup.
+  return cliEntryIdentityKey(entry);
 }
 
 /**

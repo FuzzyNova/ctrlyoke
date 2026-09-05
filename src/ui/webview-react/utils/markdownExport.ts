@@ -32,7 +32,10 @@ import {
   OUTPUT_DEFAULT_LABELS,
   OUTPUT_MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
-import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
+import {
+  getTargetKey,
+  mapOrderedHistoryEntriesToMessages,
+} from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
 import { redactPreviewText } from "@root/types/PreviewRedactor";
@@ -394,7 +397,7 @@ export function generateMarkdownExport(
   let seq = 0;
   for (const item of sortedOutputs) {
     if (item.type === OUTPUT_MESSAGE_TYPES.CLI) {
-      const key = `${item.target.kind}:${item.target.index}`;
+      const key = getTargetKey(item.target);
       if (!stepSequence.has(key)) {
         seq++;
         stepSequence.set(key, seq);
@@ -406,7 +409,7 @@ export function generateMarkdownExport(
   const filteredOutputs = stepRange
     ? sortedOutputs.filter((item) => {
         if (item.type === OUTPUT_MESSAGE_TYPES.STATUS) return false;
-        const key = `${item.target.kind}:${item.target.index}`;
+        const key = getTargetKey(item.target);
         const num = stepSequence.get(key);
         return num !== undefined && stepRange.includes(num);
       })

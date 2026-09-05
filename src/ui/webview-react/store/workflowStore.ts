@@ -15,7 +15,6 @@ import {
   type CliOutput,
   type RetryState,
   type ExecutionPhase,
-  EXECUTION_PHASES,
   getStreamingChunkKey,
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -112,6 +111,7 @@ import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import {
+  cliEntryIdentityKey,
   getCliEntryIdentity,
   matchesCliEntryIdentity,
   type CliEntryIdentity,
@@ -526,11 +526,10 @@ function findMatchingCliEntryIndex(
 }
 
 function activityEntryKey(entry: OutputActivityEntry): string {
-  const targetIndex =
-    entry.target.kind === FINAL_STEP_PHASES.QUEUE
-      ? entry.target.stepIndex
-      : entry.target.loopIndex;
-  return `${entry.target.kind}:${targetIndex}:${entry.runIndex}:${entry.attemptIndex}:${entry.phase ?? EXECUTION_PHASES.PROMPT}:${entry.kind}`;
+  // Compose the canonical identity key rather than re-deriving its fields by
+  // hand — a hand-rolled duplicate of the same format is exactly what let the
+  // outputProjection.ts activity/aggregate lookup silently drift apart.
+  return `${cliEntryIdentityKey(entry)}:${entry.kind}`;
 }
 
 function mergeActivityEntry(

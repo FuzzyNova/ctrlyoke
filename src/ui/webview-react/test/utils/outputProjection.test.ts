@@ -194,6 +194,52 @@ describe("outputProjection", () => {
     ]);
   });
 
+  it("carries the attempt's prompt and command onto its activity messages", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          cliOutput: {
+            prompt: "Read the codebase and summarize the architecture.",
+            cliCommand: "claude -p ...",
+            response: "",
+            elapsed: 0,
+            isStreaming: false,
+            timestampMs: 1000,
+          },
+          timestampMs: 1000,
+          sequence: 10,
+        },
+      ],
+      [
+        {
+          timestampMs: 1001,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "Reading files...",
+        },
+      ]
+    );
+
+    // Activity projection replaces the aggregate message, but must keep the
+    // aggregate's prompt/command reachable via `message.aggregate` so
+    // buildOutputRows can still emit the PROMPT/CLI_COMMAND leading-chrome
+    // rows for the attempt. A mismatched identity-key format between the two
+    // lookups previously made this lookup always miss.
+    const activityMessage = messages.find((message) => message.isActivity);
+    expect(activityMessage?.aggregate).toMatchObject({
+      prompt: "Read the codebase and summarize the architecture.",
+      cliCommand: "claude -p ...",
+    });
+  });
+
   it("updates a tool activity in place when its result arrives", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const messages = mapOrderedHistoryEntriesToMessages(
