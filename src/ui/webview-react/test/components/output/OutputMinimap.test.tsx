@@ -124,40 +124,13 @@ describe("OutputMinimap step visibility controls", () => {
   });
 });
 
-describe("OutputMinimap activity spans", () => {
-  it("replaces activity dots with a step-colored band spanning both fractions", () => {
-    renderMinimap([
-      makeStep({
-        firstActivityScrollFraction: 0.2,
-        latestActivityScrollFraction: 0.75,
-        stepColor: "#abcdef",
-      }),
-    ]);
+describe("OutputMinimap marker colors", () => {
+  it("does not render an activity band on step markers", () => {
+    renderMinimap([makeStep()]);
 
     expect(
-      document.querySelectorAll("[data-minimap-activity-marker]").length
-    ).toBe(0);
-    const band = document.querySelector("[data-minimap-activity-band]");
-    expect(band).toBeInTheDocument();
-    expect(band).toHaveStyle({
-      top: "20%",
-      height: "55%",
-      backgroundColor: "#abcdef",
-    });
-  });
-
-  it("falls back to the pre-color activity treatment when step colors are disabled", () => {
-    renderMinimap([
-      makeStep({
-        selected: true,
-        firstActivityScrollFraction: 0.3,
-        latestActivityScrollFraction: 0.6,
-      }),
-    ]);
-
-    expect(document.querySelector("[data-minimap-activity-band]")).toHaveClass(
-      "bg-focus-border"
-    );
+      document.querySelector("[data-minimap-activity-band]")
+    ).not.toBeInTheDocument();
   });
 
   it("keeps pill colors dedicated to undo and redo availability", () => {

@@ -54,18 +54,12 @@ export interface MinimapStep {
   kind: FinalStepPhase;
   stepIndex: number;
   firstMessageIndex: number;
-  firstActivityRowIndex?: number;
-  latestActivityRowIndex?: number;
-  firstActivityScrollFraction?: number;
-  latestActivityScrollFraction?: number;
   /** Real pixel fraction (0–1): offsetTop of the step anchor / shared content height */
   scrollFraction: number;
   label: string;
   hidden: boolean;
   selected?: boolean;
   hasHiddenActivity: boolean;
-  /** Resolved by buildOutputRows through the shared step-color resolver. */
-  stepColor?: string;
   /**
    * Available undo/redo actions for this step.
    * Both can be non-null in mixed state (some files undone, others not).
@@ -750,43 +744,9 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 ? "text-link-fg"
                 : "text-description-fg";
         const hideShowLabel = `${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`;
-        const hasActivitySpan =
-          step.firstActivityScrollFraction !== undefined &&
-          step.latestActivityScrollFraction !== undefined &&
-          step.firstActivityScrollFraction !==
-            step.latestActivityScrollFraction;
-        const activitySpanTop = hasActivitySpan
-          ? Math.min(
-              step.firstActivityScrollFraction ?? 0,
-              step.latestActivityScrollFraction ?? 0
-            )
-          : 0;
-        const activitySpanHeight = hasActivitySpan
-          ? Math.abs(
-              (step.latestActivityScrollFraction ?? 0) -
-                (step.firstActivityScrollFraction ?? 0)
-            )
-          : 0;
 
         return (
           <React.Fragment key={step.key}>
-            {/* The activity span uses the channel formerly occupied by the
-                first/latest dots. It stays beside the pill so the pill's
-                undo/redo color remains independent of step identity. */}
-            {hasActivitySpan && (
-              <span
-                data-minimap-activity-band
-                className={`pointer-events-none absolute right-[var(--fp-output-minimap-diff-width)] w-1 ${step.stepColor ? "" : step.selected ? "bg-focus-border" : "bg-output-streaming"}`}
-                style={{
-                  top: `${Math.round(activitySpanTop * 1_000_000) / 10_000}%`,
-                  height: `${Math.round(activitySpanHeight * 1_000_000) / 10_000}%`,
-                  ...(step.stepColor
-                    ? { backgroundColor: step.stepColor }
-                    : {}),
-                }}
-                aria-hidden="true"
-              />
-            )}
             {/* Outer row: anchored to the boundary between the pills and diff
                 tracks (not the rail's outer edge), so the marker pill lands
                 inside the pills track while the popup grows further left,

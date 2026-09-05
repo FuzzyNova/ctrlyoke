@@ -166,13 +166,6 @@ export function useOutputMinimapModel({
       () => {
         const totalSize = Math.max(1, rowLayout.totalSize);
         const newestTimestampByTarget = new Map<string, number>();
-        const stepColorByTargetKey = new Map<string, string | undefined>();
-        for (const row of rows) {
-          const targetKey = getTargetKey(row.target);
-          if (!stepColorByTargetKey.has(targetKey)) {
-            stepColorByTargetKey.set(targetKey, row.stepColor);
-          }
-        }
         for (const message of allMessages) {
           const key = getTargetKey(message.target);
           const previous = newestTimestampByTarget.get(key);
@@ -220,29 +213,6 @@ export function useOutputMinimapModel({
             stepScrollFractions.get(key) ??
             rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
           const hidden = hiddenTargetKeys.includes(key);
-          const activityRowIndexes = rows.reduce<number[]>((indexes, row, rowIndex) => {
-            if (
-              row.activityKey &&
-              row.target.kind === msgTarget.kind &&
-              row.target.index === msgTarget.index
-            ) {
-              indexes.push(rowIndex);
-            }
-            return indexes;
-          }, []);
-          const firstActivityRowIndex = activityRowIndexes[0];
-          const latestActivityRowIndex =
-            activityRowIndexes[activityRowIndexes.length - 1];
-          const firstActivityScrollFraction =
-            firstActivityRowIndex === undefined
-              ? undefined
-              : (rowLayout.rowStartsByIndex[firstActivityRowIndex] ?? 0) /
-                totalSize;
-          const latestActivityScrollFraction =
-            latestActivityRowIndex === undefined
-              ? undefined
-              : (rowLayout.rowStartsByIndex[latestActivityRowIndex] ?? 0) /
-                totalSize;
           const selected =
             hiddenTargetKeys.length > 0 && !hiddenTargetKeys.includes(key);
           const hiddenTimestamp = hiddenAtMs[key];
@@ -250,7 +220,6 @@ export function useOutputMinimapModel({
             hidden &&
             hiddenTimestamp !== undefined &&
             (newestTimestampByTarget.get(key) ?? 0) > hiddenTimestamp;
-          const stepColor = stepColorByTargetKey.get(key);
           const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
             if (
               row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
@@ -291,16 +260,11 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
-                firstActivityRowIndex,
-                latestActivityRowIndex,
-                firstActivityScrollFraction,
-                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
                 selected,
                 hasHiddenActivity,
-                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -315,16 +279,11 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
-                firstActivityRowIndex,
-                latestActivityRowIndex,
-                firstActivityScrollFraction,
-                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
                 selected,
                 hasHiddenActivity,
-                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -340,16 +299,11 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
-                firstActivityRowIndex,
-                latestActivityRowIndex,
-                firstActivityScrollFraction,
-                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
                 selected,
                 hasHiddenActivity,
-                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -368,16 +322,11 @@ export function useOutputMinimapModel({
                 kind,
                 stepIndex,
                 firstMessageIndex: firstRowIndex,
-                firstActivityRowIndex,
-                latestActivityRowIndex,
-                firstActivityScrollFraction,
-                latestActivityScrollFraction,
                 scrollFraction,
                 label,
                 hidden,
                 selected,
                 hasHiddenActivity,
-                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -460,16 +409,11 @@ export function useOutputMinimapModel({
               kind,
               stepIndex,
               firstMessageIndex: firstRowIndex,
-              firstActivityRowIndex,
-              latestActivityRowIndex,
-              firstActivityScrollFraction,
-              latestActivityScrollFraction,
               scrollFraction,
               label,
               hidden,
               selected,
               hasHiddenActivity,
-              stepColor,
               undoActions,
               diffBlocks,
             },
