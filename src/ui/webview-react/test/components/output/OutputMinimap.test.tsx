@@ -113,11 +113,94 @@ describe("OutputMinimap step visibility controls", () => {
     expect(
       document.querySelector("[data-minimap-hidden-activity]")
     ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-minimap-hidden-activity]")
+    ).toHaveClass("animate-pulse-streaming");
 
     fireEvent.click(screen.getByRole("button", { name: "research-db" }));
     expect(
       screen.getByRole("button", { name: "Show step 3 output" })
     ).toBeInTheDocument();
+  });
+});
+
+describe("OutputMinimap activity spans", () => {
+  it("replaces activity dots with a step-colored band spanning both fractions", () => {
+    renderMinimap([
+      makeStep({
+        firstActivityScrollFraction: 0.2,
+        latestActivityScrollFraction: 0.75,
+        stepColor: "#abcdef",
+      }),
+    ]);
+
+    expect(
+      document.querySelectorAll("[data-minimap-activity-marker]").length
+    ).toBe(0);
+    const band = document.querySelector("[data-minimap-activity-band]");
+    expect(band).toBeInTheDocument();
+    expect(band).toHaveStyle({
+      top: "20%",
+      height: "55%",
+      backgroundColor: "#abcdef",
+    });
+  });
+
+  it("falls back to the pre-color activity treatment when step colors are disabled", () => {
+    renderMinimap([
+      makeStep({
+        selected: true,
+        firstActivityScrollFraction: 0.3,
+        latestActivityScrollFraction: 0.6,
+      }),
+    ]);
+
+    expect(document.querySelector("[data-minimap-activity-band]")).toHaveClass(
+      "bg-focus-border"
+    );
+  });
+
+  it("keeps pill colors dedicated to undo and redo availability", () => {
+    renderMinimap([
+      makeStep({ key: "queue:0", label: "selected", selected: true }),
+      makeStep({
+        key: "queue:1",
+        label: "mixed",
+        undoActions: {
+          undo: { label: "Undo", onTrigger: vi.fn() },
+          redo: { label: "Redo", onTrigger: vi.fn() },
+        },
+      }),
+      makeStep({
+        key: "queue:2",
+        label: "redo",
+        undoActions: {
+          undo: null,
+          redo: { label: "Redo", onTrigger: vi.fn() },
+        },
+      }),
+      makeStep({
+        key: "queue:3",
+        label: "undo",
+        undoActions: {
+          undo: { label: "Undo", onTrigger: vi.fn() },
+          redo: null,
+        },
+      }),
+    ]);
+
+    expect(screen.getByRole("button", { name: "selected" })).toHaveClass(
+      "text-focus-border"
+    );
+    expect(screen.getByRole("button", { name: "mixed" })).toHaveClass(
+      "text-warning-fg"
+    );
+    expect(screen.getByRole("button", { name: "redo" })).toHaveClass(
+      "text-terminal-ansiGreen"
+    );
+    expect(screen.getByRole("button", { name: "undo" })).toHaveClass(
+      "text-link-fg"
+    );
   });
 });
 

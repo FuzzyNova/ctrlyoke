@@ -13,12 +13,12 @@ This doc is a design brainstorm, not an approved plan. Nothing here is implement
 
 ## What currently draws step attribution
 
-| #   | Surface             | Where                                          | Renders                                                                                  | Added by     |
-| --- | ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------ |
-| 1   | `cli-header` row    | `OutputRow.tsx` (~line 1190)                   | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b`                     | pre-existing |
-| 3   | activity label      | `ActivityAttribution` when `row.activityFirst` | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`), parallel groups only | parallel     |
-| 4   | output identity bar | `OutputRow`'s step wrapper                     | `box-shadow: inset 3px 0 0 <step colour>`, every row and every run                       | item 6       |
-| 5   | minimap pills       | `OutputMinimap.tsx`                            | one pill per step on the right rail                                                      | pre-existing |
+| #   | Surface             | Where                                          | Renders                                                                                                     | Added by     |
+| --- | ------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | `cli-header` row    | `OutputRow.tsx` (~line 1190)                   | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b`                                        | pre-existing |
+| 3   | activity label      | `ActivityAttribution` when `row.activityFirst` | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`), parallel groups only                    | parallel     |
+| 4   | output identity bar | `OutputRow`'s step wrapper                     | `box-shadow: inset 3px 0 0 <step colour>`, every row and every run                                          | item 6       |
+| 5   | minimap pills       | `OutputMinimap.tsx`                            | one undo/redo-status pill per step plus a separate step-colour activity band spanning first → latest output | item 9       |
 
 Rows 1 and 3 are emitted from `buildOutputRows` and both identify the step.
 
@@ -658,8 +658,11 @@ Worth stating because this pane is unusually sensitive to it (see
    gap `executionMode` already closed.~~ **Done (2026-09-04).** Added all three editor mounts,
    including the shared full field for prompt and script steps, the inherited-state reset affordance,
    and editor-store/mutation wiring for authored colors.
-9. Independently of the colour work: delete the minimap's two activity dots and paint the step
-   colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
+9. ~~Independently of the colour work: delete the minimap's two activity dots and paint the step
+   colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.~~ **Done
+   (2026-09-04).** The minimap now renders a separate step-colour band from the first to latest
+   interleaved activity fraction, while the pill retains its undo/redo-status colour and the hidden
+   activity pulse remains a filter affordance.
 
 Step 3 is worth doing regardless of whether the colour work ever happens. Steps 4–6 are the colour
 work proper; 7 and 8 are persistence and can lag indefinitely. Step 8 is large enough to split in

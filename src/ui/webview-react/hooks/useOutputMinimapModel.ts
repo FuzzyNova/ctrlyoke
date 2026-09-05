@@ -166,6 +166,13 @@ export function useOutputMinimapModel({
       () => {
         const totalSize = Math.max(1, rowLayout.totalSize);
         const newestTimestampByTarget = new Map<string, number>();
+        const stepColorByTargetKey = new Map<string, string | undefined>();
+        for (const row of rows) {
+          const targetKey = `${row.target.kind}:${row.target.index}`;
+          if (!stepColorByTargetKey.has(targetKey)) {
+            stepColorByTargetKey.set(targetKey, row.stepColor);
+          }
+        }
         for (const message of allMessages) {
           const key = `${message.target.kind}:${message.target.index}`;
           const previous = newestTimestampByTarget.get(key);
@@ -243,6 +250,7 @@ export function useOutputMinimapModel({
             hidden &&
             hiddenTimestamp !== undefined &&
             (newestTimestampByTarget.get(key) ?? 0) > hiddenTimestamp;
+          const stepColor = stepColorByTargetKey.get(key);
           const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
             if (
               row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
@@ -292,6 +300,7 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
+                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -315,6 +324,7 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
+                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -339,6 +349,7 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
+                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -366,6 +377,7 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
+                stepColor,
                 undoActions: noActions,
                 diffBlocks,
               },
@@ -457,6 +469,7 @@ export function useOutputMinimapModel({
               hidden,
               selected,
               hasHiddenActivity,
+              stepColor,
               undoActions,
               diffBlocks,
             },
