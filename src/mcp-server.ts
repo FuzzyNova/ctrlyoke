@@ -323,7 +323,7 @@ export class CtrlYokeMCPServer {
    * Returns comprehensive queue state including metadata and all prompts
    */
   private async handleQueueStatus() {
-    const selected = await this.resolveRun("queue_status");
+    const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
     const workingFile = selected.filePath;
 
     const fileContent = await fs.readFile(workingFile, "utf8");
