@@ -472,6 +472,16 @@ export function parseWorkingFileAddressFromPath(
   return undefined;
 }
 
+/**
+ * The run (or draft) directory containing a working file. Every working-file
+ * path is built as `path.join(runDir|draftDir, WORKING_FILE_NAME)`, so the
+ * parent is the directory by construction — this exists so callers do not
+ * encode that layout fact themselves.
+ */
+export function runDirectoryForWorkingFile(workingFilePath: string): string {
+  return path.dirname(path.resolve(workingFilePath));
+}
+
 // ---- WorkflowKey allocation ----
 
 /**
