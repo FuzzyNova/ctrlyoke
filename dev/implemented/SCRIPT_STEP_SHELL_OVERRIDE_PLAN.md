@@ -300,6 +300,18 @@ call sites beyond whatever prop plumbing each already does for the rest of
 Placeholder/help text: `"Auto (terminal.shellExecutable, or platform default)"`,
 mirroring the Settings page's own `shellExecutable` description.
 
+**Save-path allowlist (found in review).** Adding the field to the editor is
+not sufficient on its own: `WorkflowSerializer.buildCleanWorkflow` strips a
+working file down to the `PROMPT_FIELDS` allowlist, so any per-step field
+missing from that list is silently dropped on save. `shell` needs
+`PROMPT_PROPERTIES.SHELL` added to both `PROMPT_PROPERTIES`
+(`src/types/DashboardConstants.ts`) and `WorkflowSerializer.PROMPT_FIELDS`.
+Treat this as the standing rule for any future per-step field — the
+`schemaUiPropertyRoundTrip` and `WorkflowSerializer` round-trip suites are what
+catch it, so never silence them with an opt-out entry to make a staged step go
+green; the opt-out outlives the step that added it and hides a real save-path
+bug.
+
 ### Documentation
 
 - `.github/instructions/harness-integrations.instructions.md`'s

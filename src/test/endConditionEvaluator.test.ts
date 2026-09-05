@@ -129,12 +129,27 @@ suite("EndConditionEvaluator Tests", () => {
       ".ps1",
     ] as const;
 
+    // `process.platform` is process-wide state. Without restoring it, every
+    // later test in this run sees the last value set here (linux), so Windows
+    // hosts silently exercise POSIX branches — including direct execution of
+    // files the platform cannot actually run.
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
+
     function setPlatform(platform: NodeJS.Platform): void {
       Object.defineProperty(process, "platform", {
         value: platform,
         configurable: true,
       });
     }
+
+    teardown(() => {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    });
 
     for (const platform of ["win32", "linux"] as const) {
       test(`routes every supported extension on ${platform}`, () => {

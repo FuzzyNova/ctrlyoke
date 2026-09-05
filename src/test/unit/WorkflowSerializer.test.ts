@@ -127,10 +127,6 @@ function schemaSentinel(context: string, field: string): string {
   return `${context}-${field}`;
 }
 
-// The shell editor/serializer field is intentionally deferred to the follow-up
-// UI step; this foundation step covers its schema and execution contracts.
-const SERIALIZER_DEFERRED_FIELDS = new Set(["shell"]);
-
 function buildSchemaBackedStep(
   fields: string[],
   context: string,
@@ -570,9 +566,6 @@ suite("WorkflowSerializer", () => {
         }
         for (const [index, sourceStep] of [promptStep, scriptStep].entries()) {
           for (const field of schemaFields.step) {
-            if (SERIALIZER_DEFERRED_FIELDS.has(field)) {
-              continue;
-            }
             assert.deepStrictEqual(
               saved.steps[index][field],
               sourceStep[field],

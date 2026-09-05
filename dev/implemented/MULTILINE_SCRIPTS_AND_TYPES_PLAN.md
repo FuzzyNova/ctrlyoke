@@ -6,7 +6,7 @@
 > the dashboard cannot reach, plus one silent-misexecution hazard); P3 for the
 > script-type half (incremental interpreter coverage).
 >
-> **Related:** `dev/backlog/SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md` — that plan pins
+> **Related:** `dev/implemented/SCRIPT_STEP_SHELL_OVERRIDE_PLAN.md` — that plan pins
 > _which shell_ runs an inline script; this one covers _what text you can put in
 > the field_ and _which interpreters a script file can reach_. They touch the
 > same call sites (`EndConditionEvaluator.getScriptCommand`,
@@ -184,8 +184,21 @@ quoteStyle: "double" })` call in `src/ui/WorkflowSerializer.ts:669` (the
   It rejects any newline-containing script resolved to `SHELL_KINDS.CMD` with
   an actionable message pointing to the per-script `shell` field (for example,
   `shell: pwsh`).
-- The editor, preview display treatment, serializer regression coverage, and
-  script-type coverage are intentionally deferred to later steps.
+
+### A dotfile script name was executed as a program (fixed by B.4)
+
+Worth recording because the symptom was mystifying: `path.extname(".sh")` is
+`""`, not `".sh"` — Node treats a leading-dot name as a dotfile with no
+extension. Under the old dispatcher, `.sh` therefore missed the `".sh"` case
+and fell into the default "execute the path directly" branch, so the step tried
+to *run* a file named `.sh` as a program. On Windows that surfaces as the OS
+"How do you want to open this file?" association dialog naming just `.sh`,
+which blocks a headless run until someone dismisses it. A template such as
+`{{name}}.sh` resolving to an empty `name` produces exactly this shape.
+
+B.4's replacement of the silent default branch fixes it: an unmapped extension
+that is not host-executable now returns `null`, which `evaluateCondition`
+reports as "Unsupported script type" instead of attempting execution.
 
 ### B. Script type coverage
 

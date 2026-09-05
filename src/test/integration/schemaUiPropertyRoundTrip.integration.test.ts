@@ -370,6 +370,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["returns", ["${idPrefix}-returns"]],
   ["secrets", ["${idPrefix}-control"]],
   ["sessionId", ["settings-session-id"]],
+  ["shell", ["${idPrefix}-shell"]],
   ["skills", ["settings-skills"]],
   ["timeout", ["${idPrefix}-timeout"]],
   ["toolPermissions", ["settings-permission-mode"]],
@@ -386,10 +387,6 @@ const UI_CONTROL_OPTOUTS = new Map<string, string>([
   [
     "color",
     "data layer landed in sequencing item 8; editor mounts are the follow-up",
-  ],
-  [
-    "shell",
-    "schema and execution support landed in the foundation step; the editor control is the follow-up",
   ],
 ]);
 

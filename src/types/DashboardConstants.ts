@@ -2745,6 +2745,7 @@ export const PROMPT_PROPERTIES = {
   TIMEOUT: "timeout",
   COMPARE_SOURCE: "compareSource",
   RETURNS: "returns",
+  SHELL: "shell",
   ON_PASS: "onPass",
   ON_FAIL: "onFail",
 
