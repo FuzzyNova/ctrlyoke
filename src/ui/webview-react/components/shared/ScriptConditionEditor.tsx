@@ -75,6 +75,7 @@ export interface ScriptConditionValue {
   returns?: string;
   compareSource?: string;
   timeout?: number;
+  shell?: string;
   onPass?: string;
   onFail?: string;
   // scriptStep-only field — inherits from workflow/settings when undefined.
@@ -120,7 +121,7 @@ interface ScriptConditionEditorProps {
  *   - Script (full width)
  *   - On Pass + On Fail (side-by-side)
  *   - Compare Source + Expected Return (side-by-side)
- *   - Timeout (half-width)
+ *   - Timeout + Shell (side-by-side)
  *
  * endCondition variant additionally renders:
  *   - Max Retries (when either onPass or onFail is "retry")
@@ -130,8 +131,8 @@ interface ScriptConditionEditorProps {
  *
  * preCondition variant uses "Continue / Skip Prompt / Stop Workflow" for action options.
  *
- * scriptStep variant additionally renders an Execution Mode dropdown (paired with
- * Timeout) — interactive/headless/inherit for this step. Pre/end conditions never
+ * scriptStep variant additionally renders an Execution Mode dropdown after the shared
+ * Timeout + Shell row — interactive/headless/inherit for this step. Pre/end conditions never
  * get this control; they always run headless (see PER_STEP_EXECUTION_MODE_PLAN.md).
  */
 export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
@@ -164,6 +165,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // flooding the undo stack with every keystroke.
   const [scriptInput, setScriptInput] = useState(v.script ?? "");
   const [returnsInput, setReturnsInput] = useState(v.returns ?? "");
+  const [shellInput, setShellInput] = useState(v.shell ?? "");
 
   // Local string state for timeout to prevent auto-reset when clearing.
   // Empty string means "inherit from settings" (ctrlyoke.scriptTimeout) — timeout stays
@@ -196,6 +198,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   useEffect(() => {
     setReturnsInput(v.returns ?? "");
   }, [v.returns]);
+
+  useEffect(() => {
+    setShellInput(v.shell ?? "");
+  }, [v.shell]);
 
   useEffect(() => {
     setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : "");
@@ -298,6 +304,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     }
     setTimeoutInput(String(parsed));
     update({ timeout: parsed });
+  };
+
+  const commitShell = () => {
+    update({ shell: shellInput.trim() === "" ? undefined : shellInput });
   };
 
   const compareSource = (v.compareSource ??
@@ -465,28 +475,53 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </div>
       </DrawerRow>
 
-      {/* Timeout + Max Retries (Max Retries shares row with Timeout in wide view when retry is active) */}
+      {/* Timeout + Shell — shell applies to every script variant. */}
+      <DrawerRow narrow={narrow}>
+        <div className="flex flex-col gap-1 w-full">
+          <label
+            htmlFor={`${idPrefix}-timeout`}
+            className="text-xs font-medium text-foreground"
+          >
+            Timeout (ms)
+          </label>
+          <input
+            type="number"
+            id={`${idPrefix}-timeout`}
+            value={timeoutInput}
+            onChange={(e) => setTimeoutInput(e.target.value)}
+            onBlur={commitTimeout}
+            min={0}
+            placeholder="Default (from settings)"
+            disabled={disabled}
+            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+          />
+        </div>
+        <div className="flex flex-col gap-1 w-full">
+          <label
+            htmlFor={`${idPrefix}-shell`}
+            className="text-xs font-medium text-foreground"
+          >
+            Shell
+          </label>
+          <input
+            type="text"
+            id={`${idPrefix}-shell`}
+            value={shellInput}
+            onChange={(e) => setShellInput(e.target.value)}
+            onBlur={commitShell}
+            onKeyDown={(e) => {
+              if (e.key === KEYBOARD_KEYS.ENTER) e.currentTarget.blur();
+            }}
+            placeholder="Auto (terminal.shellExecutable, or platform default)"
+            disabled={disabled}
+            className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+          />
+        </div>
+      </DrawerRow>
+
+      {/* Variant-specific fields that follow the shared timeout/shell row. */}
       {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry ? (
         <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1 w-full">
-            <label
-              htmlFor={`${idPrefix}-timeout`}
-              className="text-xs font-medium text-foreground"
-            >
-              Timeout (ms)
-            </label>
-            <input
-              type="number"
-              id={`${idPrefix}-timeout`}
-              value={timeoutInput}
-              onChange={(e) => setTimeoutInput(e.target.value)}
-              onBlur={commitTimeout}
-              min={0}
-              placeholder="Default (from settings)"
-              disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-            />
-          </div>
           <div className="flex flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-max-retries`}
@@ -517,25 +552,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </DrawerRow>
       ) : variant === SCRIPT_CONDITION_VARIANTS.SCRIPT_STEP ? (
         <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1 w-full">
-            <label
-              htmlFor={`${idPrefix}-timeout`}
-              className="text-xs font-medium text-foreground"
-            >
-              Timeout (ms)
-            </label>
-            <input
-              type="number"
-              id={`${idPrefix}-timeout`}
-              value={timeoutInput}
-              onChange={(e) => setTimeoutInput(e.target.value)}
-              onBlur={commitTimeout}
-              min={0}
-              placeholder="Default (from settings)"
-              disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-            />
-          </div>
           <div className="flex flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-execution-mode`}
@@ -567,27 +583,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </div>
         </DrawerRow>
       ) : (
-        <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1 w-full">
-            <label
-              htmlFor={`${idPrefix}-timeout`}
-              className="text-xs font-medium text-foreground"
-            >
-              Timeout (ms)
-            </label>
-            <input
-              type="number"
-              id={`${idPrefix}-timeout`}
-              value={timeoutInput}
-              onChange={(e) => setTimeoutInput(e.target.value)}
-              onBlur={commitTimeout}
-              min={0}
-              placeholder="Default (from settings)"
-              disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-            />
-          </div>
-        </DrawerRow>
+        null
       )}
 
       {/* endCondition-only: retry fields (shown when retry is an action) */}

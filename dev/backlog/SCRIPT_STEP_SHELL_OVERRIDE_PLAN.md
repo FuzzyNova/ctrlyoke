@@ -1,6 +1,6 @@
 # Per-Script `shell` Override
 
-> **Status:** Foundation and preview landed; UI remains
+> **Status:** Implemented end to end
 >
 > **Priority:** P3 — small authoring convenience. Not a bug fix (the shell
 > inconsistency it's adjacent to is already fixed) and not a release gate.
@@ -335,21 +335,23 @@ mirroring the Settings page's own `shellExecutable` description.
 
 ## Acceptance Criteria
 
-- `scriptStep`, `preCondition`, and `endCondition` accept an optional `shell`
+- [x] `scriptStep`, `preCondition`, and `endCondition` accept an optional `shell`
   string field in the schema and `ScriptProperties` type.
-- A pinned `shell` takes effect only on the inline/no-file-match execution
+- [x] A pinned `shell` takes effect only on the inline/no-file-match execution
   path; extension-based script *file* dispatch (`.ps1`, `.sh`, etc.) is
   unaffected.
-- Precedence is per-script `shell` → `terminal.shellExecutable` →
+- [x] Precedence is per-script `shell` → `terminal.shellExecutable` →
   platform auto-detect, identical across interactive script-step PTYs and
   headless script steps/preconditions/end-conditions.
-- Dry-run preview's script-step command reflects the same resolved shell
+- [x] Dry-run preview's script-step command reflects the same resolved shell
   (including the override) that execution actually uses — no third,
   independent shell guess remains in `ExecutionPreviewService`.
-- No new `CapabilityDomain`, capability declaration, or portability-report row
+- [x] No new `CapabilityDomain`, capability declaration, or portability-report row
   is added for shell selection.
-- No workflow-root `shell` property or `executionProperties` inheritance is
+- [x] No workflow-root `shell` property or `executionProperties` inheritance is
   added.
+
+All acceptance criteria are met; there are no known exceptions.
 
 ## Non-goals
 
