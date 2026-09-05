@@ -301,7 +301,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 });
 
 suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
-  test("threads the working-file definition revision for external replays", async () => {
+  test("omits the definition revision for external replays", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-session-revision-")
     );
@@ -336,10 +336,47 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
       });
 
       assert.strictEqual(calls.length, 1);
-      assert.strictEqual(calls[0][12], 11);
+      // Switching a client onto an external run replaces its displayed
+      // workflow and publishes no address of its own. A revision here makes
+      // the webview classify the untagged SESSION_RESTORED as a replay of the
+      // workflow already on screen and keep that workflow's view address.
+      assert.strictEqual(calls[0][12], undefined);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
+  });
+
+  test("replays a lineage-less instance as a replacement, not a replay", async () => {
+    const replayCalls: Array<{ asReplacement?: boolean } | undefined> = [];
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const instance = {
+      getSummary: () => ({ workingFilePath: null }),
+      // A brand-new workflow: no workflowKey, so nothing publishes an address
+      // before the SESSION_RESTORED that follows.
+      getQueueState: () => ({ workflowKey: undefined, runRef: undefined }),
+      replayFullStateTo: (
+        _sink: unknown,
+        options?: { asReplacement?: boolean }
+      ) => replayCalls.push(options),
+      replayOutputHistoryTo: async () => {},
+    };
+    internal.instances = new Map([["inst-new", instance]]);
+    internal.retiredInstances = new Map();
+    internal.externalRunSessions = new Map();
+    internal.getActiveTerminalWorkflowRefs = () => [];
+    internal.setViewedWorkflowId = () => {};
+    internal.loadRunViewForClient = async () => {
+      assert.fail("a lineage-less instance has no address to load");
+    };
+
+    await orchestrator.replayWorkflowStateTo("inst-new", () => {}, "panel", {
+      skipTerminalReplay: true,
+    });
+
+    assert.deepStrictEqual(replayCalls, [{ asReplacement: true }]);
   });
 });
 

@@ -317,6 +317,61 @@ suite("WorkflowInstance finalStep replay", () => {
   });
 });
 
+suite("WorkflowInstance replay classification", () => {
+  test("omits the definition revision when the replay replaces the client's workflow", () => {
+    const platform = new MockPlatform();
+    const sessionRestoredCalls: any[] = [];
+    const sink: any = {
+      updateSessionRestored: async (...args: any[]) => {
+        sessionRestoredCalls.push(args);
+      },
+      updateCliOutput: () => {},
+      updateStatusMessage: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateFileSelected: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      sink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "queue-1" }] });
+    const revision = instance.promptQueue.getState().definitionRevision;
+
+    // A replay of the workflow the client already displays: the revision is
+    // what arms the webview's regressive-snapshot guard against this
+    // in-memory snapshot overwriting a newer addressed one.
+    instance.replayFullStateTo(sink);
+    assert.strictEqual(sessionRestoredCalls[0][12], revision);
+
+    // A replacement (a brand-new workflow, which has no lineage and therefore
+    // no preceding address publish) must send none, or the webview reads it as
+    // a replay and keeps the outgoing workflow's view address — every later
+    // rename and prompt then lands on the workflow the user just left.
+    instance.replayFullStateTo(sink, { asReplacement: true });
+    assert.strictEqual(sessionRestoredCalls[1][12], undefined);
+  });
+});
+
 suite("WorkflowInstance session activity forwarding", () => {
   test("buffers SessionActivityWatcher handoff events until the completed step target is known", () => {
     const platform = new MockPlatform();

@@ -950,8 +950,19 @@ export class WorkflowInstance {
    * Unlike sendFullStateToDashboard(), this bypasses the broadcast hub so
    * only the provided sink receives the messages — used for per-client
    * workflow switches in the hosted server.
+   *
+   * `asReplacement` marks a replay that *replaces* the client's displayed
+   * workflow rather than re-sending the one it already shows. The webview
+   * classifies an untagged SESSION_RESTORED by whether it carries a
+   * `definitionRevision` (see core.instructions.md), so a replacement must
+   * send none: it has no preceding address publish, and a revision there
+   * would keep the outgoing workflow's view address alive on the client and
+   * compare two unrelated lineages' revisions.
    */
-  replayFullStateTo(sink: IDashboardSink): void {
+  replayFullStateTo(
+    sink: IDashboardSink,
+    options?: { asReplacement?: boolean }
+  ): void {
     const state = this.promptQueue.getState();
     const executionState = this.getAuthoritativeExecutionState();
     const fileName = this.currentPromptFile
@@ -970,7 +981,7 @@ export class WorkflowInstance {
       this.getWorkflowPropertiesForDashboard(),
       state.parallelGroups,
       this.getActiveStepIndices(),
-      state.definitionRevision
+      options?.asReplacement ? undefined : state.definitionRevision
     );
     this.outputCaptureBuffer.replayTo(
       sink,

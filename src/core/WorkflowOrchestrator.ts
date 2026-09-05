@@ -1008,7 +1008,16 @@ export class WorkflowOrchestrator {
         );
       }
 
-      instance.replayFullStateTo(sink);
+      // A brand-new workflow (New / Ctrl+N) has no lineage yet, so the
+      // addressed RUN_VIEW_LOADED above did not run and nothing has published
+      // an address for it. Its SESSION_RESTORED therefore *replaces* whatever
+      // the client was displaying, and must omit `definitionRevision` — with
+      // one, the webview reads it as a replay of the workflow already on
+      // screen and keeps that workflow's view address, so the rename and every
+      // prompt that follows is written to the workflow the user just left.
+      instance.replayFullStateTo(sink, {
+        asReplacement: !queueState.workflowKey,
+      });
       await instance.replayOutputHistoryTo(send);
       // The addressed RUN_VIEW_LOADED above set the client's displayed view
       // address (and, for a system-generated lineage, its read-only
@@ -6893,12 +6902,10 @@ export class WorkflowOrchestrator {
           phase: FinalStepPhase;
         }
       | undefined;
-    let definitionRevision: number | undefined;
 
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as WorkingFile;
-      definitionRevision = workingFile.definitionRevision ?? 1;
       steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
         ...p,
         // Strip any existing status so loadWorkflow sets it from the results array
@@ -6948,7 +6955,13 @@ export class WorkflowOrchestrator {
       undefined,
       undefined,
       undefined,
-      definitionRevision
+      // Deliberately no `definitionRevision`: switching a client onto an
+      // external run replaces its displayed workflow and publishes no address
+      // of its own, so a revision here would be misread as a replay of the
+      // outgoing workflow and preserve that workflow's view address. The steps
+      // above were just read from disk, so there is no staleness for the
+      // webview's regressive-snapshot guard to catch either.
+      undefined
     );
 
     // Replay all captured CLI outputs from the active history file
