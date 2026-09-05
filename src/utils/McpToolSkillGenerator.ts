@@ -1,7 +1,7 @@
 import {
-  MCP_QUEUE_TOOL_NAMES,
+  MCP_WORKFLOW_TOOL_NAMES,
   MCP_TOOL_DEFINITIONS,
-  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
 } from "./McpToolDefinitions";
 import { MCP_SKILL_NAMES } from "../types/DashboardConstants";
@@ -13,6 +13,9 @@ const COMMIT_OUTPUT_PATH_PLACEHOLDER = "<commit output path>";
 function exampleValue(schema: McpToolInputSchema): unknown {
   if (schema.enum && schema.enum.length > 0) {
     return schema.enum[0];
+  }
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    return exampleValue(schema.oneOf[0]);
   }
 
   switch (schema.type) {
@@ -49,9 +52,11 @@ function renderParameters(schema: McpToolInputSchema): string {
 
   const lines = entries.map(([name, property]) => {
     const requirement = required.has(name) ? "required" : "optional";
-    const type = property.items
-      ? `${property.type} of ${property.items.type}`
-      : property.type;
+    const type = property.oneOf
+      ? property.oneOf.map((variant) => variant.type).join(" or ")
+      : property.items
+        ? `${property.type} of ${property.items.type}`
+        : property.type;
     const description = property.description
       ? ` — ${property.description}`
       : "";
@@ -74,7 +79,7 @@ export class McpToolSkillGenerator {
       ...tools.map((tool) => {
         const args = JSON.stringify(exampleValue(tool.inputSchema));
         const command =
-          tool.name === MCP_COMMIT_MESSAGE_TOOL_NAME
+          tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
             ? `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --commit-output \"${COMMIT_OUTPUT_PATH_PLACEHOLDER}\"`
             : `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --working-file \"${PATH_PLACEHOLDER}\"`;
         return [
@@ -109,11 +114,11 @@ export class McpToolSkillGenerator {
   }
 }
 
-/** The built-in skill's queue-only tool subset. */
+/** The built-in skill's workflow-tool subset. */
 export const MCP_TOOL_SKILL_TOOL_NAMES: readonly string[] =
-  MCP_QUEUE_TOOL_NAMES;
+  MCP_WORKFLOW_TOOL_NAMES;
 
 /** The built-in skill's commit-message tool subset. */
 export const MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES: readonly string[] = [
-  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 ];

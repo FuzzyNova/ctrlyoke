@@ -13,6 +13,10 @@ import {
   getCtrlYokeUserMcpRegistryPath,
   getCtrlYokeWorkspaceMcpRegistryPath,
 } from "./McpConfigPaths";
+import {
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+} from "./McpToolDefinitions";
 
 function isStringArray(value: unknown): value is string[] {
   return (
@@ -251,8 +255,8 @@ export class McpRegistryFileManager {
 export const CTRLYOKE_BUILTIN_MCP_SERVER_INFO = {
   id: SPECIAL_TARGET_IDS.CTRLYOKE,
   description:
-    "ctrlyoke's built-in MCP server. Gives the model queue-status and append-queue tools scoped to the current workflow run.",
-  tools: ["ctrlyoke_queue_status", "ctrlyoke_append_queue"],
+    "ctrlyoke's built-in MCP server. Gives the model workflow-status and append-step tools scoped to the current workflow run.",
+  tools: [MCP_WORKFLOW_STATUS_TOOL_NAME, MCP_APPEND_STEP_TOOL_NAME],
 } as const;
 
 /** Find a managed MCP server by its ctrlyoke registry ID. */

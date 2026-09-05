@@ -4008,7 +4008,7 @@ suite("CodexLogParser", () => {
             name: "exec",
             call_id: "call_mcp_append_queue",
             input:
-              "const result = await tools.mcp__ctrlyoke__ctrlyoke_append_queue({\n" +
+              "const result = await tools.mcp__ctrlyoke__append_step({\n" +
               '  position: "end",\n' +
               '  source: "planning pass",\n' +
               '  steps: [{ name: "Add tests", prompt: "Write tests." }],\n' +
@@ -4052,7 +4052,7 @@ suite("CodexLogParser", () => {
       );
       const initiated = mcpEvents[0].data as { server: string; tool: string };
       assert.strictEqual(initiated.server, "ctrlyoke");
-      assert.strictEqual(initiated.tool, "ctrlyoke_append_queue");
+      assert.strictEqual(initiated.tool, "append_step");
 
       const completed = mcpEvents.find(
         (e) => (e.data as { result?: unknown }).result

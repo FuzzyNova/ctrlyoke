@@ -3,16 +3,18 @@ import { QUEUE_POSITION } from "../types/DashboardConstants";
 /**
  * JSON-schema shape used by ctrlyoke's MCP tools.
  *
- * Kept in a small Node-only module so prompt helpers can describe the tools
+ * Kept in a small shared module so prompt helpers can describe the tools
  * without importing the MCP server entrypoint (and its transport setup).
  */
 export interface McpToolInputSchema {
-  type: string;
+  type?: string;
   description?: string;
   properties?: Record<string, McpToolInputSchema>;
   required?: readonly string[];
   items?: McpToolInputSchema;
   enum?: readonly string[];
+  oneOf?: readonly McpToolInputSchema[];
+  minimum?: number;
 }
 
 export interface McpToolDefinition {
@@ -21,24 +23,78 @@ export interface McpToolDefinition {
   inputSchema: McpToolInputSchema;
 }
 
-/** Tool used by the structured commit-message capture path. */
-export const MCP_COMMIT_MESSAGE_TOOL_NAME = "ctrlyoke_submit_commit_message";
+/** Tool that reports the current workflow state. */
+export const MCP_WORKFLOW_STATUS_TOOL_NAME = "workflow_status";
 
-/** Tool used to add one or more steps to the workflow's queue. */
-export const MCP_APPEND_QUEUE_TOOL_NAME = "ctrlyoke_append_queue";
+/** Tool used to add one or more steps to the workflow. */
+export const MCP_APPEND_STEP_TOOL_NAME = "append_step";
+
+/** Tool that lists the installed harnesses and supported models. */
+export const MCP_CAPABILITIES_TOOL_NAME = "capabilities";
+
+/** Tool that reads output from earlier workflow steps. */
+export const MCP_READ_OUTPUT_TOOL_NAME = "read_output";
+
+/** Tool that lists other workflows in the workspace. */
+export const MCP_GLOBAL_STATUS_TOOL_NAME = "global_status";
+
+/** Tool used by the structured commit-message capture path. */
+export const MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME = "submit_commit_message";
+
+/** Tool used to edit a pending step in the workflow. */
+export const MCP_EDIT_STEP_TOOL_NAME = "edit_step";
+
+/** Tool used to remove a pending step from the workflow. */
+export const MCP_REMOVE_STEP_TOOL_NAME = "remove_step";
+
+/** Tool used to reorder the pending workflow steps. */
+export const MCP_REORDER_STEPS_TOOL_NAME = "reorder_steps";
+
+const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
+  type: "object",
+  description:
+    "Fields to change on the step. Omitted fields keep their current values.",
+  properties: {
+    prompt: { type: "string", description: "The new prompt text." },
+    name: { type: "string", description: "The step's display label." },
+    model: { type: "string", description: "The model override." },
+    harness: { type: "string", description: "The harness override." },
+    resumeSession: {
+      type: "boolean",
+      description: "Whether the step should resume a previous session.",
+    },
+    sessionId: {
+      oneOf: [{ type: "string" }, { type: "number" }],
+      description: "The session or step index to resume.",
+    },
+    agent: { type: "string", description: "The agent override." },
+    enabled: { type: "boolean", description: "Whether the step is enabled." },
+    color: { type: "string", description: "The step's display color." },
+    additionalArgs: {
+      type: "array",
+      items: { type: "string" },
+      description: "Additional arguments for the harness.",
+    },
+    skills: {
+      type: "array",
+      items: { type: "string" },
+      description: "Skills to make available to the step.",
+    },
+  },
+};
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
-    name: "ctrlyoke_queue_status",
+    name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
       "See the steps in your workflow: which have finished, which is running now, and which are still queued.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: MCP_APPEND_QUEUE_TOOL_NAME,
+    name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
+      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call capabilities first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -82,10 +138,18 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           description: "One or more steps to add, in the order to run them.",
         },
         position: {
-          type: "string",
-          enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+          oneOf: [
+            {
+              type: "string",
+              enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+            },
+            {
+              type: "number",
+              minimum: 0,
+            },
+          ],
           description:
-            "'next' runs the new steps before the rest of the queue; 'end' runs them last.",
+            "Use 'next' to run them after the current step, 'end' to run them last, or a zero-based step index to insert them before that step.",
         },
         source: {
           type: "string",
@@ -96,15 +160,71 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: "ctrlyoke_capabilities",
+    name: MCP_EDIT_STEP_TOOL_NAME,
+    description:
+      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        index: {
+          type: "number",
+          minimum: 0,
+          description: "Zero-based index of the step to edit.",
+        },
+        updates: MCP_STEP_UPDATE_SCHEMA,
+        clearProperties: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional step fields to remove so they inherit defaults.",
+        },
+      },
+      required: ["index", "updates"],
+    },
+  },
+  {
+    name: MCP_REMOVE_STEP_TOOL_NAME,
+    description:
+      "Remove one pending step when it is no longer needed or has been superseded by another step.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        index: {
+          type: "number",
+          minimum: 0,
+          description: "Zero-based index of the step to remove.",
+        },
+      },
+      required: ["index"],
+    },
+  },
+  {
+    name: MCP_REORDER_STEPS_TOOL_NAME,
+    description:
+      "Reorder the pending steps when their execution order should change. Provide every pending step's zero-based index in the desired order.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        indices: {
+          type: "array",
+          items: { type: "number", minimum: 0 },
+          description:
+            "All pending step indices, in the order they should run; use absolute zero-based workflow indices.",
+        },
+      },
+      required: ["indices"],
+    },
+  },
+  {
+    name: MCP_CAPABILITIES_TOOL_NAME,
     description:
       "List the harnesses installed on this machine and the models each one supports. Call this before setting a harness or model on a step so you pick values that exist.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "ctrlyoke_read_output",
+    name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
-      "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work.",
+      "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work; for a large output, page one selected step with limit and cursor or inspect its tail.",
     inputSchema: {
       type: "object",
       properties: {
@@ -112,13 +232,28 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "array",
           items: { type: "number" },
           description:
-            "Zero-based step numbers to read. Omit to read them all.",
+            "Zero-based step numbers to read. Omit to read them all; paging arguments require exactly one.",
+        },
+        cursor: {
+          type: "string",
+          description:
+            "Continue reading the selected step from the nextCursor returned by an earlier read_output call.",
+        },
+        limit: {
+          type: "number",
+          description:
+            "Maximum number of characters to return from the selected step. Omit to read through the end.",
+        },
+        tail: {
+          type: "number",
+          description:
+            "Return the last N characters of the selected step instead of reading forward. Do not combine with cursor or limit.",
         },
       },
     },
   },
   {
-    name: "ctrlyoke_global_status",
+    name: MCP_GLOBAL_STATUS_TOOL_NAME,
     description:
       "List the other ctrlyoke workflows in this workspace and what they are doing. Call this before wide-reaching edits so you can leave files another workflow is working on alone, and recognize build or test failures it caused rather than chasing them.",
     inputSchema: {
@@ -127,7 +262,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         workflowKey: {
           type: "string",
           description:
-            "Report only this workflow, as identified by a previous ctrlyoke_global_status call.",
+            "Report only this workflow, as identified by a previous global_status call.",
         },
         runRef: {
           type: "string",
@@ -138,7 +273,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: MCP_COMMIT_MESSAGE_TOOL_NAME,
+    name: MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
     description:
       "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
     inputSchema: {
@@ -154,11 +289,14 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
 ];
 
-/** Queue tools documented by the built-in MCP skill. */
-export const MCP_QUEUE_TOOL_NAMES = [
-  "ctrlyoke_queue_status",
-  MCP_APPEND_QUEUE_TOOL_NAME,
-  "ctrlyoke_capabilities",
-  "ctrlyoke_read_output",
-  "ctrlyoke_global_status",
+/** Workflow tools documented by the built-in MCP skill. */
+export const MCP_WORKFLOW_TOOL_NAMES = [
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
 ] as const;

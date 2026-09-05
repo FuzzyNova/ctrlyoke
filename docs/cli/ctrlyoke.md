@@ -9,6 +9,9 @@ ctrlyoke trust-external-roots
 ctrlyoke trust-workflow-external-roots <file>
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
+ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
+ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
+ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
 ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace]
 ctrlyoke secret list
 ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace]
@@ -155,3 +158,47 @@ destinations containing history. A matching empty destination scaffold may be
 replaced automatically. Relinking operates on the user project tree even when
 `storage.runHistoryLocation` is currently `workspace`; changing that setting
 does not migrate history.
+
+## `ctrlyoke step`
+
+These commands edit a persisted run without starting or resuming a harness.
+They address steps by their zero-based absolute index and require both the
+workflow lineage key and a run reference or numeric run ID.
+
+### `ctrlyoke step edit`
+
+Edit a pending step with an inline prompt:
+
+```bash
+ctrlyoke step edit --workflow release --run 7 --index 3 --prompt "Correct the deployment target"
+```
+
+Instead of `--prompt`, pass a file containing exactly one workflow step. The
+step's authored fields are merged into the addressed step, which allows a file
+to change configuration as well as the prompt:
+
+```bash
+ctrlyoke step edit replacement.ctrlyoke.yaml --workflow release --run 7 --index 3
+```
+
+`--prompt` and the file argument are mutually exclusive. An edit is accepted
+for any not-yet-executed step, including while another process executes the
+target run; the completed prefix and in-flight step remain protected.
+
+### `ctrlyoke step remove`
+
+```bash
+ctrlyoke step remove --workflow release --run 7 --index 3
+```
+
+### `ctrlyoke step reorder`
+
+Pass every pending step's absolute zero-based index once, in its desired
+execution order. When a step is in flight, include that index first:
+
+```bash
+ctrlyoke step reorder --workflow release --run 7 --order 3,4,5
+```
+
+All three commands support `--cwd <path>` and `--json`. JSON output is a
+versioned one-line result envelope; failures exit with code `2`.

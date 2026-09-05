@@ -55,9 +55,16 @@ import {
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
 import {
-  MCP_APPEND_QUEUE_TOOL_NAME,
-  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
 } from "./utils/McpToolDefinitions";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
@@ -66,6 +73,12 @@ export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 const CTRLYOKE_DIR = ".ctrlyoke";
 const LOGS_DIR = "logs";
 const CAPABILITIES_FILE = "capabilities.json";
+
+interface ReadOutputPaging {
+  cursor?: string;
+  limit?: number;
+  tail?: number;
+}
 
 const lineageRepository = new WorkflowLineageRepository();
 
@@ -131,6 +144,40 @@ function getMaxQueueSize(): number {
 
 function isUnlimitedMode(): boolean {
   return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
+}
+
+function asRecord(value: unknown, field: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function parseStepIndex(value: unknown, operation: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${operation}: index must be a non-negative integer`);
+  }
+  return value;
+}
+
+function parseNumberArray(value: unknown, field: string): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (item) => typeof item !== "number" || !Number.isInteger(item) || item < 0
+    )
+  ) {
+    throw new Error(`${field} must be an array of non-negative integers`);
+  }
+  return value;
+}
+
+function parseStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} must be an array of strings`);
+  }
+  return value;
 }
 
 export class CtrlYokeMCPServer {
@@ -218,17 +265,23 @@ export class CtrlYokeMCPServer {
   /** Dispatch one tool without transport error wrapping; useful to embedders and focused tests. */
   public async invokeTool(name: string, args: unknown): Promise<unknown> {
     switch (name) {
-      case "ctrlyoke_queue_status":
+      case MCP_WORKFLOW_STATUS_TOOL_NAME:
         return this.handleQueueStatus();
-      case MCP_APPEND_QUEUE_TOOL_NAME:
+      case MCP_APPEND_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleQueueAppend(args));
-      case "ctrlyoke_capabilities":
+      case MCP_EDIT_STEP_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepEdit(args));
+      case MCP_REMOVE_STEP_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepRemove(args));
+      case MCP_REORDER_STEPS_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepsReorder(args));
+      case MCP_CAPABILITIES_TOOL_NAME:
         return this.handleCapabilities();
-      case "ctrlyoke_read_output":
+      case MCP_READ_OUTPUT_TOOL_NAME:
         return this.handleReadOutput(args);
-      case "ctrlyoke_global_status":
+      case MCP_GLOBAL_STATUS_TOOL_NAME:
         return this.handleGlobalStatus(args);
-      case MCP_COMMIT_MESSAGE_TOOL_NAME:
+      case MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME:
         return this.handleSubmitCommitMessage(args);
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -237,7 +290,7 @@ export class CtrlYokeMCPServer {
 
   /**
    * Queue an operation to prevent race conditions
-   * All append operations are serialized through this queue
+   * All workflow mutations are serialized through this queue
    */
   private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
     const previousOperation = this.operationQueue;
@@ -266,7 +319,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_queue_status tool invocation
+   * Handle workflow_status tool invocation
    * Returns comprehensive queue state including metadata and all prompts
    */
   private async handleQueueStatus() {
@@ -329,12 +382,12 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_append_queue tool invocation.
+   * Handle append_step tool invocation.
    * Adds prompts to this server's own run with position control. The target is
    * never taken from the arguments — see `resolveRun`.
    */
   private async handleQueueAppend(args: any) {
-    log("Processing append_queue request...");
+    log(`Processing ${MCP_APPEND_STEP_TOOL_NAME} request...`);
     const {
       steps,
       position,
@@ -347,7 +400,7 @@ export class CtrlYokeMCPServer {
           harness?: string;
         }
       >;
-      position: QueuePosition;
+      position: QueuePosition | number;
       source?: string;
     };
 
@@ -364,18 +417,24 @@ export class CtrlYokeMCPServer {
     }
     if (steps.some((step) => "parallel" in step)) {
       throw new Error(
-        "ctrlyoke_append_queue accepts flat workflow steps only; parallel groups cannot be created through MCP"
+        "append_step accepts flat workflow steps only; parallel groups cannot be created through MCP"
       );
     }
 
-    if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
+    if (
+      position !== QUEUE_POSITION.NEXT &&
+      position !== QUEUE_POSITION.END &&
+      (typeof position !== "number" ||
+        !Number.isInteger(position) ||
+        position < 0)
+    ) {
       log("ERROR: Invalid position:", position);
       throw new Error(
-        `position must be '${QUEUE_POSITION.NEXT}' or '${QUEUE_POSITION.END}'`
+        `position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', or a non-negative integer index`
       );
     }
 
-    const selected = await this.resolveRun("append_queue");
+    const selected = await this.resolveRun(MCP_APPEND_STEP_TOOL_NAME);
     const target = await RunContinuationService.validateContinuationTarget(
       this.workspaceRoot,
       selected.workflowKey,
@@ -494,6 +553,144 @@ export class CtrlYokeMCPServer {
     };
   }
 
+  /** Handle edit_step for a zero-based pending step index. */
+  private async handleStepEdit(args: unknown) {
+    const input = asRecord(args, MCP_EDIT_STEP_TOOL_NAME);
+    const index = parseStepIndex(input.index, MCP_EDIT_STEP_TOOL_NAME);
+    const updates = asRecord(
+      input.updates,
+      `${MCP_EDIT_STEP_TOOL_NAME}.updates`
+    );
+    const clearProperties = parseStringArray(
+      input.clearProperties,
+      `${MCP_EDIT_STEP_TOOL_NAME}.clearProperties`
+    );
+    const selected = await this.resolveRun(MCP_EDIT_STEP_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const edited = await RunContinuationService.editStepAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      index,
+      {
+        updates: updates as Partial<WorkflowStep>,
+        clearProperties,
+      },
+      target.definitionRevision,
+      lineageRepository,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(MCP_EDIT_STEP_TOOL_NAME, selected, edited, {
+      index,
+    });
+  }
+
+  /** Handle remove_step for a zero-based pending step index. */
+  private async handleStepRemove(args: unknown) {
+    const input = asRecord(args, MCP_REMOVE_STEP_TOOL_NAME);
+    const index = parseStepIndex(input.index, MCP_REMOVE_STEP_TOOL_NAME);
+    const selected = await this.resolveRun(MCP_REMOVE_STEP_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const removed = await RunContinuationService.removeStepAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      index,
+      target.definitionRevision,
+      lineageRepository,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(MCP_REMOVE_STEP_TOOL_NAME, selected, removed, {
+      index,
+    });
+  }
+
+  /** Handle reorder_steps using absolute zero-based pending step indices. */
+  private async handleStepsReorder(args: unknown) {
+    const input = asRecord(args, MCP_REORDER_STEPS_TOOL_NAME);
+    const indices = parseNumberArray(
+      input.indices,
+      `${MCP_REORDER_STEPS_TOOL_NAME}.indices`
+    );
+    const selected = await this.resolveRun(MCP_REORDER_STEPS_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      indices,
+      target.definitionRevision,
+      lineageRepository,
+      undefined,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(
+      MCP_REORDER_STEPS_TOOL_NAME,
+      selected,
+      reordered,
+      { indices }
+    );
+  }
+
+  private mutationResponse(
+    operation: string,
+    selected: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      filePath: string;
+    },
+    mutation: {
+      workingFile: WorkingFile;
+      definitionRevision: number;
+      descriptorRevision: number;
+    },
+    details: Record<string, unknown>
+  ) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              success: true,
+              operation,
+              ...details,
+              newQueueSize: mutation.workingFile.steps?.length ?? 0,
+              workingFile: path.relative(this.workspaceRoot, selected.filePath),
+              workflowKey: selected.workflowKey,
+              runRef: selected.runRef,
+              definitionRevision: mutation.definitionRevision,
+              descriptorRevision: mutation.descriptorRevision,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
   /**
    * Read and parse .ctrlyoke/capabilities.json.
    * Returns null if the file does not exist or cannot be parsed.
@@ -513,7 +710,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_capabilities tool invocation.
+   * Handle capabilities tool invocation.
    * Returns available harnesses and their supported models.
    */
   private async handleCapabilities() {
@@ -551,11 +748,11 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_read_output tool invocation.
+   * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
    */
   private async handleReadOutput(args: any) {
-    const selected = await this.resolveRun("read_output");
+    const selected = await this.resolveRun(MCP_READ_OUTPUT_TOOL_NAME);
     const workingFile = selected.filePath;
 
     const fileContent = await fs.readFile(workingFile, "utf8");
@@ -571,6 +768,7 @@ export class CtrlYokeMCPServer {
       Array.isArray(args?.indices) && args.indices.length > 0
         ? args.indices
         : allSteps.map((_: any, i: number) => i);
+    const paging = this.parseReadOutputPaging(args, requestedIndices, allSteps);
 
     const resolver = new RunOutputResolver();
     const resolved = selected.runRef
@@ -589,11 +787,38 @@ export class CtrlYokeMCPServer {
       .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
         const p = allSteps[i];
-        return {
+        const resolvedOutput = resolved.get(`queue:${i}`);
+        const fullResponseText = resolvedOutput?.responseText ?? null;
+        const baseOutput = {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
           status: this.getStepStatus(i, runtime, allSteps),
-          responseText: resolved.get(`queue:${i}`)?.responseText ?? null,
+          responseText: fullResponseText,
+        };
+
+        if (!paging || fullResponseText === null) {
+          return baseOutput;
+        }
+
+        if (paging.tail !== undefined) {
+          return {
+            ...baseOutput,
+            responseText:
+              paging.tail === 0 ? "" : fullResponseText.slice(-paging.tail),
+          };
+        }
+
+        const offset = paging.cursor === undefined ? 0 : Number(paging.cursor);
+        const end =
+          paging.limit === undefined ? undefined : offset + paging.limit;
+        const responseText = fullResponseText.slice(offset, end);
+        const hasNextCursor =
+          paging.limit !== undefined && end! < fullResponseText.length;
+
+        return {
+          ...baseOutput,
+          responseText,
+          ...(hasNextCursor ? { nextCursor: String(end) } : {}),
         };
       });
 
@@ -615,8 +840,87 @@ export class CtrlYokeMCPServer {
     };
   }
 
+  private parseReadOutputPaging(
+    args: unknown,
+    requestedIndices: readonly number[],
+    allSteps: readonly WorkflowStep[]
+  ): ReadOutputPaging | undefined {
+    const value =
+      args !== null && typeof args === "object"
+        ? (args as Record<string, unknown>)
+        : {};
+    const hasCursor = value.cursor !== undefined;
+    const hasLimit = value.limit !== undefined;
+    const hasTail = value.tail !== undefined;
+
+    if (!hasCursor && !hasLimit && !hasTail) {
+      return undefined;
+    }
+
+    if (hasTail && (hasCursor || hasLimit)) {
+      throw new Error(
+        "read_output: tail is mutually exclusive with cursor and limit"
+      );
+    }
+
+    const singleStepPagingError =
+      "read_output: cursor, limit, and tail require indices to name exactly one step";
+    const suppliedIndices = value.indices;
+    if (
+      suppliedIndices !== undefined &&
+      (!Array.isArray(suppliedIndices) ||
+        suppliedIndices.length !== 1 ||
+        typeof suppliedIndices[0] !== "number" ||
+        !Number.isSafeInteger(suppliedIndices[0]))
+    ) {
+      throw new Error(singleStepPagingError);
+    }
+    if (
+      requestedIndices.length !== 1 ||
+      requestedIndices[0] < 0 ||
+      requestedIndices[0] >= allSteps.length
+    ) {
+      throw new Error(singleStepPagingError);
+    }
+
+    let cursor: string | undefined;
+    if (hasCursor) {
+      if (
+        typeof value.cursor !== "string" ||
+        !/^\d+$/.test(value.cursor) ||
+        !Number.isSafeInteger(Number(value.cursor))
+      ) {
+        throw new Error(
+          "read_output: cursor must be a non-negative integer cursor returned by read_output"
+        );
+      }
+      cursor = value.cursor;
+    }
+
+    const parseCount = (name: "limit" | "tail"): number | undefined => {
+      const count = value[name];
+      if (count === undefined) {
+        return undefined;
+      }
+      if (
+        typeof count !== "number" ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      ) {
+        throw new Error(`read_output: ${name} must be a non-negative integer`);
+      }
+      return count;
+    };
+
+    return {
+      ...(cursor !== undefined ? { cursor } : {}),
+      ...(hasLimit ? { limit: parseCount("limit")! } : {}),
+      ...(hasTail ? { tail: parseCount("tail")! } : {}),
+    };
+  }
+
   /**
-   * Handle ctrlyoke_global_status tool invocation.
+   * Handle global_status tool invocation.
    * The only tool that reports on workflows other than this server's own, and
    * read-only by design: agents call it to learn what sibling workflows are
    * running so they can avoid file conflicts and attribute stray build errors.
@@ -751,7 +1055,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_submit_commit_message tool invocation.
+   * Handle submit_commit_message tool invocation.
    * Writes the commit message to the output path specified by CTRLYOKE_COMMIT_OUTPUT.
    * The CLI entrypoint can populate that variable from --commit-output.
    * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
@@ -784,7 +1088,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Optional narrowing filters for `ctrlyoke_global_status`. Both fields are
+   * Optional narrowing filters for `global_status`. Both fields are
    * optional and neither can redirect any other tool — see `resolveRun`.
    */
   private parseOtherWorkflowSelector(

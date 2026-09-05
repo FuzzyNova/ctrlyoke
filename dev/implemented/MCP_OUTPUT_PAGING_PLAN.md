@@ -1,6 +1,6 @@
 # MCP Output Paging Plan
 
-**Status:** Proposed
+**Status:** Implemented 2026-09-05
 **Priority:** P2
 
 Harvested from the rejected [`MCP_CONTROL_SURFACE_PLAN.md`](../rejected/MCP_CONTROL_SURFACE_PLAN.md),
@@ -10,7 +10,9 @@ within the current run's scope.
 
 ## Problem
 
-`ctrlyoke_read_output` in `src/mcp-server.ts` has no paging. A caller either names
+The following describes the behavior before paging was implemented.
+
+`read_output` in `src/mcp-server.ts` has no paging. A caller either names
 explicit indices or gets every prompt in the run. For each requested index it
 returns the full `responseText` from `RunOutputResolver.resolveLatestAttempts`.
 
@@ -18,19 +20,27 @@ For a long workflow this means a step that wants "what did the previous step
 conclude" pulls back the entire response history into its context window. There is
 no way to read a bounded tail, and no way to resume where a previous read stopped.
 
+**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md)
+completed the naming pass and moved every tool name behind an exported constant. This plan was
+implemented against the final `read_output` tool, so the schema was edited once. Names below use
+the final names.
+
 ## Scope
 
-Add cursor-based reads to `ctrlyoke_read_output` only.
+The implementation adds cursor-based reads to `read_output` only.
 
 - An opaque cursor plus a caller-supplied limit, returning a `nextCursor` when
   more output remains.
-- A bounded-tail mode so a caller can ask for the last N characters/lines of a
-  step's output without paging forward through all of it.
+- A bounded-tail mode so a caller can ask for the last N **characters** of a
+  step's output without paging forward through all of it. (Characters only —
+  line-based slicing was considered and dropped: it would need a second unit in
+  the schema for no use case the Problem statement raises. See Design below,
+  which is the authoritative definition.)
 - Preserve the existing behavior when no cursor or limit is supplied, so current
   workflows are unaffected.
 
 `RunOutputResolver` already streams the run timeline in a single bounded-memory
-pass; the cursor should ride that existing traversal rather than introducing a
+pass; the cursor rides that existing traversal rather than introducing a
 second read path or materializing the JSONL history.
 
 ## Design
@@ -46,7 +56,7 @@ new streaming or seeking mode. This keeps the "no additional full traversal"
 acceptance criterion trivially true: the existing single pass is unchanged,
 and the new logic runs only after it completes.
 
-### Input schema additions (`ctrlyoke_read_output`)
+### Input schema additions (`read_output`)
 
 - `cursor` (string, optional) — opaque. Internally a stringified character
   offset into the target's `responseText`; encoding is not a compatibility

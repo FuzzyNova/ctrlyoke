@@ -5,11 +5,17 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
-import { MCP_APPEND_QUEUE_TOOL_NAME } from "../../utils/McpToolDefinitions";
+import {
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+} from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
   WorkflowKey,
   WorkflowLineageDescriptor,
+  WorkflowStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
@@ -94,6 +100,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       prompt?: string;
       responseText?: string;
       worktree?: WorkingFileWorktreeRuntime;
+      stepCount?: number;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
@@ -114,23 +121,27 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       nextRunId: 2,
       revision: 3,
     };
+    const stepCount = options.stepCount ?? 1;
+    const steps = Array.from({ length: stepCount }, (_, index) => ({
+      prompt:
+        index === 0
+          ? (options.prompt ?? `prompt-${suffix}`)
+          : `prompt-${suffix}-${index}`,
+      _runtime: {
+        startedAt: 1,
+        completedAt: 2,
+        sessionId:
+          index === 0 ? `session-${suffix}` : `session-${suffix}-${index}`,
+      },
+    }));
     const workingFile: WorkingFile = {
       workflowName: descriptor.workflowName,
       startedAt: 1,
       lastModifiedAt: 1,
       definitionRevision: 4,
-      steps: [
-        {
-          prompt: options.prompt ?? `prompt-${suffix}`,
-          _runtime: {
-            startedAt: 1,
-            completedAt: 2,
-            sessionId: `session-${suffix}`,
-          },
-        },
-      ],
+      steps,
       _runtime: {
-        currentIndex: 1,
+        currentIndex: stepCount,
         executionState: EXECUTION_STATES.COMPLETED,
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
@@ -174,6 +185,53 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     return { workflowKey, runRef, runFilePath };
   }
 
+  async function prepareActiveRun(suffix: string): Promise<{
+    run: RunFixture;
+    ownerToken: string;
+  }> {
+    const run = await createRun(suffix, "2026-01-01T00-00-00-000Z", {
+      stepCount: 4,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      { prompt: "completed", _runtime: { completedAt: 2 } },
+      { prompt: "in flight", _runtime: { startedAt: 3 } },
+      { prompt: "pending-a" },
+      { prompt: "pending-b" },
+    ] as WorkflowStep[];
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const ownerToken = `mcp-${suffix}-owner`;
+    await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      schemaVersion: 2,
+      workflowKey: run.workflowKey,
+      runRef: run.runRef,
+      runner: RUNNER_IDS.CLI,
+      pid: process.pid,
+      ownerToken,
+      hostInstanceId: "mcp-host",
+      executionInstanceId: "mcp-execution",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    });
+    return { run, ownerToken };
+  }
+
+  async function releaseActiveRun(run: RunFixture, ownerToken: string) {
+    await WorkflowLockManager.releaseLock(
+      workspaceRoot,
+      run.workflowKey,
+      ownerToken
+    );
+  }
+
   async function setup(): Promise<CtrlYokeMCPServer> {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
@@ -197,7 +255,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const run = await createRun("cli", "2026-01-01T00-00-00-000Z");
     const success = runMcpToolCli([
       "--tool",
-      "ctrlyoke_queue_status",
+      "workflow_status",
       "--args",
       "{}",
       "--workspace",
@@ -233,7 +291,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const outputPath = path.join(workspaceRoot, "commit-output-flag.txt");
     const result = runMcpToolCli([
       "--tool",
-      "ctrlyoke_submit_commit_message",
+      "submit_commit_message",
       "--args",
       JSON.stringify({ message: "feat: capture via flag" }),
       "--workspace",
@@ -259,7 +317,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const result = runMcpToolCli(
       [
         "--tool",
-        "ctrlyoke_submit_commit_message",
+        "submit_commit_message",
         "--args",
         JSON.stringify({ message: "fix: capture via env" }),
         "--workspace",
@@ -279,7 +337,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
-  test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {
+  test("publishes a run address on global_status and nowhere else", async () => {
     const server = await setup();
     const selectorKeys = () =>
       server.getToolDefinitions().map((tool) => ({
@@ -296,21 +354,35 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // Only the cross-workflow read tool is addressable, and the shape does not
     // change with the environment: there is one supported way to run this
     // server, so there is one tool surface.
-    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+    assert.deepStrictEqual(addressable(), ["global_status"]);
     process.env.CTRLYOKE_WORKING_FILE = (
       await createRun("schema", "2026-01-01T00-00-00-000Z")
     ).runFilePath;
-    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+    assert.deepStrictEqual(addressable(), ["global_status"]);
 
     const append: any = server
       .getToolDefinitions()
-      .find((tool) => tool.name === MCP_APPEND_QUEUE_TOOL_NAME)!.inputSchema;
+      .find((tool) => tool.name === MCP_APPEND_STEP_TOOL_NAME)!.inputSchema;
     assert.deepStrictEqual(Object.keys(append.properties).sort(), [
       "position",
       "source",
       "steps",
     ]);
-    assert.deepStrictEqual(append.properties.position.enum, ["next", "end"]);
+    assert.deepStrictEqual(append.properties.position.oneOf[0].enum, [
+      "next",
+      "end",
+    ]);
+    assert.strictEqual(append.properties.position.oneOf[1].type, "number");
+
+    const readOutput: any = server
+      .getToolDefinitions()
+      .find((tool) => tool.name === "read_output")!.inputSchema;
+    assert.deepStrictEqual(Object.keys(readOutput.properties).sort(), [
+      "cursor",
+      "indices",
+      "limit",
+      "tail",
+    ]);
   });
 
   test("answers only for its own run, ignoring any address in the arguments", async () => {
@@ -324,16 +396,191 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const status = responseJson(
-      await server.invokeTool("ctrlyoke_queue_status", other)
+      await server.invokeTool("workflow_status", other)
     );
-    const output = responseJson(
-      await server.invokeTool("ctrlyoke_read_output", other)
-    );
+    const output = responseJson(await server.invokeTool("read_output", other));
 
     assert.strictEqual(status.metadata.workflowKey, own.workflowKey);
     assert.strictEqual(status.metadata.runRef, own.runRef);
     assert.strictEqual(output.workflowKey, own.workflowKey);
     assert.strictEqual(output.outputs[0].responseText, "own output");
+  });
+
+  test("preserves the read_output response when paging is omitted", async () => {
+    const server = await setup();
+    const run = await createRun("no-paging", "2026-01-01T00-00-00-000Z", {
+      responseText: "plain output",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = await server.invokeTool("read_output", {});
+    const text = (result as { content: Array<{ text: string }> }).content[0]
+      .text;
+
+    assert.strictEqual(
+      text,
+      JSON.stringify(
+        {
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+          outputs: [
+            {
+              index: 0,
+              prompt: "prompt-no-paging",
+              status: "completed",
+              responseText: "plain output",
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+  });
+
+  test("returns a next cursor for a forward page", async () => {
+    const server = await setup();
+    const run = await createRun("forward-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], limit: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "abc");
+    assert.strictEqual(output.outputs[0].nextCursor, "3");
+  });
+
+  test("resumes from a cursor through the end without another cursor", async () => {
+    const server = await setup();
+    const run = await createRun("resume-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", {
+        indices: [0],
+        cursor: "3",
+      })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "def");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
+  });
+
+  test("returns a bounded tail without a next cursor", async () => {
+    const server = await setup();
+    const run = await createRun("tail-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], tail: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "def");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
+  });
+
+  test("reads the first page when limit is supplied without a cursor", async () => {
+    const server = await setup();
+    const run = await createRun("limit-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], limit: 2 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "ab");
+    assert.strictEqual(output.outputs[0].nextCursor, "2");
+  });
+
+  test("rejects paging for multiple selected steps", async () => {
+    const server = await setup();
+    const run = await createRun("multi-page", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0, 1], limit: 1 }),
+      /require indices to name exactly one step/
+    );
+  });
+
+  test("rejects paging when no step is selected", async () => {
+    const server = await setup();
+    const run = await createRun("zero-page", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [], limit: 1 }),
+      /require indices to name exactly one step/
+    );
+  });
+
+  test("rejects tail combined with cursor", async () => {
+    const server = await setup();
+    const run = await createRun("tail-cursor", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          indices: [0],
+          tail: 1,
+          cursor: "0",
+        }),
+      /tail is mutually exclusive/
+    );
+  });
+
+  test("rejects tail combined with limit", async () => {
+    const server = await setup();
+    const run = await createRun("tail-limit", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("read_output", {
+          indices: [0],
+          tail: 1,
+          limit: 1,
+        }),
+      /tail is mutually exclusive/
+    );
+  });
+
+  test("rejects malformed paging values and returns an empty past-end page", async () => {
+    const server = await setup();
+    const run = await createRun("invalid-page", "2026-01-01T00-00-00-000Z", {
+      responseText: "abcdef",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0], limit: -1 }),
+      /limit must be a non-negative integer/
+    );
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0], tail: "2" }),
+      /tail must be a non-negative integer/
+    );
+
+    const output = responseJson(
+      await server.invokeTool("read_output", {
+        indices: [0],
+        cursor: "999",
+      })
+    );
+    assert.strictEqual(output.outputs[0].responseText, "");
+    assert.strictEqual("nextCursor" in output.outputs[0], false);
   });
 
   test("global_status reports sibling workflows and narrows on request", async () => {
@@ -361,16 +608,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
-    const all = responseJson(
-      await server.invokeTool("ctrlyoke_global_status", {})
-    );
+    const all = responseJson(await server.invokeTool("global_status", {}));
     assert.deepStrictEqual(
       all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
       [other.workflowKey, own.workflowKey].sort()
     );
 
     const narrowed = responseJson(
-      await server.invokeTool("ctrlyoke_global_status", {
+      await server.invokeTool("global_status", {
         workflowKey: other.workflowKey,
       })
     );
@@ -394,23 +639,39 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const notAttached = /no ctrlyoke workflow run is attached/i;
 
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_queue_status", {}),
+      () => server.invokeTool("workflow_status", {}),
       notAttached
     );
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_read_output", {}),
+      () => server.invokeTool("read_output", {}),
       notAttached
     );
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_global_status", {}),
+      () => server.invokeTool("global_status", {}),
       notAttached
     );
     await assert.rejects(
       () =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "no target" }],
         }),
+      notAttached
+    );
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 0,
+          updates: { prompt: "no target" },
+        }),
+      notAttached
+    );
+    await assert.rejects(
+      () => server.invokeTool(MCP_REMOVE_STEP_TOOL_NAME, { index: 0 }),
+      notAttached
+    );
+    await assert.rejects(
+      () => server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, { indices: [0] }),
       notAttached
     );
 
@@ -420,13 +681,177 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(persisted.steps?.length, 1);
   });
 
+  test("edits a pending step's prompt and configuration", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-step");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { prompt: "pending-a (corrected)", model: "model-x" },
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.index, 2);
+      assert.strictEqual(result.definitionRevision, 5);
+      assert.deepStrictEqual(persisted.steps?.[2], {
+        prompt: "pending-a (corrected)",
+        model: "model-x",
+      });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("removes a pending step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("remove-step");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_REMOVE_STEP_TOOL_NAME, { index: 3 })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.index, 3);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "pending-a"]
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("reorders pending steps using absolute indices", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("reorder-steps");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+          indices: [1, 3, 2],
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "pending-b", "pending-a"]
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  for (const [tool, args] of [
+    [MCP_EDIT_STEP_TOOL_NAME, { index: 0, updates: { prompt: "blocked" } }],
+    [MCP_REMOVE_STEP_TOOL_NAME, { index: 0 }],
+  ] as const) {
+    test(`${tool} rejects a completed step`, async () => {
+      const server = await setup();
+      const { run, ownerToken } = await prepareActiveRun(`completed-${tool}`);
+      try {
+        await assert.rejects(
+          () => server.invokeTool(tool, args),
+          /completed step/i
+        );
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    });
+  }
+
+  test("reorder_steps rejects an order that moves the completed prefix", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("completed-reorder");
+    try {
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+            indices: [0, 2, 1],
+          }),
+        /completed step/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  for (const [tool, args] of [
+    [MCP_EDIT_STEP_TOOL_NAME, { index: 1, updates: { prompt: "blocked" } }],
+    [MCP_REMOVE_STEP_TOOL_NAME, { index: 1 }],
+  ] as const) {
+    test(`${tool} rejects the in-flight step`, async () => {
+      const server = await setup();
+      const { run, ownerToken } = await prepareActiveRun(`in-flight-${tool}`);
+      try {
+        await assert.rejects(
+          () => server.invokeTool(tool, args),
+          /currently executing/i
+        );
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    });
+  }
+
+  test("reorder_steps rejects moving the in-flight step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("in-flight-reorder");
+    try {
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+            indices: [2, 1, 3],
+          }),
+        /currently executing/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("supports a numeric append position and rejects one before the execution head", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("numeric-append");
+    try {
+      const inserted = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: 2,
+          steps: [{ prompt: "inserted before pending-a" }],
+        })
+      );
+      assert.strictEqual(inserted.insertIndex, 2);
+
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+            position: 0,
+            steps: [{ prompt: "must not move execution head" }],
+          }),
+        /completed step/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("appends to its own run through the continuation transaction", async () => {
     const server = await setup();
     const run = await createRun("append", "2026-01-01T00-00-00-000Z");
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "end",
         steps: [{ prompt: "new tail", _runtime: { responseText: "omit" } }],
       })
@@ -451,13 +876,17 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("accepts an append whose prompt matches a completed step", async () => {
     const server = await setup();
-    const run = await createRun("repeat-completed", "2026-01-01T00-00-00-000Z", {
-      prompt: "repeat this gate",
-    });
+    const run = await createRun(
+      "repeat-completed",
+      "2026-01-01T00-00-00-000Z",
+      {
+        prompt: "repeat this gate",
+      }
+    );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "end",
         steps: [{ prompt: "repeat this gate" }],
       })
@@ -484,7 +913,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // A supplied address is not an alternate target — it is ignored outright,
     // so a workflow cannot queue work into a sibling run by guessing its ref.
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         workflowKey: other.workflowKey,
         runRef: other.runRef,
         position: "end",
@@ -531,7 +960,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     try {
       const result = responseJson(
-        await server.invokeTool("ctrlyoke_append_queue", {
+        await server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "active tail" }],
         })
@@ -579,7 +1008,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     try {
       const result = responseJson(
-        await server.invokeTool("ctrlyoke_append_queue", {
+        await server.invokeTool("append_step", {
           position: "next",
           steps: [{ prompt: "steered" }],
         })
@@ -627,7 +1056,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "next",
         steps: [{ prompt: "steered" }],
       })
@@ -662,7 +1091,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     await assert.rejects(
       () =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "blocked" }],
         }),
@@ -678,7 +1107,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // work twice gets both appends rather than a spurious revision conflict.
     const results = await Promise.all(
       ["first", "second"].map((prompt) =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt }],
         })

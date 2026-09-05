@@ -1495,7 +1495,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"ctrlyoke_append_queue\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
+          "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
         }
       },
       "required": ["id"],

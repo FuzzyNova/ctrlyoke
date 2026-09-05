@@ -302,7 +302,7 @@ suite("Inline harness configuration regression tests", function () {
             {
               name: "opencode-ctrlyoke-mcp",
               prompt: [
-                "Call ctrlyoke_queue_status before doing anything else.",
+                "Call workflow_status before doing anything else.",
                 `After it returns, use the shell tool to run: node -e \"require('fs').writeFileSync('${marker}','mcp-connected')\"`,
               ].join(" "),
             },

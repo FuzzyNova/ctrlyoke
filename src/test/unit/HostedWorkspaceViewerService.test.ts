@@ -564,14 +564,24 @@ suite("HostedWorkspaceViewerService", function () {
       const originalStat = fs.promises.stat;
       let active = 0;
       let maximum = 0;
+      // `fs.promises.stat` is process-global, so this patch also sees stats
+      // issued by anything else alive in the extension host. Counting those
+      // made the ceiling assertion fail intermittently under a full-suite run
+      // (observed 11 against a limit of 8) while passing in isolation. Only
+      // this workspace's own stats say anything about the service's limiter.
+      const countsTowardLimit = (target: unknown): boolean =>
+        typeof target === "string" && target.startsWith(root);
       fs.promises.stat = (async (...args: Parameters<typeof originalStat>) => {
-        active++;
-        maximum = Math.max(maximum, active);
+        const counted = countsTowardLimit(args[0]);
+        if (counted) {
+          active++;
+          maximum = Math.max(maximum, active);
+        }
         await new Promise((resolve) => setTimeout(resolve, 1));
         try {
           return await originalStat(...args);
         } finally {
-          active--;
+          if (counted) active--;
         }
       }) as typeof originalStat;
       try {

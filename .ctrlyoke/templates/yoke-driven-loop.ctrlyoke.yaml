@@ -30,7 +30,7 @@ steps:
       Be my ctrlyoke orchestrator for this specification:
       @{file:specFile}
 
-      Review the spec and the codebase it touches, then use the ctrlyoke_append_queue
+      Review the spec and the codebase it touches, then use the append_step
       tool to add one step for each chunk of work that can reasonably be completed in a
       single session, in the correct staging order. Update the spec first if you find a
       clear problem with it; if the plan needs more thought than you can give it here,
@@ -57,7 +57,7 @@ finalStep:
 
     All the steps you queued should have run by now. Verify the work is actually
     complete, inspect it, fix any errors you find, and commit your cleanup. If a large
-    chunk is still missing or wrong, use ctrlyoke_append_queue to append more steps and
+    chunk is still missing or wrong, use append_step to append more steps and
     let the loop continue. Once everything is done, give me a real summary of what was
     built and end your turn. `npm test` should be the main gate, and generally follow
     @ctrlyoke/.github/instructions/test.instructions.md for testing.

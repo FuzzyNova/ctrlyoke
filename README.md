@@ -9,7 +9,7 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 - **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
 - **Script-based validation** — attach an end condition script to any prompt; if the script returns the expected value the step passes, otherwise the AI retries with a configurable retry prompt
 - **Harness-agnostic** — switch between six AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
-- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to give the AI MCP tools (`ctrlyoke_append_queue`, `ctrlyoke_queue_status`) so it can extend the workflow queue autonomously
+- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to give the AI MCP tools (`append_step`, `workflow_status`) so it can extend the workflow queue autonomously
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
 - **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
 - **Dashboard with embedded terminal** — a bottom-panel UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
@@ -187,7 +187,7 @@ mcpServers:
 mcpServers: null
 ```
 
-The `"ctrlyoke"` shorthand injects the built-in ctrlyoke MCP server, giving the AI access to `ctrlyoke_append_queue` and `ctrlyoke_queue_status`. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
+The `"ctrlyoke"` shorthand injects the built-in ctrlyoke MCP server, giving the AI access to `append_step` and `workflow_status`. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
 
 ### Final prompt
 

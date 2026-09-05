@@ -211,7 +211,7 @@ export class CodexToolBuilder {
    * const r = await tools.update_plan({plan: [{step: "...", status: "..."}]});
    * ```
    * ```js
-   * const result = await tools.mcp__ctrlyoke__ctrlyoke_append_queue({ position: "end", steps: [...] });
+   * const result = await tools.mcp__ctrlyoke__append_step({ position: "end", steps: [...] });
    * ```
    *
    * This unwraps that snippet back into the underlying shell command,
@@ -291,7 +291,7 @@ export class CodexToolBuilder {
 
   /**
    * Matches an MCP tool invocation inside a Codex `exec` snippet, e.g.
-   * `tools.mcp__ctrlyoke__ctrlyoke_append_queue(`. Checked before every other
+   * `tools.mcp__ctrlyoke__append_step(`. Checked before every other
    * branch in {@link parseExecInput}: an MCP call's JSON-ish argument object
    * (often a multi-line prompt string) can freely contain words like
    * "apply_patch" or "command:" that would otherwise false-positive on the
