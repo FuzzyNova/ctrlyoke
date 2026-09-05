@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
 import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { Log } from "../../utils/Log";
+import { pathsEqual } from "../../utils/PathCasing";
 
 /**
  * PromptFileWatcher
@@ -18,6 +20,14 @@ import { Log } from "../../utils/Log";
  */
 export class PromptFileWatcher {
   private watcher?: vscode.FileSystemWatcher;
+  private pollingInterval?: ReturnType<typeof setInterval>;
+  private pollingFilePath?: string;
+  private pollingFileSignature?: string;
+  private pollingInFlight = false;
+  private stateChangeSubscription?: { dispose(): void };
+  private watchedFilePath?: string;
+  private onFileChangedCallback?: (filePath: string) => Promise<void>;
+  private onFileDeletedCallback?: (filePath: string) => void;
 
   constructor(
     private promptQueue: PromptQueue,
@@ -40,6 +50,31 @@ export class PromptFileWatcher {
     // Dispose existing watcher
     this.dispose();
 
+    this.onFileChangedCallback = onFileChanged;
+    this.onFileDeletedCallback = onFileDeleted;
+    this.stateChangeSubscription = this.promptQueue.onDidChangeState(
+      (state) => {
+        const nextWorkingFilePath = state.workingFilePath;
+        if (!nextWorkingFilePath) {
+          this.disposeWatcher();
+          this.watchedFilePath = undefined;
+          return;
+        }
+        if (
+          !this.watchedFilePath ||
+          !pathsEqual(this.watchedFilePath, nextWorkingFilePath)
+        ) {
+          this.watchFile(nextWorkingFilePath);
+        }
+      }
+    );
+
+    this.watchFile(this.promptQueue.getState().workingFilePath ?? filePath);
+  }
+
+  private watchFile(filePath: string): void {
+    this.disposeWatcher();
+
     // Create watcher for this specific file (working file)
     const pattern = new vscode.RelativePattern(
       path.dirname(filePath),
@@ -49,14 +84,79 @@ export class PromptFileWatcher {
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.watcher.onDidChange(async (uri) => {
-      await this.onFileChanged(uri, onFileChanged);
+      if (this.onFileChangedCallback) {
+        await this.onFileChanged(uri, this.onFileChangedCallback);
+      }
+    });
+
+    // Also handle onDidCreate: on Windows, fs.rename() over an existing file
+    // (used by the working-file atomic write) fires onDidCreate instead of
+    // onDidChange, so queue appends would otherwise be missed until the next
+    // natural queue write.
+    this.watcher.onDidCreate(async (uri) => {
+      if (this.onFileChangedCallback) {
+        await this.onFileChanged(uri, this.onFileChangedCallback);
+      }
     });
 
     this.watcher.onDidDelete((uri) => {
-      this.onFileDeleted(uri, onFileDeleted);
+      if (this.onFileDeletedCallback) {
+        this.onFileDeleted(uri, this.onFileDeletedCallback);
+      }
     });
 
     Log.trace(`Set up file watcher for ${filePath}`);
+    this.watchedFilePath = filePath;
+    this.startExternalFilePolling(filePath);
+  }
+
+  private startExternalFilePolling(filePath: string): void {
+    const isExternalFile =
+      vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath)) ===
+      undefined;
+    if (!isExternalFile) {
+      return;
+    }
+
+    this.pollingFilePath = filePath;
+    this.pollingFileSignature = undefined;
+    this.pollingInterval = setInterval(() => {
+      void this.pollExternalFile(filePath);
+    }, 1_000);
+    void this.pollExternalFile(filePath);
+  }
+
+  private async pollExternalFile(filePath: string): Promise<void> {
+    if (
+      this.pollingInFlight ||
+      !pathsEqual(this.pollingFilePath ?? "", filePath)
+    ) {
+      return;
+    }
+
+    this.pollingInFlight = true;
+    try {
+      const stats = await fs.stat(filePath);
+      const signature = `${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}:${stats.ino}`;
+      if (this.pollingFileSignature === undefined) {
+        this.pollingFileSignature = signature;
+        return;
+      }
+      if (this.pollingFileSignature === signature) {
+        return;
+      }
+      this.pollingFileSignature = signature;
+      if (this.onFileChangedCallback) {
+        await this.onFileChanged(vscode.Uri.file(filePath), this.onFileChangedCallback);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        Log.trace(`Unable to poll external working file ${filePath}:`, error);
+      }
+    } finally {
+      this.pollingInFlight = false;
+    }
   }
 
   /**
@@ -119,7 +219,23 @@ export class PromptFileWatcher {
    * Dispose the file watcher
    */
   dispose(): void {
+    this.disposeWatcher();
+    this.stateChangeSubscription?.dispose();
+    this.stateChangeSubscription = undefined;
+    this.watchedFilePath = undefined;
+    this.onFileChangedCallback = undefined;
+    this.onFileDeletedCallback = undefined;
+  }
+
+  private disposeWatcher(): void {
     this.watcher?.dispose();
     this.watcher = undefined;
+    if (this.pollingInterval !== undefined) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = undefined;
+    }
+    this.pollingFilePath = undefined;
+    this.pollingFileSignature = undefined;
+    this.pollingInFlight = false;
   }
 }

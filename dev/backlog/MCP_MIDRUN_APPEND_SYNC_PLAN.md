@@ -60,6 +60,14 @@ file. Five defects sit on that path.
 
 ### 1. The watcher is pointed at the draft, not the run
 
+**Status: Implemented (2026-09-05).** `PromptFileWatcher` now subscribes to
+`PromptQueue.onDidChangeState` and treats `state.workingFilePath` as the single source of truth for
+its watched path. Promotion therefore moves the watcher from the draft to the newly allocated run
+without adding another scattered `setupPromptFileWatcher` call site. A real VS Code extension-host
+test showed that this external, non-recursive single-file `RelativePattern` does **not** reliably
+deliver the atomic replacement event, so `PromptFileWatcher` now has the same 1s polling fallback
+shape used by runner discovery for external working files.
+
 `WorkflowInstance.setupPromptFileWatcher` (`:5415`) is called from seven sites —
 `initializeFileWatcher` :1282, `loadPromptFile` :1334, `loadFromTemplate` :1361,
 `restoreWorkflowFromWorkingFile` :1464, `autoLoadFromWorkingFile` :1523, the append-file path :2769,
@@ -91,6 +99,12 @@ territory that already forced the 1s polling fallback at `WorkflowOrchestrator.t
 the watcher actually fires there rather than assuming.
 
 ### 2. `PromptFileWatcher` is missing `onDidCreate`
+
+**Status: Implemented (2026-09-05).** `PromptFileWatcher` registers `onDidCreate` with the same
+reload handler as `onDidChange`, using the same Windows atomic-rename explanation as
+`ExternalRunWatchSession`. A focused handler test confirms that an `onDidCreate` callback reaches
+the reload handler; the real external-path test showed that VS Code may deliver neither event for
+the atomic replacement, which is why the polling fallback is also required.
 
 `PromptFileWatcher.ts:51-57` registers `onDidChange` and `onDidDelete` only. On Windows,
 `fs.rename()` over an existing file — exactly what `writeWorkingFileAtomic` does — fires
@@ -258,11 +272,10 @@ this recurs, consider a single options-object parameter, which _would_ be checke
 Revised after verification — defect 5 moved to the front. Its `PromptFileLoader` call site sits _on_
 the push path defects 1–2 restore, so it is a prerequisite rather than an unordered one-liner.
 
-1. **Defect 5** — thread `parallelGroups` through `DashboardBroadcastHub`, `CtrlYokeHostedServer`, and
-   the `PromptFileLoader` merge call site. Small, no dependencies, and it makes the push that step 2
-   revives actually correct.
-2. **Defects 1 + 2 together** — re-point the watcher on promotion, add `onDidCreate`. This is the
-   actual fix for the reported symptom and restores the proactive push. Neither works alone.
+1. **Defect 5** — implemented in `d2fb3483`; thread `parallelGroups` through `DashboardBroadcastHub`,
+   `CtrlYokeHostedServer`, and the `PromptFileLoader` merge call site.
+2. **Defects 1 + 2 together** — implemented above: re-point the watcher on promotion and add
+   `onDidCreate`. The real external-path test confirmed that the polling fallback is required.
 3. **Defect 4** — replace hash identity with index-based `_runtime` merge in `mergeDiskSteps`, supply
    the replacement novelty signal, and remove the `validatePrompts` completed-text rejection.
    Independent of 1–2, and worth doing even if 1–2 slip: the disk merge at the next step transition is
