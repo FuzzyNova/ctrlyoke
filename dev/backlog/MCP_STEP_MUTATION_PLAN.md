@@ -1,6 +1,6 @@
 # MCP/CLI Step Mutation Plan
 
-**Status:** Corrections 1–3 addressed 2026-09-05; MCP/CLI surfaces remain proposed
+**Status:** Corrections 1–3 addressed 2026-09-05; MCP scope implemented 2026-09-05; CLI surface remains proposed
 **Priority:** P2
 
 Grew out of a discussion of [`MCP_OUTPUT_PAGING_PLAN.md`](MCP_OUTPUT_PAGING_PLAN.md) and the
@@ -68,6 +68,10 @@ for MCP and CLI callers instead of introducing anything new.
 
 ### MCP — same-run only, unchanged trust boundary
 
+**Implemented 2026-09-05.** The MCP surface now supports editing, removing, and
+reordering pending steps, plus arbitrary-index insertion through `append_step`.
+The CLI surface below remains proposed.
+
 Add three tools alongside `append_step`, all scoped through the existing
 `resolveRun()`/`requireRunAddress()` path (`src/mcp-server.ts`) — no new addressing, no change to
 what a workflow step can reach. This is the same trust class `append_step` already has
@@ -125,17 +129,17 @@ MCP server's tool of the same name — the server prefix already disambiguates t
 
 ### Final names
 
-| Tool purpose               | Implemented name        |
-| -------------------------- | ----------------------- |
-| Workflow status            | `workflow_status`       |
-| Append a step              | `append_step`           |
-| Capabilities               | `capabilities`          |
-| Read output                | `read_output`           |
-| Global status              | `global_status`         |
-| Submit commit message      | `submit_commit_message` |
-| _(new, this plan)_ edit    | `edit_step`             |
-| _(new, this plan)_ remove  | `remove_step`           |
-| _(new, this plan)_ reorder | `reorder_steps`         |
+| Tool purpose                | Implemented name                         |
+| --------------------------- | ---------------------------------------- |
+| Workflow status             | `workflow_status`                        |
+| Append a step               | `append_step`                            |
+| Capabilities                | `capabilities`                           |
+| Read output                 | `read_output`                            |
+| Global status               | `global_status`                          |
+| Submit commit message       | `submit_commit_message`                  |
+| Edit a step's prompt/config | `edit_step` — implemented 2026-09-05     |
+| Remove a pending step       | `remove_step` — implemented 2026-09-05   |
+| Reorder pending steps       | `reorder_steps` — implemented 2026-09-05 |
 
 Consider folding arbitrary-index insert into `append_step` (accept a numeric index alongside
 `'next'`/`'end'` in its `position` field) rather than adding a fifth new tool — `insertStepAtRun`

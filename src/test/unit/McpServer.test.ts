@@ -5,11 +5,17 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
-import { MCP_APPEND_STEP_TOOL_NAME } from "../../utils/McpToolDefinitions";
+import {
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+} from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
   WorkflowKey,
   WorkflowLineageDescriptor,
+  WorkflowStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
@@ -179,6 +185,53 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     return { workflowKey, runRef, runFilePath };
   }
 
+  async function prepareActiveRun(suffix: string): Promise<{
+    run: RunFixture;
+    ownerToken: string;
+  }> {
+    const run = await createRun(suffix, "2026-01-01T00-00-00-000Z", {
+      stepCount: 4,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      { prompt: "completed", _runtime: { completedAt: 2 } },
+      { prompt: "in flight", _runtime: { startedAt: 3 } },
+      { prompt: "pending-a" },
+      { prompt: "pending-b" },
+    ] as WorkflowStep[];
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const ownerToken = `mcp-${suffix}-owner`;
+    await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      schemaVersion: 2,
+      workflowKey: run.workflowKey,
+      runRef: run.runRef,
+      runner: RUNNER_IDS.CLI,
+      pid: process.pid,
+      ownerToken,
+      hostInstanceId: "mcp-host",
+      executionInstanceId: "mcp-execution",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    });
+    return { run, ownerToken };
+  }
+
+  async function releaseActiveRun(run: RunFixture, ownerToken: string) {
+    await WorkflowLockManager.releaseLock(
+      workspaceRoot,
+      run.workflowKey,
+      ownerToken
+    );
+  }
+
   async function setup(): Promise<CtrlYokeMCPServer> {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
@@ -315,7 +368,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "source",
       "steps",
     ]);
-    assert.deepStrictEqual(append.properties.position.enum, ["next", "end"]);
+    assert.deepStrictEqual(append.properties.position.oneOf[0].enum, [
+      "next",
+      "end",
+    ]);
+    assert.strictEqual(append.properties.position.oneOf[1].type, "number");
 
     const readOutput: any = server
       .getToolDefinitions()
@@ -601,11 +658,191 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         }),
       notAttached
     );
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 0,
+          updates: { prompt: "no target" },
+        }),
+      notAttached
+    );
+    await assert.rejects(
+      () => server.invokeTool(MCP_REMOVE_STEP_TOOL_NAME, { index: 0 }),
+      notAttached
+    );
+    await assert.rejects(
+      () => server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, { indices: [0] }),
+      notAttached
+    );
 
     const persisted = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     assert.strictEqual(persisted.steps?.length, 1);
+  });
+
+  test("edits a pending step's prompt and configuration", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-step");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { prompt: "pending-a (corrected)", model: "model-x" },
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.index, 2);
+      assert.strictEqual(result.definitionRevision, 5);
+      assert.deepStrictEqual(persisted.steps?.[2], {
+        prompt: "pending-a (corrected)",
+        model: "model-x",
+      });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("removes a pending step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("remove-step");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_REMOVE_STEP_TOOL_NAME, { index: 3 })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.index, 3);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "pending-a"]
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("reorders pending steps using absolute indices", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("reorder-steps");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+          indices: [1, 3, 2],
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "pending-b", "pending-a"]
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  for (const [tool, args] of [
+    [MCP_EDIT_STEP_TOOL_NAME, { index: 0, updates: { prompt: "blocked" } }],
+    [MCP_REMOVE_STEP_TOOL_NAME, { index: 0 }],
+  ] as const) {
+    test(`${tool} rejects a completed step`, async () => {
+      const server = await setup();
+      const { run, ownerToken } = await prepareActiveRun(`completed-${tool}`);
+      try {
+        await assert.rejects(
+          () => server.invokeTool(tool, args),
+          /completed step/i
+        );
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    });
+  }
+
+  test("reorder_steps rejects an order that moves the completed prefix", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("completed-reorder");
+    try {
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+            indices: [0, 2, 1],
+          }),
+        /completed step/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  for (const [tool, args] of [
+    [MCP_EDIT_STEP_TOOL_NAME, { index: 1, updates: { prompt: "blocked" } }],
+    [MCP_REMOVE_STEP_TOOL_NAME, { index: 1 }],
+  ] as const) {
+    test(`${tool} rejects the in-flight step`, async () => {
+      const server = await setup();
+      const { run, ownerToken } = await prepareActiveRun(`in-flight-${tool}`);
+      try {
+        await assert.rejects(
+          () => server.invokeTool(tool, args),
+          /currently executing/i
+        );
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    });
+  }
+
+  test("reorder_steps rejects moving the in-flight step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("in-flight-reorder");
+    try {
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+            indices: [2, 1, 3],
+          }),
+        /currently executing/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("supports a numeric append position and rejects one before the execution head", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("numeric-append");
+    try {
+      const inserted = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: 2,
+          steps: [{ prompt: "inserted before pending-a" }],
+        })
+      );
+      assert.strictEqual(inserted.insertIndex, 2);
+
+      await assert.rejects(
+        () =>
+          server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+            position: 0,
+            steps: [{ prompt: "must not move execution head" }],
+          }),
+        /completed step/i
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
   });
 
   test("appends to its own run through the continuation transaction", async () => {

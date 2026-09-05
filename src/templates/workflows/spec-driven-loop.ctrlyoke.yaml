@@ -20,7 +20,8 @@ priorContext: none
 
 # Only the plan step is queued up front, so it's visible right away instead of
 # hidden behind the finalStep. It reviews the spec and the codebase, then appends
-# one step per chunk of work via append_step. Everything it queues runs
+# one step per chunk of work via append_step. It can also edit, remove, or
+# reorder pending work when review discovers a correction. Everything it queues runs
 # before the final step comes back around to review.
 steps:
   - name: plan
@@ -61,7 +62,8 @@ finalStep:
 
     All the steps you queued should have run by now. Verify the work is actually
     complete, inspect it, fix any errors you find, and commit your cleanup. If a large
-    chunk is still missing or wrong, use append_step to append more steps and
+    chunk is still missing or wrong, use edit_step/remove_step/reorder_steps for
+    pending work or append_step to add more steps and
     let the loop continue. Once everything is done, give me a real summary of what was
     built and end your turn.
 

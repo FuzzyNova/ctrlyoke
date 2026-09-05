@@ -7,12 +7,14 @@ import { QUEUE_POSITION } from "../types/DashboardConstants";
  * without importing the MCP server entrypoint (and its transport setup).
  */
 export interface McpToolInputSchema {
-  type: string;
+  type?: string;
   description?: string;
   properties?: Record<string, McpToolInputSchema>;
   required?: readonly string[];
   items?: McpToolInputSchema;
   enum?: readonly string[];
+  oneOf?: readonly McpToolInputSchema[];
+  minimum?: number;
 }
 
 export interface McpToolDefinition {
@@ -38,6 +40,48 @@ export const MCP_GLOBAL_STATUS_TOOL_NAME = "global_status";
 
 /** Tool used by the structured commit-message capture path. */
 export const MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME = "submit_commit_message";
+
+/** Tool used to edit a pending step in the workflow. */
+export const MCP_EDIT_STEP_TOOL_NAME = "edit_step";
+
+/** Tool used to remove a pending step from the workflow. */
+export const MCP_REMOVE_STEP_TOOL_NAME = "remove_step";
+
+/** Tool used to reorder the pending workflow steps. */
+export const MCP_REORDER_STEPS_TOOL_NAME = "reorder_steps";
+
+const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
+  type: "object",
+  description:
+    "Fields to change on the step. Omitted fields keep their current values.",
+  properties: {
+    prompt: { type: "string", description: "The new prompt text." },
+    name: { type: "string", description: "The step's display label." },
+    model: { type: "string", description: "The model override." },
+    harness: { type: "string", description: "The harness override." },
+    resumeSession: {
+      type: "boolean",
+      description: "Whether the step should resume a previous session.",
+    },
+    sessionId: {
+      oneOf: [{ type: "string" }, { type: "number" }],
+      description: "The session or step index to resume.",
+    },
+    agent: { type: "string", description: "The agent override." },
+    enabled: { type: "boolean", description: "Whether the step is enabled." },
+    color: { type: "string", description: "The step's display color." },
+    additionalArgs: {
+      type: "array",
+      items: { type: "string" },
+      description: "Additional arguments for the harness.",
+    },
+    skills: {
+      type: "array",
+      items: { type: "string" },
+      description: "Skills to make available to the step.",
+    },
+  },
+};
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
@@ -94,10 +138,18 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           description: "One or more steps to add, in the order to run them.",
         },
         position: {
-          type: "string",
-          enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+          oneOf: [
+            {
+              type: "string",
+              enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+            },
+            {
+              type: "number",
+              minimum: 0,
+            },
+          ],
           description:
-            "'next' runs the new steps before the rest of the queue; 'end' runs them last.",
+            "Use 'next' to run them after the current step, 'end' to run them last, or a zero-based step index to insert them before that step.",
         },
         source: {
           type: "string",
@@ -105,6 +157,62 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         },
       },
       required: ["steps", "position"],
+    },
+  },
+  {
+    name: MCP_EDIT_STEP_TOOL_NAME,
+    description:
+      "Change the prompt or configuration of one pending step when you discover that its work needs correction or different settings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        index: {
+          type: "number",
+          minimum: 0,
+          description: "Zero-based index of the step to edit.",
+        },
+        updates: MCP_STEP_UPDATE_SCHEMA,
+        clearProperties: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional step fields to remove so they inherit defaults.",
+        },
+      },
+      required: ["index", "updates"],
+    },
+  },
+  {
+    name: MCP_REMOVE_STEP_TOOL_NAME,
+    description:
+      "Remove one pending step when it is no longer needed or has been superseded by another step.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        index: {
+          type: "number",
+          minimum: 0,
+          description: "Zero-based index of the step to remove.",
+        },
+      },
+      required: ["index"],
+    },
+  },
+  {
+    name: MCP_REORDER_STEPS_TOOL_NAME,
+    description:
+      "Reorder the pending steps when their execution order should change. Provide every pending step's zero-based index in the desired order.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        indices: {
+          type: "array",
+          items: { type: "number", minimum: 0 },
+          description:
+            "All pending step indices, in the order they should run; use absolute zero-based workflow indices.",
+        },
+      },
+      required: ["indices"],
     },
   },
   {
@@ -188,4 +296,7 @@ export const MCP_WORKFLOW_TOOL_NAMES = [
   MCP_CAPABILITIES_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
 ] as const;

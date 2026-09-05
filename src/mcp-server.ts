@@ -57,8 +57,11 @@ import {
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_CAPABILITIES_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
@@ -141,6 +144,40 @@ function getMaxQueueSize(): number {
 
 function isUnlimitedMode(): boolean {
   return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
+}
+
+function asRecord(value: unknown, field: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function parseStepIndex(value: unknown, operation: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${operation}: index must be a non-negative integer`);
+  }
+  return value;
+}
+
+function parseNumberArray(value: unknown, field: string): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (item) => typeof item !== "number" || !Number.isInteger(item) || item < 0
+    )
+  ) {
+    throw new Error(`${field} must be an array of non-negative integers`);
+  }
+  return value;
+}
+
+function parseStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} must be an array of strings`);
+  }
+  return value;
 }
 
 export class CtrlYokeMCPServer {
@@ -232,6 +269,12 @@ export class CtrlYokeMCPServer {
         return this.handleQueueStatus();
       case MCP_APPEND_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleQueueAppend(args));
+      case MCP_EDIT_STEP_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepEdit(args));
+      case MCP_REMOVE_STEP_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepRemove(args));
+      case MCP_REORDER_STEPS_TOOL_NAME:
+        return this.queueOperation(() => this.handleStepsReorder(args));
       case MCP_CAPABILITIES_TOOL_NAME:
         return this.handleCapabilities();
       case MCP_READ_OUTPUT_TOOL_NAME:
@@ -247,7 +290,7 @@ export class CtrlYokeMCPServer {
 
   /**
    * Queue an operation to prevent race conditions
-   * All append operations are serialized through this queue
+   * All workflow mutations are serialized through this queue
    */
   private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
     const previousOperation = this.operationQueue;
@@ -357,7 +400,7 @@ export class CtrlYokeMCPServer {
           harness?: string;
         }
       >;
-      position: QueuePosition;
+      position: QueuePosition | number;
       source?: string;
     };
 
@@ -378,10 +421,16 @@ export class CtrlYokeMCPServer {
       );
     }
 
-    if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
+    if (
+      position !== QUEUE_POSITION.NEXT &&
+      position !== QUEUE_POSITION.END &&
+      (typeof position !== "number" ||
+        !Number.isInteger(position) ||
+        position < 0)
+    ) {
       log("ERROR: Invalid position:", position);
       throw new Error(
-        `position must be '${QUEUE_POSITION.NEXT}' or '${QUEUE_POSITION.END}'`
+        `position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', or a non-negative integer index`
       );
     }
 
@@ -499,6 +548,144 @@ export class CtrlYokeMCPServer {
         {
           type: "text",
           text: JSON.stringify(response, null, 2),
+        },
+      ],
+    };
+  }
+
+  /** Handle edit_step for a zero-based pending step index. */
+  private async handleStepEdit(args: unknown) {
+    const input = asRecord(args, MCP_EDIT_STEP_TOOL_NAME);
+    const index = parseStepIndex(input.index, MCP_EDIT_STEP_TOOL_NAME);
+    const updates = asRecord(
+      input.updates,
+      `${MCP_EDIT_STEP_TOOL_NAME}.updates`
+    );
+    const clearProperties = parseStringArray(
+      input.clearProperties,
+      `${MCP_EDIT_STEP_TOOL_NAME}.clearProperties`
+    );
+    const selected = await this.resolveRun(MCP_EDIT_STEP_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const edited = await RunContinuationService.editStepAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      index,
+      {
+        updates: updates as Partial<WorkflowStep>,
+        clearProperties,
+      },
+      target.definitionRevision,
+      lineageRepository,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(MCP_EDIT_STEP_TOOL_NAME, selected, edited, {
+      index,
+    });
+  }
+
+  /** Handle remove_step for a zero-based pending step index. */
+  private async handleStepRemove(args: unknown) {
+    const input = asRecord(args, MCP_REMOVE_STEP_TOOL_NAME);
+    const index = parseStepIndex(input.index, MCP_REMOVE_STEP_TOOL_NAME);
+    const selected = await this.resolveRun(MCP_REMOVE_STEP_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const removed = await RunContinuationService.removeStepAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      index,
+      target.definitionRevision,
+      lineageRepository,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(MCP_REMOVE_STEP_TOOL_NAME, selected, removed, {
+      index,
+    });
+  }
+
+  /** Handle reorder_steps using absolute zero-based pending step indices. */
+  private async handleStepsReorder(args: unknown) {
+    const input = asRecord(args, MCP_REORDER_STEPS_TOOL_NAME);
+    const indices = parseNumberArray(
+      input.indices,
+      `${MCP_REORDER_STEPS_TOOL_NAME}.indices`
+    );
+    const selected = await this.resolveRun(MCP_REORDER_STEPS_TOOL_NAME);
+    const target = await RunContinuationService.validateContinuationTarget(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      lineageRepository,
+      "edit",
+      true
+    );
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      this.workspaceRoot,
+      selected.workflowKey,
+      selected.runRef,
+      indices,
+      target.definitionRevision,
+      lineageRepository,
+      undefined,
+      target.allowInterruptedRun
+    );
+    return this.mutationResponse(
+      MCP_REORDER_STEPS_TOOL_NAME,
+      selected,
+      reordered,
+      { indices }
+    );
+  }
+
+  private mutationResponse(
+    operation: string,
+    selected: {
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+      filePath: string;
+    },
+    mutation: {
+      workingFile: WorkingFile;
+      definitionRevision: number;
+      descriptorRevision: number;
+    },
+    details: Record<string, unknown>
+  ) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              success: true,
+              operation,
+              ...details,
+              newQueueSize: mutation.workingFile.steps?.length ?? 0,
+              workingFile: path.relative(this.workspaceRoot, selected.filePath),
+              workflowKey: selected.workflowKey,
+              runRef: selected.runRef,
+              definitionRevision: mutation.definitionRevision,
+              descriptorRevision: mutation.descriptorRevision,
+            },
+            null,
+            2
+          ),
         },
       ],
     };

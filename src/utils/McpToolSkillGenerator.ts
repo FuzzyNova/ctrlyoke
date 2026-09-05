@@ -14,6 +14,9 @@ function exampleValue(schema: McpToolInputSchema): unknown {
   if (schema.enum && schema.enum.length > 0) {
     return schema.enum[0];
   }
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    return exampleValue(schema.oneOf[0]);
+  }
 
   switch (schema.type) {
     case "object": {
@@ -49,9 +52,11 @@ function renderParameters(schema: McpToolInputSchema): string {
 
   const lines = entries.map(([name, property]) => {
     const requirement = required.has(name) ? "required" : "optional";
-    const type = property.items
-      ? `${property.type} of ${property.items.type}`
-      : property.type;
+    const type = property.oneOf
+      ? property.oneOf.map((variant) => variant.type).join(" or ")
+      : property.items
+        ? `${property.type} of ${property.items.type}`
+        : property.type;
     const description = property.description
       ? ` — ${property.description}`
       : "";

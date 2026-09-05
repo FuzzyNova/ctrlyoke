@@ -46,7 +46,7 @@ type RunContinuationAction =
   (typeof RUN_CONTINUATION_ACTIONS)[keyof typeof RUN_CONTINUATION_ACTIONS];
 
 export type RunStepChange =
-  | { updates: Partial<WorkflowStep> }
+  | { updates: Partial<WorkflowStep>; clearProperties?: string[] }
   | { replace: WorkflowStep; clearProperties?: string[] };
 
 interface RunDefinitionMutationOptions {
@@ -371,7 +371,7 @@ export class RunContinuationService {
           mergeWorkflowStepUpdate(
             topology.steps[index],
             incomingStep,
-            "replace" in change ? change.clearProperties : undefined
+            change.clearProperties
           )
         );
         return {
@@ -506,6 +506,67 @@ export class RunContinuationService {
     pendingGroups?: PendingParallelGroupRange[],
     allowInterruptedRun = false
   ): Promise<RunContinuationMutationResult> {
+    return this.reorderStepsWithOrder(
+      workspaceRoot,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      () => newPendingOrder,
+      lineageRepository,
+      pendingGroups,
+      allowInterruptedRun
+    );
+  }
+
+  /** Reorder the pending suffix using absolute workflow step indices. */
+  static async reorderStepsAtRun(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    absoluteOrder: number[],
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    pendingGroups?: PendingParallelGroupRange[],
+    allowInterruptedRun = false
+  ): Promise<RunContinuationMutationResult> {
+    return this.reorderStepsWithOrder(
+      workspaceRoot,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      (_source, _topology, currentIndex) => {
+        if (absoluteOrder.some((index) => !Number.isInteger(index))) {
+          throw new Error("Reorder indices must be integers");
+        }
+        return absoluteOrder.map((index) => {
+          if (index < currentIndex) {
+            throw new Error(
+              "Cannot reorder a completed step while the workflow is running"
+            );
+          }
+          return index - currentIndex;
+        });
+      },
+      lineageRepository,
+      pendingGroups,
+      allowInterruptedRun
+    );
+  }
+
+  private static async reorderStepsWithOrder(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision: number,
+    resolvePendingOrder: (
+      source: WorkingFile,
+      topology: ReturnType<typeof normalizeParallelGroupTopology>,
+      currentIndex: number
+    ) => number[],
+    lineageRepository: WorkflowLineageRepository,
+    pendingGroups: PendingParallelGroupRange[] | undefined,
+    allowInterruptedRun: boolean
+  ): Promise<RunContinuationMutationResult> {
     return this.mutateRunDefinition(
       workspaceRoot,
       workflowKey,
@@ -517,6 +578,11 @@ export class RunContinuationService {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
+        const newPendingOrder = resolvePendingOrder(
+          source,
+          topology,
+          currentIndex
+        );
         assertPendingReorderIsSafe(source, topology.steps, newPendingOrder);
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,

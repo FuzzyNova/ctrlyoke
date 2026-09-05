@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import {
   McpToolSkillGenerator,
   MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
+  MCP_TOOL_SKILL_TOOL_NAMES,
 } from "../../utils/McpToolSkillGenerator";
 
 suite("McpToolSkillGenerator", () => {
@@ -49,5 +50,16 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes("### submit_commit_message"));
     assert.ok(!reference.includes("### workflow_status"));
     assert.ok(reference.includes("--commit-output"));
+  });
+
+  test("includes the step mutation tools in the workflow skill subset", () => {
+    const reference = McpToolSkillGenerator.generateToolReference([
+      ...MCP_TOOL_SKILL_TOOL_NAMES,
+    ]);
+
+    assert.ok(reference.includes("### edit_step"));
+    assert.ok(reference.includes("### remove_step"));
+    assert.ok(reference.includes("### reorder_steps"));
+    assert.ok(reference.includes("zero-based step index"));
   });
 });
