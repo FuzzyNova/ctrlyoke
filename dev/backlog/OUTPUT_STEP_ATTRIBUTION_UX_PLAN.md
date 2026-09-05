@@ -426,6 +426,131 @@ copies, or they will drift the first time the seeding changes.
 
 ---
 
+### 6. Where the colour is edited — the UI surfaces
+
+**Follow the `executionMode` precedent exactly.** That property already solved this problem, and it
+is the pattern to copy rather than reason from scratch:
+
+| Site                                                                                           | Renders for                                                                                                            | Control       |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `EditorSection` header                                                                         | prompt **and** script — `ExecutionModeQuickPicker` sits _outside_ the `!isScriptMode` guard (`EditorSection.tsx` ~315) | quick picker  |
+| `PropertiesDrawer` → Harness page (~776–806)                                                   | prompt steps                                                                                                           | full dropdown |
+| `ScriptConditionEditor`, `scriptStep` variant (~539–567), rendered by `PromptEditor.tsx` ~1294 | script steps                                                                                                           | full dropdown |
+
+So: one quick control in the header for both step types, plus a full control in each type's own
+"all properties" surface. Colour gets the same triad.
+
+**Correction to the previous revision.** It claimed "script steps have no properties drawer" and
+concluded the header swatch therefore had to carry the feature alone. The first half is true —
+`EditorFooter.tsx` wraps the quick-picker/`DrawerTabBar` zone in `{!isScriptMode && …}` (~120) and
+substitutes a spacer (~189), so `PropertiesDrawer` genuinely never renders for a script step. The
+conclusion was wrong: script steps have an all-properties surface, it is just a different component —
+the inline `ScriptConditionEditor` in `PromptEditor`'s `isScriptMode` branch. `executionMode` is
+already surfaced there for exactly this reason.
+
+| Surface                                          | Prompt | Script | Role                       |
+| ------------------------------------------------ | ------ | ------ | -------------------------- |
+| `EditorSection` header                           | ✓      | ✓      | Quick picker               |
+| `PropertiesDrawer` → Harness page                | ✓      | —      | Full control, prompt steps |
+| Script-step sibling block (`PromptEditor` ~1313) | —      | ✓      | Full control, script steps |
+| Step context menu (steps panel + chip rail)      | ✓      | ✓      | Skip, see below            |
+| Settings sections                                | n/a    | n/a    | Defaults (`ui.stepColors`) |
+
+#### Header — a colour quick picker
+
+Beside `ExecutionModeQuickPicker`, mirroring its shape so the two read as a pair. An
+`<input type="color">` styled as a small swatch, following `ServerSection`'s icon-colour pattern —
+local state, `onChange` for a live preview, `onBlur` to commit.
+
+It needs a **reset-to-inherited** affordance (a small clear button, or alt-click). "No explicit
+colour" is a genuinely different state from "a hex that happens to equal the harness default", and
+only the former keeps following the harness if the step's harness later changes. `<input
+type="color">` has no null state of its own, so this has to be built.
+
+#### Prompt steps — `PropertiesDrawer`, Harness page
+
+`PropertiesDrawer.tsx` ~805 is a literal empty `<div />` filling the right-hand column of the
+Execution Mode `DrawerRow`. Step Color drops straight in with no layout work, and the Harness page is
+the right conceptual home because the _default_ comes from the harness — the same reasoning that put
+Execution Mode there.
+
+#### Script steps — the sibling properties block, not inside `ScriptConditionEditor`
+
+`PromptEditor`'s `isScriptMode` branch already has the right home: a bordered
+`<div className="mt-4 space-y-4 rounded border border-panel-border p-3">` rendered _after_
+`ScriptConditionEditor` (`PromptEditor.tsx` ~1313–1352), holding `SecretGrantsEditor` and Error
+Behavior. Both are **step-level** properties written with `setProperty(...)`, not script-condition
+fields threaded through `handleScriptChange`. Step Color is the same kind of thing, so it goes in
+that block.
+
+`executionMode` is the counter-example, and deliberately not the model to copy here. It lives _inside_
+`ScriptConditionValue` as a documented "scriptStep-only field" (`ScriptConditionEditor.tsx` ~80) on a
+shape the file itself calls "kept loose". Two reasons colour must not follow it:
+
+- `ScriptConditionValue` is shared with the pre-condition and end-condition variants, which have no
+  colour. A fourth variant-gated field deepens a leak the type already has.
+- Colour belongs to `StepDisplayProperties` and is shared by _both_ step types. Routing the prompt
+  path through `setProperty(PROMPT_PROPERTIES.COLOR, …)` and the script path through
+  `handleScriptChange` on a condition-shaped object forks one property across two write paths — the
+  exact drift the single-resolver rule in §5 exists to prevent. Putting it in the sibling block keeps
+  both types on `setProperty`, which is what `secrets` and `errorBehavior` already do.
+
+#### One shared control, three mounts
+
+Extract a `StepColorField` (full control) used by both the drawer and the script-step sibling block, plus a
+`StepColorQuickPicker` for the header — the same split `ExecutionModeQuickPicker` already has against
+the drawer's dropdown. All three write the same `StepDisplayProperties.color`. This is not the
+duplication the project rules forbid; `FooterQuickPicker` exists specifically to expose drawer
+properties "directly from the EditorFooter without opening PropertiesDrawer", so quick control plus
+full control for one property is the established shape here.
+
+#### Context menu — skip it initially
+
+The instinct to drop it is right, and there is a mechanical reason as well as a UX one. `StepContextMenu`
+items are `{label, icon, onClick}` with no submenu and no embedded-control support, so an in-menu
+picker needs a new menu capability, and a menu _item_ could only navigate to the swatch — which
+clicking the step already does. Revisit only if the header swatch proves undiscoverable from the
+steps panel, which is where colours actually get compared side by side.
+
+#### Settings — `HarnessesSection`, not `GeneralSection`
+
+`ui.*` settings live in `GeneralSection` today, but `HarnessesSection` already iterates
+`CLI_HARNESSES` with one row per harness (~90), which is exactly the shape `ui.stepColors.byHarness`
+needs. Add a swatch to those existing rows rather than building a second six-row list somewhere else.
+`ui.stepColors.enabled` and `ui.stepColors.script` are one-offs and belong with the other `ui`
+toggles in `GeneralSection`.
+
+The schema path stays `ui.stepColors` either way — this is display state and must never reach
+execution. Use `SettingInputRow` with `path`/`sources`/`onReset` so scope indication and per-setting
+reset come for free, as `ServerSection` does.
+
+### 7. The minimap's activity dots — remove, but replace
+
+**What they are.** Not step-start markers; the pill already owns that (`step.scrollFraction`, the
+step anchor). The dots are a **span** indicator for a step's interleaved output:
+
+- 4px dot (`data-minimap-activity-marker="first"`) at `firstActivityScrollFraction` — the first row
+  of that step's activity.
+- 6px dot (`…="latest"`) at `latestActivityScrollFraction` — the last one.
+- Both painted `bg-output-streaming`, or `bg-focus-border` when the step is selected, and rendered
+  only when the two fractions differ (`OutputMinimap.tsx` ~760–786).
+
+A third dot beside the pill is unrelated and **must stay**: `hasHiddenActivity` (~914) pulses when a
+step has activity whose output is currently filtered out. That is a filter affordance, not a span.
+
+**Recommendation: remove the two activity dots, and put the step colour in the channel they vacate.**
+Two dots are a weak way to draw a span, and a coloured vertical band in the pills track from first to
+latest activity does everything they did, better. This also resolves §5's open problem — the minimap
+pill's own colour is spoken for by undo/redo availability, so step colour needed "a separate channel";
+the vacated activity-marker channel _is_ that channel. That makes the minimap a real correlation
+surface instead of an excluded one.
+
+**Keep the dot design in pocket for find results — it is a good fit, with one gap.** `useOutputFind`
+computes a `matches` array internally, but `OutputFindState` only exposes `matchCount` and
+`currentMatch` (`useOutputFind.ts` ~21–22). A minimap find channel needs the per-match row indices,
+so the hook would have to surface `matches` (or a derived list of scroll fractions) before that can
+be built. Worth noting now so the eventual work does not start by rediscovering it.
+
 ## Consequences for the estimator
 
 Worth stating because this pane is unusually sensitive to it (see
@@ -466,9 +591,14 @@ Worth stating because this pane is unusually sensitive to it (see
 8. `ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
    chrome.
-9. Last, the authored `color?` field on a shared `StepDisplayProperties`. It is the most invasive
-   piece (schema, parser, export, templates, mutations) and the least urgent — harness defaults plus
-   group tie-breaking already deliver the correlation benefit.
+9. The authored `color?` field on a shared `StepDisplayProperties` — schema, parser, export,
+   templates, mutations — plus all three editor mounts from §6 together: the header
+   `StepColorQuickPicker`, the `PropertiesDrawer` slot, and the `StepColorField` in the script-step
+   sibling properties block beside Secrets and Error Behavior. Shipping
+   only some of them leaves one step type unable to set what the other can, which is exactly the gap
+   `executionMode` already closed.
+10. Independently of the colour work: delete the minimap's two activity dots and paint the step
+    colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
 
 Steps 2, 3 and 4 are worth doing regardless of whether the colour work ever happens. Steps 5–7 are
 the colour work proper; 8 and 9 are persistence and can lag indefinitely.
