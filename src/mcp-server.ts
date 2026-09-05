@@ -344,7 +344,7 @@ export class CtrlYokeMCPServer {
    * never taken from the arguments — see `resolveRun`.
    */
   private async handleQueueAppend(args: any) {
-    log("Processing append_queue request...");
+    log(`Processing ${MCP_APPEND_STEP_TOOL_NAME} request...`);
     const {
       steps,
       position,
@@ -385,7 +385,7 @@ export class CtrlYokeMCPServer {
       );
     }
 
-    const selected = await this.resolveRun("append_queue");
+    const selected = await this.resolveRun(MCP_APPEND_STEP_TOOL_NAME);
     const target = await RunContinuationService.validateContinuationTarget(
       this.workspaceRoot,
       selected.workflowKey,

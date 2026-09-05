@@ -1,6 +1,6 @@
 # MCP/CLI Step Mutation Plan
 
-**Status:** Proposed
+**Status:** Corrections 1–3 addressed 2026-09-05; MCP/CLI surfaces remain proposed
 **Priority:** P2
 
 Grew out of a discussion of [`MCP_OUTPUT_PAGING_PLAN.md`](MCP_OUTPUT_PAGING_PLAN.md) and the
@@ -16,7 +16,7 @@ their final names rather than launching and immediately being renamed.
 
 ## Problem
 
-A workflow step can only *append* to its own run's queue (`append_step`). It cannot edit,
+A workflow step can only _append_ to its own run's queue (`append_step`). It cannot edit,
 remove, or reorder a step that has already been queued but hasn't run yet. In practice this comes up
 constantly in long orchestrator-driven runs (e.g.
 [`spec-driven-loop.ctrlyoke.yaml`](../../src/templates/workflows/spec-driven-loop.ctrlyoke.yaml)):
@@ -24,7 +24,7 @@ the orchestrator queues a plan, then later wants to insert a correction step, dr
 turned out to be unnecessary, or reorder the remaining work — and today the only tool available is
 "add more steps at the end (or next)."
 
-Separately, driving ctrlyoke from *outside* a workflow (the CLI, used by an external automation
+Separately, driving ctrlyoke from _outside_ a workflow (the CLI, used by an external automation
 agent) can start a run, resume it, or append to it (`ctrlyoke run`, `ctrlyoke run --run <ref>`,
 `ctrlyoke run --run <ref> --append`), but has no way to edit, remove, or reorder a run's pending
 steps from outside. An agent supervising a long run has no way to insert a fix without waiting for
@@ -32,26 +32,26 @@ the run to reach a point where it can append.
 
 ## What already exists
 
-The underlying primitive is already built, already cross-process safe, and already in production —
-it's just never been wired up to MCP or the CLI. It currently serves only the dashboard's own step
-editor.
+The dashboard's underlying primitives are already built and cross-process safe, but they are not the
+Node-only entry point needed by MCP or the CLI. The shared Node-only continuation layer now provides
+the addressed edit/remove/reorder/insert transactions those later surfaces will consume.
 
 - `WorkingFileManager` (`src/core/WorkingFileManager.ts`) has the full addressed CRUD set for a
   run's step list: `insertStepAtRun` (`:1263`), `updateStepAtRun` (`:1331`), `deleteStepAtRun`
   (`:1450`), `reorderStepsAtRun` (`:1503`) — each addressed by `(workspaceFolderPath, workflowKey,
-  runRef, ..., expectedDefinitionRevision)`, lock-safe via the same `mutateRunDefinition` helper
+runRef, ..., expectedDefinitionRevision)`, lock-safe via the same `mutateRunDefinition` helper
   `appendStepsToRun`-style writes already use.
 - `WorkflowOrchestrator.prepareDefinitionMutation` (`:3564-3616`) already branches on run ownership:
   a **resident** run (this process holds the lineage lock / is executing it) is edited in-place
   against the live in-memory queue; a **non-resident** run (idle, or owned by a different process —
-  the code's own comment names this case explicitly: *"reaching here with the lock on this run means
-  a non-resident (e.g. CLI) owner"*, `RunContinuationService.ts:123`) goes through
+  the code's own comment names this case explicitly: _"reaching here with the lock on this run means
+  a non-resident (e.g. CLI) owner"_, `RunContinuationService.ts:123`) goes through
   `RunContinuationService.validateContinuationTarget(..., "edit")`.
   **`WorkflowOrchestrator` imports `vscode`, so neither `mcp-server.ts` nor `cli.ts` can reuse this
   branching — see "Corrections" below.**
 - That `"edit"` action is deliberately more permissive than `"append"`/`"continue"`: it's allowed on
-  an idle run even while a *different* run in the same lineage is executing, and is blocked only
-  when the lock names *this exact* run and isn't held by the calling process
+  an idle run even while a _different_ run in the same lineage is executing, and is blocked only
+  when the lock names _this exact_ run and isn't held by the calling process
   (`RunContinuationService.ts:114-134`).
 - `PromptQueue.assertEditableDuringExecution` (`:2443-2461`) — the same boundary
   `immutablePrefixLength` (`RunContinuationService.ts:314-322`) mirrors for the cross-process path —
@@ -81,8 +81,8 @@ today; it only fills out the missing CRUD verbs.
   already needed for edit/remove.
 
 All three must reject an index outside the pending region (`< currentIndex` or the in-flight step),
-mirroring `assertEditableDuringExecution`. **This enforcement does not exist yet at the addressed
-layer and must be written** — see Correction 1.
+mirroring `assertEditableDuringExecution`. The shared Node-only continuation layer enforces this
+boundary — see Corrections 1 and 2.
 
 ### CLI — named-run, external caller
 
@@ -125,17 +125,17 @@ MCP server's tool of the same name — the server prefix already disambiguates t
 
 ### Final names
 
-| Tool purpose         | Implemented name          |
-| -------------------- | ------------------------- |
-| Workflow status      | `workflow_status`         |
-| Append a step        | `append_step`             |
-| Capabilities         | `capabilities`            |
-| Read output          | `read_output`             |
-| Global status        | `global_status`           |
-| Submit commit message| `submit_commit_message`  |
-| *(new, this plan)* edit           | `edit_step`             |
-| *(new, this plan)* remove         | `remove_step`           |
-| *(new, this plan)* reorder        | `reorder_steps`         |
+| Tool purpose               | Implemented name        |
+| -------------------------- | ----------------------- |
+| Workflow status            | `workflow_status`       |
+| Append a step              | `append_step`           |
+| Capabilities               | `capabilities`          |
+| Read output                | `read_output`           |
+| Global status              | `global_status`         |
+| Submit commit message      | `submit_commit_message` |
+| _(new, this plan)_ edit    | `edit_step`             |
+| _(new, this plan)_ remove  | `remove_step`           |
+| _(new, this plan)_ reorder | `reorder_steps`         |
 
 Consider folding arbitrary-index insert into `append_step` (accept a numeric index alongside
 `'next'`/`'end'` in its `position` field) rather than adding a fifth new tool — `insertStepAtRun`
@@ -210,12 +210,13 @@ and the `name:` fields) is the single source of truth and should be edited first
 Five defects found while validating this plan against the code. Each was confirmed by reading the
 cited source; the Scope sections above have been amended to match.
 
-### 1. The pending-region guard does not exist yet — and it is load-bearing
+### 1. ✅ Addressed — the pending-region guard is load-bearing
 
 The plan asserted the boundary check was "enforcement `WorkingFileManager`'s primitives already
-carry." It is not. `updateStepAtRun` (`:1352`), `deleteStepAtRun` (`:1473`) and `insertStepAtRun`
-(`:1285`) validate **only** `index < 0 || index >= steps.length` against the array length. Neither
-`_runtime.completedAt` nor `_runtime.currentIndex` is consulted.
+carry." It was not. `updateStepAtRun` (`:1352`), `deleteStepAtRun` (`:1473`) and `insertStepAtRun`
+(`:1285`) still validate their own dashboard inputs against the array length, while the new
+`RunContinuationService` transactions also consult `_runtime.completedAt` and
+`_runtime.currentIndex` before writing an executing run.
 
 The two real guards live elsewhere and neither covers this path:
 
@@ -233,32 +234,32 @@ removes that gating.
 
 This matters more than a normal input-validation gap, because `PromptQueue.mergeDiskSteps`'s
 correctness argument depends on it. Its comment (`:1394-1402`) states plainly that completed steps
-and the running step are index-stable *because* "`RunContinuationService` clamps every cross-process
+and the running step are index-stable _because_ "`RunContinuationService` clamps every cross-process
 splice past the completed boundary, and the positions MCP can request resolve to either `next` ... or
 `end`. Nothing can renumber the running step." A `remove_step` or arbitrary-index insert that lands
 before the execution head falsifies that premise directly: the merge would reattach the running
-step's `_runtime` (session ID, `startedAt`) and its `results` entry to a *different* step, and
+step's `_runtime` (session ID, `startedAt`) and its `results` entry to a _different_ step, and
 `manifest.json`/`events.jsonl` — which address recorded attempts by array index — would
 re-attribute recorded output. Corrupt run history, not just a rejected call.
 
-**Fix:** enforce the boundary in the shared primitive (Correction 2), rejecting rather than clamping,
-and cover it with tests that assert a completed-step and an in-flight-step target both throw.
+**Fix landed:** the shared Node-only mutation transactions enforce the boundary, rejecting rather
+than clamping, with tests that assert a completed-step and an in-flight-step target both throw.
 
-### 2. Missing layer: there is no Node-only wrapper for edit/remove/reorder
+### 2. ✅ Addressed — add the Node-only wrapper for edit/remove/reorder
 
 `WorkflowOrchestrator` imports `vscode`, so `prepareDefinitionMutation`'s resident/non-resident
 branching is unreachable from `mcp-server.ts` (which `extension.instructions.md` forbids from
 importing `vscode`) and from `cli.ts`. `handleAppendQueue` does not call it either — it calls
 `RunContinuationService.appendStepsToRun` (`mcp-server.ts:456`), a Node-only method that does its own
-descriptor lock → run-file lock → revision check → boundary clamp → atomic write, entirely
+descriptor lock → run-file lock → revision check → boundary-aware atomic write, entirely
 independent of `WorkingFileManager.mutateRunDefinition`.
 
-There is no equivalent for edit/remove/reorder, so the work is not "wrap the existing primitives" —
-it is **add the missing sibling methods to `RunContinuationService`**, mirroring `appendStepsToRun`:
-`editStepAtRun`, `removeStepAtRun`, `reorderPendingStepsAtRun`. Both MCP and the CLI then consume
-those, and the boundary rule from Correction 1 is written once, in one place.
+The missing equivalent was **added as sibling methods to `RunContinuationService`**, mirroring
+`appendStepsToRun`: `editStepAtRun`, `removeStepAtRun`, `reorderPendingStepsAtRun`, and the explicit
+`insertStepAtRun` transaction. Both MCP and the CLI will consume those, and the boundary rule from
+Correction 1 is written once, in one place.
 
-### 3. `validateContinuationTarget(..., "edit")` rejects the MCP caller as written
+### 3. ✅ Addressed — `validateContinuationTarget(..., "edit")` permits the intended caller
 
 The EDIT bypass at `RunContinuationService.ts:114-134` skips the "another run is executing" error
 only when `action === EDIT && !lockNamesTarget`. An MCP tool edits **its own** run, so
@@ -266,9 +267,9 @@ only when `action === EDIT && !lockNamesTarget`. An MCP tool edits **its own** r
 `allowActiveTargetAppend: true` (`mcp-server.ts:378-385`), but that flag is hard-gated to
 `action === "append"` in the signature (`:62-63`, `:78-80`).
 
-**Fix:** generalize the flag to cover a self-owned edit (e.g. `allowActiveTargetOperation`, admitting
-`append` and `edit`) rather than adding a parallel code path. Renaming it is in scope; the semantics
-are "the caller *is* the run that holds the lock," which was never append-specific.
+**Fix landed:** the flag is now `allowActiveTargetOperation`, admitting both `append` and `edit`,
+rather than adding a parallel code path. The semantics are "the caller _is_ the run that holds the
+lock," which was never append-specific.
 
 ### 4. The CLI subcommands are non-executing and do not belong in `CLI_RUN_OPERATION_KINDS`
 

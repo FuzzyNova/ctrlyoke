@@ -2,8 +2,12 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
-import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
+import { afterEach, suite, test } from "mocha";
+import {
+  EXECUTION_STATES,
+  RUNNER_IDS,
+  type ExecutionState,
+} from "../../types/DashboardConstants";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -28,7 +32,10 @@ suite(
     const targetRun = "run-2026-01-01T00-00-00-000Z" as RunRef;
     const otherRun = "run-2026-01-02T00-00-00-000Z" as RunRef;
 
-    async function seedLineage(workspaceRoot: string): Promise<void> {
+    async function seedLineage(
+      workspaceRoot: string,
+      executionState: ExecutionState = EXECUTION_STATES.IDLE
+    ): Promise<void> {
       const descriptorPath = WorkflowPaths.descriptorPath(
         workspaceRoot,
         workflowKey
@@ -60,7 +67,7 @@ suite(
         JSON.stringify({
           steps: [{ prompt: "s0" }, { prompt: "s1" }],
           definitionRevision: 1,
-          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.IDLE },
+          _runtime: { currentIndex: 0, executionState },
         }),
         "utf8"
       );
@@ -158,6 +165,28 @@ suite(
       }
     });
 
+    test("allows an explicitly permitted edit of the executing target", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-edit-lock-active-target-")
+      );
+      try {
+        await seedLineage(ws, EXECUTION_STATES.RUNNING);
+        await liveLock(ws, targetRun);
+
+        const target = await RunContinuationService.validateContinuationTarget(
+          ws,
+          workflowKey,
+          targetRun,
+          new WorkflowLineageRepository(),
+          "edit",
+          true
+        );
+        assert.strictEqual(target.allowInterruptedRun, true);
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+
     test("reports a self-owned but untracked continuation as an invariant failure", async () => {
       const ws = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-edit-lock-self-untracked-")
@@ -184,6 +213,234 @@ suite(
     });
   }
 );
+
+suite("RunContinuationService addressed step mutations", () => {
+  const workflowKey =
+    "addressed-step-mutations-2026-01-01T00-00-00" as WorkflowKey;
+  const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+  let workspace: string;
+
+  async function seedRun(
+    executionState: ExecutionState,
+    currentIndex: number,
+    steps: Array<Record<string, unknown>>
+  ): Promise<void> {
+    const descriptorPath = WorkflowPaths.descriptorPath(workspace, workflowKey);
+    await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        workflowKey,
+        workflowName: "Addressed mutations",
+        isFavorite: false,
+        createdAt: 0,
+        lastModifiedAt: 0,
+        latestRunRef: runRef,
+        nextRunId: 2,
+        revision: 1,
+      }),
+      "utf8"
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        workflowName: "Addressed mutations",
+        startedAt: 0,
+        definitionRevision: 1,
+        steps,
+        _runtime: { currentIndex, executionState },
+      }),
+      "utf8"
+    );
+  }
+
+  afterEach(async () => {
+    if (workspace) {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("edits pending steps while running and rejects completed and in-flight steps", async () => {
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-step-edit-"));
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+      { prompt: "pending" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+
+    const edited = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      2,
+      { updates: { prompt: "pending (edited)" } },
+      1,
+      repository,
+      true
+    );
+    assert.strictEqual(edited.definitionRevision, 2);
+    assert.strictEqual(
+      (edited.workingFile.steps![2] as { prompt: string }).prompt,
+      "pending (edited)"
+    );
+
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { updates: { prompt: "must stay done" } },
+        2,
+        repository,
+        true
+      ),
+      /completed step/i
+    );
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        { updates: { prompt: "must stay in flight" } },
+        2,
+        repository,
+        true
+      ),
+      /currently executing/i
+    );
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        2,
+        { updates: { prompt: "stale" } },
+        1,
+        repository,
+        true
+      ),
+      /Definition revision conflict/
+    );
+  });
+
+  test("reorders only the pending suffix and keeps the in-flight step fixed", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-reorder-")
+    );
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+      { prompt: "pending-a" },
+      { prompt: "pending-b" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+
+    const reordered = await RunContinuationService.reorderPendingStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [0, 2, 1],
+      1,
+      repository,
+      undefined,
+      true
+    );
+    assert.deepStrictEqual(
+      reordered.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "in flight", "pending-b", "pending-a"]
+    );
+
+    await assert.rejects(
+      RunContinuationService.reorderPendingStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [1, 0, 2],
+        2,
+        repository,
+        undefined,
+        true
+      ),
+      /currently executing|completed step/i
+    );
+  });
+
+  test("rejects insertions that would move the in-flight step, including numeric append positions", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-insert-")
+    );
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+      { prompt: "pending" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+
+    await assert.rejects(
+      RunContinuationService.insertStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        { prompt: "must not shift in flight" },
+        1,
+        repository,
+        true
+      ),
+      /currently executing|completed step/i
+    );
+    await assert.rejects(
+      RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "must not shift in flight" }],
+        1,
+        repository,
+        true,
+        1
+      ),
+      /currently executing|completed step/i
+    );
+  });
+
+  test("allows the paused current step because no step is in flight", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-paused-")
+    );
+    await seedRun(EXECUTION_STATES.PAUSED, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "next" },
+    ]);
+
+    const edited = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { prompt: "next (edited)" } },
+      1,
+      new WorkflowLineageRepository(),
+      true
+    );
+    assert.strictEqual(
+      (edited.workingFile.steps![1] as { prompt: string }).prompt,
+      "next (edited)"
+    );
+  });
+});
 
 /**
  * A paused run whose owning process is gone is adoptable, not permanently
