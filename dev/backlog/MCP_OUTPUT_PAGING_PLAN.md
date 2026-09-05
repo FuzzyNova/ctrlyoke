@@ -18,14 +18,22 @@ For a long workflow this means a step that wants "what did the previous step
 conclude" pulls back the entire response history into its context window. There is
 no way to read a bounded tail, and no way to resume where a previous read stopped.
 
+**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md) renames
+this tool `ctrlyoke_read_output` → `read_output` and moves every tool name behind an exported
+constant. Land that rename first, then apply this plan against the renamed tool, so the schema is
+edited once. Names below are the pre-rename ones.
+
 ## Scope
 
 Add cursor-based reads to `ctrlyoke_read_output` only.
 
 - An opaque cursor plus a caller-supplied limit, returning a `nextCursor` when
   more output remains.
-- A bounded-tail mode so a caller can ask for the last N characters/lines of a
-  step's output without paging forward through all of it.
+- A bounded-tail mode so a caller can ask for the last N **characters** of a
+  step's output without paging forward through all of it. (Characters only —
+  line-based slicing was considered and dropped: it would need a second unit in
+  the schema for no use case the Problem statement raises. See Design below,
+  which is the authoritative definition.)
 - Preserve the existing behavior when no cursor or limit is supplied, so current
   workflows are unaffected.
 
