@@ -333,6 +333,60 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
+  test("refuses to clear internal step properties through clearProperties", async () => {
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-step-clear-"));
+    // Idle: the execution-head guard deliberately stands down, so this is the
+    // state in which a completed step is reachable and `_runtime` is worth
+    // something. `updates` is already sanitized; `clearProperties` is the only
+    // way left to reach it.
+    await seedRun(EXECUTION_STATES.IDLE, 0, [
+      { prompt: "done", _runtime: { completedAt: 10, sessionId: "abc" } },
+      { prompt: "pending" },
+    ]);
+    const repository = new WorkflowLineageRepository();
+
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { updates: {}, clearProperties: ["_runtime"] },
+        1,
+        repository
+      ),
+      /Cannot clear internal step property: _runtime/
+    );
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        1,
+        { updates: {}, clearProperties: ["status", "details"] },
+        1,
+        repository
+      ),
+      /Cannot clear internal step properties: status, details/
+    );
+
+    // The completed step keeps the runtime that anchors it in
+    // `immutablePrefixLength`, and an ordinary clear still works.
+    const cleared = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { prompt: "pending" }, clearProperties: ["model"] },
+      1,
+      repository
+    );
+    assert.deepStrictEqual(
+      (cleared.workingFile.steps![0] as { _runtime?: unknown })._runtime,
+      { completedAt: 10, sessionId: "abc" }
+    );
+  });
+
   test("reorders only the pending suffix and keeps the in-flight step fixed", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-reorder-")

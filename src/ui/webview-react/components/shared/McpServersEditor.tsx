@@ -6,8 +6,11 @@ import {
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_CAPABILITIES_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
 } from "@root/utils/McpToolDefinitions";
 import React, { useEffect, useMemo, useState } from "react";
@@ -33,8 +36,13 @@ interface ListedServer {
   isLegacy: boolean;
 }
 
-/** User-visible ctrlyoke MCP tools that can be selectively disabled. */
-const CTRLYOKE_USER_TOOLS: {
+/**
+ * User-visible ctrlyoke MCP tools that can be selectively disabled. Must stay
+ * exhaustive over `MCP_WORKFLOW_TOOL_NAMES` — a tool missing here has no off
+ * switch in the UI, and the "N of M tools enabled" count silently under-reports.
+ * `McpServersEditor.test.tsx` asserts the coverage.
+ */
+export const CTRLYOKE_USER_TOOLS: {
   id: string;
   label: string;
   description: string;
@@ -63,6 +71,21 @@ const CTRLYOKE_USER_TOOLS: {
     id: MCP_GLOBAL_STATUS_TOOL_NAME,
     label: "Global status",
     description: "List all workflows running in this workspace",
+  },
+  {
+    id: MCP_EDIT_STEP_TOOL_NAME,
+    label: "Edit step",
+    description: "Change a not-yet-executed step's prompt or configuration",
+  },
+  {
+    id: MCP_REMOVE_STEP_TOOL_NAME,
+    label: "Remove step",
+    description: "Delete a not-yet-executed step",
+  },
+  {
+    id: MCP_REORDER_STEPS_TOOL_NAME,
+    label: "Reorder steps",
+    description: "Change the order of the not-yet-executed steps",
   },
 ];
 

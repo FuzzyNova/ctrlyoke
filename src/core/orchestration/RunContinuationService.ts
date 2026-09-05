@@ -358,6 +358,7 @@ export class RunContinuationService {
         assertStepIndex(topology.steps, index, "edit");
         assertEditableDuringExecution(source, topology.steps, index, "edit");
         assertPendingRewindSuffix(source, index, "edit");
+        assertClearablePropertiesAreEditable(change.clearProperties);
         const incomingStep = stripViewOnlyWorkflowStepFields(
           stripStepRuntime([
             "replace" in change
@@ -741,6 +742,30 @@ function assertEditableDuringExecution(
     isInFlightExecutionState(source._runtime?.executionState)
   ) {
     throw new Error(`Cannot ${operation} the currently executing step`);
+  }
+}
+
+/**
+ * Fields an addressed edit may never reach through `clearProperties`.
+ * `updates`/`replace` are already sanitized by `stripStepRuntime` and
+ * `stripViewOnlyWorkflowStepFields`, but `buildClearUpdates` writes whatever
+ * keys it is handed straight onto the merged step. Without this, a caller
+ * could clear `_runtime` — erasing `completedAt`, and with it the step's
+ * membership in `immutablePrefixLength`, which is what keeps
+ * `manifest.json`/`events.jsonl` attribution pinned to a stable index.
+ */
+const NON_CLEARABLE_STEP_PROPERTIES = ["_runtime", "status", "details"];
+
+function assertClearablePropertiesAreEditable(
+  clearProperties: string[] | undefined
+): void {
+  const rejected = clearProperties?.filter((property) =>
+    NON_CLEARABLE_STEP_PROPERTIES.includes(property)
+  );
+  if (rejected?.length) {
+    throw new Error(
+      `Cannot clear internal step ${rejected.length === 1 ? "property" : "properties"}: ${rejected.join(", ")}`
+    );
   }
 }
 
