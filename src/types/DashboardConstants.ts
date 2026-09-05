@@ -3076,7 +3076,6 @@ export const OUTPUT_DEFAULT_LABELS = {
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
-  STEP_SWITCH: "step-switch",
   STEP_ANCHOR: "step-anchor",
   STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",

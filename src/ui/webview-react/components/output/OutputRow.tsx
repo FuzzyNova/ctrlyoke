@@ -105,7 +105,6 @@ import { getTargetKey } from "@utils/outputProjection";
 import type {
   CliHeaderRow,
   OutputRenderRow,
-  StepSwitchRow,
   StepHiddenRow,
   ScriptOutputRow,
   StructuredEventRow,
@@ -271,21 +270,6 @@ const StepHiddenRowView: React.FC<{
     </div>
   );
 };
-
-const StepSwitchRowView: React.FC<{ row: StepSwitchRow }> = ({ row }) => (
-  <div
-    className="flex items-center gap-2 border-y border-panel-border/60 bg-sidebar-bg/60 px-3 py-1 text-xs text-description-fg"
-    role="status"
-    aria-label={`Switched to ${row.stepLabel}${row.stepName ? `, ${row.stepName}` : ""}`}
-  >
-    <i
-      className="codicon codicon-arrow-right text-output-streaming"
-      aria-hidden="true"
-    />
-    <span className="font-semibold text-foreground">{row.stepLabel}</span>
-    {row.stepName && <span className="truncate">{row.stepName}</span>}
-  </div>
-);
 
 const ActivityAttribution: React.FC<{
   row: OutputRenderRow;
@@ -1679,9 +1663,6 @@ function OutputRowComponent({
       content = (
         <StepHiddenRowView row={row} hasHiddenActivity={hasHiddenActivity} />
       );
-      break;
-    case OUTPUT_ROW_KINDS.STEP_SWITCH:
-      content = <StepSwitchRowView row={row} />;
       break;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (

@@ -16,12 +16,11 @@ This doc is a design brainstorm, not an approved plan. Nothing here is implement
 | #   | Surface           | Where                                                 | Renders                                                              | Added by     |
 | --- | ----------------- | ----------------------------------------------------- | -------------------------------------------------------------------- | ------------ |
 | 1   | `cli-header` row  | `OutputRow.tsx` (~line 1190)                          | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b` | pre-existing |
-| 2   | `step-switch` row | `StepSwitchRowView` in `OutputRow.tsx`                | full-width `border-y` bar: `→ Step 4  name`                          | parallel     |
 | 3   | activity label    | `ActivityAttribution` when `row.activityFirst`        | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`)   | parallel     |
 | 4   | activity rail     | `ActivityAttribution` when `row.activityContinuation` | `border-l-2 border-output-streaming/40` + `pl-2` on the content      | parallel     |
 | 5   | minimap pills     | `OutputMinimap.tsx`                                   | one pill per step on the right rail                                  | pre-existing |
 
-Rows 1–3 are all emitted from `buildOutputRows` and all say the same thing.
+Rows 1 and 3 are emitted from `buildOutputRows` and both identify the step.
 
 ### What the rail (4) actually means today
 
@@ -609,13 +608,11 @@ Worth stating because this pane is unusually sensitive to it (see
 1. ~~Settle the open question~~ — done: the predicate is right, the per-row stamping is wrong.
 2. ~~Fix the stamping~~ — done: the label lands on the slice's first content row only; the rail
    stays per-row. Removed the duplicate `⚡ Step 1`; the rail is untouched and still needs 3/5.
-3. **Delete the `step-switch` row kind outright, and gate the `⚡ Step N` label behind "step ran in
-   a parallel group with ≥2 members".** The previous revision split these across two sequencing
-   items; they collapse into one because deleting marker 2 entirely supersedes gating it, and both
-   changes land in the same two emission sites (`outputRows.ts` ~1990 and ~2180). The gate needs a
-   new snapshot-free `getParallelGroupForStep`, and must be applied by not stamping `activityFirst`
-   — see "Consequences for the estimator". Marker 4 is not gated; it becomes the always-on colour
-   bar in step 5. Largest remaining win, smallest change.
+3. ~~Delete the `step-switch` row kind outright, and gate the `⚡ Step N` label behind "step ran in
+   a parallel group with ≥2 members".~~ — done: removed the row kind and both emission sites, and
+   gated `activityFirst` stamping with the snapshot-free `getParallelGroupForStep`. The snapshot
+   check remains on the undo-only `getConcurrentGroupForStep` path. Marker 4 is not gated; it
+   becomes the always-on colour bar in step 5. Largest remaining win, smallest change.
 4. **Land `resolveStepColor` on built-in harness defaults only** — no schema, no settings yet. Fix
    the two unusable `HARNESS_CHART_COLORS` entries (`codex-cli`, `opencode-cli`) and add the script
    default, then switch the three steps-panel rails from `getStepAccentClass` to

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowStep } from "@store/workflowStore";
-import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
+import {
+  buildOutputRows,
+  estimateOutputRowHeight,
+  getConcurrentGroupForStep,
+  getParallelGroupForStep,
+} from "@utils/outputRows";
 import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
@@ -345,6 +350,14 @@ describe("outputRows", () => {
       diffExpansionState: new Map(),
       toolCallExpansionState: new Map(),
       defaultDiffCollapsed: false,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
     });
 
     const eventRows = result.rows.filter(
@@ -371,7 +384,7 @@ describe("outputRows", () => {
     ]);
   });
 
-  it("renders semantic activity switches and continuation rails", () => {
+  it("renders continuation rails without sequential activity labels", () => {
     const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
     const allMessages = mapOrderedHistoryEntriesToMessages(
@@ -433,17 +446,107 @@ describe("outputRows", () => {
     const activityRows = result.rows.filter(
       (row) =>
         row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
-        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
-        row.rowKind === OUTPUT_ROW_KINDS.STEP_SWITCH
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
     );
     expect(activityRows.map((row) => row.rowKind)).toEqual([
       OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
-      OUTPUT_ROW_KINDS.STEP_SWITCH,
       OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
     ]);
-    expect(activityRows[0]?.activityFirst).toBe(true);
+    expect(activityRows.some((row) => row.activityFirst)).toBe(false);
     expect(activityRows[1]?.activityContinuation).toBe(true);
+  });
+
+  it("stamps activity labels once per contiguous run in parallel output", () => {
+    const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A1",
+        },
+        {
+          timestampMs: 1001,
+          sequence: 2,
+          target: targetB,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "B1",
+        },
+        {
+          timestampMs: 1002,
+          sequence: 3,
+          target: targetA,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "A2",
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
+      finalStep: null,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: true,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const activityRows = result.rows.filter(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+    );
+    expect(activityRows.map((row) => row.activityFirst === true)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it("separates the parallel-group predicate from the snapshot-gated undo predicate", () => {
+    const parallelGroups = [
+      {
+        id: "parallel-0-1",
+        startIndex: 0,
+        endIndex: 1,
+        failFast: false,
+      },
+    ];
+    const input = {
+      parallelGroups,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+    };
+
+    expect(getParallelGroupForStep(parallelGroups, 1)).toBe(parallelGroups[0]);
+    expect(getConcurrentGroupForStep(input, 1)).toBeUndefined();
   });
 
   it("gives every row a unique key and opens each attempt's chrome once across activity slices", () => {
@@ -480,8 +583,16 @@ describe("outputRows", () => {
     );
     const result = buildOutputRows({
       allMessages,
-      steps: [{ name: "One" }] as WorkflowStep[],
+      steps: [{ name: "One" }, { name: "Two" }] as WorkflowStep[],
       finalStep: null,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
       streamingChunks: {},
       finalStepStreamingChunks: {},
       isExecutionActive: false,

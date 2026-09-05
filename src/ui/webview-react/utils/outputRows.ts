@@ -149,15 +149,6 @@ export interface AttemptGroupSummaryRow extends OutputRowBase<
   coverage: WorkflowTokenCoverage;
 }
 
-export interface StepSwitchRow extends OutputRowBase<
-  typeof OUTPUT_ROW_KINDS.STEP_SWITCH
-> {
-  target: OutputMessageTarget;
-  fromTarget?: OutputMessageTarget;
-  stepLabel: string;
-  stepName?: string;
-}
-
 export interface StepAnchorRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.STEP_ANCHOR
 > {
@@ -320,7 +311,6 @@ export type OutputRenderRow =
   | ScriptOutputRow
   | ScriptVerdictRow
   | AttemptGroupSummaryRow
-  | StepSwitchRow
   | StatsRow;
 
 export interface BuildOutputRowsInput {
@@ -361,15 +351,28 @@ export interface BuildOutputRowsInput {
   collapsedToolOutputLineCount?: number;
 }
 
-function getConcurrentGroupForStep(
-  input: BuildOutputRowsInput,
+export function getParallelGroupForStep(
+  parallelGroups: readonly ParallelGroupDefinition[] | undefined,
   stepIndex: number
 ): ParallelGroupDefinition | undefined {
-  const group = input.parallelGroups?.find(
+  const group = parallelGroups?.find(
     (candidate) =>
       stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
   );
-  if (!group || group.startIndex === group.endIndex) return undefined;
+  return group && group.startIndex !== group.endIndex ? group : undefined;
+}
+
+type ConcurrentGroupInput = Pick<
+  BuildOutputRowsInput,
+  "parallelGroups" | "isViewingHistory" | "historyOutputs" | "workspaceSnapshots"
+>;
+
+export function getConcurrentGroupForStep(
+  input: ConcurrentGroupInput,
+  stepIndex: number
+): ParallelGroupDefinition | undefined {
+  const group = getParallelGroupForStep(input.parallelGroups, stepIndex);
+  if (!group) return undefined;
   const groupSnapshot =
     input.isViewingHistory && input.historyOutputs
       ? input.historyOutputs.promptOutputs[group.startIndex]?.workspaceSnapshot
@@ -1648,8 +1651,6 @@ function estimateOutputRowContentHeight(
       return STEP_HIDDEN_ROW_HEIGHT;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return 24;
-    case OUTPUT_ROW_KINDS.STEP_SWITCH:
-      return 24;
     case OUTPUT_ROW_KINDS.STATUS:
       return estimateTextBlockHeight(
         row.status.message,
@@ -1984,21 +1985,10 @@ export function buildOutputRows(
       if (!message.isActivity && activityStatusTargets.has(targetKey)) continue;
       const activityFirst =
         message.isActivity && previousActivityTargetKey !== targetKey;
-      if (message.isActivity && activityFirst && previousActivityTargetKey) {
-        rows.push({
-          key: `${message.activityKey}:switch`,
-          rowKind: OUTPUT_ROW_KINDS.STEP_SWITCH,
-          target,
-          fromTarget: input.allMessages.find(
-            (candidate) =>
-              candidate.isActivity &&
-              getTargetKey(candidate.target) === previousActivityTargetKey
-          )?.target,
-          stepLabel: `Step ${target.index + 1}`,
-          stepName: undefined,
-          estimateSize: 24,
-        });
-      }
+      const stampActivityFirst =
+        activityFirst &&
+        getParallelGroupForStep(input.parallelGroups, target.index) !==
+          undefined;
       if (message.isActivity) previousActivityTargetKey = targetKey;
       rows.push({
         key: `${targetKey}:status:${messageIndex}`,
@@ -2006,11 +1996,14 @@ export function buildOutputRows(
         target,
         status: message.data as OutputStatusMessage,
         activityKey: message.activityKey,
-        activityFirst: message.isActivity ? activityFirst : undefined,
+        activityFirst:
+          message.isActivity && stampActivityFirst ? true : undefined,
         activityContinuation:
           message.isActivity && !activityFirst ? true : undefined,
         activityLabel: message.isActivity
-          ? `Step ${target.index + 1}`
+          ? stampActivityFirst
+            ? `Step ${target.index + 1}`
+            : undefined
           : undefined,
         estimateSize: 36,
       });
@@ -2174,21 +2167,9 @@ export function buildOutputRows(
     const scriptish = isScriptOutput(output);
     const activityFirst =
       message.isActivity && previousActivityTargetKey !== targetKey;
-    if (message.isActivity && activityFirst && previousActivityTargetKey) {
-      rows.push({
-        key: `${message.activityKey}:switch`,
-        rowKind: OUTPUT_ROW_KINDS.STEP_SWITCH,
-        target,
-        fromTarget: input.allMessages.find(
-          (candidate) =>
-            candidate.isActivity &&
-            getTargetKey(candidate.target) === previousActivityTargetKey
-        )?.target,
-        stepLabel,
-        stepName,
-        estimateSize: 24,
-      });
-    }
+    const stampActivityFirst =
+      activityFirst &&
+      getParallelGroupForStep(input.parallelGroups, target.index) !== undefined;
     if (message.isActivity) previousActivityTargetKey = targetKey;
     // What belongs to *every* row the slice emits. `activityKey` is looked up
     // per row by the minimap and the streaming anchor. The continuation rail is
@@ -2472,7 +2453,9 @@ export function buildOutputRows(
     // event. `outputRowActivityChrome` charges 20px per flagged row, so this is
     // also what keeps the estimate matched to what actually renders.
     const sliceOpener =
-      message.isActivity && activityFirst && rows.length > contentRowStart
+      message.isActivity &&
+      stampActivityFirst &&
+      rows.length > contentRowStart
         ? rows[contentRowStart]
         : undefined;
     if (sliceOpener) {
