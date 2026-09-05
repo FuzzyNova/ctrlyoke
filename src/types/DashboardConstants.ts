@@ -1539,11 +1539,26 @@ export const HARNESS_INFO = {
 export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CLI]: "var(--vscode-charts-blue, #59a4f9)",
   [HARNESS_IDS.CLAUDE_CLI]: "var(--vscode-charts-orange, #d18616)",
-  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-editor-foreground, #ffffff)",
-  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-gray, #808080)",
+  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-charts-red, #f14c4c)",
+  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-yellow, #d19a66)",
   [HARNESS_IDS.QWEN_CLI]: "var(--vscode-charts-purple, #b180d7)",
   [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-green, #89d185)",
 };
+
+/** Neutral identity color for script steps, which have no harness. */
+export const SCRIPT_STEP_DEFAULT_COLOR = "var(--vscode-charts-gray, #808080)";
+
+/** Stable, curated colors used only to break same-harness group collisions. */
+export const STEP_COLOR_TIE_BREAK_PALETTE = [
+  "#4ec9b0",
+  "#c586c0",
+  "#9cdcfe",
+  "#ce9178",
+  "#dcdcaa",
+  "#d7ba7d",
+  "#b5cea8",
+  "#569cd6",
+] as const;
 
 // ============================================================================
 // HOOK EVENT - Logical hook event names and metadata

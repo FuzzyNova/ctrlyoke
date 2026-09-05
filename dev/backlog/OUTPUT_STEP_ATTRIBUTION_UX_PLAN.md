@@ -613,10 +613,16 @@ Worth stating because this pane is unusually sensitive to it (see
    gated `activityFirst` stamping with the snapshot-free `getParallelGroupForStep`. The snapshot
    check remains on the undo-only `getConcurrentGroupForStep` path. Marker 4 is not gated; it
    becomes the always-on colour bar in step 5. Largest remaining win, smallest change.
-4. **Land `resolveStepColor` on built-in harness defaults only** — no schema, no settings yet. Fix
+4. ~~**Land `resolveStepColor` on built-in harness defaults only** — no schema, no settings yet. Fix
    the two unusable `HARNESS_CHART_COLORS` entries (`codex-cli`, `opencode-cli`) and add the script
    default, then switch the three steps-panel rails from `getStepAccentClass` to
-   `style={{ backgroundColor }}`. This is the whole visual payoff and it needs no persisted state.
+   `style={{ backgroundColor }}`. This is the whole visual payoff and it needs no persisted state.~~
+   **Done (2026-09-04).** The final signature is
+   `resolveStepColor({ step, harnessId, group, offsetInGroup, settings })`; callers supply the
+   already-resolved harness. Optional `groupMembers` context lets the resolver detect genuine
+   baseline-color collisions without moving tie-breaking into a surface. The built-in defaults
+   and the fixed tie-break palette live beside `HARNESS_CHART_COLORS` in
+   `src/types/DashboardConstants.ts`.
 5. **Add the status icon to the chip rail, then flip its border to identity.** In that order — the
    chip's border is its only status signal, so flipping first loses information for one commit.
    Prototype the three-row and two-row layouts here (§5).

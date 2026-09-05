@@ -17,6 +17,8 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
@@ -64,6 +66,9 @@ export type WorkflowStepRowProps = {
   isExecutionTargetLocked: boolean;
   hideBorderBottom?: boolean;
   dimmed?: boolean;
+  colorGroup?: ParallelGroupDefinition;
+  colorGroupMembers?: readonly StepColorGroupMember[];
+  offsetInGroup?: number;
   dragHandleProps?: WorkflowStepDragHandleProps;
   getStepHarnessModel: (
     step: WorkflowStep,
@@ -233,13 +238,27 @@ export const SortableWorkflowStepWrapper = React.memo(
       transition,
       opacity: isDragging ? 0.5 : 1,
     };
+    const harnessModel = stepItemProps.getStepHarnessModel(
+      stepItemProps.step,
+      stepItemProps.status
+    );
+    const stepColor = resolveStepColor({
+      step: stepItemProps.step,
+      harnessId: harnessModel.harnessId,
+      group: stepItemProps.colorGroup,
+      offsetInGroup: stepItemProps.offsetInGroup,
+      groupMembers: stepItemProps.colorGroupMembers,
+    });
     return (
       <div
         className="relative flex items-stretch"
         data-workflow-step-index={stepItemProps.index}
       >
         {showPauseBoundaryBefore && <PauseBoundary />}
-        <div className="w-[2px] flex-shrink-0 self-stretch" />
+        <div
+          className="w-[2px] flex-shrink-0 self-stretch"
+          style={{ backgroundColor: stepColor }}
+        />
         <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
           {slotNumber}
         </div>

@@ -19,11 +19,8 @@ import {
 } from "./WorkflowStepRow";
 import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
-import {
-  getStepAccentClass,
-  isWorkflowActive,
-  isWorkflowRunning,
-} from "@utils/status";
+import { isWorkflowActive, isWorkflowRunning } from "@utils/status";
+import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 
 export type ParallelGroupStatus =
   | "running"
@@ -182,8 +179,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       .map((index) => ({
         step: steps[index],
         index,
-        status:
-          statuses[index - group.startIndex] ?? STEP_STATUS.PENDING,
+        status: statuses[index - group.startIndex] ?? STEP_STATUS.PENDING,
       }))
       .filter(
         (
@@ -195,6 +191,15 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         } => member.step !== undefined
       );
   }, [group.startIndex, memberIds, members, statuses, steps]);
+  const colorGroupMembers = useMemo<StepColorGroupMember[]>(
+    () =>
+      displayedMembers.map(({ step, status: memberStatus }, offsetInGroup) => ({
+        step,
+        harnessId: getStepHarnessModel(step, memberStatus).harnessId,
+        offsetInGroup,
+      })),
+    [displayedMembers, getStepHarnessModel]
+  );
   const status = deriveParallelGroupStatus(
     displayedMembers.map(({ step, status }) => ({
       status,
@@ -242,95 +247,120 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
             items={memberIds}
             strategy={verticalListSortingStrategy}
           >
-            {displayedMembers.map(({ step, index, status: memberStatus }, offset) => (
-              <SortableWorkflowStepWrapper
-                key={index}
-                id={memberIds[offset]}
-                disabled={dragDisabled || isStepExecutionLocked(
-                  step,
-                  index,
-                  currentStep,
-                  executionState
-                )}
-                slotNumber={index + 1}
-                step={step}
-                index={index}
-                currentStep={currentStep}
-                executionState={executionState}
-                status={memberStatus}
-                retryState={retryStates[index]}
-                latestOutput={getLatestOutput(index)}
-                liveContextWindow={liveContextWindow[index]}
-                isCurrent={isStepActive(index)}
-                isSelected={selectedIndex === index}
-                canSetStartPosition={canSetStartPosition}
-                startPositionDirection={
-                  index < currentStep ? "rewind" : "forward"
-                }
-                setPositionTarget={index}
-                isExecutionTargetLocked={isStepExecutionLocked(
-                  step,
-                  index,
-                  currentStep,
-                  executionState
-                )}
-                hideBorderBottom={offset === displayedMembers.length - 1}
-                dimmed={index < currentStep}
-                getStepHarnessModel={getStepHarnessModel}
-                getStepOverrides={getStepOverrides}
-                onStepClick={onStepClick}
-                onSetStartPosition={onSetStartPosition}
-                onOpenContextMenu={onOpenContextMenu}
-              />
-            ))}
+            {displayedMembers.map(
+              ({ step, index, status: memberStatus }, offset) => (
+                <SortableWorkflowStepWrapper
+                  key={index}
+                  id={memberIds[offset]}
+                  disabled={
+                    dragDisabled ||
+                    isStepExecutionLocked(
+                      step,
+                      index,
+                      currentStep,
+                      executionState
+                    )
+                  }
+                  slotNumber={index + 1}
+                  step={step}
+                  index={index}
+                  currentStep={currentStep}
+                  executionState={executionState}
+                  status={memberStatus}
+                  retryState={retryStates[index]}
+                  latestOutput={getLatestOutput(index)}
+                  liveContextWindow={liveContextWindow[index]}
+                  isCurrent={isStepActive(index)}
+                  isSelected={selectedIndex === index}
+                  canSetStartPosition={canSetStartPosition}
+                  startPositionDirection={
+                    index < currentStep ? "rewind" : "forward"
+                  }
+                  setPositionTarget={index}
+                  isExecutionTargetLocked={isStepExecutionLocked(
+                    step,
+                    index,
+                    currentStep,
+                    executionState
+                  )}
+                  hideBorderBottom={offset === displayedMembers.length - 1}
+                  dimmed={index < currentStep}
+                  colorGroup={group}
+                  colorGroupMembers={colorGroupMembers}
+                  offsetInGroup={offset}
+                  getStepHarnessModel={getStepHarnessModel}
+                  getStepOverrides={getStepOverrides}
+                  onStepClick={onStepClick}
+                  onSetStartPosition={onSetStartPosition}
+                  onOpenContextMenu={onOpenContextMenu}
+                />
+              )
+            )}
           </SortableContext>
-        ) : displayedMembers.map(({ step, index, status: memberStatus }, offset) => (
-          <div
-            key={index}
-            className="relative flex items-stretch"
-            data-workflow-step-index={index}
-          >
-            <div
-              className={`w-[2px] flex-shrink-0 self-stretch ${getStepAccentClass(memberStatus)}`}
-            />
-            <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-              {index + 1}
-            </div>
-            <div className="flex-1 min-w-0">
-              <WorkflowStepRow
-                step={step}
-                index={index}
-                slotNumber={index + 1}
-                currentStep={currentStep}
-                executionState={executionState}
-                status={memberStatus}
-                retryState={retryStates[index]}
-                latestOutput={getLatestOutput(index)}
-                liveContextWindow={liveContextWindow[index]}
-                isCurrent={isStepActive(index)}
-                isSelected={selectedIndex === index}
-                canSetStartPosition={canSetStartPosition}
-                startPositionDirection={
-                  index < currentStep ? "rewind" : "forward"
-                }
-                setPositionTarget={index}
-                isExecutionTargetLocked={isStepExecutionLocked(
-                  step,
-                  index,
-                  currentStep,
-                  executionState
-                )}
-                hideBorderBottom={offset === displayedMembers.length - 1}
-                dimmed={index < currentStep}
-                getStepHarnessModel={getStepHarnessModel}
-                getStepOverrides={getStepOverrides}
-                onStepClick={onStepClick}
-                onSetStartPosition={onSetStartPosition}
-                onOpenContextMenu={onOpenContextMenu}
-              />
-            </div>
-          </div>
-        ))}
+        ) : (
+          displayedMembers.map(
+            ({ step, index, status: memberStatus }, offset) => (
+              <div
+                key={index}
+                className="relative flex items-stretch"
+                data-workflow-step-index={index}
+              >
+                <div
+                  className="w-[2px] flex-shrink-0 self-stretch"
+                  style={{
+                    backgroundColor: resolveStepColor({
+                      step,
+                      harnessId: getStepHarnessModel(step, memberStatus)
+                        .harnessId,
+                      group,
+                      offsetInGroup: offset,
+                      groupMembers: colorGroupMembers,
+                    }),
+                  }}
+                />
+                <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <WorkflowStepRow
+                    step={step}
+                    index={index}
+                    slotNumber={index + 1}
+                    currentStep={currentStep}
+                    executionState={executionState}
+                    status={memberStatus}
+                    retryState={retryStates[index]}
+                    latestOutput={getLatestOutput(index)}
+                    liveContextWindow={liveContextWindow[index]}
+                    isCurrent={isStepActive(index)}
+                    isSelected={selectedIndex === index}
+                    canSetStartPosition={canSetStartPosition}
+                    startPositionDirection={
+                      index < currentStep ? "rewind" : "forward"
+                    }
+                    setPositionTarget={index}
+                    isExecutionTargetLocked={isStepExecutionLocked(
+                      step,
+                      index,
+                      currentStep,
+                      executionState
+                    )}
+                    hideBorderBottom={offset === displayedMembers.length - 1}
+                    dimmed={index < currentStep}
+                    colorGroup={group}
+                    colorGroupMembers={colorGroupMembers}
+                    offsetInGroup={offset}
+                    getStepHarnessModel={getStepHarnessModel}
+                    getStepOverrides={getStepOverrides}
+                    onStepClick={onStepClick}
+                    onSetStartPosition={onSetStartPosition}
+                    onOpenContextMenu={onOpenContextMenu}
+                  />
+                </div>
+              </div>
+            )
+          )
+        )}
       </div>
     </section>
   );

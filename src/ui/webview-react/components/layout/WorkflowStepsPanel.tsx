@@ -27,15 +27,11 @@ import {
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
-import {
-  type PromptOverride,
-} from "../prompts/WorkflowStep";
+import { type PromptOverride } from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
-import {
-  PauseBoundary,
-} from "../prompts/ExecutingStepHighlight";
+import { PauseBoundary } from "../prompts/ExecutingStepHighlight";
 import {
   WorkflowStepRow,
   SortableWorkflowStepWrapper,
@@ -67,11 +63,8 @@ import {
 } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { ExitButton } from "../shared";
-import {
-  getStepAccentClass,
-  isExecutionBusy,
-  isWorkflowRunning,
-} from "../../utils/status";
+import { isExecutionBusy, isWorkflowRunning } from "../../utils/status";
+import { resolveStepColor } from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -79,9 +72,7 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-import {
-  isParallelGroupTopologyLocked,
-} from "@utils/stepContextMenuItems";
+import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 
 type PendingDragContainer = {
   id: string;
@@ -210,7 +201,11 @@ export function movePendingDragItem(
   } else {
     const standalone = { id: activeId, items: [activeId] };
     const overIndex = next.order.indexOf(overId);
-    next.order.splice(overIndex < 0 ? next.order.length : overIndex, 0, activeId);
+    next.order.splice(
+      overIndex < 0 ? next.order.length : overIndex,
+      0,
+      activeId
+    );
     next.containers[activeId] = standalone;
   }
   return next;
@@ -271,9 +266,7 @@ export function buildPendingReorderPayload(
     if (!container) continue;
     const start = newPendingOrder.length;
     for (const item of container.items) {
-      newPendingOrder.push(
-        absoluteIndexFromStepDragId(item) - currentStep
-      );
+      newPendingOrder.push(absoluteIndexFromStepDragId(item) - currentStep);
     }
     if (container.groupId) {
       const group = parallelGroups.find(
@@ -727,12 +720,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const handleFailFastChange = useCallback(
     (group: (typeof parallelGroups)[number], failFast: boolean) => {
       if (
-        isParallelGroupTopologyLocked(
-          group,
-          steps,
-          currentStep,
-          executionState
-        )
+        isParallelGroupTopologyLocked(group, steps, currentStep, executionState)
       ) {
         return;
       }
@@ -1172,9 +1160,16 @@ const WorkflowStepsPanelInner: React.FC<{
                     className="relative flex items-stretch"
                     data-workflow-step-index={index}
                   >
-                    {/* Keep the status accent separate from the consistently sized number column. */}
+                    {/* Keep the identity rail separate from the consistently sized number column. */}
                     <div
-                      className={`w-[2px] flex-shrink-0 self-stretch ${getStepAccentClass(status)}`}
+                      className="w-[2px] flex-shrink-0 self-stretch"
+                      style={{
+                        backgroundColor: resolveStepColor({
+                          step,
+                          harnessId: getStepHarnessModel(step, status)
+                            .harnessId,
+                        }),
+                      }}
                     />
                     <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
                       {slotNumber}
@@ -1232,12 +1227,9 @@ const WorkflowStepsPanelInner: React.FC<{
                     if (container.groupId) {
                       pendingOffset += container.items.length;
                       const group = parallelGroups.find(
-                        (candidate) =>
-                          candidate.id === container.groupId
+                        (candidate) => candidate.id === container.groupId
                       );
-                      return group
-                        ? renderParallelGroup(group, true)
-                        : null;
+                      return group ? renderParallelGroup(group, true) : null;
                     }
 
                     const id = container.items[0];
