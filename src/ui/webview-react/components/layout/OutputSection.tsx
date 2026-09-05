@@ -340,6 +340,7 @@ const OutputSectionInner: React.FC = () => {
   const collapsedToolOutputLineCount = useSettingsStore(
     (s) => s.globalSettings.collapsedToolOutputLineCount
   );
+  const effectiveHarness = useSettingsStore((s) => s.getEffectiveHarness());
   const atomicContextReferences = useSettingsStore(
     (s) => s.globalSettings.atomicContextReferences
   );
@@ -493,6 +494,7 @@ const OutputSectionInner: React.FC = () => {
     steps,
     parallelGroups,
     finalStep,
+    effectiveHarness,
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,

@@ -23,6 +23,8 @@ import {
   OUTPUT_MESSAGE_TYPES,
   OPERATION_STATUS,
   WORKFLOW_TOKEN_COVERAGE,
+  STEP_TYPES,
+  type HarnessId,
   type OutputRowKind,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
@@ -82,6 +84,7 @@ import {
   toolResultPrefixWidth,
 } from "./outputLineMetrics";
 import type { DiffRenderPlan } from "./rdvAdapter";
+import { resolveStepColor } from "./stepColor";
 
 export interface OutputRowPromptUndoAction {
   label: string;
@@ -134,9 +137,10 @@ export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   promptUndo?: OutputRowPromptUndoMeta;
   activityKey?: string;
   activityFirst?: boolean;
-  activityContinuation?: boolean;
   activityLabel?: string;
   activityName?: string;
+  /** Identity color painted by OutputRow's inset gutter bar. */
+  stepColor?: string;
 }
 
 export interface AttemptGroupSummaryRow extends OutputRowBase<
@@ -318,6 +322,8 @@ export interface BuildOutputRowsInput {
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null | undefined;
   parallelGroups?: readonly ParallelGroupDefinition[];
+  /** Workflow-level fallback for prompt-step harness resolution. */
+  effectiveHarness?: HarnessId;
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
@@ -364,7 +370,10 @@ export function getParallelGroupForStep(
 
 type ConcurrentGroupInput = Pick<
   BuildOutputRowsInput,
-  "parallelGroups" | "isViewingHistory" | "historyOutputs" | "workspaceSnapshots"
+  | "parallelGroups"
+  | "isViewingHistory"
+  | "historyOutputs"
+  | "workspaceSnapshots"
 >;
 
 export function getConcurrentGroupForStep(
@@ -466,6 +475,18 @@ function getStepName(
 ): string {
   const name = step?.name?.trim();
   return name || fallback;
+}
+
+function getEffectiveStepHarness(
+  step: WorkflowStep,
+  effectiveHarness: HarnessId | undefined
+): HarnessId | undefined {
+  // Runtime metadata is authoritative for started steps: changing workflow
+  // defaults while viewing a run must not recolor its existing output.
+  if (step.type === STEP_TYPES.SCRIPT) return undefined;
+  return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
+    | HarnessId
+    | undefined;
 }
 
 function getStepOutputArtifacts(
@@ -1848,6 +1869,7 @@ export function buildOutputRows(
   const stepOutputsMap = new Map<string, CliOutputType[]>();
   const lastCliIndexPerStep = new Map<string, number>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
+  const stepColorByTargetKey = new Map<string, string>();
   const firstRowIndexByTarget = new Map<string, number>();
   const anchorRowIndexByTarget = new Map<string, number>();
   const collapsedToolOutputLineCount =
@@ -1878,6 +1900,43 @@ export function buildOutputRows(
       )
       .map((message) => getTargetKey(message.target))
   );
+  const getStepOutputColor = (
+    target: OutputMessageTarget
+  ): string | undefined => {
+    const targetKey = getTargetKey(target);
+    const cached = stepColorByTargetKey.get(targetKey);
+    if (cached !== undefined) return cached;
+
+    const step =
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? input.finalStep
+        : input.steps[target.index];
+    if (!step) return undefined;
+
+    const group =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? getParallelGroupForStep(input.parallelGroups, target.index)
+        : undefined;
+    const groupMembers = group
+      ? input.steps
+          .slice(group.startIndex, group.endIndex + 1)
+          .map((member, offsetInGroup) => ({
+            step: member,
+            harnessId: getEffectiveStepHarness(member, input.effectiveHarness),
+            offsetInGroup,
+          }))
+      : undefined;
+    const color = resolveStepColor({
+      step,
+      harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
+      group,
+      offsetInGroup:
+        group === undefined ? undefined : target.index - group.startIndex,
+      groupMembers,
+    });
+    stepColorByTargetKey.set(targetKey, color);
+    return color;
+  };
   let previousActivityTargetKey: string | undefined;
   // An attempt's chrome belongs to the attempt, not to each activity slice
   // inside it: the header/prompt/command/error open the block and the
@@ -1998,8 +2057,6 @@ export function buildOutputRows(
         activityKey: message.activityKey,
         activityFirst:
           message.isActivity && stampActivityFirst ? true : undefined,
-        activityContinuation:
-          message.isActivity && !activityFirst ? true : undefined,
         activityLabel: message.isActivity
           ? stampActivityFirst
             ? `Step ${target.index + 1}`
@@ -2172,9 +2229,7 @@ export function buildOutputRows(
       getParallelGroupForStep(input.parallelGroups, target.index) !== undefined;
     if (message.isActivity) previousActivityTargetKey = targetKey;
     // What belongs to *every* row the slice emits. `activityKey` is looked up
-    // per row by the minimap and the streaming anchor. The continuation rail is
-    // a continuous left edge down the slice's content, so it is per-row too —
-    // stamping it once per slice would break it into scattered dashes.
+    // per row by the minimap and the streaming anchor.
     //
     // The `⚡ Step N` label is the opposite: it describes the slice, not each
     // row in it, so it is stamped on the opening row alone (below). Spreading
@@ -2183,7 +2238,6 @@ export function buildOutputRows(
     const activityMeta = message.isActivity
       ? {
           activityKey: message.activityKey,
-          activityContinuation: activityFirst ? undefined : true,
           promptUndo,
         }
       : {};
@@ -2453,9 +2507,7 @@ export function buildOutputRows(
     // event. `outputRowActivityChrome` charges 20px per flagged row, so this is
     // also what keeps the estimate matched to what actually renders.
     const sliceOpener =
-      message.isActivity &&
-      stampActivityFirst &&
-      rows.length > contentRowStart
+      message.isActivity && stampActivityFirst && rows.length > contentRowStart
         ? rows[contentRowStart]
         : undefined;
     if (sliceOpener) {
@@ -2514,7 +2566,10 @@ export function buildOutputRows(
     // only ever sees the copy. Estimating the draft would leave every published
     // row cold and cost the first `estimateSize` sweep a second full pass.
     rows: rows.map((row) => {
-      const publishedRow = { ...row };
+      const publishedRow = {
+        ...row,
+        stepColor: getStepOutputColor(row.target),
+      };
       publishedRow.estimateSize = estimateOutputRowHeight(
         publishedRow,
         input.outputFontSize,

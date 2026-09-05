@@ -13,25 +13,25 @@ This doc is a design brainstorm, not an approved plan. Nothing here is implement
 
 ## What currently draws step attribution
 
-| #   | Surface           | Where                                                 | Renders                                                              | Added by     |
-| --- | ----------------- | ----------------------------------------------------- | -------------------------------------------------------------------- | ------------ |
-| 1   | `cli-header` row  | `OutputRow.tsx` (~line 1190)                          | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b` | pre-existing |
-| 3   | activity label    | `ActivityAttribution` when `row.activityFirst`        | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`)   | parallel     |
-| 4   | activity rail     | `ActivityAttribution` when `row.activityContinuation` | `border-l-2 border-output-streaming/40` + `pl-2` on the content      | parallel     |
-| 5   | minimap pills     | `OutputMinimap.tsx`                                   | one pill per step on the right rail                                  | pre-existing |
+| #   | Surface             | Where                                          | Renders                                                                                  | Added by     |
+| --- | ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------ |
+| 1   | `cli-header` row    | `OutputRow.tsx` (~line 1190)                   | `[10:41:20 AM] [💬 Step 4] name  harness · model`, with a `border-b`                     | pre-existing |
+| 3   | activity label      | `ActivityAttribution` when `row.activityFirst` | `⚡ Step 4 · name`, 20px tall (`OUTPUT_ROW_ACTIVITY_LABEL_HEIGHT`), parallel groups only | parallel     |
+| 4   | output identity bar | `OutputRow`'s step wrapper                     | `box-shadow: inset 3px 0 0 <step colour>`, every row and every run                       | item 6       |
+| 5   | minimap pills       | `OutputMinimap.tsx`                            | one pill per step on the right rail                                                      | pre-existing |
 
 Rows 1 and 3 are emitted from `buildOutputRows` and both identify the step.
 
-### What the rail (4) actually means today
+### What the rail (4) meant before item 6
 
-`ActivityAttribution` renders **either** the label **or** the rail, never both, keyed off two
+`ActivityAttribution` rendered **either** the label **or** the rail, never both, keyed off two
 mutually exclusive flags on the row:
 
 - `activityFirst` → the 20px `⚡ Step N · name` label above the row.
 - `activityContinuation` → a `border-l-2 border-output-streaming/40` at the row's left edge plus
   `pl-2` on the content.
 
-So the rail's intended meaning is **"the step that was already writing is still the one writing"** —
+So the old rail's intended meaning was **"the step that was already writing is still the one writing"** —
 a _same-step-continues_ marker, not a step identifier. Two consequences follow, and both are why it
 reads as noise:
 
@@ -57,7 +57,7 @@ spread sites (~2303 streaming text, ~2375 per structured event, ~2429 streaming 
 response). A slice carrying _n_ visible events therefore stamps `activityFirst: true` on all _n_
 rows and paints the label _n_ times.
 
-The rail shares the spread but **not** the defect: `activityContinuation` is a continuous left edge
+The old rail shared the spread but **not** the defect: `activityContinuation` was a continuous left edge
 down a slice's content, so per-row is what it wants. Its problem is scope, not stamping — it is on
 for every slice after the first, which on a sequential run is essentially the whole attempt. That is
 what §1 and §5 address, not the stamping fix.
@@ -635,9 +635,15 @@ Worth stating because this pane is unusually sensitive to it (see
    Prompt and script shape remains distinct, and the running ring, context fill, and pause boundary
    are unchanged. `getStepAccentClass` remains in use for the final-step chip's status edge; it has
    no remaining step-chip callers.
-6. Replace the output pane's continuation rail with the zero-width inset gutter bar reading the same
+6. ~~Replace the output pane's continuation rail with the zero-width inset gutter bar reading the same
    resolver, painted on every row of every run. Watch the continuity trap: `OutputRow`'s non-CLI-group
-   return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.
+   return path has no padded wrapper, so the bar must be applied on both paths or it reads as dashed.~~
+   **Done (2026-09-04).** `OutputRow` now paints `box-shadow: inset 3px 0 0 <step colour>` on
+   every row wrapper, including sequential output and the bare non-CLI-group return path. The
+   non-CLI-group path uses the spec's default **3px overlap** treatment: it keeps the bar's geometry
+   identical without adding `pl-[3px]` or shifting the existing chrome rows. `activityContinuation`,
+   the shared streaming rail, and its `pl-2` content indent are removed; step colors are resolved
+   once per target using runtime harness metadata first, then the configured/effective harness.
 7. `ui.stepColors` in `schemas/settings-schema.json` + `CtrlYokeSettings.ts` — the `enabled` escape
    hatch and the per-harness overrides. Higher priority than it looks now that the bar is always-on
    chrome.
@@ -648,7 +654,7 @@ Worth stating because this pane is unusually sensitive to it (see
    only some of them leaves one step type unable to set what the other can, which is exactly the gap
    `executionMode` already closed.
 9. Independently of the colour work: delete the minimap's two activity dots and paint the step
-    colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
+   colour as a span in the channel they vacate (§7). Keep the `hasHiddenActivity` pulse.
 
 Step 3 is worth doing regardless of whether the colour work ever happens. Steps 4–6 are the colour
 work proper; 7 and 8 are persistence and can lag indefinitely. Step 8 is large enough to split in

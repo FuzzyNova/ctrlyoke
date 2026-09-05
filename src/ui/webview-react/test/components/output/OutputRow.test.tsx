@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
-import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
+import {
+  estimateOutputRowHeight,
+  type OutputRenderRow,
+  type StructuredEventRow,
+} from "@utils/outputRows";
 import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import {
@@ -293,6 +297,44 @@ describe("OutputRow hidden steps", () => {
     expect(
       container.querySelector("[data-hidden-output-activity]")
     ).not.toHaveClass("invisible");
+  });
+});
+
+describe("OutputRow step identity bar", () => {
+  it("paints the inset bar on both row wrapper paths without changing height estimates", () => {
+    const stepColor = "#123456";
+    const cliRow = {
+      ...buildStatsRow({ prompt: 0, completion: 0, total: 1 }),
+      stepColor,
+    };
+    const nonCliRow: OutputRenderRow = {
+      key: "queue:0:anchor",
+      target: TARGET,
+      estimateSize: 1,
+      rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+    };
+    const { container, rerender } = render(
+      <OutputRow row={cliRow} isExecutionActive={false} />
+    );
+
+    const cliBar = container.querySelector("[data-step-color-bar]");
+    expect(cliBar).toHaveStyle({ boxShadow: `inset 3px 0 0 ${stepColor}` });
+
+    rerender(
+      <OutputRow row={{ ...nonCliRow, stepColor }} isExecutionActive={false} />
+    );
+    const nonCliBar = container.querySelector("[data-step-color-bar]");
+    expect(nonCliBar).toHaveStyle({
+      boxShadow: `inset 3px 0 0 ${stepColor}`,
+    });
+    expect(nonCliRow.estimateSize).toBe(1);
+    expect(estimateOutputRowHeight(cliRow, 13, 760)).toBe(
+      estimateOutputRowHeight(
+        buildStatsRow({ prompt: 0, completion: 0, total: 1 }),
+        13,
+        760
+      )
+    );
   });
 });
 

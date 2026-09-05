@@ -30,6 +30,8 @@ import {
   getStreamingChunkKey,
 } from "@/types/messages";
 import {
+  HARNESS_CHART_COLORS,
+  HARNESS_IDS,
   OUTPUT_ROW_KINDS,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
@@ -373,18 +375,11 @@ describe("outputRows", () => {
       false,
     ]);
 
-    // The rail is a continuous left edge down a continuation slice's content,
-    // so unlike the label it stays on every one of that slice's rows —
-    // stamping it per slice would break it into scattered dashes.
-    expect(eventRows.map((row) => row.activityContinuation === true)).toEqual([
-      false,
-      false,
-      true,
-      true,
-    ]);
+    // The identity bar is carried by every row, including continuation slices.
+    expect(eventRows.every((row) => row.stepColor !== undefined)).toBe(true);
   });
 
-  it("renders continuation rails without sequential activity labels", () => {
+  it("paints sequential activity rows without sequential activity labels", () => {
     const targetA = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const targetB = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
     const allMessages = mapOrderedHistoryEntriesToMessages(
@@ -441,6 +436,7 @@ describe("outputRows", () => {
       diffExpansionState: new Map(),
       toolCallExpansionState: new Map(),
       defaultDiffCollapsed: false,
+      effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
     });
 
     const activityRows = result.rows.filter(
@@ -454,7 +450,11 @@ describe("outputRows", () => {
       OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
     ]);
     expect(activityRows.some((row) => row.activityFirst)).toBe(false);
-    expect(activityRows[1]?.activityContinuation).toBe(true);
+    expect(activityRows.map((row) => row.stepColor)).toEqual([
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+      HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI],
+    ]);
   });
 
   it("stamps activity labels once per contiguous run in parallel output", () => {
