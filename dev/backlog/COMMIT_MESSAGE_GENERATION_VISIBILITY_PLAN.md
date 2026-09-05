@@ -27,7 +27,7 @@ Traced through the code (line numbers re-verified 2026-08-24; content
 unchanged, only line numbers drifted slightly since the 2026-08-17 original):
 
 - `CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:144-371`)
-  tries the `ctrlyoke_submit_commit_message` MCP tool first, and only falls
+  tries the `submit_commit_message` MCP tool first, and only falls
   back to captured response text if the tool was never called
   (`CommitMessageGenerator.ts:313-337`).
 - The fallback text comes from `capturedResponseText`, set by an

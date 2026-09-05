@@ -16,7 +16,7 @@ their final names rather than launching and immediately being renamed.
 
 ## Problem
 
-A workflow step can only *append* to its own run's queue (`ctrlyoke_append_queue`). It cannot edit,
+A workflow step can only *append* to its own run's queue (`append_step`). It cannot edit,
 remove, or reorder a step that has already been queued but hasn't run yet. In practice this comes up
 constantly in long orchestrator-driven runs (e.g.
 [`spec-driven-loop.ctrlyoke.yaml`](../../src/templates/workflows/spec-driven-loop.ctrlyoke.yaml)):
@@ -68,16 +68,16 @@ for MCP and CLI callers instead of introducing anything new.
 
 ### MCP — same-run only, unchanged trust boundary
 
-Add three tools alongside `ctrlyoke_append_queue`, all scoped through the existing
+Add three tools alongside `append_step`, all scoped through the existing
 `resolveRun()`/`requireRunAddress()` path (`src/mcp-server.ts`) — no new addressing, no change to
-what a workflow step can reach. This is the same trust class `ctrlyoke_append_queue` already has
+what a workflow step can reach. This is the same trust class `append_step` already has
 today; it only fills out the missing CRUD verbs.
 
 - **Edit a step's prompt/config** — wraps `WorkingFileManager.updateStepAtRun`.
 - **Remove a step** — wraps `WorkingFileManager.deleteStepAtRun`.
 - **Reorder pending steps** — wraps `WorkingFileManager.reorderStepsAtRun`.
 - Consider exposing `insertStepAtRun`'s arbitrary-index insert directly rather than only through
-  `ctrlyoke_append_queue`'s coarser `next`/`end` position enum, now that precise addressing is
+  `append_step`'s coarser `next`/`end` position enum, now that precise addressing is
   already needed for edit/remove.
 
 All three must reject an index outside the pending region (`< currentIndex` or the in-flight step),
@@ -99,6 +99,8 @@ agent's own harness already enforces on shell commands.
 
 ## Naming — drop the redundant `ctrlyoke_` prefix, and `queue` → `step`/`steps`
 
+**Status:** Implemented 2026-09-05
+
 Pre-release, no users, no back-compat constraint — this is the time to fix this, and doing it
 alongside the new tools below means the new tools ship with their final names directly instead of
 needing a second rename later.
@@ -106,8 +108,8 @@ needing a second rename later.
 **Why the prefix is redundant.** Every MCP client namespaces tool calls as `mcp__<server>__<tool>`
 — that's the server boundary, not the tool name. Other MCP servers don't self-prefix: playwright's
 tools are `browser_click`, `browser_navigate`, not `playwright_browser_click`; cclsp's are
-`find_definition`, not `cclsp_find_definition`. ctrlyoke's own tools being named `ctrlyoke_append_queue`
-means the fully-qualified call is `mcp__ctrlyoke__ctrlyoke_append_queue` — doubled for no reason.
+`find_definition`, not `cclsp_find_definition`. ctrlyoke's own tools being named `append_step`
+means the fully-qualified call is `mcp__ctrlyoke__append_step` — doubled for no reason.
 
 **Why it's safe to change now.** Verified across all 6 harness providers
 (`src/core/harness/{claude,copilot,codex,antigravity,qwen,opencode}/*ToolPermissionMapper.ts`,
@@ -121,16 +123,16 @@ called. A rename touches zero permission/auto-approval logic on any harness.
 (`mcp__<server>__<tool>`), a generic name like `append_step` cannot collide with another attached
 MCP server's tool of the same name — the server prefix already disambiguates them structurally.
 
-### Proposed names
+### Final names
 
-| Current                          | Proposed               |
-| --------------------------------- | ----------------------- |
-| `ctrlyoke_queue_status`           | `workflow_status`       |
-| `ctrlyoke_append_queue`           | `append_step`           |
-| `ctrlyoke_capabilities`           | `capabilities`          |
-| `ctrlyoke_read_output`            | `read_output`           |
-| `ctrlyoke_global_status`          | `global_status`         |
-| `ctrlyoke_submit_commit_message`  | `submit_commit_message` |
+| Tool purpose         | Implemented name          |
+| -------------------- | ------------------------- |
+| Workflow status      | `workflow_status`         |
+| Append a step        | `append_step`             |
+| Capabilities         | `capabilities`            |
+| Read output          | `read_output`             |
+| Global status        | `global_status`           |
+| Submit commit message| `submit_commit_message`  |
 | *(new, this plan)* edit           | `edit_step`             |
 | *(new, this plan)* remove         | `remove_step`           |
 | *(new, this plan)* reorder        | `reorder_steps`         |
@@ -139,48 +141,42 @@ Consider folding arbitrary-index insert into `append_step` (accept a numeric ind
 `'next'`/`'end'` in its `position` field) rather than adding a fifth new tool — `insertStepAtRun`
 already supports it, so this is a schema addition, not new logic.
 
-`workflow_status` over `step_status`: the old name's "queue" never specifically meant *the step
-queue* as opposed to *the workflow* — `ctrlyoke_append_queue` already used "queue" loosely to mean
-"the workflow," and this tool reports the whole workflow's state (harness, model, execution state,
-every step), not just a step-level view. "Workflow" is the accurate noun here; the new edit/remove
-tools below are what "step" actually refers to.
+`workflow_status` over `step_status`: this tool reports the whole workflow's state (harness, model,
+execution state, every step), not just a step-level view. "Workflow" is the accurate noun here; the
+new edit/remove tools below are what "step" actually refers to.
 
 ### Single-source every tool name as a constant
 
-Today only 2 of the 6 names have an exported constant (`MCP_COMMIT_MESSAGE_TOOL_NAME`,
-`MCP_APPEND_QUEUE_TOOL_NAME`); the other 4 are bare string literals inline in
-`MCP_TOOL_DEFINITIONS`, and the audit below found 3 more files that hold their own independent
-literal copies rather than importing anything. Fix both as one piece of this change:
+All 6 existing names now have an exported constant in `McpToolDefinitions.ts`, and the audit below
+found 3 more files that held their own independent literal copies rather than importing anything.
+Fixing both closes the drift risk:
 
-- Export one named constant per tool in `McpToolDefinitions.ts` — the 6 renamed existing tools plus
-  the 3 new ones this plan adds (`edit_step`, `remove_step`, `reorder_steps`) — and have every
-  `name:` field in `MCP_TOOL_DEFINITIONS` reference its constant instead of a bare literal, matching
-  the pattern `MCP_APPEND_QUEUE_TOOL_NAME` already established.
+- Export one named constant per existing tool in `McpToolDefinitions.ts` and have every `name:` field
+  in `MCP_TOOL_DEFINITIONS` reference its constant instead of a bare literal. The three new tool
+  constants (`edit_step`, `remove_step`, `reorder_steps`) belong to the later mutation step.
 - Update the 3 duplicate-literal files found in the blast-radius audit
   (`CommitMessageGenerator.ts:345-349`, `McpRegistryFileManager.ts:255`,
   `McpServersEditor.tsx:36-56`) to import these constants instead of holding their own copies. This
   is what actually closes the drift risk the audit flagged — renaming the strings without also
   fixing these three would just relocate the duplication under new names.
-- `MCP_QUEUE_TOOL_NAMES` should be rebuilt from the same constants (and likely renamed itself, since
-  "queue" is going away as a concept here too — e.g. `MCP_WORKFLOW_TOOL_NAMES`).
+- `MCP_WORKFLOW_TOOL_NAMES` is rebuilt from the same five workflow-tool constants; the commit-message
+  tool remains in its separate skill subset.
 
 ### Blast radius (audited)
 
-`src/utils/McpToolDefinitions.ts` (`MCP_COMMIT_MESSAGE_TOOL_NAME`, `MCP_APPEND_QUEUE_TOOL_NAME`,
-`MCP_QUEUE_TOOL_NAMES`, and the inline `name:` literals) is the single source of truth and should be
-edited first.
+`src/utils/McpToolDefinitions.ts` (the six exported tool-name constants, `MCP_WORKFLOW_TOOL_NAMES`,
+and the `name:` fields) is the single source of truth and should be edited first.
 
 - **Duplicate literal arrays that will silently drift if missed** (these do not import the source of
   truth — real risk, independent of the rename):
   - `src/git/CommitMessageGenerator.ts:345-349` — own literal array of all 5 queue-tool names.
   - `src/utils/McpRegistryFileManager.ts:255` — own literal 2-name array.
   - `src/ui/webview-react/components/shared/McpServersEditor.tsx:36-56` — own literal `id:` list;
-    plausibly legitimate as a separate copy since `McpToolDefinitions.ts` is Node-only and not meant
-    for the webview bundle, but still needs manual updating on rename.
+    it now imports the shared constants because `McpToolDefinitions.ts` is safe for the webview bundle.
 - **Doc-comment/example references only** (cosmetic, low-risk, still worth fixing for accuracy):
   `CodexToolBuilder.ts:214,294`; `schemas/workflow-schema.json:1487` /
   `schemas/workflow-schema.yaml:1380` (the `mcpServers[].deniedTools` field description uses
-  `"ctrlyoke_append_queue"` as an example string); `src/types/CtrlYokeTypes.ts:106,790`.
+  `"append_step"` as an example string); `src/types/CtrlYokeTypes.ts:106,790`.
 - **Hand-written docs needing manual update:** `docs/reference/mcp-tools.md`, `README.md:12,190`.
 - **Auto-generated, no action needed:** `McpToolSkillGenerator` reads `MCP_TOOL_DEFINITIONS` at
   runtime and regenerates its skill text from the source of truth.
@@ -191,7 +187,7 @@ edited first.
   `src/templates/agents/ctrlyoke-workflow-composer.agent.md` (81).
 - **Tests to update:** `McpServer.test.ts`, `McpToolSkillGenerator.test.ts`, `SkillDiscovery.test.ts`,
   `HarnessFileManager.test.ts`, `mcp.harness.test.ts`, `inline-config.harness.test.ts`,
-  `CliEventMapper.test.ts` (asserts the literal split of `mcp__ctrlyoke__ctrlyoke_append_queue`),
+  `CliEventMapper.test.ts` (asserts the literal split of `mcp__ctrlyoke__append_step`),
   `LogParsers.test.ts`.
 - **Additional live reference sites the original audit missed** (verified 2026-09-05 by grepping all
   six current tool names across the repo — 185 occurrences in 47 files):

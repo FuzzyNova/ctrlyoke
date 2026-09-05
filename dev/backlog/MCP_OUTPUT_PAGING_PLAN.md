@@ -10,7 +10,7 @@ within the current run's scope.
 
 ## Problem
 
-`ctrlyoke_read_output` in `src/mcp-server.ts` has no paging. A caller either names
+`read_output` in `src/mcp-server.ts` has no paging. A caller either names
 explicit indices or gets every prompt in the run. For each requested index it
 returns the full `responseText` from `RunOutputResolver.resolveLatestAttempts`.
 
@@ -18,14 +18,13 @@ For a long workflow this means a step that wants "what did the previous step
 conclude" pulls back the entire response history into its context window. There is
 no way to read a bounded tail, and no way to resume where a previous read stopped.
 
-**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md) renames
-this tool `ctrlyoke_read_output` → `read_output` and moves every tool name behind an exported
-constant. Land that rename first, then apply this plan against the renamed tool, so the schema is
-edited once. Names below are the pre-rename ones.
+**Sequencing note (2026-09-05):** [`MCP_STEP_MUTATION_PLAN.md`](MCP_STEP_MUTATION_PLAN.md) has
+completed the naming pass and moved every tool name behind an exported constant. Apply this plan
+against the final `read_output` tool so the schema is edited once. Names below use the final names.
 
 ## Scope
 
-Add cursor-based reads to `ctrlyoke_read_output` only.
+Add cursor-based reads to `read_output` only.
 
 - An opaque cursor plus a caller-supplied limit, returning a `nextCursor` when
   more output remains.
@@ -54,7 +53,7 @@ new streaming or seeking mode. This keeps the "no additional full traversal"
 acceptance criterion trivially true: the existing single pass is unchanged,
 and the new logic runs only after it completes.
 
-### Input schema additions (`ctrlyoke_read_output`)
+### Input schema additions (`read_output`)
 
 - `cursor` (string, optional) — opaque. Internally a stringified character
   offset into the target's `responseText`; encoding is not a compatibility

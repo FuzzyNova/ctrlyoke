@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
-import { MCP_APPEND_QUEUE_TOOL_NAME } from "../../utils/McpToolDefinitions";
+import { MCP_APPEND_STEP_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
   WorkflowKey,
@@ -197,7 +197,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const run = await createRun("cli", "2026-01-01T00-00-00-000Z");
     const success = runMcpToolCli([
       "--tool",
-      "ctrlyoke_queue_status",
+      "workflow_status",
       "--args",
       "{}",
       "--workspace",
@@ -233,7 +233,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const outputPath = path.join(workspaceRoot, "commit-output-flag.txt");
     const result = runMcpToolCli([
       "--tool",
-      "ctrlyoke_submit_commit_message",
+      "submit_commit_message",
       "--args",
       JSON.stringify({ message: "feat: capture via flag" }),
       "--workspace",
@@ -259,7 +259,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const result = runMcpToolCli(
       [
         "--tool",
-        "ctrlyoke_submit_commit_message",
+        "submit_commit_message",
         "--args",
         JSON.stringify({ message: "fix: capture via env" }),
         "--workspace",
@@ -279,7 +279,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
-  test("publishes a run address on ctrlyoke_global_status and nowhere else", async () => {
+  test("publishes a run address on global_status and nowhere else", async () => {
     const server = await setup();
     const selectorKeys = () =>
       server.getToolDefinitions().map((tool) => ({
@@ -296,15 +296,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // Only the cross-workflow read tool is addressable, and the shape does not
     // change with the environment: there is one supported way to run this
     // server, so there is one tool surface.
-    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+    assert.deepStrictEqual(addressable(), ["global_status"]);
     process.env.CTRLYOKE_WORKING_FILE = (
       await createRun("schema", "2026-01-01T00-00-00-000Z")
     ).runFilePath;
-    assert.deepStrictEqual(addressable(), ["ctrlyoke_global_status"]);
+    assert.deepStrictEqual(addressable(), ["global_status"]);
 
     const append: any = server
       .getToolDefinitions()
-      .find((tool) => tool.name === MCP_APPEND_QUEUE_TOOL_NAME)!.inputSchema;
+      .find((tool) => tool.name === MCP_APPEND_STEP_TOOL_NAME)!.inputSchema;
     assert.deepStrictEqual(Object.keys(append.properties).sort(), [
       "position",
       "source",
@@ -324,10 +324,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const status = responseJson(
-      await server.invokeTool("ctrlyoke_queue_status", other)
+      await server.invokeTool("workflow_status", other)
     );
     const output = responseJson(
-      await server.invokeTool("ctrlyoke_read_output", other)
+      await server.invokeTool("read_output", other)
     );
 
     assert.strictEqual(status.metadata.workflowKey, own.workflowKey);
@@ -362,7 +362,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const all = responseJson(
-      await server.invokeTool("ctrlyoke_global_status", {})
+      await server.invokeTool("global_status", {})
     );
     assert.deepStrictEqual(
       all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
@@ -370,7 +370,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
 
     const narrowed = responseJson(
-      await server.invokeTool("ctrlyoke_global_status", {
+      await server.invokeTool("global_status", {
         workflowKey: other.workflowKey,
       })
     );
@@ -394,20 +394,20 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const notAttached = /no ctrlyoke workflow run is attached/i;
 
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_queue_status", {}),
+      () => server.invokeTool("workflow_status", {}),
       notAttached
     );
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_read_output", {}),
+      () => server.invokeTool("read_output", {}),
       notAttached
     );
     await assert.rejects(
-      () => server.invokeTool("ctrlyoke_global_status", {}),
+      () => server.invokeTool("global_status", {}),
       notAttached
     );
     await assert.rejects(
       () =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "no target" }],
         }),
@@ -426,7 +426,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "end",
         steps: [{ prompt: "new tail", _runtime: { responseText: "omit" } }],
       })
@@ -457,7 +457,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "end",
         steps: [{ prompt: "repeat this gate" }],
       })
@@ -484,7 +484,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // A supplied address is not an alternate target — it is ignored outright,
     // so a workflow cannot queue work into a sibling run by guessing its ref.
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         workflowKey: other.workflowKey,
         runRef: other.runRef,
         position: "end",
@@ -531,7 +531,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     try {
       const result = responseJson(
-        await server.invokeTool("ctrlyoke_append_queue", {
+        await server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "active tail" }],
         })
@@ -579,7 +579,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     try {
       const result = responseJson(
-        await server.invokeTool("ctrlyoke_append_queue", {
+        await server.invokeTool("append_step", {
           position: "next",
           steps: [{ prompt: "steered" }],
         })
@@ -627,7 +627,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
-      await server.invokeTool("ctrlyoke_append_queue", {
+      await server.invokeTool("append_step", {
         position: "next",
         steps: [{ prompt: "steered" }],
       })
@@ -662,7 +662,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     await assert.rejects(
       () =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt: "blocked" }],
         }),
@@ -678,7 +678,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     // work twice gets both appends rather than a spurious revision conflict.
     const results = await Promise.all(
       ["first", "second"].map((prompt) =>
-        server.invokeTool("ctrlyoke_append_queue", {
+        server.invokeTool("append_step", {
           position: "end",
           steps: [{ prompt }],
         })

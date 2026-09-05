@@ -131,9 +131,9 @@ suite("Execution-root asset discovery", () => {
 
       assert.ok(skills?.includes("Use when MCP config is disabled by policy"));
       assert.ok(skills?.includes("## Available ctrlyoke MCP tools"));
-      assert.ok(skills?.includes("### ctrlyoke_queue_status"));
-      assert.ok(skills?.includes("### ctrlyoke_global_status"));
-      assert.ok(!skills?.includes("ctrlyoke_submit_commit_message"));
+      assert.ok(skills?.includes("### workflow_status"));
+      assert.ok(skills?.includes("### global_status"));
+      assert.ok(!skills?.includes("submit_commit_message"));
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -150,8 +150,8 @@ suite("Execution-root asset discovery", () => {
       );
 
       assert.ok(skills?.includes("Pass the commit output path"));
-      assert.ok(skills?.includes("### ctrlyoke_submit_commit_message"));
-      assert.ok(!skills?.includes("### ctrlyoke_queue_status"));
+      assert.ok(skills?.includes("### submit_commit_message"));
+      assert.ok(!skills?.includes("### workflow_status"));
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

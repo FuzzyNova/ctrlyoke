@@ -152,7 +152,7 @@ and `QueueOperations` are gone.
 
 `docs/reference/mcp-tools.md` does not document response shapes at all, so
 nothing there is invalidated. It is separately stale — it omits
-`ctrlyoke_global_status` and `ctrlyoke_submit_commit_message`, and lists
+`global_status` and `submit_commit_message`, and lists
 `append_queue`'s parameters as `prompts`/`reason` when the actual schema is
 `steps`/`position`/`source`. Fixing that is adjacent, optional, and explicitly
 not required by this change.
@@ -169,10 +169,10 @@ workspace via its `createRun` helper and reads responses with `responseJson`, so
 these are additions to an existing harness rather than new scaffolding. No
 existing assertion covers the emitted path value, so nothing needs updating.
 
-- `ctrlyoke_queue_status` emits an absolute `workingFile` equal to the run file
+- `workflow_status` emits an absolute `workingFile` equal to the run file
   on disk, and a `runDirectory` that is its parent.
-- `ctrlyoke_append_queue` emits the same two fields with the same values.
-- `ctrlyoke_global_status` emits both fields for every listed workflow,
+- `append_step` emits the same two fields with the same values.
+- `global_status` emits both fields for every listed workflow,
   including one that has never been promoted (draft branch → draft directory).
 - Neither field ever begins with `..` — the direct regression guard, and the
   one assertion that would have caught this at the time.
@@ -186,7 +186,7 @@ existing assertion covers the emitted path value, so nothing needs updating.
 - `runDirectory` is present beside it in all three, and is the directory that
   actually contains `workflow.ctrlyoke.json`, `manifest.json`, and
   `events.jsonl`.
-- Draft-only lineages in `ctrlyoke_global_status` report their draft directory
+- Draft-only lineages in `global_status` report their draft directory
   rather than being skipped or emitting a run path.
 - Both fields are identical in shape under `storage.runHistoryLocation` of
   `user` and `workspace`; only the location differs.
@@ -195,7 +195,7 @@ existing assertion covers the emitted path value, so nothing needs updating.
 
 ## Non-goals
 
-- A new MCP tool for paths, or any expansion of `ctrlyoke_global_status`'s
+- A new MCP tool for paths, or any expansion of `global_status`'s
   selector.
 - Exposing `manifest.json` / `events.jsonl` paths individually — `runDirectory`
   covers them.

@@ -6,12 +6,12 @@ ctrlyoke exposes built-in tools for workflows and chat integrations that need to
 
 | Tool                    | Purpose                                         |
 | ----------------------- | ----------------------------------------------- |
-| `ctrlyoke_queue_status` | Return queue metadata and step state            |
-| `ctrlyoke_append_queue` | Append prompts to the current queue             |
-| `ctrlyoke_capabilities` | Return available harnesses and supported models |
-| `ctrlyoke_read_output`  | Read output from completed prompts              |
+| `workflow_status` | Return queue metadata and step state            |
+| `append_step` | Append prompts to the current queue             |
+| `capabilities` | Return available harnesses and supported models |
+| `read_output`  | Read output from completed prompts              |
 
-## `ctrlyoke_append_queue`
+## `append_step`
 
 This tool accepts:
 

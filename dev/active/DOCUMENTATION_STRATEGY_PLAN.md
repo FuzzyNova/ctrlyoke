@@ -486,7 +486,7 @@ ctrlyoke/
 │   │   ├── workflow-schema.md     # Full property list (hand-maintained initially)
 │   │   ├── settings.md            # All VS Code settings documented
 │   │   ├── commands.md            # All command palette commands
-│   │   └── mcp-tools.md           # ctrlyoke_queue_status, ctrlyoke_append_queue
+│   │   └── mcp-tools.md           # workflow_status, append_step
 │   │
 │   ├── cli/                       # CLI binary documentation
 │   │   ├── index.md               # CLI overview

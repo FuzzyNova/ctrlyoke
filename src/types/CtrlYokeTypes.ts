@@ -103,7 +103,7 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
   /**
    * Tool names from this server to deny at execution time.
-   * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["ctrlyoke_append_queue"]`).
+   * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["append_step"]`).
    * Translated to `mcp__<id>__<tool>` deny patterns and merged into the harness permission args.
    * Supported on harnesses that accept tool deny patterns (e.g. Claude CLI `--disallowedTools`).
    */
@@ -787,7 +787,7 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
  * True when a workflow has something to execute. A `finalStep` counts as a
  * step: a final-step-only workflow (empty `steps`, orchestrating `finalStep`)
  * is a valid, supported shape — the final step appends the queue at runtime via
- * `ctrlyoke_append_queue`. See the Spec-Driven Loop template. Anything that
+ * `append_step`. See the Spec-Driven Loop template. Anything that
  * gates loading, validation, or execution on "does this workflow have work"
  * must use this rather than checking `steps.length` alone.
  */

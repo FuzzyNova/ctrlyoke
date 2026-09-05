@@ -15,7 +15,10 @@ import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineage
 import { Log } from "../utils/Log";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
-import { MCP_COMMIT_MESSAGE_TOOL_NAME } from "../utils/McpToolDefinitions";
+import {
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_WORKFLOW_TOOL_NAMES,
+} from "../utils/McpToolDefinitions";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -41,7 +44,7 @@ const execFileAsync = promisify(execFile);
 // The harness handles actual context-window limits natively — this is just a safeguard
 // against truly pathological diffs (e.g. generated files, minified bundles).
 const MAX_DIFF_BYTES = 750 * 1024;
-const COMMIT_MESSAGE_MCP_TOOL = MCP_COMMIT_MESSAGE_TOOL_NAME;
+const COMMIT_MESSAGE_MCP_TOOL = MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
 
@@ -340,14 +343,8 @@ export class CommitMessageGenerator {
             CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
           },
           autoApprove: true,
-          // Deny all queue-management tools — the AI only needs submit_commit_message.
-          deniedTools: [
-            "ctrlyoke_queue_status",
-            "ctrlyoke_append_queue",
-            "ctrlyoke_capabilities",
-            "ctrlyoke_read_output",
-            "ctrlyoke_global_status",
-          ],
+          // Deny all workflow tools — the AI only needs submit_commit_message.
+          deniedTools: [...MCP_WORKFLOW_TOOL_NAMES],
         }
       : undefined;
 
@@ -476,7 +473,7 @@ export class CommitMessageGenerator {
       const workflowKey = generationState.workflowKey;
       const runRef = generationState.runRef;
 
-      // Primary path: read the commit message written by ctrlyoke_submit_commit_message.
+      // Primary path: read the commit message written by submit_commit_message.
       if (useMcpCapture) {
         let mcpMessage: string | undefined;
         try {

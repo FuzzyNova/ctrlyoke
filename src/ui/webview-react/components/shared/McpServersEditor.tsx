@@ -3,6 +3,13 @@ import {
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
 } from "@root/types/DashboardConstants";
+import {
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+} from "@root/utils/McpToolDefinitions";
 import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
@@ -33,27 +40,27 @@ const CTRLYOKE_USER_TOOLS: {
   description: string;
 }[] = [
   {
-    id: "ctrlyoke_queue_status",
-    label: "Queue status",
+    id: MCP_WORKFLOW_STATUS_TOOL_NAME,
+    label: "Workflow status",
     description: "Read this workflow's queue and execution state",
   },
   {
-    id: "ctrlyoke_append_queue",
-    label: "Append to queue",
+    id: MCP_APPEND_STEP_TOOL_NAME,
+    label: "Append step",
     description: "Add prompts after the current step or at the end",
   },
   {
-    id: "ctrlyoke_capabilities",
+    id: MCP_CAPABILITIES_TOOL_NAME,
     label: "Capabilities",
     description: "List installed harnesses and their available models",
   },
   {
-    id: "ctrlyoke_read_output",
+    id: MCP_READ_OUTPUT_TOOL_NAME,
     label: "Read output",
     description: "Read AI response text from completed steps",
   },
   {
-    id: "ctrlyoke_global_status",
+    id: MCP_GLOBAL_STATUS_TOOL_NAME,
     label: "Global status",
     description: "List all workflows running in this workspace",
   },

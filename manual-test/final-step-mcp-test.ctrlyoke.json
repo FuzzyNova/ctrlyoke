@@ -8,6 +8,6 @@
   "finalStep": {
     "name": "final-step-check",
     "mcpServers": ["ctrlyoke"],
-    "prompt": "Call the tool 'ctrlyoke_queue_status' (no parameters needed). Examine the JSON response.\n\nLook at the completed steps. If a step named 'added by final step' is listed in the completed steps:\n  Say: 'TEST PASSED — the appended step ran and finalStep was called again.'\n\nIf NO step named 'added by final step' exists in the completed steps:\n  Call 'ctrlyoke_append_queue' to add a new step with:\n    name: 'added by final step'\n    prompt: 'Just say: hi'\n  After appending, say: 'Appended new step — finalStep will run again once it completes.'\n\nDo nothing else."
+    "prompt": "Call the tool 'workflow_status' (no parameters needed). Examine the JSON response.\n\nLook at the completed steps. If a step named 'added by final step' is listed in the completed steps:\n  Say: 'TEST PASSED — the appended step ran and finalStep was called again.'\n\nIf NO step named 'added by final step' exists in the completed steps:\n  Call 'append_step' to add a new step with:\n    name: 'added by final step'\n    prompt: 'Just say: hi'\n  After appending, say: 'Appended new step — finalStep will run again once it completes.'\n\nDo nothing else."
   }
 }

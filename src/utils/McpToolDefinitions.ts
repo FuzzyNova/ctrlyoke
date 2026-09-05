@@ -3,7 +3,7 @@ import { QUEUE_POSITION } from "../types/DashboardConstants";
 /**
  * JSON-schema shape used by ctrlyoke's MCP tools.
  *
- * Kept in a small Node-only module so prompt helpers can describe the tools
+ * Kept in a small shared module so prompt helpers can describe the tools
  * without importing the MCP server entrypoint (and its transport setup).
  */
 export interface McpToolInputSchema {
@@ -21,24 +21,36 @@ export interface McpToolDefinition {
   inputSchema: McpToolInputSchema;
 }
 
-/** Tool used by the structured commit-message capture path. */
-export const MCP_COMMIT_MESSAGE_TOOL_NAME = "ctrlyoke_submit_commit_message";
+/** Tool that reports the current workflow state. */
+export const MCP_WORKFLOW_STATUS_TOOL_NAME = "workflow_status";
 
-/** Tool used to add one or more steps to the workflow's queue. */
-export const MCP_APPEND_QUEUE_TOOL_NAME = "ctrlyoke_append_queue";
+/** Tool used to add one or more steps to the workflow. */
+export const MCP_APPEND_STEP_TOOL_NAME = "append_step";
+
+/** Tool that lists the installed harnesses and supported models. */
+export const MCP_CAPABILITIES_TOOL_NAME = "capabilities";
+
+/** Tool that reads output from earlier workflow steps. */
+export const MCP_READ_OUTPUT_TOOL_NAME = "read_output";
+
+/** Tool that lists other workflows in the workspace. */
+export const MCP_GLOBAL_STATUS_TOOL_NAME = "global_status";
+
+/** Tool used by the structured commit-message capture path. */
+export const MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME = "submit_commit_message";
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
-    name: "ctrlyoke_queue_status",
+    name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
       "See the steps in your workflow: which have finished, which is running now, and which are still queued.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: MCP_APPEND_QUEUE_TOOL_NAME,
+    name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call ctrlyoke_capabilities first if you want to choose a harness or model for the new steps.",
+      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call capabilities first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -96,13 +108,13 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: "ctrlyoke_capabilities",
+    name: MCP_CAPABILITIES_TOOL_NAME,
     description:
       "List the harnesses installed on this machine and the models each one supports. Call this before setting a harness or model on a step so you pick values that exist.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "ctrlyoke_read_output",
+    name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
       "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work.",
     inputSchema: {
@@ -118,7 +130,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: "ctrlyoke_global_status",
+    name: MCP_GLOBAL_STATUS_TOOL_NAME,
     description:
       "List the other ctrlyoke workflows in this workspace and what they are doing. Call this before wide-reaching edits so you can leave files another workflow is working on alone, and recognize build or test failures it caused rather than chasing them.",
     inputSchema: {
@@ -127,7 +139,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         workflowKey: {
           type: "string",
           description:
-            "Report only this workflow, as identified by a previous ctrlyoke_global_status call.",
+            "Report only this workflow, as identified by a previous global_status call.",
         },
         runRef: {
           type: "string",
@@ -138,7 +150,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: MCP_COMMIT_MESSAGE_TOOL_NAME,
+    name: MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
     description:
       "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
     inputSchema: {
@@ -154,11 +166,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
 ];
 
-/** Queue tools documented by the built-in MCP skill. */
-export const MCP_QUEUE_TOOL_NAMES = [
-  "ctrlyoke_queue_status",
-  MCP_APPEND_QUEUE_TOOL_NAME,
-  "ctrlyoke_capabilities",
-  "ctrlyoke_read_output",
-  "ctrlyoke_global_status",
+/** Workflow tools documented by the built-in MCP skill. */
+export const MCP_WORKFLOW_TOOL_NAMES = [
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
 ] as const;

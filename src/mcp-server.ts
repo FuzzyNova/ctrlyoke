@@ -55,9 +55,13 @@ import {
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
 import {
-  MCP_APPEND_QUEUE_TOOL_NAME,
-  MCP_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
 } from "./utils/McpToolDefinitions";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
@@ -218,17 +222,17 @@ export class CtrlYokeMCPServer {
   /** Dispatch one tool without transport error wrapping; useful to embedders and focused tests. */
   public async invokeTool(name: string, args: unknown): Promise<unknown> {
     switch (name) {
-      case "ctrlyoke_queue_status":
+      case MCP_WORKFLOW_STATUS_TOOL_NAME:
         return this.handleQueueStatus();
-      case MCP_APPEND_QUEUE_TOOL_NAME:
+      case MCP_APPEND_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleQueueAppend(args));
-      case "ctrlyoke_capabilities":
+      case MCP_CAPABILITIES_TOOL_NAME:
         return this.handleCapabilities();
-      case "ctrlyoke_read_output":
+      case MCP_READ_OUTPUT_TOOL_NAME:
         return this.handleReadOutput(args);
-      case "ctrlyoke_global_status":
+      case MCP_GLOBAL_STATUS_TOOL_NAME:
         return this.handleGlobalStatus(args);
-      case MCP_COMMIT_MESSAGE_TOOL_NAME:
+      case MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME:
         return this.handleSubmitCommitMessage(args);
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -266,7 +270,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_queue_status tool invocation
+   * Handle workflow_status tool invocation
    * Returns comprehensive queue state including metadata and all prompts
    */
   private async handleQueueStatus() {
@@ -329,7 +333,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_append_queue tool invocation.
+   * Handle append_step tool invocation.
    * Adds prompts to this server's own run with position control. The target is
    * never taken from the arguments — see `resolveRun`.
    */
@@ -364,7 +368,7 @@ export class CtrlYokeMCPServer {
     }
     if (steps.some((step) => "parallel" in step)) {
       throw new Error(
-        "ctrlyoke_append_queue accepts flat workflow steps only; parallel groups cannot be created through MCP"
+        "append_step accepts flat workflow steps only; parallel groups cannot be created through MCP"
       );
     }
 
@@ -513,7 +517,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_capabilities tool invocation.
+   * Handle capabilities tool invocation.
    * Returns available harnesses and their supported models.
    */
   private async handleCapabilities() {
@@ -551,7 +555,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_read_output tool invocation.
+   * Handle read_output tool invocation.
    * Returns AI response text from completed prompts.
    */
   private async handleReadOutput(args: any) {
@@ -616,7 +620,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_global_status tool invocation.
+   * Handle global_status tool invocation.
    * The only tool that reports on workflows other than this server's own, and
    * read-only by design: agents call it to learn what sibling workflows are
    * running so they can avoid file conflicts and attribute stray build errors.
@@ -751,7 +755,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle ctrlyoke_submit_commit_message tool invocation.
+   * Handle submit_commit_message tool invocation.
    * Writes the commit message to the output path specified by CTRLYOKE_COMMIT_OUTPUT.
    * The CLI entrypoint can populate that variable from --commit-output.
    * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
@@ -784,7 +788,7 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Optional narrowing filters for `ctrlyoke_global_status`. Both fields are
+   * Optional narrowing filters for `global_status`. Both fields are
    * optional and neither can redirect any other tool — see `resolveRun`.
    */
   private parseOtherWorkflowSelector(

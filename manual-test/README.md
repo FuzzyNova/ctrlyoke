@@ -263,8 +263,8 @@ echo 0 > counter.txt
 
 **Expected:**
 
-- First prompt calls `ctrlyoke_append_queue` tool to add 2 new prompts
-- Second prompt calls `ctrlyoke_queue_status` to verify queue state
+- First prompt calls `append_step` tool to add 2 new prompts
+- Second prompt calls `workflow_status` to verify queue state
 - Dynamically added prompts execute automatically
 
 ---

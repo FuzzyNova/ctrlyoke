@@ -59,7 +59,7 @@ suite("HarnessFileManager", () => {
     );
     const exported = await fs.readFile(exportedPath, "utf8");
     assert.match(exported, /## Available ctrlyoke MCP tools/);
-    assert.match(exported, /### ctrlyoke_append_queue/);
+    assert.match(exported, /### append_step/);
     assert.match(exported, /--working-file/);
   });
 });
