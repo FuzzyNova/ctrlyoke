@@ -44,6 +44,9 @@ import {
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
 
+const pythonExecutables = new Map<string, string>();
+const powerShellExecutables = new Map<string, string>();
+
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
   passed: boolean;
@@ -763,16 +766,28 @@ export class EndConditionEvaluator {
    * Resolve Python executable — prefer `python3` (Linux/macOS standard), fall back to `python`.
    */
   private resolvePythonExecutable(): string {
-    if (process.platform === "win32") {
-      return "python";
+    const platform = process.platform;
+    const cachedExecutable = pythonExecutables.get(platform);
+    if (cachedExecutable !== undefined) {
+      return cachedExecutable;
     }
-    try {
-      const { execSync } = require("child_process");
-      execSync("python3 --version", { stdio: "ignore", timeout: 5000 });
-      return "python3";
-    } catch {
-      return "python";
+
+    let executable: string;
+    if (platform === "win32") {
+      executable = "python";
+    } else {
+      try {
+        const { execSync } = require("child_process");
+        execSync("python3 --version", { stdio: "ignore", timeout: 5000 });
+        executable = "python3";
+      } catch {
+        executable = "python";
+      }
     }
+
+    pythonExecutables.set(platform, executable);
+    Log.debug(`🐍 Python executable resolved for ${platform}: ${executable}`);
+    return executable;
   }
 
   /**
@@ -780,17 +795,30 @@ export class EndConditionEvaluator {
    * `powershell.exe` on Windows PowerShell 5.1.
    */
   protected resolvePowerShellExecutable(): string {
-    if (process.platform !== "win32") {
-      return "pwsh";
+    const platform = process.platform;
+    const cachedExecutable = powerShellExecutables.get(platform);
+    if (cachedExecutable !== undefined) {
+      return cachedExecutable;
     }
 
-    try {
-      const { execSync } = require("child_process");
-      execSync("pwsh -Version", { stdio: "ignore", timeout: 5000 });
-      return "pwsh";
-    } catch {
-      return "powershell.exe";
+    let executable: string;
+    if (platform !== "win32") {
+      executable = "pwsh";
+    } else {
+      try {
+        const { execSync } = require("child_process");
+        execSync("pwsh -Version", { stdio: "ignore", timeout: 5000 });
+        executable = "pwsh";
+      } catch {
+        executable = "powershell.exe";
+      }
     }
+
+    powerShellExecutables.set(platform, executable);
+    Log.debug(
+      `💠 PowerShell executable resolved for ${platform}: ${executable}`
+    );
+    return executable;
   }
 
   /**

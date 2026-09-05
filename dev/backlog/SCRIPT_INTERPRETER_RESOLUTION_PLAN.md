@@ -14,7 +14,11 @@
 
 ---
 
-## 1. Interpreter probes run a synchronous subprocess on every dispatch
+## 1. Interpreter probes run a synchronous subprocess on every dispatch ✅ Completed
+
+**Completed:** Python and PowerShell executable resolution is memoized per
+resolved platform value, with regression coverage for repeated dispatches and
+cross-platform cache isolation.
 
 `EndConditionEvaluator.getScriptCommand()` resolves two interpreters by
 shelling out, and neither result is cached:
@@ -89,8 +93,9 @@ on it instead of returning `null`. Notes:
 
 ## Tests
 
-- Interpreter probes: the underlying `execSync` runs once across repeated
-  `getScriptCommand` calls; faking `process.platform` between cases still
+- [x] Interpreter probes: the underlying `execSync` runs once across repeated
+  `getScriptCommand` calls.
+- [x] Interpreter probes: faking `process.platform` between cases still
   yields that platform's answer (no stale cross-platform cache).
 - Shebang: table-driven over `#!/bin/sh`, `#!/bin/bash`,
   `#!/usr/bin/env python3`, `#!/usr/bin/env node`, a shebang with extra

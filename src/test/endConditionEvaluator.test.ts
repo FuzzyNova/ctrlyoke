@@ -11,6 +11,8 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
+const childProcess = require("child_process") as typeof import("child_process");
+
 class TestableEndConditionEvaluator extends EndConditionEvaluator {
   commandFor(
     scriptPath: string
@@ -148,6 +150,110 @@ suite("EndConditionEvaluator Tests", () => {
     teardown(() => {
       if (originalPlatform) {
         Object.defineProperty(process, "platform", originalPlatform);
+      }
+    });
+
+    test("caches Python resolution per platform", () => {
+      const originalExecSyncDescriptor = Object.getOwnPropertyDescriptor(
+        childProcess,
+        "execSync"
+      );
+      const probes: string[] = [];
+      Object.defineProperty(childProcess, "execSync", {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: (command: string) => {
+          probes.push(command);
+          return Buffer.from("");
+        },
+      });
+
+      try {
+        setPlatform("linux");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.py`)?.executable,
+          "python3"
+        );
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.py`)?.executable,
+          "python3"
+        );
+
+        setPlatform("win32");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.py`)?.executable,
+          "python"
+        );
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.py`)?.executable,
+          "python"
+        );
+
+        setPlatform("linux");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.py`)?.executable,
+          "python3"
+        );
+        assert.deepStrictEqual(probes, ["python3 --version"]);
+      } finally {
+        if (originalExecSyncDescriptor) {
+          Object.defineProperty(
+            childProcess,
+            "execSync",
+            originalExecSyncDescriptor
+          );
+        }
+      }
+    });
+
+    test("caches PowerShell resolution per platform", () => {
+      const originalExecSyncDescriptor = Object.getOwnPropertyDescriptor(
+        childProcess,
+        "execSync"
+      );
+      const probes: string[] = [];
+      Object.defineProperty(childProcess, "execSync", {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: (command: string) => {
+          probes.push(command);
+          return Buffer.from("");
+        },
+      });
+
+      try {
+        setPlatform("win32");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
+          "pwsh"
+        );
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
+          "pwsh"
+        );
+
+        setPlatform("linux");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
+          "pwsh"
+        );
+
+        setPlatform("win32");
+        assert.strictEqual(
+          evaluator.commandFor(`${scriptPath}.ps1`)?.executable,
+          "pwsh"
+        );
+        assert.deepStrictEqual(probes, ["pwsh -Version"]);
+      } finally {
+        if (originalExecSyncDescriptor) {
+          Object.defineProperty(
+            childProcess,
+            "execSync",
+            originalExecSyncDescriptor
+          );
+        }
       }
     });
 
