@@ -31,6 +31,9 @@ describe("PromptChipRail", () => {
   beforeEach(resetStores);
 
   it("keeps status in an icon and paints the identity border from the resolver", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
       steps: [

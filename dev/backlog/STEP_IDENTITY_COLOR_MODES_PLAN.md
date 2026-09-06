@@ -1,6 +1,8 @@
 # Step Identity Color Modes — a unique color per step
 
-> **Status:** Not implemented. Follow-on to
+> **Status:** Implemented through steps 1–6. The palette feature is complete.
+> Recorded follow-ups: the CVD-safe named palette (`ui.stepColorPalette`) and the
+> `name`-as-cosmetic decision. This is a follow-on to
 > [`OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md`](../implemented/OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md)
 > (landed 2026-09-04/05), which established the left edge as the step identity channel and
 > `resolveStepColor` as the single resolver every surface reads.
@@ -555,8 +557,8 @@ classification cannot silently widen.
    `getUniqueStepColor`, then delete `STEP_COLOR_TIE_BREAK_PALETTE`, `hashSeed`, and
    `getTieBreakColor`, and guard the three surface-local `groupMembers` builders on the mode.
    Separate from step 3 so the deletion is reviewable against a working `unique` mode.
-5. Swap the `GeneralSection` toggle for the mode select; reword the two swatch descriptions.
-6. Flip the default to `unique` in `CTRLYOKE_SETTINGS_DEFAULTS` — one line, deliberately last so the
+5. ✅ **Done.** Swap the `GeneralSection` toggle for the mode select; reword the two swatch descriptions.
+6. ✅ **Done.** Flip the default to `unique` in `CTRLYOKE_SETTINGS_DEFAULTS` — one line, deliberately last so the
    preceding steps can all be reviewed against today's rendering.
 
 7. Cosmetic in-place color edits (§7). Independent of steps 2–6 — it only needs `step.color`, which

@@ -119,22 +119,27 @@ export function GeneralSection({
           path="ui.showCliCommand"
           {...rowProps}
         />
-        <SettingToggleRow
-          label="Show step identity colors"
-          description="Show the same step color across the steps panel, chip rail, and output pane."
-          checked={ui.stepColorMode === STEP_COLOR_MODES.HARNESS}
-          onChange={(v) =>
-            onUpdate(
-              "ui.stepColorMode",
-              v ? STEP_COLOR_MODES.HARNESS : STEP_COLOR_MODES.OFF
-            )
-          }
+        <SettingInputRow
+          label="Step identity colors"
+          description="Choose how workflow step identity colors are rendered across the dashboard."
+          id="ui-step-color-mode"
           path="ui.stepColorMode"
           {...rowProps}
-        />
+        >
+          <CustomSelect
+            id="ui-step-color-mode"
+            value={ui.stepColorMode}
+            onChange={(v) => onUpdate("ui.stepColorMode", v)}
+            options={[
+              { value: STEP_COLOR_MODES.OFF, label: "Off" },
+              { value: STEP_COLOR_MODES.HARNESS, label: "Harness color" },
+              { value: STEP_COLOR_MODES.UNIQUE, label: "Unique per step" },
+            ]}
+          />
+        </SettingInputRow>
         <SettingInputRow
           label="Script step color"
-          description="Identity color used for script steps when step colors are enabled."
+          description="Identity color used for script steps in harness mode."
           id="ui-step-colors-script"
           path="ui.harnessColors.script"
           {...rowProps}

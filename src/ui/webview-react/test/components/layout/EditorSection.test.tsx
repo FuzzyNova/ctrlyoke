@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import {
   PROMPT_PROPERTIES,
   RUNNER_IDS,
+  STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 
@@ -227,6 +228,9 @@ describe("EditorSection", () => {
   });
 
   it("lets both step types override the header step color", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
     render(<EditorSection />);
 
     const color = screen.getByLabelText("Step color");

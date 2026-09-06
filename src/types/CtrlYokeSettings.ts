@@ -514,7 +514,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     hideCost: false,
-    stepColorMode: STEP_COLOR_MODES.HARNESS,
+    stepColorMode: STEP_COLOR_MODES.UNIQUE,
     harnessColors: {
       byHarness: {},
       script: "#808080",
