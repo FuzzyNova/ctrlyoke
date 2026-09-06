@@ -268,6 +268,7 @@ export function useStepContextMenu({
         currentStep,
         steps: useWorkflowStore.getState().steps,
         parallelGroups,
+        executionState,
         disabled: groupingDisabled,
         disabledTitle: isExternallyManaged
           ? (externalReadOnlyLabel ?? "Read-only — external workflow")

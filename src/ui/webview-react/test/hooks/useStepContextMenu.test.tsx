@@ -15,6 +15,9 @@ function TestHarness({
   runtimeMeta,
   parallelGroups = [],
   totalSteps = 2,
+  currentStep = 0,
+  deleteIndex = 0,
+  executionState = EXECUTION_STATES.IDLE,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
@@ -28,15 +31,18 @@ function TestHarness({
     failFast: boolean;
   }>;
   totalSteps?: number;
+  currentStep?: number;
+  deleteIndex?: number;
+  executionState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
     isExternallyManaged: false,
     canChangeStartPosition: true,
     canPasteStep: true,
-    executionState: EXECUTION_STATES.IDLE,
+    executionState,
     confirmResetOperations: false,
     totalSteps,
-    currentStep: 0,
+    currentStep,
     pendingRewind,
     parallelGroups,
   });
@@ -48,8 +54,8 @@ function TestHarness({
           openContextMenu(20, 20, {
             step,
             setPositionTarget: 1,
-            deleteIndex: 0,
-            isCurrentStep: false,
+            deleteIndex,
+            isCurrentStep: deleteIndex === currentStep,
             isExecutionTargetLocked: false,
             direction,
             outputText: "step output",
@@ -304,5 +310,76 @@ describe("useStepContextMenu", () => {
       newPendingOrder: [0, 1],
       pendingGroups: [],
     });
+  });
+
+  it("disables grouping into a settled neighbor group instead of sending a merge the server would reject", () => {
+    const parallelGroups = [
+      { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
+    ];
+    // currentStep=1 sits inside the group's own range, which is exactly what
+    // makes it settled: `isParallelGroupTopologyLocked` treats any group
+    // whose startIndex is behind currentStep as already executed.
+    const steps: WorkflowStep[] = [
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+    ];
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps,
+      parallelGroups,
+    });
+    render(
+      <TestHarness
+        step={steps[2]}
+        parallelGroups={parallelGroups}
+        totalSteps={3}
+        currentStep={1}
+        deleteIndex={2}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const groupWithPrevious = screen.getByRole("button", {
+      name: "Group with previous step",
+    });
+    expect(groupWithPrevious).toBeDisabled();
+
+    const callsBefore = (window.vscodeApi?.postMessage as any).mock.calls
+      .length;
+    fireEvent.click(groupWithPrevious);
+    expect(
+      (window.vscodeApi?.postMessage as any).mock.calls.length
+    ).toBe(callsBefore);
+  });
+
+  it("disables grouping the currently executing step with its next neighbor", () => {
+    const steps: WorkflowStep[] = [{ prompt: "one" }, { prompt: "two" }];
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps,
+    });
+    render(
+      <TestHarness
+        step={steps[0]}
+        totalSteps={2}
+        currentStep={0}
+        deleteIndex={0}
+        executionState={EXECUTION_STATES.RUNNING}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const groupWithNext = screen.getByRole("button", {
+      name: "Group with next step",
+    });
+    expect(groupWithNext).toBeDisabled();
+
+    const callsBefore = (window.vscodeApi?.postMessage as any).mock.calls
+      .length;
+    fireEvent.click(groupWithNext);
+    expect(
+      (window.vscodeApi?.postMessage as any).mock.calls.length
+    ).toBe(callsBefore);
   });
 });

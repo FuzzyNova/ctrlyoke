@@ -7,6 +7,7 @@ import {
   EXECUTION_STATES,
   type ExecutionState,
 } from "@root/types/DashboardConstants";
+import { isExecutionBusy } from "./status";
 import { getTargetKey, toOutputMessageTarget } from "./outputProjection";
 import {
   getWorkflowStepRawText,
@@ -146,6 +147,7 @@ export interface StepGroupingMenuItemsInput {
   currentStep: number;
   steps: readonly WorkflowStep[];
   parallelGroups: readonly ParallelGroupDefinition[];
+  executionState: ExecutionState;
   disabled: boolean;
   disabledTitle?: string;
   onReorder: (
@@ -252,6 +254,7 @@ export function buildStepGroupingMenuItems({
   currentStep,
   steps,
   parallelGroups,
+  executionState,
   disabled,
   disabledTitle,
   onReorder,
@@ -278,6 +281,29 @@ export function buildStepGroupingMenuItems({
     ];
   }
 
+  // A neighbor being merged into is never the step the caller checked when it
+  // computed `disabled` (that check only ever covers stepIndex's own group,
+  // and stepIndex is guaranteed ungrouped here) — so an adjacent step that
+  // belongs to a settled/in-flight group, or the currently executing step
+  // itself, needs its own lock check or the server rejects a merge the menu
+  // never disabled.
+  const isBoundaryBusy = (index: number) =>
+    index === currentStep && isExecutionBusy(executionState);
+  const isNeighborLocked = (neighborIndex: number): boolean => {
+    const neighborGroup = parallelGroups.find(
+      (group) =>
+        neighborIndex >= group.startIndex && neighborIndex <= group.endIndex
+    );
+    return neighborGroup
+      ? isParallelGroupTopologyLocked(
+          neighborGroup,
+          steps,
+          currentStep,
+          executionState
+        )
+      : false;
+  };
+
   const items: StepContextMenuItem[] = [];
   const makeGroupItem = (neighborIndex: number, label: string) => {
     const nextGroups = buildGroupingMutation(
@@ -287,11 +313,19 @@ export function buildStepGroupingMenuItems({
       parallelGroups
     );
     if (!nextGroups) return;
+    const itemLocked =
+      isNeighborLocked(neighborIndex) ||
+      isBoundaryBusy(stepIndex) ||
+      isBoundaryBusy(neighborIndex);
     items.push({
       label,
       icon: "codicon-type-hierarchy",
-      disabled,
-      disabledTitle,
+      disabled: disabled || itemLocked,
+      disabledTitle: disabled
+        ? disabledTitle
+        : itemLocked
+          ? "Cannot change a settled or executing parallel group"
+          : undefined,
       onClick: () => {
         onReorder(
           Array.from({ length: steps.length - currentStep }, (_, index) => index),
