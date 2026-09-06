@@ -249,22 +249,22 @@ regex-extract `#rrggbb` to feed `<input type="color">`, which accepts nothing el
 `unique` mode the header quick picker's "inherited" value needs a real hex. Static hex also keeps the
 values reviewable in diffs and sidesteps browser color-space support in the hosted client entirely.
 
-Illustrative generator output (hue ring from 25°, 15° tier offset, chroma clipped to gamut; `L`
-0.78/0.88/0.68 dark and 0.56/0.45/0.67 light) — **not final values; tune during implementation:**
+Shipped generator output (hue ring from 0°, 15° tier offset, chroma clipped to gamut; `L`
+0.78/0.88/0.92 dark and 0.58/0.54/0.48 light):
 
 ```
-DARK   tier 0  #ff958e #f4a437 #b5c242 #4ad496 #0dcfdf #7cbdff #bda7fe #f68fd5   (steps 1–8)
-       tier 1  #ffcab7 #ffd16b #b7eb7d #47f7d2 #95e5ff #c5d8ff #e7caff #fec5da   (steps 9–16)
-       tier 2  #dd7b2b #ad9907 #54b05a #0cafa8 #02a5e4 #878bf2 #c675cb #e46c83   (steps 17–24)
+DARK   tier 0  #ff8fb4 #ff996a #dfb100 #82d04f #00d4bb #00cafe #9cb4ff #df94ff   (steps 1–8)
+       tier 1  #ffc7ca #ffcca3 #eadd24 #72f896 #00f6f6 #b1deff #d3d3ff #ffbff8   (steps 9–16)
+       tier 2  #ffdbd5 #ffdfb4 #d6f55b #8effd0 #acf2ff #d4e6ff #e9deff #ffd8ec   (steps 17–24)
 
-LIGHT  tier 0  #c04442 #a06604 #737c03 #038a5a #09848f #0177cc #7d5cc7 #af4791
-       tier 1  #922f00 #6d5001 #3e6200 #036453 #005f75 #284cac #703396 #931e5a
-       tier 2  #de7515 #a99607 #4aae52 #0daba5 #01a1df #8487f5 #c56fcb #e5657f
+LIGHT  tier 0  #c93f76 #c65100 #967600 #498f00 #008e7d #0087ab #526ee3 #a151c2
+       tier 1  #c0304c #a25900 #797200 #00853c #007f7f #0076af #6857d1 #a53d9f
+       tier 2  #ac1c0f #7e5400 #566600 #006f4f #006a77 #005bb4 #6f3bb2 #9d1f74
 ```
 
-Two things that read badly in that sample and should be handled in tuning: the light tier-1 band
-drifts muddy and brown at `L 0.45` (raise C or compress the L range), and light tier-0 `#c04442`
-sits close enough to `indicator-error` to be worth nudging.
+The property test keeps every entry at least 8 CIEDE2000 units from the fallback and indicator
+accents, and raises the tier-0 adjacent-pair bar to 18 units. This tuned output avoids the muddy
+light tier-1 band and the near-`indicator-error` light tier-0 red from the illustrative sample.
 
 ### Delivery: CSS custom properties, with a hex helper for the picker
 
@@ -544,7 +544,7 @@ classification cannot silently widen.
    validates. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
    and is reviewable on its own. The step-1 default remains `"harness"`; the final `"unique"`
    default is intentionally deferred to step 6.
-2. Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
+2. ✅ **Done.** Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
    generated constants, and the `globals.css` variable blocks until they pass. Nothing consumes them
    yet, and the tests are what carry the guarantees the old curated palette carried. Have the
    generator emit *named* tables (`rainbow` for now) so §3a's CVD palette is later a data change.
