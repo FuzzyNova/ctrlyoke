@@ -4,7 +4,6 @@ import {
   HARNESS_CHART_COLORS,
   SCRIPT_STEP_DEFAULT_COLOR,
   STEP_COLOR_PALETTES,
-  STEP_COLOR_TIE_BREAK_PALETTE,
   STEP_COLOR_MODES,
   THEME_KINDS,
   type HarnessId,
@@ -156,36 +155,6 @@ function getBaseStepColor(
   return step.color ?? resolveHarnessColor(harnessId, settings);
 }
 
-function hashSeed(seed: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function getTieBreakColor(
-  group: ParallelGroupDefinition,
-  offsetInGroup: number,
-  baseColor: string,
-  siblingBaseColors: readonly string[]
-): string {
-  const paletteLength = STEP_COLOR_TIE_BREAK_PALETTE.length;
-  const start = hashSeed(`${group.id}:${offsetInGroup}`) % paletteLength;
-  const forbiddenColors = new Set([baseColor, ...siblingBaseColors]);
-
-  for (let attempt = 0; attempt < paletteLength; attempt += 1) {
-    const candidate =
-      STEP_COLOR_TIE_BREAK_PALETTE[(start + attempt) % paletteLength];
-    if (!forbiddenColors.has(candidate)) return candidate;
-  }
-
-  // The palette is curated to avoid the built-in colors, but always return a
-  // CSS color even if a future authored color exhausts the candidates.
-  return STEP_COLOR_TIE_BREAK_PALETTE[start];
-}
-
 /**
  * Resolve the identity color for a workflow step.
  *
@@ -222,7 +191,7 @@ export function resolveStepColor({
   // resolver call still treats a parallel member as a collision candidate so
   // the documented group/offset signature remains useful on its own.
   if (!groupMembers) {
-    return getTieBreakColor(group, offsetInGroup, baseColor, []);
+    return getUniqueStepColor(stepIndex);
   }
 
   const siblingBaseColors = groupMembers
@@ -230,5 +199,5 @@ export function resolveStepColor({
     .map((member) => getBaseStepColor(member.step, member.harnessId, settings));
   if (!siblingBaseColors.includes(baseColor)) return baseColor;
 
-  return getTieBreakColor(group, offsetInGroup, baseColor, siblingBaseColors);
+  return getUniqueStepColor(stepIndex);
 }

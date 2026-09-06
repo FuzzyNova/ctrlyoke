@@ -28,7 +28,6 @@ import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
   STEP_COLOR_MODES,
-  STEP_COLOR_TIE_BREAK_PALETTE,
 } from "@root/types/DashboardConstants";
 import { getUniqueStepColor, resolveStepColor } from "@utils/stepColor";
 
@@ -957,7 +956,7 @@ describe("WorkflowStepsPanel identity rails", () => {
       ],
     });
 
-    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(withGroupContext);
+    expect(withGroupContext).toBe(getUniqueStepColor(0));
     expect(rail?.style.backgroundColor).toBe(
       normalizeColor(withGroupContext as string)
     );

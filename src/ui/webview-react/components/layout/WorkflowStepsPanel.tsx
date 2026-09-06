@@ -9,6 +9,7 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
   MCP_SERVER_IDS,
+  STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -1496,6 +1497,7 @@ const WorkflowStepsPanelInner: React.FC<{
                   index
                 );
                 const colorGroupMembers: StepColorGroupMember[] | undefined =
+                  globalSettings.stepColorMode === STEP_COLOR_MODES.HARNESS &&
                   colorGroup
                     ? steps
                         .slice(colorGroup.startIndex, colorGroup.endIndex + 1)

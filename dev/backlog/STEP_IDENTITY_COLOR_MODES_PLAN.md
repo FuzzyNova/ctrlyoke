@@ -551,7 +551,7 @@ classification cannot silently widen.
 3. ✅ **Done.** Thread `stepIndex` through `resolveStepColor` and all five call sites (plus `steps.length` for the
    final step), add `getUniqueStepColor`, and implement the `unique` branch. This is the whole visual
    payoff.
-4. Collapse the tie-break into it (§4): point the `harness`-mode collision path at
+4. ✅ **Done.** Collapse the tie-break into it (§4): point the `harness`-mode collision path at
    `getUniqueStepColor`, then delete `STEP_COLOR_TIE_BREAK_PALETTE`, `hashSeed`, and
    `getTieBreakColor`, and guard the three surface-local `groupMembers` builders on the mode.
    Separate from step 3 so the deletion is reviewable against a working `unique` mode.

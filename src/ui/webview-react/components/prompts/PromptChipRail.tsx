@@ -37,7 +37,11 @@ import {
   type HarnessId,
   type StepStatus,
 } from "../../types/messages";
-import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  STEP_COLOR_MODES,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import {
   getStepAccentClass,
@@ -375,16 +379,18 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     );
     const offsetInGroup = group ? index - group.startIndex : undefined;
     const groupMembers: StepColorGroupMember[] | undefined = group
-      ? prompts
-          .slice(group.startIndex, group.endIndex + 1)
-          .map((memberStep, offset) => ({
-            step: memberStep,
-            harnessId: getChipHarnessId(
-              memberStep,
-              getPromptStatus(memberStep, group.startIndex + offset)
-            ),
-            offsetInGroup: offset,
-          }))
+      ? globalSettings.stepColorMode === STEP_COLOR_MODES.HARNESS
+        ? prompts
+            .slice(group.startIndex, group.endIndex + 1)
+            .map((memberStep, offset) => ({
+              step: memberStep,
+              harnessId: getChipHarnessId(
+                memberStep,
+                getPromptStatus(memberStep, group.startIndex + offset)
+              ),
+              offsetInGroup: offset,
+            }))
+        : undefined
       : undefined;
 
     return resolveStepColor({

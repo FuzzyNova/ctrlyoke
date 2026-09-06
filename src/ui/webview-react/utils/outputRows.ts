@@ -22,6 +22,7 @@ import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
   OPERATION_STATUS,
+  STEP_COLOR_MODES,
   WORKFLOW_TOKEN_COVERAGE,
   STEP_TYPES,
   type HarnessId,
@@ -1923,15 +1924,19 @@ export function buildOutputRows(
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? getParallelGroupForStep(input.parallelGroups, target.index)
         : undefined;
-    const groupMembers = group
-      ? input.steps
-          .slice(group.startIndex, group.endIndex + 1)
-          .map((member, offsetInGroup) => ({
-            step: member,
-            harnessId: getEffectiveStepHarness(member, input.effectiveHarness),
-            offsetInGroup,
-          }))
-      : undefined;
+    const groupMembers =
+      input.stepColorMode === STEP_COLOR_MODES.HARNESS && group
+        ? input.steps
+            .slice(group.startIndex, group.endIndex + 1)
+            .map((member, offsetInGroup) => ({
+              step: member,
+              harnessId: getEffectiveStepHarness(
+                member,
+                input.effectiveHarness
+              ),
+              offsetInGroup,
+            }))
+        : undefined;
     const color = resolveStepColor({
       step,
       harnessId: getEffectiveStepHarness(step, input.effectiveHarness),

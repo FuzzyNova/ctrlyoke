@@ -4,7 +4,6 @@ import {
   HARNESS_IDS,
   SCRIPT_STEP_DEFAULT_COLOR,
   STEP_COLOR_MODES,
-  STEP_COLOR_TIE_BREAK_PALETTE,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
@@ -69,7 +68,7 @@ describe("resolveStepColor", () => {
     ).toBe("#abcdef");
   });
 
-  it("keeps tie-break colors above a matching harness override", () => {
+  it("uses the unique palette for a same-harness collision", () => {
     const firstStep: WorkflowStep = { prompt: "first" };
     const secondStep: WorkflowStep = { prompt: "second" };
     const groupMembers = [
@@ -86,13 +85,13 @@ describe("resolveStepColor", () => {
       groupMembers,
     });
 
-    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(firstColor);
+    expect(firstColor).toBe(getUniqueStepColor(4));
     expect(firstColor).not.toBe(
       customSettings.byHarness[HARNESS_IDS.CLAUDE_CLI]
     );
   });
 
-  it("keeps an authored color above a parallel tie-break", () => {
+  it("keeps an authored color above a parallel collision color", () => {
     const authoredStep: WorkflowStep = {
       prompt: "authored member",
       color: "#abcdef",
@@ -157,7 +156,7 @@ describe("resolveStepColor", () => {
     ).toBe(SCRIPT_STEP_DEFAULT_COLOR);
   });
 
-  it("uses stable palette entries when group members share a harness color", () => {
+  it("uses unique palette entries when group members share a harness color", () => {
     const firstStep: WorkflowStep = { prompt: "first" };
     const secondStep: WorkflowStep = { prompt: "second" };
     const groupMembers = [
@@ -183,14 +182,14 @@ describe("resolveStepColor", () => {
       groupMembers,
     });
 
-    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(firstColor);
-    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(secondColor);
+    expect(firstColor).toBe(getUniqueStepColor(4));
+    expect(secondColor).toBe(getUniqueStepColor(5));
     expect(firstColor).not.toBe(baseColor);
     expect(secondColor).not.toBe(baseColor);
     expect(secondColor).not.toBe(firstColor);
   });
 
-  it("keeps a tie-break color stable when the group indices change", () => {
+  it("keeps a collision color stable when the group indices change", () => {
     const step: WorkflowStep = { prompt: "stable member" };
     const groupMembers = [
       groupMember(step, 1),
@@ -216,6 +215,36 @@ describe("resolveStepColor", () => {
     });
 
     expect(reorderedColor).toBe(originalColor);
+  });
+
+  it("retains harness colors for a non-colliding mixed-harness group", () => {
+    const firstStep: WorkflowStep = { prompt: "claude" };
+    const secondStep: WorkflowStep = { prompt: "codex" };
+    const groupMembers = [
+      groupMember(firstStep, 0, HARNESS_IDS.CLAUDE_CLI),
+      groupMember(secondStep, 1, HARNESS_IDS.CODEX_CLI),
+    ];
+
+    expect(
+      resolveStepColor({
+        step: firstStep,
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 4,
+        group,
+        offsetInGroup: 0,
+        groupMembers,
+      })
+    ).toBe(HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI]);
+    expect(
+      resolveStepColor({
+        step: secondStep,
+        harnessId: HARNESS_IDS.CODEX_CLI,
+        stepIndex: 5,
+        group,
+        offsetInGroup: 1,
+        groupMembers,
+      })
+    ).toBe(HARNESS_CHART_COLORS[HARNESS_IDS.CODEX_CLI]);
   });
 
   it("does not tie-break a step outside a parallel group", () => {
