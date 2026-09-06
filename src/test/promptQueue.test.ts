@@ -12,6 +12,7 @@ import {
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
 import {
+  ParallelGroupDefinition,
   PromptStep,
   PromptFile,
   StepExecutionOutcome,
@@ -1796,6 +1797,89 @@ suite("PromptQueue State Machine Tests", () => {
       }
     });
   });
+
+  // `updateWorkingFileDirect`'s merge treats disk as authoritative for step
+  // order and parallel-group topology, so a local definition mutation that
+  // only exists in memory must write with `skipMerge`. Without it the merge
+  // rebuilds the queue from the pre-mutation disk snapshot and the write
+  // silently persists the *old* definition — which is why these assertions
+  // read the file back rather than only inspecting `getState()`.
+  suite(
+    "local definition mutations survive the disk-authoritative merge",
+    () => {
+      async function withWorkingFile(
+        steps: PromptStep[],
+        run: (queue: PromptQueue, workingFilePath: string) => Promise<void>
+      ): Promise<void> {
+        const tempRoot = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-prompt-queue-persist-")
+        );
+        const workingFilePath = path.join(tempRoot, "workflow.json");
+        try {
+          const queue = new PromptQueue();
+          queue.loadPrompts(createPromptFile(steps), workingFilePath);
+          await fs.writeFile(
+            workingFilePath,
+            JSON.stringify({ steps, parallelGroups: [] }),
+            "utf8"
+          );
+          await run(queue, workingFilePath);
+        } finally {
+          await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+      }
+
+      async function readPersisted(workingFilePath: string): Promise<{
+        prompts: string[];
+        parallelGroups: ParallelGroupDefinition[];
+      }> {
+        const raw = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+        return {
+          prompts: (raw.steps as PromptStep[]).map((step) => step.prompt),
+          parallelGroups: raw.parallelGroups ?? [],
+        };
+      }
+
+      test("reorderPendingPrompts persists the new order", async () => {
+        await withWorkingFile(
+          [{ prompt: "p0" }, { prompt: "p1" }, { prompt: "p2" }],
+          async (queue, workingFilePath) => {
+            await queue.reorderPendingPrompts([0, 2, 1]);
+            const persisted = await readPersisted(workingFilePath);
+            assert.deepStrictEqual(persisted.prompts, ["p0", "p2", "p1"]);
+          }
+        );
+      });
+
+      test("reorderPendingPrompts persists a newly created parallel group", async () => {
+        await withWorkingFile(
+          [{ prompt: "p0" }, { prompt: "p1" }, { prompt: "p2" }],
+          async (queue, workingFilePath) => {
+            await queue.reorderPendingPrompts(
+              [0, 1, 2],
+              [{ start: 1, end: 2, failFast: true }]
+            );
+            const persisted = await readPersisted(workingFilePath);
+            assert.strictEqual(persisted.parallelGroups.length, 1);
+            assert.strictEqual(persisted.parallelGroups[0].startIndex, 1);
+            assert.strictEqual(persisted.parallelGroups[0].endIndex, 2);
+            assert.strictEqual(persisted.parallelGroups[0].failFast, true);
+          }
+        );
+      });
+
+      test("insertStepAfterIndex persists the inserted step", async () => {
+        await withWorkingFile(
+          [{ prompt: "p0" }, { prompt: "p1" }],
+          async (queue, workingFilePath) => {
+            await queue.insertStepAfterIndex(0, { prompt: "inserted" });
+            const persisted = await readPersisted(workingFilePath);
+            assert.deepStrictEqual(persisted.prompts, ["p0", "inserted", "p1"]);
+          }
+        );
+      });
+    }
+  );
 
   suite("syncStepsForUndoRedo", () => {
     test("does not restore archived or incoming suffix runtime during a pending rewind", async () => {

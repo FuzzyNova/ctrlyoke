@@ -256,11 +256,7 @@ function movePendingDragItemWithinContainer(
   return next;
 }
 
-export function buildPendingReorderPayload(
-  state: PendingDragState,
-  currentStep: number,
-  parallelGroups: ParallelGroupDefinition[]
-): {
+export type PendingReorderPayload = {
   newPendingOrder: number[];
   pendingGroups: Array<{
     id?: string;
@@ -268,7 +264,13 @@ export function buildPendingReorderPayload(
     end: number;
     failFast: boolean;
   }>;
-} {
+};
+
+export function buildPendingReorderPayload(
+  state: PendingDragState,
+  currentStep: number,
+  parallelGroups: ParallelGroupDefinition[]
+): PendingReorderPayload {
   const newPendingOrder: number[] = [];
   const pendingGroups: Array<{
     id?: string;
@@ -297,6 +299,49 @@ export function buildPendingReorderPayload(
     }
   }
   return { newPendingOrder, pendingGroups };
+}
+
+/**
+ * Resolve the outcome of a pending-tail drag, or `undefined` when the drag
+ * left the committed topology unchanged.
+ *
+ * `handleDragOver` has already folded any cross-container move into
+ * `dragState`, so "did `dragState` change here?" is the wrong question: a
+ * plain top-level reorder never takes the within-container branch — every
+ * ungrouped step is its own container, so such a drag always ends in a
+ * *different* container — and would read as a no-op even though the user
+ * moved a step. `committedState` (rebuilt from the store) is the only
+ * correct baseline.
+ */
+export function resolvePendingDragEnd(
+  dragState: PendingDragState,
+  committedState: PendingDragState,
+  activeId: string,
+  overId: string,
+  currentStep: number,
+  parallelGroups: ParallelGroupDefinition[]
+): { state: PendingDragState; payload: PendingReorderPayload } | undefined {
+  let nextState = dragState;
+  const sourceId = findPendingDragContainer(nextState, activeId);
+  const destinationId = findPendingDragContainer(nextState, overId);
+  if (sourceId && sourceId === destinationId) {
+    nextState = movePendingDragItemWithinContainer(nextState, activeId, overId);
+  }
+
+  const payload = buildPendingReorderPayload(
+    nextState,
+    currentStep,
+    parallelGroups
+  );
+  const committedPayload = buildPendingReorderPayload(
+    committedState,
+    currentStep,
+    parallelGroups
+  );
+  if (JSON.stringify(payload) === JSON.stringify(committedPayload)) {
+    return undefined;
+  }
+  return { state: nextState, payload };
 }
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -949,31 +994,24 @@ const WorkflowStepsPanelInner: React.FC<{
       const overId = event.over ? String(event.over.id) : undefined;
       if (!overId || !activeId.startsWith("step-pending-")) return;
 
-      let nextState = pendingDragState;
-      const sourceId = findPendingDragContainer(nextState, activeId);
-      const destinationId = findPendingDragContainer(nextState, overId);
-      if (sourceId && sourceId === destinationId) {
-        nextState = movePendingDragItemWithinContainer(
-          nextState,
-          activeId,
-          overId
-        );
-      }
-      if (nextState === pendingDragState) return;
-      setPendingDragState(nextState);
-      const payload = buildPendingReorderPayload(
-        nextState,
+      const outcome = resolvePendingDragEnd(
+        pendingDragState,
+        buildPendingDragState(steps, currentStep, parallelGroups),
+        activeId,
+        overId,
         currentStep,
         parallelGroups
       );
-      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, payload);
+      if (!outcome) return;
+      setPendingDragState(outcome.state);
+      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, outcome.payload);
 
       const editorStore = useEditorStore.getState();
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
-    [currentStep, parallelGroups, pendingDragState]
+    [currentStep, parallelGroups, pendingDragState, steps]
   );
 
   // In mobile mode (onRequestClose present), disable all collapse interactions —

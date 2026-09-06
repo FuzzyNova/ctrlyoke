@@ -12,6 +12,7 @@ import {
   buildPendingDragState,
   buildPendingReorderPayload,
   movePendingDragItem,
+  resolvePendingDragEnd,
 } from "@components/layout/WorkflowStepsPanel";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
 import { useEditorStore } from "@store/editorStore";
@@ -40,7 +41,6 @@ function resetStores() {
     activeWorkflowId: null,
     isViewingHistory: false,
   });
-
 }
 
 function loadSelectedWorkflow() {
@@ -612,9 +612,7 @@ describe("WorkflowStepsPanel grouped drag model", () => {
 
     expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
       newPendingOrder: [1, 2, 0, 3],
-      pendingGroups: [
-        { id: "group-1", start: 0, end: 2, failFast: false },
-      ],
+      pendingGroups: [{ id: "group-1", start: 0, end: 2, failFast: false }],
     });
   });
 
@@ -639,15 +637,79 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       "group-group-2"
     );
 
-    expect(buildPendingReorderPayload(next, 0, [
-      { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
-      { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
-    ])).toEqual({
+    expect(
+      buildPendingReorderPayload(next, 0, [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+        { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
+      ])
+    ).toEqual({
       newPendingOrder: [0, 2, 3, 4, 1],
-      pendingGroups: [
-        { id: "group-2", start: 2, end: 4, failFast: false },
-      ],
+      pendingGroups: [{ id: "group-2", start: 2, end: 4, failFast: false }],
     });
+  });
+
+  // `handleDragOver` commits cross-container moves optimistically, so the
+  // drag-end decision cannot ask whether the *local* state changed — for an
+  // ungrouped step (its own container) it never does, and the reorder was
+  // silently dropped: the list re-ordered on screen and nothing was sent.
+  it("emits a payload for a top-level reorder that dragOver already applied", () => {
+    const committed = buildPendingDragState(steps, 0, []);
+    const dragged = movePendingDragItem(
+      committed,
+      "step-pending-1",
+      "step-pending-2"
+    );
+
+    const outcome = resolvePendingDragEnd(
+      dragged,
+      committed,
+      "step-pending-1",
+      "step-pending-2",
+      0,
+      []
+    );
+
+    expect(outcome?.payload).toEqual({
+      newPendingOrder: [0, 2, 1, 3],
+      pendingGroups: [],
+    });
+  });
+
+  it("emits nothing when a drag ends on the committed topology", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+
+    expect(
+      resolvePendingDragEnd(
+        committed,
+        committed,
+        "step-pending-1",
+        "step-pending-1",
+        0,
+        groups
+      )
+    ).toBeUndefined();
+  });
+
+  it("emits a payload when a member is dropped into a different group", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+    const dragged = movePendingDragItem(
+      committed,
+      "step-pending-3",
+      "group-group-1"
+    );
+
+    const outcome = resolvePendingDragEnd(
+      dragged,
+      committed,
+      "step-pending-3",
+      "group-group-1",
+      0,
+      groups
+    );
+
+    expect(outcome?.payload.pendingGroups).toEqual([
+      { id: "group-1", start: 1, end: 3, failFast: false },
+    ]);
   });
 
   it("moves a member out of a group and unwraps the remainder", () => {

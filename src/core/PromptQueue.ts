@@ -1705,7 +1705,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           }
         : this.workflowFile;
       this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect();
+      // Intentional local definition mutation — same reasoning as `appendSteps`.
+      // The merge in `updateWorkingFileDirect` is disk-authoritative for order
+      // and topology, so letting it run here would rebuild the queue from the
+      // pre-insert disk snapshot and drop the step that was just inserted.
+      await this.workingFileManager.updateWorkingFileDirect(true);
       Log.info(
         `Inserted step from ${source} after index ${afterIndex} (insertIndex=${insertIndex})`
       );
@@ -2278,7 +2282,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         : this.workflowFile;
       this.bumpDefinitionRevision();
       this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect();
+      // Intentional local definition mutation — same reasoning as `appendSteps`.
+      // A reorder is expressed entirely in memory, and the merge in
+      // `updateWorkingFileDirect` treats disk as authoritative for both step
+      // order and parallel-group topology, so running it here would restore
+      // the pre-reorder disk snapshot and silently discard the move (and any
+      // group the reorder created).
+      await this.workingFileManager.updateWorkingFileDirect(true);
     });
   }
 
