@@ -16,7 +16,9 @@ import {
   MCP_AVAILABILITY_MODES,
   RUN_HISTORY_LOCATIONS,
   STATUS_LINE_TRACKING_PROVIDERS,
+  TOAST_LEVEL_MODES,
   type StatusLineTrackingProvider,
+  type ToastLevelMode,
   WORKTREE_MODES,
 } from "./DashboardConstants";
 import {
@@ -288,6 +290,7 @@ export interface CtrlYokeNotificationSettings {
     promptComplete: NotificationEventMode;
     hookEvents: { [key in HookEvent]: boolean };
   };
+  toastLevel: ToastLevelMode;
   includeWorkflowName: boolean;
   includePromptName: boolean;
   onlyWhenWindowUnfocused: boolean;
@@ -542,6 +545,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
         error: false,
       },
     },
+    toastLevel: TOAST_LEVEL_MODES.ALL,
     includeWorkflowName: true,
     includePromptName: true,
     onlyWhenWindowUnfocused: true,

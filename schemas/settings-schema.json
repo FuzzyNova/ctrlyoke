@@ -868,6 +868,11 @@
             }
           }
         },
+        "toastLevel": {
+          "type": "string",
+          "enum": ["all", "warningAndError", "errorOnly", "off"],
+          "description": "Minimum severity for operational toast/feedback popups, such as action results (save failures and validation errors); separate from completion notifications."
+        },
         "events": {
           "type": "object",
           "description": "Which events trigger notifications.",

@@ -9,6 +9,11 @@ import {
   HOOK_EVENT_NAMES,
   HOOK_EVENT_ORDER,
   NOTIFICATION_EVENT_MODES,
+  meetsToastLevel,
+  TOAST_LEVEL_MODES,
+  USER_FEEDBACK_SEVERITY,
+  type ToastLevelMode,
+  type UserFeedbackSeverity,
 } from "../../types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
@@ -30,9 +35,39 @@ suite("Notification settings defaults", () => {
       NOTIFICATION_EVENT_MODES.NEVER
     );
     assert.strictEqual(notifications.events.hookEvents.notification, false);
+    assert.strictEqual(notifications.toastLevel, TOAST_LEVEL_MODES.ALL);
     assert.strictEqual(notifications.includeWorkflowName, true);
     assert.strictEqual(notifications.includePromptName, true);
     assert.strictEqual(notifications.onlyWhenWindowUnfocused, true);
+  });
+
+  test("applies every severity and toast level combination", () => {
+    const cases: Array<[UserFeedbackSeverity, ToastLevelMode, boolean]> = [
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.ALL, true],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.ALL, true],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.ALL, true],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.ALL, true],
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.WARNING_AND_ERROR, false],
+      [
+        USER_FEEDBACK_SEVERITY.SUCCESS,
+        TOAST_LEVEL_MODES.WARNING_AND_ERROR,
+        false,
+      ],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.WARNING_AND_ERROR, true],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.WARNING_AND_ERROR, true],
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.ERROR_ONLY, false],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.ERROR_ONLY, false],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.ERROR_ONLY, false],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.ERROR_ONLY, true],
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.OFF, false],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.OFF, false],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.OFF, false],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.OFF, false],
+    ];
+
+    for (const [severity, level, expected] of cases) {
+      assert.strictEqual(meetsToastLevel(severity, level), expected);
+    }
   });
 
   test("keeps hook event order and metadata aligned", () => {

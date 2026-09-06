@@ -826,6 +826,35 @@ export type UserFeedbackSeverity =
   (typeof USER_FEEDBACK_SEVERITY)[keyof typeof USER_FEEDBACK_SEVERITY];
 
 // ============================================================================
+// TOAST LEVEL MODES - Minimum severity threshold for operational toast/feedback
+// ============================================================================
+export const TOAST_LEVEL_MODES = {
+  ALL: "all",
+  WARNING_AND_ERROR: "warningAndError",
+  ERROR_ONLY: "errorOnly",
+  OFF: "off",
+} as const;
+
+export type ToastLevelMode =
+  (typeof TOAST_LEVEL_MODES)[keyof typeof TOAST_LEVEL_MODES];
+
+export function meetsToastLevel(
+  severity: UserFeedbackSeverity,
+  level: ToastLevelMode
+): boolean {
+  if (level === TOAST_LEVEL_MODES.OFF) return false;
+  if (level === TOAST_LEVEL_MODES.ALL) return true;
+  if (level === TOAST_LEVEL_MODES.ERROR_ONLY) {
+    return severity === USER_FEEDBACK_SEVERITY.ERROR;
+  }
+  // WARNING_AND_ERROR
+  return (
+    severity === USER_FEEDBACK_SEVERITY.WARNING ||
+    severity === USER_FEEDBACK_SEVERITY.ERROR
+  );
+}
+
+// ============================================================================
 // NOTIFICATION KINDS - Superset of completion notification kinds (includes hook events)
 // ============================================================================
 export const NOTIFICATION_KINDS = {
