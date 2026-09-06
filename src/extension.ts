@@ -1387,6 +1387,7 @@ function registerCommands(
       unprotectServerToken = secretRedactionService.protectValue(token);
       const bindAddress =
         configService.get("server")?.bindAddress ?? "127.0.0.1";
+      const fallbackPorts = configService.get("server")?.fallbackPorts ?? [];
       const tlsCfg = configService.get("server")?.tls;
       const tlsConfig =
         tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
@@ -1420,7 +1421,8 @@ function registerCommands(
             ),
           () => licenseService.hasRemoteAccess(),
           showRemoteAccessUpsell,
-          runnerHostIdentity
+          runnerHostIdentity,
+          fallbackPorts
         );
       } catch (err) {
         unprotectServerToken?.();

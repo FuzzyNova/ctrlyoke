@@ -212,7 +212,8 @@ export class CtrlYokeHostedServer
     private readonly onSiblingServerDetected?: (url: string) => void,
     getRemoteAccess?: () => Promise<boolean>,
     onRemoteAccessBlocked?: () => void,
-    runnerHostIdentity?: RunnerHostIdentity
+    runnerHostIdentity?: RunnerHostIdentity,
+    private readonly fallbackPorts: number[] = []
   ) {
     this.getRemoteAccess = getRemoteAccess;
     this.onRemoteAccessBlocked = onRemoteAccessBlocked;
@@ -2235,23 +2236,34 @@ export class CtrlYokeHostedServer
     this.portFellBack = false;
     this.bindAddressFallback = undefined;
     await this.enforceRemoteBindBeforeListen();
+    // Try the configured port, then each configured fallback port in order
+    // (so a workspace can pin a stable, bookmarkable URL even when the
+    // primary port is often taken), then finally an OS-assigned port.
+    const candidatePorts = [
+      this.port,
+      ...this.fallbackPorts.filter((port) => port !== this.port),
+      0,
+    ];
+    let candidateIndex = 0;
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
         const onError = (err: NodeJS.ErrnoException) => {
           this.httpServer.removeListener("listening", onListening);
           if (err.code === "EADDRINUSE") {
-            const fallBackToOsPort = () => {
+            const tryNextCandidate = () => {
               this.portFellBack = true;
-              setImmediate(() => attemptListen(0));
+              candidateIndex += 1;
+              const nextPort = candidatePorts[candidateIndex] ?? 0;
+              setImmediate(() => attemptListen(nextPort));
             };
             void this.probeExistingServer(port)
               .then((existingServer) => {
                 if (existingServer) {
                   this.onSiblingServerDetected?.(this.buildPublicUrl(port));
                 }
-                fallBackToOsPort();
+                tryNextCandidate();
               })
-              .catch(fallBackToOsPort);
+              .catch(tryNextCandidate);
           } else {
             reject(err);
           }
@@ -2272,7 +2284,7 @@ export class CtrlYokeHostedServer
         this.httpServer.once("listening", onListening);
         this.httpServer.listen(port, this.bindAddress);
       };
-      attemptListen(this.port);
+      attemptListen(candidatePorts[0]);
     });
   }
 

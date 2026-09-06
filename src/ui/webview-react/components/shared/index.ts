@@ -99,6 +99,7 @@ export {
   TrustedRootsListEditor,
   type TrustedRootsListEditorProps,
 } from "./TrustedRootsListEditor";
+export { PortListEditor, type PortListEditorProps } from "./PortListEditor";
 export { NumberField, type NumberFieldProps } from "./NumberField";
 export { LocalTextInput, LocalNumberInput, LocalTextarea } from "./LocalInputs";
 export {

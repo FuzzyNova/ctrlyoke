@@ -800,6 +800,11 @@
           "type": "number",
           "description": "Port for the standalone (non-extension) ctrlyoke server."
         },
+        "fallbackPorts": {
+          "type": "array",
+          "items": { "type": "number" },
+          "description": "Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance."
+        },
         "theme": {
           "type": "string",
           "enum": ["auto", "light", "dark"],
