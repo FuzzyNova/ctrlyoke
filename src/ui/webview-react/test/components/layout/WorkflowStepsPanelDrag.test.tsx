@@ -7,12 +7,15 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { MESSAGE_TYPES } from "@/types/messages";
+import type { CollisionDetection } from "@dnd-kit/core";
 
 type DragEventLike = { active: { id: string }; over: { id: string } | null };
 
 const postMessage = vi.fn();
 
 const dnd: {
+  collisionDetection?: CollisionDetection;
+  onDragStart?: () => void;
   onDragOver?: (event: DragEventLike) => void;
   onDragEnd?: (event: DragEventLike) => void;
 } = {};
@@ -28,15 +31,48 @@ vi.mock("@dnd-kit/core", async () => {
     ...actual,
     DndContext: (props: {
       children?: ReactNode;
+      collisionDetection?: CollisionDetection;
+      onDragStart?: () => void;
       onDragOver?: (event: DragEventLike) => void;
       onDragEnd?: (event: DragEventLike) => void;
     }) => {
+      dnd.collisionDetection = props.collisionDetection;
+      dnd.onDragStart = props.onDragStart;
       dnd.onDragOver = props.onDragOver;
       dnd.onDragEnd = props.onDragEnd;
       return <>{props.children}</>;
     },
   };
 });
+
+/**
+ * Feed the panel a drag position the way `DndContext` does — by running its
+ * collision detection with a `collisionRect` at that offset. Everything else in
+ * the args is inert: no droppable rects means the panel's own re-pointing rule
+ * can't fire, so the caller's `over` id is what drives the drag.
+ */
+function measureDragAt(top: number): void {
+  dnd.collisionDetection?.({
+    active: {
+      id: "step-pending-0",
+      data: { current: undefined },
+      rect: {
+        current: { initial: null, translated: null },
+      },
+    },
+    collisionRect: {
+      top,
+      bottom: top + 24,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 24,
+    },
+    droppableRects: new Map(),
+    droppableContainers: [],
+    pointerCoordinates: null,
+  } as unknown as Parameters<CollisionDetection>[0]);
+}
 
 /** Visual order of the pending list, read as the absolute step index per row. */
 function renderedOrder(): number[] {
@@ -237,6 +273,84 @@ describe("WorkflowStepsPanel parallel group drag", () => {
       });
     });
 
+    expect(reorderMessages()).toEqual([
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [2, 0, 1, 3],
+        pendingGroups: [{ id: "g1", start: 1, end: 2, failFast: false }],
+      }),
+    ]);
+  });
+
+  // A fold relocates the dragged row's DOM node, which reflows the list and
+  // makes dnd-kit re-measure every droppable against a drag position that never
+  // moved. The new rects can point `over` back at the side the row just left,
+  // and `onDragOver` fires on every `over` change — an unbounded fold/re-measure
+  // cycle that ends as React's "Maximum update depth exceeded" in the webview.
+  it("folds a group crossing at most once per drag position", () => {
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.();
+      measureDragAt(40);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-1" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
+
+    // Same drag position, `over` swinging back to a top-level slot: this is the
+    // bounce, and it must not move the row again.
+    act(() => {
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-3" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
+
+    // A real pointer move re-arms folding.
+    act(() => {
+      measureDragAt(120);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-3" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
+  });
+
+  // The other half of the same oscillation: the fold that put the step into the
+  // group pushes its row down past the group header, which on its own is enough
+  // for the next collision to resolve to the group's own slot.
+  it("does not fold a member back out over its own group's slot", () => {
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.();
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-1" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
+
+    act(() => {
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "group-g1" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
+
+    // Dropping there still means "leave the group and take its slot".
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-2" },
+        over: { id: "group-g1" },
+      });
+    });
     expect(reorderMessages()).toEqual([
       expect.objectContaining({
         type: MESSAGE_TYPES.REORDER_PROMPTS,

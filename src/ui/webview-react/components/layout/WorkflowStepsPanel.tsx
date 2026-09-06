@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
@@ -357,6 +363,13 @@ function movePendingDragMemberWithinGroup(
  *
  * Dragging a whole group is a plain top-level reorder and never mutates: the
  * group's own id is in the outer items, so the strategy can displace around it.
+ *
+ * A member over its *own* group's slot is deliberately not a crossing. On drop
+ * that means "leave the group and take its slot" (see `movePendingDragItem`),
+ * but folding it mid-drag is the bounce half of an oscillation: the fold that
+ * put the step into the group pushed its row down past the group header, which
+ * is enough for the next collision to resolve to the group's own slot, which
+ * folds it straight back out. See `handleDragOver` for why that loop is fatal.
  */
 export function isParallelGroupDragMove(
   state: PendingDragState,
@@ -367,9 +380,13 @@ export function isParallelGroupDragMove(
   const sourceId = findPendingDragContainer(state, activeId);
   const target = resolvePendingDropTarget(state, overId);
   if (!sourceId || !target) return false;
-  return target.kind === PENDING_DROP_TARGET_KINDS.MEMBER
-    ? target.containerId !== sourceId
-    : Boolean(state.containers[sourceId].groupId);
+  if (target.kind === PENDING_DROP_TARGET_KINDS.MEMBER) {
+    return target.containerId !== sourceId;
+  }
+  return (
+    Boolean(state.containers[sourceId].groupId) &&
+    state.order[target.orderIndex] !== sourceId
+  );
 }
 
 export type PendingReorderPayload = {
@@ -1172,15 +1189,55 @@ const WorkflowStepsPanelInner: React.FC<{
     ? getStepOverrides(finalStep)
     : undefined;
 
-  const collisionDetection = useMemo(
-    () => pendingDragCollisionDetection(pendingDragState),
-    [pendingDragState]
-  );
+  /** Latest drag position dnd-kit measured, or `null` before the first one. */
+  const dragPositionRef = useRef<number | null>(null);
+
+  const collisionDetection = useMemo<CollisionDetection>(() => {
+    const detect = pendingDragCollisionDetection(pendingDragState);
+    return (args) => {
+      // `collisionRect` is the drag's *input* position: dnd-kit subtracts the
+      // active node's re-measurement delta from the sensor translate, so it
+      // resolves to `initialActiveNodeRect + translate` and moves only when a
+      // sensor moves. That is the property `handleDragOver` needs and cannot
+      // get from its own event — `event.delta` is the modified translate,
+      // which shifts by a row height the instant a fold relocates the row's
+      // DOM node. Recorded during render because collision detection runs in
+      // the render that produces the `over` this drag reacts to; nothing
+      // renders off it.
+      dragPositionRef.current = args.collisionRect.top;
+      return detect(args);
+    };
+  }, [pendingDragState]);
+
+  /** Drag position at which the last group crossing was folded in. */
+  const foldedAtPositionRef = useRef<number | null>(null);
+
+  /** Every drag starts and ends with the fold guard disarmed. */
+  const resetFoldGuard = useCallback(() => {
+    foldedAtPositionRef.current = null;
+  }, []);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : undefined;
     if (!overId) return;
+    // At most one fold per drag position, because a fold can manufacture the
+    // `over` change that triggers the next one. Folding moves the dragged
+    // row's DOM node into (or out of) a group panel, which reflows the list
+    // and makes dnd-kit re-measure every droppable against a drag position
+    // that did not move; the new rects can resolve `over` back to the side the
+    // row just left, and `onDragOver` fires on every `over` change. Nothing in
+    // that cycle needs the user to move, so it spins until React tears the
+    // webview down with "Maximum update depth exceeded" (minified #185).
+    //
+    // Refusing a fold is always safe: it is a preview, and `handleDragEnd`
+    // resolves the same outcome from `committedState` whether or not the
+    // crossing was folded in. `null` means no collision has been measured
+    // (the drag is being driven by a test, or by a sensor that never rendered
+    // one), and never suppresses a fold.
+    const position = dragPositionRef.current;
+    if (position !== null && position === foldedAtPositionRef.current) return;
+    foldedAtPositionRef.current = position;
     setPendingDragState((state) =>
       isParallelGroupDragMove(state, activeId, overId)
         ? movePendingDragItem(state, activeId, overId)
@@ -1190,6 +1247,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      foldedAtPositionRef.current = null;
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : undefined;
       if (!overId) return;
@@ -1506,8 +1564,10 @@ const WorkflowStepsPanelInner: React.FC<{
             <DndContext
               sensors={sensors}
               collisionDetection={collisionDetection}
+              onDragStart={resetFoldGuard}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
+              onDragCancel={resetFoldGuard}
             >
               <SortableContext
                 items={pendingDragState.order}
