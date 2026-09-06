@@ -25,11 +25,23 @@ import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 beforeEach(() => {
   useUiStore.getState().resetUi();
   useUiStore.setState({ workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT });
-  useSettingsStore.setState({ fullGlobalSettings: null });
+  useSettingsStore.setState({
+    fullGlobalSettings: null,
+    globalSettings: {
+      ...useSettingsStore.getState().globalSettings,
+      toastLevel: TOAST_LEVEL_MODES.ALL,
+    },
+  });
 });
 
 afterEach(() => {
-  useSettingsStore.setState({ fullGlobalSettings: null });
+  useSettingsStore.setState({
+    fullGlobalSettings: null,
+    globalSettings: {
+      ...useSettingsStore.getState().globalSettings,
+      toastLevel: TOAST_LEVEL_MODES.ALL,
+    },
+  });
 });
 
 function store() {
@@ -608,6 +620,41 @@ describe("toast queue", () => {
 
   it("fails open for showToast before settings load", () => {
     store().showToast("Early toast", USER_FEEDBACK_SEVERITY.INFO);
+
+    expect(store().toastQueue).toHaveLength(1);
+  });
+
+  function setMirroredToastLevel(
+    toastLevel: (typeof TOAST_LEVEL_MODES)[keyof typeof TOAST_LEVEL_MODES]
+  ): void {
+    useSettingsStore.setState({
+      globalSettings: {
+        ...useSettingsStore.getState().globalSettings,
+        toastLevel,
+      },
+    });
+  }
+
+  it("applies the mirrored globalSettings threshold before the drawer loads", () => {
+    // `fullGlobalSettings` stays null until the settings drawer is opened, so
+    // the INIT-mirrored value is the only threshold available after a reload.
+    setMirroredToastLevel(TOAST_LEVEL_MODES.ERROR_ONLY);
+
+    store().showToast("Info", USER_FEEDBACK_SEVERITY.INFO);
+    store().enqueueToast({
+      message: "Warning",
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
+    });
+    store().showToast("Error", USER_FEEDBACK_SEVERITY.ERROR);
+
+    expect(store().toastQueue.map((toast) => toast.message)).toEqual(["Error"]);
+  });
+
+  it("prefers fullGlobalSettings over the mirrored value once loaded", () => {
+    setMirroredToastLevel(TOAST_LEVEL_MODES.OFF);
+    setToastLevel(TOAST_LEVEL_MODES.ALL);
+
+    store().showToast("Info", USER_FEEDBACK_SEVERITY.INFO);
 
     expect(store().toastQueue).toHaveLength(1);
   });

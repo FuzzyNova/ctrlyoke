@@ -23,6 +23,8 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR,
   WORKTREE_MODES,
   COMPARE_SOURCES,
+  TOAST_LEVEL_MODES,
+  type ToastLevelMode,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -139,6 +141,8 @@ export interface GlobalSettings {
   worktree?: WorktreeDefaultConfig;
   externalFileRootsByScope?: ExternalFileRootsByScope;
   terminal?: TerminalSettings;
+  /** Minimum severity for operational toast; mirrored from `notifications.toastLevel`. */
+  toastLevel: ToastLevelMode;
   /** Per-leaf-path source map: "workspace" if a workspace file owns the setting, "user" if a user file does, absent if at default */
   settingSources: Record<string, string>;
 }
@@ -446,6 +450,7 @@ const initialGlobalSettings: GlobalSettings = {
     },
     mobileCustomShortcuts: [],
   },
+  toastLevel: TOAST_LEVEL_MODES.ALL,
   settingSources: {},
 };
 
@@ -827,3 +832,23 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       }),
   })
 );
+
+/**
+ * Resolve the operational-toast severity threshold.
+ *
+ * `fullGlobalSettings` is only populated once the global settings drawer has
+ * been opened (and is refreshed on every save from it), so it is preferred
+ * when present but cannot be relied on alone — after a reload it is `null`.
+ * `globalSettings.toastLevel` is mirrored into the `INIT` payload and every
+ * `GLOBAL_SETTINGS_UPDATED` push, so it is available from panel load onward.
+ * Falls back to `ALL` (fail open) so toasts are never silently swallowed
+ * before any settings have arrived.
+ */
+export function selectToastLevel(): ToastLevelMode {
+  const state = useSettingsStore.getState();
+  return (
+    state.fullGlobalSettings?.settings.notifications.toastLevel ??
+    state.globalSettings.toastLevel ??
+    TOAST_LEVEL_MODES.ALL
+  );
+}

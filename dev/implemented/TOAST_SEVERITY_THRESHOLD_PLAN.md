@@ -147,9 +147,10 @@ object (starts line 790), matching the existing enum-string shape used for
 
 ### Where the threshold is checked
 
-**`uiStore.ts`** — both `enqueueToast` and `showToast` read the current
-threshold and no-op (return unchanged state) when the incoming severity
-doesn't clear it:
+**`uiStore.ts`** — both `enqueueToast` and `showToast` resolve the current
+threshold via `selectToastLevel()` (exported from `settingsStore.ts`, so the
+resolution order lives in one place) and no-op (return unchanged state) when
+the incoming severity doesn't clear it:
 
 ```typescript
 enqueueToast: (toast) =>
@@ -292,6 +293,23 @@ changes.
 
 ## Edge Cases
 
+- **`fullGlobalSettings` is not populated until the settings drawer opens.**
+  Found during review, after the three implementation steps had landed. The
+  webview only receives `GLOBAL_SETTINGS_LOADED` in response to a
+  `GLOBAL_SETTINGS_LOAD_REQUEST`, and the sole sender of that request is
+  `GlobalSettingsDrawer.tsx` on open. Reading the threshold from
+  `fullGlobalSettings` alone therefore fails open on every fresh panel/tab
+  load, so the setting silently stopped applying to in-app toast after any
+  reload until the user happened to open the settings drawer. Fixed by
+  mirroring `toastLevel` into `WebviewSettingsSync.buildGlobalSettings()`,
+  which rides the `INIT` payload and every `GLOBAL_SETTINGS_UPDATED` push and
+  so is present from panel load onward. `selectToastLevel()` in
+  `settingsStore.ts` is the single source of the resolution order
+  (`fullGlobalSettings` -> mirrored `globalSettings.toastLevel` -> `ALL`) and
+  is what both `uiStore` guards call. The native VS Code path was never
+  affected: `VsCodeUserFeedbackSink` reads `configService` directly.
+  **Any future webview-side gate on a `.ctrlyoke/settings.json` value needs
+  the same mirroring** — `fullGlobalSettings` is drawer-scoped, not ambient.
 - **Settings not yet loaded in the webview** (`fullGlobalSettings === null`,
   e.g. very early in panel/tab startup). Fail open (`ALL`) rather than
   silently dropping early toasts — a brief window of "can't yet suppress"

@@ -647,7 +647,8 @@ export class WebviewSettingsSync {
       clientId
     );
 
-    const trustedExternalRoots = properties[PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS];
+    const trustedExternalRoots =
+      properties[PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS];
     if (Array.isArray(trustedExternalRoots)) {
       await this.recordInteractiveWorkflowExternalRootDecision(
         clientId,
@@ -918,6 +919,10 @@ export class WebviewSettingsSync {
         root: ConfigurationUtils.getWorktreeRoot() ?? "",
       },
       workspaceRoot,
+      // Mirrored so the webview can gate operational toast from panel load
+      // onward; `fullGlobalSettings` only arrives once the settings drawer
+      // is opened, which would leave the threshold unenforced after a reload.
+      toastLevel: configService.getAll().notifications.toastLevel,
       settingSources: configService.getLeafSources(),
       runHistoryPath: this.getResolvedRunHistoryPath(),
     };

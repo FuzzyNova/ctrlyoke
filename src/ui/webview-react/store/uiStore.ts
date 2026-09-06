@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
-import { useSettingsStore } from "@store/settingsStore";
+import { selectToastLevel } from "@store/settingsStore";
 import type {
   WorkflowSummary,
   HarnessId,
@@ -41,7 +41,6 @@ import {
 } from "../constants";
 import {
   USER_FEEDBACK_SEVERITY,
-  TOAST_LEVEL_MODES,
   meetsToastLevel,
   type UserFeedbackSeverity,
   HISTORY_EVENT_KINDS,
@@ -1762,10 +1761,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       enqueueToast: (toast) =>
         set((state) => {
-          const level =
-            useSettingsStore.getState().fullGlobalSettings?.settings
-              .notifications.toastLevel ?? TOAST_LEVEL_MODES.ALL;
-          if (!meetsToastLevel(toast.severity, level)) return state;
+          if (!meetsToastLevel(toast.severity, selectToastLevel()))
+            return state;
 
           if (
             toast.dedupeKey &&
@@ -1797,10 +1794,7 @@ export const useUiStore = create<UiState & UiActions>()(
 
       showToast: (message, severity = USER_FEEDBACK_SEVERITY.INFO, options) =>
         set((state) => {
-          const level =
-            useSettingsStore.getState().fullGlobalSettings?.settings
-              .notifications.toastLevel ?? TOAST_LEVEL_MODES.ALL;
-          if (!meetsToastLevel(severity, level)) return state;
+          if (!meetsToastLevel(severity, selectToastLevel())) return state;
 
           if (
             options?.dedupeKey &&

@@ -1,12 +1,17 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { HARNESS_IDS, PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+  TOAST_LEVEL_MODES,
+} from "@root/types/DashboardConstants";
 import type { GlobalSettings } from "@store/settingsStore";
 import { useDrawerTabOverrides } from "@hooks/useDrawerTabOverrides";
 import { useSettingsDrawerTabOverrides } from "@hooks/useSettingsDrawerTabOverrides";
 import { getPermissionTabOverride } from "@components/shared/tabBadgeUtils";
 
 const globalSettings: GlobalSettings = {
+  toastLevel: TOAST_LEVEL_MODES.ALL,
   harness: HARNESS_IDS.CLAUDE_CLI,
   model: "",
   harnessDefaultModels: {},

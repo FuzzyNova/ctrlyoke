@@ -5,6 +5,7 @@ import {
   PERMISSION_MODES,
   EXECUTION_MODES,
   WORKTREE_MODES,
+  TOAST_LEVEL_MODES,
 } from "@root/types/DashboardConstants";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
@@ -151,6 +152,7 @@ describe("isHarnessAvailable", () => {
 describe("setGlobalSettings", () => {
   it("replaces global settings", () => {
     const settings: GlobalSettings = {
+      toastLevel: TOAST_LEVEL_MODES.ALL,
       harness: HARNESS_IDS.CLAUDE_CLI,
       model: "claude-opus-4",
       harnessDefaultModels: {},
