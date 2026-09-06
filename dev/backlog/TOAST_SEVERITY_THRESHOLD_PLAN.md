@@ -163,28 +163,49 @@ enqueueToast: (toast) =>
 
 Same guard added to `showToast`. `useSettingsStore` is already the
 project's settings store (`src/ui/webview-react/store/settingsStore.ts`);
-`uiStore.ts` does not currently import it, but nothing prevents a
-`getState()` read the way other cross-store reads are done elsewhere in the
-webview — confirm this is an accepted pattern here (see Open Questions if
-not; the fallback is threading the setting in as an argument from the two
-callers instead).
+`uiStore.ts` does not currently import it, but a cross-store `getState()`
+read is an established pattern in this directory — `editorStore.ts:581`,
+`editorStore.ts:847`, `editorStore.ts:1007`, and `workflowStore.ts:1370`
+all read `useUiStore.getState()`. `settingsStore.ts` does not import
+`uiStore.ts`, so the new `uiStore -> settingsStore` import introduces no
+cycle. Use the direct `getState()` read (resolved — see Open Questions).
 
 **`VsCodeUserFeedbackSink.ts`** — reads the same setting via the existing
 module-singleton `configService` (`src/config/CtrlYokeConfigService.ts`),
-matching exactly how `NotificationManager.ts:55` already does
-(`configService.getAll().notifications`) rather than adding a new
-constructor-injected dependency:
+matching how `NotificationManager.ts:55` already does
+(`configService.getAll().notifications`). `src/platform/` already imports
+that singleton (`CliAdapter.ts:8`), so this crosses no layer boundary.
+
+The read is exposed as a **second optional constructor parameter with that
+default**, mirroring how the class already takes an optional `api` default
+of `vscode.window`. This is not a new required dependency — it keeps the
+existing `UserFeedbackSink.test.ts` suite hermetic and lets a suppression
+test inject a level without mutating the global config singleton:
 
 ```typescript
 import { configService } from "../config/CtrlYokeConfigService";
-import { meetsToastLevel, TOAST_LEVEL_MODES } from "../types/DashboardConstants";
+import {
+  meetsToastLevel,
+  TOAST_LEVEL_MODES,
+  type ToastLevelMode,
+} from "../types/DashboardConstants";
+
+constructor(
+  private readonly api: VsCodeFeedbackApi = vscode.window,
+  private readonly resolveToastLevel: () => ToastLevelMode = () =>
+    configService.getAll().notifications?.toastLevel ?? TOAST_LEVEL_MODES.ALL
+) {}
 
 notify(message: UserFeedback): void {
-  const level = configService.getAll().notifications.toastLevel ?? TOAST_LEVEL_MODES.ALL;
-  if (!meetsToastLevel(message.severity, level)) return;
+  if (!meetsToastLevel(message.severity, this.resolveToastLevel())) return;
   // ...existing switch unchanged
 }
 ```
+
+Note `configService.getAll()` always seeds from `CTRLYOKE_SETTINGS_DEFAULTS`
+before merging backends (`CtrlYokeConfigService.ts:218-222`), so an
+uninitialized service returns the `ALL` default rather than throwing — the
+existing sink tests keep passing unchanged.
 
 This covers every path identified in the earlier audit except the two that
 are correctly out of scope:
@@ -333,21 +354,36 @@ changes.
 
 ---
 
-## Open Questions
+## Resolved Questions
 
-1. Does `uiStore.ts` reading `useSettingsStore.getState()` directly violate
-   any existing store-isolation convention in this codebase, or is
-   cross-store `getState()` read already an accepted pattern elsewhere in
-   `webview-react/store/`? If not accepted, the fallback is passing the
-   resolved `ToastLevelMode` in as a parameter from the two callers
-   (`useMessageHandler.ts`, `notifyUser.ts`) instead of reading it inside
-   the store action itself.
-2. Should `success`-severity toast be treated as below the
-   `WARNING_AND_ERROR` threshold (current design), or should it get its own
-   tier? Leaning toward current design (success is noise-adjacent to info,
-   not warning-adjacent), but worth confirming against actual user intent
-   once this ships.
-3. Naming: `toastLevel` vs. something that more clearly distinguishes it
-   from the `events.*` completion-notification modes at a glance in the
-   settings JSON (e.g. `feedbackLevel`, `operationalToastLevel`). No strong
-   reason to prefer one over another yet.
+1. **Cross-store `getState()` in `uiStore.ts`** — *resolved: allowed.* It is
+   an established pattern in `src/ui/webview-react/store/` (four existing
+   `useUiStore.getState()` call sites in `editorStore.ts` and
+   `workflowStore.ts`), and `settingsStore.ts` does not import `uiStore.ts`,
+   so there is no import cycle. The parameter-threading fallback is not
+   needed.
+2. **`success` severity under `WARNING_AND_ERROR`/`ERROR_ONLY`** —
+   *resolved: below threshold under both,* as originally designed. A user
+   selecting "Warnings and errors" is asking to silence routine chatter, and
+   success toast is the most routine chatter there is.
+3. **Naming (`toastLevel` vs. `feedbackLevel`/`operationalToastLevel`)** —
+   *resolved: keep `toastLevel`.* It sits as a direct sibling of
+   `vscode`/`browser`/`events` inside `notifications`, and the settings-UI
+   row carries an explicit description distinguishing it from the completion
+   channel. A longer key buys nothing the description does not already.
+
+---
+
+## Staging
+
+Queued as three steps, each independently committable:
+
+1. **Contract and settings foundation** — `TOAST_LEVEL_MODES`,
+   `ToastLevelMode`, `meetsToastLevel()`, the `CtrlYokeNotificationSettings`
+   field and its default, the `settings-schema.json` enum, and unit coverage
+   for the helper.
+2. **Threshold enforcement at both chokepoints** — the `uiStore`
+   `enqueueToast`/`showToast` guards and the `VsCodeUserFeedbackSink.notify()`
+   guard, each with tests.
+3. **Settings UI** — the `NotificationsSection.tsx` row under "Noise
+   control", plus moving this plan to `dev/implemented/`.
