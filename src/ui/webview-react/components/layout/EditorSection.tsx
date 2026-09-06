@@ -3,7 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
-import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useElementTier } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { formatMagnitude } from "../../utils/number";
@@ -24,6 +24,27 @@ import {
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
+
+/** Width tiers for the editor header row, from the section's own content width. */
+const EDITOR_HEADER_TIERS = {
+  WIDE: "wide",
+  NARROW: "narrow",
+  COMPACT: "compact",
+} as const;
+type EditorHeaderTier =
+  (typeof EDITOR_HEADER_TIERS)[keyof typeof EDITOR_HEADER_TIERS];
+
+const EDITOR_HEADER_NARROW_THRESHOLD = 600;
+// Below this, the name + token count no longer fit on one line without the
+// token count truncating away — stack them into two lines instead.
+const EDITOR_HEADER_COMPACT_THRESHOLD = 460;
+
+function resolveEditorHeaderTier(width: number): EditorHeaderTier {
+  if (width < EDITOR_HEADER_COMPACT_THRESHOLD)
+    return EDITOR_HEADER_TIERS.COMPACT;
+  if (width < EDITOR_HEADER_NARROW_THRESHOLD) return EDITOR_HEADER_TIERS.NARROW;
+  return EDITOR_HEADER_TIERS.WIDE;
+}
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -70,7 +91,12 @@ const EditorSectionInner: React.FC = () => {
       : steps.length;
   const tokenCount = useAttachmentTokenCount(promptText, stepCount);
 
-  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>(600);
+  const [sectionRef, headerTier] = useElementTier<
+    EditorHeaderTier,
+    HTMLElement
+  >(resolveEditorHeaderTier, EDITOR_HEADER_TIERS.WIDE);
+  const isNarrow = headerTier !== EDITOR_HEADER_TIERS.WIDE;
+  const isCompact = headerTier === EDITOR_HEADER_TIERS.COMPACT;
 
   // Inline name editing state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -123,6 +149,15 @@ const EditorSectionInner: React.FC = () => {
   };
 
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+
+  // Below EDITOR_HEADER_COMPACT_THRESHOLD the name + token count no longer
+  // fit on one line without the token count truncating away, so stack them.
+  const showStackedTokens =
+    isCompact &&
+    !isExternallyManaged &&
+    !isEditingName &&
+    stepEnabled &&
+    !isScriptMode;
 
   // Generate mode indicator text (includes name when set)
   const getModeText = () => {
@@ -241,7 +276,13 @@ const EditorSectionInner: React.FC = () => {
             </button>
           )}
           {!isExternallyManaged && <StepColorQuickPicker />}
-          <span className="editor-mode-indicator text-center text-xs text-description-fg truncate min-w-0">
+          <span
+            className={`editor-mode-indicator text-center text-xs text-description-fg min-w-0 ${
+              showStackedTokens
+                ? "flex flex-col items-center leading-tight"
+                : "truncate"
+            }`}
+          >
             {isExternallyManaged ? (
               (externalReadOnlyLabel ?? "Read-only — external run in progress")
             ) : isEditingName ? (
@@ -259,7 +300,7 @@ const EditorSectionInner: React.FC = () => {
               />
             ) : (
               <span
-                className={`cursor-pointer hover:text-foreground transition-colors${!stepEnabled ? " italic" : ""}`}
+                className={`cursor-pointer hover:text-foreground transition-colors truncate max-w-full${!stepEnabled ? " italic" : ""}`}
                 role="button"
                 tabIndex={0}
                 onClick={startNameEditing}
@@ -282,7 +323,7 @@ const EditorSectionInner: React.FC = () => {
                 </>
               ) : !isScriptMode ? (
                 <>
-                  {" — "}
+                  {!showStackedTokens && " — "}
                   <span
                     className={`font-bold tabular-nums ${
                       tokenCount >= 100_000
