@@ -82,4 +82,35 @@ describe("NotificationsSection", () => {
       true
     );
   });
+
+  it("updates the toast notification severity threshold", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+
+    render(
+      <NotificationsSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Toast notifications")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Controls in-app and native popups for action results.*separate from the completion notifications configured above/i
+      )
+    ).toBeInTheDocument();
+
+    const toastLevelSelect = document.getElementById("notif-toast-level");
+    expect(toastLevelSelect).not.toBeNull();
+    await user.click(toastLevelSelect!);
+    await user.click(screen.getByRole("button", { name: "Warnings and errors" }));
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      "notifications.toastLevel",
+      "warningAndError"
+    );
+  });
 });

@@ -12,10 +12,10 @@ section) that operational toast is "governed by Nothing. Never
 suppressed." `notifications.vscode.enabled` only gates
 `NotificationManager` — completion popups for workflow/prompt-done events
 (`src/ui/NotificationManager.ts:118-130`). It has no effect on operational
-toast (save failed, validation error, action result, etc.), and there is
-currently no setting anywhere that does.
+toast (save failed, validation error, action result, etc.), and there was
+no setting anywhere that did before this feature shipped.
 
-This plan adds one new setting — a **toast severity threshold** — and
+The shipped feature adds one new setting — a **toast severity threshold** — and
 supersedes that specific "never suppressed" decision for operational toast
 only. Completion-notification gating (`vscode.enabled`, `browser.mode`,
 `events.workflowComplete`/`promptComplete`, `onlyWhenWindowUnfocused`) is
@@ -25,7 +25,7 @@ unrelated and unchanged.
 registry (each toast site gets a stable ID, dismissal persists, a settings
 page lists every toast and its show/hide state). That was considered and
 rejected for now — see "Not In Scope" — in favor of the smaller change that
-gets users an actual silence control.
+gives users an actual silence control.
 
 ---
 
@@ -64,10 +64,10 @@ calling `uiStore.showToast()` directly in the browser or posting
 lands on the same `VsCodeUserFeedbackSink` instance. So the two chokepoints
 above are exhaustive — no per-call-site migration is needed.
 
-This means `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s architecture goal
+This meant `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s architecture goal
 (funnel everything through a small number of injected ports) is *already
-satisfied* for this specific purpose. This plan does not depend on any
-stage of that plan and does not need to wait for it.
+satisfied* for this specific purpose. The implementation did not depend on
+any stage of that plan.
 
 ---
 
@@ -163,8 +163,8 @@ enqueueToast: (toast) =>
 
 Same guard added to `showToast`. `useSettingsStore` is already the
 project's settings store (`src/ui/webview-react/store/settingsStore.ts`);
-`uiStore.ts` does not currently import it, but a cross-store `getState()`
-read is an established pattern in this directory — `editorStore.ts:581`,
+The cross-store `getState()` read is an established pattern in this
+directory — `editorStore.ts:581`,
 `editorStore.ts:847`, `editorStore.ts:1007`, and `workflowStore.ts:1370`
 all read `useUiStore.getState()`. `settingsStore.ts` does not import
 `uiStore.ts`, so the new `uiStore -> settingsStore` import introduces no
@@ -224,8 +224,8 @@ are correctly out of scope:
 
 ### Settings UI
 
-`src/ui/webview-react/components/settings/NotificationsSection.tsx` gets
-one new row, placed under a new or existing "Noise control" grouping
+`src/ui/webview-react/components/settings/NotificationsSection.tsx` has
+one row, placed in the existing "Noise control" grouping
 (there's already a "Noise control" section at line 427-441 for
 `onlyWhenWindowUnfocused`), mirroring the existing `EVENT_MODE_OPTIONS` /
 `CustomSelect` pattern used for `notif.events.workflowComplete`
@@ -307,7 +307,7 @@ changes.
   Settings are workspace/server-scoped, not per-client, so every connected
   browser shares the same `toastLevel` — consistent with how `browser.mode`
   already works today. No new per-client complexity.
-- **`OFF` and an error that genuinely blocks progress.** This plan does not
+- **`OFF` and an error that genuinely blocks progress.** The implementation does not
   change or reintroduce any blocking-modal path — `EndConditionHandler`'s
   two `showChoice()` blocking sites are already deleted per
   `BROWSER_USER_FEEDBACK_PLAN.md` Phase 2.5, and `toastLevel: off` only
@@ -374,9 +374,9 @@ changes.
 
 ---
 
-## Staging
+## Delivery
 
-Queued as three steps, each independently committable:
+Delivered as three independently committable steps:
 
 1. **Contract and settings foundation** — `TOAST_LEVEL_MODES`,
    `ToastLevelMode`, `meetsToastLevel()`, the `CtrlYokeNotificationSettings`
@@ -385,5 +385,5 @@ Queued as three steps, each independently committable:
 2. **Threshold enforcement at both chokepoints** — the `uiStore`
    `enqueueToast`/`showToast` guards and the `VsCodeUserFeedbackSink.notify()`
    guard, each with tests.
-3. **Settings UI** — the `NotificationsSection.tsx` row under "Noise
-   control", plus moving this plan to `dev/implemented/`.
+3. **Settings UI** — added the `NotificationsSection.tsx` row under
+   "Noise control" and moved this plan to `dev/implemented/`.

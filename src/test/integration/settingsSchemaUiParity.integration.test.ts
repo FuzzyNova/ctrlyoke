@@ -163,7 +163,6 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
-  "notifications.toastLevel",
   "server.standalonePort",
   "server.theme",
   "terminal.mobileBarLayout.bar",

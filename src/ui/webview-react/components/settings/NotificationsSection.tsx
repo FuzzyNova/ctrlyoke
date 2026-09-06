@@ -6,6 +6,7 @@ import {
   NOTIFICATION_EVENT_MODES,
   HOOK_EVENT_METADATA,
   HOOK_EVENT_ORDER,
+  TOAST_LEVEL_MODES,
 } from "@root/types/DashboardConstants";
 import type {
   FullGlobalSettings,
@@ -36,6 +37,19 @@ const EVENT_MODE_OPTIONS = [
   { value: NOTIFICATION_EVENT_MODES.ALL, label: "Success and failure" },
   { value: NOTIFICATION_EVENT_MODES.FAILURES_ONLY, label: "Failures only" },
   { value: NOTIFICATION_EVENT_MODES.NEVER, label: "Off" },
+];
+
+const TOAST_LEVEL_OPTIONS = [
+  {
+    value: TOAST_LEVEL_MODES.ALL,
+    label: "All (info, success, warnings, errors)",
+  },
+  {
+    value: TOAST_LEVEL_MODES.WARNING_AND_ERROR,
+    label: "Warnings and errors",
+  },
+  { value: TOAST_LEVEL_MODES.ERROR_ONLY, label: "Errors only" },
+  { value: TOAST_LEVEL_MODES.OFF, label: "Off" },
 ];
 
 const BROWSER_MODE_OPTIONS = [
@@ -428,6 +442,24 @@ export function NotificationsSection({
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Noise control
         </h4>
+        <SettingInputRow
+          label="Toast notifications"
+          id="notif-toast-level"
+          path="notifications.toastLevel"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="notif-toast-level"
+            value={notif.toastLevel}
+            onChange={(value) => onUpdate("notifications.toastLevel", value)}
+            options={TOAST_LEVEL_OPTIONS}
+          />
+          <p className="mt-1 text-xs text-description-fg">
+            Controls in-app and native popups for action results (save failed,
+            validation errors, and similar) — separate from the completion
+            notifications configured above.
+          </p>
+        </SettingInputRow>
         <SettingToggleRow
           label="Only notify when ctrlyoke is not focused"
           description="Suppress notifications while the VS Code window or hosted dashboard is focused."

@@ -44,11 +44,10 @@ npm run compile-tests
 $env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP = $null
 ```
 
-## Current gaps (6)
+## Current gaps (5)
 
 | Setting                           | Section it belongs in                                  | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `notifications.toastLevel`        | Notifications                                        | **Pending UI control.** The setting is part of the shared notifications contract and schema, but its dashboard control is deferred to the toast severity threshold plan's UI step. Keep it in `PENDING_UI_PARITY` until that control lands. |
 | `server.theme`                    | intentionally not surfaced (for now)                   | **Not a gap yet — leave as-is.** The VS Code-hosted dashboard (`ServerSection.tsx`'s process) always follows the VS Code theme; there's nothing for this setting to control there. It's meant for the standalone `ctrlyoke server` headless CLI process's own dashboard, which doesn't exist yet — same story as `server.standalonePort` below. Give it a control once the standalone server ships and gets its own settings surface.                                                                                                                                  |
 | `server.standalonePort`           | intentionally not surfaced                             | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 | `terminal.mobileBarLayout.bar`    | `TerminalSection.tsx` → `TerminalControlBarEditor.tsx` | **Not a gap — leave as-is.** Same shape as `modelPricing` below: `bar`/`popup`/`hidden` are always read and written together as one `TerminalMobileBarLayout` object (`onUpdate("terminal.mobileBarLayout", nextLayout)`), never as individual leaf paths, so no literal `path="terminal.mobileBarLayout.bar"` will ever appear in source. See `dev/implemented/MOBILE_TERMINAL_BAR_CUSTOMIZATION_PLAN.md`.                                                                                                                                                            |
@@ -58,8 +57,8 @@ $env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP
 `defaults.secrets`, the four `usageTracking.*` controls, and `modelPricing` are done — see
 "Completed" below. `server.theme` and `server.standalonePort` are intentionally deferred until
 the standalone server ships; the three `terminal.mobileBarLayout.*` leaves are a permanent,
-structural exemption (whole-object write, not a missing control). `notifications.toastLevel`
-remains pending until its UI step lands. All six should stay in `PENDING_UI_PARITY` as markers.
+structural exemption (whole-object write, not a missing control). All five remaining gaps
+should stay in `PENDING_UI_PARITY` as markers.
 
 ### Related fixes surfaced while scoping `modelPricing`
 
