@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
 import { useEditorStore } from "../../store/editorStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getInheritedStepColor } from "../../utils/stepColor";
 
@@ -14,11 +15,15 @@ interface StepColorInputState {
 }
 
 export function useStepColorInput(): StepColorInputState {
-  const { properties, setProperty, stepType } = useEditorStore();
+  const { properties, setProperty, stepType, selectedPromptIndex } =
+    useEditorStore();
+  const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
     stepType === STEP_TYPES.SCRIPT ? undefined : getEffectiveHarness(),
-    globalSettings.harnessColors
+    globalSettings.harnessColors,
+    globalSettings.stepColorMode,
+    selectedPromptIndex ?? steps.length
   );
   const hasOverride = properties.color !== undefined;
   const [color, setColor] = useState(properties.color ?? inheritedColor);
@@ -47,14 +52,8 @@ export interface StepColorFieldProps {
 
 /** Full step-color control for an all-properties editor surface. */
 export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
-  const {
-    color,
-    inheritedColor,
-    hasOverride,
-    setColor,
-    commit,
-    reset,
-  } = useStepColorInput();
+  const { color, inheritedColor, hasOverride, setColor, commit, reset } =
+    useStepColorInput();
   const inputId = `${idPrefix}-color`;
 
   return (

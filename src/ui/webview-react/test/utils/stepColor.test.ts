@@ -9,7 +9,13 @@ import {
 } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
-import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import {
+  getStepPaletteHex,
+  getInheritedStepColor,
+  getUniqueStepColor,
+  resolveStepColor,
+  type StepColorGroupMember,
+} from "@utils/stepColor";
 
 const group: ParallelGroupDefinition = {
   id: "stable-group-id",
@@ -37,6 +43,7 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: { prompt: "Use Claude" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 0,
         stepColorMode: STEP_COLOR_MODES.HARNESS,
         settings: customSettings,
       })
@@ -44,6 +51,7 @@ describe("resolveStepColor", () => {
     expect(
       resolveStepColor({
         step: { type: "script", script: "npm test" },
+        stepIndex: 1,
         stepColorMode: STEP_COLOR_MODES.HARNESS,
         settings: customSettings,
       })
@@ -55,6 +63,7 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: { prompt: "authored", color: "#abcdef" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 0,
         settings: customSettings,
       })
     ).toBe("#abcdef");
@@ -70,6 +79,7 @@ describe("resolveStepColor", () => {
     const firstColor = resolveStepColor({
       step: firstStep,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 4,
       group,
       offsetInGroup: 0,
       settings: customSettings,
@@ -97,6 +107,7 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: authoredStep,
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 4,
         group,
         offsetInGroup: 0,
         settings: customSettings,
@@ -105,15 +116,26 @@ describe("resolveStepColor", () => {
     ).toBe("#abcdef");
   });
 
-  it("disables identity colors in off mode, including authored colors", () => {
+  it("disables identity colors in off mode", () => {
     expect(
       resolveStepColor({
-        step: { prompt: "disabled", color: "#abcdef" },
+        step: { prompt: "disabled" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 0,
         stepColorMode: STEP_COLOR_MODES.OFF,
         settings: customSettings,
       })
     ).toBeUndefined();
+  });
+
+  it("keeps authored colors above the off mode", () => {
+    expect(
+      resolveStepColor({
+        step: { prompt: "authored", color: "#abcdef" },
+        stepIndex: 0,
+        stepColorMode: STEP_COLOR_MODES.OFF,
+      })
+    ).toBe("#abcdef");
   });
 
   it("uses the built-in harness color by default", () => {
@@ -121,6 +143,7 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: { prompt: "Use Claude" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 0,
       })
     ).toBe(HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI]);
   });
@@ -129,6 +152,7 @@ describe("resolveStepColor", () => {
     expect(
       resolveStepColor({
         step: { type: "script", script: "npm test" },
+        stepIndex: 0,
       })
     ).toBe(SCRIPT_STEP_DEFAULT_COLOR);
   });
@@ -145,6 +169,7 @@ describe("resolveStepColor", () => {
     const firstColor = resolveStepColor({
       step: firstStep,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 4,
       group,
       offsetInGroup: 0,
       groupMembers,
@@ -152,6 +177,7 @@ describe("resolveStepColor", () => {
     const secondColor = resolveStepColor({
       step: secondStep,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 5,
       group,
       offsetInGroup: 1,
       groupMembers,
@@ -175,6 +201,7 @@ describe("resolveStepColor", () => {
     const originalColor = resolveStepColor({
       step,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 4,
       group,
       offsetInGroup: 1,
       groupMembers,
@@ -182,6 +209,7 @@ describe("resolveStepColor", () => {
     const reorderedColor = resolveStepColor({
       step,
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 4,
       group: reorderedGroup,
       offsetInGroup: 1,
       groupMembers,
@@ -195,8 +223,70 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: { prompt: "sequential" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 0,
         groupMembers: [groupMember({ prompt: "sibling" }, 0)],
       })
     ).toBe(HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI]);
+  });
+
+  it("uses unique palette colors independently of harness settings", () => {
+    expect(
+      resolveStepColor({
+        step: { prompt: "unique" },
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 2,
+        stepColorMode: STEP_COLOR_MODES.UNIQUE,
+        settings: customSettings,
+      })
+    ).toBe(getUniqueStepColor(2));
+
+    expect(
+      resolveStepColor({
+        step: { prompt: "authored", color: "#abcdef" },
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepIndex: 2,
+        stepColorMode: STEP_COLOR_MODES.UNIQUE,
+        settings: customSettings,
+      })
+    ).toBe("#abcdef");
+  });
+
+  it("wraps unique colors after the 24-slot palette", () => {
+    expect(getUniqueStepColor(24)).toBe(getUniqueStepColor(0));
+    expect(getStepPaletteHex(24, "light")).toBe(getStepPaletteHex(0, "light"));
+  });
+
+  it("uses the unique palette for the inherited color picker value", () => {
+    expect(
+      getInheritedStepColor(
+        HARNESS_IDS.CLAUDE_CLI,
+        customSettings,
+        STEP_COLOR_MODES.UNIQUE,
+        1
+      )
+    ).toBe(getStepPaletteHex(1));
+  });
+
+  it("uses the light palette when the theme is forwarded through the DOM", () => {
+    const originalBodyClass = document.body.className;
+    const originalThemeKind = document.documentElement.style.getPropertyValue(
+      "--fp-color-theme-kind"
+    );
+    document.body.className = "vscode-light";
+    document.documentElement.style.setProperty("--fp-color-theme-kind", "dark");
+
+    try {
+      expect(getStepPaletteHex(0)).toBe(getStepPaletteHex(0, "light"));
+    } finally {
+      document.body.className = originalBodyClass;
+      if (originalThemeKind) {
+        document.documentElement.style.setProperty(
+          "--fp-color-theme-kind",
+          originalThemeKind
+        );
+      } else {
+        document.documentElement.style.removeProperty("--fp-color-theme-kind");
+      }
+    }
   });
 });

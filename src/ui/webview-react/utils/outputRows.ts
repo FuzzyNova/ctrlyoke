@@ -1935,6 +1935,10 @@ export function buildOutputRows(
     const color = resolveStepColor({
       step,
       harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
+      stepIndex:
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? input.steps.length
+          : target.index,
       stepColorMode: input.stepColorMode,
       settings: input.harnessColorSettings,
       group,

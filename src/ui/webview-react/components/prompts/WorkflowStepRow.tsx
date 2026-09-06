@@ -250,6 +250,7 @@ export const SortableWorkflowStepWrapper = React.memo(
     const stepColor = resolveStepColor({
       step: stepItemProps.step,
       harnessId: harnessModel.harnessId,
+      stepIndex: stepItemProps.index,
       group: stepItemProps.colorGroup,
       offsetInGroup: stepItemProps.offsetInGroup,
       stepColorMode: stepItemProps.stepColorMode,

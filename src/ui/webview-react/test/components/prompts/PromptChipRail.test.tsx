@@ -6,6 +6,7 @@ import {
   HARNESS_IDS,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
+import { getUniqueStepColor } from "@utils/stepColor";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -100,6 +101,61 @@ describe("PromptChipRail", () => {
         '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
       )
     ).not.toHaveAttribute("style");
+  });
+
+  it("uses the unique palette for steps instead of harness colors", () => {
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      stepColorMode: STEP_COLOR_MODES.UNIQUE,
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "First" }, { prompt: "Second" }],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(
+      <PromptChipRail
+        onExpand={vi.fn()}
+        getStepHarnessModel={getStepHarnessModel}
+      />
+    );
+
+    expect(
+      document.querySelector(
+        '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
+      )
+    ).toHaveStyle(`background-color: ${getUniqueStepColor(0)}`);
+    expect(
+      document.querySelector(
+        '[data-workflow-chip-index="1"] [data-chip-identity-bar]'
+      )
+    ).toHaveStyle(`background-color: ${getUniqueStepColor(1)}`);
+  });
+
+  it("seeds the final step after the last regular step", () => {
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      stepColorMode: STEP_COLOR_MODES.UNIQUE,
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Only step" }],
+      finalStep: { prompt: "Final step" },
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const stepBar = document.querySelector(
+      '[data-workflow-chip-index="0"] [data-chip-identity-bar]'
+    );
+    const finalBar = document.querySelector("[data-final-step-identity-bar]");
+    expect(stepBar).toHaveStyle(`background-color: ${getUniqueStepColor(0)}`);
+    expect(finalBar).toHaveStyle(`background-color: ${getUniqueStepColor(1)}`);
+    expect(finalBar).not.toHaveStyle(
+      `background-color: ${getUniqueStepColor(0)}`
+    );
   });
 
   it("renders the status row before the context row in the three-row layout", () => {

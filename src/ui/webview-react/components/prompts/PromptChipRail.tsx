@@ -187,6 +187,7 @@ function ChipContent({
 
 type FinalStepChipProps = {
   status: StepStatus;
+  stepColor?: string;
   hasFinalStep: boolean;
   isDisabled: boolean;
   showPauseBoundaryBefore: boolean;
@@ -196,13 +197,14 @@ type FinalStepChipProps = {
 
 function FinalStepChip({
   status,
+  stepColor,
   hasFinalStep,
   isDisabled,
   showPauseBoundaryBefore,
   onChipClick,
   onOpenContextMenu,
 }: FinalStepChipProps) {
-  const borderBarClass = getChipBorderClass(status);
+  const borderBarClass = stepColor ? "" : getChipBorderClass(status);
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <div
@@ -227,7 +229,9 @@ function FinalStepChip({
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {/* Left status border bar */}
       <div
+        data-final-step-identity-bar
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
+        style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
       {/* Row 1: "FINAL" label */}
       <div className="flex justify-center w-full">
@@ -386,6 +390,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     return resolveStepColor({
       step,
       harnessId: getChipHarnessId(step, status),
+      stepIndex: index,
       stepColorMode: globalSettings.stepColorMode,
       settings: globalSettings.harnessColors,
       group,
@@ -404,6 +409,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   const finalStepEffectiveStatus: StepStatus = hasFinalStep
     ? (finalStepStatus ?? STEP_STATUS.PENDING)
     : STEP_STATUS.PENDING;
+  const finalStepColor = finalStep
+    ? resolveStepColor({
+        step: finalStep,
+        harnessId: getChipHarnessId(finalStep, finalStepEffectiveStatus),
+        stepIndex: prompts.length,
+        stepColorMode: globalSettings.stepColorMode,
+        settings: globalSettings.harnessColors,
+      })
+    : undefined;
 
   const handleFinalStepClick = useCallback(() => {
     if (isExternallyManaged || isLineageReadOnly) return;
@@ -602,6 +616,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       {/* Final step chip — pinned at bottom, always visible */}
       <FinalStepChip
         status={finalStepEffectiveStatus}
+        stepColor={finalStepColor}
         hasFinalStep={hasFinalStep}
         isDisabled={finalStep?.enabled === false}
         showPauseBoundaryBefore={

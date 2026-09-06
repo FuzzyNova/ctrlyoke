@@ -1186,6 +1186,16 @@ const WorkflowStepsPanelInner: React.FC<{
     };
   };
 
+  const finalStepColor = finalStep
+    ? resolveStepColor({
+        step: finalStep,
+        harnessId: getFinalStepHarnessModel().harnessId,
+        stepIndex: steps.length,
+        stepColorMode: globalSettings.stepColorMode,
+        settings: globalSettings.harnessColors,
+      })
+    : undefined;
+
   // Compute overrides for the final step (same logic as regular steps)
   const finalStepOverrides = finalStep
     ? getStepOverrides(finalStep)
@@ -1504,6 +1514,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 const stepColor = resolveStepColor({
                   step,
                   harnessId: getStepHarnessModel(step, status).harnessId,
+                  stepIndex: index,
                   stepColorMode: globalSettings.stepColorMode,
                   settings: globalSettings.harnessColors,
                   group: colorGroup,
@@ -1665,6 +1676,7 @@ const WorkflowStepsPanelInner: React.FC<{
         )}
       <FinalStepFooter
         finalStep={finalStep}
+        stepColor={finalStepColor}
         status={finalStepStatus}
         loopCount={finalStepLoopCount}
         phase={finalStepPhase}

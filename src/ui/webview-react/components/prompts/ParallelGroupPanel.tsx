@@ -351,6 +351,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
               const stepColor = resolveStepColor({
                 step,
                 harnessId: getStepHarnessModel(step, memberStatus).harnessId,
+                stepIndex: index,
                 group,
                 offsetInGroup: offset,
                 stepColorMode,

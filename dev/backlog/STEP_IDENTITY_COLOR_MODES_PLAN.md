@@ -548,7 +548,7 @@ classification cannot silently widen.
    generated constants, and the `globals.css` variable blocks until they pass. Nothing consumes them
    yet, and the tests are what carry the guarantees the old curated palette carried. Have the
    generator emit *named* tables (`rainbow` for now) so §3a's CVD palette is later a data change.
-3. Thread `stepIndex` through `resolveStepColor` and all five call sites (plus `steps.length` for the
+3. ✅ **Done.** Thread `stepIndex` through `resolveStepColor` and all five call sites (plus `steps.length` for the
    final step), add `getUniqueStepColor`, and implement the `unique` branch. This is the whole visual
    payoff.
 4. Collapse the tie-break into it (§4): point the `harness`-mode collision path at
