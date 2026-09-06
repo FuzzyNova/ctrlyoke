@@ -452,7 +452,8 @@ another cosmetic field is ever added.
 `PromptEditor` sets `rewindCompletedStep: true` whenever the edited step is completed —
 `isPromptCompleted` is derived from status alone (`PromptEditor.tsx:272`) and spread into the
 `UPDATE_PROMPT` message at `:681`, `:1060`, and `:1094` **without looking at what actually changed**.
-`WorkflowStepHandlers.handleUpdatePrompt:93` routes that to
+`WorkflowStepHandlers.handleUpdatePrompt` (`src/ui/WorkflowStepHandlers.ts:91-104` — note it
+lives under `src/ui/`, not `src/core/orchestration/`) routes that to
 `WorkflowOrchestrator.updateCompletedPromptInQueue`, which calls `setStartPositionAtRun` to establish
 a durable pending rewind *before* applying the edit.
 
@@ -501,16 +502,21 @@ table.
 
 ### Three things to get right
 
-- **`_runtime` must survive the partial update.** That is the whole point of the feature. Today's
-  `{ replace }` path hands in a step object with no `_runtime` at all, so something downstream is
-  already preserving it (or the field is reconstructed) — confirm which, in
-  `replaceParallelGroupStep`, before assuming a `{ updates }` merge inherits the same protection.
+- **`_runtime` survives the partial update — verified, and by the same mechanism both branches
+  already use.** `updateStepAtRun` (`WorkingFileManager.ts:1331`) does not hand `change` straight to
+  `replaceParallelGroupStep`; it first runs `mergeWorkflowStepUpdate(steps[index], incomingStep, …)`
+  (`WorkflowStepSanitizer.ts:554-568`), which returns `{ ...existingStep, ...incomingStep }`. The
+  disk-head step carries `_runtime`, an incoming patch has no `_runtime` key, so the field is
+  inherited rather than reconstructed. A `{ updates }` patch therefore gets the same protection the
+  `{ replace }` path gets today, with no change to `WorkingFileManager` — assert it in the test
+  rather than building for it. (The one escape hatch: `mergeWorkflowStepUpdate` returns
+  `incomingStep` outright on a prompt↔script type change, which a cosmetic patch can never be.)
 - **Keep the edit undoable.** `isStepContentEqual` (`workflowStore.ts:80`) ignores only `status` and
   `_runtime`, so a color change already registers as an undoable content change. Do **not** add
   `color` to its ignore list while implementing "cosmetic" — cosmetic means "does not rewind the
   run", not "is not tracked".
 - **Step 0 is a second, separate symptom and is not fixed by this rule alone.** The rewind branch is
-  guarded on `index > 0` (`WorkflowStepHandlers.ts:94`), so index 0 never took it; the observed
+  guarded on `index > 0` (`src/ui/WorkflowStepHandlers.ts:93`), so index 0 never took it; the observed
   "creates a new draft" comes from the step-zero full-rerun path that
   `handleUpdatePrompt`'s else-branch comment describes, and I did not trace it to a specific line.
   Reproduce it first. The intent is unambiguous either way: under the cosmetic rule a color edit
@@ -532,7 +538,10 @@ classification cannot silently widen.
 1. Move `enabled` out: drop it from `HarnessColorSettings`, the schema, and the defaults; add
    `STEP_COLOR_MODES` + `ui.stepColorMode` through `CtrlYokeSettings`, `ConfigurationUtils`,
    `WebviewSettingsSync`, `settingsStore`, and `ResolveStepColorOptions`. `ui.harnessColors` is
-   otherwise untouched. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
+   otherwise untouched. `src/test/unit/CtrlYokeConfigService.test.ts:586-600` writes and asserts
+   `ui.harnessColors.enabled` and moves with it; the schema's `additionalProperties: false` means the
+   schema, `CTRLYOKE_SETTINGS_DEFAULTS`, and that test have to change in the same commit or nothing
+   validates. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
    and is reviewable on its own.
 2. Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
    generated constants, and the `globals.css` variable blocks until they pass. Nothing consumes them
