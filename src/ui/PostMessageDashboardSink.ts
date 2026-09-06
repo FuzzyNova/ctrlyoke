@@ -334,6 +334,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
+  updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number,
+    workflowId?: string
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
+      index,
+      color,
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
+  }
+
   updatePromptDeleted(
     fileName: string,
     steps: any[],

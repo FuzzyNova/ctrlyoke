@@ -22,6 +22,7 @@ import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
   OPERATION_STATUS,
+  STEP_COLOR_MODES,
   WORKFLOW_TOKEN_COVERAGE,
   STEP_TYPES,
   type HarnessId,
@@ -86,6 +87,7 @@ import {
 import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
+import type { StepColorMode } from "@root/types/DashboardConstants";
 
 export interface OutputRowPromptUndoAction {
   label: string;
@@ -326,6 +328,7 @@ export interface BuildOutputRowsInput {
   /** Workflow-level fallback for prompt-step harness resolution. */
   effectiveHarness?: HarnessId;
   /** Dashboard-only per-harness identity color settings. */
+  stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
@@ -1921,18 +1924,27 @@ export function buildOutputRows(
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? getParallelGroupForStep(input.parallelGroups, target.index)
         : undefined;
-    const groupMembers = group
-      ? input.steps
-          .slice(group.startIndex, group.endIndex + 1)
-          .map((member, offsetInGroup) => ({
-            step: member,
-            harnessId: getEffectiveStepHarness(member, input.effectiveHarness),
-            offsetInGroup,
-          }))
-      : undefined;
+    const groupMembers =
+      input.stepColorMode === STEP_COLOR_MODES.HARNESS && group
+        ? input.steps
+            .slice(group.startIndex, group.endIndex + 1)
+            .map((member, offsetInGroup) => ({
+              step: member,
+              harnessId: getEffectiveStepHarness(
+                member,
+                input.effectiveHarness
+              ),
+              offsetInGroup,
+            }))
+        : undefined;
     const color = resolveStepColor({
       step,
       harnessId: getEffectiveStepHarness(step, input.effectiveHarness),
+      stepIndex:
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? input.steps.length
+          : target.index,
+      stepColorMode: input.stepColorMode,
       settings: input.harnessColorSettings,
       group,
       offsetInGroup:

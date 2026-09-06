@@ -23,6 +23,8 @@ function getStepDisplayText(step: WorkflowStep): string {
 
 interface FinalStepFooterProps {
   finalStep: WorkflowStep | null;
+  /** Resolved identity color for the final step, when identity colors are on. */
+  stepColor?: string;
   status: StepStatus | null;
   loopCount: number;
   phase: FinalStepPhase | null;
@@ -65,6 +67,7 @@ const truncate = (text: string, maxLength: number = 72): string => {
 
 export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   finalStep,
+  stepColor,
   status,
   loopCount,
   phase,
@@ -99,7 +102,13 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "Final Step — Disabled";
 
   return (
-    <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0 select-none [-webkit-touch-callout:none]">
+    <div className="relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 select-none [-webkit-touch-callout:none]">
+      <div
+        data-final-step-identity-bar
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : "bg-transparent"}`}
+        style={stepColor ? { backgroundColor: stepColor } : undefined}
+        aria-hidden="true"
+      />
       {hasFinalStep && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${

@@ -19,6 +19,7 @@ import {
 } from "./ExecutingStepHighlight";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
+import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
 
@@ -71,6 +72,7 @@ export type WorkflowStepRowProps = {
   colorGroup?: ParallelGroupDefinition;
   colorGroupMembers?: readonly StepColorGroupMember[];
   offsetInGroup?: number;
+  stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
   dragHandleProps?: WorkflowStepDragHandleProps;
   getStepHarnessModel: (
@@ -248,8 +250,10 @@ export const SortableWorkflowStepWrapper = React.memo(
     const stepColor = resolveStepColor({
       step: stepItemProps.step,
       harnessId: harnessModel.harnessId,
+      stepIndex: stepItemProps.index,
       group: stepItemProps.colorGroup,
       offsetInGroup: stepItemProps.offsetInGroup,
+      stepColorMode: stepItemProps.stepColorMode,
       settings: stepItemProps.harnessColorSettings,
       groupMembers: stepItemProps.colorGroupMembers,
     });

@@ -27,9 +27,9 @@ import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
-  STEP_COLOR_TIE_BREAK_PALETTE,
+  STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
-import { resolveStepColor } from "@utils/stepColor";
+import { getUniqueStepColor, resolveStepColor } from "@utils/stepColor";
 
 function resetStores() {
   useWorkflowStore.getState().resetWorkflow();
@@ -947,6 +947,7 @@ describe("WorkflowStepsPanel identity rails", () => {
     const withGroupContext = resolveStepColor({
       step: steps[0],
       harnessId: HARNESS_IDS.CLAUDE_CLI,
+      stepIndex: 0,
       group,
       offsetInGroup: 0,
       groupMembers: [
@@ -955,7 +956,7 @@ describe("WorkflowStepsPanel identity rails", () => {
       ],
     });
 
-    expect(STEP_COLOR_TIE_BREAK_PALETTE).toContain(withGroupContext);
+    expect(withGroupContext).toBe(getUniqueStepColor(0));
     expect(rail?.style.backgroundColor).toBe(
       normalizeColor(withGroupContext as string)
     );
@@ -964,5 +965,25 @@ describe("WorkflowStepsPanel identity rails", () => {
     expect(rail?.style.backgroundColor).not.toBe(
       normalizeColor(HARNESS_CHART_COLORS[HARNESS_IDS.CLAUDE_CLI])
     );
+  });
+
+  it("uses the unique palette in visible step rows", () => {
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      stepColorMode: STEP_COLOR_MODES.UNIQUE,
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "First" }, { prompt: "Second" }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      document.querySelector('[data-workflow-step-index="0"] > div:first-child')
+    ).toHaveStyle(`background-color: ${getUniqueStepColor(0)}`);
+    expect(
+      document.querySelector('[data-workflow-step-index="1"] > div:first-child')
+    ).toHaveStyle(`background-color: ${getUniqueStepColor(1)}`);
   });
 });

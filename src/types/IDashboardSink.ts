@@ -166,6 +166,13 @@ export interface IDashboardSink {
     parallelGroups?: ParallelGroupDefinition[]
   ): void;
 
+  updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number,
+    workflowId?: string
+  ): void;
+
   updatePromptDeleted(
     fileName: string,
     steps: any[],

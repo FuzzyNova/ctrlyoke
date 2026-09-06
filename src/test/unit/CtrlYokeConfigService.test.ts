@@ -577,13 +577,13 @@ suite("FileConfigBackend", () => {
     });
   });
 
-  test("round-trips harness color settings through the config hierarchy", async () => {
+  test("round-trips step color mode and harness color settings", async () => {
     const configPath = path.join(tmpDir, "settings.json");
     const backend = new FileConfigBackend(configPath);
     const service = new CtrlYokeConfigService();
     service.setUserBackend(backend);
 
-    await service.set("ui.harnessColors.enabled", false, "user");
+    await service.set("ui.stepColorMode", "off", "user");
     await service.set(
       "ui.harnessColors.byHarness.claude-cli",
       "#123456",
@@ -591,15 +591,14 @@ suite("FileConfigBackend", () => {
     );
     await service.set("ui.harnessColors.script", "#654321", "user");
 
+    assert.strictEqual(service.get("ui").stepColorMode, "off");
     assert.deepStrictEqual(service.get("ui").harnessColors, {
-      enabled: false,
       byHarness: { "claude-cli": "#123456" },
       script: "#654321",
     });
     assert.deepStrictEqual(
       JSON.parse(fs.readFileSync(configPath, "utf-8")).ui.harnessColors,
       {
-        enabled: false,
         byHarness: { "claude-cli": "#123456" },
         script: "#654321",
       }

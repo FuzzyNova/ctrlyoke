@@ -17,6 +17,7 @@ import { DRAWER_PAGES } from "@/types/drawerPages";
 import {
   EXECUTION_MODES,
   SECRET_REGISTRY_STATES,
+  STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
 
 function resetStores(): void {
@@ -151,6 +152,9 @@ describe("PropertiesDrawer execution mode", () => {
   });
 
   it("writes and resets the full step color control", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
     renderHarnessDrawer();
 
     const color = screen.getByLabelText("Step color");

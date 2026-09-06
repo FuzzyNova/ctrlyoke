@@ -1,7 +1,9 @@
 # Step Identity Color Modes — a unique color per step
 
-> **Status:** Not implemented. Follow-on to
-> [`OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md`](../implemented/OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md)
+> **Status:** Implemented — all seven sequencing steps landed 2026-09-06.
+> Recorded follow-ups: the CVD-safe named palette (`ui.stepColorPalette`, §3a) and the
+> `name`-as-cosmetic decision (§7). This is a follow-on to
+> [`OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md`](./OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md)
 > (landed 2026-09-04/05), which established the left edge as the step identity channel and
 > `resolveStepColor` as the single resolver every surface reads.
 
@@ -249,22 +251,22 @@ regex-extract `#rrggbb` to feed `<input type="color">`, which accepts nothing el
 `unique` mode the header quick picker's "inherited" value needs a real hex. Static hex also keeps the
 values reviewable in diffs and sidesteps browser color-space support in the hosted client entirely.
 
-Illustrative generator output (hue ring from 25°, 15° tier offset, chroma clipped to gamut; `L`
-0.78/0.88/0.68 dark and 0.56/0.45/0.67 light) — **not final values; tune during implementation:**
+Shipped generator output (hue ring from 0°, 15° tier offset, chroma clipped to gamut; `L`
+0.78/0.88/0.92 dark and 0.58/0.54/0.48 light):
 
 ```
-DARK   tier 0  #ff958e #f4a437 #b5c242 #4ad496 #0dcfdf #7cbdff #bda7fe #f68fd5   (steps 1–8)
-       tier 1  #ffcab7 #ffd16b #b7eb7d #47f7d2 #95e5ff #c5d8ff #e7caff #fec5da   (steps 9–16)
-       tier 2  #dd7b2b #ad9907 #54b05a #0cafa8 #02a5e4 #878bf2 #c675cb #e46c83   (steps 17–24)
+DARK   tier 0  #ff8fb4 #ff996a #dfb100 #82d04f #00d4bb #00cafe #9cb4ff #df94ff   (steps 1–8)
+       tier 1  #ffc7ca #ffcca3 #eadd24 #72f896 #00f6f6 #b1deff #d3d3ff #ffbff8   (steps 9–16)
+       tier 2  #ffdbd5 #ffdfb4 #d6f55b #8effd0 #acf2ff #d4e6ff #e9deff #ffd8ec   (steps 17–24)
 
-LIGHT  tier 0  #c04442 #a06604 #737c03 #038a5a #09848f #0177cc #7d5cc7 #af4791
-       tier 1  #922f00 #6d5001 #3e6200 #036453 #005f75 #284cac #703396 #931e5a
-       tier 2  #de7515 #a99607 #4aae52 #0daba5 #01a1df #8487f5 #c56fcb #e5657f
+LIGHT  tier 0  #c93f76 #c65100 #967600 #498f00 #008e7d #0087ab #526ee3 #a151c2
+       tier 1  #c0304c #a25900 #797200 #00853c #007f7f #0076af #6857d1 #a53d9f
+       tier 2  #ac1c0f #7e5400 #566600 #006f4f #006a77 #005bb4 #6f3bb2 #9d1f74
 ```
 
-Two things that read badly in that sample and should be handled in tuning: the light tier-1 band
-drifts muddy and brown at `L 0.45` (raise C or compress the L range), and light tier-0 `#c04442`
-sits close enough to `indicator-error` to be worth nudging.
+The property test keeps every entry at least 8 CIEDE2000 units from the fallback and indicator
+accents, and raises the tier-0 adjacent-pair bar to 18 units. This tuned output avoids the muddy
+light tier-1 band and the near-`indicator-error` light tier-0 red from the illustrative sample.
 
 ### Delivery: CSS custom properties, with a hex helper for the picker
 
@@ -342,8 +344,9 @@ boundary — the same reasoning that settles the parallel question in §1. `off`
 ## 4. Precedence
 
 ```
-1. step.color                     authored — always wins, unchanged
-2. mode === "off"                 → undefined (surfaces fall back to status)
+1. mode === "off"                 → undefined (surfaces fall back to status),
+                                    checked first so it drops authored colors too — see §3a
+2. step.color                     authored — wins over every palette, unchanged
 3. mode === "unique"              → getUniqueStepColor(stepIndex)
 4. mode === "harness"             → getUniqueStepColor(stepIndex), when a ≥2-member parallel
                                     sibling resolves to the same base color
@@ -452,7 +455,8 @@ another cosmetic field is ever added.
 `PromptEditor` sets `rewindCompletedStep: true` whenever the edited step is completed —
 `isPromptCompleted` is derived from status alone (`PromptEditor.tsx:272`) and spread into the
 `UPDATE_PROMPT` message at `:681`, `:1060`, and `:1094` **without looking at what actually changed**.
-`WorkflowStepHandlers.handleUpdatePrompt:93` routes that to
+`WorkflowStepHandlers.handleUpdatePrompt` (`src/ui/WorkflowStepHandlers.ts:91-104` — note it
+lives under `src/ui/`, not `src/core/orchestration/`) routes that to
 `WorkflowOrchestrator.updateCompletedPromptInQueue`, which calls `setStartPositionAtRun` to establish
 a durable pending rewind *before* applying the edit.
 
@@ -501,21 +505,32 @@ table.
 
 ### Three things to get right
 
-- **`_runtime` must survive the partial update.** That is the whole point of the feature. Today's
-  `{ replace }` path hands in a step object with no `_runtime` at all, so something downstream is
-  already preserving it (or the field is reconstructed) — confirm which, in
-  `replaceParallelGroupStep`, before assuming a `{ updates }` merge inherits the same protection.
+- **`_runtime` survives the partial update — verified, and by the same mechanism both branches
+  already use.** `updateStepAtRun` (`WorkingFileManager.ts:1331`) does not hand `change` straight to
+  `replaceParallelGroupStep`; it first runs `mergeWorkflowStepUpdate(steps[index], incomingStep, …)`
+  (`WorkflowStepSanitizer.ts:554-568`), which returns `{ ...existingStep, ...incomingStep }`. The
+  disk-head step carries `_runtime`, an incoming patch has no `_runtime` key, so the field is
+  inherited rather than reconstructed. A `{ updates }` patch therefore gets the same protection the
+  `{ replace }` path gets today, with no change to `WorkingFileManager` — assert it in the test
+  rather than building for it. (The one escape hatch: `mergeWorkflowStepUpdate` returns
+  `incomingStep` outright on a prompt↔script type change, which a cosmetic patch can never be.)
 - **Keep the edit undoable.** `isStepContentEqual` (`workflowStore.ts:80`) ignores only `status` and
   `_runtime`, so a color change already registers as an undoable content change. Do **not** add
   `color` to its ignore list while implementing "cosmetic" — cosmetic means "does not rewind the
   run", not "is not tracked".
 - **Step 0 is a second, separate symptom and is not fixed by this rule alone.** The rewind branch is
-  guarded on `index > 0` (`WorkflowStepHandlers.ts:94`), so index 0 never took it; the observed
+  guarded on `index > 0` (`src/ui/WorkflowStepHandlers.ts:93`), so index 0 never took it; the observed
   "creates a new draft" comes from the step-zero full-rerun path that
-  `handleUpdatePrompt`'s else-branch comment describes, and I did not trace it to a specific line.
-  Reproduce it first. The intent is unambiguous either way: under the cosmetic rule a color edit
-  takes the same in-place path at every index, because recoloring is not a re-run trigger no matter
-  where the step sits.
+  `handleUpdatePrompt`'s else-branch comment describes. Reproduction confirmed that routing symptom:
+  index 0 enters that ordinary branch because of the guard. With a valid addressed run mutation, the
+  write still stays on that run and does not create a draft; the new-draft observation therefore needs
+  a separate stale/missing-address reproduction. The color-only message bypasses this branch entirely,
+  so recoloring takes the same in-place path at every index.
+
+- **Viewer push result.** `invalidation: "properties"` carries workflow-level fields only; it drops
+  `steps`, so it cannot carry a changed step color. The implementation adds the narrow
+  `STEP_COLOR_UPDATED` broadcast (index + color + revision), while retaining the lightweight
+  properties-style invalidation and avoiding `RUN_VIEW_LOADED`.
 
 ### Testing
 
@@ -525,32 +540,44 @@ historical run, then assert the run's `workflow.ctrlyoke.json` has the new color
 0, and a negative case — a prompt edit on the same completed step still rewinds — so the
 classification cannot silently widen.
 
+Implemented in `WorkflowOrchestrator.test.ts`: both index 0 and index 1 are edited through the
+addressed historical-run path, with exact `_runtime` assertions, no pending-rewind file, and no full
+run-view broadcast. The existing completed-suffix prompt-edit test remains the negative rewind case;
+the webview test also verifies that a color-only editor submission carries no prompt payload or rewind
+flag.
+
 ---
 
 ## 8. Sequencing
 
-1. Move `enabled` out: drop it from `HarnessColorSettings`, the schema, and the defaults; add
+1. ✅ **Done.** Move `enabled` out: drop it from `HarnessColorSettings`, the schema, and the defaults; add
    `STEP_COLOR_MODES` + `ui.stepColorMode` through `CtrlYokeSettings`, `ConfigurationUtils`,
    `WebviewSettingsSync`, `settingsStore`, and `ResolveStepColorOptions`. `ui.harnessColors` is
-   otherwise untouched. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
-   and is reviewable on its own.
-2. Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
+   otherwise untouched. `src/test/unit/CtrlYokeConfigService.test.ts:586-600` writes and asserts
+   `ui.stepColorMode` alongside the palette; the schema's `additionalProperties: false` means the
+   schema, `CTRLYOKE_SETTINGS_DEFAULTS`, and that test have to change in the same commit or nothing
+   validates. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
+   and is reviewable on its own. The step-1 default remains `"harness"`; the final `"unique"`
+   default is intentionally deferred to step 6.
+2. ✅ **Done.** Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
    generated constants, and the `globals.css` variable blocks until they pass. Nothing consumes them
    yet, and the tests are what carry the guarantees the old curated palette carried. Have the
    generator emit *named* tables (`rainbow` for now) so §3a's CVD palette is later a data change.
-3. Thread `stepIndex` through `resolveStepColor` and all five call sites (plus `steps.length` for the
+3. ✅ **Done.** Thread `stepIndex` through `resolveStepColor` and all five call sites (plus `steps.length` for the
    final step), add `getUniqueStepColor`, and implement the `unique` branch. This is the whole visual
    payoff.
-4. Collapse the tie-break into it (§4): point the `harness`-mode collision path at
+4. ✅ **Done.** Collapse the tie-break into it (§4): point the `harness`-mode collision path at
    `getUniqueStepColor`, then delete `STEP_COLOR_TIE_BREAK_PALETTE`, `hashSeed`, and
    `getTieBreakColor`, and guard the three surface-local `groupMembers` builders on the mode.
    Separate from step 3 so the deletion is reviewable against a working `unique` mode.
-5. Swap the `GeneralSection` toggle for the mode select; reword the two swatch descriptions.
-6. Flip the default to `unique` in `CTRLYOKE_SETTINGS_DEFAULTS` — one line, deliberately last so the
+5. ✅ **Done.** Swap the `GeneralSection` toggle for the mode select; reword the two swatch descriptions.
+6. ✅ **Done.** Flip the default to `unique` in `CTRLYOKE_SETTINGS_DEFAULTS` — one line, deliberately last so the
    preceding steps can all be reviewed against today's rendering.
 
-7. Cosmetic in-place color edits (§7). Independent of steps 2–6 — it only needs `step.color`, which
-   already ships — so it can land before or after the palette work, and is worth doing either way.
+7. ✅ **Done.** Cosmetic in-place color edits (§7). The editor sends a color-only addressed message;
+   the core applies it with the existing partial step update so `_runtime`, continuation state, and
+   start position remain untouched. Historical viewers receive a narrow color broadcast, and completed
+   prompt edits retain their rewind path.
 
 Follow-up, not part of the above: the CVD-safe named palette and `ui.stepColorPalette` (§3a), and the
 `name`-as-cosmetic decision (§7).

@@ -2899,6 +2899,131 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
 });
 
 suite("WorkflowOrchestrator run-addressed step edits", () => {
+  test("changes completed step colors in place at index 0 and nonzero indexes", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-color-edit-")
+    );
+    try {
+      const runtime = [
+        { startedAt: 1, completedAt: 2 },
+        { startedAt: 3, completedAt: 4 },
+      ];
+      const steps = [
+        { prompt: "first", color: "#111111", _runtime: runtime[0] },
+        { prompt: "second", color: "#222222", _runtime: runtime[1] },
+      ];
+      const sourceManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => steps,
+        getCurrentIndex: () => steps.length,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Color edit",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "color-edit",
+        steps,
+        workspace,
+        "Color edit"
+      );
+      const promoted = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+      const messages: unknown[] = [];
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.externalRunSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map([
+        ["client-a", (message: unknown) => messages.push(message)],
+      ]);
+
+      let expectedDefinitionRevision = 1;
+      for (const [index, expectedRuntime, color] of [
+        [0, runtime[0], "#abcdef"],
+        [1, runtime[1], "#fedcba"],
+      ] as const) {
+        await orchestrator.updateStepColorInQueue(
+          {
+            address: {
+              workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef: promoted.runRef,
+            },
+            expectedDefinitionRevision,
+            expectedDescriptorRevision: descriptor.revision,
+          },
+          index,
+          color,
+          "client-a"
+        );
+
+        const written = JSON.parse(
+          await fs.readFile(promoted.workingFilePath, "utf8")
+        );
+        assert.strictEqual(written.steps[index].color, color);
+        assert.deepStrictEqual(written.steps[index]._runtime, expectedRuntime);
+        assert.strictEqual(written._runtime?.pendingRewind, undefined);
+        const pendingRewindExists = await fs
+          .access(
+            WorkflowPaths.pendingRewindBaseFilePath(
+              workspace,
+              workflowKey,
+              promoted.runRef
+            )
+          )
+          .then(() => true)
+          .catch(() => false);
+        assert.strictEqual(pendingRewindExists, false);
+        expectedDefinitionRevision = written.definitionRevision;
+      }
+
+      assert.ok(
+        messages.some(
+          (message) =>
+            (message as { type?: string }).type ===
+            MESSAGE_TYPES.STEP_COLOR_UPDATED
+        )
+      );
+      assert.ok(
+        messages.every(
+          (message) =>
+            (message as { type?: string }).type !==
+            MESSAGE_TYPES.RUN_VIEW_LOADED
+        )
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("edits an idle run's steps directly on disk when no live instance owns it, without creating a draft", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-run-static-edit-")

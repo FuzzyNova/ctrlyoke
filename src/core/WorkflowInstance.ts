@@ -3057,6 +3057,21 @@ export class WorkflowInstance {
     Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
   }
 
+  async updateStepColorInQueue(
+    index: number,
+    color: string | null
+  ): Promise<void> {
+    await this.promptQueue.updatePrompt(index, {
+      color: color ?? undefined,
+    });
+    const currentState = this.promptQueue.getState();
+    this.dashboardSink?.updateStepColor(
+      index,
+      color,
+      currentState.definitionRevision
+    );
+  }
+
   async updateFinalStepInQueue(
     finalStep: WorkflowStep | null,
     clearProperties?: string[]

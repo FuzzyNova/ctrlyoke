@@ -16,7 +16,9 @@ import {
   MCP_AVAILABILITY_MODES,
   RUN_HISTORY_LOCATIONS,
   STATUS_LINE_TRACKING_PROVIDERS,
+  STEP_COLOR_MODES,
   TOAST_LEVEL_MODES,
+  type StepColorMode,
   type StatusLineTrackingProvider,
   type ToastLevelMode,
   WORKTREE_MODES,
@@ -68,7 +70,6 @@ export interface StatusLineTrackingSettings {
 
 /** Dashboard-only per-harness identity colors for correlating workflow steps across panes. */
 export interface HarnessColorSettings {
-  enabled: boolean;
   byHarness: Partial<Record<HarnessId, string>>;
   script: string;
 }
@@ -241,6 +242,8 @@ export interface CtrlYokeGlobalSettings {
     offerTrustForUntrustedFileLinks: boolean;
     /** Hide token cost estimates from dashboard and CLI presentation. */
     hideCost: boolean;
+    /** Dashboard step identity color mode. */
+    stepColorMode: StepColorMode;
     /** Dashboard-only per-harness identity color controls. */
     harnessColors: HarnessColorSettings;
   };
@@ -511,8 +514,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     hideCost: false,
+    stepColorMode: STEP_COLOR_MODES.UNIQUE,
     harnessColors: {
-      enabled: true,
       byHarness: {},
       script: "#808080",
     },

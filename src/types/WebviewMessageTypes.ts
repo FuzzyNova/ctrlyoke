@@ -47,6 +47,7 @@ import {
   type ShellKind,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
+  type StepColorMode,
 } from "./DashboardConstants";
 import type {
   ErrorBehavior,
@@ -507,6 +508,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
@@ -837,6 +839,16 @@ export interface StepsExtendedMessage {
   /** The definition head that produced `steps`. Lets a following edit target
    *  the append immediately, without waiting for long-running execution to end. */
   definitionRevision?: number;
+}
+
+/** A narrow addressed update for the only currently cosmetic step field. */
+export interface StepColorUpdatedMessage {
+  type: typeof MESSAGE_TYPES.STEP_COLOR_UPDATED;
+  index: number;
+  /** `null` removes the authored override and restores inherited color. */
+  color: string | null;
+  definitionRevision?: number;
+  workflowId?: string;
 }
 
 /**
@@ -1543,6 +1555,7 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
@@ -2029,6 +2042,19 @@ export interface UpdatePromptMessage {
   clearProperties?: string[];
   promptName?: string;
   rewindCompletedStep?: boolean;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+/**
+ * Update only a step's authored identity color. This intentionally cannot
+ * carry prompt content or execution properties, so a cosmetic edit cannot
+ * bypass completed-step rewind classification.
+ */
+export interface UpdateStepColorMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_STEP_COLOR;
+  index: number;
+  /** `null` removes the authored override and restores inherited color. */
+  color: string | null;
   mutation?: WorkflowDefinitionMutation;
 }
 
@@ -2652,6 +2678,7 @@ export type IncomingMessage =
   | FinalStepStreamingEventsMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | StepsExtendedMessage
+  | StepColorUpdatedMessage
   | PromptDeletedMessage
   | ReorderPromptsConfirmedMessage
   | ModelOptionsUpdateMessage

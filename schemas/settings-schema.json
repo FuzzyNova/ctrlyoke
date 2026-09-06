@@ -734,15 +734,16 @@
           "type": "boolean",
           "description": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears."
         },
+        "stepColorMode": {
+          "type": "string",
+          "enum": ["off", "harness", "unique"],
+          "description": "Choose how workflow step identity colors are rendered: off uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step."
+        },
         "harnessColors": {
           "type": "object",
           "description": "Controls the per-harness identity colors used to correlate workflow steps across the dashboard.",
           "additionalProperties": false,
           "properties": {
-            "enabled": {
-              "type": "boolean",
-              "description": "Show step identity colors in the workflow steps, chip rail, and output pane."
-            },
             "byHarness": {
               "type": "object",
               "description": "Optional hex color overrides for each harness. Remove an override to follow the built-in theme-aware chart color.",

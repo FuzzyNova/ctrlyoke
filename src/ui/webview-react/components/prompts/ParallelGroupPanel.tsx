@@ -8,6 +8,7 @@ import {
   STEP_STATUS,
   type ExecutionState,
   type StepStatus,
+  type StepColorMode,
 } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
@@ -146,6 +147,7 @@ type ParallelGroupPanelProps = {
   containerId?: string;
   memberIds?: string[];
   dragDisabled?: boolean;
+  stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
 };
 
@@ -170,6 +172,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   containerId,
   memberIds,
   dragDisabled = false,
+  stepColorMode,
   harnessColorSettings,
 }) => {
   // A group is a sortable sibling of the ungrouped steps around it, so it can
@@ -331,6 +334,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   colorGroup={group}
                   colorGroupMembers={colorGroupMembers}
                   offsetInGroup={offset}
+                  stepColorMode={stepColorMode}
                   harnessColorSettings={harnessColorSettings}
                   getStepHarnessModel={getStepHarnessModel}
                   getStepOverrides={getStepOverrides}
@@ -347,8 +351,10 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
               const stepColor = resolveStepColor({
                 step,
                 harnessId: getStepHarnessModel(step, memberStatus).harnessId,
+                stepIndex: index,
                 group,
                 offsetInGroup: offset,
+                stepColorMode,
                 settings: harnessColorSettings,
                 groupMembers: colorGroupMembers,
               });
@@ -396,6 +402,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                       colorGroup={group}
                       colorGroupMembers={colorGroupMembers}
                       offsetInGroup={offset}
+                      stepColorMode={stepColorMode}
                       harnessColorSettings={harnessColorSettings}
                       getStepHarnessModel={getStepHarnessModel}
                       getStepOverrides={getStepOverrides}

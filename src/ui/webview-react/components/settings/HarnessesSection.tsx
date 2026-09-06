@@ -183,7 +183,7 @@ export function HarnessesSection({
               </SettingInputRow>
               <SettingInputRow
                 label="Harness color"
-                description="Identity color used for this harness across the steps panel, chip rail, output pane, and harness share bar when step colors are enabled. Reset to follow the built-in theme-aware chart color."
+                description="Identity color used for this harness in the harness share bar in every mode and for steps in harness mode. Reset to follow the built-in theme-aware chart color."
                 id={`step-color-${harnessId}`}
                 path={`ui.harnessColors.byHarness.${harnessId}`}
                 {...rowProps}

@@ -214,6 +214,7 @@ export function sendMessage(
   }
   const definitionMutationTypes = new Set<string>([
     MESSAGE_TYPES.UPDATE_PROMPT,
+    MESSAGE_TYPES.UPDATE_STEP_COLOR,
     MESSAGE_TYPES.INSERT_WORKFLOW_STEP,
     MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
     MESSAGE_TYPES.DELETE_PROMPT,
@@ -997,6 +998,44 @@ export function createMessageHandlers(
       workflowStore.setFinalStep(message.finalStep ?? null);
       useWorkflowStore.temporal.getState().resume();
     }
+  };
+
+  // --------------------------------------------------------------------------
+  // STEP_COLOR_UPDATED - A run-addressed cosmetic step edit was persisted
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.STEP_COLOR_UPDATED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) return;
+    }
+
+    if (message.definitionRevision !== undefined) {
+      const displayedAddress = useUiStore.getState().displayedViewAddress;
+      if (displayedAddress) {
+        useExecutionPreviewStore
+          .getState()
+          .observeDefinitionRevision(
+            displayedAddress,
+            message.definitionRevision
+          );
+      }
+      useUiStore.setState((state) => ({
+        displayedDefinitionRevision:
+          state.displayedDefinitionRevision === null
+            ? message.definitionRevision
+            : Math.max(
+                state.displayedDefinitionRevision,
+                message.definitionRevision
+              ),
+      }));
+      useUiStore
+        .getState()
+        .markAppliedDefinitionRevision(message.definitionRevision);
+    }
+
+    useWorkflowStore
+      .getState()
+      .updatePrompt(message.index, { color: message.color ?? undefined });
   };
 
   // --------------------------------------------------------------------------

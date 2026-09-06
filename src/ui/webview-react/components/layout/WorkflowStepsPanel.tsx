@@ -9,6 +9,7 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
   MCP_SERVER_IDS,
+  STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -1032,6 +1033,7 @@ const WorkflowStepsPanelInner: React.FC<{
         canSetStartPosition={canChangeStartPosition}
         getLatestOutput={getLatestOutput}
         getStepHarnessModel={getStepHarnessModel}
+        stepColorMode={globalSettings.stepColorMode}
         harnessColorSettings={globalSettings.harnessColors}
         getStepOverrides={getStepOverrides}
         onStepClick={handleStepClick}
@@ -1065,6 +1067,7 @@ const WorkflowStepsPanelInner: React.FC<{
       getStepHarnessModel,
       getStepOverrides,
       globalSettings.harnessColors,
+      globalSettings.stepColorMode,
       handleFailFastChange,
       handleSetStartPosition,
       handleStepClick,
@@ -1183,6 +1186,16 @@ const WorkflowStepsPanelInner: React.FC<{
       modelIsDefault,
     };
   };
+
+  const finalStepColor = finalStep
+    ? resolveStepColor({
+        step: finalStep,
+        harnessId: getFinalStepHarnessModel().harnessId,
+        stepIndex: steps.length,
+        stepColorMode: globalSettings.stepColorMode,
+        settings: globalSettings.harnessColors,
+      })
+    : undefined;
 
   // Compute overrides for the final step (same logic as regular steps)
   const finalStepOverrides = finalStep
@@ -1484,6 +1497,7 @@ const WorkflowStepsPanelInner: React.FC<{
                   index
                 );
                 const colorGroupMembers: StepColorGroupMember[] | undefined =
+                  globalSettings.stepColorMode === STEP_COLOR_MODES.HARNESS &&
                   colorGroup
                     ? steps
                         .slice(colorGroup.startIndex, colorGroup.endIndex + 1)
@@ -1502,6 +1516,8 @@ const WorkflowStepsPanelInner: React.FC<{
                 const stepColor = resolveStepColor({
                   step,
                   harnessId: getStepHarnessModel(step, status).harnessId,
+                  stepIndex: index,
+                  stepColorMode: globalSettings.stepColorMode,
                   settings: globalSettings.harnessColors,
                   group: colorGroup,
                   offsetInGroup: colorGroup
@@ -1528,6 +1544,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     <div className="flex-1 min-w-0">
                       <WorkflowStepRow
                         step={step}
+                        stepColorMode={globalSettings.stepColorMode}
                         harnessColorSettings={globalSettings.harnessColors}
                         index={index}
                         slotNumber={slotNumber}
@@ -1621,6 +1638,7 @@ const WorkflowStepsPanelInner: React.FC<{
                         }
                         step={step}
                         index={index}
+                        stepColorMode={globalSettings.stepColorMode}
                         currentStep={currentStep}
                         executionState={executionState}
                         status={status}
@@ -1660,6 +1678,7 @@ const WorkflowStepsPanelInner: React.FC<{
         )}
       <FinalStepFooter
         finalStep={finalStep}
+        stepColor={finalStepColor}
         status={finalStepStatus}
         loopCount={finalStepLoopCount}
         phase={finalStepPhase}

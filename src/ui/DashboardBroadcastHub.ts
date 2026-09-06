@@ -374,6 +374,17 @@ export class DashboardBroadcastHub
     }
   }
 
+  updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number,
+    workflowId?: string
+  ): void {
+    for (const client of this.clients) {
+      client.updateStepColor?.(index, color, definitionRevision, workflowId);
+    }
+  }
+
   updatePromptDeleted(
     fileName: string,
     steps: any[],

@@ -232,6 +232,61 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     ).toBe(false);
   });
 
+  it("sends a color-only message for a completed step recolor", async () => {
+    const user = userEvent.setup();
+    const originalStep = {
+      prompt: "completed suffix",
+      color: "#111111",
+      status: STEP_STATUS.COMPLETED,
+    };
+    useWorkflowStore.setState({
+      steps: [originalStep],
+      currentStep: 1,
+      executionState: EXECUTION_STATES.COMPLETED,
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index: 0 }, originalStep);
+    useEditorStore.getState().setProperty("color", "#abcdef");
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 7,
+    });
+
+    const { container } = render(<PromptEditor />);
+    const updateButton = container.querySelector(
+      ".btn-editor-update"
+    ) as HTMLButtonElement;
+    await user.click(updateButton);
+
+    const colorMessages = postMessageSpy.mock.calls
+      .map(([message]) => message as Record<string, unknown>)
+      .filter((message) => message.type === MESSAGE_TYPES.UPDATE_STEP_COLOR);
+    expect(colorMessages).toHaveLength(1);
+    expect(colorMessages[0]).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
+      index: 0,
+      color: "#abcdef",
+      mutation: {
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
+        expectedDefinitionRevision: 2,
+        expectedDescriptorRevision: 7,
+      },
+    });
+    expect(colorMessages[0]).not.toHaveProperty("text");
+    expect(colorMessages[0]).not.toHaveProperty("properties");
+    expect(colorMessages[0]).not.toHaveProperty("rewindCompletedStep");
+  });
+
   it("omits the mutation when no persisted draft/run view is displayed", async () => {
     const user = userEvent.setup();
     useEditorStore.getState().setPromptText("fresh ephemeral prompt");

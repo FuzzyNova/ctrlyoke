@@ -10,7 +10,10 @@ import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 import { RunHistorySection } from "./RunHistorySection";
-import { MCP_AVAILABILITY_MODES } from "@root/types/DashboardConstants";
+import {
+  MCP_AVAILABILITY_MODES,
+  STEP_COLOR_MODES,
+} from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -116,17 +119,27 @@ export function GeneralSection({
           path="ui.showCliCommand"
           {...rowProps}
         />
-        <SettingToggleRow
-          label="Show step identity colors"
-          description="Show the same step color across the steps panel, chip rail, and output pane."
-          checked={harnessColors.enabled}
-          onChange={(v) => onUpdate("ui.harnessColors.enabled", v)}
-          path="ui.harnessColors.enabled"
+        <SettingInputRow
+          label="Step identity colors"
+          description="Choose how workflow step identity colors are rendered across the dashboard."
+          id="ui-step-color-mode"
+          path="ui.stepColorMode"
           {...rowProps}
-        />
+        >
+          <CustomSelect
+            id="ui-step-color-mode"
+            value={ui.stepColorMode}
+            onChange={(v) => onUpdate("ui.stepColorMode", v)}
+            options={[
+              { value: STEP_COLOR_MODES.OFF, label: "Off" },
+              { value: STEP_COLOR_MODES.HARNESS, label: "Harness color" },
+              { value: STEP_COLOR_MODES.UNIQUE, label: "Unique per step" },
+            ]}
+          />
+        </SettingInputRow>
         <SettingInputRow
           label="Script step color"
-          description="Identity color used for script steps when step colors are enabled."
+          description="Identity color used for script steps in harness mode."
           id="ui-step-colors-script"
           path="ui.harnessColors.script"
           {...rowProps}
