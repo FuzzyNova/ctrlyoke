@@ -1,9 +1,9 @@
 # Step Identity Color Modes — a unique color per step
 
-> **Status:** Implemented through steps 1–6. The palette feature is complete.
-> Recorded follow-ups: the CVD-safe named palette (`ui.stepColorPalette`) and the
-> `name`-as-cosmetic decision. This is a follow-on to
-> [`OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md`](../implemented/OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md)
+> **Status:** Implemented — all seven sequencing steps landed 2026-09-06.
+> Recorded follow-ups: the CVD-safe named palette (`ui.stepColorPalette`, §3a) and the
+> `name`-as-cosmetic decision (§7). This is a follow-on to
+> [`OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md`](./OUTPUT_STEP_ATTRIBUTION_UX_PLAN.md)
 > (landed 2026-09-04/05), which established the left edge as the step identity channel and
 > `resolveStepColor` as the single resolver every surface reads.
 
@@ -344,8 +344,9 @@ boundary — the same reasoning that settles the parallel question in §1. `off`
 ## 4. Precedence
 
 ```
-1. step.color                     authored — always wins, unchanged
-2. mode === "off"                 → undefined (surfaces fall back to status)
+1. mode === "off"                 → undefined (surfaces fall back to status),
+                                    checked first so it drops authored colors too — see §3a
+2. step.color                     authored — wins over every palette, unchanged
 3. mode === "unique"              → getUniqueStepColor(stepIndex)
 4. mode === "harness"             → getUniqueStepColor(stepIndex), when a ≥2-member parallel
                                     sibling resolves to the same base color

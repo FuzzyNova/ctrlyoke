@@ -172,10 +172,15 @@ export function resolveStepColor({
   settings,
   groupMembers,
 }: ResolveStepColorOptions): string | undefined {
+  // `off` is checked before the authored color deliberately: in `off` the 2px
+  // rail means status, and honoring an authored identity color would put both
+  // meanings in one panel with no visible boundary between them. `off` means
+  // off, for authored colors too.
+  if (stepColorMode === STEP_COLOR_MODES.OFF) return undefined;
+
   const authoredColor = step.color;
   if (authoredColor) return authoredColor;
 
-  if (stepColorMode === STEP_COLOR_MODES.OFF) return undefined;
   if (stepColorMode === STEP_COLOR_MODES.UNIQUE) {
     return getUniqueStepColor(stepIndex);
   }

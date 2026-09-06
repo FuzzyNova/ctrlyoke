@@ -127,14 +127,15 @@ describe("resolveStepColor", () => {
     ).toBeUndefined();
   });
 
-  it("keeps authored colors above the off mode", () => {
+  it("suppresses authored colors in off mode", () => {
+    // `off` drops authored colors too, so the rail keeps meaning status alone.
     expect(
       resolveStepColor({
         step: { prompt: "authored", color: "#abcdef" },
         stepIndex: 0,
         stepColorMode: STEP_COLOR_MODES.OFF,
       })
-    ).toBe("#abcdef");
+    ).toBeUndefined();
   });
 
   it("uses the built-in harness color by default", () => {
