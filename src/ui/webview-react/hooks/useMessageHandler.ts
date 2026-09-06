@@ -2551,9 +2551,27 @@ export function createMessageHandlers(
     // (`readAddressedRunView`/`deliverRunView` target a specific client), so
     // by the time one reaches here it is already known to be for this
     // client's own workflow — no extra address check is needed to trust it.
+    //
+    // It IS gated on the snapshot describing the run the backend is still
+    // executing, which `executionRunRef` reports in this very message from
+    // live in-memory registry state (never from disk, so it cannot lose the
+    // same race). Only such a snapshot can be a stale read of an execution
+    // that is still under way. Without that gate the guard also swallowed a
+    // *genuine* completion: a mobile PWA resumed after the workflow finished
+    // reconnects holding a live-looking RUNNING state it never saw retired,
+    // and the reconnect snapshot — requestless, and correctly reporting
+    // COMPLETED — was rejected as stale. That left the client permanently
+    // "running" with no live output, which `OutputSection` then reads as a
+    // live run and wipes the just-loaded history for, blanking the output
+    // pane until the user switched workflows and back.
     const currentExecutionState = useWorkflowStore.getState().executionState;
+    const snapshotDescribesLiveExecution =
+      executionRunRef !== undefined &&
+      (address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+        address.runRef === executionRunRef);
     const isStaleExecutionStateRegression =
       !message.requestId &&
+      snapshotDescribesLiveExecution &&
       isWorkflowActive(currentExecutionState) &&
       !isWorkflowActive(runtime?.executionState ?? EXECUTION_STATES.IDLE);
     const resolvedExecutionState = isStaleExecutionStateRegression

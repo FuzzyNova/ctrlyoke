@@ -1775,6 +1775,9 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
         runSummaries: [],
         history: null,
         descriptorRevision: 1,
+        // The backend always reports the lineage's executing run alongside the
+        // snapshot; during the promotion race that is this very address.
+        executionRunRef: runAddress.runRef,
       });
     });
 
@@ -1830,11 +1833,118 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
         runSummaries: [],
         history: null,
         descriptorRevision: 1,
+        executionRunRef: runAddress.runRef,
       });
     });
 
     expect(useWorkflowStore.getState().executionState).toBe(
       EXECUTION_STATES.RUNNING
+    );
+  });
+
+  // The other side of the guard, and the bug it originally caused: a mobile
+  // PWA backgrounded mid-run misses the completion, and its resumed page
+  // reconnects still holding RUNNING. The reconnect's requestless snapshot
+  // carries the truth (COMPLETED) and no executionRunRef, because nothing is
+  // executing that lineage any more — so it must be applied, not rejected as
+  // a stale disk read. Left rejected, OutputSection reads the phantom RUNNING
+  // as a live run and wipes the history this same snapshot just loaded,
+  // blanking the output pane with no path back short of a workflow switch.
+  it("applies a completed reconnect snapshot when nothing is executing the lineage", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    const runAddress = {
+      workflowKey: "wf-resumed" as never,
+      kind: "run" as const,
+      runRef: "run-2026-09-06T19-10-27-671Z" as never,
+    };
+    useUiStore.setState({
+      appliedViewAddress: runAddress,
+      pendingRunViewRequestId: null,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf-resumed.yaml",
+        totalSteps: 1,
+      });
+    });
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: runAddress,
+        workingFile: {
+          workflowName: "Rainbow plan",
+          definitionRevision: 1,
+          steps: [makePrompt("first")],
+          _runtime: {
+            executionState: EXECUTION_STATES.COMPLETED,
+            currentIndex: 1,
+          },
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+        // Nothing is executing this lineage any more.
+        executionRunRef: undefined,
+      });
+    });
+
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+  });
+
+  // A completed snapshot for an *older* run of a lineage whose newer run is
+  // executing is likewise authoritative about that older run.
+  it("applies a completed snapshot for a run other than the executing one", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    const olderRunAddress = {
+      workflowKey: "wf-two-runs" as never,
+      kind: "run" as const,
+      runRef: "run-2026-09-06T18-00-00-000Z" as never,
+    };
+    useUiStore.setState({
+      appliedViewAddress: olderRunAddress,
+      pendingRunViewRequestId: null,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf-two-runs.yaml",
+        totalSteps: 1,
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address: olderRunAddress,
+        workingFile: {
+          workflowName: "Two runs",
+          definitionRevision: 1,
+          steps: [makePrompt("first")],
+          _runtime: {
+            executionState: EXECUTION_STATES.COMPLETED,
+            currentIndex: 1,
+          },
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+        executionRunRef: "run-2026-09-06T19-10-27-671Z",
+      });
+    });
+
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.COMPLETED
     );
   });
 });
