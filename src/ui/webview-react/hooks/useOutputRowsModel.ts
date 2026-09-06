@@ -24,7 +24,7 @@ import {
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import type { HarnessId } from "@root/types/DashboardConstants";
+import type { HarnessId, StepColorMode } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
@@ -55,6 +55,7 @@ interface UseOutputRowsModelInput {
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
   effectiveHarness: HarnessId;
+  stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
@@ -97,6 +98,7 @@ export function useOutputRowsModel({
   finalStep,
   parallelGroups,
   effectiveHarness,
+  stepColorMode,
   harnessColorSettings,
   streamingChunks,
   finalStepStreamingChunks,
@@ -219,6 +221,7 @@ export function useOutputRowsModel({
             finalStep,
             parallelGroups,
             effectiveHarness,
+            stepColorMode,
             harnessColorSettings,
             streamingChunks,
             finalStepStreamingChunks,
@@ -250,6 +253,7 @@ export function useOutputRowsModel({
       finalStep,
       parallelGroups,
       effectiveHarness,
+      stepColorMode,
       harnessColorSettings,
       streamingChunks,
       finalStepStreamingChunks,

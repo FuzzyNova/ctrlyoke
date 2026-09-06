@@ -33,6 +33,7 @@ import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
   OUTPUT_ROW_KINDS,
+  STEP_COLOR_MODES,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
 
@@ -478,7 +479,8 @@ describe("outputRows", () => {
       steps: [{ name: "auth" }] as WorkflowStep[],
       finalStep: null,
       effectiveHarness: HARNESS_IDS.CLAUDE_CLI,
-      harnessColorSettings: { enabled: false, byHarness: {}, script: "#808080" },
+      stepColorMode: STEP_COLOR_MODES.OFF,
+      harnessColorSettings: { byHarness: {}, script: "#808080" },
       streamingChunks: {},
       finalStepStreamingChunks: {},
       isExecutionActive: false,

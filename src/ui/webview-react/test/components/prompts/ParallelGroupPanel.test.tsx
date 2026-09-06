@@ -7,6 +7,7 @@ import {
 } from "@components/prompts/ParallelGroupPanel";
 import { useSettingsStore } from "@store/settingsStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
+import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 
@@ -129,7 +130,8 @@ describe("ParallelGroupPanel", () => {
         retryStates={{}}
         liveContextWindow={{}}
         canSetStartPosition
-        harnessColorSettings={{ enabled: false, byHarness: {}, script: "#808080" }}
+        stepColorMode={STEP_COLOR_MODES.OFF}
+        harnessColorSettings={{ byHarness: {}, script: "#808080" }}
         getLatestOutput={() => null}
         getStepHarnessModel={() => ({
           harnessId: undefined,

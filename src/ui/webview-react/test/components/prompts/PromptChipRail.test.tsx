@@ -4,6 +4,7 @@ import { PromptChipRail } from "@components/prompts/PromptChipRail";
 import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
+  STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import { useSettingsStore } from "@store/settingsStore";
@@ -72,8 +73,8 @@ describe("PromptChipRail", () => {
       ...useSettingsStore.getState().globalSettings,
       harnessColors: {
         ...useSettingsStore.getState().globalSettings.harnessColors!,
-        enabled: false,
       },
+      stepColorMode: STEP_COLOR_MODES.OFF,
     });
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",

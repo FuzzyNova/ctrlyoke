@@ -24,6 +24,7 @@ import {
   WORKTREE_MODES,
   COMPARE_SOURCES,
   TOAST_LEVEL_MODES,
+  type StepColorMode,
   type ToastLevelMode,
 } from "@root/types/DashboardConstants";
 import type {
@@ -127,6 +128,7 @@ export interface GlobalSettings {
   atomicContextReferences: boolean;
   outputVirtualizationRowThreshold: number;
   collapsedToolOutputLineCount: number;
+  stepColorMode?: StepColorMode;
   harnessColors?: HarnessColorSettings;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
@@ -420,6 +422,7 @@ const initialGlobalSettings: GlobalSettings = {
   atomicContextReferences: false,
   outputVirtualizationRowThreshold: 200,
   collapsedToolOutputLineCount: DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
+  stepColorMode: CTRLYOKE_SETTINGS_DEFAULTS.ui.stepColorMode,
   harnessColors: CTRLYOKE_SETTINGS_DEFAULTS.ui.harnessColors,
   confirmDeleteOperations: true,
   confirmResetOperations: true,

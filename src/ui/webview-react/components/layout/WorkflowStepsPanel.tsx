@@ -1032,6 +1032,7 @@ const WorkflowStepsPanelInner: React.FC<{
         canSetStartPosition={canChangeStartPosition}
         getLatestOutput={getLatestOutput}
         getStepHarnessModel={getStepHarnessModel}
+        stepColorMode={globalSettings.stepColorMode}
         harnessColorSettings={globalSettings.harnessColors}
         getStepOverrides={getStepOverrides}
         onStepClick={handleStepClick}
@@ -1065,6 +1066,7 @@ const WorkflowStepsPanelInner: React.FC<{
       getStepHarnessModel,
       getStepOverrides,
       globalSettings.harnessColors,
+      globalSettings.stepColorMode,
       handleFailFastChange,
       handleSetStartPosition,
       handleStepClick,
@@ -1502,6 +1504,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 const stepColor = resolveStepColor({
                   step,
                   harnessId: getStepHarnessModel(step, status).harnessId,
+                  stepColorMode: globalSettings.stepColorMode,
                   settings: globalSettings.harnessColors,
                   group: colorGroup,
                   offsetInGroup: colorGroup
@@ -1528,6 +1531,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     <div className="flex-1 min-w-0">
                       <WorkflowStepRow
                         step={step}
+                        stepColorMode={globalSettings.stepColorMode}
                         harnessColorSettings={globalSettings.harnessColors}
                         index={index}
                         slotNumber={slotNumber}
@@ -1621,6 +1625,7 @@ const WorkflowStepsPanelInner: React.FC<{
                         }
                         step={step}
                         index={index}
+                        stepColorMode={globalSettings.stepColorMode}
                         currentStep={currentStep}
                         executionState={executionState}
                         status={status}

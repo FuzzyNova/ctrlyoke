@@ -4,7 +4,9 @@ import {
   HARNESS_CHART_COLORS,
   SCRIPT_STEP_DEFAULT_COLOR,
   STEP_COLOR_TIE_BREAK_PALETTE,
+  STEP_COLOR_MODES,
   type HarnessId,
+  type StepColorMode,
 } from "@root/types/DashboardConstants";
 import type { WorkflowStep } from "@store/workflowStore";
 
@@ -21,6 +23,8 @@ export interface ResolveStepColorOptions {
   harnessId?: HarnessId;
   group?: ParallelGroupDefinition;
   offsetInGroup?: number;
+  /** Effective mode controlling whether step identity colors are rendered. */
+  stepColorMode?: StepColorMode;
   /** Effective dashboard settings for identity colors. */
   settings?: HarnessColorSettings;
   /** Group members let the resolver identify a genuine baseline-color collision. */
@@ -125,10 +129,11 @@ export function resolveStepColor({
   harnessId,
   group,
   offsetInGroup,
+  stepColorMode,
   settings,
   groupMembers,
 }: ResolveStepColorOptions): string | undefined {
-  if (settings?.enabled === false) return undefined;
+  if (stepColorMode === STEP_COLOR_MODES.OFF) return undefined;
 
   const authoredColor = step.color;
   if (authoredColor) return authoredColor;

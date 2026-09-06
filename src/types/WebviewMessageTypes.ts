@@ -47,6 +47,7 @@ import {
   type ShellKind,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
+  type StepColorMode,
 } from "./DashboardConstants";
 import type {
   ErrorBehavior,
@@ -507,6 +508,7 @@ export interface InitMessageData {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     externalFileRootsByScope?: ExternalFileRootsByScope;
     /** Whether standalone prompt paths use folder-qualified multi-root syntax. */
@@ -1543,6 +1545,7 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    stepColorMode?: StepColorMode;
     harnessColors?: HarnessColorSettings;
     worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
     worktrees?: CtrlYokeGlobalSettings["worktrees"];

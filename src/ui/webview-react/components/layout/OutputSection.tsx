@@ -344,6 +344,9 @@ const OutputSectionInner: React.FC = () => {
   const harnessColorSettings = useSettingsStore(
     (s) => s.globalSettings.harnessColors
   );
+  const stepColorMode = useSettingsStore(
+    (s) => s.globalSettings.stepColorMode
+  );
   const atomicContextReferences = useSettingsStore(
     (s) => s.globalSettings.atomicContextReferences
   );
@@ -498,6 +501,7 @@ const OutputSectionInner: React.FC = () => {
     parallelGroups,
     finalStep,
     effectiveHarness,
+    stepColorMode,
     harnessColorSettings,
     streamingChunks,
     finalStepStreamingChunks,

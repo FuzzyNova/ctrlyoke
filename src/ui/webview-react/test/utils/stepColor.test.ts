@@ -3,6 +3,7 @@ import {
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
   SCRIPT_STEP_DEFAULT_COLOR,
+  STEP_COLOR_MODES,
   STEP_COLOR_TIE_BREAK_PALETTE,
   type HarnessId,
 } from "@root/types/DashboardConstants";
@@ -27,22 +28,23 @@ function groupMember(
 
 describe("resolveStepColor", () => {
   const customSettings = {
-    enabled: true,
     byHarness: { [HARNESS_IDS.CLAUDE_CLI]: "#123456" },
     script: "#654321",
   };
 
-  it("uses enabled harness and script overrides", () => {
+  it("uses harness mode with the existing harness and script behavior", () => {
     expect(
       resolveStepColor({
         step: { prompt: "Use Claude" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
+        stepColorMode: STEP_COLOR_MODES.HARNESS,
         settings: customSettings,
       })
     ).toBe("#123456");
     expect(
       resolveStepColor({
         step: { type: "script", script: "npm test" },
+        stepColorMode: STEP_COLOR_MODES.HARNESS,
         settings: customSettings,
       })
     ).toBe("#654321");
@@ -103,12 +105,13 @@ describe("resolveStepColor", () => {
     ).toBe("#abcdef");
   });
 
-  it("disables identity colors when the setting is false", () => {
+  it("disables identity colors in off mode, including authored colors", () => {
     expect(
       resolveStepColor({
-        step: { prompt: "disabled" },
+        step: { prompt: "disabled", color: "#abcdef" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
-        settings: { ...customSettings, enabled: false },
+        stepColorMode: STEP_COLOR_MODES.OFF,
+        settings: customSettings,
       })
     ).toBeUndefined();
   });

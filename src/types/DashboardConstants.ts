@@ -1616,6 +1616,16 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
   [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-green, #89d185)",
 };
 
+/** Modes controlling how workflow steps receive identity colors. */
+export const STEP_COLOR_MODES = {
+  OFF: "off",
+  HARNESS: "harness",
+  UNIQUE: "unique",
+} as const;
+
+export type StepColorMode =
+  (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES];
+
 /** Neutral identity color for script steps, which have no harness. */
 export const SCRIPT_STEP_DEFAULT_COLOR = "var(--vscode-charts-gray, #808080)";
 

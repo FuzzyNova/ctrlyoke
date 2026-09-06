@@ -10,7 +10,10 @@ import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 import { RunHistorySection } from "./RunHistorySection";
-import { MCP_AVAILABILITY_MODES } from "@root/types/DashboardConstants";
+import {
+  MCP_AVAILABILITY_MODES,
+  STEP_COLOR_MODES,
+} from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -119,9 +122,14 @@ export function GeneralSection({
         <SettingToggleRow
           label="Show step identity colors"
           description="Show the same step color across the steps panel, chip rail, and output pane."
-          checked={harnessColors.enabled}
-          onChange={(v) => onUpdate("ui.harnessColors.enabled", v)}
-          path="ui.harnessColors.enabled"
+          checked={ui.stepColorMode === STEP_COLOR_MODES.HARNESS}
+          onChange={(v) =>
+            onUpdate(
+              "ui.stepColorMode",
+              v ? STEP_COLOR_MODES.HARNESS : STEP_COLOR_MODES.OFF
+            )
+          }
+          path="ui.stepColorMode"
           {...rowProps}
         />
         <SettingInputRow

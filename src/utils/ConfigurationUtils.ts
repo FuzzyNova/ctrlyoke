@@ -25,6 +25,7 @@ import {
   type ContextResolutionFailureMode,
   type PermissionMode,
   type McpAvailability,
+  type StepColorMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import {
@@ -264,6 +265,11 @@ export const ConfigurationUtils = {
   /** Get the dashboard-only per-harness identity color settings. */
   getHarnessColorSettings(): HarnessColorSettings {
     return configService.get(CONFIG_KEYS.UI).harnessColors;
+  },
+
+  /** Get the dashboard step identity color mode. */
+  getStepColorMode(): StepColorMode {
+    return configService.get(CONFIG_KEYS.UI).stepColorMode;
   },
 
   /**

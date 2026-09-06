@@ -535,14 +535,15 @@ classification cannot silently widen.
 
 ## 8. Sequencing
 
-1. Move `enabled` out: drop it from `HarnessColorSettings`, the schema, and the defaults; add
+1. ✅ **Done.** Move `enabled` out: drop it from `HarnessColorSettings`, the schema, and the defaults; add
    `STEP_COLOR_MODES` + `ui.stepColorMode` through `CtrlYokeSettings`, `ConfigurationUtils`,
    `WebviewSettingsSync`, `settingsStore`, and `ResolveStepColorOptions`. `ui.harnessColors` is
    otherwise untouched. `src/test/unit/CtrlYokeConfigService.test.ts:586-600` writes and asserts
-   `ui.harnessColors.enabled` and moves with it; the schema's `additionalProperties: false` means the
+   `ui.stepColorMode` alongside the palette; the schema's `additionalProperties: false` means the
    schema, `CTRLYOKE_SETTINGS_DEFAULTS`, and that test have to change in the same commit or nothing
    validates. Behavior-neutral: `"off"`/`"harness"` reproduce today exactly, so this ships
-   and is reviewable on its own.
+   and is reviewable on its own. The step-1 default remains `"harness"`; the final `"unique"`
+   default is intentionally deferred to step 6.
 2. Write the palette property + stability tests (§6), then `scripts/generate-step-palette.mjs`, the
    generated constants, and the `globals.css` variable blocks until they pass. Nothing consumes them
    yet, and the tests are what carry the guarantees the old curated palette carried. Have the

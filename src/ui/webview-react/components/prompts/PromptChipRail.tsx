@@ -386,6 +386,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     return resolveStepColor({
       step,
       harnessId: getChipHarnessId(step, status),
+      stepColorMode: globalSettings.stepColorMode,
       settings: globalSettings.harnessColors,
       group,
       offsetInGroup,
