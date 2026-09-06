@@ -32,6 +32,19 @@ export default defineConfig({
     // in the setup file.  Test files still use explicit vitest imports.
     globals: true,
 
+    // Vitest's 5s default is too tight for this suite. The heavy jsdom
+    // component tests (WorkflowPropertiesPanel, the output pane) legitimately
+    // cost several hundred ms each in isolation, and running 200+ files across
+    // every core inflates any single test several-fold when the pool is
+    // oversubscribed — one WorkflowPropertiesPanel case measured 719ms alone,
+    // 1.4s within its own file, and 5.1s under the full suite, where it
+    // intermittently tripped the 5s limit and failed a run that had nothing
+    // wrong with it. These are wall-clock budgets for catching a genuine hang,
+    // not assertions about performance, so give them enough headroom to
+    // survive load; a real hang still fails, just later.
+    testTimeout: 20000,
+    hookTimeout: 20000,
+
     include: ["./test/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
