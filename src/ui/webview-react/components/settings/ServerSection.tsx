@@ -19,6 +19,7 @@ import type {
 import { ActionButton } from "../shared/ActionButton";
 import { CustomSelect } from "../shared/CustomSelect";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
+import { PortListEditor } from "../shared/PortListEditor";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
@@ -147,6 +148,26 @@ export function ServerSection({
   }, [vscode]);
 
   const rowProps = { sources, onReset, activeScope };
+
+  const fallbackPorts = useMemo(
+    () => server.fallbackPorts ?? [],
+    [server.fallbackPorts]
+  );
+  const handleAddFallbackPort = useCallback(
+    (port: number) => {
+      onUpdate("server.fallbackPorts", [...fallbackPorts, port]);
+    },
+    [onUpdate, fallbackPorts]
+  );
+  const handleRemoveFallbackPort = useCallback(
+    (port: number) => {
+      onUpdate(
+        "server.fallbackPorts",
+        fallbackPorts.filter((existing) => existing !== port)
+      );
+    },
+    [onUpdate, fallbackPorts]
+  );
 
   // Only surface the warning while it still describes the currently configured
   // port — if the user already edited the port field to work around the
@@ -473,6 +494,25 @@ export function ServerSection({
               </p>
             )}
           </div>
+        )}
+
+        {/* Fallback ports — tried in order before an OS-assigned port; lets a
+            workspace pin a stable, bookmarkable URL. Server-side only. */}
+        {!isStandalone && (
+          <SettingInputRow
+            label="Fallback ports"
+            id="server-fallback-ports"
+            path="server.fallbackPorts"
+            description="If the server port above is already taken, ctrlyoke tries these ports in order before falling back to a random one. Useful for a stable, bookmarkable URL when the server port is often taken by another ctrlyoke window."
+            {...rowProps}
+          >
+            <PortListEditor
+              inputId="server-fallback-ports"
+              ports={fallbackPorts}
+              onAdd={handleAddFallbackPort}
+              onRemove={handleRemoveFallbackPort}
+            />
+          </SettingInputRow>
         )}
 
         {/*

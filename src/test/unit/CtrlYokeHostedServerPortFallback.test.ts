@@ -13,23 +13,32 @@ import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 /**
  * Minimal stand-in for Node's http.Server, driving the same
  * error/listening event sequence CtrlYokeHostedServer.listen() reacts to.
- * `failOnPort` simulates EADDRINUSE for exactly one requested port (the
- * "configured port is already taken" case); any other port — including the
- * `0` retry — succeeds and reports `boundPort` from address().
+ * `failOnPorts` simulates EADDRINUSE for each requested port in the set (the
+ * "this port is already taken" case, which may include one or more
+ * configured fallback ports); any other port — including the final `0`
+ * retry — succeeds and reports `boundPort` from address().
  */
 class FakeHttpServer extends EventEmitter {
   listenCalls: number[] = [];
+  private readonly failOnPorts: Set<number>;
 
   constructor(
-    private readonly failOnPort: number | null,
+    failOnPorts: number | number[] | null,
     private readonly boundPort: number
   ) {
     super();
+    this.failOnPorts = new Set(
+      failOnPorts === null
+        ? []
+        : Array.isArray(failOnPorts)
+          ? failOnPorts
+          : [failOnPorts]
+    );
   }
 
   listen(port: number, _bindAddress: string): void {
     this.listenCalls.push(port);
-    if (this.failOnPort !== null && port === this.failOnPort) {
+    if (this.failOnPorts.has(port)) {
       queueMicrotask(() => {
         const err = new Error("address in use") as NodeJS.ErrnoException;
         err.code = "EADDRINUSE";
@@ -48,6 +57,7 @@ class FakeHttpServer extends EventEmitter {
 interface HostedServerListenInternals {
   httpServer: FakeHttpServer;
   port: number;
+  fallbackPorts: number[];
   bindAddress: string;
   isTls: boolean;
   token: string;
@@ -66,13 +76,15 @@ interface HostedServerListenInternals {
 
 function createListenHarness(
   requestedPort: number,
-  fakeHttpServer: FakeHttpServer
+  fakeHttpServer: FakeHttpServer,
+  fallbackPorts: number[] = []
 ): HostedServerListenInternals {
   const server = Object.create(
     CtrlYokeHostedServer.prototype
   ) as HostedServerListenInternals;
   server.httpServer = fakeHttpServer;
   server.port = requestedPort;
+  server.fallbackPorts = fallbackPorts;
   server.bindAddress = "127.0.0.1";
   server.isTls = false;
   server.token = "test-token";
@@ -107,7 +119,8 @@ function createHostedServer(
   port: number,
   token: string,
   onSiblingServerDetected?: (url: string) => void,
-  workspaceRoot = process.cwd()
+  workspaceRoot = process.cwd(),
+  fallbackPorts: number[] = []
 ): CtrlYokeHostedServer {
   return new CtrlYokeHostedServer(
     new DashboardBroadcastHub(),
@@ -119,7 +132,11 @@ function createHostedServer(
     token,
     "127.0.0.1",
     undefined,
-    onSiblingServerDetected
+    onSiblingServerDetected,
+    undefined,
+    undefined,
+    undefined,
+    fallbackPorts
   );
 }
 
@@ -157,6 +174,63 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
       requestedPort: 4747,
       actualPort: 51234,
     });
+  });
+
+  test("tries configured fallback ports in order before an OS-assigned port", async () => {
+    // The first fallback (4749) is also taken; the second (4750) succeeds.
+    const fakeHttpServer = new FakeHttpServer([4747, 4749], 4750);
+    const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
+
+    const url = await server.listen();
+
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749, 4750]);
+    assert.strictEqual(server.port, 4750);
+    assert.ok(url.includes(":4750/"));
+    assert.deepStrictEqual(server.getPortFallbackInfo(), {
+      requestedPort: 4747,
+      actualPort: 4750,
+    });
+  });
+
+  test("lands on the first configured fallback port when it is free", async () => {
+    const fakeHttpServer = new FakeHttpServer(4747, 4749);
+    const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
+
+    const url = await server.listen();
+
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749]);
+    assert.strictEqual(server.port, 4749);
+    assert.ok(url.includes(":4749/"));
+    assert.deepStrictEqual(server.getPortFallbackInfo(), {
+      requestedPort: 4747,
+      actualPort: 4749,
+    });
+  });
+
+  test("falls back to an OS-assigned port when every configured fallback is taken too", async () => {
+    const fakeHttpServer = new FakeHttpServer([4747, 4749, 4750], 51234);
+    const server = createListenHarness(4747, fakeHttpServer, [4749, 4750]);
+
+    const url = await server.listen();
+
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749, 4750, 0]);
+    assert.strictEqual(server.port, 51234);
+    assert.ok(url.includes(":51234/"));
+    assert.deepStrictEqual(server.getPortFallbackInfo(), {
+      requestedPort: 4747,
+      actualPort: 51234,
+    });
+  });
+
+  test("does not retry the configured port a second time if it also appears in fallbackPorts", async () => {
+    const fakeHttpServer = new FakeHttpServer([4747], 4749);
+    const server = createListenHarness(4747, fakeHttpServer, [4747, 4749]);
+
+    const url = await server.listen();
+
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747, 4749]);
+    assert.strictEqual(server.port, 4749);
+    assert.ok(url.includes(":4749/"));
   });
 
   test("reports no fallback when the configured port binds on the first try", async () => {

@@ -250,6 +250,13 @@ export interface CtrlYokeGlobalSettings {
     enabled: boolean;
     port: number;
     standalonePort: number;
+    /**
+     * Ordered ports to try, in order, if `port` is already in use, before
+     * falling back to an OS-assigned port. Lets a workspace pin a stable,
+     * bookmarkable URL even when the primary port is often taken by another
+     * running instance (e.g. a daily-driver window).
+     */
+    fallbackPorts: number[];
     theme: "auto" | "light" | "dark";
     bindAddress: string; // "127.0.0.1" = localhost only; "0.0.0.0" = all interfaces
     tls: {
@@ -514,6 +521,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     enabled: false,
     port: 4747,
     standalonePort: 4748,
+    fallbackPorts: [],
     theme: "auto",
     bindAddress: "127.0.0.1",
     tls: {

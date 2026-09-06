@@ -112,4 +112,63 @@ describe("ServerSection", () => {
       screen.queryByRole("button", { name: "Unlock Pro Features" })
     ).not.toBeInTheDocument();
   });
+
+  it("adds and removes fallback ports", () => {
+    const onUpdate = vi.fn();
+    const props = {
+      activeScope: SETTING_SCOPES.USER,
+      onUpdate,
+      onReset: vi.fn(),
+    };
+    const settings: FullGlobalSettings = {
+      settings: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS,
+        server: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.server,
+          fallbackPorts: [4749],
+        },
+      },
+      sources: {},
+      isMultiRoot: false,
+    };
+    render(<ServerSection {...props} settings={settings} />);
+
+    expect(screen.getByTestId("port-list-entry-4749")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Fallback port"), {
+      target: { value: "4750" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(onUpdate).toHaveBeenCalledWith("server.fallbackPorts", [
+      4749, 4750,
+    ]);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove port 4749" })
+    );
+    expect(onUpdate).toHaveBeenCalledWith("server.fallbackPorts", []);
+  });
+
+  it("rejects an out-of-range fallback port instead of adding it", () => {
+    const onUpdate = vi.fn();
+    const props = {
+      activeScope: SETTING_SCOPES.USER,
+      onUpdate,
+      onReset: vi.fn(),
+    };
+    render(<ServerSection {...props} settings={createSettings("127.0.0.1")} />);
+
+    fireEvent.change(screen.getByLabelText("Fallback port"), {
+      target: { value: "99999" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(
+      screen.getByText("Enter a port number between 1 and 65535.")
+    ).toBeInTheDocument();
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      "server.fallbackPorts",
+      expect.anything()
+    );
+  });
 });
