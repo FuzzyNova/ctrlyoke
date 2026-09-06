@@ -275,6 +275,32 @@ suite("ParallelGroupTopology", () => {
       assert.strictEqual(ranges(result), "g1:1-3");
     });
 
+    // The steps panel emits a whole-group drag as an ordinary pending
+    // permutation whose `pendingGroups` range has simply moved with it.
+    test("moves a whole pending group to a later slot", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(),
+        0,
+        [0, 4, 1, 2, 3],
+        [{ id: "g1", start: 2, end: 4, failFast: true }]
+      );
+      assert.deepStrictEqual(names(result), ["a", "e", "b", "c", "d"]);
+      assert.strictEqual(ranges(result), "g1:2-4");
+    });
+
+    test("places an ungrouped step above a leading group", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(
+          ["a", "b", "c"],
+          [{ id: "g1", startIndex: 0, endIndex: 1, failFast: true }]
+        ),
+        0,
+        [2, 0, 1],
+        [{ id: "g1", start: 1, end: 2, failFast: true }]
+      );
+      assert.deepStrictEqual(names(result), ["c", "a", "b"]);
+      assert.strictEqual(ranges(result), "g1:1-2");
+    });
     test("applies slice-relative group ranges and creates a new group", () => {
       const result = reorderParallelGroupPendingSteps(
         topology(),
@@ -314,12 +340,7 @@ suite("ParallelGroupTopology", () => {
       };
       assert.throws(
         () =>
-          reorderParallelGroupPendingSteps(
-            partiallySettled,
-            1,
-            [0, 1, 2],
-            []
-          ),
+          reorderParallelGroupPendingSteps(partiallySettled, 1, [0, 1, 2], []),
         /settled or in-flight/
       );
     });

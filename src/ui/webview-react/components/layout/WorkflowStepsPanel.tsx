@@ -53,6 +53,7 @@ import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   DndContext,
   closestCenter,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
@@ -81,6 +82,12 @@ import {
   writeClipboardText,
 } from "@utils/stepClipboard";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
+import {
+  absoluteIndexFromStepDragId,
+  groupDragId,
+  isStepDragId,
+  stepDragId,
+} from "@utils/dndKit";
 
 type PendingDragContainer = {
   id: string;
@@ -93,16 +100,60 @@ type PendingDragState = {
   containers: Record<string, PendingDragContainer>;
 };
 
-function stepDragId(index: number): string {
-  return `step-pending-${index}`;
-}
+const PENDING_DROP_TARGET_KINDS = {
+  /** A position in the top-level pending order. */
+  SIBLING: "sibling",
+  /** A position inside one parallel group. */
+  MEMBER: "member",
+} as const;
 
-function groupDragId(id: string): string {
-  return `group-${id}`;
-}
+/**
+ * Where a drop lands, resolved from the id dnd-kit reports as `over`.
+ *
+ * The distinction the steps panel needs is "beside a group" versus "inside
+ * one", and the id alone answers it: a *container* id (a standalone step, or a
+ * parallel group) is a position in the top-level `order`, while a group
+ * *member* id is a position inside that group. That is what makes a step
+ * droppable above a leading group — the group's own id is a reachable
+ * top-level slot (see `pendingDragCollisionDetection`), where before, every
+ * collision over a group resolved to one of its members and the step could
+ * only ever be absorbed into it.
+ */
+type PendingDropTarget =
+  | {
+      kind: typeof PENDING_DROP_TARGET_KINDS.SIBLING;
+      orderIndex: number;
+    }
+  | {
+      kind: typeof PENDING_DROP_TARGET_KINDS.MEMBER;
+      containerId: string;
+      itemIndex: number;
+    };
 
-function absoluteIndexFromStepDragId(id: string): number {
-  return Number.parseInt(id.replace("step-pending-", ""), 10);
+export function resolvePendingDropTarget(
+  state: PendingDragState,
+  overId: string
+): PendingDropTarget | undefined {
+  if (state.containers[overId]) {
+    const orderIndex = state.order.indexOf(overId);
+    return orderIndex < 0
+      ? undefined
+      : { kind: PENDING_DROP_TARGET_KINDS.SIBLING, orderIndex };
+  }
+  const ownerId = findPendingDragContainer(state, overId);
+  if (!ownerId) return undefined;
+  const owner = state.containers[ownerId];
+  if (!owner.groupId) {
+    const orderIndex = state.order.indexOf(ownerId);
+    return orderIndex < 0
+      ? undefined
+      : { kind: PENDING_DROP_TARGET_KINDS.SIBLING, orderIndex };
+  }
+  return {
+    kind: PENDING_DROP_TARGET_KINDS.MEMBER,
+    containerId: ownerId,
+    itemIndex: owner.items.indexOf(overId),
+  };
 }
 
 export function buildPendingDragState(
@@ -175,85 +226,150 @@ export function movePendingDragItem(
   overId: string
 ): PendingDragState {
   const sourceId = findPendingDragContainer(state, activeId);
-  const destinationId = findPendingDragContainer(state, overId);
-  if (!sourceId || !destinationId || sourceId === destinationId) return state;
-
-  // Capture the target's index from the pre-mutation state (mirroring
-  // dnd-kit's own arrayMove). Recomputing this after removing the dragged
-  // item would under-count by one whenever the item being dragged sits
-  // before the drop target in the same order/items array (i.e. dragging
-  // downward), since the removal shifts everything after it left by one.
-  const destinationContainer = state.containers[destinationId];
-  const originalOverIndex = destinationContainer.groupId
-    ? destinationContainer.items.indexOf(overId)
-    : state.order.indexOf(overId);
+  // The target index is captured from the pre-mutation state (mirroring
+  // dnd-kit's own arrayMove). Recomputing it after removing the dragged item
+  // would under-count by one whenever the item being dragged sits before the
+  // drop target in the same order/items array (i.e. dragging downward), since
+  // the removal shifts everything after it left by one.
+  const target = resolvePendingDropTarget(state, overId);
+  if (!sourceId || !target) return state;
+  const source = state.containers[sourceId];
+  if (target.kind === PENDING_DROP_TARGET_KINDS.MEMBER) {
+    // Reordering inside the step's own group is a within-container move.
+    if (target.containerId === sourceId) return state;
+  } else if (!source.groupId && state.order[target.orderIndex] === sourceId) {
+    // A standalone step dropped on its own slot has not moved. A *member*
+    // dropped on its group's slot has: it leaves the group and takes that slot.
+    return state;
+  }
 
   const next = clonePendingDragState(state);
-  const source = next.containers[sourceId];
-  source.items = source.items.filter((id) => id !== activeId);
+  const nextSource = next.containers[sourceId];
+  nextSource.items = nextSource.items.filter((id) => id !== activeId);
 
-  if (source.groupId && source.items.length < 2) {
+  if (nextSource.groupId && nextSource.items.length < 2) {
     const sourcePosition = next.order.indexOf(sourceId);
     next.order.splice(sourcePosition, 1);
     delete next.containers[sourceId];
-    for (const item of source.items) {
+    for (const item of nextSource.items) {
       const standalone = { id: item, items: [item] };
       next.order.splice(sourcePosition, 0, item);
       next.containers[item] = standalone;
     }
-  } else if (!source.groupId) {
+  } else if (!nextSource.groupId) {
     next.order = next.order.filter((id) => id !== sourceId);
     delete next.containers[sourceId];
   }
 
-  const refreshedDestinationId = findPendingDragContainer(next, overId);
-  if (!refreshedDestinationId) return state;
-  const refreshedDestination = next.containers[refreshedDestinationId];
-  if (refreshedDestination.groupId) {
+  if (target.kind === PENDING_DROP_TARGET_KINDS.MEMBER) {
+    const destination = next.containers[target.containerId];
+    if (!destination) return state;
     const insertIndex =
-      originalOverIndex < 0
-        ? refreshedDestination.items.length
-        : Math.min(originalOverIndex, refreshedDestination.items.length);
-    refreshedDestination.items.splice(insertIndex, 0, activeId);
+      target.itemIndex < 0
+        ? destination.items.length
+        : Math.min(target.itemIndex, destination.items.length);
+    destination.items.splice(insertIndex, 0, activeId);
   } else {
-    const standalone = { id: activeId, items: [activeId] };
-    const insertIndex =
-      originalOverIndex < 0
-        ? next.order.length
-        : Math.min(originalOverIndex, next.order.length);
-    next.order.splice(insertIndex, 0, activeId);
-    next.containers[activeId] = standalone;
+    next.order.splice(
+      Math.min(target.orderIndex, next.order.length),
+      0,
+      activeId
+    );
+    next.containers[activeId] = { id: activeId, items: [activeId] };
   }
   return next;
 }
 
-function movePendingDragItemWithinContainer(
+/**
+ * Move a whole parallel group to another top-level slot. Groups never nest, so
+ * a drop that resolves inside another group is taken as that group's slot.
+ */
+export function movePendingDragContainer(
   state: PendingDragState,
+  containerId: string,
+  overId: string
+): PendingDragState {
+  if (!state.containers[containerId]) return state;
+  const target = resolvePendingDropTarget(state, overId);
+  if (!target) return state;
+  const fromIndex = state.order.indexOf(containerId);
+  const toIndex =
+    target.kind === PENDING_DROP_TARGET_KINDS.SIBLING
+      ? target.orderIndex
+      : state.order.indexOf(target.containerId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return state;
+  const next = clonePendingDragState(state);
+  next.order = arrayMove(next.order, fromIndex, toIndex);
+  return next;
+}
+
+/**
+ * Reorder a member inside the parallel group it already belongs to. Top-level
+ * siblings never reach this path — every one of them is its own container, so
+ * their drops resolve as cross-container moves through `movePendingDragItem`.
+ */
+function movePendingDragMemberWithinGroup(
+  state: PendingDragState,
+  containerId: string,
   activeId: string,
   overId: string
 ): PendingDragState {
-  const containerId = findPendingDragContainer(state, activeId);
-  if (!containerId || containerId !== findPendingDragContainer(state, overId)) {
-    return state;
-  }
+  const container = state.containers[containerId];
+  if (!container?.groupId) return state;
+  const fromIndex = container.items.indexOf(activeId);
+  const toIndex = container.items.indexOf(overId);
+  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return state;
   const next = clonePendingDragState(state);
-  const container = next.containers[containerId];
-  if (container.groupId) {
-    const fromIndex = container.items.indexOf(activeId);
-    const toIndex = container.items.indexOf(overId);
-    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
-      return state;
-    }
-    container.items = arrayMove(container.items, fromIndex, toIndex);
-  } else {
-    const fromIndex = next.order.indexOf(activeId);
-    const toIndex = next.order.indexOf(overId);
-    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
-      return state;
-    }
-    next.order = arrayMove(next.order, fromIndex, toIndex);
-  }
+  next.containers[containerId].items = arrayMove(
+    container.items,
+    fromIndex,
+    toIndex
+  );
   return next;
+}
+
+/**
+ * Whether a drag crosses a parallel-group boundary — the only case that has to
+ * be folded into `dragState` while the pointer is still down.
+ *
+ * Reordering the rendered list mid-drag is the multi-container pattern, and it
+ * is actively harmful for a plain top-level move. There is no `DragOverlay`
+ * here, so the dragged row is the real row: dnd-kit keeps it under the pointer
+ * by subtracting the delta between the active node's *current* measured rect
+ * and the one it measured at drag start. That re-measurement is driven by a
+ * `MutationObserver`, and re-ordering the list is exactly such a mutation — so
+ * for the frames between the reorder and the measurement landing, the row is
+ * drawn a whole row-height away from the cursor and then snaps back. The
+ * neighbour is worse off: `SortableContext` re-measures its droppables a render
+ * later too, so `verticalListSortingStrategy` briefly indexes the *previous*
+ * layout's rects by the *new* order and displaces it by a bogus offset. Whether
+ * either excursion is visible depends purely on which frame the observers fire
+ * on, which is why the same drag looks smooth once and jumps the next time.
+ *
+ * `verticalListSortingStrategy` is built to displace a *stationary* list with
+ * transforms and have the caller commit the move on drop, so that is what a
+ * same-level drag now does (see `resolvePendingDragEnd`). Crossing a group
+ * boundary has no transform-only equivalent: `over` is then a member id, which
+ * belongs to the group's own nested `SortableContext` and not to the outer
+ * one, and an outer `overIndex` of -1 makes dnd-kit drop *every* transform —
+ * including the one keeping the dragged row under the cursor. Folding the move
+ * in is what puts the row into the context that can still animate it.
+ *
+ * Dragging a whole group is a plain top-level reorder and never mutates: the
+ * group's own id is in the outer items, so the strategy can displace around it.
+ */
+export function isParallelGroupDragMove(
+  state: PendingDragState,
+  activeId: string,
+  overId: string
+): boolean {
+  if (!isStepDragId(activeId)) return false;
+  const sourceId = findPendingDragContainer(state, activeId);
+  const target = resolvePendingDropTarget(state, overId);
+  if (!sourceId || !target) return false;
+  return target.kind === PENDING_DROP_TARGET_KINDS.MEMBER
+    ? target.containerId !== sourceId
+    : Boolean(state.containers[sourceId].groupId);
 }
 
 export type PendingReorderPayload = {
@@ -305,13 +421,15 @@ export function buildPendingReorderPayload(
  * Resolve the outcome of a pending-tail drag, or `undefined` when the drag
  * left the committed topology unchanged.
  *
- * `handleDragOver` has already folded any cross-container move into
- * `dragState`, so "did `dragState` change here?" is the wrong question: a
- * plain top-level reorder never takes the within-container branch — every
- * ungrouped step is its own container, so such a drag always ends in a
- * *different* container — and would read as a no-op even though the user
- * moved a step. `committedState` (rebuilt from the store) is the only
- * correct baseline.
+ * `handleDragOver` has already folded any group crossing into `dragState`, and
+ * such a drop lands with the active step and the drop target in the same
+ * container. Everything else — a plain top-level reorder, a move inside one
+ * parallel group, and dragging a whole group — is applied here, on drop.
+ *
+ * "Did `dragState` change here?" is therefore the wrong question either way: a
+ * drop that merely confirms what `handleDragOver` already applied changes
+ * nothing at this point yet still has to be sent. `committedState` (rebuilt
+ * from the store) is the only correct baseline.
  */
 export function resolvePendingDragEnd(
   dragState: PendingDragState,
@@ -322,10 +440,29 @@ export function resolvePendingDragEnd(
   parallelGroups: ParallelGroupDefinition[]
 ): { state: PendingDragState; payload: PendingReorderPayload } | undefined {
   let nextState = dragState;
-  const sourceId = findPendingDragContainer(nextState, activeId);
-  const destinationId = findPendingDragContainer(nextState, overId);
-  if (sourceId && sourceId === destinationId) {
-    nextState = movePendingDragItemWithinContainer(nextState, activeId, overId);
+  if (isStepDragId(activeId)) {
+    const sourceId = findPendingDragContainer(nextState, activeId);
+    const target = resolvePendingDropTarget(nextState, overId);
+    // A step whose container already changed was folded in by `handleDragOver`
+    // and is rendered where it will land. Re-running the move against the drop
+    // target it is now sitting next to would advance it one more slot.
+    const wasFoldedIn =
+      sourceId !== findPendingDragContainer(committedState, activeId);
+    if (sourceId && target) {
+      nextState =
+        target.kind === PENDING_DROP_TARGET_KINDS.MEMBER &&
+        target.containerId === sourceId &&
+        !wasFoldedIn
+          ? movePendingDragMemberWithinGroup(
+              nextState,
+              sourceId,
+              activeId,
+              overId
+            )
+          : movePendingDragItem(nextState, activeId, overId);
+    }
+  } else {
+    nextState = movePendingDragContainer(nextState, activeId, overId);
   }
 
   const payload = buildPendingReorderPayload(
@@ -342,6 +479,62 @@ export function resolvePendingDragEnd(
     return undefined;
   }
   return { state: nextState, payload };
+}
+
+/**
+ * `closestCenter`, with two corrections a nested sortable needs.
+ *
+ * A parallel group registers one droppable spanning the whole panel *and* one
+ * per member row inside it. Because a member's centre is always nearer to the
+ * dragged row than the enclosing panel's centre is, plain `closestCenter` can
+ * never report the group itself — so every drag over a group resolved to "into
+ * this group", and a step could not be placed above a group sitting at the top
+ * of the list. A collision on a member whose dragged centre lies outside the
+ * members' own band — over the header, or past the last row — is re-pointed at
+ * the group, which is both a real top-level slot and, being in the outer
+ * `items`, one the sorting strategy can animate around. Only a group that is
+ * first or last in the list needs this; anywhere else the neighbouring step is
+ * already the nearer collision.
+ *
+ * Dragging a group has the mirror-image problem: its own members sit under the
+ * pointer for the entire drag and would be the only collisions ever reported,
+ * leaving `overIndex` outside the outer list and killing every transform. A
+ * group can only land in a top-level slot anyway, so nothing else is offered.
+ */
+export function pendingDragCollisionDetection(
+  state: PendingDragState
+): CollisionDetection {
+  return (args) => {
+    const activeId = String(args.active.id);
+    if (!isStepDragId(activeId)) {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((container) => {
+          const id = String(container.id);
+          return id !== activeId && state.order.includes(id);
+        }),
+      });
+    }
+
+    const collisions = closestCenter(args);
+    const overId = collisions[0] ? String(collisions[0].id) : undefined;
+    if (!overId) return collisions;
+    const target = resolvePendingDropTarget(state, overId);
+    if (target?.kind !== PENDING_DROP_TARGET_KINDS.MEMBER) return collisions;
+
+    const items = state.containers[target.containerId]?.items ?? [];
+    const firstMemberRect = args.droppableRects.get(items[0] ?? "");
+    const lastMemberRect = args.droppableRects.get(
+      items[items.length - 1] ?? ""
+    );
+    if (!firstMemberRect || !lastMemberRect) return collisions;
+
+    const centerY = args.collisionRect.top + args.collisionRect.height / 2;
+    if (centerY < firstMemberRect.top || centerY >= lastMemberRect.bottom) {
+      return [{ id: target.containerId }, ...collisions];
+    }
+    return collisions;
+  };
 }
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -979,12 +1172,19 @@ const WorkflowStepsPanelInner: React.FC<{
     ? getStepOverrides(finalStep)
     : undefined;
 
+  const collisionDetection = useMemo(
+    () => pendingDragCollisionDetection(pendingDragState),
+    [pendingDragState]
+  );
+
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : undefined;
-    if (!overId || !activeId.startsWith("step-pending-")) return;
+    if (!overId) return;
     setPendingDragState((state) =>
-      movePendingDragItem(state, activeId, overId)
+      isParallelGroupDragMove(state, activeId, overId)
+        ? movePendingDragItem(state, activeId, overId)
+        : state
     );
   }, []);
 
@@ -992,7 +1192,7 @@ const WorkflowStepsPanelInner: React.FC<{
     (event: DragEndEvent) => {
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : undefined;
-      if (!overId || !activeId.startsWith("step-pending-")) return;
+      if (!overId) return;
 
       const outcome = resolvePendingDragEnd(
         pendingDragState,
@@ -1305,7 +1505,7 @@ const WorkflowStepsPanelInner: React.FC<{
             {/* Sortable pending steps (currentStep..end) — includes current step */}
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              collisionDetection={collisionDetection}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >

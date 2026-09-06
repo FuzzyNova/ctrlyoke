@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
-import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
+  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
@@ -26,6 +26,11 @@ import {
   isWorkflowRunning,
 } from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import {
+  DRAG_HANDLE_TOUCH_ACTION_STYLE,
+  absoluteIndexFromStepDragId,
+  groupDragId,
+} from "@utils/dndKit";
 
 export type ParallelGroupStatus =
   | "running"
@@ -167,8 +172,21 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   dragDisabled = false,
   harnessColorSettings,
 }) => {
-  const { setNodeRef } = useDroppable({
-    id: containerId ?? `group-${group.id}`,
+  // A group is a sortable sibling of the ungrouped steps around it, so it can
+  // be dragged as a unit. Only the pending copy takes part: the done-steps
+  // branch renders this panel outside the `DndContext` entirely, where dnd-kit
+  // falls back to its inert default context.
+  const isSortable = memberIds !== undefined && !dragDisabled;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: containerId ?? groupDragId(group.id),
+    disabled: !isSortable,
   });
   const members = useMemo(
     () =>
@@ -182,7 +200,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   const displayedMembers = useMemo(() => {
     if (!memberIds) return members;
     return memberIds
-      .map((id) => Number.parseInt(id.replace("step-pending-", ""), 10))
+      .map((id) => absoluteIndexFromStepDragId(id))
       .map((index) => ({
         step: steps[index],
         index,
@@ -222,11 +240,29 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   return (
     <section
       ref={setNodeRef}
-      className="mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"
+      style={{
+        transform: transform
+          ? `translate3d(0, ${transform.y}px, 0)`
+          : undefined,
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className="group/parallel relative mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"
       data-testid={`parallel-group-${group.id}`}
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
+        {isSortable && (
+          <span
+            className="-ml-0.5 flex w-4 flex-shrink-0 cursor-grab items-center justify-center text-description-fg opacity-0 transition-opacity hover:text-foreground active:cursor-grabbing group-hover/parallel:opacity-100"
+            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
+            {...listeners}
+            {...attributes}
+            aria-label="Drag to reorder parallel group"
+          >
+            <i className="codicon codicon-grabber text-xs" />
+          </span>
+        )}
         <i className="codicon codicon-type-hierarchy text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}

@@ -11,7 +11,10 @@ import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
 import {
   buildPendingDragState,
   buildPendingReorderPayload,
+  isParallelGroupDragMove,
+  movePendingDragContainer,
   movePendingDragItem,
+  pendingDragCollisionDetection,
   resolvePendingDragEnd,
 } from "@components/layout/WorkflowStepsPanel";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
@@ -587,6 +590,9 @@ describe("WorkflowStepsPanel grouped drag model", () => {
   const groups = [
     { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
   ];
+  const leadingGroups = [
+    { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+  ];
 
   it("moves a step between outer containers", () => {
     const initial = buildPendingDragState(steps, 0, []);
@@ -602,21 +608,42 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     });
   });
 
-  it("moves a step into a group container", () => {
+  it("moves a step into a group by dropping it on a member", () => {
     const initial = buildPendingDragState(steps, 0, groups);
     const next = movePendingDragItem(
       initial,
       "step-pending-0",
-      "group-group-1"
+      "step-pending-2"
     );
 
     expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
-      newPendingOrder: [1, 2, 0, 3],
+      newPendingOrder: [1, 0, 2, 3],
       pendingGroups: [{ id: "group-1", start: 0, end: 2, failFast: false }],
     });
   });
 
+  // The reported bug: a group pinned to the top of the list left a step no
+  // reachable slot above it, because every drop over the group resolved to one
+  // of its members and absorbed the step into it.
+  it("moves a step above a leading group when dropped on the group itself", () => {
+    const initial = buildPendingDragState(steps, 0, leadingGroups);
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-2",
+      "group-group-1"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, leadingGroups)).toEqual({
+      newPendingOrder: [2, 0, 1, 3],
+      pendingGroups: [{ id: "group-1", start: 1, end: 2, failFast: false }],
+    });
+  });
+
   it("moves a member between group containers", () => {
+    const twoGroups = [
+      { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+      { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
+    ];
     const initial = buildPendingDragState(
       [
         { prompt: "one" },
@@ -626,42 +653,59 @@ describe("WorkflowStepsPanel grouped drag model", () => {
         { prompt: "five" },
       ],
       0,
-      [
-        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
-        { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
-      ]
+      twoGroups
     );
     const next = movePendingDragItem(
       initial,
       "step-pending-1",
-      "group-group-2"
+      "step-pending-3"
     );
 
-    expect(
-      buildPendingReorderPayload(next, 0, [
-        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
-        { id: "group-2", startIndex: 3, endIndex: 4, failFast: false },
-      ])
-    ).toEqual({
-      newPendingOrder: [0, 2, 3, 4, 1],
+    expect(buildPendingReorderPayload(next, 0, twoGroups)).toEqual({
+      newPendingOrder: [0, 2, 1, 3, 4],
       pendingGroups: [{ id: "group-2", start: 2, end: 4, failFast: false }],
     });
   });
 
-  // `handleDragOver` commits cross-container moves optimistically, so the
-  // drag-end decision cannot ask whether the *local* state changed — for an
-  // ungrouped step (its own container) it never does, and the reorder was
-  // silently dropped: the list re-ordered on screen and nothing was sent.
-  it("emits a payload for a top-level reorder that dragOver already applied", () => {
-    const committed = buildPendingDragState(steps, 0, []);
-    const dragged = movePendingDragItem(
-      committed,
-      "step-pending-1",
-      "step-pending-2"
+  it("drags a whole group to another top-level slot", () => {
+    const initial = buildPendingDragState(steps, 0, groups);
+    const next = movePendingDragContainer(
+      initial,
+      "group-group-1",
+      "step-pending-3"
     );
 
+    expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
+      newPendingOrder: [0, 3, 1, 2],
+      pendingGroups: [{ id: "group-1", start: 2, end: 3, failFast: false }],
+    });
+  });
+
+  it("resolves a group drop inside another group to that group's slot", () => {
+    const initial = buildPendingDragState(steps, 0, leadingGroups);
+    const next = movePendingDragContainer(
+      initial,
+      "step-pending-3",
+      "step-pending-1"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, leadingGroups)).toEqual({
+      newPendingOrder: [3, 0, 1, 2],
+      pendingGroups: [{ id: "group-1", start: 1, end: 2, failFast: false }],
+    });
+  });
+
+  // A same-level drag leaves the rendered list alone while the pointer is
+  // down (`isParallelGroupDragMove` is false), so drag end both applies the
+  // move and emits it. It also cannot ask whether the *local* state changed:
+  // for an ungrouped step (its own container) a group crossing never does,
+  // and the reorder used to be silently dropped — the list re-ordered on
+  // screen and nothing was sent.
+  it("applies and emits a top-level reorder on drop", () => {
+    const committed = buildPendingDragState(steps, 0, []);
+
     const outcome = resolvePendingDragEnd(
-      dragged,
+      committed,
       committed,
       "step-pending-1",
       "step-pending-2",
@@ -673,6 +717,55 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       newPendingOrder: [0, 2, 1, 3],
       pendingGroups: [],
     });
+  });
+
+  it("only folds a drag into the in-flight state when it crosses a group", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+
+    // Plain sibling reorders, including one that lands beside the group.
+    expect(
+      isParallelGroupDragMove(committed, "step-pending-0", "step-pending-3")
+    ).toBe(false);
+    expect(
+      isParallelGroupDragMove(committed, "step-pending-0", "group-group-1")
+    ).toBe(false);
+    // Joining a group, and leaving one.
+    expect(
+      isParallelGroupDragMove(committed, "step-pending-0", "step-pending-2")
+    ).toBe(true);
+    expect(
+      isParallelGroupDragMove(committed, "step-pending-1", "step-pending-3")
+    ).toBe(true);
+    // Reordering inside the group the step already belongs to, and dragging
+    // the group itself, both stay out of it.
+    expect(
+      isParallelGroupDragMove(committed, "step-pending-1", "step-pending-2")
+    ).toBe(false);
+    expect(
+      isParallelGroupDragMove(committed, "group-group-1", "step-pending-3")
+    ).toBe(false);
+  });
+
+  it("does not re-apply a group crossing that dragOver already folded in", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+    const dragged = movePendingDragItem(
+      committed,
+      "step-pending-0",
+      "step-pending-2"
+    );
+
+    const outcome = resolvePendingDragEnd(
+      dragged,
+      committed,
+      "step-pending-0",
+      "step-pending-2",
+      0,
+      groups
+    );
+
+    expect(outcome?.payload).toEqual(
+      buildPendingReorderPayload(dragged, 0, groups)
+    );
   });
 
   it("emits nothing when a drag ends on the committed topology", () => {
@@ -695,14 +788,14 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     const dragged = movePendingDragItem(
       committed,
       "step-pending-3",
-      "group-group-1"
+      "step-pending-1"
     );
 
     const outcome = resolvePendingDragEnd(
       dragged,
       committed,
       "step-pending-3",
-      "group-group-1",
+      "step-pending-1",
       0,
       groups
     );
@@ -725,8 +818,84 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       pendingGroups: [],
     });
   });
+
+  it("pulls a member out of its group when dropped on the group's own slot", () => {
+    const initial = buildPendingDragState(steps, 0, groups);
+    const next = movePendingDragItem(
+      initial,
+      "step-pending-2",
+      "group-group-1"
+    );
+
+    expect(buildPendingReorderPayload(next, 0, groups)).toEqual({
+      newPendingOrder: [0, 2, 1, 3],
+      pendingGroups: [],
+    });
+  });
 });
 
+describe("WorkflowStepsPanel pending drag collision detection", () => {
+  const steps = [{ prompt: "one" }, { prompt: "two" }, { prompt: "three" }];
+  // A group holding steps 0-1 sits at the top of the list; step 2 follows it.
+  const leadingGroups = [
+    { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+  ];
+  const state = buildPendingDragState(steps, 0, leadingGroups);
+
+  function rect(top: number, height: number) {
+    return {
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 100,
+      width: 100,
+      height,
+    };
+  }
+
+  // Header 0-30, members 30-90 and 90-150, then the ungrouped step 150-210.
+  const droppableRects = new Map<string, ReturnType<typeof rect>>([
+    ["group-group-1", rect(0, 150)],
+    ["step-pending-0", rect(30, 60)],
+    ["step-pending-1", rect(90, 60)],
+    ["step-pending-2", rect(150, 60)],
+  ]);
+  const droppableContainers = [...droppableRects.keys()].map((id) => ({ id }));
+
+  function firstCollisionFor(activeId: string, draggedTop: number) {
+    const detect = pendingDragCollisionDetection(state);
+    const collisions = detect({
+      active: { id: activeId },
+      collisionRect: rect(draggedTop, 60),
+      droppableRects,
+      droppableContainers,
+      pointerCoordinates: null,
+    } as never);
+    return collisions[0] ? String(collisions[0].id) : undefined;
+  }
+
+  it("targets the group itself when a step is dragged over its header", () => {
+    // Dragged centre at 0 — above the first member row, so the step belongs
+    // beside the group rather than inside it. Plain closestCenter reports the
+    // member here, which is why a leading group could not be dragged past.
+    expect(firstCollisionFor("step-pending-2", -30)).toBe("group-group-1");
+  });
+
+  it("targets the group itself when a step is dragged past its last member", () => {
+    expect(firstCollisionFor("step-pending-2", 120)).toBe("group-group-1");
+  });
+
+  it("still targets a member when the step is dragged over the members", () => {
+    // Centre at 60 — squarely on the first member row.
+    expect(firstCollisionFor("step-pending-2", 30)).toBe("step-pending-0");
+  });
+
+  it("offers a dragged group only top-level slots, never its own members", () => {
+    // The group's members sit under the pointer for the whole drag; reporting
+    // one would put `over` outside the outer list and kill every transform.
+    expect(firstCollisionFor("group-group-1", 30)).toBe("step-pending-2");
+  });
+});
 describe("WorkflowStepsPanel identity rails", () => {
   beforeEach(() => {
     resetStores();
