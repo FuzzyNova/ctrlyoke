@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
-import { USER_FEEDBACK_SEVERITY } from "../types/DashboardConstants";
+import { configService } from "../config/CtrlYokeConfigService";
+import {
+  meetsToastLevel,
+  TOAST_LEVEL_MODES,
+  USER_FEEDBACK_SEVERITY,
+  type ToastLevelMode,
+} from "../types/DashboardConstants";
 import {
   formatUserFeedback,
   type UserFeedback,
@@ -14,9 +20,15 @@ interface VsCodeFeedbackApi {
 
 /** Delivers operational feedback through the native VS Code message APIs. */
 export class VsCodeUserFeedbackSink implements UserFeedbackSink {
-  constructor(private readonly api: VsCodeFeedbackApi = vscode.window) {}
+  constructor(
+    private readonly api: VsCodeFeedbackApi = vscode.window,
+    private readonly resolveToastLevel: () => ToastLevelMode = () =>
+      configService.getAll().notifications?.toastLevel ?? TOAST_LEVEL_MODES.ALL
+  ) {}
 
   notify(message: UserFeedback): void {
+    if (!meetsToastLevel(message.severity, this.resolveToastLevel())) return;
+
     const text = formatUserFeedback(message);
     switch (message.severity) {
       case USER_FEEDBACK_SEVERITY.WARNING:

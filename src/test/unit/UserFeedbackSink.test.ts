@@ -9,7 +9,10 @@ import { ConsoleUserFeedbackSink } from "../../platform/ConsoleUserFeedbackSink"
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 import { HostedWebSocketUserFeedbackSink } from "../../server/HostedWebSocketUserFeedbackSink";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  TOAST_LEVEL_MODES,
+} from "../../types/DashboardConstants";
 import type { UserFeedbackMessage } from "../../types/WebviewMessageTypes";
 
 const feedback: UserFeedback = {
@@ -51,6 +54,25 @@ suite("VsCodeUserFeedbackSink", () => {
       showErrorMessage: () => calls.push("error"),
     });
 
+    sink.notify({ ...feedback, severity: "warning" });
+    sink.notify({ ...feedback, severity: "error" });
+
+    assert.deepStrictEqual(calls, ["warning", "error"]);
+  });
+
+  test("suppresses severities below the resolved toast level", () => {
+    const calls: string[] = [];
+    const sink = new VsCodeUserFeedbackSink(
+      {
+        showInformationMessage: () => calls.push("info"),
+        showWarningMessage: () => calls.push("warning"),
+        showErrorMessage: () => calls.push("error"),
+      },
+      () => TOAST_LEVEL_MODES.WARNING_AND_ERROR
+    );
+
+    sink.notify({ ...feedback, severity: "info" });
+    sink.notify({ ...feedback, severity: "success" });
     sink.notify({ ...feedback, severity: "warning" });
     sink.notify({ ...feedback, severity: "error" });
 

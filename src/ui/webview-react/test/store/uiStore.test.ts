@@ -1,13 +1,17 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
   RUNNER_IDS,
+  TOAST_LEVEL_MODES,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -21,6 +25,11 @@ import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 beforeEach(() => {
   useUiStore.getState().resetUi();
   useUiStore.setState({ workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT });
+  useSettingsStore.setState({ fullGlobalSettings: null });
+});
+
+afterEach(() => {
+  useSettingsStore.setState({ fullGlobalSettings: null });
 });
 
 function store() {
@@ -534,6 +543,75 @@ describe("setLoading", () => {
 // ---------------------------------------------------------------------------
 
 describe("toast queue", () => {
+  function setToastLevel(
+    toastLevel: (typeof TOAST_LEVEL_MODES)[keyof typeof TOAST_LEVEL_MODES]
+  ): void {
+    const settings: FullGlobalSettings = {
+      settings: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS,
+        notifications: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+          toastLevel,
+        },
+      },
+      sources: {},
+      isMultiRoot: false,
+    };
+    useSettingsStore.setState({ fullGlobalSettings: settings });
+  }
+
+  it("filters enqueueToast below the threshold and admits at-or-above severities", () => {
+    setToastLevel(TOAST_LEVEL_MODES.WARNING_AND_ERROR);
+
+    store().enqueueToast({
+      message: "Info",
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+    });
+    store().enqueueToast({
+      message: "Success",
+      severity: USER_FEEDBACK_SEVERITY.SUCCESS,
+    });
+    store().enqueueToast({
+      message: "Warning",
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
+    });
+    store().enqueueToast({
+      message: "Error",
+      severity: USER_FEEDBACK_SEVERITY.ERROR,
+    });
+
+    expect(store().toastQueue.map((toast) => toast.message)).toEqual([
+      "Warning",
+      "Error",
+    ]);
+  });
+
+  it("fails open for enqueueToast before settings load", () => {
+    store().enqueueToast({
+      message: "Early toast",
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+    });
+
+    expect(store().toastQueue).toHaveLength(1);
+  });
+
+  it("filters showToast below the threshold and admits at-or-above severities", () => {
+    setToastLevel(TOAST_LEVEL_MODES.ERROR_ONLY);
+
+    store().showToast("Info", USER_FEEDBACK_SEVERITY.INFO);
+    store().showToast("Success", USER_FEEDBACK_SEVERITY.SUCCESS);
+    store().showToast("Warning", USER_FEEDBACK_SEVERITY.WARNING);
+    store().showToast("Error", USER_FEEDBACK_SEVERITY.ERROR);
+
+    expect(store().toastQueue.map((toast) => toast.message)).toEqual(["Error"]);
+  });
+
+  it("fails open for showToast before settings load", () => {
+    store().showToast("Early toast", USER_FEEDBACK_SEVERITY.INFO);
+
+    expect(store().toastQueue).toHaveLength(1);
+  });
+
   it("shows a toast with default info severity", () => {
     store().showToast("Hello!");
     expect(store().toastQueue[0]).toMatchObject({
