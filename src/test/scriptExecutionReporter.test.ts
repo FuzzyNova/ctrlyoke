@@ -16,6 +16,7 @@ import { StatusMessageReporter } from "../core/orchestration/StatusMessageReport
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   SCRIPT_OUTPUT_SOURCES,
 } from "../types/DashboardConstants";
@@ -544,6 +545,87 @@ suite("ScriptExecutionReporter", () => {
       `chunk:${expectedLength}`,
       "final",
     ]);
+  });
+
+  test("flushes the history manager's own streaming buffer before dispatching the completed output", async () => {
+    const temporaryDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-reporter-flush-")
+    );
+    temporaryDirectories.push(temporaryDirectory);
+    const historyManager = new OutputHistoryManager(temporaryDirectory);
+    outputHistoryManagers.push(historyManager);
+    const historyFilePath = (
+      await historyManager.initializeRunAt(
+        "reporter-flush-test" as WorkflowKey,
+        "run-1" as RunRef,
+        path.join(temporaryDirectory, "run"),
+        1,
+        Date.now()
+      )
+    ).filePath;
+
+    // A registered activity handler is what routes chunks through the
+    // history manager's own StreamingHistoryBuffer instead of the direct
+    // dashboard push — matching a real WorkflowInstance, which always
+    // registers one. That buffer only writes on a size/age cap, so nothing
+    // publishes this single small chunk until it is explicitly flushed.
+    const events: string[] = [];
+    historyManager.setOutputActivityHandler((entry) => {
+      if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
+        events.push(`activity:${entry.text}`);
+      }
+    });
+
+    const evaluator = {
+      evaluateCondition: async (
+        _condition: unknown,
+        _workingDirectory: string | undefined,
+        _vars: Record<string, string> | undefined,
+        onOutput: (chunk: string) => void
+      ) => {
+        onOutput("chunk");
+        return makeResult({ stdout: "chunk" });
+      },
+    } as unknown as EndConditionEvaluator;
+    const reporter = new ScriptExecutionReporter(evaluator);
+    const context: ScriptExecutionReporterContext = {
+      workspaceFolderPath: process.cwd(),
+      historyFilePath,
+      outputHistoryManager: historyManager,
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      ),
+      dashboardProvider: {
+        updateCliOutput: (_stepIndex: number, output: unknown) => {
+          events.push(
+            (output as CliOutput).isStreaming ? "placeholder" : "final"
+          );
+        },
+        updateCliStreamingChunk: () => undefined,
+        updateStatusMessage: () => undefined,
+      } as any,
+    };
+
+    await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+      properties: {
+        script: "check.sh",
+        compareSource: "exitCode",
+      },
+      phase: EXECUTION_PHASES.PROMPT,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+    });
+
+    assert.deepStrictEqual(events, ["placeholder", "activity:chunk", "final"]);
   });
 
   test("fans out delegated status messages for queue and final-step targets", async () => {

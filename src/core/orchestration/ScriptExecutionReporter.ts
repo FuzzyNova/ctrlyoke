@@ -278,8 +278,16 @@ export class ScriptExecutionReporter {
           );
     } finally {
       // The buffered tail must land before the completed output replaces the
-      // streaming placeholder below, on the throwing path too.
+      // streaming placeholder below, on the throwing path too. `flush()` only
+      // releases the coalescer's own local buffer synchronously — the history
+      // manager's own streaming buffer batches on top of that (up to
+      // maxBufferedAgeMs) and is what actually persists the chunk and fires
+      // the live activity push, so without this await the final CLI output
+      // below can reach the dashboard before the trailing chunk does.
       coalescer.flush();
+      if (context.historyFilePath && history) {
+        await history.flushPendingWrites(context.historyFilePath);
+      }
     }
     const outputText = sanitizeTerminalOutput(
       [evaluationResult.stdout, evaluationResult.stderr]

@@ -20,7 +20,6 @@ import {
   TIMELINE_EVENT_TYPES,
   type CliOutputChunkAppendedEvent,
   type CliOutputEventsAppendedEvent,
-  type ScriptExecutionRecordedEvent,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
@@ -283,23 +282,13 @@ export class OutputHistoryTimelineAdapter {
             sequence: event.sequence,
           });
           break;
-        case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED: {
-          const scriptEvent = event as ScriptExecutionRecordedEvent;
-          const text = [scriptEvent.payload.stdout, scriptEvent.payload.stderr]
-            .filter((value) => value.length > 0)
-            .join("");
-          activityEntries.push({
-            timestampMs: scriptEvent.timestampMs,
-            sequence: scriptEvent.sequence,
-            target: scriptEvent.target,
-            runIndex: scriptEvent.runIndex,
-            attemptIndex: scriptEvent.attemptIndex,
-            phase: scriptEvent.phase,
-            kind: OUTPUT_ACTIVITY_KINDS.SCRIPT,
-            ...(text ? { text } : {}),
-          });
-          break;
-        }
+        // SCRIPT_EXECUTION_RECORDED is a lossless stdout/stderr record consumed
+        // by RunOutputResolver for prior-context/verdict purposes. It carries
+        // the same text every CLI_OUTPUT_CHUNK_APPENDED delta for this attempt
+        // already streamed — the unified ScriptExecutionReporter pipeline
+        // always streams before recording it — so projecting it into
+        // activityEntries as well duplicated the script's own output on every
+        // history reload (each stayed a separate, non-coalescing activity kind).
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED:
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED:
           this.ensureStepOutput(history, event.target).workspaceSnapshot =

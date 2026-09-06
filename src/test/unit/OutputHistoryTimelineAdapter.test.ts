@@ -188,6 +188,10 @@ suite("OutputHistoryTimelineAdapter", () => {
       chunk,
     ]);
 
+    // SCRIPT_EXECUTION_RECORDED (the `script` event) carries the same text a
+    // CLI_OUTPUT_CHUNK_APPENDED delta already streamed for this attempt, so it
+    // must not also project into activityEntries — that duplicated the
+    // script's own output on every history reload.
     assert.deepStrictEqual(
       history.activityEntries?.map((entry) => ({
         sequence: entry.sequence,
@@ -218,19 +222,11 @@ suite("OutputHistoryTimelineAdapter", () => {
           attemptIndex: 0,
           kind: "status",
         },
-        {
-          sequence: 7,
-          target: TARGET,
-          runIndex: 2,
-          attemptIndex: 1,
-          kind: "script",
-        },
       ]
     );
     assert.strictEqual(history.activityEntries?.[0]?.text, "text");
     assert.deepStrictEqual(history.activityEntries?.[1]?.events, [
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "structured" } },
     ]);
-    assert.strictEqual(history.activityEntries?.[3]?.text, "outerr");
   });
 });
