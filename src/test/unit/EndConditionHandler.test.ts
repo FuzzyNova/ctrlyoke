@@ -203,6 +203,7 @@ class DashboardSinkDouble implements IDashboardSink {
     this.statusMessages.push({ stepIndex, message, severity });
   }
   updateStepsExtended(): void {}
+  updateStepColor(): void {}
   updatePromptDeleted(): void {}
   updateFinalStep(): void {}
   updateFinalStepStatus(): void {}

@@ -779,6 +779,15 @@ export class CtrlYokeWebviewProvider
       parallelGroups
     );
   }
+
+  public updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateStepColor(index, color, definitionRevision, workflowId);
+  }
   public updatePromptDeleted(
     fileName: string,
     steps: any[],

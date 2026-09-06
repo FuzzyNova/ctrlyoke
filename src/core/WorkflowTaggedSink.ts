@@ -384,6 +384,19 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateWorkflowName(name, this.workflowId);
   }
 
+  updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number
+  ): void {
+    this.inner.updateStepColor(
+      index,
+      color,
+      definitionRevision,
+      this.workflowId
+    );
+  }
+
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
     workspaceSnapshot?: WorkspaceSnapshot

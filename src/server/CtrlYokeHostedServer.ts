@@ -629,6 +629,14 @@ export class CtrlYokeHostedServer
       parallelGroups
     );
   }
+  updateStepColor(
+    index: number,
+    color: string | null,
+    definitionRevision?: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateStepColor(index, color, definitionRevision, workflowId);
+  }
   updatePromptDeleted(
     fileName: string,
     steps: any[],

@@ -239,6 +239,7 @@ export const MESSAGE_TYPES = {
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
   EXECUTE_PROMPT_ERROR: "executePromptError", // Extension -> Webview: Notify failure so editor can restore content
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
+  UPDATE_STEP_COLOR: "updateStepColor", // Update only a step's authored identity color
   INSERT_WORKFLOW_STEP: "insertWorkflowStep", // Insert a fully-shaped workflow step after a selected index
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
@@ -248,6 +249,7 @@ export const MESSAGE_TYPES = {
   // Workflow Status - Webview <-> Extension
   UPDATE_WORKFLOW_NAME: "updateWorkflowName", // Webview -> Extension: Save new workflow name
   WORKFLOW_NAME_UPDATED: "workflowNameUpdated", // Extension -> Webview: Confirm name update
+  STEP_COLOR_UPDATED: "stepColorUpdated", // Extension -> Webview: Confirm a step color update
   GET_RECENT_WORKFLOWS: "getRecentWorkflows", // Webview -> Extension: Request workflow history
   RECENT_WORKFLOWS: "recentWorkflows", // Extension -> Webview: Send workflow history
   LOAD_WORKFLOW: "loadWorkflow", // Webview -> Extension: Load specific workflow

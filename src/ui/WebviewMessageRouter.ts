@@ -794,6 +794,10 @@ export class WebviewMessageRouter {
       void this.workflowStepHandlers.handleUpdatePrompt(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.UPDATE_STEP_COLOR, (message, ctx) => {
+      void this.workflowStepHandlers.handleUpdateStepColor(ctx, message);
+    });
+
     table.set(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, async (message, ctx) => {
       await this.workflowStepHandlers.handleInsertWorkflowStep(ctx, message);
     });

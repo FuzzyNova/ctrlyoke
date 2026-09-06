@@ -6,7 +6,11 @@ import React, {
   useState,
 } from "react";
 import { useEditorStore } from "../../store/editorStore";
-import { useWorkflowStore } from "../../store/workflowStore";
+import {
+  useWorkflowStore,
+  isStepContentEqual,
+  type WorkflowStep,
+} from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
@@ -76,6 +80,19 @@ export interface PromptFileAction {
   onClick: () => void;
 }
 
+function isOnlyColorChange(
+  original: WorkflowStep | null,
+  submitted: WorkflowStep
+): boolean {
+  if (!original || original.color === submitted.color) return false;
+  const { color: _originalColor, ...originalWithoutColor } = original;
+  const { color: _submittedColor, ...submittedWithoutColor } = submitted;
+  return isStepContentEqual(
+    originalWithoutColor as WorkflowStep,
+    submittedWithoutColor as WorkflowStep
+  );
+}
+
 /**
  * PromptEditor - Main prompt editing component
  *
@@ -115,6 +132,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptEnv,
     scriptExecutionMode,
     scriptShell,
+    originalPromptData,
     setScriptCommand,
     setScriptTimeout,
     setScriptOnPass,
@@ -992,6 +1010,24 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Update existing prompt
   const handleUpdate = useCallback(() => {
+    const submitQueueUpdate = (
+      submittedStep: WorkflowStep,
+      fullMessage: Record<string, unknown>
+    ) => {
+      if (
+        selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+        isOnlyColorChange(originalPromptData, submittedStep)
+      ) {
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
+          index: selectionTarget.index,
+          color: submittedStep.color ?? null,
+        });
+      } else {
+        postWorkflowDefinitionMutation(vscode, fullMessage);
+      }
+    };
+
     if (isScriptMode) {
       const command = scriptCommand.trim();
       if (!command) return;
@@ -1049,8 +1085,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(!promptName.trim() ? ["name"] : []),
       ];
 
+      const submittedStep = {
+        ...scriptProperties,
+        script: command,
+        ...(promptName.trim() ? { name: promptName.trim() } : {}),
+      } as WorkflowStep;
+
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-        postWorkflowDefinitionMutation(vscode, {
+        submitQueueUpdate(submittedStep, {
           type: MESSAGE_TYPES.UPDATE_PROMPT,
           index: selectionTarget.index,
           text: command,
@@ -1084,15 +1126,22 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       getPropertyValues(true);
 
     if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-      postWorkflowDefinitionMutation(vscode, {
-        type: MESSAGE_TYPES.UPDATE_PROMPT,
-        index: selectionTarget.index,
-        text,
-        properties: propertyValues,
-        clearProperties,
-        promptName: promptName.trim(),
-        ...(isPromptCompleted && { rewindCompletedStep: true }),
-      });
+      submitQueueUpdate(
+        {
+          prompt: text,
+          ...(promptName.trim() ? { name: promptName.trim() } : {}),
+          ...propertyValues,
+        } as WorkflowStep,
+        {
+          type: MESSAGE_TYPES.UPDATE_PROMPT,
+          index: selectionTarget.index,
+          text,
+          properties: propertyValues,
+          clearProperties,
+          promptName: promptName.trim(),
+          ...(isPromptCompleted && { rewindCompletedStep: true }),
+        }
+      );
     } else if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
@@ -1129,6 +1178,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     cancelEdit,
     promptName,
     isPromptCompleted,
+    originalPromptData,
   ]);
 
   // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)

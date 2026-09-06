@@ -841,6 +841,16 @@ export interface StepsExtendedMessage {
   definitionRevision?: number;
 }
 
+/** A narrow addressed update for the only currently cosmetic step field. */
+export interface StepColorUpdatedMessage {
+  type: typeof MESSAGE_TYPES.STEP_COLOR_UPDATED;
+  index: number;
+  /** `null` removes the authored override and restores inherited color. */
+  color: string | null;
+  definitionRevision?: number;
+  workflowId?: string;
+}
+
 /**
  * Prompt deleted message (extension -> webview)
  */
@@ -2036,6 +2046,19 @@ export interface UpdatePromptMessage {
 }
 
 /**
+ * Update only a step's authored identity color. This intentionally cannot
+ * carry prompt content or execution properties, so a cosmetic edit cannot
+ * bypass completed-step rewind classification.
+ */
+export interface UpdateStepColorMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_STEP_COLOR;
+  index: number;
+  /** `null` removes the authored override and restores inherited color. */
+  color: string | null;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+/**
  * Insert workflow step message (webview -> extension)
  * `afterIndex` is the existing queue index after which the pasted step should be inserted.
  */
@@ -2655,6 +2678,7 @@ export type IncomingMessage =
   | FinalStepStreamingEventsMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | StepsExtendedMessage
+  | StepColorUpdatedMessage
   | PromptDeletedMessage
   | ReorderPromptsConfirmedMessage
   | ModelOptionsUpdateMessage

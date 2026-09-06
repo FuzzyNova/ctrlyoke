@@ -55,6 +55,7 @@ class DashboardSinkDouble implements IDashboardSink {
     });
   }
   updateStepsExtended(): void {}
+  updateStepColor(): void {}
   updatePromptDeleted(): void {}
   updateFinalStep(): void {}
   updateFinalStepStatus(): void {}

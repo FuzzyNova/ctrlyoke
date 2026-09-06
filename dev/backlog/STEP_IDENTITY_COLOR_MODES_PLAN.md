@@ -520,10 +520,16 @@ table.
 - **Step 0 is a second, separate symptom and is not fixed by this rule alone.** The rewind branch is
   guarded on `index > 0` (`src/ui/WorkflowStepHandlers.ts:93`), so index 0 never took it; the observed
   "creates a new draft" comes from the step-zero full-rerun path that
-  `handleUpdatePrompt`'s else-branch comment describes, and I did not trace it to a specific line.
-  Reproduce it first. The intent is unambiguous either way: under the cosmetic rule a color edit
-  takes the same in-place path at every index, because recoloring is not a re-run trigger no matter
-  where the step sits.
+  `handleUpdatePrompt`'s else-branch comment describes. Reproduction confirmed that routing symptom:
+  index 0 enters that ordinary branch because of the guard. With a valid addressed run mutation, the
+  write still stays on that run and does not create a draft; the new-draft observation therefore needs
+  a separate stale/missing-address reproduction. The color-only message bypasses this branch entirely,
+  so recoloring takes the same in-place path at every index.
+
+- **Viewer push result.** `invalidation: "properties"` carries workflow-level fields only; it drops
+  `steps`, so it cannot carry a changed step color. The implementation adds the narrow
+  `STEP_COLOR_UPDATED` broadcast (index + color + revision), while retaining the lightweight
+  properties-style invalidation and avoiding `RUN_VIEW_LOADED`.
 
 ### Testing
 
@@ -532,6 +538,12 @@ historical run, then assert the run's `workflow.ctrlyoke.json` has the new color
 `_runtime` block is byte-identical, and no `pendingRewind` was created. Add the mirror case at index
 0, and a negative case — a prompt edit on the same completed step still rewinds — so the
 classification cannot silently widen.
+
+Implemented in `WorkflowOrchestrator.test.ts`: both index 0 and index 1 are edited through the
+addressed historical-run path, with exact `_runtime` assertions, no pending-rewind file, and no full
+run-view broadcast. The existing completed-suffix prompt-edit test remains the negative rewind case;
+the webview test also verifies that a color-only editor submission carries no prompt payload or rewind
+flag.
 
 ---
 
@@ -561,8 +573,10 @@ classification cannot silently widen.
 6. ✅ **Done.** Flip the default to `unique` in `CTRLYOKE_SETTINGS_DEFAULTS` — one line, deliberately last so the
    preceding steps can all be reviewed against today's rendering.
 
-7. Cosmetic in-place color edits (§7). Independent of steps 2–6 — it only needs `step.color`, which
-   already ships — so it can land before or after the palette work, and is worth doing either way.
+7. ✅ **Done.** Cosmetic in-place color edits (§7). The editor sends a color-only addressed message;
+   the core applies it with the existing partial step update so `_runtime`, continuation state, and
+   start position remain untouched. Historical viewers receive a narrow color broadcast, and completed
+   prompt edits retain their rewind path.
 
 Follow-up, not part of the above: the CVD-safe named palette and `ui.stepColorPalette` (§3a), and the
 `name`-as-cosmetic decision (§7).

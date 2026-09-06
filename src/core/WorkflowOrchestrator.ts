@@ -234,6 +234,11 @@ interface DefinitionRollbackInvalidation {
   descriptorRevision: number;
 }
 
+interface StepColorInvalidation {
+  kind: "stepColor";
+  index: number;
+}
+
 function buildPromptStepChange(
   text: string,
   properties: unknown,
@@ -3713,7 +3718,7 @@ export class WorkflowOrchestrator {
     runAddress: WorkflowRunAddress,
     liveEdit: (instance: WorkflowInstance) => Promise<void>,
     staticEdit: (workspaceRoot: string) => Promise<void>,
-    invalidation: "snapshot" | "properties" = "snapshot"
+    invalidation: "snapshot" | "properties" | StepColorInvalidation = "snapshot"
   ): Promise<void> {
     const live = this.findResidentInstanceForRun(
       runAddress.workflowKey,
@@ -3736,6 +3741,22 @@ export class WorkflowOrchestrator {
         runAddress.workflowKey,
         runAddress.runRef
       );
+    } else if (typeof invalidation === "object") {
+      // A resident instance broadcasts the narrow update through its tagged
+      // dashboard sink. Static historical-run edits have no instance sink,
+      // so target their viewers directly without a full run snapshot. Keep
+      // the existing properties push for workflow-level identity fields.
+      await this.invalidateRunViewProperties(
+        runAddress.workflowKey,
+        runAddress.runRef
+      );
+      if (!live) {
+        await this.invalidateRunViewStepColor(
+          runAddress.workflowKey,
+          runAddress.runRef,
+          invalidation.index
+        );
+      }
     } else {
       await this.invalidateRunViews(runAddress.workflowKey, runAddress.runRef);
     }
@@ -4136,6 +4157,38 @@ export class WorkflowOrchestrator {
           mutation.expectedDefinitionRevision,
           this.lineageRepository
         ).then(() => undefined)
+    );
+  }
+
+  async updateStepColorInQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
+    index: number,
+    color: string | null,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
+      await this.getInstanceForClient(clientId).updateStepColorInQueue(
+        index,
+        color
+      );
+      return;
+    }
+
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      (instance) => instance.updateStepColorInQueue(index, color),
+      (workspaceRoot) =>
+        WorkingFileManager.updateStepAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          index,
+          { updates: { color: color ?? undefined } },
+          mutation.expectedDefinitionRevision,
+          this.lineageRepository
+        ).then(() => undefined),
+      { kind: "stepColor", index }
     );
   }
 
@@ -5247,6 +5300,47 @@ export class WorkflowOrchestrator {
         type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
         workflowProperties,
       });
+    }
+  }
+
+  private async invalidateRunViewStepColor(
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    index: number
+  ): Promise<void> {
+    const targets = [...this.getViewAddressRegistry().entries()].filter(
+      ([, address]) =>
+        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        address.workflowKey === workflowKey &&
+        address.runRef === runRef
+    );
+    if (targets.length === 0) return;
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceRoot) return;
+
+    try {
+      const filePath = this.resolveAddressFilePath(workspaceRoot, {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      });
+      const workingFile = JSON.parse(
+        await fs.promises.readFile(filePath, "utf-8")
+      ) as WorkingFile;
+      const color = workingFile.steps?.[index]?.color ?? null;
+      const definitionRevision = workingFile.definitionRevision;
+      for (const [clientId] of targets) {
+        this.getViewMessageSinks().get(clientId)?.({
+          type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
+          index,
+          color,
+          ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+        });
+      }
+    } catch (error) {
+      Log.warn(
+        `[WorkflowOrchestrator] Failed to read run file for step color invalidation: ${getErrorMessage(error)}`
+      );
     }
   }
 
