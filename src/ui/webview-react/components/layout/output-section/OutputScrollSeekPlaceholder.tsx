@@ -2,6 +2,7 @@ import React from "react";
 import type { OutputRenderRow } from "@utils/outputRows";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { CLI_EVENT_TYPES } from "@/types/messages";
+import { getStepIdentityBarStyle } from "@components/output/outputStyles";
 
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200;
 
@@ -105,9 +106,11 @@ export const OutputScrollSeekPlaceholder: React.FC<{
 }> = ({ row, height }) => (
   <div
     className="px-2 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
+    data-step-color-bar={row.stepColor ? "true" : undefined}
     style={{
       height: `${Math.max(1, height)}px`,
       contain: "layout paint style",
+      ...(row.stepColor ? getStepIdentityBarStyle(row.stepColor) : undefined),
     }}
   >
     <div className="h-full min-h-6 rounded border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
