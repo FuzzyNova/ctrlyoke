@@ -23,6 +23,7 @@ import { PortListEditor } from "../shared/PortListEditor";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
+import { Icon } from "../shared/Icon";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg
@@ -294,10 +295,7 @@ export function ServerSection({
           aria-label="Unlock Pro Features"
           className="mb-3 flex w-full items-center gap-2 rounded border border-pro-brand px-3 py-2 text-left hover:bg-pro-brand/10"
         >
-          <i
-            className="codicon codicon-key text-pro-brand"
-            aria-hidden="true"
-          />
+          <Icon name="key" className="text-pro-brand" />
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-medium text-pro-brand">
               Unlock Pro Features
@@ -307,10 +305,7 @@ export function ServerSection({
               features.
             </span>
           </span>
-          <i
-            className="codicon codicon-chevron-right text-pro-brand"
-            aria-hidden="true"
-          />
+          <Icon name="chevron-right" className="text-pro-brand" />
         </button>
       )}
 
@@ -385,7 +380,7 @@ export function ServerSection({
                 aria-label="Copy URL"
                 className="shrink-0 text-description-fg hover:text-foreground"
               >
-                <i className="codicon codicon-copy" />
+                <Icon name="copy" />
               </button>
               <button
                 type="button"
@@ -483,7 +478,7 @@ export function ServerSection({
             </SettingInputRow>
             {portFallbackForCurrentSetting && (
               <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
-                <i className="codicon codicon-warning shrink-0 translate-y-px" />
+                <Icon name="warning" className="shrink-0 translate-y-px" />
                 <span>
                   Port {portFallbackForCurrentSetting.requestedPort} was already
                   in use by another process — ctrlyoke started on port{" "}
@@ -558,7 +553,7 @@ export function ServerSection({
             )}
             {bindAddressFallbackForCurrentSetting && (
               <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
-                <i className="codicon codicon-warning shrink-0 translate-y-px" />
+                <Icon name="warning" className="shrink-0 translate-y-px" />
                 <span>
                   ctrlyoke started on localhost only — a Pro license or active
                   remote-access trial is required for All Interfaces (
@@ -760,7 +755,7 @@ export function ServerSection({
                   >
                     {certExpired ? (
                       <p className="flex items-baseline gap-1 text-error-fg font-medium">
-                        <i className="codicon codicon-warning" />
+                        <Icon name="warning" />
                         <span>
                           Certificate expired{" "}
                           {new Date(

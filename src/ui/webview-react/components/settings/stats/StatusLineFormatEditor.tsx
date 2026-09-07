@@ -28,6 +28,7 @@ import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
 import { useSortableDndSensors } from "@hooks/useSortableDndSensors";
 import { StatusLinePreview } from "./StatusLinePreview";
+import { Icon } from "../../shared/Icon";
 
 const MAX_LITERAL_LENGTH = 64;
 const STATUS_LINE_FIELD_LIST: readonly StatusLineFieldId[] = Object.values(
@@ -111,7 +112,7 @@ function SortableSegmentRow({
         {...attributes}
         aria-label={`Drag to reorder segment ${index + 1}`}
       >
-        <i className="codicon codicon-grabber text-xs" />
+        <Icon name="grabber" className="text-xs" />
       </span>
       <span className="text-xs text-description-fg w-5 shrink-0 text-center">
         {index + 1}
@@ -182,7 +183,7 @@ function SortableSegmentRow({
         title="Remove segment"
         className="shrink-0 px-1.5"
       >
-        <i className="codicon codicon-trash" aria-hidden="true" />
+        <Icon name="trash" />
       </Button>
     </div>
   );

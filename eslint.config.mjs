@@ -166,6 +166,41 @@ export default [
       ],
     },
   },
+  // All codicons in React markup must go through Icon so decorative glyphs
+  // stay hidden from the accessibility tree and their class shape is shared.
+  {
+    files: ["src/ui/webview-react/**/*.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "JSXOpeningElement[name.name=/^(i|span)$/] > JSXAttribute[name.name='className'][value.type='Literal'][value.value=/codicon/]",
+          message:
+            "Use components/shared/Icon.tsx instead of raw codicon JSX elements.",
+        },
+        {
+          selector:
+            "JSXOpeningElement[name.name=/^(i|span)$/] > JSXAttribute[name.name='className'] JSXExpressionContainer TemplateLiteral TemplateElement[value.raw=/codicon/]",
+          message:
+            "Use components/shared/Icon.tsx instead of raw codicon JSX elements.",
+        },
+        {
+          selector:
+            "JSXOpeningElement[name.name=/^(i|span)$/] > JSXAttribute[name.name='className'] JSXExpressionContainer > Literal[value=/codicon/]",
+          message:
+            "Use components/shared/Icon.tsx instead of raw codicon JSX elements.",
+        },
+      ],
+    },
+  },
+  // Icon is the one intentional raw codicon primitive.
+  {
+    files: ["src/ui/webview-react/components/shared/Icon.tsx"],
+    rules: {
+      "no-restricted-syntax": "off",
+    },
+  },
   // Local rules. Scoped to webview-react: zustand stores live only there, and an
   // allocating selector there is a crash (React #185), not a style preference.
   {

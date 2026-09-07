@@ -58,6 +58,7 @@ import {
   SCM_FILE_KINDS,
   WORKSPACE_ENTRY_KINDS,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 /**
  * Resolves the git-status text color class for an explorer entry, mirroring
@@ -513,7 +514,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           title="Go to parent directory"
           aria-label="Go to parent directory"
         >
-          <i className="codicon codicon-arrow-left text-xs" />
+          <Icon name="arrow-left" className="text-xs" />
         </button>
 
         <div className="flex-1 min-w-0 px-1 py-0.5">
@@ -548,8 +549,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 : "Hide git-ignored files"
             }
           >
-            <i
-              className={`codicon ${hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"} text-xs`}
+            <Icon
+              name={hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"}
+              className="text-xs"
             />
           </button>
         )}
@@ -560,10 +562,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
           title="Refresh directory"
           aria-label="Refresh directory"
         >
-          <i
-            className={`codicon codicon-refresh text-xs ${
-              directory.isLoading ? "animate-spin" : ""
-            }`}
+          <Icon
+            name="refresh"
+            className={`text-xs ${directory.isLoading ? "animate-spin" : ""}`}
           />
         </button>
 
@@ -579,7 +580,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
             title="Sync explorer to open file"
             aria-label="Sync explorer to open file"
           >
-            <i className="codicon codicon-arrow-swap text-xs" />
+            <Icon name="arrow-swap" className="text-xs" />
           </button>
         )}
       </div>
@@ -608,7 +609,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           </div>
         ) : directory.isLoading && directory.totalCount === 0 ? (
           <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
-            <i className="codicon codicon-loading animate-spin mr-2" />
+            <Icon name="loading" className="animate-spin mr-2" />
             <span className="text-sm">Loading…</span>
           </div>
         ) : directory.totalCount === 0 ? (
@@ -709,7 +710,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
             onClick={handleMobileBack}
             className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
-            <i className="codicon codicon-arrow-left text-sm" />
+            <Icon name="arrow-left" className="text-sm" />
             <span className="text-sm">Back</span>
           </button>
         )}
@@ -728,9 +729,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   title={fileDirty ? "Save file" : "No changes to save"}
                 >
                   {fileSaving ? (
-                    <i className="codicon codicon-loading animate-spin" />
+                    <Icon name="loading" className="animate-spin" />
                   ) : (
-                    <i className="codicon codicon-save" />
+                    <Icon name="save" />
                   )}
                   Save
                 </button>
@@ -752,7 +753,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
                     }`}
                   >
-                    <i className="codicon codicon-discard" />
+                    <Icon name="discard" />
                   </button>
                   <div className="bg-btn-secondary-bg text-btn-secondary-fg py-0.5 flex-shrink-0">
                     <div className="w-px h-full bg-current opacity-40" />
@@ -769,7 +770,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                         : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
                     }`}
                   >
-                    <i className="codicon codicon-redo" />
+                    <Icon name="redo" />
                   </button>
                 </div>
                 {isMarkdownFile && (
@@ -788,8 +789,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
                         : "Preview rendered markdown"
                     }
                   >
-                    <i
-                      className={`codicon ${previewMode ? "codicon-code" : "codicon-open-preview"}`}
+                    <Icon
+                      name={
+                        previewMode ? "codicon-code" : "codicon-open-preview"
+                      }
                     />
                     {previewMode ? "Edit" : "Preview"}
                   </button>
@@ -808,7 +811,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                       : "No unsaved changes to discard"
                   }
                 >
-                  <i className="codicon codicon-debug-restart" />
+                  <Icon name="debug-restart" />
                   Discard
                 </button>
               </>
@@ -828,12 +831,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {fileLoading ? (
             <div className="flex items-center gap-2 p-4 opacity-50 text-editor-fg">
-              <i className="codicon codicon-loading animate-spin" />
+              <Icon name="loading" className="animate-spin" />
               <span className="text-sm">Loading file…</span>
             </div>
           ) : fileReadOnly ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
-              <i className="codicon codicon-info text-2xl" />
+              <Icon name="info" className="text-2xl" />
               <p className="text-sm">
                 {fileReadOnlyReason ?? "This file cannot be edited"}
               </p>

@@ -4,6 +4,7 @@ import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { StepDetails } from "./WorkflowStep";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
+import { Icon } from "../shared/Icon";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -139,7 +140,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Retry indicator */}
       {retryState && retryState.currentRetry > 0 && (
         <div className="mt-1 pl-5 flex items-center gap-1.5 text-xs font-semibold text-warning-fg">
-          <i className="codicon codicon-refresh text-xs" />
+          <Icon name="refresh" className="text-xs" />
           <span>
             Retry {retryState.currentRetry} of {retryState.maxRetries}
           </span>
@@ -175,8 +176,9 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                     title="Copy session ID"
                     aria-label="Copy session ID"
                   >
-                    <i
-                      className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
+                    <Icon
+                      name={copied ? "codicon-check" : "codicon-copy"}
+                      className="text-xxs"
                     />
                   </button>
                 </span>
@@ -199,9 +201,9 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         >
           <span>End condition:</span>
           {details.endConditionResult.passed ? (
-            <i className="codicon codicon-pass text-indicator-success" />
+            <Icon name="pass" className="text-indicator-success" />
           ) : (
-            <i className="codicon codicon-error text-indicator-error" />
+            <Icon name="error" className="text-indicator-error" />
           )}
           {details.endConditionResult.message && (
             <span className="truncate">
@@ -232,7 +234,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
               title={override.title ?? override.label}
             >
               {override.icon && (
-                <i className={`codicon codicon-${override.icon} mr-0.5`} />
+                <Icon name={override.icon} className="mr-0.5" />
               )}
               {override.label}
             </span>

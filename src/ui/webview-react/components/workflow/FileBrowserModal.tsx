@@ -22,6 +22,7 @@ import {
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 const FILE_BROWSER_VIRTUALIZATION_THRESHOLD = 50;
 const FILE_BROWSER_OVERSCAN = 12;
@@ -224,7 +225,7 @@ export const FileBrowserModal: React.FC = () => {
             title="Go to parent directory"
             aria-label="Go to parent directory"
           >
-            <i className="codicon codicon-arrow-left text-xs" />
+            <Icon name="arrow-left" className="text-xs" />
           </button>
           <div className="flex-1 min-w-0 flex flex-wrap items-center px-1">
             {renderBreadcrumb(directory.path, directory.rootLabel, (p) =>
@@ -246,7 +247,7 @@ export const FileBrowserModal: React.FC = () => {
           />
           {directory.isInitialLoading ? (
             <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
-              <i className="codicon codicon-loading animate-spin mr-2" />
+              <Icon name="loading" className="animate-spin mr-2" />
               <span className="text-sm">Loading…</span>
             </div>
           ) : directory.initialError ? (

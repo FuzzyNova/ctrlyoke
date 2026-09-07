@@ -30,6 +30,7 @@ import {
   type BulkAction,
 } from "@components/shared/BulkSelectionActionsBar";
 import { isStandalone } from "@hooks/useVsCodeApi";
+import { Icon } from "../shared/Icon";
 
 // ============================================================================
 // Constants
@@ -333,7 +334,7 @@ function FileRow({
               title={`Open ${file.type === HARNESS_FILE_TYPES.SKILL ? "SKILL.md" : file.displayName} in VS Code`}
               aria-label={`Edit ${file.displayName}`}
             >
-              <i className="codicon codicon-edit text-xxs" />
+              <Icon name="edit" className="text-xxs" />
             </button>
           )}
 
@@ -377,7 +378,7 @@ function FileRow({
             title={toggleTitle}
             aria-label={toggleTitle}
           >
-            <i className="codicon codicon-globe text-xxs" />
+            <Icon name="globe" className="text-xxs" />
             {isDefault && <span>Default</span>}
           </button>
         </div>
@@ -677,7 +678,7 @@ export function AgentSkillsManagerSection({
             className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.AGENT ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             title="Manage agent files"
           >
-            <i className="codicon codicon-agent codicon-sm" />
+            <Icon name="agent" className="codicon-sm" />
             Agents
           </button>
           <div className="fp-mode-switch-divider">
@@ -689,7 +690,7 @@ export function AgentSkillsManagerSection({
             className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.SKILL ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             title="Manage skill files"
           >
-            <i className="codicon codicon-tools codicon-sm" />
+            <Icon name="tools" className="codicon-sm" />
             Skills
           </button>
         </div>

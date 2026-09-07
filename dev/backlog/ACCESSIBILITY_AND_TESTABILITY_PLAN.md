@@ -146,13 +146,13 @@ entire prompt text is not usable. Both appear in the ground-truth snapshot above
 
 ## Phase 1 — Hide decorative icons (precondition for every later phase)
 
-**Status:** `Icon.tsx` and `scripts/codemod-codicon-icon.mjs` are implemented; the `shared`,
-`editor`, and `layout` component directories are migrated. **195** raw codicon elements remain
-elsewhere in `src/` (excluding tests), measured after this migration.
+**Status:** Complete — `Icon.tsx` and `scripts/codemod-codicon-icon.mjs` are implemented, and
+all webview React components are migrated. **Raw codicons remaining: 0** outside tests. A scoped
+ESLint `no-restricted-syntax` rule now prevents raw codicon JSX from reappearing.
 
-357 raw `<i className="codicon …">` in source; 5 of 171 live ones are hidden. Until these are
-hidden, adding `aria-label` still works but every un-migrated `title` stays invisible, and no
-exact-name match is reliable.
+The sweep started with 357 raw `<i className="codicon …">` elements in source; all migrated
+codicons now render through `Icon` with `aria-hidden="true"`, so exact-name matching can proceed
+reliably in later phases.
 
 **Do it once, structurally.** There is no shared icon component today — that is why the attribute
 is missing in 350+ places, and why a one-time sweep would rot immediately. Introduce a primitive:

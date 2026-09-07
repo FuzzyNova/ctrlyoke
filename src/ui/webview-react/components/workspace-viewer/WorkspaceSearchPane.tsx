@@ -15,6 +15,7 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
 import { truncateSnippet } from "@utils/string";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 const INITIAL_RESULT_LIMIT = 50;
 
@@ -204,7 +205,10 @@ export const WorkspaceSearchPane: React.FC = () => {
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-editor-bg">
       <div className="flex shrink-0 flex-col gap-2 border-b border-panel-border px-3 py-3">
         <div className="relative min-w-0">
-          <i className="codicon codicon-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg" />
+          <Icon
+            name="search"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg"
+          />
           <input
             type="search"
             value={searchQuery}
@@ -255,7 +259,10 @@ export const WorkspaceSearchPane: React.FC = () => {
             <label className="flex min-w-[160px] flex-1 items-center gap-2 sm:flex-initial">
               <span className="sr-only">Repository</span>
               <div className="relative w-full">
-                <i className="codicon codicon-repo pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+                <Icon
+                  name="repo"
+                  className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60"
+                />
                 <select
                   value={selectedRepoId ?? ""}
                   onChange={(event) =>
@@ -270,7 +277,10 @@ export const WorkspaceSearchPane: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <i className="codicon codicon-chevron-down pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+                <Icon
+                  name="chevron-down"
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60"
+                />
               </div>
             </label>
           )}
@@ -286,7 +296,7 @@ export const WorkspaceSearchPane: React.FC = () => {
 
         {showInitialLoading && (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-description-fg">
-            <i className="codicon codicon-loading animate-spin" />
+            <Icon name="loading" className="animate-spin" />
             <span>Searching...</span>
           </div>
         )}
@@ -379,7 +389,7 @@ export const WorkspaceSearchPane: React.FC = () => {
               className="flex min-h-[44px] items-center justify-center gap-2 rounded border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60 sm:min-h-0"
             >
               {searchLoading && (
-                <i className="codicon codicon-loading animate-spin" />
+                <Icon name="loading" className="animate-spin" />
               )}
               <span>{searchLoading ? "Loading..." : "Load more"}</span>
             </button>

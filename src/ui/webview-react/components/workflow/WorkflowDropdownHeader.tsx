@@ -1,5 +1,6 @@
 import React from "react";
 import { ExitButton } from "@components/shared";
+import { Icon } from "../shared/Icon";
 
 interface WorkflowDropdownHeaderProps {
   icon: string;
@@ -32,14 +33,17 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
     <div className="workflow-menu-header px-3 py-2 text-xs font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0">
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <div className="flex items-center gap-1.5">
-          <i className={`codicon ${icon} text-sm`} />
+          <Icon name={icon} className="text-sm" />
           <span className="whitespace-nowrap">{title}</span>
         </div>
 
         {showSearch && onSearchChange ? (
           <div className="flex w-full max-w-[360px] justify-self-center items-center gap-1">
             <div className="relative min-w-0 flex-1">
-              <i className="codicon codicon-search absolute left-2 top-1/2 -translate-y-1/2 text-xs text-description-fg pointer-events-none" />
+              <Icon
+                name="search"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-description-fg pointer-events-none"
+              />
               <input
                 type="search"
                 aria-label="Search workflows"
@@ -66,10 +70,7 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
                     : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 }`}
               >
-                <span
-                  className="codicon codicon-filter block leading-none"
-                  aria-hidden="true"
-                />
+                <Icon name="filter" className="block leading-none" />
               </button>
             )}
           </div>

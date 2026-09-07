@@ -130,6 +130,7 @@ import {
   buildCollapsedOutputPreview,
   formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
+import { Icon } from "../shared/Icon";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -292,16 +293,14 @@ const ActivityAttribution: React.FC<{
         className="mb-1 flex items-center gap-1.5 text-xs text-foreground"
         aria-label={label}
       >
-        <i
+        <Icon
           // The step's own kind glyph, not a generic activity mark: `⚡` is the
           // hooks icon everywhere else. It carries the step identity color when
           // one resolves, and falls back to the neutral type-icon treatment the
           // steps panel uses when `ui.stepColorMode` is off.
-          className={`codicon ${getStepKindIconClass(row.activityStepType)}${
-            row.stepColor ? "" : " text-description-fg"
-          }`}
+          name={getStepKindIconClass(row.activityStepType)}
+          className={row.stepColor ? "" : "text-description-fg"}
           style={row.stepColor ? { color: row.stepColor } : undefined}
-          aria-hidden="true"
         />
         <span className="font-semibold">{label}</span>
         {row.activityName && (
@@ -1057,7 +1056,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
             <div className="flex-1 h-px bg-panel-border" />
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
-              <i className="codicon codicon-fold text-xxs" />
+              <Icon name="fold" className="text-xxs" />
               <span>
                 Conversation compacted ({trigger}){tokenInfo}
               </span>
@@ -1073,7 +1072,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
             <div className="flex-1 h-px bg-panel-border" />
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
-              <i className="codicon codicon-debug-continue text-xxs" />
+              <Icon name="debug-continue" className="text-xxs" />
               <span>
                 Follow-up{resumedAtLabel ? ` — ${resumedAtLabel}` : ""}
               </span>
@@ -1132,7 +1131,7 @@ const CliHeaderRowView: React.FC<{
       aria-label="Hide output for this step"
       className="inline-flex min-w-0 max-w-full items-center gap-1 text-description-fg hover:text-foreground transition-colors"
     >
-      <i className="codicon codicon-eye-closed shrink-0" />
+      <Icon name="eye-closed" className="shrink-0" />
     </button>
   );
   const structuredMetadata = output.structured?.metadata;
@@ -1181,8 +1180,11 @@ const CliHeaderRowView: React.FC<{
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
-            <i
-              className={`codicon ${isConditionOutput ? headerIcon : "codicon-terminal-powershell"} text-xs`}
+            <Icon
+              name={
+                isConditionOutput ? headerIcon : "codicon-terminal-powershell"
+              }
+              className="text-xs"
             />
             <span className="min-w-0 break-words [overflow-wrap:anywhere]">
               {headerLabel}]
@@ -1215,7 +1217,7 @@ const CliHeaderRowView: React.FC<{
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
-          <i className="codicon codicon-comment text-xs" />
+          <Icon name="comment" className="text-xs" />
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">
             {stepLabelContent ?? row.stepLabel}]
           </span>
@@ -1245,7 +1247,7 @@ const CliHeaderRowView: React.FC<{
             title={row.promptUndo.undo.label}
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
           >
-            <i className="codicon codicon-discard shrink-0" />
+            <Icon name="discard" className="shrink-0" />
             <span className="min-w-0 truncate">
               {row.promptUndo.undo.label}
             </span>
@@ -1259,7 +1261,7 @@ const CliHeaderRowView: React.FC<{
             title={row.promptUndo.redo.label}
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
           >
-            <i className="codicon codicon-redo shrink-0" />
+            <Icon name="redo" className="shrink-0" />
             <span className="min-w-0 truncate">
               {row.promptUndo.redo.label}
             </span>
@@ -1417,8 +1419,10 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
           title="Copy session ID"
           aria-label="Copy session ID"
         >
-          <i
-            className={`codicon ${copiedSessionId === sessionId ? "codicon-check" : "codicon-copy"}`}
+          <Icon
+            name={
+              copiedSessionId === sessionId ? "codicon-check" : "codicon-copy"
+            }
           />
         </button>
       </span>
@@ -1462,9 +1466,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         onClick={handleCopyOutput}
         title="Copy output to clipboard"
       >
-        <i
-          className={`codicon ${copiedOutput ? "codicon-check" : "codicon-copy"}`}
-        />
+        <Icon name={copiedOutput ? "codicon-check" : "codicon-copy"} />
         <span>{copiedOutput ? "Copied" : "Copy output"}</span>
       </button>
     );
@@ -1895,7 +1897,7 @@ function OutputRowComponent({
           aria-label={`Expand ${row.attemptCount} attempts${totalLabel ? `, ${totalLabel} total` : ""}`}
           onClick={() => onAttemptGroupToggle?.(row.groupKey)}
         >
-          <i className="codicon codicon-chevron-right text-xxs" />
+          <Icon name="chevron-right" className="text-xxs" />
           <span>
             {row.attemptCount} attempts
             {totalLabel ? ` · ${totalLabel} total` : ""}

@@ -12,6 +12,7 @@ import {
   type ScriptConditionValue,
 } from "../../shared";
 import { SettingSourceBadge } from "../../shared/SettingSourceBadge";
+import { Icon } from "../../shared/Icon";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -65,7 +66,7 @@ function ObjectSettingHeader({
             : "opacity-0 pointer-events-none"
         }`}
       >
-        <i className="codicon codicon-discard text-xxs" />
+        <Icon name="discard" className="text-xxs" />
       </button>
     </div>
   );

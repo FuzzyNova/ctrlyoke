@@ -38,6 +38,7 @@ import {
   SEP,
   normalizeCodexAbsPath,
 } from "@utils/filePathPatterns";
+import { Icon } from "../shared/Icon";
 
 const MARKDOWN_NODE_TYPES = {
   LINK: "link",
@@ -364,7 +365,7 @@ function FileRefButton({
       }
       title={title}
     >
-      <i className="codicon codicon-file text-xxs opacity-70" />
+      <Icon name="file" className="text-xxs opacity-70" />
       <span className="group-hover:underline">{children}</span>
     </button>
   );
@@ -576,7 +577,7 @@ function ImageRefThumbnail({
           aria-label={`Download ${filename}`}
           className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity hover:brightness-110 focus:opacity-100 group-hover/thumb:opacity-100"
         >
-          <i className="codicon codicon-cloud-download text-sm" />
+          <Icon name="cloud-download" className="text-sm" />
         </button>
       </span>
     </span>
@@ -866,8 +867,9 @@ function MermaidBlock({ code }: { code: string }) {
             aria-label={copied ? "Copied" : "Copy source"}
             className={MERMAID_HEADER_BTN_CLASS}
           >
-            <i
-              className={`codicon ${copied ? "codicon-check" : "codicon-copy"} text-sm`}
+            <Icon
+              name={copied ? "codicon-check" : "codicon-copy"}
+              className="text-sm"
             />
           </button>
           <button
@@ -878,7 +880,7 @@ function MermaidBlock({ code }: { code: string }) {
             aria-label="Download as PNG"
             className={MERMAID_HEADER_BTN_CLASS}
           >
-            <i className="codicon codicon-download text-sm" />
+            <Icon name="download" className="text-sm" />
           </button>
         </div>
       </div>
@@ -897,7 +899,7 @@ function MermaidBlock({ code }: { code: string }) {
         </>
       ) : (
         <div className="flex items-center gap-2 p-4 text-description-fg text-xs">
-          <i className="codicon codicon-loading codicon-modifier-spin" />
+          <Icon name="loading" className="codicon-modifier-spin" />
           <span>Rendering diagram…</span>
         </div>
       )}

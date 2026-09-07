@@ -30,6 +30,7 @@ import {
   type ToolResultStatus,
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 // ============================================================================
 // Shared primitives
@@ -219,8 +220,13 @@ const FileUndoButton: React.FC<{
     }
     onClick={onUndoFile}
   >
-    <i
-      className={`codicon ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "codicon-redo" : "codicon-discard"} text-xxs`}
+    <Icon
+      name={
+        fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
+          ? "codicon-redo"
+          : "codicon-discard"
+      }
+      className="text-xxs"
     />
     <span>{fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo"}</span>
   </button>

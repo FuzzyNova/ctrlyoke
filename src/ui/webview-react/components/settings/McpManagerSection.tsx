@@ -43,6 +43,7 @@ import type {
   ManagedMcpServer,
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
+import { Icon } from "../shared/Icon";
 
 type DefaultMcpServerValue = (string | McpServerConfig)[];
 
@@ -1046,8 +1047,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                               : `Expand ${server.id}`
                           }
                         >
-                          <i
-                            className={`codicon codicon-chevron-${
+                          <Icon
+                            name="chevron"
+                            className={`-${
                               expandedId === server.id ? "down" : "right"
                             } text-xxs`}
                           />
@@ -1080,7 +1082,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             title={`Edit ${server.id} in ${activeScope}`}
                             aria-label={`Edit ${server.id}`}
                           >
-                            <i className="codicon codicon-edit text-xxs" />
+                            <Icon name="edit" className="text-xxs" />
                           </button>
 
                           <FlyoutActionDropdown
@@ -1128,7 +1130,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                                 : `Add to default MCP servers (${activeScope})`
                             }
                           >
-                            <i className="codicon codicon-globe text-xxs" />
+                            <Icon name="globe" className="text-xxs" />
                             {defaultsEnabled && <span>Default</span>}
                           </button>
                         </div>
@@ -1196,7 +1198,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 }}
                 className="flex items-center gap-1 rounded border border-dashed border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
               >
-                <i className="codicon codicon-add text-xxs" />
+                <Icon name="add" className="text-xxs" />
                 Add server
               </button>
             )}
@@ -1219,7 +1221,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
             }`}
           >
-            <i className="codicon codicon-folder-opened text-xxs" />
+            <Icon name="folder-opened" className="text-xxs" />
             Local configs
           </button>
           <button
@@ -1231,7 +1233,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
             }`}
           >
-            <i className="codicon codicon-globe text-xxs" />
+            <Icon name="globe" className="text-xxs" />
             Registry
           </button>
           {!isStandalone && (
@@ -1241,7 +1243,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               title="Open VS Code's MCP Servers Panel. Browse and install MCPs from Microsoft's curated list of MCP servers, then return here and click 'Scan again' to import them"
               className="flex items-center gap-1 rounded border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
             >
-              <i className="codicon codicon-extensions text-xxs" />
+              <Icon name="extensions" className="text-xxs" />
               VS Code MCP
             </button>
           )}
@@ -1269,7 +1271,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
             {isLoadingLocal ? (
               <div className="flex items-center gap-1.5 text-xs text-description-fg">
-                <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
+                <Icon
+                  name="loading"
+                  className="codicon-modifier-spin text-xxs"
+                />
                 Scanning local configs…
               </div>
             ) : localError ? (
@@ -1392,7 +1397,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
             {isLoadingRemote ? (
               <div className="flex items-center gap-1.5 text-xs text-description-fg">
-                <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
+                <Icon
+                  name="loading"
+                  className="codicon-modifier-spin text-xxs"
+                />
                 Fetching from MCP Registry…
               </div>
             ) : remoteError ? (
@@ -1417,8 +1425,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                               {getRegistryEntryDisplayName(entry)}
                             </span>
                             {entry.verified && (
-                              <i
-                                className="codicon codicon-verified-filled flex-shrink-0 text-xxs text-verified"
+                              <Icon
+                                name="verified-filled"
+                                className="flex-shrink-0 text-xxs text-verified"
                                 title="MCP Registry verified"
                               />
                             )}
@@ -1484,7 +1493,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       }
                       className="flex items-center gap-1 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <i className="codicon codicon-chevron-left text-xxs" />
+                      <Icon name="chevron-left" className="text-xxs" />
                       Prev
                     </button>
                     <span className="text-xxs text-description-fg">
@@ -1497,7 +1506,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       className="flex items-center gap-1 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Next
-                      <i className="codicon codicon-chevron-right text-xxs" />
+                      <Icon name="chevron-right" className="text-xxs" />
                     </button>
                   </div>
                 )}

@@ -26,6 +26,7 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { ImageDiffView } from "./ImageDiffView";
 import { workspaceFileHistoryDiff } from "@utils/hostedApi";
+import { Icon } from "../shared/Icon";
 
 export type DeferredDiffState =
   (typeof DEFERRED_DIFF_STATES)[keyof typeof DEFERRED_DIFF_STATES];
@@ -387,8 +388,9 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
               aria-expanded={!isCollapsed}
               onClick={() => cardCollapseHandler?.(!isCollapsed)}
             >
-              <i
-                className={`codicon codicon-chevron-right text-xxs transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+              <Icon
+                name="chevron-right"
+                className={`text-xxs transition-transform ${isCollapsed ? "" : "rotate-90"}`}
               />
               <span>
                 {isCollapsed ? "Show binary diff" : "Hide binary diff"}
@@ -442,8 +444,9 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
                 className="shrink-0"
               />
             ))}
-          <i
-            className={`codicon ${DIFF_CHANGE_ICON[renderedChangeType]} shrink-0 ${DIFF_CHANGE_COLOR[renderedChangeType]}`}
+          <Icon
+            name={DIFF_CHANGE_ICON[renderedChangeType]}
+            className={`shrink-0 ${DIFF_CHANGE_COLOR[renderedChangeType]}`}
             title={DIFF_CHANGE_LABEL[renderedChangeType]}
             aria-label={DIFF_CHANGE_LABEL[renderedChangeType]}
           />
@@ -458,8 +461,9 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
                 aria-expanded={!isCollapsed}
                 onClick={() => handleCollapsedChange(!isCollapsed)}
               >
-                <i
-                  className={`codicon codicon-chevron-right text-xxs transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                <Icon
+                  name="chevron-right"
+                  className={`text-xxs transition-transform ${isCollapsed ? "" : "rotate-90"}`}
                 />
               </button>
             )}

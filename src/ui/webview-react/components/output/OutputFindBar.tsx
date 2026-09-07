@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import type { OutputFindState } from "@hooks/useOutputFind";
 import { ExitButton } from "@components/shared";
+import { Icon } from "../shared/Icon";
 
 const EXIT_DURATION_MS = 180;
 
@@ -125,7 +126,7 @@ export function OutputFindBar({
         title="Previous match"
         aria-label="Previous match"
       >
-        <i className="codicon codicon-arrow-up" />
+        <Icon name="arrow-up" />
       </button>
       <button
         type="button"
@@ -134,7 +135,7 @@ export function OutputFindBar({
         title="Next match"
         aria-label="Next match"
       >
-        <i className="codicon codicon-arrow-down" />
+        <Icon name="arrow-down" />
       </button>
       <button
         type="button"
@@ -148,7 +149,7 @@ export function OutputFindBar({
         aria-label="Match case"
         aria-pressed={state.caseSensitive}
       >
-        <i className="codicon codicon-case-sensitive" />
+        <Icon name="case-sensitive" />
       </button>
       <ExitButton
         className="shrink-0"

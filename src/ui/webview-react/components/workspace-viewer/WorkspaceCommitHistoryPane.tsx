@@ -27,6 +27,7 @@ import {
   GIT_HEAD_RELATIONS,
   GIT_REF_LABEL_TYPES,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 export interface WorkspaceCommitHistoryPaneProps {
   onRefresh: () => void;
@@ -594,7 +595,7 @@ const RefPill: React.FC<RefPillProps> = ({ label, colorClass, iconOnly }) => {
       className={`flex items-center gap-0.5 px-1 py-px rounded border text-xxs leading-none whitespace-nowrap ${colorClass} ${borderColorClass}`}
       title={label.name}
     >
-      <i className={`codicon ${icon} text-xxs`} />
+      <Icon name={icon} className="text-xxs" />
       {!iconOnly && label.name}
     </span>
   );
@@ -864,12 +865,12 @@ export const WorkspaceCommitHistoryPane: React.FC<
               className="flex items-center gap-1 min-w-0 text-xs text-scm-graph-local"
               title={`Current branch: ${currentBranch}`}
             >
-              <i className="codicon codicon-git-branch text-xs flex-shrink-0" />
+              <Icon name="git-branch" className="text-xs flex-shrink-0" />
               <span className="truncate">{currentBranch}</span>
             </span>
           ) : (
             <span className="flex items-center gap-1 text-xs text-yellow-400">
-              <i className="codicon codicon-git-commit text-xs flex-shrink-0" />
+              <Icon name="git-commit" className="text-xs flex-shrink-0" />
               detached
             </span>
           )}
@@ -885,7 +886,10 @@ export const WorkspaceCommitHistoryPane: React.FC<
       {detached && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-yellow-500/10 border-y border-yellow-500/20 flex-shrink-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <i className="codicon codicon-warning text-xs text-yellow-400 flex-shrink-0" />
+            <Icon
+              name="warning"
+              className="text-xs text-yellow-400 flex-shrink-0"
+            />
             <span className="text-xs text-editor-fg truncate">
               Detached HEAD
             </span>
@@ -931,7 +935,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
 
       {controller.isLoading && (
         <div className="flex items-center gap-2 px-3 py-2 text-editor-fg opacity-50 flex-shrink-0">
-          <i className="codicon codicon-loading animate-spin text-xs" />
+          <Icon name="loading" className="animate-spin text-xs" />
           <span className="text-xs">Loading…</span>
         </div>
       )}

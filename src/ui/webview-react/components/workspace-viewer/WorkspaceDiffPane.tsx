@@ -25,6 +25,7 @@ import {
   mergeNonTextDiffEntries,
   type ParsedDiffFile,
 } from "@utils/rdvAdapter";
+import { Icon } from "../shared/Icon";
 
 export const WorkspaceDiffPane: React.FC = () => {
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
@@ -220,7 +221,7 @@ export const WorkspaceDiffPane: React.FC = () => {
             className="flex items-center gap-1 text-xs text-editor-fg hover:opacity-80 transition-opacity"
             aria-label="Back to source control files"
           >
-            <i className="codicon codicon-arrow-left text-sm" />
+            <Icon name="arrow-left" className="text-sm" />
             <span>Back</span>
           </button>
           <span className="truncate text-xs font-semibold text-editor-fg">
@@ -246,7 +247,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   if (diffRef !== null && pagedGitRefDiff.initialLoading) {
     return (
       <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
-        <i className="codicon codicon-loading animate-spin" />
+        <Icon name="loading" className="animate-spin" />
         <span className="text-sm">Loading diff…</span>
       </div>
     );
@@ -258,7 +259,10 @@ export const WorkspaceDiffPane: React.FC = () => {
         {/* Ref header banner */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <i className="codicon codicon-git-commit flex-shrink-0 text-sm text-editor-fg opacity-60" />
+            <Icon
+              name="git-commit"
+              className="flex-shrink-0 text-sm text-editor-fg opacity-60"
+            />
             <span className="text-xs font-semibold text-editor-fg truncate">
               {pagedGitRefDiff.refLabel}
             </span>
@@ -282,8 +286,9 @@ export const WorkspaceDiffPane: React.FC = () => {
               className="flex items-center gap-1 text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
               title="Download as .diff file"
             >
-              <i
-                className={`codicon ${downloading ? "codicon-loading animate-spin" : "codicon-cloud-download"}`}
+              <Icon
+                name={downloading ? "loading" : "cloud-download"}
+                className={downloading ? "animate-spin" : undefined}
               />
               Download
             </button>
@@ -302,8 +307,9 @@ export const WorkspaceDiffPane: React.FC = () => {
                   : "Show commit details"
               }
             >
-              <i
-                className={`codicon codicon-chevron-right text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+              <Icon
+                name="chevron-right"
+                className={`text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
               />
               <span className="truncate font-medium">
                 {pagedGitRefDiff.commitInfo.subject}
@@ -357,7 +363,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   if (diffRefLoading) {
     return (
       <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
-        <i className="codicon codicon-loading animate-spin" />
+        <Icon name="loading" className="animate-spin" />
         <span className="text-sm">Loading diff…</span>
       </div>
     );
@@ -369,7 +375,10 @@ export const WorkspaceDiffPane: React.FC = () => {
         {/* Ref header banner */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <i className="codicon codicon-git-commit flex-shrink-0 text-sm text-editor-fg opacity-60" />
+            <Icon
+              name="git-commit"
+              className="flex-shrink-0 text-sm text-editor-fg opacity-60"
+            />
             <span className="text-xs font-semibold text-editor-fg truncate">
               {diffRefLabel}
             </span>
@@ -393,8 +402,9 @@ export const WorkspaceDiffPane: React.FC = () => {
               className="flex items-center gap-1 text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
               title="Download as .diff file"
             >
-              <i
-                className={`codicon ${downloading ? "codicon-loading animate-spin" : "codicon-cloud-download"}`}
+              <Icon
+                name={downloading ? "loading" : "cloud-download"}
+                className={downloading ? "animate-spin" : undefined}
               />
               Download
             </button>
@@ -413,8 +423,9 @@ export const WorkspaceDiffPane: React.FC = () => {
                   : "Show commit details"
               }
             >
-              <i
-                className={`codicon codicon-chevron-right text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+              <Icon
+                name="chevron-right"
+                className={`text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
               />
               <span className="truncate font-medium">
                 {diffCommitInfo.subject}
@@ -475,7 +486,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   if (diffLoading) {
     return (
       <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
-        <i className="codicon codicon-loading animate-spin" />
+        <Icon name="loading" className="animate-spin" />
         <span className="text-sm">Loading diff…</span>
       </div>
     );

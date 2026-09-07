@@ -11,6 +11,7 @@ import type {
 import type { RunHistoryLocation } from "@root/types/CtrlYokeSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { Icon } from "../shared/Icon";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -80,7 +81,7 @@ export function RunHistorySection({
 
       <div className="mt-2 space-y-1 text-xs text-description-fg">
         <p className="flex items-center gap-1.5">
-          <i className="codicon codicon-warning" aria-hidden="true" />
+          <Icon name="warning" />
           <span className="font-medium text-foreground">Requires reload</span>
           <span>to apply a changed location.</span>
         </p>

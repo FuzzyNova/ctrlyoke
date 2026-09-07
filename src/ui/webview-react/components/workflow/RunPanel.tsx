@@ -18,6 +18,7 @@ import {
   RUN_NAVIGATION_DIRECTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 /** Builds the stable list key for a run-panel row — draft or run:{workflowKey}:{runRef}. */
 function runPanelRowKey(workflowKey: WorkflowKey, row: RunPanelRow): string {
@@ -204,7 +205,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           aria-label="Back to workflow list"
           className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
-          <i className="codicon codicon-chevron-left text-sm" />
+          <Icon name="chevron-left" className="text-sm" />
         </button>
         <span
           className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
@@ -222,7 +223,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           aria-label="Newer run"
           className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <i className="codicon codicon-arrow-up text-sm" />
+          <Icon name="arrow-up" className="text-sm" />
         </button>
         <button
           type="button"
@@ -234,7 +235,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           aria-label="Older run"
           className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <i className="codicon codicon-arrow-down text-sm" />
+          <Icon name="arrow-down" className="text-sm" />
         </button>
         {onClose && (
           <ExitButton
@@ -254,7 +255,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
       >
         {isLoading && rows.length === 0 ? (
           <div className="flex items-center gap-2 px-3 py-3 text-sm text-description-fg">
-            <i className="codicon codicon-loading codicon-modifier-spin text-xs" />
+            <Icon name="loading" className="codicon-modifier-spin text-xs" />
             Loading runs…
           </div>
         ) : loadError ? (

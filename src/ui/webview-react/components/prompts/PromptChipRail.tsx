@@ -61,6 +61,7 @@ import {
   PauseBoundary,
 } from "./ExecutingStepHighlight";
 import { isStepExecutionLocked } from "./ParallelGroupPanel";
+import { Icon } from "../shared/Icon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -154,10 +155,11 @@ function ChipContent({
           <StatusIcon status={status} className="!text-base" />
         </div>
         <div className="flex h-3 items-center justify-start">
-          <i
-            className={`codicon ${getStepKindIconClass(
+          <Icon
+            name={getStepKindIconClass(
               isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
-            )} text-xs text-description-fg`}
+            )}
+            className="text-xs text-description-fg"
           />
         </div>
       </div>
@@ -487,8 +489,11 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") onExpand();
         }}
       >
-        <i className="codicon codicon-chevron-right text-xs text-description-fg" />
-        <i className="codicon codicon-list-ordered text-xs text-description-fg mt-1" />
+        <Icon name="chevron-right" className="text-xs text-description-fg" />
+        <Icon
+          name="list-ordered"
+          className="text-xs text-description-fg mt-1"
+        />
       </div>
 
       {/* Prompt chips — scrollable, scrollbars hidden */}
@@ -518,7 +523,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       >
         {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-2">
-            <i className="codicon codicon-dash text-xxs text-description-fg" />
+            <Icon name="dash" className="text-xxs text-description-fg" />
           </div>
         ) : (
           <div className="relative">

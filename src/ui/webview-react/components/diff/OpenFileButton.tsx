@@ -1,6 +1,7 @@
 import React from "react";
 import { openContextReference } from "@utils/contextReferenceActions";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { Icon } from "../shared/Icon";
 
 export interface OpenFileButtonProps {
   path: string;
@@ -23,6 +24,6 @@ export const OpenFileButton: React.FC<OpenFileButtonProps> = ({ path }) => (
     title="Open file"
     aria-label={`Open ${path}`}
   >
-    <i className="codicon codicon-go-to-file" aria-hidden="true" />
+    <Icon name="go-to-file" />
   </button>
 );

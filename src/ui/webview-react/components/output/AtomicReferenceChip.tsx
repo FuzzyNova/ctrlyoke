@@ -7,6 +7,7 @@ import {
 } from "@utils/atomicReferences";
 import type { RowFindDecoration } from "@utils/outputFind";
 import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 export interface AtomicReferenceChipProps {
   descriptor: AtomicReferenceDescriptor;
@@ -100,10 +101,7 @@ export function AtomicReferenceChip({
       {...descriptor.attrs}
       {...(descriptor.invalid ? { "data-invalid": "true" } : {})}
     >
-      <span
-        className={`atomic-reference-chip-icon codicon codicon-${descriptor.icon}`}
-        aria-hidden="true"
-      />
+      <Icon name={descriptor.icon} className="atomic-reference-chip-icon" />
       <span className="atomic-reference-chip-label">
         {renderLabel(projected.text, projected.marks)}
       </span>

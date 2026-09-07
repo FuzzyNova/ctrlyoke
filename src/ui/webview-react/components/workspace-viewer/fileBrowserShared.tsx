@@ -11,6 +11,7 @@ import {
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 /**
  * Shared tracks keep the sort header and every entry row aligned. At the
@@ -160,13 +161,13 @@ export function FileBrowserSortHeader({
       >
         <span className="truncate">{visibleLabel}</span>
         {isActive && (
-          <i
-            aria-hidden="true"
-            className={`codicon flex-shrink-0 ${
+          <Icon
+            name={
               sort.direction === WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING
                 ? "codicon-chevron-up"
                 : "codicon-chevron-down"
-            }`}
+            }
+            className="flex-shrink-0"
           />
         )}
       </button>
@@ -276,12 +277,14 @@ export function EntryRow({
       title={`${entry.path} — Modified ${modifiedAt.full}`}
       aria-label={entryLabel}
     >
-      <i
-        aria-hidden="true"
-        className={`codicon text-sm ${
+      <Icon
+        name={
+          entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY ? "folder" : "file"
+        }
+        className={`text-sm ${
           entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
-            ? "codicon-folder text-[var(--status-warning)]"
-            : "codicon-file"
+            ? "text-[var(--status-warning)]"
+            : ""
         }`}
       />
       <span className={`min-w-0 truncate ${statusColorClass ?? ""}`}>

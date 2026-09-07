@@ -18,6 +18,7 @@ import {
   WORKFLOW_FILE_PICKER_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 interface WorkflowControlsProps {
   /** Additional className for styling */
@@ -163,7 +164,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         ? "Duplicate This Run as New Workflow…"
         : "Duplicate Workflow…",
       value: "duplicate-workflow",
-      icon: <i className="codicon codicon-copy" />,
+      icon: <Icon name="copy" />,
       onClick: handleDuplicateWorkflow,
       disabled: !displayedViewAddress || isViewingDeletedWorkflow,
     },
@@ -174,7 +175,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       <SplitButton
         mainLabel={
           <span className="flex items-center gap-1.5">
-            <i className={`codicon codicon-add py-0.5 ${btnSizes.icon}`} />
+            <Icon name="add" className={`py-0.5 ${btnSizes.icon}`} />
             <span
               className={
                 compactUntilLg ? "hidden lg:inline" : "hidden sm:inline"

@@ -41,6 +41,7 @@ import {
   type VirtualizedListRange,
 } from "@components/shared";
 import { formatMultiFilterLabel } from "@utils/filterLabels";
+import { Icon } from "../shared/Icon";
 
 const RESULT_LIMIT = 50;
 const HISTORY_RESULT_ESTIMATE = 108;
@@ -551,7 +552,7 @@ export function HistorySearchDrawer() {
     >
       <div className="flex items-center justify-between px-2 h-[30px] border-b border-panel-border shrink-0">
         <div className="flex items-center gap-1 text-description-fg">
-          <i className="codicon codicon-search text-sm" />
+          <Icon name="search" className="text-sm" />
           <span
             id="history-search-title"
             className="text-sm font-semibold uppercase tracking-wide ml-0.5"
@@ -571,7 +572,10 @@ export function HistorySearchDrawer() {
         <div className={CONTENT_COLUMN_CLASS}>
           <div className="flex items-center gap-2">
             <div className="relative min-w-0 flex-1">
-              <i className="codicon codicon-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg" />
+              <Icon
+                name="search"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-description-fg"
+              />
               <input
                 ref={inputRef}
                 type="search"
@@ -592,7 +596,7 @@ export function HistorySearchDrawer() {
               title="History search filters"
               className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
             >
-              <i className="codicon codicon-filter text-sm" />
+              <Icon name="filter" className="text-sm" />
               {activeFilterCount > 0 && (
                 <span
                   aria-hidden="true"
@@ -682,7 +686,10 @@ export function HistorySearchDrawer() {
                 </div>
 
                 <div className="relative w-full flex-shrink-0 sm:w-[170px]">
-                  <i className="codicon codicon-search pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xxs text-description-fg" />
+                  <Icon
+                    name="search"
+                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xxs text-description-fg"
+                  />
                   <input
                     type="text"
                     value={historySearchFilters.pathContains}
@@ -734,7 +741,7 @@ export function HistorySearchDrawer() {
                 aria-label="Clear history search filters"
                 className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
               >
-                <i className="codicon codicon-clear-all text-xxs" />
+                <Icon name="clear-all" className="text-xxs" />
               </button>
             </div>
           )}
@@ -794,7 +801,7 @@ export function HistorySearchDrawer() {
             </div>
           ) : (
             <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-description-fg">
-              <i className="codicon codicon-loading animate-spin" />
+              <Icon name="loading" className="animate-spin" />
               <span>Searching...</span>
             </div>
           ))}

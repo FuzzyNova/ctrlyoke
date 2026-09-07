@@ -18,6 +18,7 @@ import {
   Modal,
   SettingToggleRow,
 } from "@components/shared";
+import { Icon } from "../shared/Icon";
 
 interface SecretsSectionProps {
   settings: FullGlobalSettings;
@@ -125,9 +126,7 @@ function SecretRow({ entry, onReplace, onDelete, onSet }: SecretRowProps) {
         )}
       </div>
       <div className={`text-xs ${stateClass(entry.state)}`}>
-        {isMissing && (
-          <i className="codicon codicon-warning mr-1" aria-hidden="true" />
-        )}
+        {isMissing && <Icon name="warning" className="mr-1" />}
         {stateLabel(entry)}
       </div>
       <SecretUsage entry={entry} />
@@ -491,7 +490,7 @@ export function SecretsSection({
             className="shrink-0 whitespace-nowrap"
             onClick={() => openSetDialog()}
           >
-            <i className="codicon codicon-add mr-1" aria-hidden="true" />
+            <Icon name="add" className="mr-1" />
             Set secret
           </Button>
         </div>

@@ -1,5 +1,6 @@
 import React from "react";
 import type { WorkspaceImageDiffSides } from "@root/types/HostedWorkspaceViewerTypes";
+import { Icon } from "../shared/Icon";
 
 export interface ImageDiffViewProps {
   path?: string;
@@ -68,8 +69,9 @@ export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
       aria-expanded={!collapsed}
       onClick={() => onCollapsedChange?.(!collapsed)}
     >
-      <i
-        className={`codicon codicon-chevron-right text-xxs transition-transform ${collapsed ? "" : "rotate-90"}`}
+      <Icon
+        name="chevron-right"
+        className={`text-xxs transition-transform ${collapsed ? "" : "rotate-90"}`}
       />
       <span>{collapsed ? "Show image diff" : "Hide image diff"}</span>
     </button>

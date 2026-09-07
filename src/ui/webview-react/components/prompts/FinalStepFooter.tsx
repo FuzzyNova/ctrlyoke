@@ -12,6 +12,7 @@ import {
 import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import { Icon } from "../shared/Icon";
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -258,8 +259,9 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
                 isDisabled ? "Enable final step" : "Disable final step"
               }
             >
-              <i
-                className={`codicon ${isDisabled ? "codicon-check" : "codicon-circle-slash"} text-xs`}
+              <Icon
+                name={isDisabled ? "codicon-check" : "codicon-circle-slash"}
+                className="text-xs"
               />
             </button>
           )}
@@ -282,8 +284,11 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
                   : "Expand final step details"
               }
             >
-              <i
-                className={`codicon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"} text-xs`}
+              <Icon
+                name={
+                  isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"
+                }
+                className="text-xs"
               />
             </button>
           )}

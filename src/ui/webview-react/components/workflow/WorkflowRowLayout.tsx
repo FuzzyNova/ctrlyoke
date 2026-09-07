@@ -4,6 +4,7 @@ import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "../../constants";
 import { runNavIndicatorLabel, isDrillableRunNav } from "@utils/runNavigation";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
+import { Icon } from "../shared/Icon";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
@@ -94,7 +95,7 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
           className="fp-dropdown-row flex h-8 items-center gap-0.5 rounded px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
           <span className="truncate">{drill.label}</span>
-          <i className="codicon codicon-chevron-right block text-xxs leading-none" />
+          <Icon name="chevron-right" className="block text-xxs leading-none" />
         </button>
       )}
     </span>
@@ -179,7 +180,6 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   const worktreeTitle = worktree
     ? `Branch: ${worktree.branchName}\nWorktree: ${worktree.worktreePath}`
     : undefined;
-
   return (
     <button
       type="button"
@@ -217,8 +217,8 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         )}
         {worktree && (
           <span className="flex w-4 flex-shrink-0 items-center justify-center">
-            <i
-              className="codicon codicon-source-control"
+            <Icon
+              name="source-control"
               title={worktreeTitle}
               aria-label={worktreeTitle}
             />

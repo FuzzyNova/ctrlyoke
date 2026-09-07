@@ -198,8 +198,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           </span>
         </button>
         {isLocked && (
-          <i
-            className="codicon codicon-lock self-center px-1.5 text-xxs text-description-fg"
+          <Icon
+            name="lock"
+            className="self-center px-1.5 text-xxs text-description-fg"
             title="Granted by prompt text"
             aria-label="Granted by prompt text"
           />

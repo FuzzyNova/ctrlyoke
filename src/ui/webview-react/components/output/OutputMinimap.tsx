@@ -13,6 +13,7 @@ import React, {
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { getProfilerState, logProfilerEvent } from "@utils/performanceProfiler";
+import { Icon } from "../shared/Icon";
 
 // ============================================================================
 // Types
@@ -800,9 +801,9 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       title={hideShowLabel}
                       className="ml-auto flex items-center gap-1 text-xxs text-description-fg hover:text-foreground transition-colors leading-tight focus:outline-none"
                     >
-                      <i
-                        className={`codicon codicon-sm ${step.hidden ? "codicon-eye-closed" : "codicon-eye"}`}
-                        aria-hidden="true"
+                      <Icon
+                        name={step.hidden ? "eye-closed" : "eye"}
+                        className="codicon-sm"
                       />
                       {step.hidden ? "Show" : "Hide"}
                     </button>
@@ -821,7 +822,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       title={redo.title}
                       className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
                     >
-                      <i className="codicon codicon-redo text-xxs" />
+                      <Icon name="redo" className="text-xxs" />
                       {redo.label}
                     </button>
                   )}
@@ -839,7 +840,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       title={undo.title}
                       className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
-                      <i className="codicon codicon-discard text-xxs" />
+                      <Icon name="discard" className="text-xxs" />
                       {undo.label}
                     </button>
                   )}
