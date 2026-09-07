@@ -11,7 +11,10 @@ import {
   DIFF_VIEW_TYPES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  OPERATION_STATUS,
   OUTPUT_HISTORY_KINDS,
+  OUTPUT_ROW_KINDS,
+  CLI_EVENT_TYPES,
 } from "@root/types/DashboardConstants";
 import { buildOutputRows } from "@utils/outputRows";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
@@ -187,5 +190,123 @@ describe("output pane width bucketing", () => {
     );
 
     expect(testState.buildCalls).toBe(1);
+  });
+
+  it("builds diff rows once and keeps global collapse toggles working", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const liveOrderedEntries: OrderedHistoryEntry[] = [
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        timestampMs: 1,
+        sequence: 0,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        cliOutput: {
+          prompt: "edit a file",
+          response: "done",
+          elapsed: 1,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: OPERATION_STATUS.COMPLETED,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-const value = 1;", "+const value = 2;"],
+                    },
+                  ],
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+    const baseInput = {
+      isViewingHistory: false,
+      historyOutputs: null,
+      liveOrderedEntries,
+      liveActivityEntries: [],
+      steps: [{ name: "Edit", prompt: "" }],
+      finalStep: null,
+      effectiveHarness: HARNESS_IDS.COPILOT_CLI,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      outputDiffViewType: DIFF_VIEW_TYPES.UNIFIED,
+      outputFontSize: 14,
+      outputContentWidth: 768,
+      collapsedToolOutputLineCount: 200,
+      invalidateMeasuredRow: vi.fn(),
+      invalidateMeasuredRowForUserResize: vi.fn(),
+      onDiffViewReset: vi.fn(),
+    };
+
+    const result = renderHook(
+      ({ diffsCollapsed, diffResetVersion }) =>
+        useOutputRowsModel({
+          ...baseInput,
+          diffsCollapsed,
+          diffResetVersion,
+        }),
+      { initialProps: { diffsCollapsed: false, diffResetVersion: 0 } }
+    );
+
+    const getDiffRow = () => {
+      const row = result.result.current.rows.find(
+        (candidate) =>
+          candidate.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+          candidate.diff !== undefined
+      );
+      if (
+        !row ||
+        row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+        !row.diff
+      ) {
+        throw new Error("Expected a structured diff row");
+      }
+      return { ...row, diff: row.diff };
+    };
+
+    expect(testState.buildCalls).toBe(1);
+    expect(getDiffRow().diff.isCollapsed).toBe(false);
+
+    act(() => {
+      result.rerender({ diffsCollapsed: true, diffResetVersion: 1 });
+    });
+    expect(getDiffRow().diff.isCollapsed).toBe(true);
+
+    act(() => {
+      result.rerender({ diffsCollapsed: false, diffResetVersion: 2 });
+    });
+    expect(getDiffRow().diff.isCollapsed).toBe(false);
+
+    const diffRow = getDiffRow();
+    act(() => {
+      result.result.current.handleDiffCollapsedChange(
+        diffRow.key,
+        diffRow.diff.key,
+        true
+      );
+    });
+    expect(getDiffRow().diff.isCollapsed).toBe(true);
+
+    act(() => {
+      result.rerender({ diffsCollapsed: false, diffResetVersion: 3 });
+    });
+    expect(getDiffRow().diff.isCollapsed).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
 # Output-Pane Resize & Mount Performance Plan
 
 **Status:** Mostly implemented and now fully measured in the hosted dashboard
-(2026-09-07). Two items remain open, both with evidence: a second redundant row
-build (root cause identified) and 1B, which the drag measurements now justify.
+(2026-09-07). One item remains open, with evidence: 1B, which the drag
+measurements now justify.
 **Priority:** P2 (was P1 before the fix)
 
 ## Relationship to the paging plan
@@ -280,7 +280,7 @@ redundant initial pass without changing the collapsed row set.
 with two attempts for one target and spies on `buildOutputRows`; that synthetic
 stable-width load now produces exactly one invocation.
 
-#### Still open 2026-09-07: `diffCollapseState` seeding causes a second build
+#### Fixed 2026-09-07: `diffCollapseState` seeding caused a second build
 
 The hosted measurement shows the real app **still builds twice at an identical
 width**. A probe logging every collapse/expansion dependency's size on each
@@ -297,12 +297,23 @@ second, independent instance of the same shape. The `rows`-dependent effect at
 key (`next.set(key, diffsCollapsed)` for all 773), which changes the map
 identity and re-runs the build memo.
 
-The seeded value is redundant: `outputRows.ts:2699` resolves
+The seeded value was redundant: `outputRows.ts:2699` resolves
 `input.diffCollapseState.get(diffKeyBase) ?? input.defaultDiffCollapsed`, and
 `defaultDiffCollapsed` _is_ `diffsCollapsed` — so the second build produces
-byte-identical rows. Removing the seeding loop is the fix, but it interacts with
-the `diffResetVersion` effect (`useOutputRowsModel.ts:455`), which rewrites only
-keys already present, so the global collapse/expand toggle must be re-verified.
+byte-identical rows. The seeding loop was removed while keeping the pruning
+pass, so the map now contains only genuine per-diff user overrides. The
+`diffResetVersion` effect still rewrites keys already present: untouched diffs
+follow the global value through the `??` fallback, while individually
+overridden diffs are present in the map and are rewritten by the reset effect.
+The regression test covers both paths.
+
+The local regression test verifies the stable-width and global-toggle behavior.
+Hosted verification on the reproduction run enabled
+`window.ctrlyokeProfiler` with `slowThresholdMs: 0`; the fresh browser client
+logged one `buildOutputRows` call at its initial stable width bucket
+(`outputContentWidth: 352`). The real output toolbar also toggled from
+`Expand all diffs` to `Collapse all diffs` and back, confirming both global
+paths against the loaded diff rows.
 
 ## Post-implementation measurement — 2026-09-07 (hosted, Playwright)
 
@@ -445,10 +456,9 @@ attributes real time to minimap reconciliation specifically.
 - [x] `buildOutputRows` runs at most once per 32 px of width change during a
       gesture — asserted by spying on the builder, and confirmed in the hosted
       app (300 px sweep → exactly 10 builds at 32 px steps).
-- [ ] A single stable-width load invokes `buildOutputRows` exactly once. The
-      synthetic test passes, but the hosted app still builds twice at an
-      identical width; root cause is the `diffCollapseState` seeding recorded
-      under Problem 3.
+- [x] A single stable-width load invokes `buildOutputRows` exactly once. The
+      synthetic diff-row regression test and hosted profiler both show one build
+      at the initial stable width bucket.
 - [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
 - [ ] Dragging the panel splitter, the VS Code panel edge, and the window with

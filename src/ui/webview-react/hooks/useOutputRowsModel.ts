@@ -312,8 +312,9 @@ export function useOutputRowsModel({
     [hasDiffRows, rows]
   );
 
-  // Drop expansion-state entries for rows that no longer exist, and seed newly
-  // appearing diffs with the current default-collapsed setting.
+  // Drop expansion-state entries for rows that no longer exist. Diff collapse
+  // state only stores per-diff overrides; untouched diffs use the global
+  // default through buildOutputRows.
   useEffect(() => {
     const presentTargetKeys = new Set(
       uniqueStepTargets.map((target) => getTargetKey(target))
@@ -366,13 +367,6 @@ export function useOutputRowsModel({
       for (const key of [...next.keys()]) {
         if (!diffKeys.has(key)) {
           next.delete(key);
-          changed = true;
-        }
-      }
-
-      for (const key of diffKeys) {
-        if (!next.has(key)) {
-          next.set(key, diffsCollapsed);
           changed = true;
         }
       }
