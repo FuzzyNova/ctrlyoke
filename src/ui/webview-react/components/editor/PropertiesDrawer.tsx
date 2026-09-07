@@ -27,6 +27,7 @@ import {
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PROPERTY_EDITOR_MODES,
+  STEP_COLOR_MODES,
   STEP_TYPES,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
@@ -804,7 +805,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                 />
               </div>
-              <StepColorField idPrefix="prop-step" />
+              {globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+                <StepColorField idPrefix="prop-step" />
+              )}
             </DrawerRow>
           </div>
         )}

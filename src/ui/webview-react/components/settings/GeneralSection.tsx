@@ -137,23 +137,27 @@ export function GeneralSection({
             ]}
           />
         </SettingInputRow>
-        <SettingInputRow
-          label="Script step color"
-          description="Identity color used for script steps in harness mode."
-          id="ui-step-colors-script"
-          path="ui.harnessColors.script"
-          {...rowProps}
-        >
-          <input
+        {ui.stepColorMode === STEP_COLOR_MODES.HARNESS && (
+          <SettingInputRow
+            label="Script step color"
+            description="Identity color used for script steps in harness mode."
             id="ui-step-colors-script"
-            type="color"
-            value={localScriptColor}
-            onChange={(e) => setLocalScriptColor(e.target.value)}
-            onBlur={(e) => onUpdate("ui.harnessColors.script", e.target.value)}
-            className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-            title="Script step color"
-          />
-        </SettingInputRow>
+            path="ui.harnessColors.script"
+            {...rowProps}
+          >
+            <input
+              id="ui-step-colors-script"
+              type="color"
+              value={localScriptColor}
+              onChange={(e) => setLocalScriptColor(e.target.value)}
+              onBlur={(e) =>
+                onUpdate("ui.harnessColors.script", e.target.value)
+              }
+              className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+              title="Script step color"
+            />
+          </SettingInputRow>
+        )}
         <SettingToggleRow
           label="Show token cost estimates"
           description="Show source-labelled token cost estimates. These are not incremental subscription spend."

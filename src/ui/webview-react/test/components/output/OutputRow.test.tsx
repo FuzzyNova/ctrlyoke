@@ -362,7 +362,7 @@ describe("OutputRow step identity bar", () => {
     const severityBorder = container.querySelector(
       ".border-l-severity-warning"
     );
-    expect(identityBar).toHaveClass("pl-[3px]");
+    expect(identityBar).toHaveClass("pl-[6px]");
     expect(identityBar).toHaveStyle(getStepIdentityBarStyle("#123456"));
     expect(severityBorder).not.toBeNull();
     expect(identityBar).not.toHaveClass("border-l-severity-warning");

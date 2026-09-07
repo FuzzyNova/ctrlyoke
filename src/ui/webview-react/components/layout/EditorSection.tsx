@@ -19,6 +19,7 @@ import {
 import {
   KEYBOARD_KEYS,
   SETTING_SCOPES,
+  STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
@@ -275,7 +276,10 @@ const EditorSectionInner: React.FC = () => {
               />
             </button>
           )}
-          {!isExternallyManaged && <StepColorQuickPicker />}
+          {!isExternallyManaged &&
+            globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+              <StepColorQuickPicker />
+            )}
           <span
             className={`editor-mode-indicator text-center text-xs text-description-fg min-w-0 ${
               showStackedTokens

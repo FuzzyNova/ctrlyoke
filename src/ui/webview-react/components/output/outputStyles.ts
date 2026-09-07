@@ -38,7 +38,10 @@ export const STEP_IDENTITY_BAR_WIDTH_PX = 2;
  * hover/drag highlight read as if the step color were bleeding into it. A
  * 1px transparent margin keeps the boundary pixel free for the splitter.
  * `OFFSET + WIDTH` (3px) is the total reserved region, matching the
- * `pl-[3px]` content offset used on the non-CLI-group row path.
+ * `pl-[3px]` content offset used on most of the non-CLI-group row path
+ * (`OutputRow.tsx`). The STATUS row kind uses a larger `pl-[6px]` there
+ * instead, since `StatusMessage` paints its own severity border and needs
+ * clearance so that border doesn't sit flush against the identity bar.
  */
 export const STEP_IDENTITY_BAR_OFFSET_PX = 1;
 

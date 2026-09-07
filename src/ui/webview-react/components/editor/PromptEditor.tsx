@@ -49,6 +49,7 @@ import {
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROPERTY_EDITOR_MODES,
+  STEP_COLOR_MODES,
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -1382,7 +1383,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             idPrefix="script-step"
           />
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
-            <StepColorField idPrefix="script-step" />
+            {globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+              <StepColorField idPrefix="script-step" />
+            )}
             <SecretGrantsEditor
               value={properties.secrets}
               inheritedValue={inheritedScriptSecrets}
