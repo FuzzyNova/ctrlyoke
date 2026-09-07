@@ -1,8 +1,8 @@
 # Output-Pane Resize & Mount Performance Plan
 
-**Status:** Partially implemented — the dominant cost was found and fixed;
-hosted resize-measurement closure is blocked on Playwright-capable browser
-access (2026-09-07).
+**Status:** Mostly implemented and now fully measured in the hosted dashboard
+(2026-09-07). Two items remain open, both with evidence: a second redundant row
+build (root cause identified) and 1B, which the drag measurements now justify.
 **Priority:** P2 (was P1 before the fix)
 
 ## Relationship to the paging plan
@@ -277,52 +277,129 @@ set must still be reconciled as messages arrive or disappear. This removes the
 redundant initial pass without changing the collapsed row set.
 
 `OutputPaneResizePerformance.test.tsx` mounts the real `useOutputRowsModel`
-with two attempts for one target and spies on `buildOutputRows`; a stable-width
-load now produces exactly one invocation. The available session did not have
-the Playwright MCP attached, so no new hosted timing claim is recorded here.
+with two attempts for one target and spies on `buildOutputRows`; that synthetic
+stable-width load now produces exactly one invocation.
 
-## Post-implementation measurement — 2026-09-07
+#### Still open 2026-09-07: `diffCollapseState` seeding causes a second build
 
-The prior implementation commits were checked against both `git log` and the
-current code: `229fb50c` memoizes undo actions per target,
-`1bc6d66a` quantizes minimap bars, `b5ff6f545` buckets output width through
-`useElementTier` and single-sources the geometry constants, and `4f5049015`
-initializes collapse-key state before the first row build. The corresponding
-tests and production call sites are present at `HEAD`.
+The hosted measurement shows the real app **still builds twice at an identical
+width**. A probe logging every collapse/expansion dependency's size on each
+build proves the trigger, at width 672:
 
-The requested hosted-dashboard reproduction could not be completed in this
-session. The shared dev host did start successfully and exposed its URL, but
-the Playwright MCP was not attached, the repository has no local Playwright
-package, and the available Edge process had no DevTools endpoint. Therefore no
-gesture was silently substituted for another and no frame number is claimed:
+| Build | `diffCollapseState` | every other tracked dependency |
+| ----- | ------------------: | ------------------------------ |
+| 1     |                   0 | 0                              |
+| 2     |                 773 | 0                              |
 
-| Resize source | Worst blocked frame | Frame count |
-| --- | ---: | ---: |
-| Internal `react-resizable-panels` splitter | not measured | not measured |
-| Outer VS Code panel edge / pane-width change | not measured | not measured |
-| Browser window / viewport resize | not measured | not measured |
+`collapsedAttemptGroupKeys` stays at 0, so the fix above is holding — this is a
+second, independent instance of the same shape. The `rows`-dependent effect at
+`useOutputRowsModel.ts:317` seeds `setDiffCollapseState` with one entry per diff
+key (`next.set(key, diffsCollapsed)` for all 773), which changes the map
+identity and re-runs the build memo.
 
-The earlier 477, 290, 193, and 119 ms viewport observations remain useful
-context, but they are not a post-2A three-source measurement and cannot settle
-the acceptance criterion. In particular, the original symptom was the VS Code
-panel edge, which does not touch `react-resizable-panels`.
+The seeded value is redundant: `outputRows.ts:2699` resolves
+`input.diffCollapseState.get(diffKeyBase) ?? input.defaultDiffCollapsed`, and
+`defaultDiffCollapsed` _is_ `diffsCollapsed` — so the second build produces
+byte-identical rows. Removing the seeding loop is the fix, but it interacts with
+the `diffResetVersion` effect (`useOutputRowsModel.ts:455`), which rewrites only
+keys already present, so the global collapse/expand toggle must be re-verified.
 
-**1B (`deferWhile`): DON'T RECOMMEND / do not queue yet.** There is no
-source-agnostic post-1A drag result from which to say that dragging still
-stutters. The follow-up must measure a pane-width-moved-within-~150-ms signal
-across all three sources; an internal splitter callback would not cover the
-reported symptom.
+## Post-implementation measurement — 2026-09-07 (hosted, Playwright)
 
-**2B (split minimap memoization): DON'T RECOMMEND / do not queue yet.** The
-post-2A resize commit is unmeasured, so the existing pre-closure ~1.9 s
-non-`buildOutputRows` hypothesis cannot establish that resize commits remain
-heavy. The named-phase attribution acceptance criterion consequently remains
-open as well.
+Measured in a real browser against the shared dev host with the built-in
+profiler at `slowThresholdMs: 0`, plus a browser `PerformanceObserver` on
+`longtask`. Run: `PARALLEL_STEPS_PLAN` / `run-2026-09-04T01-35-57-252Z` —
+4 653 messages, 5 256 rows, 19 targets, 773 diff rows.
 
-This plan is not yet satisfied. A review pass with Playwright-capable hosted
-browser access should collect the three gesture traces, compare the minimap
-before/after visually, attribute the remaining commit to named phases, and
-then revisit 1B and 2B from those numbers.
+Method note: the dev host opens this worktree, which has its own history root
+(`WorkflowPaths.runsRoot`), so the reproduction lineage was copied into the
+worktree's `.runs/` for the session and deleted afterwards. The source run
+under the main checkout was not modified.
+
+### Named-phase attribution of the mount
+
+Named phases, one fresh page load (the hosted client loads the run view twice
+per reload — bootstrap then restore — so these counts are ~2× a single load):
+
+| Phase                             | calls | total ms |  max ms |
+| --------------------------------- | ----: | -------: | ------: |
+| browser `longtask` (ground truth) |     8 |  4 715.0 | 1 595.0 |
+| `buildOutputRows`                 |    12 |    738.4 |   175.5 |
+| `minimapSteps`                    |    21 |    363.3 |    30.1 |
+| `rowLayout`                       |    20 |     38.2 |     6.2 |
+| `virtualizerMeasurementPass`      |     5 |     32.6 |     9.7 |
+| `minimapViewportUpdate`           |    18 |      8.4 |     2.4 |
+| `rowMeasurement:updated`          |   125 |      1.1 |     0.1 |
+| `virtualizerInitialMeasurement`   |     1 |      0.4 |     0.4 |
+| `stepScrollFractions`             |    20 |      0.3 |     0.1 |
+
+All named JS phases together account for ~1 182 ms of 4 715 ms of long-task
+time. **Roughly three quarters of the mount is not in any named phase** — it is
+React commit/reconciliation, style/layout/paint, and payload parse. That is the
+honest answer to this plan's attribution criterion: there is no remaining
+single hot function to memoize.
+
+### The Problem 2 hypothesis is refuted
+
+`minimapSteps` measures ~25 ms per call (21 calls, 363 ms total), exactly as the
+pre-fix table already recorded — it was never the cost. The minimap DOM in the
+default state is **773 elements, not ~7 100**: diffs load collapsed, and a
+collapsed block renders a single 2 px div with no run children. The ~7 100
+figure applies only when diffs are expanded.
+
+2A was still worth landing — it bounds the tree by rail height and is the
+prerequisite for a whole-run minimap over a paged row list — but it was **not**
+the leading remaining cost, and the remaining ~1.9 s was never minimap
+reconciliation.
+
+### Minimap element count and visual parity
+
+Measured at an identical viewport (1400×1000, 744 px rail):
+
+|                                               |   Diff-track elements |
+| --------------------------------------------- | --------------------: |
+| Before 2A (`1bc6d66a^`, rebuilt and reloaded) |                   773 |
+| After 2A                                      |                   331 |
+| Production bound                              | `floor(railHeightPx)` |
+
+At a 965 px rail the same run renders 401 bars. Before/after screenshots at the
+same viewport show the same band positions and the same red/green proportions;
+quantization merges a few adjacent thin bands, and the rail reads the same at a
+glance.
+
+### Resize gestures
+
+| Resize source                                           | Long tasks |                  Worst blocked frame | Total blocked |
+| ------------------------------------------------------- | ---------: | -----------------------------------: | ------------: |
+| Internal `react-resizable-panels` splitter, 300 px drag |          9 |                           **229 ms** |      1 351 ms |
+| Outer viewport width sweep, 300 px in 16 steps          |         15 |                           **270 ms** |      2 811 ms |
+| VS Code panel edge                                      |          — | not reproducible in a hosted browser |             — |
+
+The literal VS Code panel-edge drag cannot be performed against the hosted
+dashboard, which runs in a browser with no VS Code panel. The viewport sweep
+covers the same _mechanism_ — an outer container width change that never
+touches `react-resizable-panels` — so the reported symptom's path is measured
+even though its exact gesture is not.
+
+**1A is confirmed in production.** The 300 px viewport sweep produced exactly
+**10 builds, at widths 704 → 416 in exact 32 px steps** — one per bucket, none
+sub-bucket. The unit test asserted this; the real app now demonstrates it.
+
+### Verdicts
+
+**1B (`deferWhile`): RECOMMEND.** A drag still costs a 229–270 ms blocked frame
+per 32 px bucket crossed. That is no longer a freeze, but it is not an
+interactive frame rate either, and it is one such frame per bucket for the
+length of the gesture. 1A cut the _number_ of rebuilds; only deferral removes
+the cost from the drag itself. The signal must be source-agnostic — a "pane
+width moved within the last ~150 ms" flag — because the reported symptom is the
+VS Code panel edge, which no `react-resizable-panels` callback observes.
+
+**2B (split minimap memoization): DON'T RECOMMEND.** `minimapSteps` is ~25 ms
+and the minimap tree is now bounded by rail height. The measured cost is React
+commit and style/layout across the whole output pane, which splitting the
+minimap's memo does not address. Revisit only if a future measurement
+attributes real time to minimap reconciliation specifically.
 
 ## Non-goals
 
@@ -356,18 +433,26 @@ then revisit 1B and 2B from those numbers.
       with coverage in
       `src/ui/webview-react/test/utils/outputRowsUndoMemo.test.ts`.
 - [x] Minimap element count is bounded by rail height rather than run size
-      (7,118 old diff elements → at most `floor(railHeightPx)` bars; roughly
-      1,000 on the reproduction rail).
-- [ ] The rendered minimap is visually indistinguishable from today's at the
-      same pane size (hosted before/after Playwright comparison pending).
-- [ ] The ~1.9 s of non-`buildOutputRows` time in the remaining 2 142 ms frame
-      is attributed to named phases and recorded here (hosted profiler access
-      was unavailable for this measurement pass).
+      (773 → 331 diff-track elements at a 744 px rail, measured before/after at
+      the same viewport; bound is `floor(railHeightPx)`).
+- [x] The rendered minimap is visually indistinguishable from today's at the
+      same pane size (before/after hosted screenshots at 1400×1000: same band
+      positions and red/green proportions).
+- [x] The non-`buildOutputRows` mount time is attributed to named phases and
+      recorded here. Outcome: named phases total ~1 182 ms of 4 715 ms of
+      long-task time; the remainder is React commit, style/layout and payload
+      parse, and the minimap hypothesis is refuted.
 - [x] `buildOutputRows` runs at most once per 32 px of width change during a
-      gesture — asserted by spying on the builder, not by wall-clock timing.
-- [x] A single stable-width load invokes `buildOutputRows` exactly once.
+      gesture — asserted by spying on the builder, and confirmed in the hosted
+      app (300 px sweep → exactly 10 builds at 32 px steps).
+- [ ] A single stable-width load invokes `buildOutputRows` exactly once. The
+      synthetic test passes, but the hosted app still builds twice at an
+      identical width; root cause is the `diffCollapseState` seeding recorded
+      under Problem 3.
 - [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
 - [ ] Dragging the panel splitter, the VS Code panel edge, and the window with
-      the reproduction open holds interactive frame rates (the three hosted
-      gestures were not measurable without Playwright-capable browser access).
+      the reproduction open holds interactive frame rates. Measured: 229 ms
+      worst frame (splitter) and 270 ms (viewport sweep), one per 32 px bucket.
+      No longer a freeze, but not interactive — this is the evidence that makes
+      1B worth doing.
