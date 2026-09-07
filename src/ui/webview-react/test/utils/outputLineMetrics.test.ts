@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bucketOutputContentWidth,
   DIFF_GAP_DECORATION_VERTICAL_PADDING,
   DIFF_LINE_HEIGHT,
   OUTPUT_RELAXED_LINE_HEIGHT,
@@ -28,6 +29,16 @@ describe("diff geometry", () => {
     it("keeps scaling below the default font size", () => {
       expect(diffLineHeight(12)).toBeCloseTo(16.5);
       expect(diffLineHeight(11)).toBeLessThan(diffLineHeight(12));
+    });
+  });
+
+  describe("bucketOutputContentWidth", () => {
+    it("floors widths into the shared 32px geometry bucket", () => {
+      expect(bucketOutputContentWidth(0)).toBe(0);
+      expect(bucketOutputContentWidth(31.99)).toBe(0);
+      expect(bucketOutputContentWidth(32)).toBe(1);
+      expect(bucketOutputContentWidth(63.99)).toBe(1);
+      expect(bucketOutputContentWidth(64)).toBe(2);
     });
   });
 

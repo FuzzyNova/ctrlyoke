@@ -9,12 +9,16 @@ import { VirtualizedList } from "@components/shared/VirtualizedList";
 import { useElementTier } from "@hooks/useElementNarrow";
 import { useUiStore } from "@store/uiStore";
 import {
-  DIFF_FILE_CONTENT_WIDTH_BUCKET,
   type DiffFileListRow,
   diffFileListRowGapClass,
   projectDiffFileListRows,
 } from "@utils/diffFileRows";
-import { DEFAULT_OUTPUT_CONTENT_WIDTH } from "@utils/outputLineMetrics";
+import {
+  bucketOutputContentWidth,
+  DEFAULT_OUTPUT_CONTENT_WIDTH,
+  DIFF_SPLIT_VIEW_THRESHOLD,
+  OUTPUT_CONTENT_WIDTH_BUCKET,
+} from "@utils/outputLineMetrics";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import {
   DIFF_FILE_LIST_ROW_KINDS,
@@ -41,18 +45,15 @@ interface ExpandedGapsOverride {
 const EMPTY_COLLAPSED_OVERRIDES = new Map<string, CollapsedOverride>();
 const EMPTY_EXPANDED_GAPS_OVERRIDES = new Map<string, ExpandedGapsOverride>();
 const EMPTY_EXPANDED_GAPS: DiffGapExpansionState = new Map();
-const DIFF_SPLIT_VIEW_THRESHOLD = 1024;
 /** Virtualize before a list reaches the fixture sizes used by acceptance tests. */
 export const DIFF_FILE_LIST_VIRTUALIZATION_THRESHOLD = 30;
 /** Two neighboring rows cover one normal wheel/touch increment without mounting a full page. */
 export const DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN = 2;
-const DEFAULT_CONTENT_WIDTH_BUCKET = Math.floor(
-  DEFAULT_OUTPUT_CONTENT_WIDTH / DIFF_FILE_CONTENT_WIDTH_BUCKET
+const DEFAULT_CONTENT_WIDTH_BUCKET = bucketOutputContentWidth(
+  DEFAULT_OUTPUT_CONTENT_WIDTH
 );
 
-function resolveDiffFileContentWidthBucket(width: number): number {
-  return Math.floor(width / DIFF_FILE_CONTENT_WIDTH_BUCKET);
-}
+const resolveDiffFileContentWidthBucket = bucketOutputContentWidth;
 
 function diffFileCardPropsWithoutKey(
   file: DiffFileCardProps & { key: string }
@@ -107,10 +108,10 @@ export const DiffFileList = React.forwardRef<
   >(resolveDiffFileContentWidthBucket, DEFAULT_CONTENT_WIDTH_BUCKET);
   const outputContentWidth =
     contentWidthBucket > 0
-      ? contentWidthBucket * DIFF_FILE_CONTENT_WIDTH_BUCKET
+      ? contentWidthBucket * OUTPUT_CONTENT_WIDTH_BUCKET
       : undefined;
   const viewType =
-    contentWidthBucket * DIFF_FILE_CONTENT_WIDTH_BUCKET >=
+    contentWidthBucket * OUTPUT_CONTENT_WIDTH_BUCKET >=
     DIFF_SPLIT_VIEW_THRESHOLD
       ? DIFF_VIEW_TYPES.SPLIT
       : DIFF_VIEW_TYPES.UNIFIED;

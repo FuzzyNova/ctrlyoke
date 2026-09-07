@@ -299,9 +299,9 @@ worth finding but no longer urgent; the dependency array in
       same pane size (hosted before/after Playwright comparison pending).
 - [ ] The ~1.9 s of non-`buildOutputRows` time in the remaining 2 142 ms frame
       is attributed to named phases and recorded here.
-- [ ] `buildOutputRows` runs at most once per 32 px of width change during a
+- [x] `buildOutputRows` runs at most once per 32 px of width change during a
       gesture — asserted by spying on the builder, not by wall-clock timing.
-- [ ] Exactly one bucketing helper and one split-view threshold constant across
+- [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
 - [ ] Dragging the panel splitter, the VS Code panel edge, and the window with
       the reproduction open holds interactive frame rates.

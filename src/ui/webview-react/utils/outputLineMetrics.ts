@@ -62,6 +62,15 @@ export const DEFAULT_OUTPUT_FONT_SIZE = 13;
 export const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
 /** Never estimate against a width narrower than this — it explodes line counts. */
 export const MIN_OUTPUT_CONTENT_WIDTH = 240;
+/** Width bucket used to avoid retaining one geometry entry per pixel resize. */
+export const OUTPUT_CONTENT_WIDTH_BUCKET = 32;
+/** Minimum output width before diffs use split view. */
+export const DIFF_SPLIT_VIEW_THRESHOLD = 1024;
+
+/** Floor a pane width to the shared geometry bucket. */
+export function bucketOutputContentWidth(width: number): number {
+  return Math.floor(width / OUTPUT_CONTENT_WIDTH_BUCKET);
+}
 
 /**
  * Output-section header breakpoint shared by the header layout and dense

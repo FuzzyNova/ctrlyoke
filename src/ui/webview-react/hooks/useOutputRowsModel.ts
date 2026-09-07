@@ -24,7 +24,11 @@ import {
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import type { HarnessId, StepColorMode } from "@root/types/DashboardConstants";
+import type {
+  DiffViewType,
+  HarnessId,
+  StepColorMode,
+} from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
@@ -67,7 +71,7 @@ interface UseOutputRowsModelInput {
   undoRecords: Record<string, UndoRecord>;
   diffsCollapsed: boolean;
   diffResetVersion: number;
-  outputDiffViewType: "split" | "unified";
+  outputDiffViewType: DiffViewType;
   outputFontSize: number;
   outputContentWidth: number;
   collapsedToolOutputLineCount: number;

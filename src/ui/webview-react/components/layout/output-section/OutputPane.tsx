@@ -50,7 +50,8 @@ interface OutputPaneProps {
   minimapSteps: MinimapStep[];
   nonVirtualRows: OutputRenderRow[];
   nonVirtualSpacerHeight: number;
-  outputRef: React.RefObject<HTMLDivElement | null>;
+  outputRef: React.RefCallback<HTMLDivElement>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   renderedScrollSeekIndices: ReadonlySet<number>;
   rows: OutputRenderRow[];
   showVirtualizationOverlay: boolean;
@@ -190,6 +191,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     nonVirtualRows,
     nonVirtualSpacerHeight,
     outputRef,
+    scrollContainerRef,
     renderedScrollSeekIndices,
     rows,
     showVirtualizationOverlay,
@@ -395,7 +397,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
         <Profiler id="OutputMinimap" onRender={onOutputProfilerRender}>
           <OutputMinimap
             steps={minimapSteps}
-            scrollContainerRef={outputRef}
+            scrollContainerRef={scrollContainerRef}
             contentHeight={contentHeight}
             onStepClick={onMinimapStepClick}
             onStepToggle={onMinimapStepToggle}

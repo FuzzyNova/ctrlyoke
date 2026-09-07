@@ -4,6 +4,7 @@ import type {
   DiffFileListProps,
 } from "../components/diff/DiffFileList";
 import {
+  bucketOutputContentWidth,
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
 } from "./outputLineMetrics";
@@ -45,9 +46,6 @@ export const DIFF_FILE_CARD_NOTE_GAP = 2;
 
 /** `DiffView` receives `outerMarginClassName="my-1"` (4px on both edges). */
 export const DIFF_FILE_DIFF_VIEW_MARGIN_HEIGHT = 8;
-
-/** Width bucket used to avoid retaining one geometry entry per pixel resize. */
-export const DIFF_FILE_CONTENT_WIDTH_BUCKET = 32;
 
 /** Card header `px-2.5` (20px) plus note `pl-5` (20px). */
 const DIFF_FILE_CARD_NOTE_HORIZONTAL_CHROME = 40;
@@ -120,7 +118,7 @@ function normalizedOptions(
 }
 
 function contentWidthBucket(outputContentWidth: number): number {
-  return Math.floor(outputContentWidth / DIFF_FILE_CONTENT_WIDTH_BUCKET);
+  return bucketOutputContentWidth(outputContentWidth);
 }
 
 function countContentLines(content: string | undefined): string[] {

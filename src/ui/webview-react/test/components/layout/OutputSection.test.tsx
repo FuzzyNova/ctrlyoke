@@ -27,6 +27,23 @@ vi.mock("@hooks/useVsCodeApi", () => ({
 
 vi.mock("@hooks/useElementNarrow", () => ({
   useElementNarrow: () => [vi.fn(), false] as const,
+  useElementTier: <Tier extends string | number | boolean>(
+    resolveTier: (width: number) => Tier,
+    initialTier: Tier
+  ) => {
+    const [tier, setTier] = React.useState(initialTier);
+    const ref = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        if (!node) return;
+        const update = () =>
+          setTier(resolveTier(node.getBoundingClientRect().width));
+        update();
+        resizeObserverCallback = update;
+      },
+      [resolveTier]
+    );
+    return [ref, tier] as const;
+  },
 }));
 
 vi.mock("@hooks/useOutputExport", () => ({
@@ -254,7 +271,7 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
     showVirtualizationOverlay,
     runBanner,
   }: {
-    outputRef: React.RefObject<HTMLDivElement | null>;
+    outputRef: React.RefCallback<HTMLDivElement>;
     showVirtualizationOverlay: boolean;
     runBanner?: {
       runId: number;
@@ -266,14 +283,14 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
       <div
         ref={(node) => {
           if (!node) {
-            outputRef.current = null;
+            outputRef(null);
             return;
           }
           Object.defineProperty(node, "getBoundingClientRect", {
             configurable: true,
             value: () => ({ width: outputWidth }),
           });
-          outputRef.current = node;
+          outputRef(node);
         }}
         data-testid="output-pane"
         data-virtualization-overlay={showVirtualizationOverlay}

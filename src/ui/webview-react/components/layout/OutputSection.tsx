@@ -10,7 +10,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
-import { useElementNarrow } from "@hooks/useElementNarrow";
+import { useElementNarrow, useElementTier } from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
 import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
 import {
@@ -23,8 +23,12 @@ import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import { useOutputFind } from "@hooks/useOutputFind";
-import { OUTPUT_SECTION_HEADER_NARROW_THRESHOLD } from "@utils/outputLineMetrics";
-import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
+import {
+  bucketOutputContentWidth,
+  DIFF_SPLIT_VIEW_THRESHOLD,
+  OUTPUT_CONTENT_WIDTH_BUCKET,
+  OUTPUT_SECTION_HEADER_NARROW_THRESHOLD,
+} from "@utils/outputLineMetrics";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -32,8 +36,10 @@ import {
   SETTING_SCOPES,
 } from "../../types/messages";
 import {
+  DIFF_VIEW_TYPES,
   OUTPUT_SCROLL_TARGET_KINDS,
   OUTPUT_TABS,
+  type DiffViewType,
 } from "@root/types/DashboardConstants";
 import { type MinimapStep } from "../output/OutputMinimap";
 import { OutputFindBar } from "../output";
@@ -92,7 +98,6 @@ const EMPTY_HIDDEN_AT_MS: Readonly<Record<string, number>> = {};
 // Stable workflowId used for standalone user shell sessions (no active workflow).
 const SHELL_WORKFLOW_ID = "_shell";
 
-const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
 const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
@@ -360,16 +365,38 @@ const OutputSectionInner: React.FC = () => {
   );
 
   const outputRef = useRef<HTMLDivElement>(null);
+  // The callback ref measures during commit, before the first paint and before
+  // the virtualizer can cache row geometry. This preserves the reason the old
+  // code used a layout effect: an unmeasured pane falls back to 760px, which
+  // can under-count wrapping by the same factor on a phone. On 2026-08-13 one
+  // diff estimated 2767px and measured 4914px (78% under) when it was measured
+  // before the real width landed; neighboring rows were within 15%. The old
+  // effect also observed every animation frame and synchronously measured a
+  // 6,000-row, million-pixel scroll canvas on each commit. The tier hook keeps
+  // the callback-ref timing while limiting state updates to bucket changes;
+  // refs keep scroll correction and the live DOM node out of the dependency
+  // cycle that previously re-subscribed the observer after every measurement.
+  const [outputContentRef, outputContentWidthBucket] = useElementTier<
+    number,
+    HTMLDivElement
+  >(bucketOutputContentWidth, 0);
+  const outputContentWidth =
+    outputContentWidthBucket * OUTPUT_CONTENT_WIDTH_BUCKET;
+  const outputDiffViewType: DiffViewType =
+    outputContentWidth >= DIFF_SPLIT_VIEW_THRESHOLD
+      ? DIFF_VIEW_TYPES.SPLIT
+      : DIFF_VIEW_TYPES.UNIFIED;
+  const mergedOutputRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      outputRef.current = node;
+      outputContentRef(node);
+    },
+    [outputContentRef]
+  );
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
-  const [outputDiffViewType, setOutputDiffViewType] = useState<
-    "split" | "unified"
-  >("split");
-  const [outputContentWidth, setOutputContentWidth] = useState(0);
-  // Width as of the pane's last measurement, so the resize handler can detect a
-  // real change without depending on the state value it writes.
-  const lastMeasuredOutputWidthRef = useRef(0);
+  const previousOutputContentWidthRef = useRef(0);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
   const getVirtualItemsRef = useRef<() => readonly { index: number }[]>(
     () => []
@@ -723,61 +750,24 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [outputCollapsed]);
 
-  // Layout effect, not effect: the pane's width is an *input* to row geometry,
-  // not a reaction to it. Diff rows bake their whole render plan at build time
-  // from this width, and an unmeasured pane resolves to
-  // DEFAULT_OUTPUT_CONTENT_WIDTH (760) — roughly double a phone's — which
-  // under-counts wrapping by the same factor. Measuring after paint let the
-  // virtualizer measure and cache rows sized against 760 before the real width
-  // ever landed: on 2026-08-13 03:54:52 one diff estimated 2767 and measured
-  // 4914 (78% under) while its neighbours, built after the width arrived, were
-  // within 15%. Running before paint means the corrected width is already in
-  // the tree the first time anything is measured.
-  // Every dependency here must be stable, and the two that are not are reached
-  // through refs on purpose. `applyScrollTarget`'s identity changes on every
-  // measurement round (it closes over `rowLayout`), and `outputContentWidth` is
-  // set by this very effect — so listing either one re-runs the effect on
-  // essentially every commit. Under `useEffect` that was merely wasteful
-  // re-subscription after paint; as a layout effect it forces a synchronous
-  // `getBoundingClientRect()` against a 6,000-row, million-pixel scroll canvas
-  // *inside the commit phase*, which is how the panel's expensive-commit rate
-  // went from 3.1/min to 7.4/min and its commit time from 1.5s to 3.3s per
-  // minute between the 04:01 and 04:12 profiler sessions on 2026-08-13.
+  // Keep scroll correction on the same layout clock as the old measurement,
+  // but only after a bucket changes. The old effect also measured a 6,000-row,
+  // million-pixel scroll canvas on every frame of a drag; the tier hook now
+  // owns measurement and this effect only reacts to meaningful geometry.
   useLayoutEffect(() => {
-    const el = outputRef.current;
-    if (!el || outputCollapsed) return;
-
-    const updateDiffViewType = () => {
-      if (suppressOutputLayoutWorkRef.current) {
-        return;
-      }
-      const width = el.getBoundingClientRect().width;
-      const previousWidth = lastMeasuredOutputWidthRef.current;
-      // Compare against what this effect last *measured*, not against state:
-      // the state write below is async, so a resize burst would otherwise
-      // re-compare against a stale value and re-fire the scroll correction.
-      if (previousWidth > 0 && Math.abs(previousWidth - width) >= 0.5) {
-        applyScrollTargetRef.current("width-change");
-      }
-      lastMeasuredOutputWidthRef.current = width;
-      setOutputContentWidth((prev) => {
-        if (Math.abs(prev - width) < 0.5) return prev;
-        return width;
-      });
-      setOutputDiffViewType((prev) => {
-        const nextDiffViewType =
-          width >= DIFF_SPLIT_VIEW_MIN_WIDTH ? "split" : "unified";
-        if (prev === nextDiffViewType) return prev;
-        return nextDiffViewType;
-      });
-    };
-
-    updateDiffViewType();
-    const { observer, disconnect } =
-      createAnimationFrameResizeObserver(updateDiffViewType);
-    observer.observe(el);
-    return disconnect;
-  }, [activeOutputTab, applyScrollTargetRef, outputCollapsed]);
+    const previousWidth = previousOutputContentWidthRef.current;
+    previousOutputContentWidthRef.current = outputContentWidth;
+    if (
+      outputCollapsed ||
+      suppressOutputLayoutWorkRef.current ||
+      outputContentWidth <= 0 ||
+      previousWidth <= 0 ||
+      previousWidth === outputContentWidth
+    ) {
+      return;
+    }
+    applyScrollTargetRef.current("width-change");
+  }, [outputCollapsed, outputContentWidth]);
 
   useEffect(() => {
     if (outputContentWidth <= 0) {
@@ -1649,7 +1639,8 @@ const OutputSectionInner: React.FC = () => {
             minimapSteps={minimapSteps}
             nonVirtualRows={nonVirtualRows}
             nonVirtualSpacerHeight={nonVirtualSpacerHeight}
-            outputRef={outputRef}
+            outputRef={mergedOutputRef}
+            scrollContainerRef={outputRef}
             renderedScrollSeekIndices={renderedScrollSeekIndices}
             rows={rows}
             showVirtualizationOverlay={showVirtualizationOverlay}
