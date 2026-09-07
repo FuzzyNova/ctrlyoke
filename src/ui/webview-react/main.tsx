@@ -15,10 +15,13 @@ import "./styles/globals.css";
 const root = document.getElementById("root");
 window.__ctrlyokeReactMounted = true;
 installPerformanceProfiler();
-// TEMP DEBUG: tracks down the EditorFooter stuck-click/flashing bug — several
-// footer quick pickers subscribe to these stores with no selector, so any
-// runaway writer here re-renders every one of them. See storeWriteWatch.ts.
-// Remove once diagnosed.
+// Diagnostic: logs writes to these frequently-over-subscribed stores and
+// escalates to WARN on a burst (see storeWriteWatch.ts). Caught a real
+// production incident — an unthrottled external-run broadcast spamming
+// uiStore.loadedWorkflows/recentWorkflows caused a footer re-render storm
+// bad enough to intermittently break click hit-testing (fixed in
+// ExternalRunWatchSession; see orchestration.instructions.md). Kept as
+// permanent early-warning tooling for the next chatty-store regression.
 watchStoreWrites(useEditorStore, "editorStore");
 watchStoreWrites(useSettingsStore, "settingsStore");
 watchStoreWrites(useUiStore, "uiStore");

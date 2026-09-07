@@ -30,16 +30,16 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
   showLabel,
   disabled = false,
 }) => {
-  const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties, harnessStatus } =
-    useSettingsStore();
-  const {
-    footerOpenPicker,
-    setFooterOpenPicker,
-    hiddenDropdownOptions,
-    hideDropdownOption,
-    unhideDropdownOption,
-  } = useUiStore();
+  const properties = useEditorStore((s) => s.properties);
+  const setProperty = useEditorStore((s) => s.setProperty);
+  const globalSettings = useSettingsStore((s) => s.globalSettings);
+  const workflowProperties = useSettingsStore((s) => s.workflowProperties);
+  const harnessStatus = useSettingsStore((s) => s.harnessStatus);
+  const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
+  const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
+  const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
+  const hideDropdownOption = useUiStore((s) => s.hideDropdownOption);
+  const unhideDropdownOption = useUiStore((s) => s.unhideDropdownOption);
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.HARNESS;
 

@@ -29,9 +29,12 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   showLabel,
   disabled = false,
 }) => {
-  const { properties, setProperty } = useEditorStore();
-  const { workflowProperties, globalSettings } = useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
+  const properties = useEditorStore((s) => s.properties);
+  const setProperty = useEditorStore((s) => s.setProperty);
+  const workflowProperties = useSettingsStore((s) => s.workflowProperties);
+  const globalSettings = useSettingsStore((s) => s.globalSettings);
+  const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
+  const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.PERMISSIONS;
   const isOverride = properties.toolPermissions !== undefined;

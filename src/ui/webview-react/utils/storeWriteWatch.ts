@@ -1,12 +1,14 @@
 import { WebviewLog } from "./logger";
 
 /**
- * Diagnostic-only watcher for zustand stores that are read via a
- * no-selector `useXStore()` call somewhere in the tree (see
- * webview-react-store.instructions.md's stable-selector gotcha) — any write
- * to a watched store re-renders every one of those subscribers, so a runaway
- * writer anywhere in the app can masquerade as a bug in an unrelated,
- * unmemoized component (e.g. EditorFooter's quick pickers).
+ * Permanent diagnostic watcher for stores that tend to accumulate no-selector
+ * `useXStore()` subscribers (see webview-react-store.instructions.md's
+ * stable-selector gotcha) — any write to a watched store re-renders every one
+ * of those subscribers, so a runaway writer anywhere in the app can
+ * masquerade as a bug in an unrelated component. This caught a real
+ * production incident (an unthrottled external-run broadcast spamming
+ * uiStore, which cascaded into EditorFooter's quick pickers over-subscribing
+ * to it) — see ExternalRunWatchSession / orchestration.instructions.md.
  *
  * Logs every write at TRACE (only persisted when the user has enabled
  * ctrlyoke's Trace log level + `ctrlyoke.enableDiagnosticLogs`, so this is

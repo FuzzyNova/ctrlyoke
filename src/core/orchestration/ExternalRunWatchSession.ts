@@ -43,6 +43,18 @@ export type ExternalRunWatchFinishReason =
  * Created by WorkflowOrchestrator when an active external CLI or sibling-VSCode lock is
  * detected. Disposed when the lock is deleted, goes stale, or changes ownership.
  */
+/**
+ * Leading+trailing throttle window for working-file change notifications.
+ * A tight-loop out-of-process writer (see handleWorkingFileChange's comment)
+ * can otherwise fire onDidChange dozens of times per second; each one used to
+ * fan out an unconditional WORKFLOW_SUMMARY_UPDATED broadcast to every
+ * connected dashboard client (VS Code panel + every hosted-browser tab),
+ * which — because several webview quick pickers subscribe to uiStore with no
+ * selector — showed up as a footer/quick-picker re-render storm bad enough to
+ * intermittently break click hit-testing near a responsive-layout breakpoint.
+ */
+const WORKING_FILE_CHANGE_THROTTLE_MS = 150;
+
 export class ExternalRunWatchSession implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
@@ -50,6 +62,8 @@ export class ExternalRunWatchSession implements vscode.Disposable {
   /** stepIndex → last number of outputs sent to the dashboard for that step */
   private lastKnownOutputByStep: Record<number, number> = {};
   private readonly manifestPath: string;
+  private workingFileChangeThrottleTimer: ReturnType<typeof setTimeout> | undefined;
+  private workingFileChangePendingDuringThrottle = false;
 
   constructor(
     private readonly workingFilePath: string,
@@ -108,6 +122,10 @@ export class ExternalRunWatchSession implements vscode.Disposable {
       clearInterval(this.heartbeatPollInterval);
       this.heartbeatPollInterval = undefined;
     }
+    if (this.workingFileChangeThrottleTimer !== undefined) {
+      clearTimeout(this.workingFileChangeThrottleTimer);
+      this.workingFileChangeThrottleTimer = undefined;
+    }
     for (const d of this.disposables) {
       d.dispose();
     }
@@ -130,8 +148,8 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.disposables.push(
-      watcher.onDidChange(async () => {
-        await this.handleWorkingFileChange();
+      watcher.onDidChange(() => {
+        this.scheduleWorkingFileChange();
       })
     );
     // Also handle onDidCreate: on Windows, fs.rename() over an existing file
@@ -139,11 +157,34 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     // instead of onDidChange, so MCP queue appends would otherwise be missed
     // until the next natural queue write.
     this.disposables.push(
-      watcher.onDidCreate(async () => {
-        await this.handleWorkingFileChange();
+      watcher.onDidCreate(() => {
+        this.scheduleWorkingFileChange();
       })
     );
     this.disposables.push(watcher);
+  }
+
+  /**
+   * Leading+trailing throttle around handleWorkingFileChange: the first change
+   * in a burst is handled immediately (so a normal, isolated step transition
+   * stays instant), further changes within WORKING_FILE_CHANGE_THROTTLE_MS are
+   * coalesced, and — if any arrived during the window — one trailing update
+   * fires at the end of it so a sustained flood still converges on the latest
+   * state instead of going silent until the writer stops.
+   */
+  private scheduleWorkingFileChange(): void {
+    if (this.workingFileChangeThrottleTimer !== undefined) {
+      this.workingFileChangePendingDuringThrottle = true;
+      return;
+    }
+    void this.handleWorkingFileChange();
+    this.workingFileChangeThrottleTimer = setTimeout(() => {
+      this.workingFileChangeThrottleTimer = undefined;
+      if (this.workingFileChangePendingDuringThrottle) {
+        this.workingFileChangePendingDuringThrottle = false;
+        void this.handleWorkingFileChange();
+      }
+    }, WORKING_FILE_CHANGE_THROTTLE_MS);
   }
 
   private async handleWorkingFileChange(retried = false): Promise<void> {

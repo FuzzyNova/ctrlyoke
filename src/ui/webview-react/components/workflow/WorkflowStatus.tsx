@@ -130,26 +130,38 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   className = "",
 }) => {
   const vscode = useVsCodeApi();
-  const { fileName, workflowName, executionState, currentStep, totalSteps } =
-    useWorkflowStore();
-  const {
-    loadedWorkflows,
-    observedRunningWorkflowIds,
-    activeWorkflowId,
-    activeWorkflowWorkingFilePath,
-    displayedViewAddress,
-    displayedRunDirectory,
-    pendingRunViewSwitch,
-    recentWorkflows,
-    setRecentWorkflows,
-    openDuplicateWorkflowDialog,
-    setActiveWorkflowWorkingFilePath,
-    runSummaries,
-    executionRunRef,
-    isViewingHistory,
-    setViewingDeletedWorkflow,
-  } = useUiStore();
-  const { globalSettings, workflowProperties } = useSettingsStore();
+  const fileName = useWorkflowStore((s) => s.fileName);
+  const workflowName = useWorkflowStore((s) => s.workflowName);
+  const executionState = useWorkflowStore((s) => s.executionState);
+  const currentStep = useWorkflowStore((s) => s.currentStep);
+  const totalSteps = useWorkflowStore((s) => s.totalSteps);
+  const loadedWorkflows = useUiStore((s) => s.loadedWorkflows);
+  const observedRunningWorkflowIds = useUiStore(
+    (s) => s.observedRunningWorkflowIds
+  );
+  const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
+  const activeWorkflowWorkingFilePath = useUiStore(
+    (s) => s.activeWorkflowWorkingFilePath
+  );
+  const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
+  const displayedRunDirectory = useUiStore((s) => s.displayedRunDirectory);
+  const pendingRunViewSwitch = useUiStore((s) => s.pendingRunViewSwitch);
+  const recentWorkflows = useUiStore((s) => s.recentWorkflows);
+  const setRecentWorkflows = useUiStore((s) => s.setRecentWorkflows);
+  const openDuplicateWorkflowDialog = useUiStore(
+    (s) => s.openDuplicateWorkflowDialog
+  );
+  const setActiveWorkflowWorkingFilePath = useUiStore(
+    (s) => s.setActiveWorkflowWorkingFilePath
+  );
+  const runSummaries = useUiStore((s) => s.runSummaries);
+  const executionRunRef = useUiStore((s) => s.executionRunRef);
+  const isViewingHistory = useUiStore((s) => s.isViewingHistory);
+  const setViewingDeletedWorkflow = useUiStore(
+    (s) => s.setViewingDeletedWorkflow
+  );
+  const globalSettings = useSettingsStore((s) => s.globalSettings);
+  const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const effectiveWorktree = useMemo(() => {
     const authored = workflowProperties.worktree;
     if (authored === false) return false;

@@ -26,9 +26,12 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   showLabel,
   disabled = false,
 }) => {
-  const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties } = useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
+  const properties = useEditorStore((s) => s.properties);
+  const setProperty = useEditorStore((s) => s.setProperty);
+  const globalSettings = useSettingsStore((s) => s.globalSettings);
+  const workflowProperties = useSettingsStore((s) => s.workflowProperties);
+  const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
+  const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.CONTEXT;
   const isOverride = properties.resumeSession !== undefined;
