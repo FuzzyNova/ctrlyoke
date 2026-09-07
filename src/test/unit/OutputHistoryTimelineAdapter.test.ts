@@ -61,6 +61,40 @@ function cliEvent(
   };
 }
 
+function chunkAppended(
+  sequence: number,
+  chunk: string
+): CliOutputChunkAppendedEvent {
+  return {
+    eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+    workflowId: "workflow",
+    runId: 1,
+    sequence,
+    timestampMs: sequence,
+    target: TARGET,
+    runIndex: 0,
+    attemptIndex: 0,
+    payload: { chunk },
+  };
+}
+
+function eventsAppended(
+  sequence: number,
+  text: string
+): CliOutputEventsAppendedEvent {
+  return {
+    eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+    workflowId: "workflow",
+    runId: 1,
+    sequence,
+    timestampMs: sequence,
+    target: TARGET,
+    runIndex: 0,
+    attemptIndex: 0,
+    payload: { events: [{ type: CLI_EVENT_TYPES.THINKING, data: { text } }] },
+  };
+}
+
 const MANIFEST: WorkflowRunManifest = {
   schemaVersion: TIMELINE_SCHEMA_VERSION,
   storageKind: TIMELINE_STORAGE_KIND,
@@ -228,5 +262,63 @@ suite("OutputHistoryTimelineAdapter", () => {
     assert.deepStrictEqual(history.activityEntries?.[1]?.events, [
       { type: CLI_EVENT_TYPES.TEXT, data: { text: "structured" } },
     ]);
+  });
+
+  test("folds streamed deltas into a still-streaming entry once", () => {
+    const streamingPlaceholder: CliOutputRecordedEvent = {
+      ...cliEvent(0, EXECUTION_PHASES.PROMPT, ""),
+      payload: { cliOutput: { ...output(""), isStreaming: true } },
+    };
+    const events = [
+      streamingPlaceholder,
+      chunkAppended(1, "hello "),
+      chunkAppended(2, "world"),
+      eventsAppended(3, "first"),
+      eventsAppended(4, "second"),
+    ];
+
+    const history = new OutputHistoryTimelineAdapter().project(
+      { ...MANIFEST, executionState: EXECUTION_STATES.RUNNING },
+      events
+    );
+
+    const entry = history.orderedEntries.find(
+      (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(entry.cliOutput.response, "hello world");
+    assert.deepStrictEqual(
+      entry.cliOutput.structured?.events.map(
+        (cli) => (cli.data as { text?: string }).text
+      ),
+      ["first", "second"]
+    );
+  });
+
+  test("drops deltas superseded by a completed aggregate", () => {
+    const streamingPlaceholder: CliOutputRecordedEvent = {
+      ...cliEvent(0, EXECUTION_PHASES.PROMPT, ""),
+      payload: { cliOutput: { ...output(""), isStreaming: true } },
+    };
+    // The completed aggregate carries the attempt's *start* timestamp, so it
+    // sorts ahead of the deltas it supersedes.
+    const completed: CliOutputRecordedEvent = {
+      ...cliEvent(1, EXECUTION_PHASES.PROMPT, "final response"),
+      timestampMs: 0,
+    };
+
+    const history = new OutputHistoryTimelineAdapter().project(MANIFEST, [
+      streamingPlaceholder,
+      completed,
+      chunkAppended(2, "stale"),
+      eventsAppended(3, "stale"),
+    ]);
+
+    const entry = history.orderedEntries.find(
+      (candidate) => candidate.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.ok(entry && entry.kind === OUTPUT_HISTORY_KINDS.CLI);
+    assert.strictEqual(entry.cliOutput.response, "final response");
+    assert.strictEqual(entry.cliOutput.structured, undefined);
   });
 });

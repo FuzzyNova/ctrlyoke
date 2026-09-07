@@ -38,6 +38,7 @@ import {
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
@@ -394,6 +395,10 @@ export class RunOutputResolver {
     attemptIndex: number
   ): Promise<ResolvedRunAttemptValue | undefined> {
     let value: ResolvedRunAttemptValue | undefined;
+    // One attempt's deltas, folded in once after the walk rather than per
+    // batch; see `StreamingCliOutputAccumulator`.
+    const deltas = new StreamingCliOutputAccumulator();
+    const deltaKey = "attempt";
 
     for await (const event of this.stream(manifestPath)) {
       if (
@@ -413,33 +418,17 @@ export class RunOutputResolver {
           value.startReason = event.startReason;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
+          // A fresh aggregate supersedes every delta buffered before it.
+          deltas.discard(deltaKey);
           value.output = event.attempt.output;
           value.responseText = event.attempt.responseText;
           value.kind = event.attempt.kind;
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
-          if (value.output?.isStreaming) {
-            value.output = {
-              ...value.output,
-              response: value.output.response + event.chunk,
-            };
-            value.responseText = value.output.response;
-          }
+          deltas.appendChunk(deltaKey, event.chunk);
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS:
-          if (value.output?.isStreaming) {
-            value.output = {
-              ...value.output,
-              structured: {
-                ...value.output.structured,
-                events: normalizeCliEvents([
-                  ...(value.output.structured?.events ?? []),
-                  ...event.events,
-                ]),
-                metadata: value.output.structured?.metadata ?? {},
-              },
-            };
-          }
+          deltas.appendEvents(deltaKey, event.events);
           break;
         case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
           value.scriptOutput = event.scriptOutput;
@@ -449,6 +438,16 @@ export class RunOutputResolver {
           value.terminalReason = event.reason;
           break;
       }
+    }
+
+    if (value?.output?.isStreaming) {
+      const merged = deltas.flush(deltaKey, value.output);
+      // `responseText` tracks streamed text only — an events-only delta leaves
+      // the aggregate's own responseText authoritative.
+      if (merged.response !== value.output.response) {
+        value.responseText = merged.response;
+      }
+      value.output = merged;
     }
 
     return value;

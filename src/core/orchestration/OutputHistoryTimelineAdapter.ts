@@ -15,7 +15,8 @@ import type {
   WorkflowOutputHistory,
 } from "../../types/OutputHistoryTypes";
 import type { OrderedCliHistoryEntry } from "../../types/OutputHistoryTypes";
-import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import type { CliOutput } from "../../types/WebviewMessageTypes";
+import { StreamingCliOutputAccumulator } from "../../utils/StreamingCliOutputAccumulator";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputChunkAppendedEvent,
@@ -60,63 +61,57 @@ export class OutputHistoryTimelineAdapter {
     events: WorkflowTimelineEvent[],
     history: WorkflowOutputHistory
   ): Promise<void> {
-    const outputs = new Map<
-      string,
-      import("../../types/WebviewMessageTypes").CliOutput
-    >();
+    const outputs = new Map<string, CliOutput>();
+    // Deltas are buffered rather than folded in per batch; see
+    // `StreamingCliOutputAccumulator` for why that matters on a large run.
+    const deltas = new StreamingCliOutputAccumulator();
     for await (const event of this.outputResolver.streamFromEvents(
       manifest,
       events
     )) {
       if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT) {
-        outputs.set(
+        const key = getCliEntryKey(
+          event.attempt.target,
+          event.attempt.runIndex,
+          event.attempt.attemptIndex,
+          event.attempt.phase
+        );
+        // A fresh aggregate replaces the attempt's output wholesale, so every
+        // delta buffered before it is superseded.
+        deltas.discard(key);
+        outputs.set(key, event.attempt.output);
+      } else if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK
+      ) {
+        deltas.appendChunk(
           getCliEntryKey(
             event.attempt.target,
             event.attempt.runIndex,
             event.attempt.attemptIndex,
             event.attempt.phase
           ),
-          event.attempt.output
+          event.chunk
         );
-      } else if (
-        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK
-      ) {
-        const key = getCliEntryKey(
-          event.attempt.target,
-          event.attempt.runIndex,
-          event.attempt.attemptIndex,
-          event.attempt.phase
-        );
-        const output = outputs.get(key);
-        if (output?.isStreaming) {
-          outputs.set(key, {
-            ...output,
-            response: output.response + event.chunk,
-          });
-        }
       } else if (
         event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS
       ) {
-        const key = getCliEntryKey(
-          event.attempt.target,
-          event.attempt.runIndex,
-          event.attempt.attemptIndex,
-          event.attempt.phase
+        deltas.appendEvents(
+          getCliEntryKey(
+            event.attempt.target,
+            event.attempt.runIndex,
+            event.attempt.attemptIndex,
+            event.attempt.phase
+          ),
+          event.events
         );
-        const output = outputs.get(key);
-        if (output?.isStreaming) {
-          outputs.set(key, {
-            ...output,
-            structured: {
-              ...output.structured,
-              events: normalizeCliEvents([
-                ...(output.structured?.events ?? []),
-                ...event.events,
-              ]),
-              metadata: output.structured?.metadata ?? {},
-            },
-          });
-        }
+      }
+    }
+    for (const key of [...deltas.keys()]) {
+      const output = outputs.get(key);
+      if (output?.isStreaming) {
+        outputs.set(key, deltas.flush(key, output));
+      } else {
+        deltas.discard(key);
       }
     }
     for (const entry of history.orderedEntries) {
@@ -166,17 +161,25 @@ export class OutputHistoryTimelineAdapter {
      */
     const sealedCliKeys = new Set<string>();
 
-    /** The still-streaming entry a delta belongs to, or undefined once sealed. */
-    const resolveStreamingEntry = (
+    /**
+     * Deltas are buffered per attempt and folded into their entry once, after
+     * the event walk; see `StreamingCliOutputAccumulator`.
+     */
+    const deltas = new StreamingCliOutputAccumulator();
+
+    /** The key of the still-streaming entry a delta belongs to, or undefined once sealed. */
+    const resolveStreamingKey = (
       event: CliOutputChunkAppendedEvent | CliOutputEventsAppendedEvent
-    ): OrderedCliHistoryEntry | undefined => {
+    ): string | undefined => {
       const key = getCliEntryKey(
         event.target,
         event.runIndex ?? 0,
         event.attemptIndex,
         event.phase
       );
-      return sealedCliKeys.has(key) ? undefined : cliEntriesByKey.get(key);
+      return sealedCliKeys.has(key) || !cliEntriesByKey.has(key)
+        ? undefined
+        : key;
     };
 
     for (const event of [...events].sort(compareTimelineEvents)) {
@@ -208,6 +211,8 @@ export class OutputHistoryTimelineAdapter {
             timestampMs: event.timestampMs,
             sequence: event.sequence,
           });
+          // The replacement entry supersedes every delta buffered before it.
+          deltas.discard(key);
           // A completed aggregate supersedes every streamed delta for this
           // attempt; a fresh streaming placeholder re-opens it (append/retry).
           if (event.payload.cliOutput.isStreaming) {
@@ -228,12 +233,9 @@ export class OutputHistoryTimelineAdapter {
             kind: OUTPUT_ACTIVITY_KINDS.TEXT,
             text: event.payload.chunk,
           });
-          const existing = resolveStreamingEntry(event);
-          if (existing) {
-            existing.cliOutput = {
-              ...existing.cliOutput,
-              response: existing.cliOutput.response + event.payload.chunk,
-            };
+          const key = resolveStreamingKey(event);
+          if (key) {
+            deltas.appendChunk(key, event.payload.chunk);
           }
           break;
         }
@@ -248,19 +250,9 @@ export class OutputHistoryTimelineAdapter {
             kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
             events: event.payload.events,
           });
-          const existing = resolveStreamingEntry(event);
-          if (existing) {
-            existing.cliOutput = {
-              ...existing.cliOutput,
-              structured: {
-                ...existing.cliOutput.structured,
-                events: normalizeCliEvents([
-                  ...(existing.cliOutput.structured?.events ?? []),
-                  ...event.payload.events,
-                ]),
-                metadata: existing.cliOutput.structured?.metadata ?? {},
-              },
-            };
+          const key = resolveStreamingKey(event);
+          if (key) {
+            deltas.appendEvents(key, event.payload.events);
           }
           break;
         }
@@ -301,6 +293,10 @@ export class OutputHistoryTimelineAdapter {
             event.payload.undoRecord;
           break;
       }
+    }
+
+    for (const [key, entry] of cliEntriesByKey) {
+      entry.cliOutput = deltas.flush(key, entry.cliOutput);
     }
 
     history.orderedEntries = [

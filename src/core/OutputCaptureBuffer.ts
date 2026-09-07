@@ -226,13 +226,16 @@ export class OutputCaptureBuffer {
     }
   }
 
+  /**
+   * Appends raw. Normalizing on every streamed batch re-pairs the whole
+   * accumulated array each time, which is quadratic in a long attempt's batch
+   * count; every reader below already normalizes what it hands out, so the
+   * write path does not need to.
+   */
   captureEvents(stepIndex: number, events: CliEvent[]): void {
     const existing = this.stepOutputBuffer.get(stepIndex);
     if (existing) {
-      existing.accumulatedEvents = normalizeCliEvents([
-        ...existing.accumulatedEvents,
-        ...events,
-      ]);
+      existing.accumulatedEvents.push(...events);
     }
   }
 
@@ -315,13 +318,11 @@ export class OutputCaptureBuffer {
     }
   }
 
+  /** Raw append, for the reason given on `captureEvents`. */
   captureFinalStepEvents(loopIndex: number, events: CliEvent[]): void {
     const existing = this.finalStepOutputBuffer.get(loopIndex);
     if (existing) {
-      existing.accumulatedEvents = normalizeCliEvents([
-        ...existing.accumulatedEvents,
-        ...events,
-      ]);
+      existing.accumulatedEvents.push(...events);
     }
   }
 
