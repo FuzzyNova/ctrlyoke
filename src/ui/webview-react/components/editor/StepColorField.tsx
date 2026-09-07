@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
 import { useEditorStore } from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
@@ -26,20 +26,35 @@ export function useStepColorInput(): StepColorInputState {
     selectedPromptIndex ?? steps.length
   );
   const hasOverride = properties.color !== undefined;
-  const [color, setColor] = useState(properties.color ?? inheritedColor);
+  const [color, setColorState] = useState(properties.color ?? inheritedColor);
+  // Tracks whether the user actually changed the value since the last
+  // commit/reset, so closing the picker untouched doesn't turn an inherited
+  // color into an explicit override of the same value.
+  const touchedRef = useRef(false);
 
   useEffect(() => {
-    setColor(properties.color ?? inheritedColor);
+    setColorState(properties.color ?? inheritedColor);
+    touchedRef.current = false;
   }, [inheritedColor, properties.color]);
+
+  const setColor = (next: string) => {
+    touchedRef.current = true;
+    setColorState(next);
+  };
 
   return {
     color,
     inheritedColor,
     hasOverride,
     setColor,
-    commit: () => setProperty(PROMPT_PROPERTIES.COLOR, color),
+    commit: () => {
+      if (!touchedRef.current) return;
+      touchedRef.current = false;
+      setProperty(PROMPT_PROPERTIES.COLOR, color);
+    },
     reset: () => {
-      setColor(inheritedColor);
+      touchedRef.current = false;
+      setColorState(inheritedColor);
       setProperty(PROMPT_PROPERTIES.COLOR, undefined);
     },
   };
