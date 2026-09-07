@@ -34,7 +34,7 @@ Taken from a live hosted dashboard (dev host + Playwright MCP `browser_snapshot`
 | …of those carrying `aria-hidden="true"`                          | **5**                       |
 | Visible buttons whose Playwright accessible name is a bare glyph | **21**                      |
 | `.fp-tab-hc` pseudo-tabs with no `role`/`aria-selected`          | **14** (2 duplicate sets)   |
-| Raw `<i className="codicon …">` in source (excl. tests)          | **357**                     |
+| Raw codicon elements in source (excl. tests)                     | **355** in 103 files        |
 | Shared `<Icon>`/`<Codicon>` component                            | **none — all hand-written** |
 
 Representative snapshot fragments, verbatim:
@@ -155,13 +155,40 @@ is missing in 350+ places, and why a one-time sweep would rot immediately. Intro
 
 ```tsx
 // components/shared/Icon.tsx
-export const Icon: React.FC<{ name: string; className?: string }> = ({
-  name,
-  className = "",
-}) => (
-  <i className={`codicon codicon-${name} ${className}`} aria-hidden="true" />
+export interface IconProps {
+  /** Codicon name, with or without the `codicon-` prefix. */
+  name: string;
+  /** Extra classes (size utilities such as `codicon-lg`, colors, spacing). */
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export const Icon: React.FC<IconProps> = ({ name, className, style }) => (
+  <i
+    className={`codicon ${name.startsWith("codicon-") ? name : `codicon-${name}`}${className ? ` ${className}` : ""}`}
+    style={style}
+    aria-hidden="true"
+  />
 );
 ```
+
+The API is wider than it looks because the real call sites are (measured 2026-09-07):
+
+| Call-site shape                                                    | Count |
+| ------------------------------------------------------------------ | ----- |
+| `<i className="codicon codicon-x" />` — fully static               | 48    |
+| `` `codicon codicon-x ${btnSize.icon}` `` — static name + size cls | many  |
+| `` `codicon codicon-${icon}` `` — name from a prop                 | many  |
+| `` `codicon ${iconClass}` `` — whole `codicon-x` class from a map  | many  |
+| `<span className="codicon …" style={{ fontSize: 20 }}>`            | 8     |
+
+So `name` must accept both `"chevron-down"` and `"codicon-chevron-down"` (maps like
+`diffChangeType.ts`, `templateFormat.ts`, `templateScope.ts`, and `constants.ts`’s `btnSize.icon`
+already store the prefixed form), and `className`/`style` must pass through for the size and
+color utilities. **The 8 `<span className="codicon">` sites matter out of proportion to their
+count**: one of them is `SegmentedTabBar`’s tab glyph, i.e. all 14 live pseudo-tabs. `.codicon`
+styling in `globals.css` is class-based (`button .codicon`, `.codicon-sm/-lg/-xl`), not tag-based,
+so normalising every one of them to `<i>` is safe.
 
 Then codemod the raw `<i className="codicon codicon-x" />` usages onto it. This matches the
 project's DRY/single-source principle and makes the guarantee enforceable rather than a
@@ -262,7 +289,9 @@ carried only by a class name cannot be asserted by any test or read by any user.
 17 elements carry `role="button"` on a `<div>`/`<span>`. A real `<button>` responds to both Enter
 and Space; these must replicate that or assistive-tech users cannot activate them.
 
-**Affected:** `App.tsx:690`, `layout/EditorSection.tsx:202,306`,
+**Affected** (17 sites; line numbers drift — re-run `grep -rn 'role="button"' src/ui/webview-react --include=*.tsx` to locate them):
+
+`App.tsx:690`, `layout/EditorSection.tsx:202,306`,
 `layout/output-section/OutputSectionHeader.tsx:105`, `layout/OutputSection.tsx:1527`,
 `prompts/FinalStepFooter.tsx:113,185`, `prompts/PromptChipRail.tsx:113,217,479`,
 `prompts/WorkflowStep.tsx:234`, `settings/AgentSkillsManagerSection.tsx:785,843`,
@@ -287,6 +316,10 @@ real buttons inside a focusable row cause sticky mobile-Safari layout drift ther
 ---
 
 ## Phase 6 — Landmark regions
+
+> **Ordering note:** landmarks are a _precondition_ for Phase 3, not a follow-up — a named
+> `region`/`dialog` is what lets a duplicated button name be scoped instead of renamed. Do this
+> phase together with Phase 3, landmarks first.
 
 The live page exposes a `<header>` and two **unlabelled** `<section>` elements — and an unlabelled
 `<section>` is not exposed as a `region` landmark at all, so it contributes nothing to navigation
@@ -379,7 +412,8 @@ Reproducing the ground-truth numbers takes about a minute and should be redone a
       (c) => c.codePointAt(0) < 0xe000 && !/\s/.test(c)
     );
   });
-  const icons = [...document.querySelectorAll("i.codicon")];
+  // NOT i.codicon — SegmentedTabBar renders its tab glyph as a <span>.
+  const icons = [...document.querySelectorAll(".codicon")];
   return {
     unnamed: glyphOnly.length,
     codiconsUnhidden:
