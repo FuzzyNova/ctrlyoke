@@ -30,6 +30,7 @@ import {
   getStreamingChunkKey,
 } from "@/types/messages";
 import {
+  FILE_OPERATION_KINDS,
   HARNESS_CHART_COLORS,
   HARNESS_IDS,
   OUTPUT_ROW_KINDS,
@@ -590,6 +591,78 @@ describe("outputRows", () => {
 
     expect(getParallelGroupForStep(parallelGroups, 1)).toBe(parallelGroups[0]);
     expect(getConcurrentGroupForStep(input, 1)).toBeUndefined();
+  });
+
+  it("puts a concurrent group's only undo on its header row, not on a member", () => {
+    const parallelGroups = [
+      { id: "parallel-0-1", startIndex: 0, endIndex: 1, failFast: false },
+    ];
+    const fileEvent = (path: string) => ({
+      type: CLI_EVENT_TYPES.FILE_EDIT,
+      data: {
+        path,
+        oldContent: "before",
+        newContent: "after",
+        status: OPERATION_STATUS.COMPLETED,
+      },
+    });
+    const result = buildOutputRows({
+      allMessages: [0, 1].map((index) => ({
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index },
+        timestamp: 1000 + index,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: `Step ${index + 1}`,
+          response: "done",
+          elapsed: 1,
+          isStreaming: false,
+          workingDirectory: "/repo",
+          structured: { events: [fileEvent(`src/file-${index}.ts`)] },
+        },
+      })) as OutputMessage[],
+      steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
+      finalStep: null,
+      parallelGroups,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: true,
+      isViewingHistory: false,
+      historyOutputs: null,
+      // One group-wide snapshot stored against the first member, covering the
+      // files both members wrote.
+      workspaceSnapshots: {
+        0: {
+          capturedAt: 1000,
+          parallelGroupId: "parallel-0-1",
+          strategy: "filesystem",
+          changedFiles: [0, 1].map((index) => ({
+            path: `src/file-${index}.ts`,
+            changeType: FILE_OPERATION_KINDS.CREATED,
+          })),
+        },
+      },
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const headerRow = result.rows.find(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+    );
+    // Two members, two edited files: the label counts steps, not changes, so
+    // the group reads as one action over the whole group.
+    expect(headerRow?.promptUndo?.undo?.label).toBe("Undo 2 steps");
+    expect(
+      result.rows
+        .filter((row) => row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER)
+        .some((row) => row.promptUndo?.undo || row.promptUndo?.redo)
+    ).toBe(false);
   });
 
   it("gives every row a unique key and opens each attempt's chrome once across activity slices", () => {

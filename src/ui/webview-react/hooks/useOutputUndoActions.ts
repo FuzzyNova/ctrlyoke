@@ -68,6 +68,19 @@ export interface OpenMinimapRedoDialogInput {
   redoInstructions: MinimapDialogState["redoInstructions"];
 }
 
+/**
+ * The execution-side spelling of an output row's target. Every prompt/file undo
+ * entry point needs it, so it is derived once rather than re-branched per
+ * handler.
+ */
+function toUndoExecutionTarget(
+  target: OutputMessageTarget
+): UndoExecutionTarget {
+  return target.kind === FINAL_STEP_PHASES.FINAL_STEP
+    ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.index }
+    : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.index };
+}
+
 export function useOutputUndoActions({
   allMessages,
   allowUndoActions,
@@ -261,10 +274,7 @@ export function useOutputUndoActions({
       promptUndo: OutputRowPromptUndoMeta | undefined
     ) => {
       if (!promptUndo || !runAddress) return;
-      const undoTarget: UndoExecutionTarget =
-        target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.index }
-          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.index };
+      const undoTarget = toUndoExecutionTarget(target);
       const alreadyUndone =
         promptUndo.undoRecord != null && promptUndo.undoRecord.isRedone !== true
           ? promptUndo.undoRecord.redoInstructions
@@ -293,15 +303,15 @@ export function useOutputUndoActions({
     [handlePromptUndoMeta]
   );
 
+  // Widened alongside `handlePromptUndo`: a parallel group's redo is offered on
+  // its header row, whose `target` is the group's first member — the same
+  // target the group's undo record is stored against.
   const handlePromptRedo = useCallback(
-    (row: CliHeaderRow) => {
+    (row: CliHeaderRow | ParallelGroupHeaderRow) => {
       if (!row.promptUndo?.undoRecord?.redoInstructions?.length || !runAddress)
         return;
-      const target: UndoExecutionTarget = row.isFinalStep
-        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
       openMinimapRedoDialog({
-        target,
+        target: toUndoExecutionTarget(row.target),
         workspacePath: row.promptUndo.workspacePath,
         redoInstructions: row.promptUndo.undoRecord.redoInstructions,
       });
@@ -311,10 +321,7 @@ export function useOutputUndoActions({
 
   const handleFileUndo = useCallback(
     (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {
-      const target: UndoExecutionTarget =
-        row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
-          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
+      const target = toUndoExecutionTarget(row.target);
       const stepOutputs = stepOutputsMap.get(getTargetKey(row.target));
       const workspacePath =
         stepOutputs && stepOutputs.length > 0

@@ -3220,11 +3220,12 @@ export const OUTPUT_DEFAULT_LABELS = {
 /**
  * Fixed labels on the parallel-group output header. Shared because the row's
  * height estimator sizes the very strings the header paints — a divergence
- * there mis-predicts the chip row's wrapping on every group.
+ * there mis-predicts the chip row's wrapping on every group. The group's
+ * undo/redo labels vary with member count and live with the other computed
+ * header text in `outputRows.ts` (`parallelGroupUndoLabel`).
  */
 export const PARALLEL_GROUP_HEADER_LABELS = {
   ALL_CHIP: "All",
-  UNDO: "Undo group",
   FILTERS: "Output filters",
 } as const;
 

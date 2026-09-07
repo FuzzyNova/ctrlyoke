@@ -10,6 +10,9 @@ import {
 
 const SHELL_WORKFLOW_ID = "_shell";
 
+const ACTION_CLASS =
+  "inline-flex min-w-0 max-w-full items-center gap-1 transition-colors";
+
 const CHIP_CLASS = "rounded border px-1.5 py-0.5";
 const CHIP_PRESSED_CLASS = "border-focus-border text-foreground";
 const CHIP_IDLE_CLASS = "border-panel-border text-description-fg";
@@ -21,6 +24,7 @@ function chipClass(pressed: boolean): string {
 export interface ParallelGroupHeaderRowViewProps {
   row: ParallelGroupHeaderRow;
   onUndo?: (row: ParallelGroupHeaderRow) => void;
+  onRedo?: (row: ParallelGroupHeaderRow) => void;
 }
 
 /**
@@ -29,13 +33,16 @@ export interface ParallelGroupHeaderRowViewProps {
  *
  * Presentational apart from the filter writes, which go straight to `uiStore`
  * exactly as `StepHiddenRowView`'s "show" button does — that keeps `OutputPane`
- * a generic row renderer. Counts, chip pressed-states, and the group-undo
- * affordance are all resolved by `buildOutputRows`, so the header's height can
- * be estimated from the same row object the virtualizer sizes.
+ * a generic row renderer. Counts, chip pressed-states, and the group's
+ * undo/redo affordances are all resolved by `buildOutputRows`, so the header's
+ * height can be estimated from the same row object the virtualizer sizes.
+ *
+ * The group owns that undo outright — its members share one workspace snapshot,
+ * so no member's own CLI header offers a second copy of the same action.
  */
 export const ParallelGroupHeaderRowView: React.FC<
   ParallelGroupHeaderRowViewProps
-> = ({ row, onUndo }) => {
+> = ({ row, onUndo, onRedo }) => {
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );
@@ -70,15 +77,36 @@ export const ParallelGroupHeaderRowView: React.FC<
         <span className="text-description-fg">
           {parallelGroupHeaderSummaryText(row)}
         </span>
-        {row.promptUndo?.undo && onUndo && (
-          <button
-            type="button"
-            className="ml-auto text-link-fg hover:text-link-active-fg"
-            onClick={() => onUndo(row)}
-          >
-            {PARALLEL_GROUP_HEADER_LABELS.UNDO}
-          </button>
-        )}
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
+          {row.promptUndo?.undo && onUndo && (
+            <button
+              type="button"
+              className={`${ACTION_CLASS} text-link-fg hover:text-link-active-fg`}
+              style={{ touchAction: "manipulation" }}
+              title={row.promptUndo.undo.label}
+              onClick={() => onUndo(row)}
+            >
+              <i className="codicon codicon-discard shrink-0" />
+              <span className="min-w-0 truncate">
+                {row.promptUndo.undo.label}
+              </span>
+            </button>
+          )}
+          {row.promptUndo?.redo && onRedo && (
+            <button
+              type="button"
+              className={`${ACTION_CLASS} text-terminal-ansiGreen hover:opacity-80`}
+              style={{ touchAction: "manipulation" }}
+              title={row.promptUndo.redo.label}
+              onClick={() => onRedo(row)}
+            >
+              <i className="codicon codicon-redo shrink-0" />
+              <span className="min-w-0 truncate">
+                {row.promptUndo.redo.label}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
       <div
         className="mt-1 flex flex-wrap gap-1"

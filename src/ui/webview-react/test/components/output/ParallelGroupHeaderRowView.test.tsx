@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
-import type { ParallelGroupHeaderRow } from "@utils/outputRows";
+import {
+  parallelGroupRedoLabel,
+  parallelGroupUndoLabel,
+  type ParallelGroupHeaderRow,
+} from "@utils/outputRows";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
@@ -102,7 +106,7 @@ describe("ParallelGroupHeaderRowView", () => {
     );
   });
 
-  it("offers group undo only when the row carries an undo action", () => {
+  it("offers the group's undo only when the row carries an undo action", () => {
     const onPromptUndo = vi.fn();
     const { rerender } = render(
       <OutputRow
@@ -112,13 +116,13 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "Undo group" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Undo/ })).toBeNull();
 
     const row = buildHeaderRow({
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: { label: "Undo parallel steps 1–2", count: 3 },
+        undo: { label: parallelGroupUndoLabel(2), count: 3 },
         redo: null,
       },
     });
@@ -130,7 +134,29 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo group" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo 2 steps" }));
     expect(onPromptUndo).toHaveBeenCalledWith(row);
+  });
+
+  it("offers the group's redo on the header once the undo has been applied", () => {
+    const onPromptRedo = vi.fn();
+    const row = buildHeaderRow({
+      promptUndo: {
+        workspacePath: "/repo",
+        allStepOutputs: [],
+        undo: null,
+        redo: { label: parallelGroupRedoLabel(2), count: 3 },
+      },
+    });
+    render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        onPromptRedo={onPromptRedo}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo 2 steps" }));
+    expect(onPromptRedo).toHaveBeenCalledWith(row);
   });
 });

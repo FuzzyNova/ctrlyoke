@@ -1663,6 +1663,7 @@ const PARALLEL_GROUP_HEADER_CHIP_HEIGHT = 22; // line (16) + py-0.5 (4) + border
 const PARALLEL_GROUP_HEADER_CHIP_ROW_GAP = 4; // mt-1, and gap-y-1 between wrapped rows
 const PARALLEL_GROUP_HEADER_CHIP_HORIZONTAL_CHROME = 14; // px-1.5 (12) + border (2)
 const PARALLEL_GROUP_HEADER_SUMMARY_GAP = 8; // gap-x-2
+const PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH = 20; // codicon (16) + gap-1 (4)
 const PARALLEL_GROUP_HEADER_CHIP_GAP = 4; // gap-1
 // Proportional 12px UI text, measured against the same VS Code font stack the
 // rest of the chrome uses. Deliberately a touch wide: under-counting a wrap
@@ -1705,6 +1706,35 @@ export function parallelGroupHeaderTitle(
   return `Parallel steps ${row.startIndex + 1}–${row.endIndex + 1}`;
 }
 
+export function parallelGroupStepCount(
+  group: Pick<ParallelGroupDefinition, "startIndex" | "endIndex">
+): number {
+  return group.endIndex - group.startIndex + 1;
+}
+
+function parallelGroupActionLabel(verb: string, stepCount: number): string {
+  return `${verb} ${stepCount} step${stepCount === 1 ? "" : "s"}`;
+}
+
+/**
+ * Labels for a concurrent group's single undo/redo affordance.
+ *
+ * A group has one workspace snapshot covering every member, so there is one
+ * action and it lives on the group header — not on the first member's CLI
+ * header, which used to show a second, differently-worded copy of the same
+ * button. Single-sourced because three surfaces render these strings: the
+ * header, the header's height estimator, and the minimap's per-member entry
+ * (which is the only one of the three that exists before the group has
+ * produced output).
+ */
+export function parallelGroupUndoLabel(stepCount: number): string {
+  return parallelGroupActionLabel("Undo", stepCount);
+}
+
+export function parallelGroupRedoLabel(stepCount: number): string {
+  return parallelGroupActionLabel("Redo", stepCount);
+}
+
 function estimateParallelGroupHeaderHeight(
   row: ParallelGroupHeaderRow,
   outputContentWidth: number | undefined
@@ -1714,10 +1744,19 @@ function estimateParallelGroupHeaderHeight(
     PARALLEL_GROUP_HEADER_HORIZONTAL_CHROME
   );
   const summaryItems = [
-    parallelGroupHeaderTitle(row),
-    parallelGroupHeaderSummaryText(row),
-    ...(row.promptUndo?.undo ? [PARALLEL_GROUP_HEADER_LABELS.UNDO] : []),
-  ].map(parallelGroupHeaderTextWidth);
+    ...[parallelGroupHeaderTitle(row), parallelGroupHeaderSummaryText(row)].map(
+      parallelGroupHeaderTextWidth
+    ),
+    // The undo/redo labels are built with the row, so the estimate sizes the
+    // very strings the header paints; both buttons carry a leading codicon.
+    ...[row.promptUndo?.undo, row.promptUndo?.redo]
+      .filter((action) => action != null)
+      .map(
+        (action) =>
+          parallelGroupHeaderTextWidth(action.label) +
+          PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
+      ),
+  ];
   const chipItems = [
     PARALLEL_GROUP_HEADER_LABELS.ALL_CHIP,
     ...row.members.map((member) => `${member.stepIndex + 1} ${member.label}`),
@@ -2085,6 +2124,7 @@ export function buildOutputRows(
   const firstRowIndexByTarget = new Map<string, number>();
   const anchorRowIndexByTarget = new Map<string, number>();
   const parallelGroupHeaderRows = new Map<string, ParallelGroupHeaderRow>();
+  const parallelGroupUndoMeta = new Map<string, OutputRowPromptUndoMeta>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
   // OutputSection starts with an unmeasured width of 0. Treat that as unknown,
@@ -2402,46 +2442,45 @@ export function buildOutputRows(
     // attempt (see lastAttemptRowKeyBasePerStep above).
     const isLastAttemptForStep =
       lastAttemptRowKeyBasePerStep.get(targetKey) === attemptRowKeyBase;
+    const canUndoAttempt =
+      input.allowUndoActions && isLastAttemptForStep && !output.isStreaming;
+    // A concurrently executed group shares one workspace snapshot — stored
+    // against its first member — so it has exactly one undo, and that undo
+    // belongs to the group header rather than to any member's CLI header. It is
+    // stashed here because the header row opens the section long before the
+    // rows carrying the aggregation are built (see the adoption pass below).
+    const concurrentGroup = canUndoAttempt
+      ? getConcurrentGroupForStep(input, target.index)
+      : undefined;
+    if (concurrentGroup && target.index === concurrentGroup.startIndex) {
+      const actions = computePromptUndoActions(
+        allStepOutputs,
+        undoRecord,
+        workspaceSnapshot
+      );
+      if (actions.undo || actions.redo) {
+        const stepCount = parallelGroupStepCount(concurrentGroup);
+        parallelGroupUndoMeta.set(concurrentGroup.id, {
+          workspacePath: output.workingDirectory ?? "",
+          workspaceSnapshot,
+          undoRecord,
+          allStepOutputs,
+          undo: actions.undo
+            ? { ...actions.undo, label: parallelGroupUndoLabel(stepCount) }
+            : null,
+          redo: actions.redo
+            ? { ...actions.redo, label: parallelGroupRedoLabel(stepCount) }
+            : null,
+        });
+      }
+    }
     const promptUndoActions =
-      input.allowUndoActions && isLastAttemptForStep && !output.isStreaming
-        ? (() => {
-            const concurrentGroup = getConcurrentGroupForStep(
-              input,
-              target.index
-            );
-            if (
-              concurrentGroup &&
-              target.index !== concurrentGroup.startIndex
-            ) {
-              return { undo: null, redo: null };
-            }
-            const effectiveSnapshot = concurrentGroup
-              ? input.isViewingHistory && input.historyOutputs
-                ? input.historyOutputs.promptOutputs[concurrentGroup.startIndex]
-                    ?.workspaceSnapshot
-                : input.workspaceSnapshots[concurrentGroup.startIndex]
-              : workspaceSnapshot;
-            const actions = computePromptUndoActions(
-              allStepOutputs,
-              undoRecord,
-              effectiveSnapshot
-            );
-            if (!concurrentGroup) return actions;
-            return {
-              undo: actions.undo
-                ? {
-                    ...actions.undo,
-                    label: `Undo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
-                  }
-                : null,
-              redo: actions.redo
-                ? {
-                    ...actions.redo,
-                    label: `Redo parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`,
-                  }
-                : null,
-            };
-          })()
+      canUndoAttempt && !concurrentGroup
+        ? computePromptUndoActions(
+            allStepOutputs,
+            undoRecord,
+            workspaceSnapshot
+          )
         : { undo: null, redo: null };
     const promptUndo =
       promptUndoActions.undo || promptUndoActions.redo
@@ -2811,18 +2850,12 @@ export function buildOutputRows(
     }
   }
 
-  // A group's undo is aggregated onto its first member's rows, which are built
-  // long after the header opens the section — so the header adopts it here
-  // rather than duplicating the aggregation. `allowUndoActions` and the
-  // group-snapshot check have already been applied upstream.
+  // A group's undo is aggregated while its first member's rows are built, which
+  // happens long after the header opens the section — so the header adopts it
+  // here rather than duplicating the aggregation. It is the group's *only*
+  // undo affordance: member rows deliberately carry none.
   for (const headerRow of parallelGroupHeaderRows.values()) {
-    headerRow.promptUndo = rows.find(
-      (row) =>
-        row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER &&
-        row.target.kind === FINAL_STEP_PHASES.QUEUE &&
-        row.target.index === headerRow.startIndex &&
-        row.promptUndo?.undo
-    )?.promptUndo;
+    headerRow.promptUndo = parallelGroupUndoMeta.get(headerRow.groupId);
   }
 
   return {

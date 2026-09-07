@@ -185,7 +185,7 @@ interface OutputRowProps {
    * same target + meta pair a CLI header carries, so both share one handler.
    */
   onPromptUndo?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
-  onPromptRedo?: (row: CliHeaderRow) => void;
+  onPromptRedo?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onFileUndo?: (
     row: StructuredEventRow,
     request: OutputRowFileUndoRequest
@@ -1687,7 +1687,13 @@ function OutputRowComponent({
       content = <div className="h-px" aria-hidden="true" />;
       break;
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
-      content = <ParallelGroupHeaderRowView row={row} onUndo={onPromptUndo} />;
+      content = (
+        <ParallelGroupHeaderRowView
+          row={row}
+          onUndo={onPromptUndo}
+          onRedo={onPromptRedo}
+        />
+      );
       break;
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
       content = (

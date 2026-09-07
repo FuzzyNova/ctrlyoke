@@ -104,7 +104,7 @@ interface OutputPaneProps {
   onMinimapStepToggle: (step: MinimapStep) => void;
   onMinimapStepSolo: (step: MinimapStep) => void;
   onOutputProfilerRender: React.ProfilerOnRenderCallback;
-  onPromptRedo: (row: CliHeaderRow) => void;
+  onPromptRedo: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onPromptUndo: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onScroll: React.UIEventHandler<HTMLDivElement>;
   onTouchCancel: React.TouchEventHandler<HTMLDivElement>;
