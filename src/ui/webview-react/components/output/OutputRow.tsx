@@ -1919,10 +1919,18 @@ function OutputRowComponent({
     if (!isActiveRow && !row.stepColor) {
       return <>{content}</>;
     }
+    // STATUS is the only non-CLI-group row kind that paints its own left
+    // border (StatusMessage's severity border). Give it extra clearance so
+    // that border doesn't sit flush against the identity bar; the other
+    // kinds here (step-anchor, step-hidden, final-step-label,
+    // parallel-group-header) have no competing border and keep the minimal
+    // offset.
+    const contentOffsetClass =
+      row.rowKind === OUTPUT_ROW_KINDS.STATUS ? "pl-[6px]" : "pl-[3px]";
     return (
       <div
         className={[
-          row.stepColor ? "pl-[3px]" : "",
+          row.stepColor ? contentOffsetClass : "",
           isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
         ]
           .filter(Boolean)
