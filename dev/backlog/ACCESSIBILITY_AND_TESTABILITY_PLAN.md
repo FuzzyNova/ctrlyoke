@@ -276,6 +276,12 @@ distinguishable by container rather than renaming them.
 
 ## Phase 4 — Real semantics for custom widgets
 
+**Status:** Complete — shared and output tab bars expose named `tablist`/`tab` semantics with
+`aria-selected`; dropdown triggers expose stable listbox relationships and field-level names;
+workflow reset/collapse controls are siblings; and Prompt/Script plus User/Workspace remain
+mutually exclusive `role="group"` toggles with `aria-pressed` because they do not switch
+associated tab panels.
+
 Custom widgets built from `<button>` + CSS classes are invisible as widgets. Selection state
 carried only by a class name cannot be asserted by any test or read by any user.
 

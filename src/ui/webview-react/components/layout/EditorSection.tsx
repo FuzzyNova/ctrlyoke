@@ -232,6 +232,7 @@ const EditorSectionInner: React.FC = () => {
             onClick={() => setStepType(STEP_TYPES.PROMPT)}
             title="Prompt step — sends text to an AI harness"
             aria-label="Prompt step"
+            aria-pressed={!isScriptMode}
           >
             <Icon
               name="comment"
@@ -249,6 +250,7 @@ const EditorSectionInner: React.FC = () => {
             onClick={() => setStepType(STEP_TYPES.SCRIPT)}
             title="Script step — runs a shell command with no AI interaction"
             aria-label="Script step"
+            aria-pressed={isScriptMode}
           >
             <Icon
               name="terminal-powershell"

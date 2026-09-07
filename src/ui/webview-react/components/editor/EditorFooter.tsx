@@ -187,6 +187,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <DrawerTabBar
               activeTab={drawerActivePage}
               onTabChange={onDrawerTabChange}
+              ariaLabel="Prompt properties"
               harnessId={drawerHarnessId}
               isNarrow={isMediumWidth}
               tabOverrides={drawerTabOverrides}

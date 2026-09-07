@@ -7,6 +7,7 @@ describe("MultiCheckboxDropdown", () => {
     render(
       <MultiCheckboxDropdown
         id="skills"
+        triggerAriaLabel="Skills"
         selectedValues={["missing"]}
         onChange={vi.fn()}
         options={[{ value: "lint", label: "Lint" }]}
@@ -15,6 +16,10 @@ describe("MultiCheckboxDropdown", () => {
     );
 
     expect(screen.getByRole("button")).toHaveClass("border-warning-fg");
+    expect(screen.getByRole("button", { name: "Skills" })).toHaveAttribute(
+      "aria-controls",
+      "skills-listbox"
+    );
     expect(screen.getByText('1 skill not found: "missing".')).toHaveClass(
       "text-warning-fg"
     );

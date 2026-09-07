@@ -25,6 +25,28 @@ describe("SkillsSelect", () => {
     );
   });
 
+  it("exposes the field name and controlled listbox state", async () => {
+    const user = userEvent.setup();
+    render(
+      <SkillsSelect
+        id="skills"
+        value={undefined}
+        onChange={vi.fn()}
+        availableSkills={SKILLS}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Skills" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-controls", "skills-listbox");
+
+    await user.click(trigger);
+
+    expect(screen.getByRole("listbox")).toHaveAttribute("id", "skills-listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("shows the hidden toggle in inline mode when a namespace is provided", () => {
     const { container } = render(
       <SkillsSelect

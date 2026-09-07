@@ -1,5 +1,5 @@
 import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
@@ -29,6 +29,8 @@ interface SkillsSelectProps extends HideableProps {
   inline?: boolean;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
+  /** Accessible name for the field represented by the trigger. */
+  triggerAriaLabel?: string;
 }
 
 /**
@@ -57,8 +59,13 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   onUnhideOption,
   nonHideableValues = [],
   warning,
+  triggerAriaLabel = "Skills",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `skills-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -303,7 +310,10 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return !prev;
           })
         }
-        aria-label="Skills"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        aria-label={triggerAriaLabel}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>
@@ -320,7 +330,13 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         </span>
       )}
 
-      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+      <DropdownPortal
+        isOpen={isOpen}
+        popupPos={popupPos}
+        ref={popupRef}
+        id={listboxId}
+        role="listbox"
+      >
         {listContent}
         {hiddenToggleBar}
       </DropdownPortal>

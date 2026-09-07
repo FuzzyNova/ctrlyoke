@@ -554,6 +554,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <HarnessDropdown
                   id="prop-harness"
+                  triggerAriaLabel="Harness"
                   value={properties.harness ?? INHERIT_DEFAULT_OPTION}
                   onChange={handleHarnessChange}
                   showDefault={true}
@@ -586,6 +587,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-model"
+                  triggerAriaLabel="Model"
                   value={properties.model ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
@@ -632,6 +634,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-agent"
+                  triggerAriaLabel="Agent"
                   value={
                     properties.agent === undefined
                       ? INHERIT_DEFAULT_OPTION
@@ -679,6 +682,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   Skills
                 </label>
                 <SkillsSelect
+                  id="prop-skills"
+                  triggerAriaLabel="Skills"
                   value={properties.skills as string[] | null | undefined}
                   onChange={(v) => setProperty(PROMPT_PROPERTIES.SKILLS, v)}
                   availableSkills={availableSkills.map((s) => ({
@@ -703,6 +708,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-additional-args-mode"
+                  triggerAriaLabel="Additional Args"
                   value={additionalArgsMode}
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
@@ -785,6 +791,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-execution-mode"
+                  triggerAriaLabel="Execution Mode"
                   value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
@@ -824,6 +831,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-resume-session"
+                  triggerAriaLabel="Resume Session"
                   value={
                     properties.resumeSession === undefined
                       ? INHERIT_DEFAULT_OPTION
@@ -930,6 +938,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-pre-condition-mode"
+                triggerAriaLabel="Pre-Condition"
                 value={preConditionMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -982,6 +991,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-end-condition-mode"
+                triggerAriaLabel="End Condition"
                 value={endConditionMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -1031,6 +1041,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-error-behavior-mode"
+                triggerAriaLabel="Error Behavior"
                 value={errorBehaviorMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -1093,6 +1104,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-permission-mode"
+                  triggerAriaLabel="Permission Mode"
                   value={
                     properties.toolPermissions === undefined
                       ? INHERIT_DEFAULT_OPTION

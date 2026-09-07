@@ -1192,6 +1192,7 @@ function StepDetail({
         tabs={DRY_RUN_TAB_DEFINITIONS}
         activeTab={activeTab}
         onTabChange={onTabChange}
+        ariaLabel="Dry run sections"
         harnessId={step.resolvedProperties.harnessId}
         tabOverrides={tabOverrides}
         className="flex flex-shrink-0 items-center border-b border-panel-border bg-sidebar-bg overflow-x-hidden h-10"

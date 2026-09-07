@@ -40,6 +40,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   dropdownMinWidth?: number;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
+  /** Accessible name for the field represented by the trigger. */
+  triggerAriaLabel?: string;
   /** Values granted by another authoring surface and therefore not toggleable here. */
   lockedValues?: readonly string[];
 }
@@ -70,9 +72,11 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   dropdownMaxHeight = "60vh",
   dropdownMinWidth,
   warning,
+  triggerAriaLabel,
   lockedValues = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const listboxId = `${id}-listbox`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -308,6 +312,10 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             return !prev;
           })
         }
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        aria-label={triggerAriaLabel}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">
@@ -330,7 +338,13 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         </span>
       )}
 
-      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+      <DropdownPortal
+        isOpen={isOpen}
+        popupPos={popupPos}
+        ref={popupRef}
+        id={listboxId}
+        role="listbox"
+      >
         {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
         {popupPos?.bottom !== undefined && hideEnabled && (
           <DropdownHiddenToggle

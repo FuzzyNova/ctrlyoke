@@ -122,11 +122,18 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
         </div>
 
         {showTerminalTab ? (
-          <div className="flex items-center ml-1">
+          <div
+            className="flex items-center ml-1"
+            role="tablist"
+            aria-label="Output views"
+          >
             <button
+              type="button"
               className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectOutputTab}
               aria-label="Output"
+              aria-selected={activeOutputTab === OUTPUT_TABS.OUTPUT}
+              role="tab"
             >
               <Icon
                 name="output"
@@ -135,6 +142,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               {!isHeaderNarrow && <span>Output</span>}
             </button>
             <button
+              type="button"
               className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.TERMINAL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectTerminalTab}
               aria-label={
@@ -147,6 +155,8 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                   ? `Terminal · ${terminalExecutionRunLabel}`
                   : undefined
               }
+              aria-selected={activeOutputTab === OUTPUT_TABS.TERMINAL}
+              role="tab"
             >
               <Icon
                 name="terminal"

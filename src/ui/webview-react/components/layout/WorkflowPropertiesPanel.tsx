@@ -1520,6 +1520,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
     );
   }
 
+  const sectionHeaderContent = (
+    <>
+      {!isMobileMode && (
+        <Icon
+          name="chevron-right"
+          className="text-xs rotate-90 transition-transform duration-150"
+        />
+      )}
+      <Icon name="settings" className="text-sm" />
+      <span className="ml-0.5 min-w-0 truncate whitespace-nowrap text-xs font-semibold uppercase tracking-wide">
+        Workflow Properties
+      </span>
+    </>
+  );
+
   return (
     <div
       ref={drawerRef}
@@ -1528,27 +1543,22 @@ const WorkflowPropertiesPanelInner: React.FC<{
       {/* Section Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         className={`flex items-center justify-between h-[30px] px-2 border-b border-panel-border${isMobileMode ? "" : " cursor-pointer select-none"}`}
-        onClick={isMobileMode ? undefined : handleToggle}
-        role={isMobileMode ? undefined : "button"}
-        aria-label={isMobileMode ? undefined : "Collapse workflow properties"}
-        tabIndex={isMobileMode ? undefined : 0}
-        onKeyDown={
-          isMobileMode
-            ? undefined
-            : (e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()
-        }
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 text-description-fg hover:text-foreground transition-colors">
-          {!isMobileMode && (
-            <Icon
-              name="chevron-right"
-              className="text-xs rotate-90 transition-transform duration-150"
-            />
+          {isMobileMode ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              {sectionHeaderContent}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1 border-none bg-transparent p-0 text-left text-description-fg transition-colors hover:text-foreground"
+              onClick={handleToggle}
+              aria-label="Collapse workflow properties"
+            >
+              {sectionHeaderContent}
+            </button>
           )}
-          <Icon name="settings" className="text-sm" />
-          <span className="ml-0.5 min-w-0 truncate whitespace-nowrap text-xs font-semibold uppercase tracking-wide">
-            Workflow Properties
-          </span>
           <button
             type="button"
             className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
@@ -1605,6 +1615,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <HarnessDropdown
                     id="settings-harness"
+                    triggerAriaLabel="Harness"
                     value={effectiveHarness}
                     onChange={handleHarnessChange}
                     harnessStatus={harnessStatus}
@@ -1643,6 +1654,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-model"
+                    triggerAriaLabel="Model"
                     value={effectiveModel}
                     onChange={handleModelChange}
                     options={
@@ -1692,6 +1704,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-agent"
+                    triggerAriaLabel="Agent"
                     value={effectiveAgent || ""}
                     onChange={handleAgentChange}
                     options={[
@@ -1734,6 +1747,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <MultiCheckboxDropdown
                     id="settings-skills"
+                    triggerAriaLabel="Skills"
                     selectedValues={effectiveSkills}
                     onChange={handleSkillsChange}
                     options={availableSkills.map((s) => ({
@@ -1817,6 +1831,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-execution-mode"
+                    triggerAriaLabel="Execution Mode"
                     value={effectiveExecutionMode}
                     onChange={handleExecutionModeChange}
                     options={EXECUTION_MODE_OPTIONS}
@@ -1841,6 +1856,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-worktree-mode"
+                    triggerAriaLabel="Worktree"
                     value={worktreeMode}
                     onChange={handleWorktreeModeChange}
                     options={WORKTREE_MODE_OPTIONS}
@@ -1999,6 +2015,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-resume-session"
+                    triggerAriaLabel="Resume Session"
                     value={
                       workflowProperties.sessionId ===
                         SESSION_ID_SENTINELS.FINAL_STEP &&
@@ -2308,6 +2325,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-permission-mode"
+                    triggerAriaLabel="Permission Mode"
                     value={permMode}
                     onChange={(mode) => {
                       handleToolPermissionsChange({
@@ -2371,6 +2389,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-trusted-external-roots-mode"
+                    triggerAriaLabel="Trusted External Roots"
                     value={trustedRootsMode}
                     onChange={handleTrustedRootsModeChange}
                     options={[
@@ -2579,6 +2598,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       <DrawerTabBar
         activeTab={activePage}
         onTabChange={setActivePage}
+        ariaLabel="Workflow properties"
         harnessId={effectiveHarness as HarnessId}
         isNarrow={isNarrow}
         tabOverrides={tabOverrides}

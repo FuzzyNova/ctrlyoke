@@ -23,6 +23,29 @@ function getTrigger() {
 }
 
 describe("CustomSelect — basic behavior", () => {
+  it("exposes a named listbox trigger and its controlled listbox", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        id="model"
+        triggerAriaLabel="Model"
+        value="a"
+        onChange={vi.fn()}
+        options={OPTIONS}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Model" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-controls", "model-listbox");
+
+    await user.click(trigger);
+
+    expect(screen.getByRole("listbox")).toHaveAttribute("id", "model-listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("shows selected option label on trigger button", () => {
     render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
     expect(getTrigger().textContent).toContain("Option A");

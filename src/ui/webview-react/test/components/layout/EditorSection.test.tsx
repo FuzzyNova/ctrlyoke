@@ -172,6 +172,20 @@ describe("EditorSection", () => {
     expect(enableButton).toHaveClass("text-warning-fg");
   });
 
+  it("exposes prompt and script mode selection through aria-pressed", () => {
+    render(<EditorSection />);
+
+    const promptButton = screen.getByRole("button", { name: "Prompt step" });
+    const scriptButton = screen.getByRole("button", { name: "Script step" });
+    expect(promptButton).toHaveAttribute("aria-pressed", "true");
+    expect(scriptButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(scriptButton);
+
+    expect(promptButton).toHaveAttribute("aria-pressed", "false");
+    expect(scriptButton).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("loads the disabled state when editing an existing disabled step", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",

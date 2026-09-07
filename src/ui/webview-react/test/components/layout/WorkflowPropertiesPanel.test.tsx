@@ -798,4 +798,17 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
       setup: undefined,
     });
   });
+
+  it("keeps reset and collapse as sibling controls", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse workflow properties",
+    });
+    const resetButton = screen.getByRole("button", {
+      name: "Reset all to defaults",
+    });
+
+    expect(collapseButton).not.toContainElement(resetButton);
+  });
 });

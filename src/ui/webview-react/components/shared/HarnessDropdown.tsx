@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useId, useState, useRef, useEffect } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
@@ -265,6 +265,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   inline = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `harness-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const pendingRetryRequest = useRef<string | null>(null);
@@ -453,6 +457,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           }
           aria-expanded={isOpen}
           aria-haspopup="listbox"
+          aria-controls={listboxId}
           aria-label={triggerAriaLabel}
           title={
             triggerTitle ??
@@ -508,7 +513,13 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         )}
       </div>
 
-      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+      <DropdownPortal
+        isOpen={isOpen}
+        popupPos={popupPos}
+        ref={popupRef}
+        id={listboxId}
+        role="listbox"
+      >
         {scrollableList}
         {toggleBar()}
       </DropdownPortal>

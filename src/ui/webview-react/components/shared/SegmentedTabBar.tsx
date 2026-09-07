@@ -17,6 +17,8 @@ export interface SegmentedTabBarProps<Id extends string> {
   tabs: readonly SegmentedTab<Id>[];
   activeTab: Id;
   onTabChange: (id: Id) => void;
+  /** Accessible name for this tablist. */
+  ariaLabel: string;
   /** Active harness ID for tabs without a codicon. */
   harnessId?: HarnessId;
   /** Per-tab icon/color overrides driven by resolved property state. */
@@ -29,6 +31,7 @@ export function SegmentedTabBar<Id extends string>({
   tabs,
   activeTab,
   onTabChange,
+  ariaLabel,
   harnessId,
   tabOverrides,
   className,
@@ -39,6 +42,8 @@ export function SegmentedTabBar<Id extends string>({
         className ??
         "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
       }
+      role="tablist"
+      aria-label={ariaLabel}
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
@@ -58,6 +63,8 @@ export function SegmentedTabBar<Id extends string>({
             type="button"
             title={tab.label}
             aria-label={tab.label}
+            role="tab"
+            aria-selected={isActive}
             className={`fp-tab-hc${isActive ? " fp-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`

@@ -27,6 +27,22 @@ afterEach(() => {
 });
 
 describe("HarnessDropdown", () => {
+  it("exposes a named listbox trigger and its controlled listbox", async () => {
+    render(
+      <HarnessDropdown
+        id="harness"
+        triggerAriaLabel="Harness"
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Harness" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-controls", "harness-listbox");
+  });
+
   it("renders the hidden toggle after inline options", () => {
     const { container } = render(
       <HarnessDropdown

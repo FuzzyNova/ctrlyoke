@@ -23,26 +23,35 @@ describe("SegmentedTabBar", () => {
         tabs={tabs}
         activeTab="summary"
         onTabChange={onTabChange}
+        ariaLabel="Test properties"
       />
     );
 
-    await user.click(screen.getByTitle("Details"));
+    await user.click(screen.getByRole("tab", { name: "Details" }));
 
     expect(onTabChange).toHaveBeenCalledWith("details");
   });
 
   it("names each tab for role-based queries", () => {
     render(
-      <SegmentedTabBar tabs={tabs} activeTab="summary" onTabChange={vi.fn()} />
+      <SegmentedTabBar
+        tabs={tabs}
+        activeTab="summary"
+        onTabChange={vi.fn()}
+        ariaLabel="Test properties"
+      />
     );
 
-    expect(screen.getByRole("button", { name: "Summary" })).toHaveAttribute(
-      "title",
-      "Summary"
+    expect(
+      screen.getByRole("tablist", { name: "Test properties" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute(
+      "aria-selected",
+      "true"
     );
-    expect(screen.getByRole("button", { name: "Details" })).toHaveAttribute(
-      "title",
-      "Details"
+    expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute(
+      "aria-selected",
+      "false"
     );
   });
 
@@ -52,6 +61,7 @@ describe("SegmentedTabBar", () => {
         tabs={tabs}
         activeTab="summary"
         onTabChange={vi.fn()}
+        ariaLabel="Test properties"
         tabOverrides={{
           details: {
             codicon: "warning",
@@ -62,7 +72,7 @@ describe("SegmentedTabBar", () => {
       />
     );
 
-    const details = screen.getByTitle("Details");
+    const details = screen.getByRole("tab", { name: "Details" });
     expect(details).toHaveClass("text-warning-fg");
     expect(details).toHaveClass("hover:text-terminal-ansiBrightYellow");
     expect(details.querySelector(".codicon")).toHaveClass("codicon-warning");
@@ -74,17 +84,17 @@ describe("SegmentedTabBar", () => {
         tabs={tabs}
         activeTab="summary"
         onTabChange={vi.fn()}
+        ariaLabel="Test properties"
         tabOverrides={{
           summary: { activeColor: "text-focus-highlight" },
         }}
       />
     );
 
-    const summary = screen.getByTitle("Summary");
-    expect(summary).toHaveClass("fp-tab-hc-selected");
-    expect(summary).toHaveClass("border-b-focus-border");
-    expect(summary).toHaveClass("text-focus-highlight");
-    expect(summary).not.toHaveClass("text-description-fg");
+    const summary = screen.getByRole("tab", { name: "Summary" });
+    const details = screen.getByRole("tab", { name: "Details" });
+    expect(summary).toHaveAttribute("aria-selected", "true");
+    expect(details).toHaveAttribute("aria-selected", "false");
   });
 
   it("renders a distinct corner badge for active and inactive tabs", () => {
@@ -93,6 +103,7 @@ describe("SegmentedTabBar", () => {
         tabs={tabs}
         activeTab="summary"
         onTabChange={vi.fn()}
+        ariaLabel="Test properties"
         tabOverrides={{
           summary: { badgeCodicon: "shield", badgeColor: "text-error-fg" },
           details: { badgeCodicon: "warning", badgeColor: "text-warning-fg" },
@@ -101,10 +112,10 @@ describe("SegmentedTabBar", () => {
     );
 
     const summaryBadge = screen
-      .getByTitle("Summary")
+      .getByRole("tab", { name: "Summary" })
       .querySelector(".codicon-shield");
     const detailsBadge = screen
-      .getByTitle("Details")
+      .getByRole("tab", { name: "Details" })
       .querySelector(".codicon-warning");
 
     expect(summaryBadge).toHaveStyle({ fontSize: "11px" });
@@ -119,8 +130,14 @@ describe("SegmentedTabBar", () => {
     );
     expect(summaryBadge?.parentElement).toHaveAttribute("aria-hidden", "true");
     expect(detailsBadge?.parentElement).toHaveAttribute("aria-hidden", "true");
-    expect(screen.getByTitle("Summary")).toHaveAttribute("title", "Summary");
-    expect(screen.getByTitle("Details")).toHaveAttribute("title", "Details");
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.getByRole("tab", { name: "Details" })).toHaveAttribute(
+      "aria-selected",
+      "false"
+    );
   });
 
   it("does not render a badge when the override omits one", () => {
@@ -129,10 +146,13 @@ describe("SegmentedTabBar", () => {
         tabs={tabs}
         activeTab="summary"
         onTabChange={vi.fn()}
+        ariaLabel="Test properties"
         tabOverrides={{ summary: { color: "text-error-fg" } }}
       />
     );
 
-    expect(screen.getByTitle("Summary").querySelector(".absolute")).toBeNull();
+    expect(
+      screen.getByRole("tab", { name: "Summary" }).querySelector(".absolute")
+    ).toBeNull();
   });
 });

@@ -30,6 +30,14 @@ describe("GlobalSettingsDrawer", () => {
     expect(
       screen.getByRole("button", { name: "Status Line" })
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "User" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
     expect(screen.getByText("Statusline Tracking")).toBeInTheDocument();
   });
 

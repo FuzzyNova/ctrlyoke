@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useId, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
@@ -102,6 +102,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   warningId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `custom-select-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -296,6 +300,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         onClick={handleToggle}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
         aria-label={triggerAriaLabel}
         aria-describedby={warning ? warningId : undefined}
         title={triggerTitle}
@@ -318,7 +323,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       )}
 
       {!disabled && (
-        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+        <DropdownPortal
+          isOpen={isOpen}
+          popupPos={popupPos}
+          ref={popupRef}
+          id={listboxId}
+          role="listbox"
+        >
           {scrollableList}
           {toggleBar()}
         </DropdownPortal>
