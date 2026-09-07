@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { HarnessQuickPicker } from "./HarnessQuickPicker";
 import { ModelQuickPicker } from "./ModelQuickPicker";
@@ -83,15 +83,22 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 }) => {
   const [footerRef, isMediumWidth] = useElementNarrow(768);
   const [footerRefSmall, isSmallWidth] = useElementNarrow(400);
+  // Must be a stable identity: an inline arrow here is a new function every
+  // render, so React detaches and re-attaches it each time, which tears down
+  // and rebuilds both ResizeObservers and re-measures on every render.
+  const mergedFooterRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      footerRef(node);
+      footerRefSmall(node);
+    },
+    [footerRef, footerRefSmall]
+  );
   const stepType = useEditorStore((s) => s.stepType);
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
 
   return (
     <div
-      ref={(node) => {
-        footerRef(node);
-        footerRefSmall(node);
-      }}
+      ref={mergedFooterRef}
       className="editor-footer shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
       style={{ height: `${EDITOR_FOOTER_HEIGHT_REM}rem` }}
     >

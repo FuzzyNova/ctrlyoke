@@ -62,25 +62,63 @@ afterEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Measured widths, keyed by node. The hook re-measures the element itself
+ * rather than trusting the ResizeObserver entry, so a simulated resize has to
+ * move the element's box — exactly as a real one does.
+ */
+const nodeWidths = new WeakMap<HTMLElement, number>();
+
+function setNodeWidth(node: HTMLElement, width: number) {
+  nodeWidths.set(node, width);
+}
+
 function makeNode(width: number): HTMLDivElement {
   const node = document.createElement("div");
-  vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
-    width,
-    height: 100,
-    x: 0,
-    y: 0,
-    top: 0,
-    right: width,
-    bottom: 100,
-    left: 0,
-    toJSON: () => ({}),
+  setNodeWidth(node, width);
+  vi.spyOn(node, "getBoundingClientRect").mockImplementation(() => {
+    const w = nodeWidths.get(node) ?? 0;
+    return {
+      width: w,
+      height: 100,
+      x: 0,
+      y: 0,
+      top: 0,
+      right: w,
+      bottom: 100,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
   });
   return node;
 }
 
+/** The node most recently passed to `observer.observe()`. */
+function observedNode(): HTMLElement | undefined {
+  const calls = mockObserveInstance.observe.mock.calls;
+  return calls[calls.length - 1]?.[0] as HTMLElement | undefined;
+}
+
 function triggerResize(width: number) {
+  const node = observedNode();
+  if (node) {
+    setNodeWidth(node, width);
+  }
   observerCallback(
     [{ contentRect: { width } } as ResizeObserverEntry],
+    mockObserveInstance as unknown as ResizeObserver
+  );
+}
+
+/**
+ * Fires the observer with a `contentRect` that disagrees with the element's
+ * actual box, without moving the element — what really happens on a padded
+ * element, where `contentRect` excludes the padding that the border box
+ * includes.
+ */
+function triggerResizeWithStaleContentRect(contentRectWidth: number) {
+  observerCallback(
+    [{ contentRect: { width: contentRectWidth } } as ResizeObserverEntry],
     mockObserveInstance as unknown as ResizeObserver
   );
 }
@@ -241,5 +279,50 @@ describe("useElementNarrow", () => {
     });
 
     expect(disconnectFn).toHaveBeenCalled();
+  });
+  // -------------------------------------------------------------------------
+  // Regression: padded-element tier flapping
+  // -------------------------------------------------------------------------
+
+  it("ignores the observer entry's contentRect and re-measures the element", () => {
+    // `contentRect` is the *content* box, but the ref-attach path measures the
+    // *border* box. On an element with horizontal padding the two disagree by
+    // exactly that padding, so a width inside that band used to resolve to one
+    // tier on attach and the opposite one when the observer fired — and the two
+    // sites then fought each other every animation frame.
+    const { result } = renderHook(() => useElementNarrow(768));
+    const node = makeNode(770); // border box 770 >= 768 → not narrow
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(false);
+
+    // A real observer on a `px-3` element reports 770 - 24 = 746 here.
+    act(() => {
+      triggerResizeWithStaleContentRect(746);
+    });
+
+    expect(result.current[1]).toBe(false);
+  });
+
+  it("holds its tier across repeated ref re-attachment near the threshold", () => {
+    const { result } = renderHook(() => useElementNarrow(768));
+    const node = makeNode(770);
+
+    act(() => {
+      result.current[0](node);
+    });
+
+    // An unstable (inline) callback ref makes React detach and re-attach on
+    // every render. That must not be able to flip the tier back and forth.
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        result.current[0](null);
+        result.current[0](node);
+        triggerResizeWithStaleContentRect(746);
+      });
+      expect(result.current[1]).toBe(false);
+    }
   });
 });

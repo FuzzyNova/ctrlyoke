@@ -14,7 +14,23 @@ import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameR
 const DEFAULT_THRESHOLD = 380;
 
 /**
- * Hook that classifies a DOM element's content width into a discrete tier.
+ * Single source of truth for "how wide is this element".
+ *
+ * Every measurement site in {@link useElementTier} must go through this. An
+ * earlier version mixed `getBoundingClientRect().width` (border box, used when
+ * attaching the ref) with `ResizeObserverEntry.contentRect.width` (content
+ * box, used in the observer). On an element with horizontal padding those two
+ * disagree by exactly that padding, so any width landing inside the resulting
+ * band resolved to one tier when the ref re-attached and the other when the
+ * observer fired — and the two measurements fought each other every animation
+ * frame, re-rendering the subtree ~60x/sec and breaking click hit-testing.
+ */
+function measureWidth(node: HTMLElement): number {
+  return node.getBoundingClientRect().width;
+}
+
+/**
+ * Hook that classifies a DOM element's width into a discrete tier.
  *
  * Uses `ResizeObserver` so it reacts to panel resizes, not just viewport
  * changes. This is essential in a resizable-panels layout where individual
@@ -33,7 +49,8 @@ const DEFAULT_THRESHOLD = 380;
  * bail-out works) and it must be **referentially stable** (module-level
  * function or `useCallback`), since changing its identity re-measures.
  *
- * @param resolveTier  Maps an observed width to its tier.
+ * @param resolveTier  Maps an observed width to its tier. The width is the
+ *                     element's border box (see {@link measureWidth}).
  * @param initialTier  Tier assumed before the element is first measured.
  * @param deferWhile   When true, suppresses tier updates until it becomes
  *                     false, then applies the most recent observed width.
@@ -77,19 +94,25 @@ export function useElementTier<
       if (node) {
         // Snapshot the current width immediately so the initial render is
         // correct before the first ResizeObserver callback fires.
-        const initialWidth = node.getBoundingClientRect().width;
+        const initialWidth = measureWidth(node);
         applyWidth(initialWidth);
 
+        // Deliberately ignores the entry's own rects and re-measures the
+        // node, so this site cannot drift from the two above. The callback is
+        // already deferred to an animation frame, so reading layout here is
+        // safe and the value is the one the browser just computed.
         const { observer, disconnect } = createAnimationFrameResizeObserver(
-          (entries) => {
-            for (const entry of entries) {
-              const width = entry.contentRect.width;
-              if (deferWhile) {
-                deferredWidthRef.current = width;
-                continue;
-              }
-              applyWidth(width);
+          () => {
+            const observed = nodeRef.current;
+            if (!observed) {
+              return;
             }
+            const width = measureWidth(observed);
+            if (deferWhile) {
+              deferredWidthRef.current = width;
+              return;
+            }
+            applyWidth(width);
           }
         );
         observer.observe(node);
@@ -115,7 +138,7 @@ export function useElementTier<
       return;
     }
 
-    const liveWidth = node.getBoundingClientRect().width;
+    const liveWidth = measureWidth(node);
     if (
       lastWidthRef.current == null ||
       Math.abs(lastWidthRef.current - liveWidth) >= 1
@@ -128,8 +151,8 @@ export function useElementTier<
 }
 
 /**
- * Two-tier {@link useElementTier}: tracks whether an element's content width is
- * below a single threshold.
+ * Two-tier {@link useElementTier}: tracks whether an element's width is below
+ * a single threshold.
  *
  * @param threshold   Width in pixels below which the element is "narrow".
  *                    Defaults to {@link DEFAULT_THRESHOLD}.
