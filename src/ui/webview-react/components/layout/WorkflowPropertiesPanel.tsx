@@ -104,6 +104,7 @@ import {
   toFieldDiagnostic,
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
+import { Icon } from "../shared/Icon";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -927,8 +928,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       }
 
       const seededRoots =
-        workflowProperties.trustedExternalRoots ??
-        liveTrustedExternalRoots;
+        workflowProperties.trustedExternalRoots ?? liveTrustedExternalRoots;
       setTrustedRootsMode(TRUSTED_ROOTS_MODES.CUSTOM);
       setTrustedRootsInput(seededRoots);
       postWorkflowPropertiesUpdate({ trustedExternalRoots: seededRoots });
@@ -1540,9 +1540,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           {!isMobileMode && (
-            <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
+            <Icon
+              name="chevron-right"
+              className="text-xs rotate-90 transition-transform duration-150"
+            />
           )}
-          <i className="codicon codicon-settings text-sm" />
+          <Icon name="settings" className="text-sm" />
           <span className="ml-0.5 min-w-0 truncate whitespace-nowrap text-xs font-semibold uppercase tracking-wide">
             Workflow Properties
           </span>
@@ -1556,7 +1559,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             title="Reset all to defaults"
             aria-label="Reset all to defaults"
           >
-            <i className="codicon codicon-debug-restart text-xs" />
+            <Icon name="debug-restart" className="text-xs" />
           </button>
         </div>
         {onRequestClose && (

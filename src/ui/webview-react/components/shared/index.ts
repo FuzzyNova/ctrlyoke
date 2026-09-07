@@ -1,4 +1,5 @@
 export { Button } from "./Button";
+export { Icon, type IconProps } from "./Icon";
 export {
   KeyValueMapEditor,
   keyValueMapObjectToString,

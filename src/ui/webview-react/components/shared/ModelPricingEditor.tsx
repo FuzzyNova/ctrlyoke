@@ -9,6 +9,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { Button } from "./Button";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import { LocalNumberInput, LocalTextInput } from "./LocalInputs";
+import { Icon } from "./Icon";
 
 export type ModelPricingValue = CtrlYokeGlobalSettings["modelPricing"];
 
@@ -224,7 +225,7 @@ export const ModelPricingEditor: React.FC<{
                 onClick={() => removeHarness(harnessId)}
                 aria-label={`Remove ${HARNESS_INFO[harnessId].name} pricing overrides`}
               >
-                <i className="codicon codicon-trash" aria-hidden="true" />
+                <Icon name="trash" />
                 <span className="sr-only">Remove harness</span>
               </Button>
             </div>
@@ -279,10 +280,7 @@ export const ModelPricingEditor: React.FC<{
                   className="flex items-start gap-1 text-xs text-warning-fg"
                   role="note"
                 >
-                  <i
-                    className="codicon codicon-warning mt-px"
-                    aria-hidden="true"
-                  />
+                  <Icon name="warning" className="mt-px" />
                   <span>
                     Cost estimates remain unavailable for this harness until its
                     token semantics are verified, even when these rates are
@@ -310,7 +308,7 @@ export const ModelPricingEditor: React.FC<{
                     onClick={() => removeModel(harnessId, modelId)}
                     aria-label={`Remove model ${modelId}`}
                   >
-                    <i className="codicon codicon-trash" aria-hidden="true" />
+                    <Icon name="trash" />
                     <span className="sr-only">Remove model</span>
                   </Button>
                 </div>
@@ -320,10 +318,7 @@ export const ModelPricingEditor: React.FC<{
                       className="flex items-start gap-1 text-xs text-warning-fg"
                       role="note"
                     >
-                      <i
-                        className="codicon codicon-warning mt-px"
-                        aria-hidden="true"
-                      />
+                      <Icon name="warning" className="mt-px" />
                       <span>
                         Both required rates are 0, so this override prices the
                         model at $0 instead of using the bundled price registry.

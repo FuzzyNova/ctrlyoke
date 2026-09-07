@@ -34,6 +34,7 @@ import {
 } from "../settings";
 import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
+import { Icon } from "../shared/Icon";
 
 const ALL_TABS = [
   // Core
@@ -228,7 +229,7 @@ export function GlobalSettingsDrawer() {
       {/* Title bar — always visible, never scrolls */}
       <div className="flex items-center justify-between px-2 h-[30px] border-b border-panel-border shrink-0">
         <div className="flex items-center gap-1 text-description-fg">
-          <i className="codicon codicon-settings-gear text-sm" />
+          <Icon name="settings-gear" className="text-sm" />
           <span className="text-sm font-semibold uppercase tracking-wide ml-0.5">
             Settings
           </span>
@@ -265,7 +266,7 @@ export function GlobalSettingsDrawer() {
             aria-label="Open settings file"
             onClick={() => openSettingsFile(activeScope, vscode)}
           >
-            <i className="codicon codicon-lg codicon-go-to-file" />
+            <Icon name="go-to-file" className="codicon-lg" />
           </button>
 
           <ExitButton

@@ -66,6 +66,7 @@ import { Modal } from "./Modal";
 import { PortabilityReportSection } from "./PortabilityReportSection";
 import { SegmentedTabBar, type SegmentedTab } from "./SegmentedTabBar";
 import { getPermissionModeBadge, type TabIconOverride } from "./tabBadgeUtils";
+import { Icon } from "./Icon";
 
 const DRY_RUN_TABS = {
   SUMMARY: "summary",
@@ -188,10 +189,7 @@ function DiagnosticList({
             className={`flex items-start gap-2 rounded border border-panel-border px-3 py-2 text-xs ${style.text}`}
             role="listitem"
           >
-            <i
-              className={`codicon codicon-${style.icon} mt-px flex-shrink-0`}
-              aria-hidden="true"
-            />
+            <Icon name={style.icon} className="mt-px flex-shrink-0" />
             <div className="min-w-0">
               <div>{diagnostic.message}</div>
               {diagnostic.remediation && (
@@ -262,10 +260,7 @@ function WorktreeSummary({
       <DefinitionList entries={entries} />
       {!worktree.eligible && (
         <div className="mt-2 flex items-start gap-1 rounded border border-error-fg border-opacity-40 bg-severity-error-bg px-3 py-2 text-xs text-error-fg">
-          <i
-            className="codicon codicon-error mt-px flex-shrink-0"
-            aria-hidden="true"
-          />
+          <Icon name="error" className="mt-px flex-shrink-0" />
           <span>
             This run will not use a worktree
             {worktree.eligibilityReason
@@ -276,10 +271,7 @@ function WorktreeSummary({
       )}
       {worktree.eligible && worktree.plannedDirectoryNotice && (
         <div className="mt-2 flex items-start gap-1 text-xxs text-description-fg">
-          <i
-            className="codicon codicon-info mt-px flex-shrink-0"
-            aria-hidden="true"
-          />
+          <Icon name="info" className="mt-px flex-shrink-0" />
           <span>{worktree.plannedDirectoryNotice}</span>
         </div>
       )}
@@ -359,10 +351,7 @@ function TimelineEntryRow({
     return (
       <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
-          <i
-            className="codicon codicon-file-code mr-2 text-description-fg"
-            aria-hidden="true"
-          />
+          <Icon name="file-code" className="mr-2 text-description-fg" />
           Payload — {formatPayloadFileCount(entry.fileCount)},{" "}
           {formatMagnitude(entry.totalByteCount)} bytes
         </div>
@@ -381,10 +370,7 @@ function TimelineEntryRow({
     return (
       <div className="flex items-center justify-between gap-3 rounded border border-panel-border px-3 py-2 text-xs">
         <div className="min-w-0 truncate text-editor-fg">
-          <i
-            className="codicon codicon-terminal mr-2 text-description-fg"
-            aria-hidden="true"
-          />
+          <Icon name="terminal" className="mr-2 text-description-fg" />
           Command — <code>{entry.executable}</code> · cwd:{" "}
           <code>{entry.cwd}</code>
         </div>
@@ -419,10 +405,7 @@ function TimelineEntryRow({
       </div>
       {isShared ? (
         <div className="mt-1 flex items-start gap-1 text-warning-fg">
-          <i
-            className="codicon codicon-warning mt-px flex-shrink-0"
-            aria-hidden="true"
-          />
+          <Icon name="warning" className="mt-px flex-shrink-0" />
           <span>{mutation.warning ?? "Workspace-wide side effect."}</span>
         </div>
       ) : (
@@ -853,10 +836,7 @@ function PayloadSection({
             role="note"
           >
             {!isNeutralTruncationReason(section.truncationReason) && (
-              <i
-                className="codicon codicon-warning mt-px flex-shrink-0"
-                aria-hidden="true"
-              />
+              <Icon name="warning" className="mt-px flex-shrink-0" />
             )}
             <span>{reason}</span>
           </div>
@@ -1054,10 +1034,7 @@ function CommandPanel({
       />
       {worktree?.eligible && worktree.mode === WORKTREE_MODES.MANAGED && (
         <div className="flex items-start gap-1 text-xxs text-description-fg">
-          <i
-            className="codicon codicon-info mt-px flex-shrink-0"
-            aria-hidden="true"
-          />
+          <Icon name="info" className="mt-px flex-shrink-0" />
           <span>
             This step actually runs inside a managed worktree, not the directory
             shown above — its exact path is assigned when this workflow runs.
@@ -1069,10 +1046,7 @@ function CommandPanel({
         worktree.mode === WORKTREE_MODES.NAMED &&
         !worktree.plannedDirectoryIsExact && (
           <div className="flex items-start gap-1 text-xxs text-description-fg">
-            <i
-              className="codicon codicon-info mt-px flex-shrink-0"
-              aria-hidden="true"
-            />
+            <Icon name="info" className="mt-px flex-shrink-0" />
             <span>
               The working directory above is a best-effort guess for this named
               worktree. See Worktree in the Overview tab for details.
@@ -1268,7 +1242,7 @@ function Rail({
         className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
         onClick={() => onSelect(PREVIEW_RAIL_SELECTIONS.OVERVIEW)}
       >
-        <i className="codicon codicon-dashboard" aria-hidden="true" />
+        <Icon name="dashboard" />
         <span className="min-w-0 truncate">Overview</span>
       </button>
       <div className="my-2 border-t border-panel-border" />
@@ -1459,8 +1433,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             title="Copy the exact command ctrlyoke will run — may reference generated files not yet written to disk"
             aria-label="Copy command"
           >
-            <i
-              className={`codicon ${copiedAction === "command" ? "codicon-check" : "codicon-copy"}`}
+            <Icon
+              name={
+                copiedAction === "command" ? "codicon-check" : "codicon-copy"
+              }
             />
             <span className="sm:hidden">Command</span>
             <span className="hidden sm:inline">Copy command</span>
@@ -1473,8 +1449,10 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             title="Copy payload"
             aria-label="Copy payload"
           >
-            <i
-              className={`codicon ${copiedAction === "payload" ? "codicon-check" : "codicon-copy"}`}
+            <Icon
+              name={
+                copiedAction === "payload" ? "codicon-check" : "codicon-copy"
+              }
             />
             <span className="sm:hidden">Payload</span>
             <span className="hidden sm:inline">Copy payload</span>
@@ -1487,7 +1465,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             title="Export"
             aria-label="Export"
           >
-            <i className="codicon codicon-cloud-download" />
+            <Icon name="cloud-download" />
             <span className="hidden sm:inline">Export</span>
           </button>
           <button
@@ -1495,7 +1473,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             className="ml-auto inline-flex items-center gap-1.5 rounded bg-btn-bg px-2 py-1.5 text-sm text-btn-fg transition-colors hover:bg-btn-hover sm:px-3"
             onClick={handleRun}
           >
-            <i className="codicon codicon-play" />
+            <Icon name="play" />
             <span className="min-[360px]:hidden">Run</span>
             <span className="hidden min-[360px]:inline">Run workflow</span>
           </button>
@@ -1504,7 +1482,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
     >
       {status === PREVIEW_STATUSES.CHECKING || !preview ? (
         <div className="flex min-h-48 items-center justify-center p-6 text-sm text-description-fg">
-          <i className="codicon codicon-loading mr-2 animate-spin" />
+          <Icon name="loading" className="mr-2 animate-spin" />
           Preparing dry run…
         </div>
       ) : (
@@ -1517,7 +1495,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
               className="flex items-center gap-2 border-b border-warning-fg border-opacity-40 bg-severity-warning-bg px-4 py-2 text-xs text-warning-fg"
               role="status"
             >
-              <i className="codicon codicon-warning" aria-hidden="true" />
+              <Icon name="warning" />
               <span>Definition changed —</span>
               <button
                 type="button"

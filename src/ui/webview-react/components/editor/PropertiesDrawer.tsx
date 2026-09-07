@@ -86,6 +86,7 @@ import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+import { Icon } from "../shared/Icon";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -514,10 +515,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg">
         <div className="flex items-center gap-2">
           <h3 className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground">
-            <i
-              className="codicon codicon-settings text-xs leading-none"
-              aria-hidden="true"
-            />
+            <Icon name="settings" className="text-xs leading-none" />
             <span>Prompt Properties</span>
           </h3>
           <button
@@ -527,7 +525,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             title="Reset all to inherit"
             aria-label="Reset all to inherit"
           >
-            <i className="codicon codicon-debug-restart text-xs" />
+            <Icon name="debug-restart" className="text-xs" />
           </button>
         </div>
         <ExitButton
@@ -918,7 +916,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 title="Dry Run Step"
                 aria-label="Dry Run Step"
               >
-                <i className="codicon codicon-telescope" aria-hidden="true" />
+                <Icon name="telescope" />
               </button>
             </div>
             {/* Pre-Condition Section */}

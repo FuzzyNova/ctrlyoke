@@ -2,6 +2,7 @@ import React from "react";
 import { useNavHistory } from "@/navigation/useNavHistory";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { HEADER_BUTTON_SIZES } from "@/constants";
+import { Icon } from "./Icon";
 
 interface NavHistoryControlsProps {
   /** Extra classes for outer spacing/layout in the host header. */
@@ -44,7 +45,7 @@ export const NavHistoryControls: React.FC<NavHistoryControlsProps> = ({
         aria-label="Go back"
         className={buttonClass(canBack, btnSize.iconButton)}
       >
-        <i className={`codicon codicon-arrow-left ${btnSize.icon}`} />
+        <Icon name="arrow-left" className={`${btnSize.icon}`} />
       </button>
       <button
         type="button"
@@ -54,7 +55,7 @@ export const NavHistoryControls: React.FC<NavHistoryControlsProps> = ({
         aria-label="Go forward"
         className={buttonClass(canForward, btnSize.iconButton)}
       >
-        <i className={`codicon codicon-arrow-right ${btnSize.icon}`} />
+        <Icon name="arrow-right" className={`${btnSize.icon}`} />
       </button>
     </div>
   );

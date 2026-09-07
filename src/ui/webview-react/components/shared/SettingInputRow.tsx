@@ -5,6 +5,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { SettingSourceBadge } from "./SettingSourceBadge";
+import { Icon } from "./Icon";
 
 interface Props {
   label: string;
@@ -63,7 +64,7 @@ export function SettingInputRow({
                 : "opacity-0 pointer-events-none"
             }`}
           >
-            <i className="codicon codicon-discard text-xxs" />
+            <Icon name="discard" className="text-xxs" />
           </button>
         )}
       </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { Icon } from "./Icon";
 
 export interface ScopeToggleOption<T extends string> {
   value: T;
@@ -46,7 +47,7 @@ export function ScopeToggle<T extends string>({
         title={first.title ?? first.label}
         aria-label={first.label}
       >
-        <i className={`codicon ${first.icon}`} />
+        <Icon name={first.icon} />
         {!iconOnly && first.label}
       </button>
       <div className="fp-mode-switch-divider">
@@ -59,7 +60,7 @@ export function ScopeToggle<T extends string>({
         title={second.title ?? second.label}
         aria-label={second.label}
       >
-        <i className={`codicon ${second.icon}`} />
+        <Icon name={second.icon} />
         {!iconOnly && second.label}
       </button>
     </div>

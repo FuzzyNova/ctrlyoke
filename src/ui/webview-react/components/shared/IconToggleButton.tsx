@@ -1,4 +1,5 @@
 import React from "react";
+import { Icon } from "./Icon";
 
 /**
  * Icon-only toggle button that functions like a checkbox.
@@ -21,9 +22,7 @@ export const IconToggleButton: React.FC<{
   inactiveTooltip,
 }) => {
   const icon = (
-    <i
-      className={`codicon codicon-lg codicon-${active ? activeIcon : inactiveIcon}`}
-    />
+    <Icon name={active ? activeIcon : inactiveIcon} className="codicon-lg" />
   );
 
   return (

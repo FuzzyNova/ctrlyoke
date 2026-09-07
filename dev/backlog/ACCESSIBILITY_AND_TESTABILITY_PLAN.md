@@ -146,6 +146,10 @@ entire prompt text is not usable. Both appear in the ground-truth snapshot above
 
 ## Phase 1 — Hide decorative icons (precondition for every later phase)
 
+**Status:** `Icon.tsx` and `scripts/codemod-codicon-icon.mjs` are implemented; the `shared`,
+`editor`, and `layout` component directories are migrated. **195** raw codicon elements remain
+elsewhere in `src/` (excluding tests), measured after this migration.
+
 357 raw `<i className="codicon …">` in source; 5 of 171 live ones are hidden. Until these are
 hidden, adding `aria-label` still works but every un-migrated `title` stays invisible, and no
 exact-name match is reliable.

@@ -25,6 +25,7 @@ import {
   getHarnessAvailabilityPhrase,
   getHarnessUsageDisplay,
 } from "@utils/harnessUsageDisplay";
+import { Icon } from "./Icon";
 
 // ─── Display names (official product names) ──────────────────────────────────
 
@@ -149,7 +150,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           }}
           className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
         >
-          <i className="codicon codicon-eye text-xs" />
+          <Icon name="eye" className="text-xs" />
         </button>
         <button
           type="button"
@@ -200,7 +201,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
             }}
             className="p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
           >
-            <i className="codicon codicon-eye-closed text-xs" />
+            <Icon name="eye-closed" className="text-xs" />
           </button>
         )}
       </div>
@@ -479,8 +480,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
               </span>
             )}
             {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
-            <i
-              className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}
+            <Icon
+              name={`chevron-${isOpen ? "up" : "down"}`}
+              className="text-xxs"
             />
           </div>
         </button>
@@ -498,7 +500,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             className="flex-shrink-0 px-1.5 py-1 text-xxs text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent disabled:cursor-wait"
           >
             {retrying ? (
-              <i className="codicon codicon-loading animate-spin" />
+              <Icon name="loading" className="animate-spin" />
             ) : (
               "Retry"
             )}

@@ -11,6 +11,7 @@ import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 import { KeyValueMapEditor } from "../shared/KeyValueMapEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
 import { Button } from "../shared/Button";
+import { Icon } from "../shared/Icon";
 
 type HooksValue = UserHookConfig[] | null | undefined;
 
@@ -229,7 +230,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 title="Remove hook"
                 className="h-7 shrink-0 self-end px-1.5"
               >
-                <i className="codicon codicon-trash" aria-hidden="true" />
+                <Icon name="trash" />
               </Button>
             </div>
             <ScriptCommandEditor

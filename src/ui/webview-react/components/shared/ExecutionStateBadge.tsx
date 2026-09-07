@@ -3,6 +3,7 @@ import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
 } from "../../utils/status";
+import { Icon } from "./Icon";
 
 interface ExecutionStateBadgeProps {
   state: string;
@@ -32,10 +33,6 @@ export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
     className={`inline-flex items-center rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
     title={isNarrow ? state : undefined}
   >
-    {isNarrow ? (
-      <i className={`codicon ${getExecutionStateBadgeIcon(state)}`} />
-    ) : (
-      state
-    )}
+    {isNarrow ? <Icon name={getExecutionStateBadgeIcon(state)} /> : state}
   </span>
 );

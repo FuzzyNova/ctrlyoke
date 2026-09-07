@@ -12,6 +12,7 @@ import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 
@@ -113,11 +114,13 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           onClick={onToggleProperties}
           title="Toggle prompt properties"
         >
-          <i className="codicon codicon-settings" />
+          <Icon name="settings" />
           {!isMediumWidth && <span>Properties</span>}
           {!isMediumWidth && (
-            <i
-              className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
+            <Icon
+              name={
+                propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"
+              }
             />
           )}
         </button>
@@ -210,7 +213,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   : "Cancel editing and return to new prompt mode"
               }
             >
-              <i className="codicon codicon-close" />
+              <Icon name="close" />
               {!isMediumWidth && <span className="btn-text">Cancel</span>}
             </button>
 
@@ -228,7 +231,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                       : "Update prompt in queue"
               }
             >
-              <i className="codicon codicon-check" />
+              <Icon name="check" />
               {!isMediumWidth && <span className="btn-text">Update</span>}
             </button>
 
@@ -246,7 +249,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                       : "Delete prompt from queue"
               }
             >
-              <i className="codicon codicon-trash" />
+              <Icon name="trash" />
               {!isMediumWidth && (
                 <span className="btn-text">
                   {isFinalStepMode ? "Disable" : "Delete"}
@@ -267,7 +270,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   : queueButtonTooltip
               }
             >
-              <i className="codicon codicon-add" />
+              <Icon name="add" />
               {!isMediumWidth && <span className="btn-text">Queue</span>}
             </button>
 
@@ -281,7 +284,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   : runButtonTooltip
               }
             >
-              <i className="codicon codicon-send" />
+              <Icon name="send" />
               {!isMediumWidth && (
                 <span className="btn-text">{runButtonText}</span>
               )}

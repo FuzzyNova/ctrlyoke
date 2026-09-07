@@ -3,6 +3,7 @@ import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { constrainPopupToViewport } from "@utils/dropdownUtils";
 import { DropdownPortal } from "./DropdownPortal";
+import { Icon } from "./Icon";
 
 export interface ActionDropdownItem {
   label: string;
@@ -106,11 +107,12 @@ export function ActionDropdown({
         }
       >
         <span className="flex min-w-0 items-center gap-1 truncate">
-          {icon && <i className={`codicon codicon-${icon} text-xxs`} />}
+          {icon && <Icon name={icon} className="text-xxs" />}
           {!iconOnly && <span className="truncate">{label}</span>}
         </span>
-        <i
-          className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`}
+        <Icon
+          name={`chevron-${open ? "up" : "down"}`}
+          className="text-[10px]"
         />
       </button>
 

@@ -6,6 +6,7 @@ import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { FOOTER_PICKERS } from "../../types/messages";
 import { SkillsSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import { Icon } from "../shared/Icon";
 
 interface SkillsQuickPickerProps {
   isNarrow: boolean;
@@ -69,8 +70,9 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       isNarrow={isNarrow}
       showLabel={showLabel && skillsValue !== undefined}
       icon={
-        <i
-          className={`codicon codicon-tools codicon-sm transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
+        <Icon
+          name="tools"
+          className={`codicon-sm transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

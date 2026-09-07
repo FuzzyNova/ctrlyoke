@@ -2,6 +2,7 @@ import React from "react";
 import { HarnessIcon } from "./HarnessIcon";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "./tabBadgeUtils";
+import { Icon } from "./Icon";
 
 export interface SegmentedTab<Id extends string> {
   id: Id;
@@ -65,17 +66,15 @@ export function SegmentedTabBar<Id extends string>({
           >
             {codicon ? (
               <span className="relative inline-flex">
-                <span
-                  className={`codicon codicon-${codicon}`}
-                  style={{ fontSize: 20 }}
-                />
+                <Icon name={codicon} style={{ fontSize: 20 }} />
                 {override?.badgeCodicon ? (
                   <span
                     aria-hidden="true"
                     className="absolute -bottom-1 -right-1 flex h-[13px] w-[13px] items-center justify-center rounded-full bg-sidebar-bg"
                   >
-                    <span
-                      className={`codicon codicon-${override.badgeCodicon} ${override.badgeColor ?? ""}`}
+                    <Icon
+                      name={override.badgeCodicon}
+                      className={override.badgeColor ?? ""}
                       style={{ fontSize: 11 }}
                     />
                   </span>
@@ -90,10 +89,7 @@ export function SegmentedTabBar<Id extends string>({
                 }
               />
             ) : (
-              <span
-                className="codicon codicon-robot"
-                style={{ fontSize: 20 }}
-              />
+              <Icon name="robot" style={{ fontSize: 20 }} />
             )}
           </button>
         );

@@ -6,6 +6,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { downloadTextFile } from "@utils/diff";
 import { CONTENT_PREVIEW_LANGUAGES } from "@root/types/DashboardConstants";
+import { Icon } from "./Icon";
 
 /**
  * Modal that displays prior-context XML preview content, a resolved
@@ -79,9 +80,7 @@ export const ContentPreviewModal: React.FC = () => {
             onClick={handleCopy}
             title="Copy to clipboard"
           >
-            <i
-              className={`codicon ${copied ? "codicon-check" : "codicon-copy"}`}
-            />
+            <Icon name={copied ? "codicon-check" : "codicon-copy"} />
             {copied ? "Copied" : "Copy"}
           </button>
           <button
@@ -92,12 +91,12 @@ export const ContentPreviewModal: React.FC = () => {
           >
             {isStandalone ? (
               <>
-                <i className="codicon codicon-cloud-download" />
+                <Icon name="cloud-download" />
                 Download
               </>
             ) : (
               <>
-                <i className="codicon codicon-go-to-file" />
+                <Icon name="go-to-file" />
                 Open in Editor
               </>
             )}

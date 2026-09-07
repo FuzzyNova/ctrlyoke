@@ -5,6 +5,7 @@ import {
 } from "@components/shared/HarnessDropdown";
 import { useSettingsStore } from "@store/settingsStore";
 import { HARNESS_STATUS_STRINGS } from "@/types/messages";
+import { Icon } from "../shared/Icon";
 
 /**
  * Non-blocking first-run guidance shown after every supported CLI has been
@@ -29,7 +30,7 @@ export function HarnessPreflightPanel() {
       aria-label="Harness installation guidance"
     >
       <div className="flex items-center gap-2">
-        <i className="codicon codicon-warning text-error-fg" />
+        <Icon name="warning" className="text-error-fg" />
         <p className="font-medium">No AI harness CLI is available</p>
       </div>
       <p className="mt-1 text-description-fg">

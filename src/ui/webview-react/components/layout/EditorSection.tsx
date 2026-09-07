@@ -25,6 +25,7 @@ import {
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
+import { Icon } from "../shared/Icon";
 
 /** Width tiers for the editor header row, from the section's own content width. */
 const EDITOR_HEADER_TIERS = {
@@ -207,8 +208,11 @@ const EditorSectionInner: React.FC = () => {
           tabIndex={0}
           onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()}
         >
-          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
-          <i className="codicon codicon-edit text-sm" />
+          <Icon
+            name="chevron-right"
+            className="text-xs rotate-90 transition-transform duration-150"
+          />
+          <Icon name="edit" className="text-sm" />
           {!isNarrow && (
             <span className="text-xs font-semibold uppercase tracking-wide">
               Editor
@@ -229,8 +233,9 @@ const EditorSectionInner: React.FC = () => {
             title="Prompt step — sends text to an AI harness"
             aria-label="Prompt step"
           >
-            <i
-              className={`codicon codicon-comment codicon-sm ${isNarrow ? "px-1" : ""}`}
+            <Icon
+              name="comment"
+              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
             />
             {!isNarrow && <span>Prompt</span>}
           </button>
@@ -245,8 +250,9 @@ const EditorSectionInner: React.FC = () => {
             title="Script step — runs a shell command with no AI interaction"
             aria-label="Script step"
           >
-            <i
-              className={`codicon codicon-terminal-powershell codicon-sm ${isNarrow ? "px-1" : ""}`}
+            <Icon
+              name="terminal-powershell"
+              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
             />
             {!isNarrow && <span>Script</span>}
           </button>
@@ -271,8 +277,9 @@ const EditorSectionInner: React.FC = () => {
                   : "text-description-fg hover:text-foreground cursor-pointer"
               }`}
             >
-              <i
-                className={`codicon text-sm ${stepEnabled ? "codicon-check" : "codicon-circle-slash"}`}
+              <Icon
+                name={stepEnabled ? "codicon-check" : "codicon-circle-slash"}
+                className="text-sm"
               />
             </button>
           )}
@@ -354,9 +361,7 @@ const EditorSectionInner: React.FC = () => {
             aria-label={promptFileAction.tooltip}
             className="control-button flex items-center px-1 bg-transparent border-none cursor-pointer leading-none transition-colors select-none disabled:opacity-50 disabled:cursor-not-allowed text-description-fg hover:text-foreground"
           >
-            <i
-              className={`codicon codicon-lg codicon-${promptFileAction.icon}`}
-            />
+            <Icon name={promptFileAction.icon} className="codicon-lg" />
           </button>
         )}
         {!isExternallyManaged && <ExecutionModeQuickPicker />}

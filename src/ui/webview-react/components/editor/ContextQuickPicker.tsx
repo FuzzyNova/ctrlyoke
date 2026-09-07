@@ -14,6 +14,7 @@ import {
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 interface ContextQuickPickerProps {
   isNarrow: boolean;
@@ -105,8 +106,9 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       isNarrow={isNarrow}
       showLabel={showLabel}
       icon={
-        <i
-          className={`codicon codicon-book codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
+        <Icon
+          name="book"
+          className={`codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

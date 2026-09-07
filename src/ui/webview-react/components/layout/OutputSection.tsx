@@ -82,6 +82,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { workflowViewAddressKey } from "@utils/viewAddress";
+import { Icon } from "../shared/Icon";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -1535,13 +1536,13 @@ const OutputSectionInner: React.FC = () => {
         e.key === KEYBOARD_KEYS.ENTER && handleToggleOutputCollapse()
       }
     >
-      <i className="codicon codicon-chevron-right text-xs" />
-      <i className="codicon codicon-output text-sm" />
+      <Icon name="chevron-right" className="text-xs" />
+      <Icon name="output" className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         Output
       </span>
       <span className="text-xs text-description-fg mx-1">/</span>
-      <i className="codicon codicon-terminal text-sm" />
+      <Icon name="terminal" className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         Terminal
       </span>

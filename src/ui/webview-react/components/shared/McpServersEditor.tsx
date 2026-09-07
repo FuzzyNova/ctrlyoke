@@ -23,6 +23,7 @@ import { useUiStore } from "@store/uiStore";
 import { findLiteralCredentialEnvKeys } from "./KeyValueMapEditor";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
+import { Icon } from "./Icon";
 
 type McpServerEntry = string | McpServerConfig;
 
@@ -288,7 +289,7 @@ function ServerDetails({ server }: { server: ListedServer }) {
           className="flex items-start gap-1 text-xxs text-warning-fg"
           role="alert"
         >
-          <i className="codicon codicon-warning mt-px" aria-hidden="true" />
+          <Icon name="warning" className="mt-px" />
           <span>
             Environment values look like pasted credentials. Use $
             {"${secret:NAME}"} references in MCP Manager.
@@ -432,7 +433,7 @@ function McpServersPanel({
 
         {isLoadingManagedServers && managedServers === undefined && (
           <div className="flex items-center gap-1.5 px-1 text-xs text-description-fg">
-            <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
+            <Icon name="loading" className="codicon-modifier-spin text-xxs" />
             Loading installed servers…
           </div>
         )}
@@ -502,10 +503,9 @@ function McpServersPanel({
                       }
                       className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                     >
-                      <i
-                        className={`codicon codicon-chevron-${
-                          isExpanded ? "down" : "right"
-                        } flex-shrink-0 text-xxs text-description-fg`}
+                      <Icon
+                        name={`chevron-${isExpanded ? "down" : "right"}`}
+                        className="flex-shrink-0 text-xxs text-description-fg"
                       />
                       <TruncatedServerText
                         value={displayName}
@@ -567,7 +567,7 @@ function McpServersPanel({
             className="mb-1 flex items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
             title="Open MCP Manager in Settings to add, edit, or remove MCP servers"
           >
-            <i className="codicon codicon-settings-gear text-xxs" />
+            <Icon name="settings-gear" className="text-xxs" />
             Manage MCP Servers
           </button>
         )}

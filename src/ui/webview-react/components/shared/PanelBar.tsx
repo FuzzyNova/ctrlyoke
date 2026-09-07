@@ -1,5 +1,6 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React from "react";
+import { Icon } from "./Icon";
 
 interface PanelBarProps {
   /** Section title (shown in horizontal bars, hidden in vertical bars) */
@@ -34,8 +35,8 @@ export const PanelBar: React.FC<PanelBarProps> = ({
         tabIndex={0}
         onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
       >
-        <i className="codicon codicon-chevron-right text-xs" />
-        <i className={`codicon codicon-${icon} text-sm`} />
+        <Icon name="chevron-right" className="text-xs" />
+        <Icon name={icon} className="text-sm" />
       </div>
     );
   }
@@ -50,8 +51,8 @@ export const PanelBar: React.FC<PanelBarProps> = ({
       tabIndex={0}
       onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
     >
-      <i className="codicon codicon-chevron-right text-xs" />
-      <i className={`codicon codicon-${icon} text-sm`} />
+      <Icon name="chevron-right" className="text-xs" />
+      <Icon name={icon} className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         {title}
       </span>

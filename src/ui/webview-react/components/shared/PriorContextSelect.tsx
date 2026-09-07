@@ -9,6 +9,7 @@ import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import { dropdownBorderClass } from "@utils/dropdownValidation";
+import { Icon } from "./Icon";
 
 interface PriorContextSelectProps {
   id?: string;
@@ -242,8 +243,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           className="fp-select-trigger fp-dropdown-row"
         >
           <span className="truncate">{buttonLabel}</span>
-          <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
+          <Icon
+            name={`chevron-${isOpen ? "up" : "down"}`}
+            className="text-xxs flex-shrink-0 ml-1"
           />
         </button>
 
@@ -266,8 +268,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                       : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
                   }`}
                 >
-                  <i
-                    className={`codicon codicon-check text-xxs flex-shrink-0 ${
+                  <Icon
+                    name="check"
+                    className={`text-xxs flex-shrink-0 ${
                       isSelected ? "visible" : "invisible"
                     }`}
                   />

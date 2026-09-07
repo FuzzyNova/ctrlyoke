@@ -4,6 +4,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getInheritedStepColor } from "../../utils/stepColor";
+import { Icon } from "../shared/Icon";
 
 interface StepColorInputState {
   color: string;
@@ -89,7 +90,7 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
           title="Reset step color to inherit"
           aria-label="Reset step color to inherit"
         >
-          <i className="codicon codicon-clear-all" aria-hidden="true" />
+          <Icon name="clear-all" />
         </button>
       </div>
       <input

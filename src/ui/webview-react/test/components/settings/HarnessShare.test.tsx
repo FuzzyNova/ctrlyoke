@@ -131,7 +131,9 @@ describe("Harness share", () => {
       <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
     );
     const share = getShareSection();
-    const bar = share.querySelector('[aria-hidden="true"]');
+    const bar = share.querySelector(
+      '[aria-label="Harness share by AI steps"] > [aria-hidden="true"]'
+    );
 
     expect(bar).toBeInTheDocument();
     expect(bar?.querySelector('[title*="Claude Code"]')).toBeInTheDocument();
@@ -158,8 +160,11 @@ describe("Harness share", () => {
       )
     ).toBeInTheDocument();
     expect(
-      share.querySelector('[aria-hidden="true"]')?.querySelectorAll("[title]")
-        .length
+      share
+        .querySelector(
+          '[aria-label="Harness share by AI steps"] > [aria-hidden="true"]'
+        )
+        ?.querySelectorAll("[title]").length
     ).toBe(1);
   });
 

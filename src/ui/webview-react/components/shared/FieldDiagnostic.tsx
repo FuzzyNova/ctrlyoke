@@ -2,6 +2,7 @@ import React from "react";
 import { HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { FieldDiagnostic as FieldDiagnosticItem } from "@utils/fieldValidation";
+import { Icon } from "./Icon";
 
 export interface FieldDiagnosticProps {
   id: string;
@@ -41,10 +42,7 @@ export const FieldDiagnostic: React.FC<FieldDiagnosticProps> = ({
             key={`${diagnostic.message}-${index}`}
             className={`flex items-start gap-1 ${style.className}`}
           >
-            <i
-              className={`codicon codicon-${style.icon} mt-px flex-shrink-0`}
-              aria-hidden="true"
-            />
+            <Icon name={style.icon} className="mt-px flex-shrink-0" />
             <span>{diagnostic.message}</span>
           </p>
         );
@@ -84,7 +82,7 @@ export const CompatibilitySummary: React.FC<CompatibilitySummaryProps> = ({
       role="status"
       aria-live="polite"
     >
-      <i className="codicon codicon-warning flex-shrink-0" aria-hidden="true" />
+      <Icon name="warning" className="flex-shrink-0" />
       <span>
         {count} {warningLabel} {harnessLabel}
       </span>

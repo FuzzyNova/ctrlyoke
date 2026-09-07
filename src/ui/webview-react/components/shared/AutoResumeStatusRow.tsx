@@ -1,5 +1,6 @@
 import React from "react";
 import type { AutoResumePreview } from "../../utils/autoResumePreview";
+import { Icon } from "./Icon";
 
 export interface AutoResumeStatusRowProps {
   preview: AutoResumePreview;
@@ -17,7 +18,7 @@ export const AutoResumeStatusRow: React.FC<AutoResumeStatusRowProps> = ({
       className="text-xs text-description-fg mt-0.5 flex items-center gap-1"
       title={AUTO_RESUME_TOOLTIP}
     >
-      <i className="codicon codicon-history text-xxs" aria-hidden="true" />
+      <Icon name="history" className="text-xxs" />
       {preview.resumable
         ? `Auto-resume: will resume ${preview.stepLabel}`
         : "Auto-resume: No sessions found to resume, will create new"}

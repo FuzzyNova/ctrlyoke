@@ -1,3 +1,4 @@
+import { Icon } from "../shared/Icon";
 interface Tab {
   id: string;
   label: string;
@@ -37,7 +38,7 @@ export function GlobalSettingsVerticalTabBar({
             }`}
         >
           <span className="relative shrink-0">
-            <span className={`codicon ${tab.icon} text-base`} />
+            <Icon name={tab.icon} className="text-base" />
             {tab.indicator && (
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-indicator-success" />
             )}

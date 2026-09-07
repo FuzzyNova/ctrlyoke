@@ -1,4 +1,5 @@
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { Icon } from "./Icon";
 
 export interface ActionFeedback {
   status:
@@ -71,10 +72,9 @@ export function ActionButton({
   const content = (
     <>
       {iconName && (
-        <i
-          className={`codicon codicon-${iconName} text-xxs ${
-            pending ? "codicon-modifier-spin" : ""
-          }`}
+        <Icon
+          name={iconName}
+          className={`text-xxs ${pending ? "codicon-modifier-spin" : ""}`}
         />
       )}
       {displayLabel}
