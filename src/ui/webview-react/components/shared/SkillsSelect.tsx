@@ -174,7 +174,15 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 isSelected ? "visible" : "invisible"
               }`}
             />
-            <span>{label}</span>
+            <span
+              data-testid={
+                keyword === INHERIT_DEFAULT_OPTION
+                  ? "inherited-skills-label"
+                  : undefined
+              }
+            >
+              {label}
+            </span>
           </button>
         );
       })}

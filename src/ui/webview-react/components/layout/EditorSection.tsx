@@ -288,6 +288,7 @@ const EditorSectionInner: React.FC = () => {
               <StepColorQuickPicker />
             )}
           <span
+            data-testid="editor-mode"
             className={`editor-mode-indicator text-center text-xs text-description-fg min-w-0 ${
               showStackedTokens
                 ? "flex flex-col items-center leading-tight"

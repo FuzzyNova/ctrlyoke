@@ -32,6 +32,7 @@ export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
   <span
     className={`inline-flex items-center rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
     title={isNarrow ? state : undefined}
+    role="status"
   >
     {isNarrow ? <Icon name={getExecutionStateBadgeIcon(state)} /> : state}
   </span>

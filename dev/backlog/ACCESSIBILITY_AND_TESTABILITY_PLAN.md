@@ -372,6 +372,10 @@ Playwright agent containers to scope duplicate names against (Phase 3).
 
 ## Phase 7 — `data-testid` for display-only dynamic values
 
+**Status:** Complete — added `editor-mode`, `inherited-skills-label`, and `run-id-banner` to
+noninteractive display nodes only. The changing execution-state and pause-pending surfaces use
+`role="status"`, following `HeaderStatusBanner.tsx`, instead of test IDs.
+
 Deliberately last, and deliberately narrow. A testid is **invisible to `browser_snapshot`**, so it
 buys nothing for agent-driven testing — it is purely a Vitest convenience for elements that have
 no semantic role and whose text is composite or dynamic.
@@ -397,8 +401,15 @@ instead); don't copy it.
 
 ## Guardrails
 
+**Status:** Complete — `check:a11y-names` statically rejects unnamed icon-only native or
+`role="button"` controls in webview source, with packaging tests covering the guard. The
+enabled `jsx-a11y` recommended rules were clean under `npm run lint` and are now errors; the
+plugin-disabled `anchor-ambiguous-text` rule remains off, as do the intentional project
+exceptions `label-has-for` and `no-autofocus`. The browser smoke check remains the documented
+`browser_evaluate` recipe below; Playwright is still not a repository dependency.
+
 `eslint-plugin-jsx-a11y` is already installed and wired in `eslint.config.mjs:120-165`, with the
-recommended set mapped to `warn`. **It cannot catch the central defect**: to ESLint's static view,
+enabled recommended set promoted to `error`. **It cannot catch the central defect**: to ESLint's static view,
 `<button title="…"><i className="codicon" /></button>` has children and looks labeled, so
 `control-has-associated-label` stays quiet. The glyph only exists at CSS runtime.
 

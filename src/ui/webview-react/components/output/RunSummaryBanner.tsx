@@ -232,7 +232,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     >
       <div className="flex items-center justify-between gap-2 min-w-0">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate min-w-0">
+          <span className="truncate min-w-0" data-testid="run-id-banner">
             Run {runId} &middot; {new Date(startedAt).toLocaleString()}
           </span>
           <ExecutionStateBadge state={executionState} />

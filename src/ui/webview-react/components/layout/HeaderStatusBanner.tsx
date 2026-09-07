@@ -99,7 +99,11 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
         </div>
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border">
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border"
+          role="status"
+          aria-label="Workflow will pause after the current step completes"
+        >
           <Icon name="debug-pause" className="animate-pulse-cancelling" />
           <span>Workflow will pause after the current step completes</span>
           <button

@@ -13,6 +13,12 @@ const TAILWIND_CONFIG = resolve(
   __dirname,
   "src/ui/webview-react/tailwind.config.js"
 );
+const jsxA11yRecommendedRules = Object.fromEntries(
+  Object.entries(jsxA11y.configs.recommended.rules).map(([key, config]) => {
+    const severity = Array.isArray(config) ? config[0] : config;
+    return [key, severity === "off" ? "off" : "error"];
+  })
+);
 
 export default [
   {
@@ -122,13 +128,9 @@ export default [
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
-      // jsx-a11y rules as warnings to match project lint style
-      ...Object.fromEntries(
-        Object.entries(jsxA11y.configs.recommended.rules).map(([key]) => [
-          key,
-          "warn",
-        ])
-      ),
+      // All enabled recommended rules are clean after the accessibility phases,
+      // so keep them as errors. Rules that the plugin itself disables remain off.
+      ...jsxA11yRecommendedRules,
       // Allow autoFocus for form inputs in controlled UI flows
       "jsx-a11y/no-autofocus": "off",
       // label-has-for is deprecated (replaced by label-has-associated-control).
@@ -138,7 +140,7 @@ export default [
       // standard form elements (<input>, <textarea>, etc.) are not flagged when they
       // are already associated with a <label> via htmlFor/id.
       "jsx-a11y/control-has-associated-label": [
-        "warn",
+        "error",
         {
           ignoreElements: [
             "audio",
