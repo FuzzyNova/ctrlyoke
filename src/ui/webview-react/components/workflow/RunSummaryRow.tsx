@@ -157,6 +157,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       data-scroll-key={rowKey}
       role="option"
       aria-selected={isViewed}
+      aria-label={accessibleName}
       title={accessibleName}
       className={`run-panel-row group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
         isViewed

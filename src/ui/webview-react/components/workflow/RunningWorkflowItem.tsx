@@ -112,6 +112,14 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
   const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
   const isActivelyTiming = isRunning || isPausing;
+  const accessibleName = composeRowAccessibleName([
+    workflow.workflowName,
+    workflow.executionState,
+    workflow.totalSteps > 0 &&
+      `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
+    workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
+    hasActiveTerminal && "terminal session is still running",
+  ]);
 
   const [elapsed, setElapsed] = useState(() =>
     formatElapsed(
@@ -188,7 +196,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   );
 
   return (
-    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
@@ -199,6 +207,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           getContextMenuOpener(event.currentTarget, event.target)
         );
       }}
+      role="listitem"
+      aria-label={accessibleName}
       // Padding matches the recent rows below exactly — the two regions are
       // separate scroll containers, so any difference in row padding offsets
       // every column between them.
@@ -214,14 +224,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         onClick={onClick}
         // Deliberately excludes `elapsed` — it ticks every second, and an
         // accessible name that changes on a timer re-announces the row.
-        ariaLabel={composeRowAccessibleName([
-          workflow.workflowName,
-          workflow.executionState,
-          workflow.totalSteps > 0 &&
-            `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
-          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
-          hasActiveTerminal && "terminal session is still running",
-        ])}
+        ariaLabel={accessibleName}
         harness={
           workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />

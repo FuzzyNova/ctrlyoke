@@ -155,6 +155,15 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const timeAgo = formatRelativeTimeVerbose(
     workflow.lastModifiedAt || workflow.startedAt
   );
+  const accessibleName = composeRowAccessibleName([
+    workflow.workflowName,
+    workflow.executionState,
+    showStepCount &&
+      `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
+    workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
+    timeAgo,
+    showTerminalIcon && "terminal session is still running",
+  ]);
   const openContextMenu = (
     x: number,
     y: number,
@@ -181,7 +190,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   );
 
   return (
-    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
@@ -192,6 +201,8 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           getContextMenuOpener(event.currentTarget, event.target)
         );
       }}
+      role="listitem"
+      aria-label={accessibleName}
       title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
         isCurrent
@@ -202,15 +213,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       <WorkflowRowLayout
         tier={tier}
         onClick={() => onSelect(workflow.address)}
-        ariaLabel={composeRowAccessibleName([
-          workflow.workflowName,
-          workflow.executionState,
-          showStepCount &&
-            `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
-          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
-          timeAgo,
-          showTerminalIcon && "terminal session is still running",
-        ])}
+        ariaLabel={accessibleName}
         harness={
           workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />

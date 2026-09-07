@@ -1557,6 +1557,7 @@ const OutputSectionInner: React.FC = () => {
     <section
       ref={sectionRef}
       id="output-section"
+      aria-label="Output"
       className={`bg-editor-bg flex flex-col overflow-hidden ${
         // `inset-0` alone fills the fixed element to the viewport; pairing it
         // with an explicit h-screen/w-screen over-constrains position+size

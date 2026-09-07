@@ -270,6 +270,7 @@ export const BashOutput = memo<BashOutputProps>(
                 }
                 label="Show full command"
                 showLabel={showLabel}
+                aria-label={`${resolvedExpansion.commandExpanded ? "Hide" : "Show"} full command for: ${commandPreview.visibleText}`}
                 title={
                   resolvedExpansion.commandExpanded
                     ? "Hide full command"

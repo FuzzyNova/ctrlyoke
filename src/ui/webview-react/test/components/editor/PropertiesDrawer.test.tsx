@@ -70,6 +70,22 @@ function chooseExecutionMode(label: string): void {
   fireEvent.click(option);
 }
 
+describe("PropertiesDrawer landmark", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(cleanup);
+
+  it("exposes a named prompt properties region", () => {
+    renderHarnessDrawer();
+
+    expect(
+      screen.getByRole("region", { name: "Prompt Properties" })
+    ).toHaveAttribute("aria-labelledby", "prompt-properties-heading");
+  });
+});
+
 describe("PropertiesDrawer execution mode", () => {
   beforeEach(() => {
     resetStores();

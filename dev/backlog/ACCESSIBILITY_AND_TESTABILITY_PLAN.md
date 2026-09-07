@@ -254,6 +254,10 @@ named "Run" must stay named "Run" whether it is enabled or not; put the "why dis
 
 ## Phase 3 — Make names unique (Playwright strict mode)
 
+**Status:** Complete — repeated workflow and run actions are scoped by named rows, command
+expansion controls are qualified by their command preview, and the two live property tablists
+retain distinct accessible names.
+
 A duplicated name is not a cosmetic issue: `getByRole('button', { name: 'Add to favorites' })`
 **throws** rather than picking one, so an agent cannot act at all. 31 × `Remove from history` and
 26 × `Add to favorites` are the worst offenders.
@@ -338,6 +342,10 @@ real buttons inside a focusable row cause sticky mobile-Safari layout drift ther
 ---
 
 ## Phase 6 — Landmark regions
+
+**Status:** Complete — the output and prompt-properties panels are named landmarks, the primary
+dashboard layout exposes `main` and workflow-step `nav` landmarks, and all shared modal call sites
+provide a title for their dialog name.
 
 > **Ordering note:** landmarks are a _precondition_ for Phase 3, not a follow-up — a named
 > `region`/`dialog` is what lets a duplicated button name be scoped instead of renamed. Do this

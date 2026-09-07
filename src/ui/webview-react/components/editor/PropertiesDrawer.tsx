@@ -504,6 +504,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-panel h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : ""
       }`}
+      role="region"
+      aria-labelledby="prompt-properties-heading"
       style={{
         transform: isOpen
           ? "translateY(0)"
@@ -514,7 +516,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg">
         <div className="flex items-center gap-2">
-          <h3 className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground">
+          <h3
+            id="prompt-properties-heading"
+            className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground"
+          >
             <Icon name="settings" className="text-xs leading-none" />
             <span>Prompt Properties</span>
           </h3>
