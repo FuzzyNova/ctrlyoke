@@ -213,6 +213,12 @@ content and carries meaning — keep an `aria-label` on the **parent control**, 
 
 ## Phase 2 — Name every control
 
+**Status:** Editor surfaces complete — the prompt editor, prompt-properties toggle,
+Queue/Run actions, and Harness/Model/Agent/Skills/Permissions/Context footer
+pickers are named; the Execution Mode and Step Color header controls were already
+named. Remaining: the rest of the dashboard's unnamed controls, including the
+non-editor surfaces covered by the follow-up phases.
+
 **Rule: add `aria-label`; keep `title`.** Do not swap one for the other. 117 existing
 `*ByTitle` queries depend on the `title` attribute, and `title` is still the hover tooltip users
 rely on. Adding `aria-label` alongside is non-breaking in both directions.

@@ -113,6 +113,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           }`}
           onClick={onToggleProperties}
           title="Toggle prompt properties"
+          aria-label="Toggle prompt properties"
         >
           <Icon name="settings" />
           {!isMediumWidth && <span>Properties</span>}
@@ -264,6 +265,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={isExternallyManaged || !hasContent}
+              aria-label="Queue"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
@@ -278,6 +280,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-run border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
               disabled={isExternallyManaged || !hasContent}
+              aria-label="Run"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")

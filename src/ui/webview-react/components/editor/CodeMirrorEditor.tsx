@@ -1540,6 +1540,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         EditorView.contentAttributes.of({
           autocorrect: "on",
           autocapitalize: "sentences",
+          "aria-label": "Prompt editor",
         }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {

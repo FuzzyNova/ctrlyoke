@@ -93,6 +93,21 @@ function findExecutePromptMessage(): Record<string, unknown> | undefined {
   )?.[0] as Record<string, unknown> | undefined;
 }
 
+describe("PromptEditor accessibility names", () => {
+  it("names the prompt editor and primary footer actions by role", () => {
+    render(<PromptEditor />);
+
+    expect(
+      screen.getByRole("textbox", { name: "Prompt editor" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Toggle prompt properties" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Queue$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Run$/ })).toBeInTheDocument();
+  });
+});
+
 describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
   it("attaches the displayed run mutation to a prompt submission", async () => {
     const user = userEvent.setup();

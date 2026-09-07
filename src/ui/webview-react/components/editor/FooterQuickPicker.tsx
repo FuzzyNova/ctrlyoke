@@ -120,6 +120,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
         title={title}
+        aria-label={title}
         className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen
             ? "bg-btn-secondary-bg text-btn-secondary-fg fp-dropdown-row-selected"
