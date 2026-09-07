@@ -380,17 +380,25 @@ glance.
 
 ### Resize gestures
 
-| Resize source                                           | Long tasks |                  Worst blocked frame | Total blocked |
-| ------------------------------------------------------- | ---------: | -----------------------------------: | ------------: |
-| Internal `react-resizable-panels` splitter, 300 px drag |          9 |                           **229 ms** |      1 351 ms |
-| Outer viewport width sweep, 300 px in 16 steps          |         15 |                           **270 ms** |      2 811 ms |
-| VS Code panel edge                                      |          — | not reproducible in a hosted browser |             — |
+| Resize source                                           | Long tasks |                  Worst blocked frame | Total blocked | After 1B |
+| ------------------------------------------------------- | ---------: | -----------------------------------: | ------------: | -------- |
+| Internal `react-resizable-panels` splitter, 300 px drag |          9 |                           **229 ms** |      1 351 ms | not measured — Playwright unavailable in this session |
+| Outer viewport width sweep, 300 px in 16 steps          |         15 |                           **270 ms** |      2 811 ms | not measured — Playwright unavailable in this session |
+| VS Code panel edge                                      |          — | not reproducible in a hosted browser |             — | not reproducible in a hosted browser |
 
 The literal VS Code panel-edge drag cannot be performed against the hosted
 dashboard, which runs in a browser with no VS Code panel. The viewport sweep
 covers the same _mechanism_ — an outer container width change that never
 touches `react-resizable-panels` — so the reported symptom's path is measured
 even though its exact gesture is not.
+
+The 1B implementation was compiled and served by the dev host (HTTP 200), but
+this session has no attached Playwright connector or local Playwright package,
+so it could not collect the required browser `longtask`/profiler measurements.
+The focused builder regression test records the deferred behavior directly:
+five bucket crossings produced **0** rebuilds during the burst and exactly
+**1** rebuild at the settled width. These are synthetic test numbers, not a
+substitute for the hosted gesture measurements above.
 
 **1A is confirmed in production.** The 300 px viewport sweep produced exactly
 **10 builds, at widths 704 → 416 in exact 32 px steps** — one per bucket, none

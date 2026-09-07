@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { act, render, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useElementTier } from "@hooks/useElementNarrow";
@@ -71,10 +71,29 @@ function buildInput(
   };
 }
 
-function OutputWidthBuildProbe() {
+function OutputWidthBuildProbe({
+  deferWhile = false,
+}: {
+  deferWhile?: boolean;
+}) {
   const [contentRef, contentWidthBucket] = useElementTier(
     bucketOutputContentWidth,
-    0
+    0,
+    deferWhile
+  );
+  const paneRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) {
+        contentRef(null);
+        return;
+      }
+      Object.defineProperty(node, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ width: testState.currentWidth }),
+      });
+      contentRef(node);
+    },
+    [contentRef]
   );
   const outputContentWidth = contentWidthBucket * OUTPUT_CONTENT_WIDTH_BUCKET;
 
@@ -82,21 +101,7 @@ function OutputWidthBuildProbe() {
     buildOutputRows(buildInput(outputContentWidth));
   }, [outputContentWidth]);
 
-  return (
-    <div
-      ref={(node) => {
-        if (!node) {
-          contentRef(null);
-          return;
-        }
-        Object.defineProperty(node, "getBoundingClientRect", {
-          configurable: true,
-          value: () => ({ width: testState.currentWidth }),
-        });
-        contentRef(node);
-      }}
-    />
-  );
+  return <div ref={paneRef} />;
 }
 
 describe("output pane width bucketing", () => {
@@ -130,6 +135,22 @@ describe("output pane width bucketing", () => {
     testState.currentWidth = 1056;
     act(() => testState.resizeObserverCallback?.());
     expect(testState.buildCalls).toBe(4);
+  });
+
+  it("defers a burst of bucket crossings until the pane settles", () => {
+    const rendered = render(<OutputWidthBuildProbe />);
+    expect(testState.buildCalls).toBe(2);
+
+    rendered.rerender(<OutputWidthBuildProbe deferWhile />);
+    for (const width of [1001, 1056, 1120, 1184, 1248]) {
+      testState.currentWidth = width;
+      act(() => testState.resizeObserverCallback?.());
+    }
+    expect(testState.buildCalls).toBe(2);
+
+    rendered.rerender(<OutputWidthBuildProbe />);
+    expect(testState.buildCalls).toBe(3);
+    expect(testState.currentWidth).toBe(1248);
   });
 
   it("builds rows once for a single load at a stable width", () => {

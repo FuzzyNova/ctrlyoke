@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useElementNarrow } from "@hooks/useElementNarrow";
+import { useElementNarrow, useElementTier } from "@hooks/useElementNarrow";
 
 // ---------------------------------------------------------------------------
 // ResizeObserver mock
@@ -122,6 +122,8 @@ function triggerResizeWithStaleContentRect(contentRectWidth: number) {
     mockObserveInstance as unknown as ResizeObserver
   );
 }
+
+const resolveHundreds = (width: number) => Math.floor(width / 100);
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -324,5 +326,59 @@ describe("useElementNarrow", () => {
       });
       expect(result.current[1]).toBe(false);
     }
+  });
+
+  it("defers tier changes until deferWhile is released", () => {
+    const { result, rerender } = renderHook(
+      ({ deferWhile }: { deferWhile: boolean }) =>
+        useElementTier(resolveHundreds, 0, deferWhile),
+      { initialProps: { deferWhile: false } }
+    );
+    const node = makeNode(500);
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(5);
+
+    rerender({ deferWhile: true });
+    act(() => {
+      result.current[0](null);
+      result.current[0](node);
+    });
+    act(() => {
+      triggerResize(150);
+      triggerResize(275);
+    });
+    expect(result.current[1]).toBe(5);
+
+    rerender({ deferWhile: false });
+    act(() => {
+      result.current[0](null);
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(2);
+    expect(MockResizeObserver).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not apply an attach-time measurement while deferred", () => {
+    const { result, rerender } = renderHook(
+      ({ deferWhile }: { deferWhile: boolean }) =>
+        useElementTier(resolveHundreds, 0, deferWhile),
+      { initialProps: { deferWhile: true } }
+    );
+    const node = makeNode(500);
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(0);
+
+    rerender({ deferWhile: false });
+    act(() => {
+      result.current[0](null);
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(5);
   });
 });

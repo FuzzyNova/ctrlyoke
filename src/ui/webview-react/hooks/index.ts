@@ -15,7 +15,11 @@ export {
 } from "./useCompatibilityDiagnostics";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useIosVisualViewportRootStyle } from "./useIosVisualViewportRootStyle";
-export { useElementNarrow } from "./useElementNarrow";
+export {
+  useElementNarrow,
+  useElementResizeActivity,
+  useElementTier,
+} from "./useElementNarrow";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
 export { useNewWorkflowKeyHandler } from "./useNewWorkflowKeyHandler";
 export { useDrawerTabOverrides } from "./useDrawerTabOverrides";

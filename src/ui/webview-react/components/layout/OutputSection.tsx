@@ -10,7 +10,11 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
-import { useElementNarrow, useElementTier } from "@hooks/useElementNarrow";
+import {
+  useElementNarrow,
+  useElementResizeActivity,
+  useElementTier,
+} from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
 import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
 import {
@@ -376,10 +380,12 @@ const OutputSectionInner: React.FC = () => {
   // the callback-ref timing while limiting state updates to bucket changes;
   // refs keep scroll correction and the live DOM node out of the dependency
   // cycle that previously re-subscribed the observer after every measurement.
+  const [outputResizeActivityRef, isOutputResizing] =
+    useElementResizeActivity<HTMLDivElement>();
   const [outputContentRef, outputContentWidthBucket] = useElementTier<
     number,
     HTMLDivElement
-  >(bucketOutputContentWidth, 0);
+  >(bucketOutputContentWidth, 0, isOutputResizing);
   const outputContentWidth =
     outputContentWidthBucket * OUTPUT_CONTENT_WIDTH_BUCKET;
   const outputDiffViewType: DiffViewType =
@@ -389,9 +395,10 @@ const OutputSectionInner: React.FC = () => {
   const mergedOutputRef = useCallback(
     (node: HTMLDivElement | null) => {
       outputRef.current = node;
+      outputResizeActivityRef(node);
       outputContentRef(node);
     },
-    [outputContentRef]
+    [outputContentRef, outputResizeActivityRef]
   );
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);

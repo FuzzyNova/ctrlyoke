@@ -12,6 +12,7 @@ import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameR
  * Individual callers can override this.
  */
 const DEFAULT_THRESHOLD = 380;
+const RESIZE_ACTIVITY_WINDOW_MS = 150;
 
 /**
  * Single source of truth for "how wide is this element".
@@ -95,7 +96,12 @@ export function useElementTier<
         // Snapshot the current width immediately so the initial render is
         // correct before the first ResizeObserver callback fires.
         const initialWidth = measureWidth(node);
-        applyWidth(initialWidth);
+        if (deferWhile) {
+          lastWidthRef.current = initialWidth;
+          deferredWidthRef.current = initialWidth;
+        } else {
+          applyWidth(initialWidth);
+        }
 
         // Deliberately ignores the entry's own rects and re-measures the
         // node, so this site cannot drift from the two above. The callback is
@@ -109,6 +115,7 @@ export function useElementTier<
             }
             const width = measureWidth(observed);
             if (deferWhile) {
+              lastWidthRef.current = width;
               deferredWidthRef.current = width;
               return;
             }
@@ -148,6 +155,87 @@ export function useElementTier<
   }, [applyWidth, deferWhile]);
 
   return [callbackRef, tier];
+}
+
+/**
+ * Reports whether an element's width changed recently.
+ *
+ * This deliberately observes the element itself instead of a particular
+ * resize control. It therefore covers panel splitters, the host application's
+ * panel edge, and outer viewport resizes through the same signal.
+ */
+export function useElementResizeActivity<
+  T extends HTMLElement = HTMLDivElement,
+>(): [RefCallback<T>, boolean] {
+  const [isActive, setIsActive] = useState(false);
+  const disconnectRef = useRef<(() => void) | null>(null);
+  const nodeRef = useRef<T | null>(null);
+  const lastWidthRef = useRef<number | null>(null);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current !== null) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  }, []);
+
+  const markActivity = useCallback(
+    (width: number) => {
+      if (
+        lastWidthRef.current !== null &&
+        Math.abs(lastWidthRef.current - width) < 1
+      ) {
+        return;
+      }
+      lastWidthRef.current = width;
+      setIsActive(true);
+      clearSettleTimer();
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        setIsActive(false);
+      }, RESIZE_ACTIVITY_WINDOW_MS);
+    },
+    [clearSettleTimer]
+  );
+
+  const callbackRef = useCallback(
+    (node: T | null) => {
+      nodeRef.current = node;
+      disconnectRef.current?.();
+      disconnectRef.current = null;
+
+      if (!node) {
+        // A merged ref can briefly receive null when another ref in the
+        // merge changes identity (useElementTier does this when deferWhile
+        // flips). Keep the activity window alive across that handoff; the
+        // timer is the settle signal, not ref detachment.
+        lastWidthRef.current = null;
+        return;
+      }
+
+      lastWidthRef.current = measureWidth(node);
+      const observer = new ResizeObserver(() => {
+        const observed = nodeRef.current;
+        if (observed) {
+          markActivity(measureWidth(observed));
+        }
+      });
+      observer.observe(node);
+      disconnectRef.current = () => observer.disconnect();
+    },
+    [markActivity]
+  );
+
+  useEffect(
+    () => () => {
+      disconnectRef.current?.();
+      clearSettleTimer();
+    },
+    [clearSettleTimer]
+  );
+
+  return [callbackRef, isActive];
 }
 
 /**

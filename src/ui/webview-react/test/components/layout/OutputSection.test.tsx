@@ -27,6 +27,10 @@ vi.mock("@hooks/useVsCodeApi", () => ({
 
 vi.mock("@hooks/useElementNarrow", () => ({
   useElementNarrow: () => [vi.fn(), false] as const,
+  useElementResizeActivity: () => {
+    const ref = React.useCallback(() => {}, []);
+    return [ref, false] as const;
+  },
   useElementTier: <Tier extends string | number | boolean>(
     resolveTier: (width: number) => Tier,
     initialTier: Tier

@@ -18,7 +18,8 @@ function makeRows(count: number): OutputRenderRow[] {
 
 function renderVirtualization(
   rows: OutputRenderRow[],
-  rowRenderIdentity = "identity"
+  rowRenderIdentity = "identity",
+  initialOutputContentWidth = 360
 ) {
   const scrollElement = document.createElement("div");
   Object.defineProperties(scrollElement, {
@@ -28,7 +29,13 @@ function renderVirtualization(
   });
 
   return renderHook(
-    ({ identity }: { identity: string }) =>
+    ({
+      identity,
+      outputContentWidth = initialOutputContentWidth,
+    }: {
+      identity: string;
+      outputContentWidth?: number;
+    }) =>
       useOutputVirtualization({
         applyScrollTargetRef: {
           current: () => ({ resolved: false, appliedDelta: 0 }),
@@ -38,7 +45,7 @@ function renderVirtualization(
         isMeasurementFlushInProgressRef: { current: false },
         lastScrollEventAtRef: { current: null },
         outputCollapsed: false,
-        outputContentWidth: 360,
+        outputContentWidth,
         outputFontSize: 13,
         outputOverscan: 2,
         outputOverscanRef: { current: 2 },
@@ -52,7 +59,11 @@ function renderVirtualization(
           current: { kind: "row", rowKey: "row-20", viewportOffsetPx: 200 },
         },
       }),
-    { initialProps: { identity: rowRenderIdentity } }
+    {
+      initialProps: {
+        identity: rowRenderIdentity,
+      } as { identity: string; outputContentWidth?: number },
+    }
   );
 }
 
@@ -135,6 +146,21 @@ describe("useOutputVirtualization scroll compensation", () => {
       expect(measure.mock.calls.length).toBeGreaterThan(
         callsBeforeIdentityChange
       )
+    );
+    rendered.unmount();
+  });
+
+  it("bulk remeasures when the applied output width changes", async () => {
+    const rows = makeRows(60);
+    const rendered = renderVirtualization(rows);
+    const measure = vi.spyOn(rendered.result.current.rowVirtualizer, "measure");
+
+    await waitFor(() => expect(measure).toHaveBeenCalled());
+    const callsBeforeWidthChange = measure.mock.calls.length;
+
+    rendered.rerender({ identity: "identity", outputContentWidth: 512 });
+    await waitFor(() =>
+      expect(measure.mock.calls.length).toBeGreaterThan(callsBeforeWidthChange)
     );
     rendered.unmount();
   });

@@ -1034,6 +1034,7 @@ export function useOutputVirtualization({
   }, [
     isOutputVirtualized,
     outputCollapsed,
+    outputContentWidth,
     performBulkRemeasure,
     rowRenderIdentity,
   ]);
