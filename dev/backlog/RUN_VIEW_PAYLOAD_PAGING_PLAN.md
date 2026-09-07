@@ -52,6 +52,15 @@ same run, in the same app:
 **What remains is a payload-size problem, not a CPU-complexity one**, and that
 is what this plan covers.
 
+### Not covered here: the client-side render cost
+
+Measured 2026-09-07, the same run also costs 130 ms of `buildOutputRows` on
+_every pane width change_ and renders ~7 100 elements in the minimap, which is
+what freezes the UI while the panel is resized. That is a separate, cheaper,
+client-side problem — see `dev/backlog/OUTPUT_PANE_RESIZE_PERFORMANCE_PLAN.md`.
+It should land first: its minimap quantization is also the compact whole-run
+overview that Proposal 1A below currently has no answer for.
+
 ## The remaining cost: one 54.5 MB snapshot per client
 
 `readAddressedRunView` builds a complete `WorkflowOutputHistory` for the run and
