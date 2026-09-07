@@ -8,9 +8,8 @@ import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
 import {
   estimateOutputDiffBlockHeight,
-  parallelGroupRedoLabel,
+  parallelGroupActionTooltip,
   parallelGroupStepCount,
-  parallelGroupUndoLabel,
   type OutputRenderRow,
 } from "@utils/outputRows";
 import { measurePhase } from "@utils/performanceProfiler";
@@ -366,11 +365,13 @@ export function useOutputMinimapModel({
           const undoActions: MinimapStep["undoActions"] = {
             redo: actions.redo
               ? {
-                  label: groupForLabels
-                    ? parallelGroupRedoLabel(
+                  label: actions.redo.label,
+                  title: groupForLabels
+                    ? parallelGroupActionTooltip(
+                        actions.redo.label,
                         parallelGroupStepCount(groupForLabels)
                       )
-                    : actions.redo.label,
+                    : undefined,
                   onTrigger: () => {
                     onOpenMinimapRedoDialog({
                       target: undoTarget,
@@ -382,11 +383,13 @@ export function useOutputMinimapModel({
               : null,
             undo: actions.undo
               ? {
-                  label: groupForLabels
-                    ? parallelGroupUndoLabel(
+                  label: actions.undo.label,
+                  title: groupForLabels
+                    ? parallelGroupActionTooltip(
+                        actions.undo.label,
                         parallelGroupStepCount(groupForLabels)
                       )
-                    : actions.undo.label,
+                    : undefined,
                   onTrigger: () => {
                     const alreadyUndone =
                       effectiveUndoRecord != null &&

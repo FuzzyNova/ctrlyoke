@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
-import {
-  parallelGroupRedoLabel,
-  parallelGroupUndoLabel,
-  type ParallelGroupHeaderRow,
-} from "@utils/outputRows";
+import type { ParallelGroupHeaderRow } from "@utils/outputRows";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
@@ -122,7 +118,7 @@ describe("ParallelGroupHeaderRowView", () => {
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: { label: parallelGroupUndoLabel(2), count: 3 },
+        undo: { label: "Undo 3 changes", count: 3 },
         redo: null,
       },
     });
@@ -134,7 +130,14 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo 2 steps" }));
+    const undoButton = screen.getByRole("button", { name: "Undo 3 changes" });
+    // The label matches every other undo surface; only the tooltip says the
+    // action covers the whole group.
+    expect(undoButton).toHaveAttribute(
+      "title",
+      "Undo 3 changes across 2 parallel steps"
+    );
+    fireEvent.click(undoButton);
     expect(onPromptUndo).toHaveBeenCalledWith(row);
   });
 
@@ -145,7 +148,7 @@ describe("ParallelGroupHeaderRowView", () => {
         workspacePath: "/repo",
         allStepOutputs: [],
         undo: null,
-        redo: { label: parallelGroupRedoLabel(2), count: 3 },
+        redo: { label: "Redo 3 changes", count: 3 },
       },
     });
     render(
@@ -156,7 +159,7 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Redo 2 steps" }));
+    fireEvent.click(screen.getByRole("button", { name: "Redo 3 changes" }));
     expect(onPromptRedo).toHaveBeenCalledWith(row);
   });
 });

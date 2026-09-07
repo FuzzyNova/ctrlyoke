@@ -49,6 +49,17 @@ export interface MinimapDiffBlock {
   isCollapsed: boolean;
 }
 
+export interface MinimapUndoAction {
+  label: string;
+  /**
+   * Longer form for the button's tooltip, when the label alone understates the
+   * scope — a concurrent group's entry undoes every member, not just the step
+   * whose marker offers it.
+   */
+  title?: string;
+  onTrigger: () => void;
+}
+
 export interface MinimapStep {
   key: string;
   kind: FinalStepPhase;
@@ -65,8 +76,8 @@ export interface MinimapStep {
    * Both can be non-null in mixed state (some files undone, others not).
    */
   undoActions: {
-    undo: { label: string; onTrigger: () => void } | null;
-    redo: { label: string; onTrigger: () => void } | null;
+    undo: MinimapUndoAction | null;
+    redo: MinimapUndoAction | null;
   };
   /** Diff regions within this step — rendered as colored overlays on the rail. */
   diffBlocks: MinimapDiffBlock[];
@@ -807,6 +818,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                         redo.onTrigger();
                       }}
                       style={{ touchAction: "manipulation" }}
+                      title={redo.title}
                       className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
                     >
                       <i className="codicon codicon-redo text-xxs" />
@@ -824,6 +836,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                         undo.onTrigger();
                       }}
                       style={{ touchAction: "manipulation" }}
+                      title={undo.title}
                       className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
                       <i className="codicon codicon-discard text-xxs" />

@@ -1712,27 +1712,23 @@ export function parallelGroupStepCount(
   return group.endIndex - group.startIndex + 1;
 }
 
-function parallelGroupActionLabel(verb: string, stepCount: number): string {
-  return `${verb} ${stepCount} step${stepCount === 1 ? "" : "s"}`;
-}
-
 /**
- * Labels for a concurrent group's single undo/redo affordance.
+ * Tooltip for a concurrent group's single undo/redo affordance.
  *
- * A group has one workspace snapshot covering every member, so there is one
- * action and it lives on the group header — not on the first member's CLI
- * header, which used to show a second, differently-worded copy of the same
- * button. Single-sourced because three surfaces render these strings: the
- * header, the header's height estimator, and the minimap's per-member entry
- * (which is the only one of the three that exists before the group has
- * produced output).
+ * The button keeps the ordinary `Undo N changes` label every other undo
+ * surface uses — N counts files, so the group reads the same as a step — and
+ * the tooltip is where the group scope is spelled out. A group has one
+ * workspace snapshot covering every member, so there is one action and it
+ * lives on the group header rather than on any member's CLI header.
+ * Single-sourced because both surfaces that offer it (the header and the
+ * minimap's per-member entry, which exists before the header does) explain it
+ * the same way.
  */
-export function parallelGroupUndoLabel(stepCount: number): string {
-  return parallelGroupActionLabel("Undo", stepCount);
-}
-
-export function parallelGroupRedoLabel(stepCount: number): string {
-  return parallelGroupActionLabel("Redo", stepCount);
+export function parallelGroupActionTooltip(
+  label: string,
+  stepCount: number
+): string {
+  return `${label} across ${stepCount} parallel steps`;
 }
 
 function estimateParallelGroupHeaderHeight(
@@ -2459,18 +2455,13 @@ export function buildOutputRows(
         workspaceSnapshot
       );
       if (actions.undo || actions.redo) {
-        const stepCount = parallelGroupStepCount(concurrentGroup);
         parallelGroupUndoMeta.set(concurrentGroup.id, {
           workspacePath: output.workingDirectory ?? "",
           workspaceSnapshot,
           undoRecord,
           allStepOutputs,
-          undo: actions.undo
-            ? { ...actions.undo, label: parallelGroupUndoLabel(stepCount) }
-            : null,
-          redo: actions.redo
-            ? { ...actions.redo, label: parallelGroupRedoLabel(stepCount) }
-            : null,
+          undo: actions.undo,
+          redo: actions.redo,
         });
       }
     }

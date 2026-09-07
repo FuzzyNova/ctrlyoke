@@ -655,9 +655,9 @@ describe("outputRows", () => {
     const headerRow = result.rows.find(
       (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
     );
-    // Two members, two edited files: the label counts steps, not changes, so
-    // the group reads as one action over the whole group.
-    expect(headerRow?.promptUndo?.undo?.label).toBe("Undo 2 steps");
+    // Both members' files are covered by the one group-wide snapshot, and the
+    // label counts those files exactly as a single step's undo does.
+    expect(headerRow?.promptUndo?.undo?.label).toBe("Undo 2 changes");
     expect(
       result.rows
         .filter((row) => row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER)

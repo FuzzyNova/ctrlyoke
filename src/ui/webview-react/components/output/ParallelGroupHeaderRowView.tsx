@@ -3,6 +3,7 @@ import { PARALLEL_GROUP_HEADER_LABELS } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
+  parallelGroupActionTooltip,
   parallelGroupHeaderSummaryText,
   parallelGroupHeaderTitle,
   type ParallelGroupHeaderRow,
@@ -38,7 +39,9 @@ export interface ParallelGroupHeaderRowViewProps {
  * height can be estimated from the same row object the virtualizer sizes.
  *
  * The group owns that undo outright — its members share one workspace snapshot,
- * so no member's own CLI header offers a second copy of the same action.
+ * so no member's own CLI header offers a second copy of the same action. The
+ * button carries the same `Undo N changes` label as every other undo surface
+ * (N counts files); only its tooltip names the group.
  */
 export const ParallelGroupHeaderRowView: React.FC<
   ParallelGroupHeaderRowViewProps
@@ -83,7 +86,10 @@ export const ParallelGroupHeaderRowView: React.FC<
               type="button"
               className={`${ACTION_CLASS} text-link-fg hover:text-link-active-fg`}
               style={{ touchAction: "manipulation" }}
-              title={row.promptUndo.undo.label}
+              title={parallelGroupActionTooltip(
+                row.promptUndo.undo.label,
+                row.members.length
+              )}
               onClick={() => onUndo(row)}
             >
               <i className="codicon codicon-discard shrink-0" />
@@ -97,7 +103,10 @@ export const ParallelGroupHeaderRowView: React.FC<
               type="button"
               className={`${ACTION_CLASS} text-terminal-ansiGreen hover:opacity-80`}
               style={{ touchAction: "manipulation" }}
-              title={row.promptUndo.redo.label}
+              title={parallelGroupActionTooltip(
+                row.promptUndo.redo.label,
+                row.members.length
+              )}
               onClick={() => onRedo(row)}
             >
               <i className="codicon codicon-redo shrink-0" />
