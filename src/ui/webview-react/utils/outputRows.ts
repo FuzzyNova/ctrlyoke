@@ -44,6 +44,7 @@ import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey } from "./outputProjection";
 import { computePromptUndoActions } from "./promptUndo";
+import type { PromptUndoActions } from "./promptUndo";
 import {
   buildUndoRecordKey,
   computeOutputDiffStats,
@@ -2131,6 +2132,7 @@ export function buildOutputRows(
 ): BuildOutputRowsResult {
   const rows: OutputRenderRow[] = [];
   const stepOutputsMap = new Map<string, CliOutputType[]>();
+  const promptUndoActionsByTarget = new Map<string, PromptUndoActions>();
   const lastCliIndexPerStep = new Map<string, number>();
   const lastAttemptRowKeyBasePerStep = new Map<string, string>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
@@ -2281,6 +2283,27 @@ export function buildOutputRows(
       );
     }
   }
+
+  // Undo actions belong to the *target*, not to the message being rendered:
+  // every input here is per-target, and `stepOutputsMap` is fully populated by
+  // the pass above before the row loop starts, so the answer cannot change
+  // mid-loop. `computePromptUndoActions` walks every structured event of every
+  // attempt the target owns, so calling it per message re-derives one constant
+  // answer thousands of times. Measured in the hosted dashboard on an 18-step
+  // run (4 653 messages, 19 targets) that was 6 413 ms of a 6 527 ms build —
+  // 98 % of it — across 4 652 calls with 19 distinct answers between them.
+  const getPromptUndoActionsForTarget = (
+    key: string,
+    outputs: CliOutputType[],
+    record: UndoRecord | undefined,
+    snapshot: WorkspaceSnapshot | undefined
+  ): PromptUndoActions => {
+    const cached = promptUndoActionsByTarget.get(key);
+    if (cached) return cached;
+    const computed = computePromptUndoActions(outputs, record, snapshot);
+    promptUndoActionsByTarget.set(key, computed);
+    return computed;
+  };
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
     const target = message.target;
@@ -2471,7 +2494,8 @@ export function buildOutputRows(
       ? getConcurrentGroupForStep(input, target.index)
       : undefined;
     if (concurrentGroup && target.index === concurrentGroup.startIndex) {
-      const actions = computePromptUndoActions(
+      const actions = getPromptUndoActionsForTarget(
+        targetKey,
         allStepOutputs,
         undoRecord,
         workspaceSnapshot
@@ -2489,7 +2513,8 @@ export function buildOutputRows(
     }
     const promptUndoActions =
       canUndoAttempt && !concurrentGroup
-        ? computePromptUndoActions(
+        ? getPromptUndoActionsForTarget(
+            targetKey,
             allStepOutputs,
             undoRecord,
             workspaceSnapshot

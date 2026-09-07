@@ -54,12 +54,20 @@ is what this plan covers.
 
 ### Not covered here: the client-side render cost
 
-Measured 2026-09-07, the same run also costs 130 ms of `buildOutputRows` on
-_every pane width change_ and renders ~7 100 elements in the minimap, which is
-what freezes the UI while the panel is resized. That is a separate, cheaper,
-client-side problem — see `dev/backlog/OUTPUT_PANE_RESIZE_PERFORMANCE_PLAN.md`.
-It should land first: its minimap quantization is also the compact whole-run
-overview that Proposal 1A below currently has no answer for.
+Measured in the hosted dashboard 2026-09-07, the client side of this same run
+was the larger half: 15.6 s of blocked main thread against 1.5 s of
+extension-host work. Almost all of it was `buildOutputRows` recomputing one
+constant undo answer once per message — fixed the same day, taking the worst
+blocked frame to 2 142 ms. What is left there (a full row rebuild per pane
+width change, and ~7 100 minimap elements) is tracked separately in
+`dev/backlog/OUTPUT_PANE_RESIZE_PERFORMANCE_PLAN.md`, and its minimap
+quantization is also the compact whole-run overview that Proposal 1A below
+currently has no answer for.
+
+Note for anyone re-measuring the numbers below: the payload sizes are
+unchanged, but the `~1 600 ms` client figure in the table above predates that
+fix and the 2026-09-06 one, and was measured in the VS Code panel rather than
+the browser.
 
 ## The remaining cost: one 54.5 MB snapshot per client
 
