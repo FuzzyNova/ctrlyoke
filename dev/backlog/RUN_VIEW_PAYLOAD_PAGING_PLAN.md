@@ -58,11 +58,17 @@ Measured in the hosted dashboard 2026-09-07, the client side of this same run
 was the larger half: 15.6 s of blocked main thread against 1.5 s of
 extension-host work. Almost all of it was `buildOutputRows` recomputing one
 constant undo answer once per message — fixed the same day, taking the worst
-blocked frame to 2 142 ms. What is left there (a full row rebuild per pane
-width change, and ~7 100 minimap elements) is tracked separately in
-`dev/backlog/OUTPUT_PANE_RESIZE_PERFORMANCE_PLAN.md`, and its minimap
-quantization is also the compact whole-run overview that Proposal 1A below
-currently has no answer for.
+blocked frame to 2 142 ms. The rest of that work is now complete and lives in
+`dev/implemented/OUTPUT_PANE_RESIZE_PERFORMANCE_PLAN.md`: the per-pane-width
+rebuild is bucketed to 32 px and deferred until a resize settles, and the
+minimap is quantized to rail pixels. Two things there matter here. First,
+`quantizeOutputMinimapBars` (`src/ui/webview-react/utils/outputMinimapBars.ts`)
+was deliberately written as a structural projection rather than a view detail,
+so it is the compact whole-run overview that Proposal 1A below currently has no
+answer for — a windowed reader can produce the same bar array without
+materializing every row. Second, that plan's measurements found the remaining
+mount cost is React commit and style/layout across ~5 000 rows, not any single
+hot function, which is precisely the cost windowing addresses.
 
 Note for anyone re-measuring the numbers below: the payload sizes are
 unchanged, but the `~1 600 ms` client figure in the table above predates that

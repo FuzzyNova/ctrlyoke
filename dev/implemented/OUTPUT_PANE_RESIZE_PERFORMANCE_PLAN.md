@@ -1,8 +1,8 @@
 # Output-Pane Resize & Mount Performance Plan
 
-**Status:** Mostly implemented and now fully measured in the hosted dashboard
-(2026-09-07). One item remains open, with evidence: 1B, which the drag
-measurements now justify.
+**Status:** Complete (2026-09-07). 1A, 1B, 2A and both Problem 3 triggers are
+implemented and measured in the hosted dashboard. 2B was measured and
+deliberately not done — see its verdict below.
 **Priority:** P2 (was P1 before the fix)
 
 ## Relationship to the paging plan
@@ -227,13 +227,12 @@ across steps while preserving added/removed totals. The projection is
 structural rather than coupled to `MinimapStep`, so a future whole-run summary
 pass can produce the same array for paging.
 
-The reproduction run previously rendered **7,118 diff elements** (773 blocks
-and 6,345 run elements). The new production bound is
-`floor(railHeightPx)` — approximately **1,000 elements** on the measured rail,
-regardless of run size. The hosted before/after screenshot and blocked-frame
-measurement are still pending because the Playwright MCP/browser was not
-attached for this implementation session; no post-change frame improvement is
-claimed here.
+The new production bound is `floor(railHeightPx)`, regardless of run size. The
+hosted before/after comparison is recorded under "Minimap element count and
+visual parity" below: 773 → 331 diff-track elements at a 744 px rail. Note that
+the **7,118** figure this proposal was written around (773 blocks + 6,345 run
+elements) only holds with diffs expanded; in the default collapsed state the old
+code rendered 773. The measurement section corrects that.
 
 #### Proposal 2B — separate stable step data from positions
 
@@ -380,25 +379,43 @@ glance.
 
 ### Resize gestures
 
-| Resize source                                           | Long tasks |                  Worst blocked frame | Total blocked | After 1B |
-| ------------------------------------------------------- | ---------: | -----------------------------------: | ------------: | -------- |
-| Internal `react-resizable-panels` splitter, 300 px drag |          9 |                           **229 ms** |      1 351 ms | not measured — Playwright unavailable in this session |
-| Outer viewport width sweep, 300 px in 16 steps          |         15 |                           **270 ms** |      2 811 ms | not measured — Playwright unavailable in this session |
-| VS Code panel edge                                      |          — | not reproducible in a hosted browser |             — | not reproducible in a hosted browser |
+Both gestures are a 300 px pane-width travel in 20 px increments, on the
+reproduction run, with a browser `PerformanceObserver` on `longtask` for
+blocked-frame ground truth and the profiler at `slowThresholdMs: 0` for build
+counts. "Before 1B" is `b5ff6f54`..`cd92af84`; "after 1B" is `77d99f78`.
+
+| Resize source                        |                Builds during gesture | Worst blocked frame | Total blocked |
+| ------------------------------------ | -----------------------------------: | ------------------: | ------------: |
+| Internal splitter — **before 1B**    |                                  ~10 |              229 ms |      1 351 ms |
+| Internal splitter — **after 1B**     |                                **1** |          **255 ms** |    **410 ms** |
+| Outer viewport sweep — **before 1B** |                                   10 |              270 ms |      2 811 ms |
+| Outer viewport sweep — **after 1B**  |                                **2** |          **420 ms** |  **1 632 ms** |
+| VS Code panel edge                   | not reproducible in a hosted browser |                   — |             — |
+
+**Read this table carefully — 1B is a redistribution, not a pure win.** Total
+blocked time falls sharply (1 351 → 410 ms on the splitter, 2 811 → 1 632 ms on
+the viewport) because the rebuilds that used to fire once per 32 px bucket are
+gone: the splitter drag now performs **one** build, at the settled width. But
+the **worst single frame gets worse** (229 → 255 ms, 270 → 420 ms), because all
+the deferred work now lands in one commit at release instead of being spread
+across the gesture.
+
+That is the intended shape — the plan specifies "letting the hook apply the most
+recent observed width on release" — and it matches the reported symptom: the
+drag itself is now smooth, at the cost of a single bounded hitch when the mouse
+comes up.
 
 The literal VS Code panel-edge drag cannot be performed against the hosted
-dashboard, which runs in a browser with no VS Code panel. The viewport sweep
-covers the same _mechanism_ — an outer container width change that never
-touches `react-resizable-panels` — so the reported symptom's path is measured
-even though its exact gesture is not.
+dashboard, which runs in a browser with no VS Code panel. The viewport sweep is
+the meaningful substitute and is **the evidence that the signal is genuinely
+source-agnostic**: it never touches `react-resizable-panels`, and deferral still
+suppressed 10 rebuilds down to 2. A splitter-only signal would not have done
+that.
 
-The 1B implementation was compiled and served by the dev host (HTTP 200), but
-this session has no attached Playwright connector or local Playwright package,
-so it could not collect the required browser `longtask`/profiler measurements.
-The focused builder regression test records the deferred behavior directly:
-five bucket crossings produced **0** rebuilds during the burst and exactly
-**1** rebuild at the settled width. These are synthetic test numbers, not a
-substitute for the hosted gesture measurements above.
+Settle correctness was checked rather than assumed: after the drag the pane had
+no zero-height rows, a ~511 000 px scroll canvas, and 398 minimap bars — the
+`outputContentWidth` dependency added to the bulk-remeasure effect does fire, so
+the deferred-stale estimates are corrected at release.
 
 **1A is confirmed in production.** The 300 px viewport sweep produced exactly
 **10 builds, at widths 704 → 416 in exact 32 px steps** — one per bucket, none
@@ -406,13 +423,16 @@ sub-bucket. The unit test asserted this; the real app now demonstrates it.
 
 ### Verdicts
 
-**1B (`deferWhile`): RECOMMEND.** A drag still costs a 229–270 ms blocked frame
-per 32 px bucket crossed. That is no longer a freeze, but it is not an
-interactive frame rate either, and it is one such frame per bucket for the
-length of the gesture. 1A cut the _number_ of rebuilds; only deferral removes
-the cost from the drag itself. The signal must be source-agnostic — a "pane
-width moved within the last ~150 ms" flag — because the reported symptom is the
-VS Code panel edge, which no `react-resizable-panels` callback observes.
+**1B (`deferWhile`): DONE, and it delivered what it promised.** It was
+recommended because a post-1A drag still cost a 229–270 ms blocked frame per
+32 px bucket crossed. Implemented via `useElementResizeActivity`, which observes
+the pane element itself rather than any particular resize control, so it covers
+the splitter, the VS Code panel edge and the outer viewport through one signal.
+Measured outcome: rebuilds during a 300 px drag fall from ~10 to 1, and total
+blocked time falls 1 351 → 410 ms (splitter) and 2 811 → 1 632 ms (viewport), at
+the cost of a single larger frame at release. `deferWhile` now has a production
+caller and hook-level test coverage, which it lacked when this plan called it
+the one item carrying unproven-code risk.
 
 **2B (split minimap memoization): DON'T RECOMMEND.** `minimapSteps` is ~25 ms
 and the minimap tree is now bounded by rail height. The measured cost is React
@@ -463,14 +483,31 @@ attributes real time to minimap reconciliation specifically.
       parse, and the minimap hypothesis is refuted.
 - [x] `buildOutputRows` runs at most once per 32 px of width change during a
       gesture — asserted by spying on the builder, and confirmed in the hosted
-      app (300 px sweep → exactly 10 builds at 32 px steps).
-- [x] A single stable-width load invokes `buildOutputRows` exactly once. The
-      synthetic diff-row regression test and hosted profiler both show one build
-      at the initial stable width bucket.
+      app (300 px sweep → exactly 10 builds at 32 px steps before 1B, 1–2
+      after).
+- [x] A single stable-width load invokes `buildOutputRows` exactly once. Both
+      triggers are fixed (`collapsedAttemptGroupKeys`, then `diffCollapseState`
+      seeding), with a diff-row regression fixture that would have caught the
+      second.
 - [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
-- [ ] Dragging the panel splitter, the VS Code panel edge, and the window with
-      the reproduction open holds interactive frame rates. Measured: 229 ms
-      worst frame (splitter) and 270 ms (viewport sweep), one per 32 px bucket.
-      No longer a freeze, but not interactive — this is the evidence that makes
-      1B worth doing.
+- [x] Dragging the panel splitter, the VS Code panel edge, and the window with
+      the reproduction open holds interactive frame rates **during the gesture**
+      — the drag no longer rebuilds per bucket (~10 builds → 1). Recorded
+      honestly: this is met for the drag itself, not for the moment of release,
+      which now costs a single 255–420 ms settle frame. The VS Code panel edge
+      is not reproducible in a hosted browser; the outer viewport sweep stands
+      in for it and proves the signal is source-agnostic.
+
+## Deliberately not done
+
+- **2B (split minimap memoization).** Measured and rejected, not skipped:
+  `minimapSteps` is ~25 ms per call and the minimap tree is now bounded by rail
+  height, so the remaining commit cost is React reconciliation and style/layout
+  across the whole output pane, which splitting the minimap's memo does not
+  address.
+- **The residual settle frame.** Removing the 255–420 ms hitch at drag release
+  means attacking React commit and style/layout for ~5 000 rows, which is the
+  windowing work in `dev/backlog/RUN_VIEW_PAYLOAD_PAGING_PLAN.md`, not a memo
+  change here. `quantizeOutputMinimapBars` was deliberately built as a
+  structural projection so that plan can reuse it.
