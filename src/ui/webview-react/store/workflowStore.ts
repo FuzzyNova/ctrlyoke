@@ -24,10 +24,21 @@ import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 
 /**
+ * Runtime execution status the extension stamps onto each step (`setStepStatus`
+ * below, and the STEPS_EXTENDED handler). It is not an authored field, so it
+ * lives here rather than on `StepDisplayProperties`; declaring it keeps readers
+ * from re-inventing `step as { status?: string }` casts, which hid the field
+ * from the language service and from `find-dead-methods.mjs`.
+ */
+interface StepRuntimeStatus {
+  status?: StepStatus;
+}
+
+/**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
  * to avoid _runtime type incompatibility with CtrlYokeTypes.PromptStep.
  */
-export type WorkflowStep = PromptStep | ScriptStep;
+export type WorkflowStep = (PromptStep | ScriptStep) & StepRuntimeStatus;
 
 /** Type guard for script steps (webview-local version) */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {

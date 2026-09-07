@@ -32,7 +32,6 @@ import {
   SETTING_SCOPES,
 } from "../../types/messages";
 import {
-  FINAL_STEP_PHASES,
   OUTPUT_SCROLL_TARGET_KINDS,
   OUTPUT_TABS,
 } from "@root/types/DashboardConstants";
@@ -49,7 +48,6 @@ import { terminalRegistry } from "../../terminalRegistry";
 import { ExportOutputModal } from "./output-section/ExportOutputModal";
 import { OutputSectionHeader } from "./output-section/OutputSectionHeader";
 import { OutputPane } from "./output-section/OutputPane";
-import { ParallelOutputGroupHeader } from "./output-section/ParallelOutputGroupHeader";
 import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 
 import { triggerPanelAnimation } from "@utils/panelAnimation";
@@ -344,9 +342,7 @@ const OutputSectionInner: React.FC = () => {
   const harnessColorSettings = useSettingsStore(
     (s) => s.globalSettings.harnessColors
   );
-  const stepColorMode = useSettingsStore(
-    (s) => s.globalSettings.stepColorMode
-  );
+  const stepColorMode = useSettingsStore((s) => s.globalSettings.stepColorMode);
   const atomicContextReferences = useSettingsStore(
     (s) => s.globalSettings.atomicContextReferences
   );
@@ -499,6 +495,7 @@ const OutputSectionInner: React.FC = () => {
     liveActivityEntries,
     steps,
     parallelGroups,
+    activeStepIndices,
     finalStep,
     effectiveHarness,
     stepColorMode,
@@ -1266,7 +1263,6 @@ const OutputSectionInner: React.FC = () => {
     handleFileUndo,
     handlePromptRedo,
     handlePromptUndo,
-    handlePromptUndoMeta,
     handleWorkflowRedo,
     handleWorkflowUndo,
     minimapDialogState,
@@ -1634,47 +1630,6 @@ const OutputSectionInner: React.FC = () => {
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {activeOutputTab === OUTPUT_TABS.OUTPUT &&
-            parallelGroups
-              .filter((group) => group.startIndex < group.endIndex)
-              .map((group) => {
-                const groupUndoRow = rows.find(
-                  (row) =>
-                    row.target.kind === FINAL_STEP_PHASES.QUEUE &&
-                    row.target.index === group.startIndex &&
-                    row.promptUndo?.undo
-                );
-                return (
-                  <ParallelOutputGroupHeader
-                    key={group.id}
-                    group={group}
-                    steps={steps}
-                    activeStepIndices={activeStepIndices}
-                    hiddenTargetKeys={
-                      new Set(
-                        hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS
-                      )
-                    }
-                    onShowAll={handleClearHiddenOutputTargets}
-                    onSoloTarget={(targetKey, allTargetKeys) =>
-                      soloOutputTarget(
-                        outputFilterAddressKey,
-                        targetKey,
-                        allTargetKeys
-                      )
-                    }
-                    onUndo={
-                      groupUndoRow?.promptUndo
-                        ? () =>
-                            handlePromptUndoMeta(
-                              groupUndoRow.target,
-                              groupUndoRow.promptUndo
-                            )
-                        : undefined
-                    }
-                  />
-                );
-              })}
           <OutputPane
             activeOutputTab={activeOutputTab}
             activeMatch={activeMatch}

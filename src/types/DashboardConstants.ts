@@ -3217,11 +3217,23 @@ export const OUTPUT_DEFAULT_LABELS = {
   THINKING: "Thinking",
 } as const;
 
+/**
+ * Fixed labels on the parallel-group output header. Shared because the row's
+ * height estimator sizes the very strings the header paints — a divergence
+ * there mis-predicts the chip row's wrapping on every group.
+ */
+export const PARALLEL_GROUP_HEADER_LABELS = {
+  ALL_CHIP: "All",
+  UNDO: "Undo group",
+  FILTERS: "Output filters",
+} as const;
+
 // ============================================================================
 // OUTPUT ROW KINDS - Discriminants for rendered output rows
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {
   ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
+  PARALLEL_GROUP_HEADER: "parallel-group-header",
   STEP_ANCHOR: "step-anchor",
   STEP_HIDDEN: "step-hidden",
   FINAL_STEP_LABEL: "final-step-label",

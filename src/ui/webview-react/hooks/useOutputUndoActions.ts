@@ -17,6 +17,7 @@ import {
 import type {
   CliHeaderRow,
   OutputRowPromptUndoMeta,
+  ParallelGroupHeaderRow,
   StructuredEventRow,
 } from "@utils/outputRows";
 import type { OutputMessageTarget } from "@utils/outputProjection";
@@ -284,8 +285,11 @@ export function useOutputUndoActions({
     [openMinimapUndoDialog, runAddress]
   );
 
+  // Widened past `CliHeaderRow` so a parallel group's header row — which
+  // carries the same group-wide `promptUndo` meta — reuses this handler.
   const handlePromptUndo = useCallback(
-    (row: CliHeaderRow) => handlePromptUndoMeta(row.target, row.promptUndo),
+    (row: CliHeaderRow | ParallelGroupHeaderRow) =>
+      handlePromptUndoMeta(row.target, row.promptUndo),
     [handlePromptUndoMeta]
   );
 

@@ -26,8 +26,7 @@ export function useContextPct() {
   const { isViewingHistory } = useUiStore();
 
   return function getContextPct(index: number): number | undefined {
-    const stepStatus = (steps[index] as { status?: string } | undefined)
-      ?.status;
+    const stepStatus = steps[index]?.status;
     const isCurrentRunning =
       isWorkflowRunning(executionState) &&
       index === currentStep &&

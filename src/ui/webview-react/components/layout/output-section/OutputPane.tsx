@@ -21,6 +21,7 @@ import {
 import type {
   CliHeaderRow,
   OutputRenderRow,
+  ParallelGroupHeaderRow,
   StructuredEventRow,
 } from "@utils/outputRows";
 import type { OutputFindMatch, RowFindDecoration } from "@utils/outputFind";
@@ -104,7 +105,7 @@ interface OutputPaneProps {
   onMinimapStepSolo: (step: MinimapStep) => void;
   onOutputProfilerRender: React.ProfilerOnRenderCallback;
   onPromptRedo: (row: CliHeaderRow) => void;
-  onPromptUndo: (row: CliHeaderRow) => void;
+  onPromptUndo: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onScroll: React.UIEventHandler<HTMLDivElement>;
   onTouchCancel: React.TouchEventHandler<HTMLDivElement>;
   onTouchEnd: React.TouchEventHandler<HTMLDivElement>;

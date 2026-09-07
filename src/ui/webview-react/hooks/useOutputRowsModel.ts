@@ -54,6 +54,7 @@ interface UseOutputRowsModelInput {
   steps: WorkflowStep[];
   finalStep: WorkflowStep | null;
   parallelGroups?: readonly ParallelGroupDefinition[];
+  activeStepIndices?: readonly number[];
   effectiveHarness: HarnessId;
   stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
@@ -97,6 +98,7 @@ export function useOutputRowsModel({
   steps,
   finalStep,
   parallelGroups,
+  activeStepIndices,
   effectiveHarness,
   stepColorMode,
   harnessColorSettings,
@@ -220,6 +222,7 @@ export function useOutputRowsModel({
             steps,
             finalStep,
             parallelGroups,
+            activeStepIndices,
             effectiveHarness,
             stepColorMode,
             harnessColorSettings,
@@ -252,6 +255,7 @@ export function useOutputRowsModel({
       steps,
       finalStep,
       parallelGroups,
+      activeStepIndices,
       effectiveHarness,
       stepColorMode,
       harnessColorSettings,

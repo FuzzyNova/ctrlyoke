@@ -21,8 +21,10 @@ import type {
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
+  PARALLEL_GROUP_HEADER_LABELS,
   OPERATION_STATUS,
   STEP_COLOR_MODES,
+  STEP_STATUS,
   WORKFLOW_TOKEN_COVERAGE,
   STEP_TYPES,
   type HarnessId,
@@ -160,6 +162,42 @@ export interface StepAnchorRow extends OutputRowBase<
   typeof OUTPUT_ROW_KINDS.STEP_ANCHOR
 > {
   target: OutputMessageTarget;
+}
+
+/** One member chip of a parallel group's output header. */
+export interface ParallelGroupHeaderMember {
+  stepIndex: number;
+  /** `getTargetKey` form, so the chip writes `uiStore.hiddenOutputTargets` directly. */
+  targetKey: string;
+  label: string;
+  /** True when this member alone is visible — the chip's pressed state. */
+  isSoloed: boolean;
+}
+
+/**
+ * Opens a parallel group's section of the output stream: member counts and the
+ * All/per-member filter chips.
+ *
+ * It is a row rather than a sibling of the scroll container because everything
+ * else about it follows from that: it only exists once the group has produced
+ * output (a group that has never run contributes no messages, so no header),
+ * the pinned `RunSummaryBanner` scrolls over it like any other row instead of
+ * covering it, and it sits with the output it describes rather than above
+ * whichever run happens to be displayed.
+ */
+export interface ParallelGroupHeaderRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+> {
+  target: OutputMessageTarget;
+  groupId: string;
+  startIndex: number;
+  endIndex: number;
+  members: ParallelGroupHeaderMember[];
+  running: number;
+  complete: number;
+  failed: number;
+  /** True when no member is filtered out — the All chip's pressed state. */
+  isAllVisible: boolean;
 }
 
 export interface StepHiddenRow extends OutputRowBase<
@@ -305,6 +343,7 @@ export interface ScriptVerdictRow extends OutputRowBase<
 
 export type OutputRenderRow =
   | StepAnchorRow
+  | ParallelGroupHeaderRow
   | StepHiddenRow
   | FinalStepLabelRow
   | StatusRow
@@ -325,6 +364,12 @@ export interface BuildOutputRowsInput {
   steps: readonly WorkflowStep[];
   finalStep: WorkflowStep | null | undefined;
   parallelGroups?: readonly ParallelGroupDefinition[];
+  /**
+   * Steps the extension currently reports as executing. A step can be active
+   * before its `status` lands, so the parallel-group header counts a member as
+   * running when either signal says so.
+   */
+  activeStepIndices?: readonly number[];
   /** Workflow-level fallback for prompt-step harness resolution. */
   effectiveHarness?: HarnessId;
   /** Dashboard-only per-harness identity color settings. */
@@ -1603,6 +1648,106 @@ function estimateToolCallStructuredEventHeight(
   );
 }
 
+// ── Parallel group header layout ───────────────────────────────────────────
+// `ParallelOutputGroupHeader` is styled in fixed Tailwind units (`text-xs`,
+// not the output font-size var), so its estimate is independent of
+// `outputFontSize` — only the pane width can change it, by wrapping the
+// summary line or the chip row.
+//   <div class="mx-2 mb-1 rounded border px-2 py-1.5 text-xs">
+//     <div class="flex flex-wrap gap-x-2 gap-y-1">  ← title / counts / undo
+//     <div class="mt-1 flex flex-wrap gap-1">       ← All + member chips
+const PARALLEL_GROUP_HEADER_VERTICAL_CHROME = 18; // py-1.5 (12) + border (2) + mb-1 (4)
+const PARALLEL_GROUP_HEADER_HORIZONTAL_CHROME = 34; // mx-2 (16) + px-2 (16) + border (2)
+const PARALLEL_GROUP_HEADER_LINE_HEIGHT = 16; // text-xs line-height
+const PARALLEL_GROUP_HEADER_CHIP_HEIGHT = 22; // line (16) + py-0.5 (4) + border (2)
+const PARALLEL_GROUP_HEADER_CHIP_ROW_GAP = 4; // mt-1, and gap-y-1 between wrapped rows
+const PARALLEL_GROUP_HEADER_CHIP_HORIZONTAL_CHROME = 14; // px-1.5 (12) + border (2)
+const PARALLEL_GROUP_HEADER_SUMMARY_GAP = 8; // gap-x-2
+const PARALLEL_GROUP_HEADER_CHIP_GAP = 4; // gap-1
+// Proportional 12px UI text, measured against the same VS Code font stack the
+// rest of the chrome uses. Deliberately a touch wide: under-counting a wrap
+// makes the pane jump, over-counting only leaves a gap the measurement closes.
+const PARALLEL_GROUP_HEADER_CHAR_WIDTH = 6.4;
+
+function parallelGroupHeaderTextWidth(text: string): number {
+  return text.length * PARALLEL_GROUP_HEADER_CHAR_WIDTH;
+}
+
+/** Greedy `flex-wrap` line count for a row of unbreakable items. */
+function countWrappedFlexLines(
+  itemWidths: readonly number[],
+  availableWidth: number,
+  gap: number
+): number {
+  let lines = 1;
+  let used = 0;
+  for (const itemWidth of itemWidths) {
+    const advance = used === 0 ? itemWidth : gap + itemWidth;
+    if (used > 0 && used + advance > availableWidth) {
+      lines += 1;
+      used = itemWidth;
+      continue;
+    }
+    used += advance;
+  }
+  return lines;
+}
+
+export function parallelGroupHeaderSummaryText(
+  row: Pick<ParallelGroupHeaderRow, "running" | "complete" | "failed">
+): string {
+  return `${row.running} running · ${row.complete} complete · ${row.failed} failed`;
+}
+
+export function parallelGroupHeaderTitle(
+  row: Pick<ParallelGroupHeaderRow, "startIndex" | "endIndex">
+): string {
+  return `Parallel steps ${row.startIndex + 1}–${row.endIndex + 1}`;
+}
+
+function estimateParallelGroupHeaderHeight(
+  row: ParallelGroupHeaderRow,
+  outputContentWidth: number | undefined
+): number {
+  const availableWidth = resolveContentWidth(
+    outputContentWidth,
+    PARALLEL_GROUP_HEADER_HORIZONTAL_CHROME
+  );
+  const summaryItems = [
+    parallelGroupHeaderTitle(row),
+    parallelGroupHeaderSummaryText(row),
+    ...(row.promptUndo?.undo ? [PARALLEL_GROUP_HEADER_LABELS.UNDO] : []),
+  ].map(parallelGroupHeaderTextWidth);
+  const chipItems = [
+    PARALLEL_GROUP_HEADER_LABELS.ALL_CHIP,
+    ...row.members.map((member) => `${member.stepIndex + 1} ${member.label}`),
+  ].map(
+    (label) =>
+      parallelGroupHeaderTextWidth(label) +
+      PARALLEL_GROUP_HEADER_CHIP_HORIZONTAL_CHROME
+  );
+
+  const summaryLines = countWrappedFlexLines(
+    summaryItems,
+    availableWidth,
+    PARALLEL_GROUP_HEADER_SUMMARY_GAP
+  );
+  const chipLines = countWrappedFlexLines(
+    chipItems,
+    availableWidth,
+    PARALLEL_GROUP_HEADER_CHIP_GAP
+  );
+
+  return (
+    PARALLEL_GROUP_HEADER_VERTICAL_CHROME +
+    summaryLines * PARALLEL_GROUP_HEADER_LINE_HEIGHT +
+    (summaryLines - 1) * PARALLEL_GROUP_HEADER_CHIP_ROW_GAP +
+    PARALLEL_GROUP_HEADER_CHIP_ROW_GAP +
+    chipLines * PARALLEL_GROUP_HEADER_CHIP_HEIGHT +
+    (chipLines - 1) * PARALLEL_GROUP_HEADER_CHIP_ROW_GAP
+  );
+}
+
 interface RowHeightEstimateCacheEntry {
   contentWidth: number | undefined;
   fontSize: number;
@@ -1674,6 +1819,8 @@ function estimateOutputRowContentHeight(
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       return 1;
+    case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
+      return estimateParallelGroupHeaderHeight(row, outputContentWidth);
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
       return STEP_HIDDEN_ROW_HEIGHT;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
@@ -1868,6 +2015,64 @@ function pushScriptOutputRows({
   }
 }
 
+function buildParallelGroupHeaderRow(
+  input: BuildOutputRowsInput,
+  group: ParallelGroupDefinition
+): ParallelGroupHeaderRow {
+  const memberIndices = Array.from(
+    { length: group.endIndex - group.startIndex + 1 },
+    (_, offset) => group.startIndex + offset
+  );
+  const statusOf = (stepIndex: number) => input.steps[stepIndex]?.status;
+  const isRunning = (stepIndex: number) =>
+    input.activeStepIndices?.includes(stepIndex) === true ||
+    statusOf(stepIndex) === STEP_STATUS.RUNNING ||
+    statusOf(stepIndex) === STEP_STATUS.SENT;
+  const members = memberIndices.map((stepIndex) => ({
+    stepIndex,
+    targetKey: getTargetKey({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: stepIndex,
+    }),
+    label: getStepName(input.steps[stepIndex], `Step ${stepIndex + 1}`),
+  }));
+  const hiddenCount = members.filter((member) =>
+    input.hiddenTargetKeys?.has(member.targetKey)
+  ).length;
+  const row: ParallelGroupHeaderRow = {
+    key: `parallel-group:${group.id}`,
+    rowKind: OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER,
+    // The group's undo and its identity both belong to the first member, which
+    // is where the group-wide workspace snapshot is stored.
+    target: { kind: FINAL_STEP_PHASES.QUEUE, index: group.startIndex },
+    groupId: group.id,
+    startIndex: group.startIndex,
+    endIndex: group.endIndex,
+    members: members.map((member) => ({
+      ...member,
+      // Soloed = every other member filtered out, which is exactly what
+      // `soloOutputTarget` writes when the chip is pressed.
+      isSoloed:
+        hiddenCount === members.length - 1 &&
+        input.hiddenTargetKeys?.has(member.targetKey) !== true,
+    })),
+    running: memberIndices.filter(isRunning).length,
+    complete: memberIndices.filter(
+      (stepIndex) => statusOf(stepIndex) === STEP_STATUS.COMPLETED
+    ).length,
+    failed: memberIndices.filter(
+      (stepIndex) =>
+        statusOf(stepIndex) === STEP_STATUS.FAILED ||
+        statusOf(stepIndex) === STEP_STATUS.CANCELLED
+    ).length,
+    isAllVisible: hiddenCount === 0,
+    // Replaced by the published-copy pass at the end of `buildOutputRows`,
+    // which is also where the group-undo affordance has landed by then.
+    estimateSize: 0,
+  };
+  return row;
+}
+
 export function buildOutputRows(
   input: BuildOutputRowsInput
 ): BuildOutputRowsResult {
@@ -1879,6 +2084,7 @@ export function buildOutputRows(
   const stepColorByTargetKey = new Map<string, string | undefined>();
   const firstRowIndexByTarget = new Map<string, number>();
   const anchorRowIndexByTarget = new Map<string, number>();
+  const parallelGroupHeaderRows = new Map<string, ParallelGroupHeaderRow>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
   // OutputSection starts with an unmeasured width of 0. Treat that as unknown,
@@ -2027,6 +2233,18 @@ export function buildOutputRows(
     const targetKey = getTargetKey(target);
     const isFirstForTarget = !firstRowIndexByTarget.has(targetKey);
     if (isFirstForTarget) {
+      // Opens the group's section, ahead of the first member to produce output
+      // — which is not necessarily the first member. Anchors are recorded
+      // afterwards so navigation still lands on the step, not on the header.
+      const parallelGroup =
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? getParallelGroupForStep(input.parallelGroups, target.index)
+          : undefined;
+      if (parallelGroup && !parallelGroupHeaderRows.has(parallelGroup.id)) {
+        const headerRow = buildParallelGroupHeaderRow(input, parallelGroup);
+        parallelGroupHeaderRows.set(parallelGroup.id, headerRow);
+        rows.push(headerRow);
+      }
       firstRowIndexByTarget.set(targetKey, rows.length);
       anchorRowIndexByTarget.set(targetKey, rows.length);
       rows.push({
@@ -2593,6 +2811,20 @@ export function buildOutputRows(
     }
   }
 
+  // A group's undo is aggregated onto its first member's rows, which are built
+  // long after the header opens the section — so the header adopts it here
+  // rather than duplicating the aggregation. `allowUndoActions` and the
+  // group-snapshot check have already been applied upstream.
+  for (const headerRow of parallelGroupHeaderRows.values()) {
+    headerRow.promptUndo = rows.find(
+      (row) =>
+        row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER &&
+        row.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        row.target.index === headerRow.startIndex &&
+        row.promptUndo?.undo
+    )?.promptUndo;
+  }
+
   return {
     // Estimate against the published copy, not the draft it was spread from:
     // `estimateOutputRowHeight` memoizes on the row object, and the virtualizer
@@ -2601,7 +2833,12 @@ export function buildOutputRows(
     rows: rows.map((row) => {
       const publishedRow = {
         ...row,
-        stepColor: getStepOutputColor(row.target),
+        // The header names the whole group, so it carries no single member's
+        // identity bar.
+        stepColor:
+          row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+            ? undefined
+            : getStepOutputColor(row.target),
       };
       publishedRow.estimateSize = estimateOutputRowHeight(
         publishedRow,

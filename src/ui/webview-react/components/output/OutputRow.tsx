@@ -33,6 +33,7 @@ import {
   GenericToolCallOutput,
   MarkdownText,
   McpToolCallOutput,
+  ParallelGroupHeaderRowView,
   StatusMessage,
   WebSearchOutput,
 } from ".";
@@ -106,6 +107,7 @@ import { getTargetKey } from "@utils/outputProjection";
 import type {
   CliHeaderRow,
   OutputRenderRow,
+  ParallelGroupHeaderRow,
   StepHiddenRow,
   ScriptOutputRow,
   StructuredEventRow,
@@ -177,7 +179,12 @@ interface OutputRowProps {
   atomicContextReferences?: boolean;
   activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
-  onPromptUndo?: (row: CliHeaderRow) => void;
+  /**
+   * Undo whatever the row's `promptUndo` describes. A parallel group's undo is
+   * group-wide and rendered on its header row, but the action itself is the
+   * same target + meta pair a CLI header carries, so both share one handler.
+   */
+  onPromptUndo?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onPromptRedo?: (row: CliHeaderRow) => void;
   onFileUndo?: (
     row: StructuredEventRow,
@@ -1678,6 +1685,9 @@ function OutputRowComponent({
   switch (row.rowKind) {
     case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       content = <div className="h-px" aria-hidden="true" />;
+      break;
+    case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
+      content = <ParallelGroupHeaderRowView row={row} onUndo={onPromptUndo} />;
       break;
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
       content = (

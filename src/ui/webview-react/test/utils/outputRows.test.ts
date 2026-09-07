@@ -34,6 +34,7 @@ import {
   HARNESS_IDS,
   OUTPUT_ROW_KINDS,
   STEP_COLOR_MODES,
+  STEP_STATUS,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
 
@@ -2751,6 +2752,149 @@ describe("outputRows", () => {
           (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
         )
       ).toHaveLength(1);
+    });
+  });
+  describe("parallel group header row", () => {
+    const PARALLEL_GROUPS = [
+      { id: "parallel-0-1", startIndex: 0, endIndex: 1, failFast: false },
+    ];
+    const STEPS = [
+      { name: "auth", status: STEP_STATUS.RUNNING },
+      { name: "database", status: STEP_STATUS.COMPLETED },
+    ] as WorkflowStep[];
+
+    function buildParallelRows(
+      overrides: Partial<Parameters<typeof buildOutputRows>[0]> = {}
+    ) {
+      // Step 2 emits first, so the header must not assume the group's first
+      // member opens the section.
+      const activityFor = (stepIndex: number, text: string, order: number) => ({
+        timestampMs: 1000 + order,
+        sequence: 1 + order,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex } as const,
+        runIndex: 0,
+        attemptIndex: 0,
+        kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+        text,
+      });
+      return buildOutputRows({
+        allMessages: mapOrderedHistoryEntriesToMessages(
+          [],
+          [activityFor(1, "B1", 0), activityFor(0, "A1", 1)]
+        ),
+        steps: STEPS,
+        finalStep: null,
+        parallelGroups: PARALLEL_GROUPS,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: true,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+        ...overrides,
+      });
+    }
+
+    const headerRow = (result: ReturnType<typeof buildOutputRows>) =>
+      result.rows.find(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+      );
+
+    it("opens the group's section once, ahead of the first member to emit output", () => {
+      const result = buildParallelRows();
+      const headers = result.rows.filter(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+      );
+
+      expect(headers).toHaveLength(1);
+      // Step 2 produced output first, so the header opens ahead of *its* anchor
+      // while still naming the whole group.
+      expect(result.rows[0]).toBe(headers[0]);
+      expect(result.rows[1]?.rowKind).toBe(OUTPUT_ROW_KINDS.STEP_ANCHOR);
+      expect(result.rows[1]?.target.index).toBe(1);
+      // Anchors still point at the step's own row, not at the header.
+      expect(result.anchorRowIndexByTarget.get("queue:1")).toBe(1);
+    });
+
+    it("emits no header for a group that has not produced output", () => {
+      const result = buildParallelRows({
+        allMessages: [] as OutputMessage[],
+      });
+
+      expect(result.rows).toHaveLength(0);
+    });
+
+    it("derives member chips, counts, and solo state from steps and the hidden set", () => {
+      const row = headerRow(buildParallelRows());
+
+      expect(row?.rowKind).toBe(OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER);
+      if (row?.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER) return;
+      expect(row.members.map((member) => member.label)).toEqual([
+        "auth",
+        "database",
+      ]);
+      expect(row.members.map((member) => member.targetKey)).toEqual([
+        "queue:0",
+        "queue:1",
+      ]);
+      expect(row.members.every((member) => !member.isSoloed)).toBe(true);
+      expect(row.isAllVisible).toBe(true);
+      expect(row.running).toBe(1);
+      expect(row.complete).toBe(1);
+      expect(row.failed).toBe(0);
+      // The header names the group, so it carries no member's identity bar.
+      expect(row.stepColor).toBeUndefined();
+    });
+
+    it("counts an active step as running before its status lands", () => {
+      const row = headerRow(
+        buildParallelRows({
+          steps: [{ name: "auth" }, { name: "database" }] as WorkflowStep[],
+          activeStepIndices: [0, 1],
+        })
+      );
+
+      if (row?.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER) {
+        throw new Error("expected a parallel group header row");
+      }
+      expect(row.running).toBe(2);
+    });
+
+    it("marks the surviving member soloed when every other member is hidden", () => {
+      const row = headerRow(
+        buildParallelRows({ hiddenTargetKeys: new Set(["queue:0"]) })
+      );
+
+      if (row?.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER) {
+        throw new Error("expected a parallel group header row");
+      }
+      expect(row.isAllVisible).toBe(false);
+      expect(
+        row.members.map((member) => [member.targetKey, member.isSoloed])
+      ).toEqual([
+        ["queue:0", false],
+        ["queue:1", true],
+      ]);
+    });
+
+    it("grows its estimate when the chip row wraps", () => {
+      const row = headerRow(buildParallelRows());
+      if (row?.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER) {
+        throw new Error("expected a parallel group header row");
+      }
+
+      const wide = estimateOutputRowHeight(row, 13, 900);
+      const narrow = estimateOutputRowHeight(row, 13, 260);
+
+      expect(wide).toBeGreaterThan(0);
+      expect(narrow).toBeGreaterThan(wide);
     });
   });
 });

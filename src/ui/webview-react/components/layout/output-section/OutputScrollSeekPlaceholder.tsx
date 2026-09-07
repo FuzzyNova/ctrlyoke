@@ -57,6 +57,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Step";
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
       return "Hidden step";
+    case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
+      return "Parallel group";
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return row.label;
   }
