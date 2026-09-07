@@ -143,7 +143,7 @@ describe("EditorSection", () => {
     const user = userEvent.setup();
     render(<EditorSection />);
 
-    const nameButton = screen.getByTitle("Click to set prompt name");
+    const nameButton = screen.getByRole("button", { name: "Set prompt name" });
     nameButton.focus();
     await user.keyboard(" ");
 

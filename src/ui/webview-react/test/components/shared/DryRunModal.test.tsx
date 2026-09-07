@@ -274,7 +274,7 @@ describe("DryRunModal", () => {
     expect(
       screen.getByRole("navigation", { name: "Dry run sections" })
     ).toBeInTheDocument();
-    expect(screen.getByTitle("Prepare")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare" })).toBeInTheDocument();
     expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
   });
 
@@ -373,10 +373,10 @@ describe("DryRunModal", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Resolved execution")).toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Command"));
+    await user.click(screen.getByRole("tab", { name: "Command" }));
     expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Conditions"));
+    await user.click(screen.getByRole("tab", { name: "Conditions" }));
     expect(
       screen.getByText("Maximum attempts").parentElement
     ).toHaveTextContent("Maximum attempts2");
@@ -407,14 +407,15 @@ describe("DryRunModal", () => {
 
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    const tabBar = screen.getByTitle("Summary").parentElement as HTMLElement;
+    const tabBar = screen.getByRole("tab", { name: "Summary" })
+      .parentElement as HTMLElement;
     expect(
       Array.from(tabBar.querySelectorAll("button")).map(
         (button) => button.title
       )
     ).toEqual(["Summary", "Command", "Payload", "Conditions"]);
 
-    const summary = screen.getByTitle("Summary");
+    const summary = screen.getByRole("tab", { name: "Summary" });
     expect(summary.querySelector(".codicon-map-vertical")).toBeInTheDocument();
     expect(summary.querySelector(".codicon-error")).toBeInTheDocument();
     expect(summary.querySelector(".codicon-warning")).not.toBeInTheDocument();
@@ -426,7 +427,7 @@ describe("DryRunModal", () => {
       "text-error-fg"
     );
 
-    const command = screen.getByTitle("Command");
+    const command = screen.getByRole("tab", { name: "Command" });
     expect(command.querySelector(".codicon-terminal")).toBeInTheDocument();
     expect(command.querySelector(".codicon-shield")).toBeInTheDocument();
     expect(command.querySelector(".codicon-error")).not.toBeInTheDocument();
@@ -440,7 +441,9 @@ describe("DryRunModal", () => {
     );
 
     expect(
-      screen.getByTitle("Conditions").querySelector(".codicon-coverage")
+      screen
+        .getByRole("tab", { name: "Conditions" })
+        .querySelector(".codicon-coverage")
     ).toBeInTheDocument();
   });
 
@@ -465,10 +468,14 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
     expect(
-      screen.getByTitle("Command").querySelector(".codicon-terminal")
+      screen
+        .getByRole("tab", { name: "Command" })
+        .querySelector(".codicon-terminal")
     ).toBeInTheDocument();
     expect(
-      screen.getByTitle("Command").querySelector(".codicon-shield")
+      screen
+        .getByRole("tab", { name: "Command" })
+        .querySelector(".codicon-shield")
     ).not.toBeInTheDocument();
   });
 
@@ -537,7 +544,7 @@ describe("DryRunModal", () => {
     expect(screen.getByText("Categorized payload")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Summary"));
+    await user.click(screen.getByRole("tab", { name: "Summary" }));
     await user.click(
       screen.getByRole("button", { name: "View in Command tab" })
     );
@@ -641,7 +648,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 });
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    await user.click(screen.getByTitle("Payload"));
+    await user.click(screen.getByRole("tab", { name: "Payload" }));
 
     expect(screen.getByText("Categorized payload")).toBeInTheDocument();
     expect(
@@ -685,7 +692,7 @@ describe("DryRunModal", () => {
     const { container } = render(
       <DryRunModal scope={{ kind: "step", stepIndex: 0 }} />
     );
-    await user.click(screen.getByTitle("Payload"));
+    await user.click(screen.getByRole("tab", { name: "Payload" }));
 
     expect(
       screen.getByText("File reference DRY_RUN_PREVIEW_PLAN.md")
@@ -732,7 +739,7 @@ describe("DryRunModal", () => {
     const { container } = render(
       <DryRunModal scope={{ kind: "step", stepIndex: 0 }} />
     );
-    await user.click(screen.getByTitle("Payload"));
+    await user.click(screen.getByRole("tab", { name: "Payload" }));
 
     expect(screen.getByText("Prior context · chunk 1")).toBeInTheDocument();
     expect(
@@ -773,7 +780,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 }, warningPreview);
 
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
-    await user.click(screen.getByTitle("Payload"));
+    await user.click(screen.getByRole("tab", { name: "Payload" }));
 
     expect(
       screen.getByText(
@@ -813,7 +820,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 }, excerptPreview);
 
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
-    await user.click(screen.getByTitle("Payload"));
+    await user.click(screen.getByRole("tab", { name: "Payload" }));
 
     expect(screen.getByText("Excerpts · chunk 1")).toBeInTheDocument();
     expect(screen.queryByText(/inline-reference/)).not.toBeInTheDocument();
@@ -914,7 +921,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 0 });
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
-    await user.click(screen.getByTitle("Command"));
+    await user.click(screen.getByRole("tab", { name: "Command" }));
     expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
     expect(screen.getByText("(PowerShell)")).toBeInTheDocument();
 
@@ -954,7 +961,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 1 }, multilinePreview);
     render(<DryRunModal scope={{ kind: "step", stepIndex: 1 }} />);
 
-    await user.click(screen.getByTitle("Command"));
+    await user.click(screen.getByRole("tab", { name: "Command" }));
 
     const command = document.querySelector("pre[title]");
     expect(command).not.toBeNull();
@@ -968,7 +975,7 @@ describe("DryRunModal", () => {
     openPreview({ kind: "step", stepIndex: 1 });
     render(<DryRunModal scope={{ kind: "step", stepIndex: 1 }} />);
 
-    await user.click(screen.getByTitle("Command"));
+    await user.click(screen.getByRole("tab", { name: "Command" }));
     expect(
       screen.queryByRole("button", { name: "PowerShell" })
     ).not.toBeInTheDocument();

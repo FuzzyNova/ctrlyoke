@@ -1645,6 +1645,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onClick={startEditing}
             className={`workflow-button-main fp-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
             title="Click to edit workflow name"
+            aria-label="Edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
               {/* Workflow Name */}

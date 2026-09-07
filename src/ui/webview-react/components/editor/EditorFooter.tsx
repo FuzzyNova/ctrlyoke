@@ -209,6 +209,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isExternallyManaged}
+              aria-label="Cancel"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
@@ -223,6 +224,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
               disabled={isExternallyManaged || !hasContent || isPromptBeingSent}
+              aria-label="Update"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
@@ -241,6 +243,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={isExternallyManaged || isPromptActivelyRunning}
+              aria-label={isFinalStepMode ? "Disable" : "Delete"}
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")

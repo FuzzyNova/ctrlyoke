@@ -453,6 +453,8 @@ export const WorkflowList = React.forwardRef<
           (flex-1) so running rows can use the free space. */}
       {hasRunningRows && (
         <div
+          role="region"
+          aria-label="Running workflows"
           className={`running-workflows-region flex flex-col border-b border-dropdown-border ${
             hasRecentRows
               ? "flex-shrink-0 max-h-[min(260px,50%)]"
@@ -465,6 +467,8 @@ export const WorkflowList = React.forwardRef<
           </div>
           <div
             ref={runningScrollContainerRef}
+            role="list"
+            aria-label="Running workflows"
             className="running-workflow-items min-h-0 overflow-y-auto overflow-x-clip pb-1"
           >
             <VirtualizedDropdownList
@@ -503,6 +507,8 @@ export const WorkflowList = React.forwardRef<
           region, so running lineages stay reachable at any scroll depth */}
       <div
         ref={recentScrollContainerRef}
+        role="list"
+        aria-label="Recent workflows"
         className={`workflow-menu-items overflow-y-auto overflow-x-clip py-1 ${
           hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "flex-shrink-0"
         }`}

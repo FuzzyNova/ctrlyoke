@@ -86,7 +86,7 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
     act(() => useUiStore.getState().openPropertiesDrawer());
 
     // Drive the real Validation-tab env control.
-    fireEvent.click(screen.getByTitle("Validation"));
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
     const preEnv = screen.getByLabelText("prop-pre-env");
     fireEvent.change(preEnv, {
       target: { value: "PRE_TOKEN=${secret:PRE_TOKEN}" },
@@ -94,7 +94,7 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
     fireEvent.blur(preEnv);
 
     // Drive the real Permissions-tab allow/deny-list controls.
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     fireEvent.change(screen.getByLabelText("Allowed Tools"), {
       target: { value: "Bash\nRead" },
     });
@@ -102,9 +102,7 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
       target: { value: "Write" },
     });
 
-    fireEvent.click(
-      document.querySelector(".btn-editor-update") as HTMLButtonElement
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
     const message = findUpdatePromptMessage();
     const properties = message?.properties as Record<string, unknown>;
@@ -135,12 +133,12 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
 
     // enterEditMode resets the drawer back to the Harness tab, mirroring what
     // happens when a user reopens a step in the real app.
-    fireEvent.click(screen.getByTitle("Validation"));
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
     expect(screen.getByLabelText("prop-pre-env")).toHaveValue(
       "PRE_TOKEN=${secret:PRE_TOKEN}"
     );
 
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     expect(screen.getByLabelText("Allowed Tools")).toHaveValue("Bash\nRead");
     expect(screen.getByLabelText("Denied Tools")).toHaveValue("Write");
   });

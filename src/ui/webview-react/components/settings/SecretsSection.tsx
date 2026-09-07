@@ -73,7 +73,11 @@ function SecretUsage({ entry }: { entry: SecretRegistryEntry }) {
   const count = usedByCount(entry);
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer text-description-fg hover:text-foreground">
+      <summary
+        role="button"
+        aria-label={`Used by (${count})`}
+        className="cursor-pointer text-description-fg hover:text-foreground"
+      >
         Used by ({count})
       </summary>
       {count === 0 ? (

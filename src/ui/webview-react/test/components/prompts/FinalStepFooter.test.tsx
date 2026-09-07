@@ -33,7 +33,7 @@ describe("FinalStepFooter", () => {
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText("Loop 2")).not.toBeInTheDocument();
     expect(
-      screen.getByTitle("Final Step — Enabled — Loop 2")
+      screen.getByRole("button", { name: "Final step" })
     ).toBeInTheDocument();
   });
 

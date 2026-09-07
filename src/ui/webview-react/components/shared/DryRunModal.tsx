@@ -1260,6 +1260,7 @@ function Rail({
               className={`flex items-center gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${selection === step.stepIndex ? "bg-list-active-selection-bg text-list-active-fg" : "text-description-fg hover:bg-list-hover-bg hover:text-foreground"}`}
               onClick={() => onSelect(step.stepIndex)}
               title={stepLabel(step)}
+              aria-label={stepLabel(step)}
             >
               <span className="w-4 flex-shrink-0 text-right text-xxs">
                 {step.stepIndex + 1}

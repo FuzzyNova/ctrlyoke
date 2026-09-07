@@ -108,9 +108,10 @@ describe("ScriptConditionEditor", () => {
 
     const picker = screen.getByRole("button", { name: "Script type" });
     fireEvent.click(picker);
-    const javascriptOption = screen.getByText("JavaScript").closest("button");
-    expect(javascriptOption).not.toBeNull();
-    fireEvent.click(javascriptOption!);
+    const javascriptOption = screen.getByRole("button", {
+      name: "JavaScript",
+    });
+    fireEvent.click(javascriptOption);
 
     expect(picker).toHaveTextContent("JavaScript");
     expect(screen.getByLabelText("Script name")).toHaveValue(
@@ -262,9 +263,10 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      expect(
-        document.getElementById(`test-${variant}-script`)
-      ).toHaveAttribute("data-multiline", "true");
+      expect(document.getElementById(`test-${variant}-script`)).toHaveAttribute(
+        "data-multiline",
+        "true"
+      );
     }
   );
 

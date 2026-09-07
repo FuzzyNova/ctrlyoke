@@ -728,6 +728,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                       : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
                   }`}
                   title={fileDirty ? "Save file" : "No changes to save"}
+                  aria-label={fileDirty ? "Save file" : "No changes to save"}
                 >
                   {fileSaving ? (
                     <Icon name="loading" className="animate-spin" />

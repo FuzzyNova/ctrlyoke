@@ -63,6 +63,7 @@ const FilePath: React.FC<{
     className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal [overflow-wrap:anywhere] max-w-full ${className}`}
     onClick={onClick ?? (() => openFile(path))}
     title={title ?? `Open ${path}`}
+    aria-label={title ?? `Open ${path}`}
   >
     {children ?? path}
   </button>

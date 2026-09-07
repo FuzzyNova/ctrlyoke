@@ -356,6 +356,7 @@ export function renderBreadcrumb(
       onClick={() => onNavigate("")}
       className="max-w-full truncate whitespace-nowrap hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
       title="Go to workspace root"
+      aria-label="Go to workspace root"
     >
       {rootLabel || "workspace"}
     </button>,

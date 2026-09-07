@@ -62,12 +62,7 @@ function renderPermissionsDrawer() {
 function chooseExecutionMode(label: string): void {
   const current = screen.getByRole("button", { name: "Execution Mode" });
   fireEvent.click(current);
-  const option = screen
-    .getAllByText(label)
-    .map((element) => element.closest("button"))
-    .find((button) => button && button !== current);
-  if (!option) throw new Error(`Execution mode option not found: ${label}`);
-  fireEvent.click(option);
+  fireEvent.click(screen.getByRole("button", { name: label }));
 }
 
 describe("PropertiesDrawer landmark", () => {
@@ -270,7 +265,7 @@ describe("PropertiesDrawer secrets", () => {
       name: "INLINE_TOKENGranted by prompt text",
     });
     expect(inlineRow.querySelector("input")).toBeDisabled();
-    fireEvent.click(screen.getByText("EXPLICIT_TOKEN").closest("button")!);
+    fireEvent.click(screen.getByRole("button", { name: /EXPLICIT_TOKEN/ }));
 
     expect(useEditorStore.getState().properties.secrets).toEqual([
       "EXPLICIT_TOKEN",
@@ -300,12 +295,7 @@ describe("PropertiesDrawer resume session", () => {
   function chooseResumeSession(label: string): void {
     const current = screen.getByRole("button", { name: "Resume Session" });
     fireEvent.click(current);
-    const option = screen
-      .getAllByText(label)
-      .map((element) => element.closest("button"))
-      .find((button) => button && button !== current);
-    if (!option) throw new Error(`Resume Session option not found: ${label}`);
-    fireEvent.click(option);
+    fireEvent.click(screen.getByRole("button", { name: label }));
   }
 
   it("clears the session ID when the override falls back to inherit", () => {

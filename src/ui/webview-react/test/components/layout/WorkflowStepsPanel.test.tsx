@@ -221,7 +221,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
 
     render(<WorkflowStepsPanel />);
 
-    fireEvent.click(screen.getByText("Final Step"));
+    fireEvent.click(screen.getByRole("button", { name: "Final step" }));
 
     expect(useEditorStore.getState().isFinalStepMode()).toBe(true);
     expect(useEditorStore.getState().promptText).toBe("Running final step");

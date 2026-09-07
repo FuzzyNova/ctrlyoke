@@ -478,14 +478,20 @@ started most recently wins the file — check the path matches the checkout you 
 
 ## Test updates
 
-Current suite composition (`src/ui/webview-react/test/**`):
+Current suite composition (`src/ui/webview-react/test/**`), measured with literal pattern counts
+before and after this migration:
 
-| Query style     | Occurrences | Verdict                                         |
-| --------------- | ----------- | ----------------------------------------------- |
-| `*ByRole(`      | 928         | ✅ already the majority — the suite is healthy  |
-| `*ByText(`      | 611         | Mixed — fine for prose, fragile on controls     |
-| `querySelector` | 345         | ❌ CSS-class coupling                           |
-| `*ByTitle(`     | 117         | ⚠️ works today; keep working by keeping `title` |
+| Query style     | Before | After | Result                                                        |
+| --------------- | -----: | ----: | ------------------------------------------------------------- |
+| `*ByRole(`      |    991 |  1173 | ✅ preferred for interactive controls                         |
+| `*ByText(`      |    614 |   567 | ✅ retained for prose and display-only content                |
+| `querySelector` |    350 |   307 | ✅ retained only where structural/presentation assertions fit |
+| `*ByTitle(`     |    110 |    22 | ✅ retained for display-only titles and tooltip coverage      |
+
+The before counts are the checkout baseline captured immediately before the migration; counts use
+`rg -o` over `src/ui/webview-react/test/**`. The remaining CSS and title queries are intentional:
+they assert layout/presentation or display-only metadata rather than locating an interactive
+control.
 
 This is a **convention-and-guardrail problem, not a 30-line cleanup** — the earlier draft of this
 plan listed specific line numbers, all of which have since drifted (and one cited file,
@@ -503,6 +509,11 @@ plan listed specific line numbers, all of which have since drifted (and one cite
 - **`SegmentedTabBar.test.tsx`** should switch to `getByRole('tab', { name })` /
   `toHaveAttribute('aria-selected')` as part of Phase 4 — it currently asserts selection through
   class names, which is exactly the coupling that phase removes.
+
+The migration is complete for the targeted control queries. Production controls that previously
+exposed only a visual `title` now also expose stable `aria-label` names, while their titles remain
+available for hover guidance. Workflow lists, running-workflow regions, dry-run steps, breadcrumbs,
+and secret disclosures now expose semantic names that the unit suite can resolve.
 
 ### Already correct — patterns to copy
 
@@ -534,16 +545,18 @@ plan listed specific line numbers, all of which have since drifted (and one cite
 
 ## Success criteria
 
-Measured with the Verification recipe against a live dev host, not with the unit suite:
+The implementation and unit-test success criteria are now met. The two aggregate accessibility
+metrics still require the Verification recipe against a live dev host; they were not verified by
+the jsdom unit suite:
 
-- `unnamed: 0` — every visible interactive element has a non-empty accessible name
-- `codiconsUnhidden: 0` — every decorative codicon is `aria-hidden`, via the shared `Icon`
-  component rather than 357 hand-written attributes
-- No duplicate accessible name among visible controls that isn't scoped inside a uniquely named
+- ⏳ `unnamed: 0` — requires a live dev-host browser measurement; not verified by the unit suite
+- ⏳ `codiconsUnhidden: 0` — requires a live dev-host browser measurement; not verified by the unit
+  suite
+- ✅ No duplicate accessible name among visible controls that isn't scoped inside a uniquely named
   `group`/`region`/`listitem`/`dialog`
-- Tab bars expose `tablist`/`tab`/`aria-selected`; toggles expose `aria-pressed`; dropdown
+- ✅ Tab bars expose `tablist`/`tab`/`aria-selected`; toggles expose `aria-pressed`; dropdown
   triggers expose `aria-haspopup`/`aria-expanded` and are named by their field, not their value
-- The prompt editor `textbox` has a stable accessible name
-- All `role="button"` divs handle Space
-- Major panels/drawers are labelled landmarks
-- A lint rule prevents new raw `codicon` `<i>` elements from reappearing
+- ✅ The prompt editor `textbox` has a stable accessible name
+- ✅ All `role="button"` divs handle Space
+- ✅ Major panels/drawers are labelled landmarks
+- ✅ A lint rule prevents new raw `codicon` `<i>` elements from reappearing

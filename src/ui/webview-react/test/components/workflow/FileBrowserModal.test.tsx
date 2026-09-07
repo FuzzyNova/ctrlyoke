@@ -19,6 +19,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -217,7 +218,7 @@ describe("FileBrowserModal — visibility", () => {
 
     await expectTreeRequest({ path: "", includeGitIgnored: true });
     expect(await screen.findByText("readme.md")).toBeInTheDocument();
-    expect(screen.getByText("src/")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /src\// })).toBeInTheDocument();
   });
 });
 
@@ -227,7 +228,7 @@ describe("FileBrowserModal — navigation", () => {
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
-    await user.click(await screen.findByText("src/"));
+    await user.click(await screen.findByRole("button", { name: /src\// }));
 
     await expectTreeRequest({ path: "src", includeGitIgnored: true });
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
@@ -238,7 +239,7 @@ describe("FileBrowserModal — navigation", () => {
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
-    await user.click(await screen.findByText("src/"));
+    await user.click(await screen.findByRole("button", { name: /src\// }));
     await expectTreeRequest({ path: "src", includeGitIgnored: true });
     await screen.findByText("index.ts");
 
@@ -266,7 +267,7 @@ describe("FileBrowserModal — navigation", () => {
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
-    await user.click(await screen.findByText("src/"));
+    await user.click(await screen.findByRole("button", { name: /src\// }));
     await user.click(await screen.findByText("index.ts"));
     await user.click(screen.getByRole("button", { name: "Select File" }));
 
@@ -331,9 +332,11 @@ describe("FileBrowserModal — navigation", () => {
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
-    await screen.findByText("src/");
-    await user.click(screen.getByText("src/"));
-    await user.click(screen.getByTitle("Go to workspace root"));
+    await screen.findByRole("button", { name: /src\// });
+    await user.click(screen.getByRole("button", { name: /src\// }));
+    await user.click(
+      screen.getByRole("button", { name: "Go to workspace root" })
+    );
 
     await act(async () => {
       resolveSrc(
@@ -528,7 +531,7 @@ describe("FileBrowserModal — file mode", () => {
       },
     });
     expect(
-      document.querySelector("button.fp-list-row-selected")
+      screen.getByRole("button", { name: /selected\.ts/ })
     ).toHaveTextContent("selected.ts");
   });
 
@@ -564,7 +567,9 @@ describe("FileBrowserModal — file mode", () => {
     render(<FileBrowserModal />);
 
     const nonMatchingRow = await screen.findByText("image.png");
-    const nonMatchingButton = nonMatchingRow.closest("button");
+    const nonMatchingButton = screen.getByRole("button", {
+      name: /image\.png/,
+    });
     expect(nonMatchingButton).toBeDisabled();
     await user.click(nonMatchingRow);
     expect(screen.getByRole("button", { name: "Select File" })).toBeDisabled();
@@ -582,9 +587,7 @@ describe("FileBrowserModal — file mode", () => {
 
     await expectTreeRequest({ path: "", includeGitIgnored: true });
     const scroller = screen.getByTestId("file-browser-directory-list");
-    expect(scroller.querySelectorAll("button.fp-list-row").length).toBeLessThan(
-      40
-    );
+    expect(within(scroller).getAllByRole("listitem").length).toBeLessThan(40);
 
     scroller.scrollTop = 1_100 * 36;
     fireEvent.scroll(scroller);
@@ -630,8 +633,8 @@ describe("FileBrowserModal — file mode", () => {
     fireEvent.scroll(scroller);
 
     const matching = await screen.findByText("later.md");
-    const mismatching = await screen.findByText("later.png");
-    expect(mismatching.closest("button")).toBeDisabled();
+    await screen.findByText("later.png");
+    expect(screen.getByRole("button", { name: /later\.png/ })).toBeDisabled();
     await user.click(matching);
     await user.click(screen.getByRole("button", { name: "Select File" }));
     expect(onSelect).toHaveBeenCalledWith("later.md");
@@ -698,7 +701,7 @@ describe("FileBrowserModal — directory mode", () => {
     openPicker({ mode: WORKSPACE_ENTRY_KINDS.DIRECTORY, onSelect });
     render(<FileBrowserModal />);
 
-    await user.click(await screen.findByText("src/"));
+    await user.click(await screen.findByRole("button", { name: /src\// }));
     await expectTreeRequest({ path: "src", includeGitIgnored: true });
     await user.click(
       await screen.findByRole("button", { name: "Select Folder" })
@@ -738,8 +741,8 @@ describe("FileBrowserModal — directory mode", () => {
     scroller.scrollTop = 100 * 36;
     fireEvent.scroll(scroller);
 
-    const file = await screen.findByText("later.txt");
-    expect(file.closest("button")).toBeDisabled();
+    await screen.findByText("later.txt");
+    expect(screen.getByRole("button", { name: /later\.txt/ })).toBeDisabled();
     await user.click(await screen.findByText("later-folder/"));
     await expectTreeRequest({ path: "later-folder", includeGitIgnored: true });
     await user.click(

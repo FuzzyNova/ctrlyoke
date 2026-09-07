@@ -122,11 +122,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 9,
     });
 
-    const { container } = render(<PromptEditor />);
-    const runButton = container.querySelector(
-      ".btn-editor-run"
-    ) as HTMLButtonElement;
-    expect(runButton).not.toBeNull();
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
     await user.click(runButton);
 
     const message = findExecutePromptMessage();
@@ -163,11 +160,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 9,
     });
 
-    const { container } = render(<PromptEditor />);
-    const updateButton = container.querySelector(
-      ".btn-editor-update"
-    ) as HTMLButtonElement;
-    expect(updateButton).not.toBeNull();
+    render(<PromptEditor />);
+    const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
     const message = postMessageSpy.mock.calls.find(
@@ -215,11 +209,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    const { container } = render(<PromptEditor />);
-    const updateButton = container.querySelector(
-      ".btn-editor-update"
-    ) as HTMLButtonElement;
-    expect(updateButton).not.toBeNull();
+    render(<PromptEditor />);
+    const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
     const updateMessages = postMessageSpy.mock.calls
@@ -275,10 +266,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       displayedDescriptorRevision: 7,
     });
 
-    const { container } = render(<PromptEditor />);
-    const updateButton = container.querySelector(
-      ".btn-editor-update"
-    ) as HTMLButtonElement;
+    render(<PromptEditor />);
+    const updateButton = screen.getByRole("button", { name: "Update" });
     await user.click(updateButton);
 
     const colorMessages = postMessageSpy.mock.calls
@@ -308,10 +297,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     const user = userEvent.setup();
     useEditorStore.getState().setPromptText("fresh ephemeral prompt");
 
-    const { container } = render(<PromptEditor />);
-    const runButton = container.querySelector(
-      ".btn-editor-run"
-    ) as HTMLButtonElement;
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
     await user.click(runButton);
 
     const message = findExecutePromptMessage();
@@ -478,15 +465,13 @@ describe("PromptEditor — prompt secret grants", () => {
     useEditorStore.getState().setPromptText("updated prompt");
     useUiStore.getState().openPropertiesDrawer();
 
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
-    fireEvent.click(screen.getByText("API_TOKEN").closest("button")!);
+    fireEvent.click(screen.getByRole("button", { name: /API_TOKEN/ }));
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -508,12 +493,10 @@ describe("PromptEditor — prompt secret grants", () => {
     useEditorStore.getState().setPromptText("updated prompt");
     useEditorStore.getState().setProperty("secrets", undefined);
 
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -534,12 +517,10 @@ describe("PromptEditor — prompt secret grants", () => {
     );
     useEditorStore.getState().setPromptText("Use !INLINE_TOKEN");
 
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -573,7 +554,7 @@ describe("PromptEditor — script-step properties", () => {
     });
 
     expect(screen.queryByLabelText("script-step-env")).not.toBeInTheDocument();
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
 
     expect(screen.getByLabelText("script-step-env")).toHaveValue(
       "DEPLOY_TOKEN=${secret:DEPLOY_TOKEN}"
@@ -583,9 +564,7 @@ describe("PromptEditor — script-step properties", () => {
 
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -605,7 +584,7 @@ describe("PromptEditor — script-step properties", () => {
 
   it("writes script-step color through the shared property path", async () => {
     prepareScriptEditor();
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
 
     const color = screen.getByLabelText("Step color");
     fireEvent.change(color, { target: { value: "#2468ac" } });
@@ -616,9 +595,7 @@ describe("PromptEditor — script-step properties", () => {
 
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -661,7 +638,7 @@ describe("PromptEditor — script-step properties", () => {
       errorBehavior: { onError: "continue" },
     });
     useEditorStore.getState().setScriptEnv({});
-    const { container } = render(<PromptEditor />);
+    render(<PromptEditor />);
     useEditorStore.setState({
       properties: {
         ...useEditorStore.getState().properties,
@@ -672,9 +649,7 @@ describe("PromptEditor — script-step properties", () => {
 
     await userEvent
       .setup()
-      .click(
-        container.querySelector(".btn-editor-update") as HTMLButtonElement
-      );
+      .click(screen.getByRole("button", { name: "Update" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
@@ -703,10 +678,8 @@ describe("PromptEditor — script-step properties", () => {
       },
     });
 
-    const { container } = render(<PromptEditor />);
-    await userEvent
-      .setup()
-      .click(container.querySelector(".btn-editor-run") as HTMLButtonElement);
+    render(<PromptEditor />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
 
     const message = postMessageSpy.mock.calls.find(
       ([msg]) =>

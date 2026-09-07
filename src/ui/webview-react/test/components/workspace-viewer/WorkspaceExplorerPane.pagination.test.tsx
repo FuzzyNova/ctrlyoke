@@ -281,7 +281,7 @@ describe("WorkspaceExplorerPane pagination", () => {
         direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
       },
     });
-    const selectedRow = screen.getByText("selected.ts").closest("button");
+    const selectedRow = screen.getByRole("button", { name: /selected\.ts/ });
     expect(selectedRow).toHaveClass("fp-list-row-selected");
     expect(selectedRow).toHaveStyle({ opacity: "0.5" });
     expect(selectedRow?.querySelector("span")).toHaveClass(
@@ -302,7 +302,7 @@ describe("WorkspaceExplorerPane pagination", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle("Save file"));
+      fireEvent.click(screen.getByRole("button", { name: "Save file" }));
     });
     await waitFor(() => expect(mocks.workspaceSaveFile).toHaveBeenCalledOnce());
     await waitFor(() => expect(mocks.workspaceTree).toHaveBeenCalledTimes(4));
@@ -439,7 +439,7 @@ describe("WorkspaceExplorerPane pagination", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle("Save file"));
+      fireEvent.click(screen.getByRole("button", { name: "Save file" }));
     });
     await waitFor(() => expect(mocks.workspaceSaveFile).toHaveBeenCalledOnce());
     expect(
@@ -477,7 +477,7 @@ describe("WorkspaceExplorerPane pagination", () => {
     );
     expect(mocks.workspaceFile).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText("file-0.ts"));
+    fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
     await waitFor(() => expect(mocks.workspaceFile).toHaveBeenCalledOnce());
   });
 });

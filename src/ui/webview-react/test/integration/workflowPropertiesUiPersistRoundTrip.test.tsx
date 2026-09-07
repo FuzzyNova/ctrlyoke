@@ -73,7 +73,7 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
   it("Variables (vars) survive a save -> reload cycle", () => {
     render(<WorkflowPropertiesPanel />);
 
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
     const varsField = screen.getByLabelText("Variables");
     fireEvent.change(varsField, {
       target: { value: "region=us-east-1\nstage=prod" },
@@ -92,7 +92,7 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
       })
     );
 
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
     expect(screen.getByLabelText("Variables")).toHaveValue(
       "region=us-east-1\nstage=prod"
     );
@@ -104,7 +104,7 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     fireEvent.paste(screen.getByLabelText("Allowed Tools"), {
       clipboardData: { getData: () => "shell(git:*)\nread" },
@@ -134,7 +134,7 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
       })
     );
 
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     expect(screen.getByLabelText("Allowed Tools")).toHaveTextContent(
       "shell(git:*)read"
     );

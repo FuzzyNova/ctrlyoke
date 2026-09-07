@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import {
@@ -72,7 +73,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     render(<WorkflowPropertiesPanel />);
 
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
       screen.getByText("Dangerously Allow All (yolo)")
@@ -90,7 +91,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(screen.getByLabelText("Allowed Tools")).not.toBeDisabled();
     expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
@@ -116,7 +117,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
       .updateWorkflowProperty("secrets", ["API_TOKEN"]);
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
 
@@ -143,7 +144,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
     fireEvent.click(
       screen.getByRole("button", { name: "INLINE_TOKENGranted by prompt text" })
@@ -168,10 +169,10 @@ describe("WorkflowPropertiesPanel permissions", () => {
       .updateWorkflowProperty("secrets", ["WORKFLOW_TOKEN"]);
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
-      screen.getByTitle("Set this as the default for new workflows")
+      screen.getByRole("button", { name: /Set as Default/ })
     ).toBeInTheDocument();
   });
 
@@ -189,7 +190,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
       .updateWorkflowProperty("secrets", ["MISSING_TOKEN"]);
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
       screen.getByText(
@@ -209,7 +210,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
     expect(screen.getByLabelText("Allowed Tools")).toHaveTextContent(
       "shell(git:*)"
     );
@@ -238,7 +239,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     fireEvent.click(
       screen.getByRole("button", { name: "Trusted External Roots" })
@@ -294,7 +295,7 @@ describe("WorkflowPropertiesPanel permissions", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
       screen.getByText("Inherit (2 roots)", { exact: false })
@@ -337,7 +338,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
 
     expect(screen.getByLabelText("Variables")).toHaveValue(
       "region=us-east-1\nretries=3"
@@ -346,7 +347,7 @@ describe("WorkflowPropertiesPanel variables", () => {
 
   it("posts a new variable through workflow-property updates", () => {
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
 
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
@@ -367,7 +368,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
       target: { value: "region=eu-west-1" },
@@ -390,7 +391,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Context"));
+    fireEvent.click(screen.getByRole("tab", { name: "Context" }));
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
       target: { value: "" },
@@ -434,17 +435,23 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
   it("shows global MCP, hooks, and condition defaults before a workflow override exists", () => {
     render(<WorkflowPropertiesPanel />);
 
-    expect(screen.getByTitle("MCP")).toHaveClass("text-focus-border");
-    expect(screen.getByTitle("Hooks")).toHaveClass("text-focus-border");
-    expect(screen.getByTitle("Validation")).toHaveClass("text-focus-border");
+    expect(screen.getByRole("tab", { name: "MCP" })).toHaveClass(
+      "text-focus-border"
+    );
+    expect(screen.getByRole("tab", { name: "Hooks" })).toHaveClass(
+      "text-focus-border"
+    );
+    expect(screen.getByRole("tab", { name: "Validation" })).toHaveClass(
+      "text-focus-border"
+    );
 
-    fireEvent.click(screen.getByTitle("MCP"));
+    fireEvent.click(screen.getByRole("tab", { name: "MCP" }));
     expect(screen.getByLabelText("ctrlyoke enabled")).toBeChecked();
 
-    fireEvent.click(screen.getByTitle("Hooks"));
+    fireEvent.click(screen.getByRole("tab", { name: "Hooks" }));
     expect(screen.getByText("npm run format")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Validation"));
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
     expect(screen.getByLabelText("Enable Pre-Condition")).toBeChecked();
     expect(screen.getByLabelText("Enable End Condition")).toBeChecked();
     expect(document.getElementById("settings-pre-script")).toHaveTextContent(
@@ -457,7 +464,7 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
 
   it("persists null to explicitly disable inherited conditions", () => {
     render(<WorkflowPropertiesPanel />);
-    fireEvent.click(screen.getByTitle("Validation"));
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
 
     fireEvent.click(screen.getByLabelText("Enable Pre-Condition"));
     fireEvent.click(screen.getByLabelText("Enable End Condition"));
@@ -485,7 +492,9 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
 
     render(<WorkflowPropertiesPanel />);
 
-    expect(screen.getByTitle("Validation")).toHaveClass("text-focus-border");
+    expect(screen.getByRole("tab", { name: "Validation" })).toHaveClass(
+      "text-focus-border"
+    );
   });
 });
 
@@ -511,12 +520,10 @@ describe("WorkflowPropertiesPanel execution mode", () => {
       name: "Execution Mode",
     });
     expect(executionMode).toHaveTextContent("Headless");
-    expect(
-      screen.queryByTitle("Set this as the default for new workflows")
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /Set as Default/ })).toBeNull();
 
     fireEvent.click(executionMode);
-    fireEvent.click(screen.getByText("Interactive").closest("button")!);
+    fireEvent.click(screen.getByRole("button", { name: "Interactive" }));
 
     expect(useSettingsStore.getState().workflowProperties.executionMode).toBe(
       EXECUTION_MODES.INTERACTIVE
@@ -539,7 +546,7 @@ describe("WorkflowPropertiesPanel execution mode", () => {
 
     render(<WorkflowPropertiesPanel />);
     expect(
-      screen.getByTitle("Set this as the default for new workflows")
+      screen.getByRole("button", { name: /Set as Default/ })
     ).toBeInTheDocument();
   });
 });
@@ -755,9 +762,9 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     const worktreeField =
       screen.getByLabelText("Worktree").parentElement?.parentElement;
     expect(
-      worktreeField?.querySelector(
-        '[title="Set this as the default for new workflows"]'
-      )
+      within(worktreeField as HTMLElement).queryByRole("button", {
+        name: /Set as Default/,
+      })
     ).toBeNull();
   });
 
@@ -773,9 +780,9 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     const worktreeField =
       screen.getByLabelText("Worktree").parentElement?.parentElement;
     expect(
-      worktreeField?.querySelector(
-        '[title="Set this as the default for new workflows"]'
-      )
+      within(worktreeField as HTMLElement).queryByRole("button", {
+        name: /Set as Default/,
+      })
     ).toBeNull();
   });
 

@@ -458,7 +458,9 @@ describe("WorkspaceDiffPane commit details section", () => {
 
     render(<WorkspaceDiffPane />);
 
-    expect(screen.queryByTitle("Show commit details")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Toggle commit details" })
+    ).not.toBeInTheDocument();
   });
 
   it("shows the subject when collapsed and reveals body/metadata when expanded", async () => {
@@ -489,7 +491,9 @@ describe("WorkspaceDiffPane commit details section", () => {
       screen.queryByText("This is the detailed description.")
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Show commit details"));
+    await user.click(
+      screen.getByRole("button", { name: "Toggle commit details" })
+    );
 
     expect(
       screen.getByText("This is the detailed description.")

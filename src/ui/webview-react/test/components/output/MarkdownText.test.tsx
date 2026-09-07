@@ -82,7 +82,7 @@ describe("MarkdownText", () => {
   it("renders a file-ref button for local file paths in text", async () => {
     render(<MarkdownText>See src/utils/foo.ts for details</MarkdownText>);
     // The remark plugin converts matching paths into <file-ref> → FileRefButton
-    const fileBtn = await screen.findByTitle(/Open src\/utils\/foo\.ts/);
+    const fileBtn = await screen.findByRole("button", { name: "Open file" });
     expect(fileBtn).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("MarkdownText", () => {
     const user = userEvent.setup();
     const { openFile } = await import("@hooks/useMessageHandler");
     render(<MarkdownText>Open src/utils/foo.ts now</MarkdownText>);
-    const fileBtn = await screen.findByTitle(/Open src\/utils\/foo\.ts/);
+    const fileBtn = await screen.findByRole("button", { name: "Open file" });
     await user.click(fileBtn);
     expect(openFile).toHaveBeenCalledWith("src/utils/foo.ts");
   });
@@ -165,9 +165,7 @@ describe("MarkdownText", () => {
       </MarkdownText>
     );
 
-    const fileBtn = await screen.findByTitle(
-      /Open C:\/dev\/ctrlyoke\/src\/ui\/webview-react\/hooks\/useDesktopLayout\.ts:143/
-    );
+    const fileBtn = await screen.findByRole("button", { name: "Open file" });
     await user.click(fileBtn);
     expect(openFile).toHaveBeenCalledWith(
       "C:/dev/ctrlyoke/src/ui/webview-react/hooks/useDesktopLayout.ts",
@@ -186,9 +184,7 @@ describe("MarkdownText", () => {
       </MarkdownText>
     );
 
-    const fileBtn = await screen.findByTitle(
-      /Open C:\/dev\/ctrlyoke\/src\/utils\/ContextExpander\.ts/
-    );
+    const fileBtn = await screen.findByRole("button", { name: "Open file" });
     await user.click(fileBtn);
     expect(openFile).toHaveBeenCalledWith(
       "C:/dev/ctrlyoke/src/utils/ContextExpander.ts"

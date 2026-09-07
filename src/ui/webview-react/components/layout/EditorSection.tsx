@@ -316,6 +316,7 @@ const EditorSectionInner: React.FC = () => {
                 className={`max-w-full appearance-none truncate border-0 bg-transparent p-0 text-left font-inherit text-inherit transition-colors hover:text-foreground${!stepEnabled ? " italic" : ""}`}
                 onClick={startNameEditing}
                 title="Click to set prompt name"
+                aria-label="Set prompt name"
               >
                 {getModeText()}
               </button>

@@ -79,7 +79,9 @@ describe("SkillsSelect", () => {
     );
 
     await user.click(screen.getByRole("button"));
-    await user.click(screen.getAllByTitle("Hide this option")[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: "Hide this option" })[0]
+    );
 
     expect(onHideOption).toHaveBeenCalledWith("lint");
   });
@@ -117,8 +119,10 @@ describe("SkillsSelect", () => {
     );
 
     await user.click(screen.getByRole("button"));
-    await user.click(screen.getByText(/Show hidden/i));
-    await user.click(screen.getByTitle("Unhide this option"));
+    await user.click(screen.getByRole("button", { name: /Show hidden/i }));
+    await user.click(
+      screen.getByRole("button", { name: "Unhide this option" })
+    );
 
     expect(onUnhideOption).toHaveBeenCalledWith("test");
   });
@@ -138,7 +142,7 @@ describe("SkillsSelect", () => {
     );
 
     await user.click(screen.getByRole("button"));
-    await user.click(screen.getByText(/Show hidden/i));
+    await user.click(screen.getByRole("button", { name: /Show hidden/i }));
 
     expect(screen.getByTitle(description)).toHaveTextContent("test");
   });
