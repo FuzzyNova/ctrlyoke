@@ -73,9 +73,7 @@ describe("OutputMinimap step visibility controls", () => {
     renderMinimap([step], { onStepToggle, onStepClick });
 
     fireEvent.click(screen.getByRole("button", { name: "research-db" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Hide step 3 output" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Hide step 3 output" }));
 
     expect(onStepToggle).toHaveBeenCalledWith(step);
   });
@@ -174,6 +172,43 @@ describe("OutputMinimap marker colors", () => {
     expect(screen.getByRole("button", { name: "undo" })).toHaveClass(
       "text-link-fg"
     );
+  });
+});
+
+describe("OutputMinimap diff bars", () => {
+  it("renders the quantized flat bar shape at the measured rail height", () => {
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockReturnValue(10);
+
+    try {
+      renderMinimap([
+        makeStep({
+          diffBlocks: [
+            {
+              key: "diff-1",
+              rowKey: "row-1",
+              scrollFraction: 0.2,
+              heightFraction: 0.5,
+              addedLines: 5,
+              removedLines: 0,
+              runs: [],
+              isCollapsed: false,
+            },
+          ],
+        }),
+      ]);
+
+      const bars = document.querySelectorAll("[data-minimap-diff-bar]");
+      expect(bars).toHaveLength(5);
+      expect(bars[0]).toHaveStyle({ top: "2px", height: "1px" });
+      expect(bars[4]).toHaveStyle({ top: "6px", height: "1px" });
+      expect(
+        document.querySelectorAll("[data-minimap-diff-bar] > div")
+      ).toHaveLength(0);
+    } finally {
+      clientHeight.mockRestore();
+    }
   });
 });
 

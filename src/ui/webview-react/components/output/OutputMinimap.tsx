@@ -13,6 +13,7 @@ import React, {
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { getProfilerState, logProfilerEvent } from "@utils/performanceProfiler";
+import { quantizeOutputMinimapBars } from "@utils/outputMinimapBars";
 
 // ============================================================================
 // Types
@@ -534,6 +535,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     () => computeDeclutteredTopsPx(steps, railHeightPx),
     [steps, railHeightPx]
   );
+  const diffBars = useMemo(
+    () => quantizeOutputMinimapBars(steps, railHeightPx),
+    [steps, railHeightPx]
+  );
 
   return (
     // The rail is split into two vertical tracks, styled after VS Code's own
@@ -570,113 +575,28 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         ref={diffColumnRef}
         className="relative flex-shrink-0 w-[var(--fp-output-minimap-diff-width)] bg-sidebar-bg"
       >
-        {/* Diff overlays — rendered below thumb and markers */}
-        {steps.map((step) => (
-          <React.Fragment key={`diffs-${step.key}`}>
-            {step.diffBlocks.map((block) => {
-              const significantLines = block.addedLines + block.removedLines;
-              if (significantLines === 0) return null;
-
-              const removedFraction = block.removedLines / significantLines;
-
-              if (block.isCollapsed) {
-                // Collapsed: fixed 2px horizontal line, left portion red, right green
-                return (
-                  <div
-                    key={block.key}
-                    className="absolute left-0 right-0 pointer-events-none"
-                    style={{
-                      top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
-                      height: "2px",
-                      background: `linear-gradient(to right,
-                        var(--fp-minimap-diff-removed) 0%,
-                        var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
-                        var(--fp-minimap-diff-added) ${removedFraction * 100}%,
-                        var(--fp-minimap-diff-added) 100%
-                      )`,
-                    }}
-                  />
-                );
-              }
-
-              if (block.runs.length > 0) {
-                const totalRunRows = block.runs.reduce(
-                  (sum, run) => sum + run.count,
-                  0
-                );
-                if (totalRunRows > 0) {
-                  let offsetRows = 0;
-                  return (
-                    <div
-                      key={block.key}
-                      className="absolute left-0 right-0 pointer-events-none overflow-hidden"
-                      style={{
-                        top: `${block.scrollFraction * 100}%`,
-                        height: `${block.heightFraction * 100}%`,
-                        minHeight: "1px",
-                      }}
-                    >
-                      {block.runs.map((run, runIndex) => {
-                        const top = (offsetRows / totalRunRows) * 100;
-                        const height = (run.count / totalRunRows) * 100;
-                        offsetRows += run.count;
-
-                        const changedLines = run.addedLines + run.removedLines;
-                        let background = "transparent";
-
-                        if (changedLines > 0) {
-                          const removedPct =
-                            (run.removedLines / changedLines) * 100;
-                          background =
-                            run.addedLines > 0 && run.removedLines > 0
-                              ? `linear-gradient(to right,
-                                  var(--fp-minimap-diff-removed) 0%,
-                                  var(--fp-minimap-diff-removed) ${removedPct}%,
-                                  var(--fp-minimap-diff-added) ${removedPct}%,
-                                  var(--fp-minimap-diff-added) 100%
-                                )`
-                              : run.removedLines > 0
-                                ? "var(--fp-minimap-diff-removed)"
-                                : "var(--fp-minimap-diff-added)";
-                        }
-
-                        return (
-                          <div
-                            key={runIndex}
-                            className="absolute left-0 right-0 pointer-events-none"
-                            style={{
-                              top: `${top}%`,
-                              height: `${height}%`,
-                              background,
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  );
-                }
-              }
-
-              return (
-                <div
-                  key={block.key}
-                  className="absolute left-0 right-0 pointer-events-none"
-                  style={{
-                    top: `${block.scrollFraction * 100}%`,
-                    height: `${block.heightFraction * 100}%`,
-                    minHeight: "1px",
-                    background: `linear-gradient(to bottom,
-                      var(--fp-minimap-diff-removed) 0%,
-                      var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
-                      var(--fp-minimap-diff-added) ${removedFraction * 100}%,
-                      var(--fp-minimap-diff-added) 100%
-                    )`,
-                  }}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
+        {/* Diff overlays — one bar per occupied rail pixel, below thumb and markers */}
+        {diffBars.map((bar) => {
+          const significantLines = bar.addedLines + bar.removedLines;
+          const removedFraction = bar.removedLines / significantLines;
+          return (
+            <div
+              key={bar.row}
+              data-minimap-diff-bar
+              className="absolute left-0 right-0 pointer-events-none"
+              style={{
+                top: `${bar.row}px`,
+                height: "1px",
+                background: `linear-gradient(to right,
+                  var(--fp-minimap-diff-removed) 0%,
+                  var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
+                  var(--fp-minimap-diff-added) ${removedFraction * 100}%,
+                  var(--fp-minimap-diff-added) 100%
+                )`,
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* Draggable viewport thumb (replaces native scrollbar). Rests over

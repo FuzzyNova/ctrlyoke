@@ -217,6 +217,24 @@ rendering, capping total elements at roughly the rail height.
 - **`railHeightPx === 0` renders nothing.** Percentage positions cannot resolve
   before the rail is measured.
 
+#### Implemented 2026-09-07
+
+`quantizeOutputMinimapBars` now projects the structural diff-block/run data
+onto integer rail rows in `src/ui/webview-react/utils/outputMinimapBars.ts`.
+The component renders one flat one-pixel bar per occupied row after the rail is
+measured; line counts are distributed across overlapping rows and accumulated
+across steps while preserving added/removed totals. The projection is
+structural rather than coupled to `MinimapStep`, so a future whole-run summary
+pass can produce the same array for paging.
+
+The reproduction run previously rendered **7,118 diff elements** (773 blocks
+and 6,345 run elements). The new production bound is
+`floor(railHeightPx)` — approximately **1,000 elements** on the measured rail,
+regardless of run size. The hosted before/after screenshot and blocked-frame
+measurement are still pending because the Playwright MCP/browser was not
+attached for this implementation session; no post-change frame improvement is
+claimed here.
+
 #### Proposal 2B — separate stable step data from positions
 
 Split `minimapSteps` so labels, undo actions, hidden/selected state, and diff
@@ -274,9 +292,11 @@ worth finding but no longer urgent; the dependency array in
 - [x] Undo actions are computed once per target rather than once per message,
       with coverage in
       `src/ui/webview-react/test/utils/outputRowsUndoMemo.test.ts`.
-- [ ] Minimap element count is bounded by rail height rather than run size, and
-      the rendered minimap is visually indistinguishable from today's at the
-      same pane size.
+- [x] Minimap element count is bounded by rail height rather than run size
+      (7,118 old diff elements → at most `floor(railHeightPx)` bars; roughly
+      1,000 on the reproduction rail).
+- [ ] The rendered minimap is visually indistinguishable from today's at the
+      same pane size (hosted before/after Playwright comparison pending).
 - [ ] The ~1.9 s of non-`buildOutputRows` time in the remaining 2 142 ms frame
       is attributed to named phases and recorded here.
 - [ ] `buildOutputRows` runs at most once per 32 px of width change during a
