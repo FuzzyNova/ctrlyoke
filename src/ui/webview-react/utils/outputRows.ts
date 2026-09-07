@@ -29,6 +29,7 @@ import {
   STEP_TYPES,
   type HarnessId,
   type OutputRowKind,
+  type StepType,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
 import type {
@@ -144,6 +145,12 @@ export interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   activityFirst?: boolean;
   activityLabel?: string;
   activityName?: string;
+  /**
+   * Step kind of the slice's step, so the activity label can draw the same
+   * prompt/script glyph the steps panel and chip rail draw. Stamped alongside
+   * `activityFirst` because only the labelled row renders it.
+   */
+  activityStepType?: StepType;
   /** Identity color painted by OutputRow's inset gutter bar. */
   stepColor?: string;
 }
@@ -526,6 +533,17 @@ function getStepName(
 ): string {
   const name = step?.name?.trim();
   return name || fallback;
+}
+
+/**
+ * Normalize a step to its kind. Prompt steps historically omit `type`, so
+ * anything that is not explicitly a script step is a prompt step — the same
+ * rule `isScriptWorkflowStep` applies.
+ */
+function getStepKind(step: WorkflowStep | null | undefined): StepType {
+  return step?.type === STEP_TYPES.SCRIPT
+    ? STEP_TYPES.SCRIPT
+    : STEP_TYPES.PROMPT;
 }
 
 function getEffectiveStepHarness(
@@ -2343,6 +2361,10 @@ export function buildOutputRows(
             ? `Step ${target.index + 1}`
             : undefined
           : undefined,
+        activityStepType:
+          message.isActivity && stampActivityFirst
+            ? getStepKind(input.steps[target.index])
+            : undefined,
         estimateSize: 36,
       });
       continue;
@@ -2795,6 +2817,7 @@ export function buildOutputRows(
       sliceOpener.activityFirst = true;
       sliceOpener.activityLabel = stepLabel;
       sliceOpener.activityName = stepName;
+      sliceOpener.activityStepType = getStepKind(workflowStep);
     }
 
     if (emitsTrailingChrome && aggregateOutput.scriptVerdict) {

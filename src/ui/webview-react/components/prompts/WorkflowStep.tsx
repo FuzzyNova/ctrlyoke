@@ -21,6 +21,8 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
+import { getStepKindIconClass } from "@utils/status";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -289,7 +291,11 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             // Script step variant
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i className="codicon codicon-terminal-powershell text-xs opacity-60 flex-shrink-0" />
+                <i
+                  className={`codicon ${getStepKindIconClass(
+                    STEP_TYPES.SCRIPT
+                  )} text-xs opacity-60 flex-shrink-0`}
+                />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
                 >
@@ -327,7 +333,11 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             // Prompt step variant (default)
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i className="codicon codicon-comment text-xs opacity-60 flex-shrink-0" />
+                <i
+                  className={`codicon ${getStepKindIconClass(
+                    STEP_TYPES.PROMPT
+                  )} text-xs opacity-60 flex-shrink-0`}
+                />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
                 >

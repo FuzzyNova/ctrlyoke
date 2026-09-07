@@ -730,6 +730,34 @@ measured, ~1.5% of same-harness groups would hand two members the same colour. G
 - `getStepAccentClass` is correctly retained: it still serves the final-step chip and every
   colours-disabled fallback, so §5's "delete it if nothing else claims it" does not apply.
 
+---
+
+## Follow-up (2026-09-07) — the parallel activity label draws the step's kind
+
+The `⚡ Step N` label used `codicon-symbol-event`, which is the **hooks** glyph everywhere else
+in the dashboard, so the one text marker that survived §1's gate was labelled with an icon that
+already means something different.
+
+It now draws the step's own kind glyph — `codicon-comment` for a prompt step,
+`codicon-terminal-powershell` for a script step — painted in the step identity colour whenever
+`resolveStepColor` returns one, and in the neutral `text-description-fg` treatment the steps
+panel uses when `ui.stepColorMode` is `off`. This is §5's "colouring the kind icon" adopted as
+the label's glyph rather than as a separate channel: it is a shape, not a word, so §2's
+never-paint-readable-text rule still holds, and it makes the label a third bar-to-bar
+correlation surface at zero layout cost.
+
+Two implementation notes:
+
+- The kind is stamped as `activityStepType` on the same row `activityFirst` lands on, in
+  `buildOutputRows`. Keeping it with the flag rather than resolving it in the component is what
+  keeps `outputRowActivityChrome`'s +20px charge matched to the row that actually paints a label
+  — the invariant the stamping fix established.
+- The two glyph names are single-sourced as `STEP_KIND_ICONS`/`getStepKindIconClass` in
+  `utils/status.ts`, read by the label, `PromptChipRail`, and `WorkflowStep`, so the pair cannot
+  drift between panes.
+
+---
+
 Step 3 is worth doing regardless of whether the colour work ever happens. Steps 4–6 are the colour
 work proper; 7 and 8 are persistence and can lag indefinitely. Step 8 is large enough to split in
 two — the data layer (schema, parser, export, templates, mutations) and the three editor mounts —

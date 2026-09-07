@@ -45,6 +45,7 @@ import {
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import {
   getStepAccentClass,
+  getStepKindIconClass,
   isExecutionBusy,
   isWorkflowRunning,
 } from "../../utils/status";
@@ -154,7 +155,9 @@ function ChipContent({
         </div>
         <div className="flex h-3 items-center justify-start">
           <i
-            className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-xs text-description-fg`}
+            className={`codicon ${getStepKindIconClass(
+              isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
+            )} text-xs text-description-fg`}
           />
         </div>
       </div>

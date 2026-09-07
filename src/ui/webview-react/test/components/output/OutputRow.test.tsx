@@ -20,6 +20,7 @@ import {
   ATTEMPT_COST_SOURCES,
   OUTPUT_ROW_KINDS,
   SCRIPT_VERDICT_OUTCOMES,
+  STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -391,6 +392,68 @@ describe("OutputRow step identity bar", () => {
     expect(container.querySelector("[data-step-color-bar]")).toBeNull();
     expect(container.children).toHaveLength(1);
     expect(container.firstElementChild).toHaveClass("border-l-severity-info");
+  });
+});
+
+describe("OutputRow activity attribution label", () => {
+  function buildActivityLabelRow(
+    overrides: Partial<OutputRenderRow>
+  ): OutputRenderRow {
+    return {
+      key: "queue:0:activity",
+      target: TARGET,
+      estimateSize: 24,
+      rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
+      activityFirst: true,
+      activityLabel: "Step 1",
+      activityName: "research-auth",
+      ...overrides,
+    } as OutputRenderRow;
+  }
+
+  it("draws the step kind glyph in the step identity color", () => {
+    const stepColor = "#123456";
+    const { container, rerender } = render(
+      <OutputRow
+        row={buildActivityLabelRow({
+          activityStepType: STEP_TYPES.PROMPT,
+          stepColor,
+        })}
+        isExecutionActive={false}
+      />
+    );
+
+    const promptIcon = container.querySelector(".codicon-comment");
+    expect(promptIcon).not.toBeNull();
+    expect(container.querySelector(".codicon-symbol-event")).toBeNull();
+    expect(promptIcon).toHaveStyle({ color: stepColor });
+
+    rerender(
+      <OutputRow
+        row={buildActivityLabelRow({
+          activityStepType: STEP_TYPES.SCRIPT,
+          stepColor,
+        })}
+        isExecutionActive={false}
+      />
+    );
+    expect(
+      container.querySelector(".codicon-terminal-powershell")
+    ).not.toBeNull();
+    expect(container.querySelector(".codicon-comment")).toBeNull();
+  });
+
+  it("falls back to the neutral glyph treatment when step colors are off", () => {
+    const { container } = render(
+      <OutputRow
+        row={buildActivityLabelRow({ activityStepType: STEP_TYPES.PROMPT })}
+        isExecutionActive={false}
+      />
+    );
+
+    const promptIcon = container.querySelector(".codicon-comment");
+    expect(promptIcon).toHaveClass("text-description-fg");
+    expect(promptIcon?.getAttribute("style")).toBeNull();
   });
 });
 

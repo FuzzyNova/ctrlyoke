@@ -16,10 +16,15 @@ import {
   canStopExecution,
   STATUS_ICONS,
   STATUS_COLORS,
+  STEP_KIND_ICONS,
   getStepAccentClass,
+  getStepKindIconClass,
 } from "@utils/status";
 import { STEP_STATUS, EXECUTION_STATES } from "@/types/messages";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  STEP_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 describe("getStatusIconClass", () => {
   it("returns icon for every STEP_STATUS value", () => {
@@ -31,6 +36,23 @@ describe("getStatusIconClass", () => {
   it("returns pending icon for unknown status", () => {
     expect(getStatusIconClass("unknown" as never)).toBe(
       STATUS_ICONS[STEP_STATUS.PENDING]
+    );
+  });
+});
+
+describe("getStepKindIconClass", () => {
+  it("returns the script glyph only for script steps", () => {
+    expect(getStepKindIconClass(STEP_TYPES.SCRIPT)).toBe(
+      STEP_KIND_ICONS[STEP_TYPES.SCRIPT]
+    );
+    expect(getStepKindIconClass(STEP_TYPES.PROMPT)).toBe(
+      STEP_KIND_ICONS[STEP_TYPES.PROMPT]
+    );
+  });
+
+  it("treats an unset step type as a prompt step", () => {
+    expect(getStepKindIconClass(undefined)).toBe(
+      STEP_KIND_ICONS[STEP_TYPES.PROMPT]
     );
   });
 });

@@ -36,6 +36,7 @@ import {
   OUTPUT_ROW_KINDS,
   STEP_COLOR_MODES,
   STEP_STATUS,
+  STEP_TYPES,
   type OutputRowKind,
 } from "@root/types/DashboardConstants";
 
@@ -380,6 +381,69 @@ describe("outputRows", () => {
 
     // The identity bar is carried by every row, including continuation slices.
     expect(eventRows.every((row) => row.stepColor !== undefined)).toBe(true);
+
+    // The label draws the step's own kind glyph, so the opener carries the
+    // kind and the continuation rows — which draw no label — carry none.
+    expect(eventRows.map((row) => row.activityStepType)).toEqual([
+      STEP_TYPES.PROMPT,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("stamps the script kind on a script step's activity label", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const allMessages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: [
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              data: { text: "running the build" },
+            },
+          ],
+        },
+      ]
+    );
+    const result = buildOutputRows({
+      allMessages,
+      steps: [
+        { name: "build", type: STEP_TYPES.SCRIPT, script: "npm run build" },
+      ] as WorkflowStep[],
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      parallelGroups: [
+        {
+          id: "parallel-0-1",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
+    });
+
+    const opener = result.rows.find((row) => row.activityFirst);
+    expect(opener?.activityStepType).toBe(STEP_TYPES.SCRIPT);
   });
 
   it("paints sequential activity rows without sequential activity labels", () => {

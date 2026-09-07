@@ -104,6 +104,7 @@ import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
+import { getStepKindIconClass } from "@utils/status";
 import type {
   CliHeaderRow,
   OutputRenderRow,
@@ -292,7 +293,14 @@ const ActivityAttribution: React.FC<{
         aria-label={label}
       >
         <i
-          className="codicon codicon-symbol-event text-output-streaming"
+          // The step's own kind glyph, not a generic activity mark: `⚡` is the
+          // hooks icon everywhere else. It carries the step identity color when
+          // one resolves, and falls back to the neutral type-icon treatment the
+          // steps panel uses when `ui.stepColorMode` is off.
+          className={`codicon ${getStepKindIconClass(row.activityStepType)}${
+            row.stepColor ? "" : " text-description-fg"
+          }`}
+          style={row.stepColor ? { color: row.stepColor } : undefined}
           aria-hidden="true"
         />
         <span className="font-semibold">{label}</span>

@@ -10,8 +10,10 @@ import {
   type ExecutionState,
 } from "../types/messages";
 import {
+  STEP_TYPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type StepType,
   type WorkflowExecutionControlAction,
 } from "@root/types/DashboardConstants";
 
@@ -52,6 +54,28 @@ export function getStatusIconClass(status: StepStatus): string {
  */
 export function getStatusIconClassName(status: StepStatus): string {
   return `codicon ${getStatusIconClass(status)}`;
+}
+
+/**
+ * Codicon class names for a step's *kind* (prompt vs script).
+ *
+ * Every surface that identifies a step by shape reads this — the chip rail, the
+ * expanded step row, and the output pane's parallel activity label — so the two
+ * glyphs cannot drift apart between panes.
+ */
+export const STEP_KIND_ICONS: Record<StepType, string> = {
+  [STEP_TYPES.PROMPT]: "codicon-comment",
+  [STEP_TYPES.SCRIPT]: "codicon-terminal-powershell",
+};
+
+/**
+ * Get the codicon class for a step's kind. Anything that is not explicitly a
+ * script step is a prompt step, matching `isScriptWorkflowStep`.
+ */
+export function getStepKindIconClass(stepType: StepType | undefined): string {
+  return stepType === STEP_TYPES.SCRIPT
+    ? STEP_KIND_ICONS[STEP_TYPES.SCRIPT]
+    : STEP_KIND_ICONS[STEP_TYPES.PROMPT];
 }
 
 /**
