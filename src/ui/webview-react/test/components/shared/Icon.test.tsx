@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Icon } from "@components/shared/Icon";
 
@@ -36,9 +36,22 @@ describe("Icon", () => {
     expect(icon).toHaveStyle({ fontSize: "20px" });
   });
 
-  it('always renders aria-hidden="true"', () => {
+  it('hides a decorative icon with aria-hidden="true"', () => {
     const { container } = render(<Icon name="warning" />);
 
-    expect(container.querySelector("i")).toHaveAttribute("aria-hidden", "true");
+    const icon = container.querySelector("i");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(icon).not.toHaveAttribute("role");
+  });
+
+  it("exposes a meaningful icon as a named img instead of hiding it", () => {
+    // aria-hidden="true" removes the element from the accessibility tree, so an
+    // aria-label alongside it would reach nobody. The label must win.
+    render(<Icon name="terminal" aria-label="Terminal session is running" />);
+
+    const icon = screen.getByRole("img", {
+      name: "Terminal session is running",
+    });
+    expect(icon).not.toHaveAttribute("aria-hidden");
   });
 });

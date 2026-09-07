@@ -8,6 +8,14 @@ export interface IconProps {
   style?: React.CSSProperties;
   /** Preserve existing hover and query metadata on migrated icons. */
   title?: string;
+  /**
+   * Name for an icon that carries meaning on its own (a status glyph, a
+   * change-type badge). Supplying it promotes the icon to `role="img"` and
+   * drops `aria-hidden` — the two cannot coexist, because `aria-hidden="true"`
+   * removes the element from the accessibility tree and takes the label with
+   * it. Leave it unset for decorative icons, which is the overwhelming
+   * majority: name the parent control instead.
+   */
   "aria-label"?: string;
 }
 
@@ -21,7 +29,8 @@ export const Icon: React.FC<IconProps> = ({
   <i
     className={`codicon ${name.startsWith("codicon-") ? name : `codicon-${name}`}${className ? ` ${className}` : ""}`}
     style={style}
-    aria-hidden="true"
+    aria-hidden={ariaLabel ? undefined : "true"}
+    role={ariaLabel ? "img" : undefined}
     title={title}
     aria-label={ariaLabel}
   />

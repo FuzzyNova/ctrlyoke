@@ -194,6 +194,15 @@ count**: one of them is `SegmentedTabBar`’s tab glyph, i.e. all 14 live pseudo
 styling in `globals.css` is class-based (`button .codicon`, `.codicon-sm/-lg/-xl`), not tag-based,
 so normalising every one of them to `<i>` is safe.
 
+**The one escape hatch, and why it is not optional.** `aria-hidden="true"` removes an element from
+the accessibility tree _and takes any `aria-label` on it with it_ — the two cannot coexist. A
+handful of codicons genuinely carry meaning on their own (the diff change-type badge, the prompt
+step `StatusIcon`, the "terminal session is still running" and worktree indicators, the compaction
+count, the "granted by prompt text" lock). Those are not inside a control whose name could carry
+them, so `Icon` promotes them to `role="img"` with the given name and drops `aria-hidden` whenever
+an `aria-label` is passed. Everything else stays hidden. Do not hand-write that combination at a
+call site — pass `aria-label` to `Icon` and let the primitive decide.
+
 Then codemod the raw `<i className="codicon codicon-x" />` usages onto it. This matches the
 project's DRY/single-source principle and makes the guarantee enforceable rather than a
 sweep-and-hope. Icons that are _not_ decorative — the rare case where the icon is the only
@@ -471,6 +480,8 @@ Reproducing the ground-truth numbers takes about a minute and should be redone a
 
 Baseline on 2026-09-07: `{ unnamed: 21, codiconsUnhidden: 166 }`. Target: `{ 0, 0 }`.
 
+`codiconsUnhidden` is expected to settle at the small number of deliberately meaningful icons that `Icon` renders as `role="img"` (see Phase 1), not literally zero. Those are named, not unnamed — the number to drive to zero is `unnamed`. Any _decorative_ codicon showing up in that count is a regression the ESLint rule should have caught.
+
 Note the dev host writes `server-url.txt` in the _workspace it opened_, and whichever instance
 started most recently wins the file — check the path matches the checkout you meant to test.
 
@@ -550,8 +561,8 @@ metrics still require the Verification recipe against a live dev host; they were
 the jsdom unit suite:
 
 - ⏳ `unnamed: 0` — requires a live dev-host browser measurement; not verified by the unit suite
-- ⏳ `codiconsUnhidden: 0` — requires a live dev-host browser measurement; not verified by the unit
-  suite
+- ⏳ `codiconsUnhidden` down to the handful of deliberately meaningful `role="img"` icons —
+  requires a live dev-host browser measurement; not verified by the unit suite
 - ✅ No duplicate accessible name among visible controls that isn't scoped inside a uniquely named
   `group`/`region`/`listitem`/`dialog`
 - ✅ Tab bars expose `tablist`/`tab`/`aria-selected`; toggles expose `aria-pressed`; dropdown
