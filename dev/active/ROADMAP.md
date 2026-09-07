@@ -222,8 +222,8 @@ both carry is satisfied by that promotion rather than blocking them.
    waiting for input.
    ([plan](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md))
 6. **Accessibility and semantic testability** — keyboard parity, accessible
-   names/states, landmarks, and resilient role-based tests.
-   ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
+   names/states, landmarks, and resilient role-based tests. Implemented.
+   ([plan](../implemented/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
 7. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
    MCP per-server tool filtering, images, and generated compatibility
    documentation. Completed in Stage G.
@@ -477,13 +477,13 @@ criteria matter more than speculative dates.
 | [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)                 | P1                                                                  |
 | [`VSCODE_LSP_MCP_PLAN.md`](../backlog/VSCODE_LSP_MCP_PLAN.md)                                           | P1 (phases 1–2)                                                     |
 | [`NOTIFICATION_HOOK_EVENT_PLAN.md`](../backlog/NOTIFICATION_HOOK_EVENT_PLAN.md)                         | P1                                                                  |
-| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)             | P1                                                                  |
+| [`ACCESSIBILITY_AND_TESTABILITY_PLAN.md`](../implemented/ACCESSIBILITY_AND_TESTABILITY_PLAN.md)         | P1                                                                  |
 | [`WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md)                                       | P2                                                                  |
 | [`WORKFLOW_VARIANTS_PLAN.md`](../backlog/WORKFLOW_VARIANTS_PLAN.md)                                     | P2                                                                  |
 | [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)                                      | P2                                                                  |
 | [`WORKFLOW_SCHEDULING_PLAN.md`](../backlog/WORKFLOW_SCHEDULING_PLAN.md)                                 | P2                                                                  |
 | [`MCP_OUTPUT_PAGING_PLAN.md`](../backlog/MCP_OUTPUT_PAGING_PLAN.md)                                     | P2                                                                  |
-| [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                         | Shipped                                                             |
+| [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)                                       | Shipped                                                             |
 | [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)               | P1 (foundation for standalone server)                               |
 | [`RUN_EXPORT_PLAN.md`](../backlog/RUN_EXPORT_PLAN.md)                                                   | P2 (ships with redaction)                                           |
 | [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](../implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md)                   | P2                                                                  |
