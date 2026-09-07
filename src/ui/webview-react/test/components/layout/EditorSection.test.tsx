@@ -77,6 +77,14 @@ vi.mock("../../../hooks/useAttachmentTokenCount", () => ({
 vi.mock("../../../hooks/useElementNarrow", () => ({
   useElementNarrow: () =>
     [React.createRef<HTMLElement>(), isElementNarrow.value] as const,
+  // Feed the caller its own resolver a synthetic width rather than returning
+  // a fixed tier, so the component's real thresholds stay under test. 500px
+  // is narrow but not compact; 900px is wide.
+  useElementTier: <Tier,>(resolveTier: (width: number) => Tier) =>
+    [
+      React.createRef<HTMLElement>(),
+      resolveTier(isElementNarrow.value ? 500 : 900),
+    ] as const,
 }));
 
 function resetStores() {
