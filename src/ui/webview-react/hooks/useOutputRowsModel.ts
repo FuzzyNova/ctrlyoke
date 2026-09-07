@@ -155,10 +155,6 @@ export function useOutputRowsModel({
   const [scriptOutputExpansionState, setScriptOutputExpansionState] = useState<
     Map<string, boolean>
   >(new Map());
-  const [collapsedAttemptGroupKeys, setCollapsedAttemptGroupKeys] = useState<
-    Set<string>
-  >(new Set());
-
   // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
     if (isViewingHistory && historyOutputs) {
@@ -182,6 +178,13 @@ export function useOutputRowsModel({
     () => getCollapsibleAttemptGroupKeys(allMessages),
     [allMessages]
   );
+
+  // Seed the initial render from the loaded messages so the row builder does
+  // not first build the entire output with every attempt group expanded and
+  // then immediately rebuild after the effect below collapses those groups.
+  const [collapsedAttemptGroupKeys, setCollapsedAttemptGroupKeys] = useState<
+    Set<string>
+  >(() => new Set(collapsibleAttemptGroupKeys));
 
   useEffect(() => {
     setCollapsedAttemptGroupKeys((previous) => {

@@ -257,9 +257,29 @@ Every load runs `buildOutputRows` twice over all 4 653 messages, at an
 identical measured width (`747.59` in one session, `753.58` in another) — so
 this is _not_ a width-0-then-measured sequence, and the "skip the unmeasured
 build" idea from the first draft of this plan was wrong. Some other memo
-dependency changes between the two passes. At ~120 ms each this is now ~240 ms,
-worth finding but no longer urgent; the dependency array in
+dependency changes between the two passes. At ~120 ms each, the redundant
+second pass costs roughly another 120 ms; it is worth fixing but no longer
+urgent. The dependency array in
 `useOutputRowsModel.ts` is the place to start.
+
+#### Fixed 2026-09-07: collapse-key state initialized after the first build
+
+The changing dependency was `collapsedAttemptGroupKeys`. The hook initialized
+it to a fresh empty `Set`, so the first render built every row with retry
+groups expanded. The effect immediately above the row-building memo then
+replaced that set with the keys derived from the loaded messages, causing a
+second full build even though the measured width and all message inputs were
+unchanged.
+
+The state now initializes from the already-computed
+`collapsibleAttemptGroupKeys`. The effect remains for later loads, where the
+set must still be reconciled as messages arrive or disappear. This removes the
+redundant initial pass without changing the collapsed row set.
+
+`OutputPaneResizePerformance.test.tsx` mounts the real `useOutputRowsModel`
+with two attempts for one target and spies on `buildOutputRows`; a stable-width
+load now produces exactly one invocation. The available session did not have
+the Playwright MCP attached, so no new hosted timing claim is recorded here.
 
 ## Non-goals
 
@@ -301,6 +321,7 @@ worth finding but no longer urgent; the dependency array in
       is attributed to named phases and recorded here.
 - [x] `buildOutputRows` runs at most once per 32 px of width change during a
       gesture — asserted by spying on the builder, not by wall-clock timing.
+- [x] A single stable-width load invokes `buildOutputRows` exactly once.
 - [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
 - [ ] Dragging the panel splitter, the VS Code panel edge, and the window with

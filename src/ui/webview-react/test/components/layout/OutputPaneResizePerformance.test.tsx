@@ -1,13 +1,20 @@
 import { useMemo } from "react";
-import { act, render } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useElementTier } from "@hooks/useElementNarrow";
+import { useOutputRowsModel } from "@hooks/useOutputRowsModel";
 import {
   bucketOutputContentWidth,
   OUTPUT_CONTENT_WIDTH_BUCKET,
 } from "@utils/outputLineMetrics";
-import { DIFF_VIEW_TYPES } from "@root/types/DashboardConstants";
+import {
+  DIFF_VIEW_TYPES,
+  FINAL_STEP_PHASES,
+  HARNESS_IDS,
+  OUTPUT_HISTORY_KINDS,
+} from "@root/types/DashboardConstants";
 import { buildOutputRows } from "@utils/outputRows";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 
 const testState = vi.hoisted(() => ({
   buildCalls: 0,
@@ -120,5 +127,65 @@ describe("output pane width bucketing", () => {
     testState.currentWidth = 1056;
     act(() => testState.resizeObserverCallback?.());
     expect(testState.buildCalls).toBe(4);
+  });
+
+  it("builds rows once for a single load at a stable width", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const cliOutput = {
+      prompt: "retry me",
+      response: "done",
+      elapsed: 1,
+      isStreaming: false,
+    };
+    const liveOrderedEntries: OrderedHistoryEntry[] = [
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        timestampMs: 1,
+        sequence: 0,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        cliOutput,
+      },
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        timestampMs: 2,
+        sequence: 1,
+        target,
+        runIndex: 0,
+        attemptIndex: 1,
+        cliOutput,
+      },
+    ];
+
+    renderHook(() =>
+      useOutputRowsModel({
+        isViewingHistory: false,
+        historyOutputs: null,
+        liveOrderedEntries,
+        liveActivityEntries: [],
+        steps: [{ name: "Step", prompt: "" }],
+        finalStep: null,
+        effectiveHarness: HARNESS_IDS.COPILOT_CLI,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffsCollapsed: false,
+        diffResetVersion: 0,
+        outputDiffViewType: DIFF_VIEW_TYPES.UNIFIED,
+        outputFontSize: 14,
+        outputContentWidth: 768,
+        collapsedToolOutputLineCount: 200,
+        invalidateMeasuredRow: vi.fn(),
+        invalidateMeasuredRowForUserResize: vi.fn(),
+        onDiffViewReset: vi.fn(),
+      })
+    );
+
+    expect(testState.buildCalls).toBe(1);
   });
 });
