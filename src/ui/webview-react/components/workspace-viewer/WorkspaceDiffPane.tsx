@@ -300,6 +300,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           <div className="border-b border-panel-border flex-shrink-0">
             <button
               onClick={() => setCommitDetailsExpanded((v) => !v)}
+              aria-label="Toggle commit details"
               className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-editor-fg hover:bg-list-hover-bg transition-colors"
               title={
                 commitDetailsExpanded
@@ -416,6 +417,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           <div className="border-b border-panel-border flex-shrink-0">
             <button
               onClick={() => setCommitDetailsExpanded((v) => !v)}
+              aria-label="Toggle commit details"
               className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-editor-fg hover:bg-list-hover-bg transition-colors"
               title={
                 commitDetailsExpanded

@@ -28,6 +28,7 @@ export function GlobalSettingsVerticalTabBar({
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
           title={tab.label}
+          aria-label={tab.label}
           className={`flex items-center gap-2 py-2 text-sm text-left w-full
             border-l-2 transition-colors
             ${iconOnly ? "justify-center px-0" : "px-3"}

@@ -385,6 +385,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             <button
               type="button"
               className="flex items-center gap-1.5"
+              aria-label="Toggle binary diff"
               aria-expanded={!isCollapsed}
               onClick={() => cardCollapseHandler?.(!isCollapsed)}
             >

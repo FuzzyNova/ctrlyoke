@@ -253,6 +253,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       }
       role="button"
       tabIndex={0}
+      aria-label={`Step ${displayNumber ?? index + 1}`}
       onKeyDown={(e) => {
         if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();

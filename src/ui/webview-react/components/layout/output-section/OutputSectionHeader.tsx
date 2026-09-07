@@ -126,6 +126,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             <button
               className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectOutputTab}
+              aria-label="Output"
             >
               <Icon
                 name="output"
@@ -241,6 +242,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             <button
               className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors"
               title="New Terminal"
+              aria-label="New terminal"
               onClick={onNewTerminal}
             >
               <Icon name="add" className="text-xs" />
@@ -281,6 +283,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
                 style={{ touchAction: "manipulation" }}
                 title={`Undo workflow changes (${workflowUndoCount} file${workflowUndoCount !== 1 ? "s" : ""})`}
+                aria-label="Undo workflow changes"
                 onClick={onWorkflowUndo}
               >
                 <Icon name="discard" className="codicon-lg flex-shrink-0" />
@@ -299,6 +302,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0"
                 style={{ touchAction: "manipulation" }}
                 title={`Redo workflow changes (${workflowRedoCount} file${workflowRedoCount !== 1 ? "s" : ""})`}
+                aria-label="Redo workflow changes"
                 onClick={onWorkflowRedo}
               >
                 <Icon name="redo" className="codicon-lg flex-shrink-0" />

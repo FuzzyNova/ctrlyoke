@@ -84,6 +84,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.EXPLORER)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.EXPLORER}
+          aria-label="Explorer"
           role="tab"
           title="Explorer"
         >
@@ -94,6 +95,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL}
+          aria-label="Source Control"
           role="tab"
           title="Source Control"
         >
@@ -104,6 +106,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SEARCH ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SEARCH)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SEARCH}
+          aria-label="Search"
           role="tab"
           title="Search"
         >

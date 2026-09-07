@@ -820,6 +820,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       }}
                       style={{ touchAction: "manipulation" }}
                       title={redo.title}
+                      aria-label="Redo workflow changes"
                       className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
                     >
                       <Icon name="redo" className="text-xxs" />
@@ -838,6 +839,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       }}
                       style={{ touchAction: "manipulation" }}
                       title={undo.title}
+                      aria-label="Undo workflow changes"
                       className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
                       <Icon name="discard" className="text-xxs" />

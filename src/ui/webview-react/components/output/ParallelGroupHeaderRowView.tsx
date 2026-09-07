@@ -91,6 +91,7 @@ export const ParallelGroupHeaderRowView: React.FC<
                 row.promptUndo.undo.label,
                 row.members.length
               )}
+              aria-label="Undo parallel group changes"
               onClick={() => onUndo(row)}
             >
               <Icon name="discard" className="shrink-0" />
@@ -108,6 +109,7 @@ export const ParallelGroupHeaderRowView: React.FC<
                 row.promptUndo.redo.label,
                 row.members.length
               )}
+              aria-label="Redo parallel group changes"
               onClick={() => onRedo(row)}
             >
               <Icon name="redo" className="shrink-0" />

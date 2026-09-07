@@ -84,6 +84,12 @@ describe("OutputSectionHeader terminal execution identity", () => {
 });
 
 describe("OutputSectionHeader tab icons", () => {
+  it("keeps the output tab named when its text is hidden", () => {
+    renderHeader({ isHeaderNarrow: true });
+
+    expect(screen.getByRole("button", { name: "Output" })).toBeInTheDocument();
+  });
+
   it("uses large icons in narrow headers and small icons otherwise", () => {
     const narrowHeader = renderHeader({ isHeaderNarrow: true });
 

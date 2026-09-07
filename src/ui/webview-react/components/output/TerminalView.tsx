@@ -619,6 +619,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
       ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}`}
     onClick={onClick}
     title={getTerminalStepLabel(session)}
+    aria-label="Open terminal session"
   >
     <SessionIcon session={session} />
     <span className="text-xxs font-mono">{label}</span>

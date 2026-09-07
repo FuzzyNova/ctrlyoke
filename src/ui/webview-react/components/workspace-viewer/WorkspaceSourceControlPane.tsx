@@ -514,6 +514,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleDiscardAll}
+                aria-label="Discard all changes"
                 className="inline-flex items-center gap-1 text-xs text-btn-fg hover:underline"
               >
                 <Icon name="discard" className="text-xs" />
@@ -579,6 +580,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
           <button
             onClick={handleDiffBack}
+            aria-label="Back to source control"
             className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
             <Icon name="arrow-left" className="text-sm" />

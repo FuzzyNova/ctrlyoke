@@ -303,6 +303,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return !prev;
           })
         }
+        aria-label="Skills"
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>

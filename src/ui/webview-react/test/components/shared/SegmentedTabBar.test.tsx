@@ -31,6 +31,21 @@ describe("SegmentedTabBar", () => {
     expect(onTabChange).toHaveBeenCalledWith("details");
   });
 
+  it("names each tab for role-based queries", () => {
+    render(
+      <SegmentedTabBar tabs={tabs} activeTab="summary" onTabChange={vi.fn()} />
+    );
+
+    expect(screen.getByRole("button", { name: "Summary" })).toHaveAttribute(
+      "title",
+      "Summary"
+    );
+    expect(screen.getByRole("button", { name: "Details" })).toHaveAttribute(
+      "title",
+      "Details"
+    );
+  });
+
   it("applies icon overrides to inactive tabs", () => {
     render(
       <SegmentedTabBar

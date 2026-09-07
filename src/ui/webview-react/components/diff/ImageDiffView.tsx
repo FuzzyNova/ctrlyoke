@@ -66,6 +66,7 @@ export const ImageDiffView: React.FC<ImageDiffViewProps> = ({
     <button
       type="button"
       className="flex items-center gap-1.5 text-xs text-description-fg"
+      aria-label="Toggle image diff"
       aria-expanded={!collapsed}
       onClick={() => onCollapsedChange?.(!collapsed)}
     >

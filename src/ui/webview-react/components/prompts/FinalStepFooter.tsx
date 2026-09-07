@@ -119,6 +119,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           } ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
           role="button"
           tabIndex={0}
+          aria-label="Final step"
           onClick={() => {
             if (!isSelectionReadOnly) {
               onSelect();
@@ -192,6 +193,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         role="button"
         tabIndex={0}
         title={finalStepTooltip}
+        aria-label="Final step"
         onClick={() => {
           if (!isSelectionReadOnly) {
             onSelect();

@@ -582,6 +582,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         <button
           type="button"
           onClick={handleToggle}
+          aria-label="Toggle diff"
           className="flex min-w-0 items-center gap-1.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
           title={isExpanded ? "Collapse diff" : "Expand diff"}
         >

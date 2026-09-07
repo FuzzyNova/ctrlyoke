@@ -213,11 +213,17 @@ content and carries meaning — keep an `aria-label` on the **parent control**, 
 
 ## Phase 2 — Name every control
 
-**Status:** Editor surfaces complete — the prompt editor, prompt-properties toggle,
-Queue/Run actions, and Harness/Model/Agent/Skills/Permissions/Context footer
-pickers are named; the Execution Mode and Step Color header controls were already
-named. Remaining: the rest of the dashboard's unnamed controls, including the
-non-editor surfaces covered by the follow-up phases.
+**Status:** Complete — the remaining dashboard controls are named, including compact
+header/output actions, workspace viewer controls, output actions, shared tabs and
+dropdown triggers, workflow/prompt rows, search controls, and settings actions.
+Existing `title` attributes were preserved, while accessible names were kept stable
+when visible text represents a transient value or status. Tests cover the shared tab
+bar, narrow output tab, and workspace commit-message action using role/name queries.
+
+Deliberately skipped the later semantic and interaction work: changing roles,
+adding `aria-selected`/`aria-pressed`, adding landmarks, changing keyboard parity
+for existing `role="button"` elements, and adding `data-testid` to controls. Those
+remain scoped to Phases 3–7.
 
 **Rule: add `aria-label`; keep `title`.** Do not swap one for the other. 117 existing
 `*ByTitle` queries depend on the `title` attribute, and `title` is still the hover tooltip users

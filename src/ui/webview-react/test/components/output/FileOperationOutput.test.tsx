@@ -47,7 +47,7 @@ describe("FileEditOutput", () => {
       />
     );
 
-    expect(getByRole("button", { name: "Undo" })).toBeTruthy();
+    expect(getByRole("button", { name: "Undo file operation" })).toBeTruthy();
   });
 
   it("renders a redo button when the diff is already undone", () => {
@@ -62,7 +62,7 @@ describe("FileEditOutput", () => {
       />
     );
 
-    expect(getByRole("button", { name: "Redo" })).toBeTruthy();
+    expect(getByRole("button", { name: "Redo file operation" })).toBeTruthy();
   });
 
   it("uses file chips for every structured operation when enabled", () => {

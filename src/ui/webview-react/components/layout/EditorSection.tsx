@@ -373,6 +373,7 @@ const EditorSectionInner: React.FC = () => {
             inactiveIcon="repo"
             activeTooltip="Respecting .gitignore for completions"
             inactiveTooltip="All files included for completions (ignoring .gitignore)"
+            ariaLabel="Respect .gitignore for completions"
           />
         )}
       </div>

@@ -364,6 +364,7 @@ function FileRefButton({
         line !== undefined ? openFile(path, line) : openFile(path)
       }
       title={title}
+      aria-label="Open file"
     >
       <Icon name="file" className="text-xxs opacity-70" />
       <span className="group-hover:underline">{children}</span>

@@ -204,6 +204,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         <button
           onClick={handlePush}
           disabled={pushing}
+          aria-label="Push commits"
           className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pushing ? (
@@ -217,6 +218,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         <button
           onClick={handlePull}
           disabled={pulling}
+          aria-label="Pull commits"
           className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pulling ? (
@@ -265,6 +267,11 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
             generatingCommitMessage
               ? "Cancel generation"
               : "Generate commit message with ctrlyoke"
+          }
+          aria-label={
+            generatingCommitMessage
+              ? "Cancel commit message generation"
+              : "Generate commit message"
           }
           data-testid="generate-commit-message-btn"
           className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"

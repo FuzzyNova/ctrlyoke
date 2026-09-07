@@ -240,6 +240,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
+          aria-label="Prior context"
           className="fp-select-trigger fp-dropdown-row"
         >
           <span className="truncate">{buttonLabel}</span>

@@ -340,7 +340,7 @@ describe("DiffView", () => {
       />
     );
 
-    fireEvent.click(getByRole("button", { name: /show diff/i }));
+    fireEvent.click(getByRole("button", { name: "Toggle diff" }));
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
 
     rerender(
@@ -353,7 +353,7 @@ describe("DiffView", () => {
       />
     );
 
-    expect(getByRole("button", { name: /hide diff/i })).toBeTruthy();
+    expect(getByRole("button", { name: "Toggle diff" })).toBeTruthy();
   });
 
   it("renders the actionSlot alongside the toggle", () => {

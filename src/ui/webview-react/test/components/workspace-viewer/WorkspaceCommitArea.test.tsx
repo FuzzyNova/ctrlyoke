@@ -39,10 +39,10 @@ describe("WorkspaceCommitArea", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Push (1)" })
+      screen.getByRole("button", { name: "Push commits" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Pull (2)" })
+      screen.getByRole("button", { name: "Pull commits" })
     ).toBeInTheDocument();
   });
 
@@ -79,7 +79,9 @@ describe("WorkspaceCommitArea", () => {
     it("renders the generate button", () => {
       renderCommitArea();
 
-      const generateButton = screen.getByTestId("generate-commit-message-btn");
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
 
       expect(generateButton).toBeInTheDocument();
       expect(
@@ -98,7 +100,9 @@ describe("WorkspaceCommitArea", () => {
       });
       renderCommitArea();
 
-      await user.click(screen.getByTestId("generate-commit-message-btn"));
+      await user.click(
+        screen.getByRole("button", { name: "Generate commit message" })
+      );
 
       await waitFor(() => {
         expect(workspaceGenerateCommitMessage).toHaveBeenCalledOnce();
@@ -114,7 +118,9 @@ describe("WorkspaceCommitArea", () => {
       });
       renderCommitArea();
 
-      await user.click(screen.getByTestId("generate-commit-message-btn"));
+      await user.click(
+        screen.getByRole("button", { name: "Generate commit message" })
+      );
 
       await waitFor(() => {
         expect(screen.getByRole("textbox")).toHaveValue("feat: test");
@@ -129,7 +135,9 @@ describe("WorkspaceCommitArea", () => {
       );
       renderCommitArea();
 
-      const generateButton = screen.getByTestId("generate-commit-message-btn");
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
       await user.click(generateButton);
 
       await waitFor(() => {
@@ -160,7 +168,9 @@ describe("WorkspaceCommitArea", () => {
       );
       renderCommitArea();
 
-      const generateButton = screen.getByTestId("generate-commit-message-btn");
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
       const commitMessageInput = screen.getByRole("textbox", {
         name: "Commit message",
       });
@@ -180,7 +190,9 @@ describe("WorkspaceCommitArea", () => {
       );
       renderCommitArea();
 
-      const generateButton = screen.getByTestId("generate-commit-message-btn");
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
       await user.click(generateButton);
 
       // After the rejection the error is caught and the button re-enables.

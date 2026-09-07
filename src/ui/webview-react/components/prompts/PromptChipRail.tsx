@@ -130,6 +130,7 @@ function ChipContent({
       }}
       {...longPressHandlers}
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
+      aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
     >
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {isExecuting && (
@@ -234,6 +235,7 @@ function FinalStepChip({
       }}
       {...longPressHandlers}
       title="Final Step — right-click for options"
+      aria-label="Final step"
     >
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {/* Left status border bar */}

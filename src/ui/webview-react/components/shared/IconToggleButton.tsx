@@ -13,6 +13,7 @@ export const IconToggleButton: React.FC<{
   inactiveIcon: string;
   activeTooltip: string;
   inactiveTooltip: string;
+  ariaLabel: string;
 }> = ({
   active,
   onToggle,
@@ -20,6 +21,7 @@ export const IconToggleButton: React.FC<{
   inactiveIcon,
   activeTooltip,
   inactiveTooltip,
+  ariaLabel,
 }) => {
   const icon = (
     <Icon name={active ? activeIcon : inactiveIcon} className="codicon-lg" />
@@ -29,6 +31,7 @@ export const IconToggleButton: React.FC<{
     <button
       onClick={() => onToggle(!active)}
       title={active ? activeTooltip : inactiveTooltip}
+      aria-label={ariaLabel}
       aria-pressed={active}
       className={`control-button flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors select-none [-webkit-touch-callout:none] ${
         active

@@ -1245,6 +1245,7 @@ const CliHeaderRowView: React.FC<{
             onClick={() => onPromptUndo?.(row)}
             style={{ touchAction: "manipulation" }}
             title={row.promptUndo.undo.label}
+            aria-label="Undo prompt changes"
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
           >
             <Icon name="discard" className="shrink-0" />
@@ -1259,6 +1260,7 @@ const CliHeaderRowView: React.FC<{
             onClick={() => onPromptRedo?.(row)}
             style={{ touchAction: "manipulation" }}
             title={row.promptUndo.redo.label}
+            aria-label="Redo prompt changes"
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
           >
             <Icon name="redo" className="shrink-0" />
@@ -1465,6 +1467,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         }`}
         onClick={handleCopyOutput}
         title="Copy output to clipboard"
+        aria-label="Copy output to clipboard"
       >
         <Icon name={copiedOutput ? "codicon-check" : "codicon-copy"} />
         <span>{copiedOutput ? "Copied" : "Copy output"}</span>

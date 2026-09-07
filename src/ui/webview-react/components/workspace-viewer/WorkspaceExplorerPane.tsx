@@ -708,6 +708,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         {isMobile && (
           <button
             onClick={handleMobileBack}
+            aria-label="Back to file list"
             className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
             <Icon name="arrow-left" className="text-sm" />
@@ -778,6 +779,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     type="button"
                     onClick={() => setPreviewMode((p) => !p)}
                     aria-pressed={previewMode}
+                    aria-label={previewMode ? "Edit file" : "Preview file"}
                     className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
                       previewMode
                         ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"

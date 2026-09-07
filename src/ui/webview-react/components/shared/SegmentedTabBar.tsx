@@ -57,6 +57,7 @@ export function SegmentedTabBar<Id extends string>({
             key={tab.id}
             type="button"
             title={tab.label}
+            aria-label={tab.label}
             className={`fp-tab-hc${isActive ? " fp-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`
