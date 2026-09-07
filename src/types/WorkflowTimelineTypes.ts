@@ -161,7 +161,13 @@ export type HistorySearchIndexState = "ready" | "building" | "fallback";
 export interface HistorySearchQuery {
   query: string;
   limit: number;
-  cursor?: string;
+  /**
+   * Absolute index of the first result to return. Paging is random-access, not
+   * a sequential cursor chain: a client that scrolls a virtualized list to row
+   * 4000 of 5000 asks for that window directly instead of walking 80 pages to
+   * reach it.
+   */
+  offset?: number;
   filters?: HistorySearchFilters;
 }
 
@@ -177,9 +183,10 @@ export interface HistorySearchFilters {
 
 export interface HistorySearchResponse {
   query: string;
+  /** Absolute index of `results[0]` within the full match list. */
+  offset: number;
   results: HistorySearchResult[];
   totalCount: number;
-  nextCursor?: string;
   hasMore: boolean;
   indexState: HistorySearchIndexState;
 }

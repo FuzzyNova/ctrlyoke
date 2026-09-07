@@ -1731,7 +1731,6 @@ export interface SearchHistoryMessage extends Partial<HistorySearchQuery> {
 
 export interface SearchHistoryResultsMessage extends HistorySearchResponse {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_RESULTS;
-  cursor?: string;
 }
 
 /**

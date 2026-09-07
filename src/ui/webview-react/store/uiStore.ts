@@ -472,13 +472,21 @@ interface UiState {
 
   // History search drawer state (transient, not persisted)
   isHistorySearchOpen: boolean;
-  historySearchResults: HistorySearchResult[];
+  /**
+   * Sparse listing indexed by absolute result position: a hole is a row the
+   * client has not fetched yet, which the virtualized list renders as a
+   * placeholder. Pages arrive by offset rather than in sequence, so a scroll
+   * that lands near the end of a large result set loads only that window.
+   */
+  historySearchResults: (HistorySearchResult | undefined)[];
   historySearchQuery: string;
+  /**
+   * Set only while the first page of a query is outstanding. There is no
+   * counterpart for later pages: those replace individual placeholder rows,
+   * which carry their own pending affordance.
+   */
   historySearchLoading: boolean;
-  historySearchLoadingMore: boolean;
   historySearchTotalCount: number;
-  historySearchNextCursor?: string;
-  historySearchHasMore: boolean;
   historySearchIndexState: HistorySearchIndexState;
   /** Set only while a search is blocked on a full search-index rebuild; null otherwise. */
   historySearchRebuildProgress: {
@@ -806,16 +814,17 @@ interface UiActions {
   setHistorySearchQuery: (query: string) => void;
   setHistorySearchFilters: (filters: HistorySearchFilterState) => void;
   resetHistorySearchFilters: () => void;
+  /**
+   * Replaces the listing when `options.offset` is absent, or merges one page
+   * into it at that absolute offset when present.
+   */
   setHistorySearchResults: (
     results: HistorySearchResult[],
     loading: boolean,
     options?: {
-      append?: boolean;
+      offset?: number;
       totalCount?: number;
-      nextCursor?: string;
-      hasMore?: boolean;
       indexState?: HistorySearchIndexState;
-      loadingMore?: boolean;
     }
   ) => void;
   setHistorySearchRebuildProgress: (
@@ -1083,10 +1092,7 @@ const initialState: UiState = {
   historySearchResults: [],
   historySearchQuery: "",
   historySearchLoading: false,
-  historySearchLoadingMore: false,
   historySearchTotalCount: 0,
-  historySearchNextCursor: undefined,
-  historySearchHasMore: false,
   historySearchIndexState: "ready",
   historySearchRebuildProgress: null,
   historySearchFilters: createDefaultHistorySearchFilters(),
@@ -1414,7 +1420,6 @@ export const useUiStore = create<UiState & UiActions>()(
         set({
           isHistorySearchOpen: false,
           historySearchLoading: false,
-          historySearchLoadingMore: false,
           historySearchRebuildProgress: null,
         }),
 
@@ -1424,7 +1429,6 @@ export const useUiStore = create<UiState & UiActions>()(
             ? {
                 isHistorySearchOpen: false,
                 historySearchLoading: false,
-                historySearchLoadingMore: false,
                 historySearchRebuildProgress: null,
               }
             : { isHistorySearchOpen: true, globalSettingsOpen: false }
@@ -1433,8 +1437,6 @@ export const useUiStore = create<UiState & UiActions>()(
       setHistorySearchQuery: (query) =>
         set({
           historySearchQuery: query,
-          historySearchNextCursor: undefined,
-          historySearchHasMore: false,
           historySearchTotalCount: 0,
         }),
 
@@ -1443,10 +1445,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchFilters: filters,
           historySearchResults: [],
           historySearchLoading: false,
-          historySearchLoadingMore: false,
           historySearchTotalCount: 0,
-          historySearchNextCursor: undefined,
-          historySearchHasMore: false,
         }),
 
       resetHistorySearchFilters: () =>
@@ -1454,31 +1453,37 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchFilters: createDefaultHistorySearchFilters(),
           historySearchResults: [],
           historySearchLoading: false,
-          historySearchLoadingMore: false,
           historySearchTotalCount: 0,
-          historySearchNextCursor: undefined,
-          historySearchHasMore: false,
         }),
 
       setHistorySearchResults: (results, loading, options) =>
-        set((state) => ({
-          historySearchResults: options?.append
-            ? [...state.historySearchResults, ...results]
-            : results,
-          historySearchLoading: loading,
-          historySearchLoadingMore: options?.loadingMore ?? false,
-          historySearchTotalCount:
-            options?.totalCount ??
-            (options?.append ? state.historySearchTotalCount : results.length),
-          historySearchNextCursor: options?.nextCursor,
-          historySearchHasMore: options?.hasMore ?? false,
-          historySearchIndexState:
-            options?.indexState ?? state.historySearchIndexState,
-          // Progress is only known once a SEARCH_INDEX_REBUILD_PROGRESS push
-          // arrives for the in-flight request; clear stale progress from a
-          // prior query whenever a request starts or a response lands.
-          historySearchRebuildProgress: null,
-        })),
+        set((state) => {
+          const offset = options?.offset;
+          let nextResults: (HistorySearchResult | undefined)[];
+          if (offset === undefined) {
+            nextResults = [...results];
+          } else {
+            nextResults = [...state.historySearchResults];
+            results.forEach((result, index) => {
+              nextResults[offset + index] = result;
+            });
+          }
+          return {
+            historySearchResults: nextResults,
+            historySearchLoading: loading,
+            historySearchTotalCount:
+              options?.totalCount ??
+              (offset === undefined
+                ? results.length
+                : state.historySearchTotalCount),
+            historySearchIndexState:
+              options?.indexState ?? state.historySearchIndexState,
+            // Progress is only known once a SEARCH_INDEX_REBUILD_PROGRESS push
+            // arrives for the in-flight request; clear stale progress from a
+            // prior query whenever a request starts or a response lands.
+            historySearchRebuildProgress: null,
+          };
+        }),
 
       setHistorySearchRebuildProgress: (progress) =>
         set({ historySearchRebuildProgress: progress }),
@@ -2248,10 +2253,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchResults: [],
           historySearchQuery: "",
           historySearchLoading: false,
-          historySearchLoadingMore: false,
           historySearchTotalCount: 0,
-          historySearchNextCursor: undefined,
-          historySearchHasMore: false,
           historySearchIndexState: "ready",
           historySearchRebuildProgress: null,
           historySearchFilters: createDefaultHistorySearchFilters(),

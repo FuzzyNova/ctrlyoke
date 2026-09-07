@@ -353,7 +353,7 @@ suite("HistorySearchService", () => {
     assert.strictEqual(commandResults[0]?.matchField, "command");
   });
 
-  test("returns accurate counts and stable cursor pages", async () => {
+  test("returns accurate counts and stable offset pages", async () => {
     const workflowId = "paged-2026-06-09T18-00-00";
     await writeWorkingFile(workflowId, { workflowName: "Paged Workflow" });
     await createRun(workflowId, 1, 1000, [
@@ -382,11 +382,11 @@ suite("HistorySearchService", () => {
     assert.strictEqual(firstPage.totalCount, 3);
     assert.strictEqual(firstPage.results.length, 2);
     assert.strictEqual(firstPage.hasMore, true);
-    assert.ok(firstPage.nextCursor);
+    assert.strictEqual(firstPage.offset, 0);
     assert.strictEqual(firstPage.results[0]?.matchContext, "Prompt 3");
 
     const secondPage = await service.search(
-      { query: "needle", limit: 2, cursor: firstPage.nextCursor },
+      { query: "needle", limit: 2, offset: 2 },
       workspaceRoot
     );
 
@@ -466,13 +466,13 @@ suite("HistorySearchService", () => {
     assert.strictEqual(firstPage.totalCount, 2);
     assert.strictEqual(firstPage.results.length, 1);
     assert.strictEqual(firstPage.hasMore, true);
-    assert.ok(firstPage.nextCursor);
+    assert.strictEqual(firstPage.offset, 0);
 
     const secondPage = await service.search(
       {
         query: "snapshot-needle",
         limit: 1,
-        cursor: firstPage.nextCursor,
+        offset: 1,
       },
       workspaceRoot
     );

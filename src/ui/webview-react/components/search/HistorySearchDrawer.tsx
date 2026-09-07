@@ -51,6 +51,15 @@ const HISTORY_RESULT_ESTIMATE = 108;
  */
 const CONTENT_COLUMN_CLASS = "mx-auto w-full max-w-4xl";
 
+/**
+ * A row's 1-based position in the whole result set, not in what happens to be
+ * loaded. This is the listing's only position readout, so it has to be derived
+ * from the absolute virtual index every row already carries.
+ */
+function formatResultOrdinal(index: number): string {
+  return `#${(index + 1).toLocaleString()}`;
+}
+
 const EVENT_KIND_LABELS: Record<HistoryEventKind, string> = {
   [HISTORY_EVENT_KINDS.PROMPT]: "Prompt",
   [HISTORY_EVENT_KINDS.RESPONSE]: "Response",
@@ -175,10 +184,7 @@ export function HistorySearchDrawer() {
   const query = useUiStore((s) => s.historySearchQuery);
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
-  const loadingMore = useUiStore((s) => s.historySearchLoadingMore);
   const totalCount = useUiStore((s) => s.historySearchTotalCount);
-  const nextCursor = useUiStore((s) => s.historySearchNextCursor);
-  const hasMore = useUiStore((s) => s.historySearchHasMore);
   const indexState = useUiStore((s) => s.historySearchIndexState);
   const rebuildProgress = useUiStore((s) => s.historySearchRebuildProgress);
   const historySearchFilters = useUiStore((s) => s.historySearchFilters);
@@ -211,11 +217,7 @@ export function HistorySearchDrawer() {
         return;
       }
 
-      setHistorySearchResults([], true, {
-        totalCount: 0,
-        hasMore: false,
-        nextCursor: undefined,
-      });
+      setHistorySearchResults([], true, { totalCount: 0 });
       vscode.postMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: trimmedQuery,
@@ -244,8 +246,6 @@ export function HistorySearchDrawer() {
     if (trimmedQuery.length < 2) {
       setHistorySearchResults([], false, {
         totalCount: 0,
-        hasMore: false,
-        nextCursor: undefined,
         indexState: "ready",
       });
       return;
@@ -320,9 +320,10 @@ export function HistorySearchDrawer() {
         return;
       }
 
-      if (event.key === KEYBOARD_KEYS.ENTER && results.length > 0) {
+      const firstResult = results[0];
+      if (event.key === KEYBOARD_KEYS.ENTER && firstResult) {
         event.preventDefault();
-        navigateToResult(results[0]);
+        navigateToResult(firstResult);
       }
     },
     [closeHistorySearch, navigateToResult, results]
@@ -378,37 +379,6 @@ export function HistorySearchDrawer() {
     trimmedQuery.length,
   ]);
 
-  const loadMore = useCallback(() => {
-    if (!nextCursor || loadingMore || loading || !hasMore) {
-      return;
-    }
-    setHistorySearchResults([], false, {
-      append: true,
-      loadingMore: true,
-      totalCount,
-      nextCursor,
-      hasMore,
-    });
-    vscode.postMessage({
-      type: MESSAGE_TYPES.SEARCH_HISTORY,
-      query: trimmedQuery,
-      limit: RESULT_LIMIT,
-      cursor: nextCursor,
-      filters: toHistorySearchFilters(historySearchFilters, workflowKey),
-    });
-  }, [
-    hasMore,
-    loading,
-    loadingMore,
-    historySearchFilters,
-    nextCursor,
-    setHistorySearchResults,
-    totalCount,
-    trimmedQuery,
-    vscode,
-    workflowKey,
-  ]);
-
   const listingId = useMemo(
     () =>
       `history-search:${trimmedQuery}:${JSON.stringify(
@@ -417,19 +387,38 @@ export function HistorySearchDrawer() {
     [historySearchFilters, trimmedQuery, workflowKey]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
-  // Tracks the furthest overscan index a range-change has ever asked for.
-  // `loadMore()` only advances the sequential cursor by one page at a time
-  // (there is no random-access offset fetch for search results), so a scroll
-  // that lands more than one page ahead of what's loaded needs several
-  // `loadMore()` calls back-to-back. Re-checking this ref whenever `results`
-  // grows (see the effect below) keeps that chain going; relying solely on
-  // the next range-change notification does not, because it's deduplicated
-  // by scroll-range signature and won't refire just because more data arrived
-  // for an unchanged range.
-  const desiredResultIndexRef = useRef(-1);
+
+  // Offsets already asked for in this listing. Pages are addressed by absolute
+  // offset rather than chained through a cursor, so scrolling to the end of a
+  // large result set fetches only the window under the viewport instead of
+  // every page leading up to it.
+  const requestedOffsetsRef = useRef(new Set<number>());
   useEffect(() => {
-    desiredResultIndexRef.current = -1;
+    requestedOffsetsRef.current = new Set<number>();
   }, [listingId]);
+
+  const requestPage = useCallback(
+    (offset: number) => {
+      if (offset <= 0 || offset >= totalCount) {
+        return;
+      }
+      if (requestedOffsetsRef.current.has(offset)) {
+        return;
+      }
+      requestedOffsetsRef.current.add(offset);
+      // No store write here: the pulsing placeholder rows this page will
+      // replace are already the in-flight indicator, per row rather than for
+      // the listing as a whole.
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SEARCH_HISTORY,
+        query: trimmedQuery,
+        limit: RESULT_LIMIT,
+        offset,
+        filters: toHistorySearchFilters(historySearchFilters, workflowKey),
+      });
+    },
+    [historySearchFilters, totalCount, trimmedQuery, vscode, workflowKey]
+  );
   const getItem = useCallback(
     (index: number): HistorySearchResult | undefined => results[index],
     [results]
@@ -440,7 +429,7 @@ export function HistorySearchDrawer() {
     []
   );
   const renderItem = useCallback(
-    (result: HistorySearchResult): ReactNode => {
+    (result: HistorySearchResult, index: number): ReactNode => {
       const relativeTime =
         formatRelativeTimeVerbose(result.startedAt) ?? "Unknown time";
       const startedAtTitle = new Date(result.startedAt).toLocaleString();
@@ -463,14 +452,22 @@ export function HistorySearchDrawer() {
                 Run #{result.runId} &middot; {relativeTime}
               </div>
             </div>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_KIND_BADGES[result.eventKind]}`}
-            >
-              {EVENT_KIND_LABELS[result.eventKind]}
-            </span>
-            <span className="shrink-0 pt-0.5 text-[11px] text-description-fg">
-              · {result.matchField}
-            </span>
+            {/* Kept in one shrink-0 group so the metadata clusters at the
+                right edge; as separate `justify-between` children they spread
+                across the row and read as unrelated columns. */}
+            <div className="flex shrink-0 items-start gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_KIND_BADGES[result.eventKind]}`}
+              >
+                {EVENT_KIND_LABELS[result.eventKind]}
+              </span>
+              <span className="pt-0.5 text-[11px] text-description-fg">
+                · {result.matchField}
+              </span>
+              <span className="pt-0.5 text-[11px] tabular-nums text-description-fg/70">
+                {formatResultOrdinal(index)}
+              </span>
+            </div>
           </div>
 
           <div className="mt-2 text-xs font-medium text-description-fg">
@@ -492,7 +489,14 @@ export function HistorySearchDrawer() {
         data-placeholder-index={index}
         aria-hidden="true"
       >
-        <div className="h-3 w-2/5 animate-pulse rounded bg-description-fg/20" />
+        {/* A placeholder carries its own ordinal so a fast scroll through
+            not-yet-fetched rows still reads as a position in the listing. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="h-3 w-2/5 animate-pulse rounded bg-description-fg/20" />
+          <span className="shrink-0 text-[11px] tabular-nums text-description-fg/70">
+            {formatResultOrdinal(index)}
+          </span>
+        </div>
         <div className="mt-3 h-3 w-4/5 animate-pulse rounded bg-description-fg/15" />
         <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-description-fg/15" />
       </div>
@@ -503,40 +507,36 @@ export function HistorySearchDrawer() {
     (_index: number): number => HISTORY_RESULT_ESTIMATE,
     []
   );
-  const maybeLoadMore = useCallback(() => {
-    if (desiredResultIndexRef.current >= results.length - 1) {
-      loadMore();
-    }
-  }, [loadMore, results.length]);
-
   const handleRangeChange = useCallback(
     (range: VirtualizedListRange): void => {
-      desiredResultIndexRef.current = range.overscanEndIndex;
-      maybeLoadMore();
+      const firstPage = Math.floor(range.overscanStartIndex / RESULT_LIMIT);
+      const lastPage = Math.floor(
+        Math.min(range.overscanEndIndex, Math.max(0, totalCount - 1)) /
+          RESULT_LIMIT
+      );
+      for (let page = firstPage; page <= lastPage; page += 1) {
+        const offset = page * RESULT_LIMIT;
+        if (results[offset] === undefined) {
+          requestPage(offset);
+        }
+      }
     },
-    [maybeLoadMore]
+    [requestPage, results, totalCount]
   );
 
-  // Continues the sequential fetch chain as each page lands: `maybeLoadMore`
-  // gets a new identity whenever `results.length` changes, so this re-runs
-  // after every page arrives and keeps requesting the next one until loaded
-  // results reach the last requested scroll position (or hasMore runs out).
-  useEffect(() => {
-    maybeLoadMore();
-  }, [maybeLoadMore]);
-
+  // Deliberately the match count alone, with no "loaded so far" component:
+  // pages now arrive fast enough that a loaded tally tracked scroll speed
+  // rather than anything the reader cares about. Position lives on the rows
+  // (see `formatResultOrdinal`), which stay correct mid-scroll because a
+  // placeholder knows its own absolute index.
   const summaryLabel = useMemo(() => {
     if (trimmedQuery.length < 2 || loading || totalCount === 0) {
       return "";
     }
-    return `Showing ${results.length} of ${totalCount}${activeFilterCount > 0 ? " (filtered)" : ""}`;
-  }, [
-    activeFilterCount,
-    loading,
-    results.length,
-    totalCount,
-    trimmedQuery.length,
-  ]);
+    return `${totalCount.toLocaleString()} result${totalCount === 1 ? "" : "s"}${
+      activeFilterCount > 0 ? " (filtered)" : ""
+    }`;
+  }, [activeFilterCount, loading, totalCount, trimmedQuery.length]);
 
   const workflowScopeAvailable =
     displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
@@ -799,7 +799,7 @@ export function HistorySearchDrawer() {
             </div>
           ))}
 
-        {trimmedQuery.length >= 2 && !loading && results.length === 0 && (
+        {trimmedQuery.length >= 2 && !loading && totalCount === 0 && (
           <div className="px-3 py-6 text-center text-sm text-description-fg">
             No results
           </div>

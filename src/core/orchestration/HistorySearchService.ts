@@ -88,21 +88,28 @@ export class HistorySearchService {
       );
       logMemoryUsage("HistorySearchService falling back to disk scan");
       const fallbackStart = Date.now();
-      const results = await this.searchLegacy(
+      const offset = Math.max(0, Math.floor(request.offset ?? 0));
+      // The unindexed path cannot know a total match count without reading the
+      // whole history, so it scans only as far as the requested window and
+      // reports what it found. `hasMore` stays optimistic while the scan hit
+      // its budget, which is what the virtualized list needs to keep paging.
+      const scanned = await this.searchLegacy(
         request.query,
         workspaceFolderPath,
-        request.limit,
+        offset + request.limit,
         request.filters
       );
+      const results = scanned.slice(offset, offset + request.limit);
       Log.info(
-        `[HistorySearchService] Disk scan fallback complete: query="${request.query.trim()}" results=${results.length} durationMs=${Date.now() - fallbackStart}`
+        `[HistorySearchService] Disk scan fallback complete: query="${request.query.trim()}" offset=${offset} scanned=${scanned.length} results=${results.length} durationMs=${Date.now() - fallbackStart}`
       );
       logMemoryUsage("HistorySearchService disk scan fallback complete");
       return {
         query: request.query.trim(),
+        offset,
         results,
-        totalCount: results.length,
-        hasMore: results.length >= request.limit,
+        totalCount: scanned.length,
+        hasMore: scanned.length >= offset + request.limit,
         indexState: "fallback",
       };
     }

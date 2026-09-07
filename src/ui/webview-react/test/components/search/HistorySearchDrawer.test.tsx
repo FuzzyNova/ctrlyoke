@@ -149,13 +149,11 @@ describe("HistorySearchDrawer filters", () => {
     });
   });
 
-  it("re-issues a filtered search immediately and clears the cursor", () => {
+  it("re-issues a filtered search immediately and clears the listing", () => {
     renderSearch();
     act(() => {
       useUiStore.getState().setHistorySearchResults([], false, {
         totalCount: 2450,
-        nextCursor: "stale-cursor",
-        hasMore: true,
       });
     });
 
@@ -175,7 +173,7 @@ describe("HistorySearchDrawer filters", () => {
         ),
       },
     });
-    expect(useUiStore.getState().historySearchNextCursor).toBeUndefined();
+    expect(useUiStore.getState().historySearchTotalCount).toBe(0);
     expect(useUiStore.getState().historySearchResults).toEqual([]);
   });
 
@@ -187,8 +185,6 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults(results(40), false, {
         totalCount: 100,
-        nextCursor: "next-cursor",
-        hasMore: true,
       });
     });
 
@@ -208,26 +204,23 @@ describe("HistorySearchDrawer filters", () => {
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
       limit: 50,
-      cursor: "next-cursor",
+      offset: 50,
       filters: {
         pathContains: "src/ui",
       },
     });
   });
 
-  it("keeps requesting sequential pages until the scrolled-to position is loaded", () => {
-    // Search results only support a sequential cursor (unlike file/commit
-    // history's offset-based paging), so catching up to a scroll position
-    // more than one page ahead of what's loaded takes several loadMore()
-    // calls in a row. A scroll to the very bottom of a 100-item list with
-    // only 40 loaded is more than one RESULT_LIMIT (50) page ahead, so this
-    // must chain through two fetches on its own, not stall after the first.
+  it("requests the scrolled-to window directly instead of every page before it", () => {
+    // Search result pages are addressed by absolute offset, so landing near the
+    // end of a large listing must fetch that window in one request. The old
+    // sequential-cursor chain walked every intervening page to get there, which
+    // on a several-thousand-result search meant dozens of round trips before
+    // the rows under the viewport appeared.
     const view = renderSearch();
     act(() => {
       useUiStore.getState().setHistorySearchResults(results(40), false, {
-        totalCount: 100,
-        nextCursor: "cursor-1",
-        hasMore: true,
+        totalCount: 1000,
       });
     });
 
@@ -237,34 +230,70 @@ describe("HistorySearchDrawer filters", () => {
     if (!scroller) return;
 
     act(() => {
-      // Far enough to land within overscan of the very last index (100
-      // items), not just past the 40 already loaded — otherwise this
-      // wouldn't exercise the multi-page catch-up path at all.
       scroller.scrollTop = 999999;
       fireEvent.scroll(scroller);
       fireEvent.scroll(scroller);
     });
 
-    expect(postMessage).toHaveBeenCalledTimes(1);
-    expect(postMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cursor: "cursor-1" })
+    const requestedOffsets = postMessage.mock.calls.map(
+      (call) => (call[0] as { offset?: number }).offset
     );
+    expect(requestedOffsets.length).toBeGreaterThan(0);
+    // Nothing between the loaded head and the viewport window is fetched.
+    expect(requestedOffsets.every((offset) => (offset ?? 0) >= 900)).toBe(true);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SEARCH_HISTORY,
+        query: "needle",
+        limit: 50,
+        offset: 950,
+      })
+    );
+  });
 
-    // The first requested page lands (append), still short of where the user
-    // scrolled to — this must trigger the next page on its own, with no
-    // further scroll event.
+  it("merges a page into the sparse listing at its absolute offset", () => {
+    renderSearch();
     act(() => {
-      useUiStore.getState().setHistorySearchResults(results(40), false, {
-        append: true,
-        totalCount: 100,
-        nextCursor: "cursor-2",
-        hasMore: true,
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        totalCount: 1000,
+      });
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        offset: 950,
+        totalCount: 1000,
       });
     });
 
-    expect(postMessage).toHaveBeenCalledTimes(2);
-    expect(postMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cursor: "cursor-2" })
+    const state = useUiStore.getState();
+    expect(state.historySearchTotalCount).toBe(1000);
+    expect(state.historySearchResults[950]).toBeDefined();
+    expect(state.historySearchResults[500]).toBeUndefined();
+    // The header reports the match count only — it must not drift with how
+    // much of the listing happens to be fetched.
+    expect(screen.getByText("1,000 results")).toBeInTheDocument();
+  });
+
+  it("numbers rows by absolute position, placeholders included", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(3), false, {
+        totalCount: 1000,
+      });
+    });
+
+    expect(screen.getByText("#1")).toBeInTheDocument();
+    expect(screen.getByText("#3")).toBeInTheDocument();
+
+    const placeholders = Array.from(
+      document.querySelectorAll('[data-history-search-placeholder="true"]')
+    );
+    expect(placeholders.length).toBeGreaterThan(0);
+    // A placeholder's ordinal comes from its own virtual index, so position
+    // stays readable while scrolling over rows that have not arrived.
+    const firstPlaceholderIndex = Number(
+      placeholders[0]?.getAttribute("data-placeholder-index")
+    );
+    expect(placeholders[0]?.textContent).toContain(
+      `#${(firstPlaceholderIndex + 1).toLocaleString()}`
     );
   });
 
@@ -273,8 +302,6 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults(results(40), false, {
         totalCount: 100,
-        nextCursor: "next-cursor",
-        hasMore: true,
       });
     });
 
@@ -288,7 +315,6 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults([result], false, {
         totalCount: 100,
-        hasMore: false,
       });
     });
 
@@ -302,7 +328,6 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults([result], false, {
         totalCount: 1,
-        hasMore: false,
       });
     });
 
@@ -456,8 +481,7 @@ describe("HistorySearchDrawer filters", () => {
     });
     act(() => {
       useUiStore.getState().setHistorySearchResults([], false, {
-        nextCursor: "stale-cursor",
-        hasMore: true,
+        totalCount: 2450,
       });
     });
     fireEvent.click(
@@ -474,7 +498,7 @@ describe("HistorySearchDrawer filters", () => {
         workflowOnly: false,
       })
     );
-    expect(useUiStore.getState().historySearchNextCursor).toBeUndefined();
+    expect(useUiStore.getState().historySearchTotalCount).toBe(0);
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
@@ -488,10 +512,9 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults([result], false, {
         totalCount: 2450,
-        hasMore: false,
       });
     });
-    expect(screen.getByText("Showing 1 of 2450")).not.toHaveTextContent(
+    expect(screen.getByText("2,450 results")).not.toHaveTextContent(
       "(filtered)"
     );
 
@@ -502,12 +525,9 @@ describe("HistorySearchDrawer filters", () => {
       });
       useUiStore.getState().setHistorySearchResults([result], false, {
         totalCount: 2450,
-        hasMore: false,
       });
     });
-    expect(
-      screen.getByText("Showing 1 of 2450 (filtered)")
-    ).toBeInTheDocument();
+    expect(screen.getByText("2,450 results (filtered)")).toBeInTheDocument();
   });
 
   it("shows when the search is using the fallback index path", () => {
@@ -515,7 +535,6 @@ describe("HistorySearchDrawer filters", () => {
     act(() => {
       useUiStore.getState().setHistorySearchResults([result], false, {
         totalCount: 1,
-        hasMore: false,
         indexState: "fallback",
       });
     });

@@ -1319,6 +1319,7 @@ export class WebviewMessageRouter {
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           query,
+          offset: 0,
           results: [],
           totalCount: 0,
           hasMore: false,
@@ -1331,8 +1332,10 @@ export class WebviewMessageRouter {
         {
           query,
           limit,
-          cursor:
-            typeof message.cursor === "string" ? message.cursor : undefined,
+          offset:
+            typeof message.offset === "number" && message.offset > 0
+              ? Math.floor(message.offset)
+              : undefined,
           filters:
             message.filters && typeof message.filters === "object"
               ? message.filters
@@ -1350,7 +1353,6 @@ export class WebviewMessageRouter {
       ctx.emit({
         type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
         ...response,
-        cursor: typeof message.cursor === "string" ? message.cursor : undefined,
       });
     });
 

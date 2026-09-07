@@ -218,7 +218,7 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
-  test("resets a cursor when its filters change", async () => {
+  test("does not serve a paged offset from another filter's snapshot", async () => {
     const workflowId = "cursor-filters-2026-06-09T22-10-00";
     await createRun(workflowId, 1, 2000, [
       createStatusDraft(2100, "cursor-filter-term"),
@@ -243,20 +243,75 @@ suite("HistorySearchIndexService", () => {
       },
       workspaceRoot
     );
-    assert.ok(firstPage.nextCursor);
+    assert.strictEqual(firstPage.totalCount, 2);
+    assert.strictEqual(firstPage.hasMore, true);
 
+    // The retained match snapshot is keyed by filters as well as query text, so
+    // an offset request under different filters must re-derive rather than
+    // slice the previous query's results.
     const changedFilters = await index.search(
       {
         query: "cursor-filter-term",
         limit: 1,
-        cursor: firstPage.nextCursor,
+        offset: 1,
         filters: { eventKinds: ["fileEdit"] },
       },
       workspaceRoot
     );
     assert.strictEqual(changedFilters.totalCount, 1);
-    assert.strictEqual(changedFilters.results.length, 1);
-    assert.strictEqual(changedFilters.results[0]?.eventKind, "fileEdit");
+    assert.strictEqual(changedFilters.results.length, 0);
+    assert.strictEqual(changedFilters.hasMore, false);
+
+    const fileEditPage = await index.search(
+      {
+        query: "cursor-filter-term",
+        limit: 1,
+        filters: { eventKinds: ["fileEdit"] },
+      },
+      workspaceRoot
+    );
+    assert.strictEqual(fileEditPage.results[0]?.eventKind, "fileEdit");
+  });
+
+  test("answers a far offset in one request instead of walking pages", async () => {
+    const workflowId = "offset-paging-2026-06-09T22-40-00";
+    await createRun(
+      workflowId,
+      1,
+      4000,
+      Array.from({ length: 25 }, (_unused, index) =>
+        createStatusDraft(4100 + index, `offset-paging-term ${index}`)
+      )
+    );
+
+    const index = new HistorySearchIndexService();
+    const firstPage = await index.search(
+      { query: "offset-paging-term", limit: 5 },
+      workspaceRoot
+    );
+    assert.strictEqual(firstPage.totalCount, 25);
+    assert.strictEqual(firstPage.offset, 0);
+    assert.strictEqual(firstPage.results.length, 5);
+
+    const lastPage = await index.search(
+      { query: "offset-paging-term", limit: 5, offset: 20 },
+      workspaceRoot
+    );
+    assert.strictEqual(lastPage.offset, 20);
+    assert.strictEqual(lastPage.totalCount, 25);
+    assert.strictEqual(lastPage.results.length, 5);
+    assert.strictEqual(lastPage.hasMore, false);
+
+    const fullListing = await index.search(
+      { query: "offset-paging-term", limit: 25 },
+      workspaceRoot
+    );
+    assert.deepStrictEqual(
+      lastPage.results.map((result) => result.matchSnippet),
+      fullListing.results
+        .slice(20)
+        .map((result: { matchSnippet: string }) => result.matchSnippet)
+    );
   });
 
   test("matches path filters across mixed separators and casing", async () => {
@@ -687,6 +742,57 @@ suite("HistorySearchIndexService", () => {
       workspaceRoot
     );
     assert.strictEqual(removedResponse.totalCount, 0);
+  });
+
+  test("splices an incremental rebuild into retained documents instead of reloading every shard", async () => {
+    await createRun("splice-existing-2026-06-09T23-30-00", 1, 20000, [
+      createStatusDraft(20100, "splice-existing-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    await index.search(
+      { query: "splice-existing-term", limit: 10 },
+      workspaceRoot
+    );
+
+    await createRun("splice-added-2026-06-09T23-31-00", 1, 21000, [
+      createStatusDraft(21100, "splice-added-term"),
+    ]);
+
+    const messages: string[] = [];
+    const originalDebug = Log.debug;
+    Log.debug = (message: string) => {
+      messages.push(message);
+    };
+    let addedResponse;
+    let existingResponse;
+    try {
+      addedResponse = await index.search(
+        { query: "splice-added-term", limit: 10 },
+        workspaceRoot
+      );
+      existingResponse = await index.search(
+        { query: "splice-existing-term", limit: 10 },
+        workspaceRoot
+      );
+    } finally {
+      Log.debug = originalDebug;
+    }
+
+    // The new run must be searchable, the untouched run must survive the
+    // splice, and neither may cost a full re-read of the index from disk.
+    assert.strictEqual(addedResponse.totalCount, 1);
+    assert.strictEqual(existingResponse.totalCount, 1);
+    assert.ok(
+      messages.some((message) =>
+        message.includes("spliced incremental index update")
+      ),
+      messages.join("\n")
+    );
+    assert.ok(
+      !messages.some((message) => message.includes("loaded index from disk")),
+      messages.join("\n")
+    );
   });
 
   test("skips a redundant rebuild after waiting for a sibling and loads retained documents", async () => {

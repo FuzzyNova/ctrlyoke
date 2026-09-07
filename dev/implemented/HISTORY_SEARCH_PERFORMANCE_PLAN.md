@@ -1,6 +1,10 @@
 # History Search Performance & Isolation Plan
 
 **Status:** Phase 2 complete (2026-08-27)
+**Follow-on:** the query-side costs this plan did not cover (a 31 s cold index
+load and a ~1.85 GB resident index in the extension host) are tracked in
+`dev/backlog/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md`, which also records what
+shipped on 2026-09-07 for incremental shard splicing and random-access paging.
 **Priority:** P1 (raised from P2 2026-08-27 — a second confirmed OOM crash,
 not just heap pressure, occurred mid-`HistorySearchIndexService` rebuild;
 see "2026-08-27 Incident #2" below)

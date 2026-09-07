@@ -2700,34 +2700,23 @@ export function createMessageHandlers(
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
-    const {
-      results,
-      query,
-      totalCount,
-      nextCursor,
-      hasMore,
-      indexState,
-      cursor,
-    } = message as {
+    const { results, query, offset, totalCount, indexState } = message as {
       results: HistorySearchResult[];
       query: string;
+      offset?: number;
       totalCount?: number;
-      nextCursor?: string;
-      hasMore: boolean;
       indexState?: "ready" | "building" | "fallback";
-      cursor?: string;
     };
     const uiStore = useUiStore.getState();
     if (uiStore.historySearchQuery !== query) {
       return;
     }
     uiStore.setHistorySearchResults(results, false, {
-      append: Boolean(cursor),
+      // Offset 0 is the first page of a new listing and replaces it; any
+      // later offset merges into the sparse listing already on screen.
+      offset: offset ? offset : undefined,
       totalCount,
-      nextCursor,
-      hasMore,
       indexState,
-      loadingMore: false,
     });
   };
 

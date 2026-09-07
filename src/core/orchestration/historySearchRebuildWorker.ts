@@ -115,10 +115,22 @@ export interface HistorySearchRebuildProgressMessage {
   totalRuns: number;
 }
 
+/**
+ * Names the shard files an incremental pass rewrote or deleted, so a host
+ * holding the index in memory can splice just those runs instead of re-reading
+ * every shard. Absent when the pass took the full-rebuild path (or skipped),
+ * because then no such narrow delta exists.
+ */
+export interface HistorySearchIncrementalShardDelta {
+  rewrittenShardNames: string[];
+  removedShardNames: string[];
+}
+
 export interface HistorySearchRebuildSuccessMessage {
   type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS;
   skipped: boolean;
   freshnessReason?: string;
+  incrementalDelta?: HistorySearchIncrementalShardDelta;
 }
 
 export interface HistorySearchRebuildErrorMessage {
@@ -318,6 +330,7 @@ export async function runHistorySearchRebuild(
   );
   let freshnessReason: string | undefined;
   let skipped = false;
+  let incrementalDelta: HistorySearchIncrementalShardDelta | undefined;
   await withFileLock(
     lockTargetPath,
     async () => {
@@ -405,7 +418,7 @@ export async function runHistorySearchRebuild(
           Log.info(
             `[HistorySearchIndexService] rebuild path: incremental newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length}`
           );
-          await runIncrementalHistorySearchRebuild(
+          incrementalDelta = await runIncrementalHistorySearchRebuild(
             data,
             indexDir,
             manifestPath,
@@ -523,6 +536,7 @@ export async function runHistorySearchRebuild(
     type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS,
     skipped,
     freshnessReason,
+    incrementalDelta,
   };
 }
 
@@ -534,11 +548,13 @@ async function runIncrementalHistorySearchRebuild(
   diff: HistorySearchIndexDiff,
   builtAt: number,
   onProgress?: HistorySearchRebuildProgressCallback
-): Promise<void> {
+): Promise<HistorySearchIncrementalShardDelta> {
   const touchedRuns = diff.newRuns.length + diff.changedRuns.length;
   const indexedRuns = { ...onDiskManifest.indexedRuns };
   const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
   const rebuildStart = Date.now();
+  const rewrittenShardNames: string[] = [];
+  const removedShardNames: string[] = [];
   let processedRuns = 0;
   let documentCount = 0;
 
@@ -547,13 +563,10 @@ async function runIncrementalHistorySearchRebuild(
   for (const source of [...diff.newRuns, ...diff.changedRuns]) {
     const runManifest = await readManifestSafe(source.manifestPath);
     const manifestKey = path.resolve(source.manifestPath);
+    const shardPath = getDocumentsShardPath(indexDir, source.manifestPath);
     if (!runManifest) {
-      await fs.promises.rm(
-        getDocumentsShardPath(indexDir, source.manifestPath),
-        {
-          force: true,
-        }
-      );
+      await fs.promises.rm(shardPath, { force: true });
+      removedShardNames.push(path.basename(shardPath));
       delete indexedRuns[manifestKey];
       processedRuns += 1;
       continue;
@@ -575,10 +588,8 @@ async function runIncrementalHistorySearchRebuild(
       source.workflowKey,
       source.runRef
     );
-    await writeDocumentsShardAtomically(
-      getDocumentsShardPath(indexDir, source.manifestPath),
-      documents
-    );
+    await writeDocumentsShardAtomically(shardPath, documents);
+    rewrittenShardNames.push(path.basename(shardPath));
     documentCount += documents.length;
     indexedRuns[manifestKey] = await buildIndexedRunEntry(source, runManifest);
     processedRuns += 1;
@@ -592,9 +603,12 @@ async function runIncrementalHistorySearchRebuild(
   }
 
   for (const removedManifestPath of diff.removedManifestPaths) {
-    await fs.promises.rm(getDocumentsShardPath(indexDir, removedManifestPath), {
-      force: true,
-    });
+    const removedShardPath = getDocumentsShardPath(
+      indexDir,
+      removedManifestPath
+    );
+    await fs.promises.rm(removedShardPath, { force: true });
+    removedShardNames.push(path.basename(removedShardPath));
     delete indexedRuns[removedManifestPath];
   }
 
@@ -612,6 +626,7 @@ async function runIncrementalHistorySearchRebuild(
   Log.info(
     `[HistorySearchIndexService] incremental rebuild complete: newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length} processedRuns=${processedRuns}/${touchedRuns} documents=${documentCount} totalMs=${Date.now() - rebuildStart}`
   );
+  return { rewrittenShardNames, removedShardNames };
 }
 
 export async function listRunSources(
