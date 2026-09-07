@@ -2,13 +2,14 @@ import {
   INHERIT_DEFAULT_OPTION,
   PRIOR_CONTEXT_SELECTION_MODES,
 } from "@root/types/DashboardConstants";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useId, useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import { dropdownBorderClass } from "@utils/dropdownValidation";
+import { Icon } from "./Icon";
 
 interface PriorContextSelectProps {
   id?: string;
@@ -95,6 +96,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   dropdownMaxHeight = "60vh",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `prior-context-listbox-${reactId.replace(/:/g, "")}`;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
@@ -239,15 +244,26 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
+          aria-label="Prior context"
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          aria-controls={listboxId}
           className="fp-select-trigger fp-dropdown-row"
         >
           <span className="truncate">{buttonLabel}</span>
-          <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
+          <Icon
+            name={`chevron-${isOpen ? "up" : "down"}`}
+            className="text-xxs flex-shrink-0 ml-1"
           />
         </button>
 
-        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+        <DropdownPortal
+          isOpen={isOpen}
+          popupPos={popupPos}
+          ref={popupRef}
+          id={listboxId}
+          role="listbox"
+        >
           <div className="overflow-y-auto min-h-0 flex-1">
             {keywords.map((k) => {
               const isSelected = displayMode === k;
@@ -266,8 +282,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                       : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
                   }`}
                 >
-                  <i
-                    className={`codicon codicon-check text-xxs flex-shrink-0 ${
+                  <Icon
+                    name="check"
+                    className={`text-xxs flex-shrink-0 ${
                       isSelected ? "visible" : "invisible"
                     }`}
                   />

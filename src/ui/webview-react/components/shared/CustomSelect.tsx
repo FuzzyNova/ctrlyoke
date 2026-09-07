@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useId, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
@@ -8,6 +8,7 @@ import {
   dropdownBorderClass,
   dropdownWarningClass,
 } from "@utils/dropdownValidation";
+import { Icon } from "./Icon";
 
 export interface SelectOption {
   value: string;
@@ -101,6 +102,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   warningId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `custom-select-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -209,7 +214,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 }}
                 className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
               >
-                <i className="codicon codicon-eye-closed text-xs" />
+                <Icon name="eye-closed" className="text-xs" />
               </button>
             )}
           </div>
@@ -236,7 +241,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 }}
                 className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
               >
-                <i className="codicon codicon-eye text-xs" />
+                <Icon name="eye" className="text-xs" />
               </button>
               {/* Clicking label: select AND unhide */}
               <button
@@ -295,14 +300,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         onClick={handleToggle}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
         aria-label={triggerAriaLabel}
         aria-describedby={warning ? warningId : undefined}
         title={triggerTitle}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
-        <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
+        <Icon
+          name={`chevron-${isOpen ? "up" : "down"}`}
+          className="text-xxs flex-shrink-0 ml-1"
         />
       </button>
       {warning && (
@@ -310,16 +317,19 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           id={warningId}
           className={`text-xxs mt-0.5 flex items-start gap-1 ${dropdownWarningClass(warning)}`}
         >
-          <i
-            className="codicon codicon-warning mt-px flex-shrink-0"
-            aria-hidden="true"
-          />
+          <Icon name="warning" className="mt-px flex-shrink-0" />
           {warning}
         </span>
       )}
 
       {!disabled && (
-        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+        <DropdownPortal
+          isOpen={isOpen}
+          popupPos={popupPos}
+          ref={popupRef}
+          id={listboxId}
+          role="listbox"
+        >
           {scrollableList}
           {toggleBar()}
         </DropdownPortal>

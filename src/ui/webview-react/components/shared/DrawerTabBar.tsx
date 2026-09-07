@@ -7,6 +7,8 @@ import { SegmentedTabBar } from "./SegmentedTabBar";
 interface DrawerTabBarProps {
   activeTab: DrawerPage;
   onTabChange: (id: DrawerPage) => void;
+  /** Accessible name for this tablist. */
+  ariaLabel: string;
   /**
    * Active harness ID — renders HarnessIcon on the Harness tab instead of a codicon.
    * When omitted, the Harness tab falls back to `codicon-robot`.
@@ -23,6 +25,7 @@ interface DrawerTabBarProps {
 export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
   activeTab,
   onTabChange,
+  ariaLabel,
   harnessId,
   tabOverrides,
   className,
@@ -32,6 +35,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
       tabs={DRAWER_TABS}
       activeTab={activeTab}
       onTabChange={onTabChange}
+      ariaLabel={ariaLabel}
       harnessId={harnessId}
       tabOverrides={tabOverrides}
       className={className}

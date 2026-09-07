@@ -86,6 +86,7 @@ import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+import { Icon } from "../shared/Icon";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -503,6 +504,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-panel h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : ""
       }`}
+      role="region"
+      aria-labelledby="prompt-properties-heading"
       style={{
         transform: isOpen
           ? "translateY(0)"
@@ -513,11 +516,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg">
         <div className="flex items-center gap-2">
-          <h3 className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground">
-            <i
-              className="codicon codicon-settings text-xs leading-none"
-              aria-hidden="true"
-            />
+          <h3
+            id="prompt-properties-heading"
+            className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground"
+          >
+            <Icon name="settings" className="text-xs leading-none" />
             <span>Prompt Properties</span>
           </h3>
           <button
@@ -527,7 +530,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             title="Reset all to inherit"
             aria-label="Reset all to inherit"
           >
-            <i className="codicon codicon-debug-restart text-xs" />
+            <Icon name="debug-restart" className="text-xs" />
           </button>
         </div>
         <ExitButton
@@ -556,6 +559,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <HarnessDropdown
                   id="prop-harness"
+                  triggerAriaLabel="Harness"
                   value={properties.harness ?? INHERIT_DEFAULT_OPTION}
                   onChange={handleHarnessChange}
                   showDefault={true}
@@ -588,6 +592,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-model"
+                  triggerAriaLabel="Model"
                   value={properties.model ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
@@ -634,6 +639,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-agent"
+                  triggerAriaLabel="Agent"
                   value={
                     properties.agent === undefined
                       ? INHERIT_DEFAULT_OPTION
@@ -681,6 +687,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   Skills
                 </label>
                 <SkillsSelect
+                  id="prop-skills"
+                  triggerAriaLabel="Skills"
                   value={properties.skills as string[] | null | undefined}
                   onChange={(v) => setProperty(PROMPT_PROPERTIES.SKILLS, v)}
                   availableSkills={availableSkills.map((s) => ({
@@ -705,6 +713,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-additional-args-mode"
+                  triggerAriaLabel="Additional Args"
                   value={additionalArgsMode}
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
@@ -787,6 +796,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-execution-mode"
+                  triggerAriaLabel="Execution Mode"
                   value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
@@ -826,6 +836,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-resume-session"
+                  triggerAriaLabel="Resume Session"
                   value={
                     properties.resumeSession === undefined
                       ? INHERIT_DEFAULT_OPTION
@@ -918,7 +929,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 title="Dry Run Step"
                 aria-label="Dry Run Step"
               >
-                <i className="codicon codicon-telescope" aria-hidden="true" />
+                <Icon name="telescope" />
               </button>
             </div>
             {/* Pre-Condition Section */}
@@ -932,6 +943,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-pre-condition-mode"
+                triggerAriaLabel="Pre-Condition"
                 value={preConditionMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -984,6 +996,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-end-condition-mode"
+                triggerAriaLabel="End Condition"
                 value={endConditionMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -1033,6 +1046,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-error-behavior-mode"
+                triggerAriaLabel="Error Behavior"
                 value={errorBehaviorMode}
                 onChange={(v) => {
                   if (v === PROPERTY_EDITOR_MODES.INHERIT) {
@@ -1095,6 +1109,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-permission-mode"
+                  triggerAriaLabel="Permission Mode"
                   value={
                     properties.toolPermissions === undefined
                       ? INHERIT_DEFAULT_OPTION

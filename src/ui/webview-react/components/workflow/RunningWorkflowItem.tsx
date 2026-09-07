@@ -25,6 +25,7 @@ import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
+import { Icon } from "../shared/Icon";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
@@ -111,6 +112,14 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
   const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
   const isActivelyTiming = isRunning || isPausing;
+  const accessibleName = composeRowAccessibleName([
+    workflow.workflowName,
+    workflow.executionState,
+    workflow.totalSteps > 0 &&
+      `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
+    workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
+    hasActiveTerminal && "terminal session is still running",
+  ]);
 
   const [elapsed, setElapsed] = useState(() =>
     formatElapsed(
@@ -187,7 +196,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   );
 
   return (
-    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
@@ -198,6 +207,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           getContextMenuOpener(event.currentTarget, event.target)
         );
       }}
+      role="listitem"
+      aria-label={accessibleName}
       // Padding matches the recent rows below exactly — the two regions are
       // separate scroll containers, so any difference in row padding offsets
       // every column between them.
@@ -213,14 +224,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         onClick={onClick}
         // Deliberately excludes `elapsed` — it ticks every second, and an
         // accessible name that changes on a timer re-announces the row.
-        ariaLabel={composeRowAccessibleName([
-          workflow.workflowName,
-          workflow.executionState,
-          workflow.totalSteps > 0 &&
-            `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
-          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
-          hasActiveTerminal && "terminal session is still running",
-        ])}
+        ariaLabel={accessibleName}
         harness={
           workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />
@@ -245,8 +249,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         worktree={workflow.worktree}
         glyph={
           hasActiveTerminal && (
-            <i
-              className="codicon codicon-terminal"
+            <Icon
+              name="terminal"
               title="Terminal session is still running"
               aria-label="Terminal session is still running"
             />
@@ -300,7 +304,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   onKeyDown={(e) => e.stopPropagation()}
                   className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
-                  <i className="codicon codicon-debug-pause" />
+                  <Icon name="debug-pause" />
                 </button>
               ) : isPausing ? (
                 <button
@@ -314,7 +318,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   onKeyDown={(e) => e.stopPropagation()}
                   className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
-                  <i className="codicon codicon-debug-continue" />
+                  <Icon name="debug-continue" />
                 </button>
               ) : (
                 <button
@@ -328,7 +332,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   onKeyDown={(e) => e.stopPropagation()}
                   className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
                 >
-                  <i className="codicon codicon-debug-continue" />
+                  <Icon name="debug-continue" />
                 </button>
               )}
 
@@ -343,7 +347,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
               >
-                <i className="codicon codicon-debug-stop" />
+                <Icon name="debug-stop" />
               </button>
             </>
           )

@@ -3,6 +3,7 @@ import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { Icon } from "../shared/Icon";
 
 /**
  * Last-resort dismissal if STARTUP_COMPLETE never arrives at all.
@@ -105,10 +106,10 @@ export const StartupOverlay: React.FC = () => {
     >
       {workspaceInitRequired ? (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center px-4">
-          <i
-            className="codicon codicon-new-folder text-description-fg opacity-80"
+          <Icon
+            name="new-folder"
+            className="text-description-fg opacity-80"
             style={{ fontSize: 32 }}
-            aria-hidden="true"
           />
           <span className="text-sm font-medium text-foreground select-none">
             Initialize ctrlyoke here?
@@ -165,10 +166,10 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
 
   return (
     <div className="flex flex-col items-center gap-4 max-w-sm text-center px-4">
-      <i
-        className="codicon codicon-editor-layout text-description-fg opacity-80"
+      <Icon
+        name="editor-layout"
+        className="text-description-fg opacity-80"
         style={{ fontSize: 32 }}
-        aria-hidden="true"
       />
       <span className="text-sm font-medium text-foreground select-none">
         One quick tip

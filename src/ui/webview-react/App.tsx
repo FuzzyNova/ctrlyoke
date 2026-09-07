@@ -1,6 +1,5 @@
 import {
   DOCUMENT_VISIBILITY_STATES,
-  KEYBOARD_KEYS,
   MOBILE_STEPS_MODES,
 } from "@root/types/DashboardConstants";
 import { useEffect, useRef, useState } from "react";
@@ -505,7 +504,7 @@ function App() {
         <HarnessPreflightPanel />
 
         {/* Main area — relative container for absolute overlays */}
-        <div className="flex-1 relative overflow-hidden flex flex-col">
+        <main className="flex-1 relative overflow-hidden flex flex-col">
           {allMobileCenterCollapsed ? (
             /* Both collapsed: plain flex stack of the two collapsed bars */
             <div className="flex flex-col flex-1 relative bg-editor-bg">
@@ -623,10 +622,12 @@ function App() {
                             : undefined
                         }
                       >
-                        <WorkflowStepsPanel
-                          onRequestSidebar={handlePromptsRequestSidebar}
-                          onRequestClose={handlePromptsRequestClose}
-                        />
+                        <nav className="h-full" aria-label="Workflow steps">
+                          <WorkflowStepsPanel
+                            onRequestSidebar={handlePromptsRequestSidebar}
+                            onRequestClose={handlePromptsRequestClose}
+                          />
+                        </nav>
                       </div>
                     )}
                   </div>
@@ -687,16 +688,11 @@ function App() {
             <>
               {/* Backdrop — tap outside closes (hidden while closing) */}
               {!settingsOverlayClosing && (
-                <div
-                  className="absolute inset-0 z-overlay"
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
+                  className="absolute inset-0 z-overlay appearance-none border-0 bg-transparent p-0"
                   aria-label="Close settings"
                   onClick={handleSettingsRequestClose}
-                  onKeyDown={(e) => {
-                    if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ")
-                      handleSettingsRequestClose();
-                  }}
                 />
               )}
               <div
@@ -728,7 +724,7 @@ function App() {
           {/* Workflow switch overlay — covers panels (not the header) while an
               addressed cross-lineage switch is loading its snapshot */}
           <WorkflowSwitchOverlay />
-        </div>
+        </main>
 
         {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
         <StartupOverlay />
@@ -767,7 +763,7 @@ function App() {
       <HarnessPreflightPanel />
 
       {/* Main layout: relative container enables GlobalSettingsDrawer overlay */}
-      <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+      <main className="flex-1 relative overflow-hidden flex flex-col min-h-0">
         {/* Prompts (left) | Output/Editor (center) | Settings (right) */}
         <Group
           groupRef={desktop.horizontalGroupRef}
@@ -805,7 +801,9 @@ function App() {
               }
             }}
           >
-            <WorkflowStepsPanel />
+            <nav className="h-full" aria-label="Workflow steps">
+              <WorkflowStepsPanel />
+            </nav>
           </Panel>
 
           <Separator className={SEPARATOR_VERTICAL} />
@@ -982,7 +980,7 @@ function App() {
         {/* Workflow switch overlay — covers panels (not the header) while an
             addressed cross-lineage switch is loading its snapshot */}
         <WorkflowSwitchOverlay />
-      </div>
+      </main>
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
       <StartupOverlay />

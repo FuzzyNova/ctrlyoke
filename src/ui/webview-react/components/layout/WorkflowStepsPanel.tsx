@@ -95,6 +95,7 @@ import {
   isStepDragId,
   stepDragId,
 } from "@utils/dndKit";
+import { Icon } from "../shared/Icon";
 
 type PendingDragContainer = {
   id: string;
@@ -1322,7 +1323,10 @@ const WorkflowStepsPanelInner: React.FC<{
       >
         {/* Left: collapse chevron (desktop) OR collapse-to-sidebar arrow (mobile fullwidth) */}
         {!isMobileMode && (
-          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
+          <Icon
+            name="chevron-right"
+            className="text-xs rotate-90 transition-transform duration-150"
+          />
         )}
         {onRequestSidebar && (
           <button
@@ -1334,10 +1338,10 @@ const WorkflowStepsPanelInner: React.FC<{
             title="Collapse to sidebar"
             aria-label="Collapse steps to sidebar"
           >
-            <i className="codicon codicon-chevron-left text-xs" />
+            <Icon name="chevron-left" className="text-xs" />
           </button>
         )}
-        <i className="codicon codicon-list-ordered text-sm ml-1" />
+        <Icon name="list-ordered" className="text-sm ml-1" />
         <span className="text-xs font-semibold uppercase tracking-wide ml-1.5">
           Steps
         </span>

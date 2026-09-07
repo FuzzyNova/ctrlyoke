@@ -192,7 +192,9 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
 
-    const mainButton = screen.getByTitle("Click to edit workflow name");
+    const mainButton = screen.getByRole("button", {
+      name: "Edit workflow name",
+    });
     expect(within(mainButton).getByText("My Workflow")).toBeInTheDocument();
     expect(within(mainButton).queryByText("CLI")).not.toBeInTheDocument();
     expect(mainButton).toHaveClass("min-w-0");
@@ -262,7 +264,9 @@ describe("WorkflowStatus — loaded state", () => {
     ]);
 
     render(<WorkflowStatus />);
-    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Copy Run Directory Path" })
     );
@@ -297,7 +301,9 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Copy Run Directory Path" })
     );
@@ -320,14 +326,16 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    const splitButton = document.querySelector(".workflow-split-button")!;
-    fireEvent.contextMenu(splitButton);
+    const mainButton = screen.getByRole("button", {
+      name: "Edit workflow name",
+    });
+    fireEvent.contextMenu(mainButton);
     fireEvent.click(
       screen.getByRole("button", { name: "Duplicate Workflow…" })
     );
 
     expect(useUiStore.getState().duplicateWorkflowDialogData?.invoker).toBe(
-      splitButton.querySelector(".workflow-button-main")
+      mainButton
     );
   });
 
@@ -340,7 +348,7 @@ describe("WorkflowStatus — loaded state", () => {
     );
     render(<WorkflowStatus />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
+    fireEvent.contextMenu(screen.getByRole("listitem", { name: /Recent 0/ }));
 
     expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
   });
@@ -359,7 +367,9 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     const favoriteMenuItem = screen.getByRole("button", {
       name: "Add to Favorites",
     });
@@ -386,7 +396,9 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
 
     expect(postMessageSpy).toHaveBeenCalledWith({
@@ -429,7 +441,9 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
+    fireEvent.contextMenu(
+      screen.getByRole("listitem", { name: /Some Other Workflow/ })
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
 
     expect(postMessageSpy).toHaveBeenCalledWith({
@@ -515,7 +529,9 @@ describe("WorkflowStatus — loaded state", () => {
     render(<WorkflowStatus />);
     // jsdom always reports 0-width elements, so isNarrow=true and the badge
     // renders an icon with the state as a title rather than visible text.
-    expect(screen.getByTitle(EXECUTION_STATES.RUNNING)).toBeInTheDocument();
+    expect(
+      screen.getByRole("status", { name: EXECUTION_STATES.RUNNING })
+    ).toBeInTheDocument();
   });
 
   it("does not show state badge when idle", () => {
@@ -568,14 +584,18 @@ describe("WorkflowStatus — loaded state", () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
     // The main button's accessible name is the workflow name text content
-    await user.click(screen.getByTitle("Click to edit workflow name"));
+    await user.click(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 
   it("pressing Enter in edit mode sends UPDATE_WORKFLOW_NAME", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
-    await user.click(screen.getByTitle("Click to edit workflow name"));
+    await user.click(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     const input = screen.getByRole("textbox");
     await user.clear(input);
     await user.type(input, "New Name{Enter}");
@@ -597,7 +617,9 @@ describe("WorkflowStatus — loaded state", () => {
       displayedDescriptorRevision: 5,
     });
     render(<WorkflowStatus />);
-    await user.click(screen.getByTitle("Click to edit workflow name"));
+    await user.click(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     const input = screen.getByRole("textbox");
     await user.clear(input);
     await user.type(input, "Renamed Run{Enter}");
@@ -619,7 +641,9 @@ describe("WorkflowStatus — loaded state", () => {
   it("pressing Escape cancels edit without sending message", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
-    await user.click(screen.getByTitle("Click to edit workflow name"));
+    await user.click(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
     const input = screen.getByRole("textbox");
     await user.clear(input);
     await user.type(input, "Cancelled{Escape}");
@@ -661,7 +685,7 @@ describe("WorkflowStatus — loaded state", () => {
 
     expect(screen.getAllByText("Pausing Workflow").length).toBeGreaterThan(0);
     expect(
-      document.querySelector(".running-workflow-item")
+      screen.getByRole("listitem", { name: /Pausing Workflow/ })
     ).toBeInTheDocument();
   });
 
@@ -693,15 +717,18 @@ describe("WorkflowStatus — loaded state", () => {
 
     // The pinned running region exists and holds the running row — never the
     // recent scroll container, so it stays visible regardless of recent scroll.
-    const runningRegion = document.querySelector(".running-workflows-region");
-    expect(runningRegion).toBeInTheDocument();
+    const runningRegion = screen.getByRole("region", {
+      name: "Running workflows",
+    });
     expect(
-      runningRegion?.querySelector(".running-workflow-item")
+      within(runningRegion as HTMLElement).getByRole("listitem", {
+        name: /Running Workflow/,
+      })
     ).toBeInTheDocument();
     expect(
-      document
-        .querySelector(".workflow-menu-items")
-        ?.querySelector(".running-workflow-item")
+      within(
+        screen.getByRole("list", { name: "Recent workflows" })
+      ).queryByRole("listitem", { name: /Running Workflow/ })
     ).toBeNull();
   });
 
@@ -746,9 +773,11 @@ describe("WorkflowStatus — loaded state", () => {
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
-      document.querySelector(".running-workflow-item")
+      screen.getByRole("listitem", { name: /Continued Workflow/ })
     ).toBeInTheDocument();
-    expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(0);
+    expect(
+      screen.queryAllByRole("listitem", { name: /Continued Workflow/ })
+    ).toHaveLength(1);
   });
 
   // The pinned region is earned by executing here, not by execution state
@@ -800,16 +829,15 @@ describe("WorkflowStatus — loaded state", () => {
       await openDropdown();
 
       expect(
-        document.querySelector(".running-workflows-region")
-      ).not.toBeInTheDocument();
-      expect(
-        document.querySelector(".running-workflow-item")
+        screen.queryByRole("region", { name: "Running workflows" })
       ).not.toBeInTheDocument();
       // It is still reachable — as an ordinary lineage row carrying the
       // paused state read off disk.
-      const recentRows = document.querySelectorAll(".workflow-menu-item");
-      expect(recentRows).toHaveLength(1);
-      expect(recentRows[0]).toHaveTextContent("Paused Workflow");
+      expect(
+        within(
+          screen.getByRole("list", { name: "Recent workflows" })
+        ).getAllByRole("listitem", { name: /Paused Workflow/ })
+      ).toHaveLength(1);
     });
 
     it("keeps a workflow pinned after it pauses, once it has executed here", async () => {
@@ -819,21 +847,30 @@ describe("WorkflowStatus — loaded state", () => {
 
       await openDropdown();
       expect(
-        document.querySelector(".running-workflow-item")
+        within(
+          screen.getByRole("region", { name: "Running workflows" })
+        ).getByRole("listitem", { name: /Paused Workflow/ })
       ).toBeInTheDocument();
 
       act(() => {
         useUiStore.getState().updateLoadedWorkflow(pausedSummary("paused"));
       });
 
-      const runningRegion = document.querySelector(".running-workflows-region");
-      expect(runningRegion).toBeInTheDocument();
+      const runningRegion = screen.getByRole("region", {
+        name: "Running workflows",
+      });
       expect(
-        runningRegion?.querySelector(".running-workflow-item")
+        within(runningRegion as HTMLElement).getByRole("listitem", {
+          name: /Paused Workflow/,
+        })
       ).toBeInTheDocument();
       // Still exactly one row for the lineage — the pinned row suppresses the
       // recent row rather than doubling it.
-      expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(0);
+      expect(
+        within(
+          screen.getByRole("list", { name: "Recent workflows" })
+        ).queryAllByRole("listitem", { name: /Paused Workflow/ })
+      ).toHaveLength(0);
     });
 
     it("releases the pinned row when a stale external-owner summary reaches a terminal state", async () => {
@@ -844,7 +881,9 @@ describe("WorkflowStatus — loaded state", () => {
 
       await openDropdown();
       expect(
-        document.querySelector(".running-workflow-item")
+        within(
+          screen.getByRole("region", { name: "Running workflows" })
+        ).getByRole("listitem", { name: /Paused Workflow/ })
       ).toBeInTheDocument();
 
       act(() => {
@@ -855,9 +894,10 @@ describe("WorkflowStatus — loaded state", () => {
       });
 
       expect(
-        document.querySelector(".running-workflow-item")
-      ).not.toBeInTheDocument();
-      expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(1);
+        within(
+          screen.getByRole("list", { name: "Recent workflows" })
+        ).getByRole("listitem", { name: /Paused Workflow/ })
+      ).toBeInTheDocument();
     });
   });
 
@@ -991,9 +1031,12 @@ describe("WorkflowStatus — loaded state", () => {
     await user.click(
       // Row buttons carry an explicit accessible name covering the whole row
       // (name, state, steps, time), so match the identity prefix.
-      within(screen.getByTitle("test-0")).getByRole("button", {
-        name: /^My Workflow\b/,
-      })
+      within(screen.getByRole("listitem", { name: /My Workflow/ })).getByRole(
+        "button",
+        {
+          name: /^My Workflow\b/,
+        }
+      )
     );
 
     expect(postMessageSpy).not.toHaveBeenCalledWith({
@@ -1034,7 +1077,9 @@ describe("WorkflowStatus — loaded state", () => {
 
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
     await user.click(
-      within(screen.getByTitle("test-1")).getByRole("button", {
+      within(
+        screen.getByRole("listitem", { name: /Another Workflow/ })
+      ).getByRole("button", {
         name: /^Another Workflow\b/,
       })
     );
@@ -1092,7 +1137,9 @@ describe("WorkflowStatus — loaded state", () => {
       ]);
     });
 
-    expect(screen.getByTitle("test-0")).toHaveClass("fp-dropdown-row-selected");
+    expect(screen.getByRole("listitem", { name: /My Workflow/ })).toHaveClass(
+      "fp-dropdown-row-selected"
+    );
   });
 
   it("sorts favorite workflows to the top of recent workflows", async () => {
@@ -1224,9 +1271,9 @@ describe("WorkflowStatus — loaded state", () => {
     await user.click(screen.getByRole("button", { name: /Show workflows/i }));
 
     expect(
-      within(screen.getByTitle("Click to edit workflow name")).queryByLabelText(
-        "Terminal session is still running"
-      )
+      within(
+        screen.getByRole("button", { name: "Edit workflow name" })
+      ).queryByLabelText("Terminal session is still running")
     ).not.toBeInTheDocument();
     expect(
       screen.getAllByLabelText("Terminal session is still running").length
@@ -1253,9 +1300,9 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     expect(
-      within(screen.getByTitle("Click to edit workflow name")).getByLabelText(
-        "Terminal session is still running"
-      )
+      within(
+        screen.getByRole("button", { name: "Edit workflow name" })
+      ).getByLabelText("Terminal session is still running")
     ).toBeInTheDocument();
     getBoundingClientRect.mockRestore();
   });

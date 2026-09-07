@@ -61,6 +61,7 @@ import {
   PauseBoundary,
 } from "./ExecutingStepHighlight";
 import { isStepExecutionLocked } from "./ParallelGroupPanel";
+import { Icon } from "../shared/Icon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -110,18 +111,11 @@ function ChipContent({
 }: ChipProps) {
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
-    <div
+    <button
+      type="button"
       data-workflow-chip-index={stepIndex}
-      className="relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
-      role="button"
-      tabIndex={0}
+      className="relative flex w-full appearance-none flex-col border-0 border-b border-panel-border bg-transparent px-1 py-1 text-left font-inherit text-inherit transition-colors hover:bg-toolbar-hover-bg"
       onClick={onChipClick}
-      onKeyDown={(e) => {
-        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
-          e.preventDefault();
-          onChipClick();
-        }
-      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -129,6 +123,7 @@ function ChipContent({
       }}
       {...longPressHandlers}
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
+      aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
     >
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {isExecuting && (
@@ -154,10 +149,11 @@ function ChipContent({
           <StatusIcon status={status} className="!text-base" />
         </div>
         <div className="flex h-3 items-center justify-start">
-          <i
-            className={`codicon ${getStepKindIconClass(
+          <Icon
+            name={getStepKindIconClass(
               isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
-            )} text-xs text-description-fg`}
+            )}
+            className="text-xs text-description-fg"
           />
         </div>
       </div>
@@ -186,7 +182,7 @@ function ChipContent({
           />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -214,17 +210,10 @@ function FinalStepChip({
   const borderBarClass = stepColor ? "" : getChipBorderClass(status);
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
-    <div
-      className="relative flex flex-col px-1 h-10 items-center justify-center border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer overflow-hidden"
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
+      className="relative flex h-10 appearance-none flex-col items-center justify-center overflow-hidden border-0 border-t-2 border-panel-border bg-transparent px-1 text-inherit transition-colors hover:bg-toolbar-hover-bg"
       onClick={onChipClick}
-      onKeyDown={(e) => {
-        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
-          e.preventDefault();
-          onChipClick();
-        }
-      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -232,6 +221,7 @@ function FinalStepChip({
       }}
       {...longPressHandlers}
       title="Final Step — right-click for options"
+      aria-label="Final step"
     >
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
       {/* Left status border bar */}
@@ -256,7 +246,7 @@ function FinalStepChip({
           className="text-base"
         />
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -476,20 +466,19 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Header: chevron + list icon stacked, expands to full panel on click */}
-      <div
-        className="flex flex-col items-center justify-center py-1.5 flex-shrink-0 border-b border-panel-border cursor-pointer hover:bg-toolbar-hover-bg transition-colors select-none"
+      <button
+        type="button"
+        className="flex flex-shrink-0 appearance-none flex-col items-center justify-center border-0 border-b border-panel-border bg-transparent p-0 py-1.5 transition-colors hover:bg-toolbar-hover-bg"
         onClick={onExpand}
-        role="button"
-        tabIndex={0}
         aria-label="Expand prompts"
         title="Expand prompts"
-        onKeyDown={(e) => {
-          if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") onExpand();
-        }}
       >
-        <i className="codicon codicon-chevron-right text-xs text-description-fg" />
-        <i className="codicon codicon-list-ordered text-xs text-description-fg mt-1" />
-      </div>
+        <Icon name="chevron-right" className="text-xs text-description-fg" />
+        <Icon
+          name="list-ordered"
+          className="text-xs text-description-fg mt-1"
+        />
+      </button>
 
       {/* Prompt chips — scrollable, scrollbars hidden */}
       <div
@@ -518,7 +507,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       >
         {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-2">
-            <i className="codicon codicon-dash text-xxs text-description-fg" />
+            <Icon name="dash" className="text-xxs text-description-fg" />
           </div>
         ) : (
           <div className="relative">

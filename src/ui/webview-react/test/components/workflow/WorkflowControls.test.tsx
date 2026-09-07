@@ -60,8 +60,12 @@ describe("WorkflowControls — dropdown options", () => {
       name: /Open workflow menu/i,
     });
     await user.click(dropdownToggle);
-    expect(screen.getByText(/New From Template/i)).toBeInTheDocument();
-    expect(screen.getByText(/Load from File/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /New From Template/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /Load from File/i })
+    ).toBeInTheDocument();
   });
 
   it("posts NEW_WORKFLOW when 'New From Template' clicked", async () => {
@@ -70,7 +74,9 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
-    await user.click(screen.getByText(/New From Template/i));
+    await user.click(
+      screen.getByRole("option", { name: /New From Template/i })
+    );
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.NEW_WORKFLOW,
     });
@@ -82,7 +88,7 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
-    await user.click(screen.getByText(/Load from File/i));
+    await user.click(screen.getByRole("option", { name: /Load from File/i }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.SELECT_FILE,
     });
@@ -94,9 +100,7 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
-    const queueItem = screen
-      .getByText(/Queue from File/i)
-      .closest("button, [role='option'], li");
+    const queueItem = screen.getByRole("option", { name: /Queue from File/i });
     // The SplitButton option with disabled:true should render as disabled
     expect(queueItem).toBeDisabled();
   });
@@ -109,7 +113,7 @@ describe("WorkflowControls — dropdown options", () => {
     await user.click(
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
-    await user.click(screen.getByText(/Queue from File/i));
+    await user.click(screen.getByRole("option", { name: /Queue from File/i }));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.APPEND_FILE,
     });
@@ -132,11 +136,13 @@ describe("WorkflowControls — dropdown options", () => {
       screen.getByRole("button", { name: /Open workflow menu/i })
     );
     expect(
-      screen.getByText(/Append and Continue from File/i)
+      screen.getByRole("option", { name: /Append and Continue from File/i })
     ).toBeInTheDocument();
     expect(screen.queryByText(/^Queue from File/i)).not.toBeInTheDocument();
 
-    await user.click(screen.getByText(/Append and Continue from File/i));
+    await user.click(
+      screen.getByRole("option", { name: /Append and Continue from File/i })
+    );
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.APPEND_FILE,
       mutation: {
@@ -162,7 +168,9 @@ describe("WorkflowControls — dropdown options", () => {
     render(<WorkflowControls />);
     const trigger = screen.getByRole("button", { name: /Open workflow menu/i });
     await user.click(trigger);
-    await user.click(screen.getByText(/Duplicate Workflow/i));
+    await user.click(
+      screen.getByRole("option", { name: /Duplicate Workflow/i })
+    );
 
     expect(useUiStore.getState().duplicateWorkflowDialogData?.invoker).toBe(
       trigger

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import {
   WorkflowList,
   type UnifiedWorkflowRow,
@@ -171,6 +177,77 @@ describe("WorkflowList token totals", () => {
       ).not.toHaveAttribute("aria-label", expect.stringMatching(/tokens/));
     }
   );
+});
+
+describe("WorkflowList row action scoping", () => {
+  afterEach(() => cleanup());
+
+  it("resolves repeated actions from the workflow row name", () => {
+    const onToggleFavorite = vi.fn();
+    const onRemove = vi.fn();
+    const makeRecentRow = (
+      key: string,
+      workflowName: string
+    ): UnifiedWorkflowRow => ({
+      kind: WORKFLOW_ROW_KINDS.RECENT,
+      key,
+      workflow: {
+        address: {
+          workflowKey: key as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+        workflowName,
+        executionState: EXECUTION_STATES.COMPLETED,
+        isFavorite: false,
+      },
+    });
+
+    render(
+      <WorkflowList
+        rows={[
+          makeRecentRow("workflow-a", "Workflow A"),
+          makeRecentRow("workflow-b", "Workflow B"),
+        ]}
+        currentAddress={null}
+        activeWorkflowId={null}
+        runningHasActiveTerminal={() => false}
+        onSelectRecent={() => undefined}
+        onSwitchRunning={() => undefined}
+        onPauseRunning={() => undefined}
+        onCancelPauseRunning={() => undefined}
+        onResumeRunning={() => undefined}
+        onStopRunning={() => undefined}
+        onClearHistory={() => undefined}
+        onToggleFavorite={onToggleFavorite}
+        onRemove={onRemove}
+      />
+    );
+
+    const workflowRow = screen.getByRole("listitem", {
+      name: /Workflow A/,
+    });
+    const favoriteButton = within(workflowRow).getByRole("button", {
+      name: "Add to favorites",
+    });
+    const removeButton = within(workflowRow).getByRole("button", {
+      name: "Remove from history",
+    });
+
+    expect(favoriteButton).toBeInTheDocument();
+    expect(removeButton).toBeInTheDocument();
+
+    fireEvent.click(favoriteButton);
+    fireEvent.click(removeButton);
+
+    expect(onToggleFavorite).toHaveBeenCalledWith({
+      workflowKey: "workflow-a",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    });
+    expect(onRemove).toHaveBeenCalledWith({
+      workflowKey: "workflow-a",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    });
+  });
 });
 
 describe("WorkflowList recent row worktree", () => {

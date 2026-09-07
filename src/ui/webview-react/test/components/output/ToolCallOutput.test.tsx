@@ -51,7 +51,9 @@ describe("GenericToolCallOutput", () => {
         /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
       )
     ).toBeInTheDocument();
-    const showParametersButton = screen.getByTitle("Show all parameters");
+    const showParametersButton = screen.getByRole("button", {
+      name: "Show all parameters",
+    });
     expect(showParametersButton).toBeInTheDocument();
     expect(showParametersButton.querySelector("i")).toHaveClass(
       "codicon-unfold"
@@ -62,7 +64,9 @@ describe("GenericToolCallOutput", () => {
     );
 
     await user.click(showParametersButton);
-    const hideParametersButton = screen.getByTitle("Hide parameters");
+    const hideParametersButton = screen.getByRole("button", {
+      name: "Hide parameters",
+    });
     expect(hideParametersButton).toBeInTheDocument();
     expect(hideParametersButton.querySelector("i")).toHaveClass("codicon-fold");
     expect(
@@ -78,9 +82,13 @@ describe("GenericToolCallOutput", () => {
       )
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByText(showMoreLabel));
-    const expandedOutput = screen.getByText(/\[show less\]/i).parentElement;
-    expect(screen.getByText(/\[show less\]/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: showMoreLabel }));
+    const expandedOutput = screen.getByRole("button", {
+      name: /\[show less\]/i,
+    }).parentElement;
+    expect(
+      screen.getByRole("button", { name: /\[show less\]/i })
+    ).toBeInTheDocument();
     expect(expandedOutput?.textContent).toContain(
       `line ${lastVisibleLine + 1}`
     );
@@ -125,13 +133,19 @@ describe("GenericToolCallOutput", () => {
       `error ${lastVisibleLine + 1}`
     );
 
-    await user.click(screen.getByTitle("Show all parameters"));
-    await user.click(screen.getByText(showMoreLabel));
+    await user.click(
+      screen.getByRole("button", { name: "Show all parameters" })
+    );
+    await user.click(screen.getByRole("button", { name: showMoreLabel }));
 
     expect(onExpansionChange).toHaveBeenNthCalledWith(1, "params", true);
     expect(onExpansionChange).toHaveBeenNthCalledWith(2, "error", true);
-    expect(screen.getByTitle("Show all parameters")).toBeInTheDocument();
-    expect(screen.queryByText(/\[show less\]/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show all parameters" })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /\[show less\]/i })
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("subject: output-layout")
     ).not.toBeInTheDocument();
@@ -286,10 +300,13 @@ describe("McpToolCallOutput", () => {
       screen.queryByText("prompt: queue the next step")
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByTitle("Show all parameters"));
+    await user.click(
+      screen.getByRole("button", { name: "Show all parameters" })
+    );
 
-    expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
-    expect(screen.getByText("Hide parameters")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Hide parameters" })
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         (_, element) =>

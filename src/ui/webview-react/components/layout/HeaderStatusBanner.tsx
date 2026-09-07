@@ -8,6 +8,7 @@ import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternal
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useUiStore } from "@store/uiStore";
+import { Icon } from "../shared/Icon";
 
 export interface HeaderStatusBannerProps {
   isPausing: boolean;
@@ -58,7 +59,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           role="status"
           aria-label={`Workflow "${props.viewingDeletedWorkflow.workflowName}" has been deleted`}
         >
-          <i className="codicon codicon-trash" aria-hidden="true" />
+          <Icon name="trash" />
           <span>
             &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been
             deleted
@@ -79,7 +80,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           role="status"
           aria-label={lockedLabel}
         >
-          <i className="codicon codicon-lock" aria-hidden="true" />
+          <Icon name="lock" />
           <span>
             {lockedLabel}
             {isSystemGeneratedLocked && (
@@ -98,8 +99,12 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
         </div>
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border">
-          <i className="codicon codicon-debug-pause animate-pulse-cancelling" />
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border"
+          role="status"
+          aria-label="Workflow will pause after the current step completes"
+        >
+          <Icon name="debug-pause" className="animate-pulse-cancelling" />
           <span>Workflow will pause after the current step completes</span>
           <button
             className="ml-auto text-xs underline opacity-80 hover:opacity-100"
@@ -119,7 +124,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
             role="status"
             aria-label={`Continuing run from step ${props.pendingRewind.fromStepIndex + 1}`}
           >
-            <i className="codicon codicon-debug-continue" aria-hidden="true" />
+            <Icon name="debug-continue" />
             <span>
               Continuing run from step {props.pendingRewind.fromStepIndex + 1}
             </span>
@@ -127,7 +132,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
               className="inline-flex items-center gap-1 opacity-90 cursor-help"
               title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
             >
-              <i className="codicon codicon-info" aria-hidden="true" />
+              <Icon name="info" />
               Can&apos;t be undone after continuing
             </span>
             <div className="ml-auto flex items-center gap-3">

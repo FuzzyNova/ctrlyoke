@@ -1,3 +1,4 @@
+import { Icon } from "../shared/Icon";
 interface Tab {
   id: string;
   label: string;
@@ -27,6 +28,7 @@ export function GlobalSettingsVerticalTabBar({
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
           title={tab.label}
+          aria-label={tab.label}
           className={`flex items-center gap-2 py-2 text-sm text-left w-full
             border-l-2 transition-colors
             ${iconOnly ? "justify-center px-0" : "px-3"}
@@ -37,7 +39,7 @@ export function GlobalSettingsVerticalTabBar({
             }`}
         >
           <span className="relative shrink-0">
-            <span className={`codicon ${tab.icon} text-base`} />
+            <Icon name={tab.icon} className="text-base" />
             {tab.indicator && (
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-indicator-success" />
             )}

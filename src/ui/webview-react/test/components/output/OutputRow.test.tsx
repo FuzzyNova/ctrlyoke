@@ -1335,7 +1335,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
         />
       );
 
-      fireEvent.click(screen.getByText("[show less]"));
+      fireEvent.click(screen.getByRole("button", { name: "[show less]" }));
 
       expect(onScriptOutputExpansionChange).toHaveBeenCalledWith(
         "row-script-output",

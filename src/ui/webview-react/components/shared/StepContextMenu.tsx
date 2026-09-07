@@ -1,6 +1,7 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "./Icon";
 
 export type StepContextMenuItem = {
   label: string;
@@ -118,7 +119,7 @@ export function StepContextMenu({
               item.onClick();
             }}
           >
-            <i className={`codicon ${item.icon} text-xxs`} />
+            <Icon name={item.icon} className="text-xxs" />
             {item.label}
           </button>
         )

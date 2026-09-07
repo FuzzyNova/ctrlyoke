@@ -2,6 +2,7 @@ import React from "react";
 import { HarnessIcon } from "./HarnessIcon";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "./tabBadgeUtils";
+import { Icon } from "./Icon";
 
 export interface SegmentedTab<Id extends string> {
   id: Id;
@@ -16,6 +17,8 @@ export interface SegmentedTabBarProps<Id extends string> {
   tabs: readonly SegmentedTab<Id>[];
   activeTab: Id;
   onTabChange: (id: Id) => void;
+  /** Accessible name for this tablist. */
+  ariaLabel: string;
   /** Active harness ID for tabs without a codicon. */
   harnessId?: HarnessId;
   /** Per-tab icon/color overrides driven by resolved property state. */
@@ -28,6 +31,7 @@ export function SegmentedTabBar<Id extends string>({
   tabs,
   activeTab,
   onTabChange,
+  ariaLabel,
   harnessId,
   tabOverrides,
   className,
@@ -38,6 +42,8 @@ export function SegmentedTabBar<Id extends string>({
         className ??
         "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
       }
+      role="tablist"
+      aria-label={ariaLabel}
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
@@ -56,6 +62,9 @@ export function SegmentedTabBar<Id extends string>({
             key={tab.id}
             type="button"
             title={tab.label}
+            aria-label={tab.label}
+            role="tab"
+            aria-selected={isActive}
             className={`fp-tab-hc${isActive ? " fp-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`
@@ -65,17 +74,15 @@ export function SegmentedTabBar<Id extends string>({
           >
             {codicon ? (
               <span className="relative inline-flex">
-                <span
-                  className={`codicon codicon-${codicon}`}
-                  style={{ fontSize: 20 }}
-                />
+                <Icon name={codicon} style={{ fontSize: 20 }} />
                 {override?.badgeCodicon ? (
                   <span
                     aria-hidden="true"
                     className="absolute -bottom-1 -right-1 flex h-[13px] w-[13px] items-center justify-center rounded-full bg-sidebar-bg"
                   >
-                    <span
-                      className={`codicon codicon-${override.badgeCodicon} ${override.badgeColor ?? ""}`}
+                    <Icon
+                      name={override.badgeCodicon}
+                      className={override.badgeColor ?? ""}
                       style={{ fontSize: 11 }}
                     />
                   </span>
@@ -90,10 +97,7 @@ export function SegmentedTabBar<Id extends string>({
                 }
               />
             ) : (
-              <span
-                className="codicon codicon-robot"
-                style={{ fontSize: 20 }}
-              />
+              <Icon name="robot" style={{ fontSize: 20 }} />
             )}
           </button>
         );

@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal } from "@components/shared";
+import { Icon } from "../../shared/Icon";
 
 interface ExportOutputModalProps {
   includeCommand: boolean;
@@ -49,12 +50,12 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
         >
           {isStandaloneMode ? (
             <>
-              <i className="codicon codicon-cloud-download mr-1" />
+              <Icon name="cloud-download" className="mr-1" />
               Download
             </>
           ) : (
             <>
-              <i className="codicon codicon-share mr-1" />
+              <Icon name="share" className="mr-1" />
               Export
             </>
           )}

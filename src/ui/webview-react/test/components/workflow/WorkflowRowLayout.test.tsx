@@ -13,6 +13,7 @@ import {
 import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "@/constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { Icon } from "../../../components/shared/Icon";
 
 function renderLayout(
   tier: WorkflowRowTier,
@@ -80,7 +81,7 @@ describe("WorkflowRowLayout", () => {
 
   it("renders the worktree icon beside the row glyph with branch and location tooltip", () => {
     const { container } = renderLayout("stacked", {
-      glyph: <i className="codicon codicon-terminal" />,
+      glyph: <Icon name="terminal" />,
       worktree: {
         branchName: "feature/auth",
         worktreePath: "C:/worktrees/feature-auth",

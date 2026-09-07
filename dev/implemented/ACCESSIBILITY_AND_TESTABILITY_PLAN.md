@@ -34,7 +34,7 @@ Taken from a live hosted dashboard (dev host + Playwright MCP `browser_snapshot`
 | …of those carrying `aria-hidden="true"`                          | **5**                       |
 | Visible buttons whose Playwright accessible name is a bare glyph | **21**                      |
 | `.fp-tab-hc` pseudo-tabs with no `role`/`aria-selected`          | **14** (2 duplicate sets)   |
-| Raw `<i className="codicon …">` in source (excl. tests)          | **357**                     |
+| Raw codicon elements in source (excl. tests)                     | **355** in 103 files        |
 | Shared `<Icon>`/`<Codicon>` component                            | **none — all hand-written** |
 
 Representative snapshot fragments, verbatim:
@@ -146,22 +146,62 @@ entire prompt text is not usable. Both appear in the ground-truth snapshot above
 
 ## Phase 1 — Hide decorative icons (precondition for every later phase)
 
-357 raw `<i className="codicon …">` in source; 5 of 171 live ones are hidden. Until these are
-hidden, adding `aria-label` still works but every un-migrated `title` stays invisible, and no
-exact-name match is reliable.
+**Status:** Complete — `Icon.tsx` and `scripts/codemod-codicon-icon.mjs` are implemented, and
+all webview React components are migrated. **Raw codicons remaining: 0** outside tests. A scoped
+ESLint `no-restricted-syntax` rule now prevents raw codicon JSX from reappearing.
+
+The sweep started with 357 raw `<i className="codicon …">` elements in source; all migrated
+codicons now render through `Icon` with `aria-hidden="true"`, so exact-name matching can proceed
+reliably in later phases.
 
 **Do it once, structurally.** There is no shared icon component today — that is why the attribute
 is missing in 350+ places, and why a one-time sweep would rot immediately. Introduce a primitive:
 
 ```tsx
 // components/shared/Icon.tsx
-export const Icon: React.FC<{ name: string; className?: string }> = ({
-  name,
-  className = "",
-}) => (
-  <i className={`codicon codicon-${name} ${className}`} aria-hidden="true" />
+export interface IconProps {
+  /** Codicon name, with or without the `codicon-` prefix. */
+  name: string;
+  /** Extra classes (size utilities such as `codicon-lg`, colors, spacing). */
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export const Icon: React.FC<IconProps> = ({ name, className, style }) => (
+  <i
+    className={`codicon ${name.startsWith("codicon-") ? name : `codicon-${name}`}${className ? ` ${className}` : ""}`}
+    style={style}
+    aria-hidden="true"
+  />
 );
 ```
+
+The API is wider than it looks because the real call sites are (measured 2026-09-07):
+
+| Call-site shape                                                    | Count |
+| ------------------------------------------------------------------ | ----- |
+| `<i className="codicon codicon-x" />` — fully static               | 48    |
+| `` `codicon codicon-x ${btnSize.icon}` `` — static name + size cls | many  |
+| `` `codicon codicon-${icon}` `` — name from a prop                 | many  |
+| `` `codicon ${iconClass}` `` — whole `codicon-x` class from a map  | many  |
+| `<span className="codicon …" style={{ fontSize: 20 }}>`            | 8     |
+
+So `name` must accept both `"chevron-down"` and `"codicon-chevron-down"` (maps like
+`diffChangeType.ts`, `templateFormat.ts`, `templateScope.ts`, and `constants.ts`’s `btnSize.icon`
+already store the prefixed form), and `className`/`style` must pass through for the size and
+color utilities. **The 8 `<span className="codicon">` sites matter out of proportion to their
+count**: one of them is `SegmentedTabBar`’s tab glyph, i.e. all 14 live pseudo-tabs. `.codicon`
+styling in `globals.css` is class-based (`button .codicon`, `.codicon-sm/-lg/-xl`), not tag-based,
+so normalising every one of them to `<i>` is safe.
+
+**The one escape hatch, and why it is not optional.** `aria-hidden="true"` removes an element from
+the accessibility tree _and takes any `aria-label` on it with it_ — the two cannot coexist. A
+handful of codicons genuinely carry meaning on their own (the diff change-type badge, the prompt
+step `StatusIcon`, the "terminal session is still running" and worktree indicators, the compaction
+count, the "granted by prompt text" lock). Those are not inside a control whose name could carry
+them, so `Icon` promotes them to `role="img"` with the given name and drops `aria-hidden` whenever
+an `aria-label` is passed. Everything else stays hidden. Do not hand-write that combination at a
+call site — pass `aria-label` to `Icon` and let the primitive decide.
 
 Then codemod the raw `<i className="codicon codicon-x" />` usages onto it. This matches the
 project's DRY/single-source principle and makes the guarantee enforceable rather than a
@@ -181,6 +221,18 @@ content and carries meaning — keep an `aria-label` on the **parent control**, 
 ---
 
 ## Phase 2 — Name every control
+
+**Status:** Complete — the remaining dashboard controls are named, including compact
+header/output actions, workspace viewer controls, output actions, shared tabs and
+dropdown triggers, workflow/prompt rows, search controls, and settings actions.
+Existing `title` attributes were preserved, while accessible names were kept stable
+when visible text represents a transient value or status. Tests cover the shared tab
+bar, narrow output tab, and workspace commit-message action using role/name queries.
+
+Deliberately skipped the later semantic and interaction work: changing roles,
+adding `aria-selected`/`aria-pressed`, adding landmarks, changing keyboard parity
+for existing `role="button"` elements, and adding `data-testid` to controls. Those
+remain scoped to Phases 3–7.
 
 **Rule: add `aria-label`; keep `title`.** Do not swap one for the other. 117 existing
 `*ByTitle` queries depend on the `title` attribute, and `title` is still the hover tooltip users
@@ -211,6 +263,10 @@ named "Run" must stay named "Run" whether it is enabled or not; put the "why dis
 
 ## Phase 3 — Make names unique (Playwright strict mode)
 
+**Status:** Complete — repeated workflow and run actions are scoped by named rows, command
+expansion controls are qualified by their command preview, and the two live property tablists
+retain distinct accessible names.
+
 A duplicated name is not a cosmetic issue: `getByRole('button', { name: 'Add to favorites' })`
 **throws** rather than picking one, so an agent cannot act at all. 31 × `Remove from history` and
 26 × `Add to favorites` are the worst offenders.
@@ -232,6 +288,12 @@ distinguishable by container rather than renaming them.
 ---
 
 ## Phase 4 — Real semantics for custom widgets
+
+**Status:** Complete — shared and output tab bars expose named `tablist`/`tab` semantics with
+`aria-selected`; dropdown triggers expose stable listbox relationships and field-level names;
+workflow reset/collapse controls are siblings; and Prompt/Script plus User/Workspace remain
+mutually exclusive `role="group"` toggles with `aria-pressed` because they do not switch
+associated tab panels.
 
 Custom widgets built from `<button>` + CSS classes are invisible as widgets. Selection state
 carried only by a class name cannot be asserted by any test or read by any user.
@@ -259,10 +321,17 @@ carried only by a class name cannot be asserted by any test or read by any user.
 
 ## Phase 5 — Keyboard parity for `role="button"` divs
 
+**Status:** Complete — standalone controls now use native buttons with reset styling;
+final-step/workflow rows and modal backdrops retain `role="button"` because they contain
+nested action buttons, and all remaining custom buttons handle Enter and Space with focusable
+`tabIndex={0}`. UI tests cover Space activation for the converted controls and protected rows.
+
 17 elements carry `role="button"` on a `<div>`/`<span>`. A real `<button>` responds to both Enter
 and Space; these must replicate that or assistive-tech users cannot activate them.
 
-**Affected:** `App.tsx:690`, `layout/EditorSection.tsx:202,306`,
+**Affected** (17 sites; line numbers drift — re-run `grep -rn 'role="button"' src/ui/webview-react --include=*.tsx` to locate them):
+
+`App.tsx:690`, `layout/EditorSection.tsx:202,306`,
 `layout/output-section/OutputSectionHeader.tsx:105`, `layout/OutputSection.tsx:1527`,
 `prompts/FinalStepFooter.tsx:113,185`, `prompts/PromptChipRail.tsx:113,217,479`,
 `prompts/WorkflowStep.tsx:234`, `settings/AgentSkillsManagerSection.tsx:785,843`,
@@ -288,6 +357,14 @@ real buttons inside a focusable row cause sticky mobile-Safari layout drift ther
 
 ## Phase 6 — Landmark regions
 
+**Status:** Complete — the output and prompt-properties panels are named landmarks, the primary
+dashboard layout exposes `main` and workflow-step `nav` landmarks, and all shared modal call sites
+provide a title for their dialog name.
+
+> **Ordering note:** landmarks are a _precondition_ for Phase 3, not a follow-up — a named
+> `region`/`dialog` is what lets a duplicated button name be scoped instead of renamed. Do this
+> phase together with Phase 3, landmarks first.
+
 The live page exposes a `<header>` and two **unlabelled** `<section>` elements — and an unlabelled
 `<section>` is not exposed as a `region` landmark at all, so it contributes nothing to navigation
 or to snapshot scoping. There is no `<main>` and no `<nav>`.
@@ -303,6 +380,10 @@ Playwright agent containers to scope duplicate names against (Phase 3).
 ---
 
 ## Phase 7 — `data-testid` for display-only dynamic values
+
+**Status:** Complete — added `editor-mode`, `inherited-skills-label`, and `run-id-banner` to
+noninteractive display nodes only. The changing execution-state and pause-pending surfaces use
+`role="status"`, following `HeaderStatusBanner.tsx`, instead of test IDs.
 
 Deliberately last, and deliberately narrow. A testid is **invisible to `browser_snapshot`**, so it
 buys nothing for agent-driven testing — it is purely a Vitest convenience for elements that have
@@ -329,8 +410,15 @@ instead); don't copy it.
 
 ## Guardrails
 
+**Status:** Complete — `check:a11y-names` statically rejects unnamed icon-only native or
+`role="button"` controls in webview source, with packaging tests covering the guard. The
+enabled `jsx-a11y` recommended rules were clean under `npm run lint` and are now errors; the
+plugin-disabled `anchor-ambiguous-text` rule remains off, as do the intentional project
+exceptions `label-has-for` and `no-autofocus`. The browser smoke check remains the documented
+`browser_evaluate` recipe below; Playwright is still not a repository dependency.
+
 `eslint-plugin-jsx-a11y` is already installed and wired in `eslint.config.mjs:120-165`, with the
-recommended set mapped to `warn`. **It cannot catch the central defect**: to ESLint's static view,
+enabled recommended set promoted to `error`. **It cannot catch the central defect**: to ESLint's static view,
 `<button title="…"><i className="codicon" /></button>` has children and looks labeled, so
 `control-has-associated-label` stays quiet. The glyph only exists at CSS runtime.
 
@@ -379,7 +467,8 @@ Reproducing the ground-truth numbers takes about a minute and should be redone a
       (c) => c.codePointAt(0) < 0xe000 && !/\s/.test(c)
     );
   });
-  const icons = [...document.querySelectorAll("i.codicon")];
+  // NOT i.codicon — SegmentedTabBar renders its tab glyph as a <span>.
+  const icons = [...document.querySelectorAll(".codicon")];
   return {
     unnamed: glyphOnly.length,
     codiconsUnhidden:
@@ -391,6 +480,8 @@ Reproducing the ground-truth numbers takes about a minute and should be redone a
 
 Baseline on 2026-09-07: `{ unnamed: 21, codiconsUnhidden: 166 }`. Target: `{ 0, 0 }`.
 
+`codiconsUnhidden` is expected to settle at the small number of deliberately meaningful icons that `Icon` renders as `role="img"` (see Phase 1), not literally zero. Those are named, not unnamed — the number to drive to zero is `unnamed`. Any _decorative_ codicon showing up in that count is a regression the ESLint rule should have caught.
+
 Note the dev host writes `server-url.txt` in the _workspace it opened_, and whichever instance
 started most recently wins the file — check the path matches the checkout you meant to test.
 
@@ -398,14 +489,20 @@ started most recently wins the file — check the path matches the checkout you 
 
 ## Test updates
 
-Current suite composition (`src/ui/webview-react/test/**`):
+Current suite composition (`src/ui/webview-react/test/**`), measured with literal pattern counts
+before and after this migration:
 
-| Query style     | Occurrences | Verdict                                         |
-| --------------- | ----------- | ----------------------------------------------- |
-| `*ByRole(`      | 928         | ✅ already the majority — the suite is healthy  |
-| `*ByText(`      | 611         | Mixed — fine for prose, fragile on controls     |
-| `querySelector` | 345         | ❌ CSS-class coupling                           |
-| `*ByTitle(`     | 117         | ⚠️ works today; keep working by keeping `title` |
+| Query style     | Before | After | Result                                                        |
+| --------------- | -----: | ----: | ------------------------------------------------------------- |
+| `*ByRole(`      |    991 |  1173 | ✅ preferred for interactive controls                         |
+| `*ByText(`      |    614 |   567 | ✅ retained for prose and display-only content                |
+| `querySelector` |    350 |   307 | ✅ retained only where structural/presentation assertions fit |
+| `*ByTitle(`     |    110 |    22 | ✅ retained for display-only titles and tooltip coverage      |
+
+The before counts are the checkout baseline captured immediately before the migration; counts use
+`rg -o` over `src/ui/webview-react/test/**`. The remaining CSS and title queries are intentional:
+they assert layout/presentation or display-only metadata rather than locating an interactive
+control.
 
 This is a **convention-and-guardrail problem, not a 30-line cleanup** — the earlier draft of this
 plan listed specific line numbers, all of which have since drifted (and one cited file,
@@ -423,6 +520,11 @@ plan listed specific line numbers, all of which have since drifted (and one cite
 - **`SegmentedTabBar.test.tsx`** should switch to `getByRole('tab', { name })` /
   `toHaveAttribute('aria-selected')` as part of Phase 4 — it currently asserts selection through
   class names, which is exactly the coupling that phase removes.
+
+The migration is complete for the targeted control queries. Production controls that previously
+exposed only a visual `title` now also expose stable `aria-label` names, while their titles remain
+available for hover guidance. Workflow lists, running-workflow regions, dry-run steps, breadcrumbs,
+and secret disclosures now expose semantic names that the unit suite can resolve.
 
 ### Already correct — patterns to copy
 
@@ -454,16 +556,18 @@ plan listed specific line numbers, all of which have since drifted (and one cite
 
 ## Success criteria
 
-Measured with the Verification recipe against a live dev host, not with the unit suite:
+The implementation and unit-test success criteria are now met. The two aggregate accessibility
+metrics still require the Verification recipe against a live dev host; they were not verified by
+the jsdom unit suite:
 
-- `unnamed: 0` — every visible interactive element has a non-empty accessible name
-- `codiconsUnhidden: 0` — every decorative codicon is `aria-hidden`, via the shared `Icon`
-  component rather than 357 hand-written attributes
-- No duplicate accessible name among visible controls that isn't scoped inside a uniquely named
+- ⏳ `unnamed: 0` — requires a live dev-host browser measurement; not verified by the unit suite
+- ⏳ `codiconsUnhidden` down to the handful of deliberately meaningful `role="img"` icons —
+  requires a live dev-host browser measurement; not verified by the unit suite
+- ✅ No duplicate accessible name among visible controls that isn't scoped inside a uniquely named
   `group`/`region`/`listitem`/`dialog`
-- Tab bars expose `tablist`/`tab`/`aria-selected`; toggles expose `aria-pressed`; dropdown
+- ✅ Tab bars expose `tablist`/`tab`/`aria-selected`; toggles expose `aria-pressed`; dropdown
   triggers expose `aria-haspopup`/`aria-expanded` and are named by their field, not their value
-- The prompt editor `textbox` has a stable accessible name
-- All `role="button"` divs handle Space
-- Major panels/drawers are labelled landmarks
-- A lint rule prevents new raw `codicon` `<i>` elements from reappearing
+- ✅ The prompt editor `textbox` has a stable accessible name
+- ✅ All `role="button"` divs handle Space
+- ✅ Major panels/drawers are labelled landmarks
+- ✅ A lint rule prevents new raw `codicon` `<i>` elements from reappearing

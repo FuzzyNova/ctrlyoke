@@ -7,6 +7,7 @@ import {
   workspaceStage,
   workspaceGenerateCommitMessage,
 } from "@utils/hostedApi";
+import { Icon } from "../shared/Icon";
 
 interface WorkspaceCommitAreaProps {
   incomingCommitCount: number;
@@ -175,7 +176,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
             Repository
           </span>
           <div className="relative">
-            <i className="codicon codicon-repo pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+            <Icon
+              name="repo"
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60"
+            />
             <select
               value={selectedRepoId ?? ""}
               onChange={(e) => setSelectedRepoId(e.target.value || null)}
@@ -188,7 +192,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
                 </option>
               ))}
             </select>
-            <i className="codicon codicon-chevron-down pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+            <Icon
+              name="chevron-down"
+              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60"
+            />
           </div>
         </label>
       )}
@@ -197,12 +204,13 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         <button
           onClick={handlePush}
           disabled={pushing}
+          aria-label="Push commits"
           className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pushing ? (
-            <i className="codicon codicon-loading animate-spin" />
+            <Icon name="loading" className="animate-spin" />
           ) : (
-            <i className="codicon codicon-cloud-upload" />
+            <Icon name="cloud-upload" />
           )}
           {formatSyncActionLabel("Push", outgoingCommitCount)}
         </button>
@@ -210,12 +218,13 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         <button
           onClick={handlePull}
           disabled={pulling}
+          aria-label="Pull commits"
           className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
         >
           {pulling ? (
-            <i className="codicon codicon-loading animate-spin" />
+            <Icon name="loading" className="animate-spin" />
           ) : (
-            <i className="codicon codicon-cloud-download" />
+            <Icon name="cloud-download" />
           )}
           {formatSyncActionLabel("Pull", incomingCommitCount)}
         </button>
@@ -259,11 +268,16 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
               ? "Cancel generation"
               : "Generate commit message with ctrlyoke"
           }
+          aria-label={
+            generatingCommitMessage
+              ? "Cancel commit message generation"
+              : "Generate commit message"
+          }
           data-testid="generate-commit-message-btn"
           className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"
         >
           {generatingCommitMessage ? (
-            <i className="codicon codicon-stop-circle" />
+            <Icon name="stop-circle" />
           ) : (
             <i
               aria-hidden="true"
@@ -279,9 +293,9 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {committing ? (
-          <i className="codicon codicon-loading animate-spin" />
+          <Icon name="loading" className="animate-spin" />
         ) : (
-          <i className="codicon codicon-check" />
+          <Icon name="check" />
         )}
         Commit
       </button>

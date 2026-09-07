@@ -15,6 +15,7 @@ import {
   SETTING_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 /**
  * Split a full save path into its directory (`location`) and basename
@@ -325,7 +326,7 @@ export const SaveWorkflowDialog: React.FC = () => {
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSave} disabled={!canSave}>
-              <i className="codicon codicon-save mr-1.5" />
+              <Icon name="save" className="mr-1.5" />
               Save
             </Button>
           </div>

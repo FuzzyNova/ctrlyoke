@@ -23,6 +23,29 @@ function getTrigger() {
 }
 
 describe("CustomSelect — basic behavior", () => {
+  it("exposes a named listbox trigger and its controlled listbox", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        id="model"
+        triggerAriaLabel="Model"
+        value="a"
+        onChange={vi.fn()}
+        options={OPTIONS}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Model" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-controls", "model-listbox");
+
+    await user.click(trigger);
+
+    expect(screen.getByRole("listbox")).toHaveAttribute("id", "model-listbox");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("shows selected option label on trigger button", () => {
     render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
     expect(getTrigger().textContent).toContain("Option A");
@@ -45,7 +68,7 @@ describe("CustomSelect — basic behavior", () => {
     render(<CustomSelect value="a" onChange={onChange} options={OPTIONS} />);
     await user.click(getTrigger());
     // Option B button — last matching text "Option B" is inside the option div
-    const optionBBtn = screen.getAllByText("Option B")[0].closest("button")!;
+    const optionBBtn = screen.getByRole("button", { name: "Option B" });
     await user.click(optionBBtn);
     expect(onChange).toHaveBeenCalledWith("b");
   });
@@ -123,9 +146,7 @@ describe("CustomSelect — basic behavior", () => {
     ];
     render(<CustomSelect value="a" onChange={onChange} options={opts} />);
     await user.click(getTrigger());
-    const disabledBtn = screen
-      .getAllByText("B (disabled)")[0]
-      .closest("button")!;
+    const disabledBtn = screen.getByRole("button", { name: "B (disabled)" });
     await user.click(disabledBtn);
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -228,7 +249,9 @@ describe("CustomSelect — hide/unhide feature", () => {
       />
     );
     await user.click(getTrigger());
-    const hideButtons = screen.getAllByTitle("Hide this option");
+    const hideButtons = screen.getAllByRole("button", {
+      name: "Hide this option",
+    });
     expect(hideButtons.length).toBeGreaterThan(0);
     await user.click(hideButtons[0]);
     expect(onHideOption).toHaveBeenCalled();
@@ -247,7 +270,7 @@ describe("CustomSelect — hide/unhide feature", () => {
       />
     );
     await user.click(getTrigger());
-    await user.click(screen.getByText(/Show hidden/i));
+    await user.click(screen.getByRole("button", { name: /Show hidden/i }));
     // Option B should now appear in the hidden section
     expect(screen.getAllByText("Option B").length).toBeGreaterThan(0);
   });
@@ -269,7 +292,7 @@ describe("CustomSelect — hide/unhide feature", () => {
     );
 
     await user.click(getTrigger());
-    await user.click(screen.getByText(/Show hidden/i));
+    await user.click(screen.getByRole("button", { name: /Show hidden/i }));
 
     expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
   });
@@ -288,8 +311,10 @@ describe("CustomSelect — hide/unhide feature", () => {
       />
     );
     await user.click(getTrigger());
-    await user.click(screen.getByText(/Show hidden/i));
-    await user.click(screen.getByTitle("Unhide this option"));
+    await user.click(screen.getByRole("button", { name: /Show hidden/i }));
+    await user.click(
+      screen.getByRole("button", { name: "Unhide this option" })
+    );
     expect(onUnhideOption).toHaveBeenCalledWith("b");
   });
 
@@ -307,7 +332,9 @@ describe("CustomSelect — hide/unhide feature", () => {
     );
     await user.click(getTrigger());
     // Options B and C have hide buttons, not A (selected)
-    const hideButtons = screen.queryAllByTitle("Hide this option");
+    const hideButtons = screen.queryAllByRole("button", {
+      name: "Hide this option",
+    });
     expect(hideButtons.length).toBe(2);
   });
 

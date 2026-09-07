@@ -30,6 +30,7 @@ import {
   type ToolResultStatus,
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 // ============================================================================
 // Shared primitives
@@ -62,6 +63,7 @@ const FilePath: React.FC<{
     className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal [overflow-wrap:anywhere] max-w-full ${className}`}
     onClick={onClick ?? (() => openFile(path))}
     title={title ?? `Open ${path}`}
+    aria-label={title ?? `Open ${path}`}
   >
     {children ?? path}
   </button>
@@ -211,6 +213,11 @@ const FileUndoButton: React.FC<{
 }) => (
   <button
     type="button"
+    aria-label={
+      fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
+        ? "Redo file operation"
+        : "Undo file operation"
+    }
     className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
     title={
       fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
@@ -219,8 +226,13 @@ const FileUndoButton: React.FC<{
     }
     onClick={onUndoFile}
   >
-    <i
-      className={`codicon ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "codicon-redo" : "codicon-discard"} text-xxs`}
+    <Icon
+      name={
+        fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
+          ? "codicon-redo"
+          : "codicon-discard"
+      }
+      className="text-xxs"
     />
     <span>{fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo"}</span>
   </button>

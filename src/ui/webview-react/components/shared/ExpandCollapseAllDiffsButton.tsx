@@ -1,4 +1,5 @@
 import React from "react";
+import { Icon } from "./Icon";
 
 interface ExpandCollapseAllDiffsButtonProps {
   anyDiffCollapsed: boolean;
@@ -17,8 +18,9 @@ export const ExpandCollapseAllDiffsButton: React.FC<
     disabled={disabled}
     onClick={() => (anyDiffCollapsed ? onExpand() : onCollapse())}
   >
-    <i
-      className={`codicon codicon-lg ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
+    <Icon
+      name={anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}
+      className="codicon-lg"
     />
   </button>
 );

@@ -468,7 +468,9 @@ describe("WorkspaceCommitHistoryPane", () => {
       vi.advanceTimersByTime(500);
     });
 
-    fireEvent.click(screen.getByText("Checkout Commit (Detach HEAD)"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Checkout Commit (Detach HEAD)" })
+    );
 
     // Regression guard: the confirm dialog must use the elevated z-layer so it
     // is not hidden behind the full-screen workspace viewer (z-workspace-viewer).

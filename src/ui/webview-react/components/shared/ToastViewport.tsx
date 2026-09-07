@@ -7,6 +7,7 @@ import {
 } from "@/constants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import { useUiStore, type ToastItem } from "@store/uiStore";
+import { Icon } from "./Icon";
 
 function isPersistentSeverity(toast: ToastItem): boolean {
   return (
@@ -145,7 +146,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
         aria-label="Dismiss notification"
         onClick={() => dismissToast(toast.id)}
       >
-        <span className="codicon codicon-close" aria-hidden="true" />
+        <Icon name="close" />
       </button>
     </article>
   );

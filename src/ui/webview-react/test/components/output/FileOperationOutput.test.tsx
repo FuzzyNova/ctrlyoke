@@ -47,7 +47,7 @@ describe("FileEditOutput", () => {
       />
     );
 
-    expect(getByRole("button", { name: "Undo" })).toBeTruthy();
+    expect(getByRole("button", { name: "Undo file operation" })).toBeTruthy();
   });
 
   it("renders a redo button when the diff is already undone", () => {
@@ -62,7 +62,7 @@ describe("FileEditOutput", () => {
       />
     );
 
-    expect(getByRole("button", { name: "Redo" })).toBeTruthy();
+    expect(getByRole("button", { name: "Redo file operation" })).toBeTruthy();
   });
 
   it("uses file chips for every structured operation when enabled", () => {
@@ -112,7 +112,9 @@ describe("FileEditOutput", () => {
       <FileReadOutput path="src/example.ts" lineStart={12} lineEnd={24} />
     );
 
-    expect(screen.getByTitle("Open src/example.ts:12-24")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Open src/example.ts:12-24" })
+    ).toBeTruthy();
   });
 
   it("renders a line-range read as a selection reference chip when enabled", () => {

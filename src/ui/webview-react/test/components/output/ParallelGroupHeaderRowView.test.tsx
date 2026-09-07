@@ -130,7 +130,9 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    const undoButton = screen.getByRole("button", { name: "Undo 3 changes" });
+    const undoButton = screen.getByRole("button", {
+      name: "Undo parallel group changes",
+    });
     // The label matches every other undo surface; only the tooltip says the
     // action covers the whole group.
     expect(undoButton).toHaveAttribute(
@@ -159,7 +161,9 @@ describe("ParallelGroupHeaderRowView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Redo 3 changes" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Redo parallel group changes" })
+    );
     expect(onPromptRedo).toHaveBeenCalledWith(row);
   });
 });

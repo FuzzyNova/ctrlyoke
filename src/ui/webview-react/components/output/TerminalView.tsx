@@ -35,6 +35,7 @@ import { TerminalSessionIcon } from "./TerminalSessionIcon";
 import { getShellCompactLabel } from "@utils/terminalPresentation";
 import { WebviewLog } from "@utils/logger";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
+import { Icon } from "../shared/Icon";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -547,7 +548,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
             onClose();
           }}
         >
-          <i className="codicon codicon-trash text-xs" />
+          <Icon name="trash" className="text-xs" />
         </button>
       )}
     </div>
@@ -593,7 +594,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
           onClose();
         }}
       >
-        <i className="codicon codicon-trash text-xs" />
+        <Icon name="trash" className="text-xs" />
       </button>
     </div>
   );
@@ -618,6 +619,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
       ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}`}
     onClick={onClick}
     title={getTerminalStepLabel(session)}
+    aria-label="Open terminal session"
   >
     <SessionIcon session={session} />
     <span className="text-xxs font-mono">{label}</span>

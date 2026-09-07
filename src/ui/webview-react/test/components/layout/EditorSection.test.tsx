@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorSection } from "@components/layout/EditorSection";
 import { useEditorStore } from "@store/editorStore";
@@ -125,6 +126,30 @@ describe("EditorSection", () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  it("activates the collapse control from Space", async () => {
+    const user = userEvent.setup();
+    render(<EditorSection />);
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse editor",
+    });
+    collapseButton.focus();
+    await user.keyboard(" ");
+
+    expect(useUiStore.getState().editorCollapsed).toBe(true);
+  });
+
+  it("activates the step-name editor from Space", async () => {
+    const user = userEvent.setup();
+    render(<EditorSection />);
+
+    const nameButton = screen.getByRole("button", { name: "Set prompt name" });
+    nameButton.focus();
+    await user.keyboard(" ");
+
+    expect(screen.getByRole("textbox", { name: "Step name" })).toBeVisible();
+  });
+
   it("hides the prompt-file action for script steps and CLI-managed workflows", () => {
     promptFileAction.value = {
       icon: "file-symlink-file",
@@ -170,6 +195,20 @@ describe("EditorSection", () => {
     const enableButton = screen.getByRole("button", { name: "Enable step" });
     expect(enableButton).toHaveAttribute("aria-pressed", "true");
     expect(enableButton).toHaveClass("text-warning-fg");
+  });
+
+  it("exposes prompt and script mode selection through aria-pressed", () => {
+    render(<EditorSection />);
+
+    const promptButton = screen.getByRole("button", { name: "Prompt step" });
+    const scriptButton = screen.getByRole("button", { name: "Script step" });
+    expect(promptButton).toHaveAttribute("aria-pressed", "true");
+    expect(scriptButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(scriptButton);
+
+    expect(promptButton).toHaveAttribute("aria-pressed", "false");
+    expect(scriptButton).toHaveAttribute("aria-pressed", "true");
   });
 
   it("loads the disabled state when editing an existing disabled step", () => {

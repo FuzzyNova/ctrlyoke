@@ -11,6 +11,7 @@ import {
   dropdownWarningClass,
 } from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
+import { Icon } from "./Icon";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
@@ -39,6 +40,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   dropdownMinWidth?: number;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
+  /** Accessible name for the field represented by the trigger. */
+  triggerAriaLabel?: string;
   /** Values granted by another authoring surface and therefore not toggleable here. */
   lockedValues?: readonly string[];
 }
@@ -69,9 +72,11 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   dropdownMaxHeight = "60vh",
   dropdownMinWidth,
   warning,
+  triggerAriaLabel,
   lockedValues = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const listboxId = `${id}-listbox`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -197,8 +202,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           </span>
         </button>
         {isLocked && (
-          <i
-            className="codicon codicon-lock self-center px-1.5 text-xxs text-description-fg"
+          <Icon
+            name="lock"
+            className="self-center px-1.5 text-xxs text-description-fg"
             title="Granted by prompt text"
             aria-label="Granted by prompt text"
           />
@@ -215,7 +221,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             }}
             className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
           >
-            <i className="codicon codicon-eye-closed text-xs" />
+            <Icon name="eye-closed" className="text-xs" />
           </button>
         )}
       </div>
@@ -306,6 +312,10 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             return !prev;
           })
         }
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        aria-label={triggerAriaLabel}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">
@@ -315,8 +325,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             buttonLabel
           )}
         </span>
-        <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
+        <Icon
+          name={`chevron-${isOpen ? "up" : "down"}`}
+          className="text-xxs flex-shrink-0 ml-1"
         />
       </button>
       {warning && (
@@ -327,7 +338,13 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         </span>
       )}
 
-      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+      <DropdownPortal
+        isOpen={isOpen}
+        popupPos={popupPos}
+        ref={popupRef}
+        id={listboxId}
+        role="listbox"
+      >
         {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
         {popupPos?.bottom !== undefined && hideEnabled && (
           <DropdownHiddenToggle
@@ -477,7 +494,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                       }}
                       className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
                     >
-                      <i className="codicon codicon-eye text-xs" />
+                      <Icon name="eye" className="text-xs" />
                     </button>
                     {/* Clicking checkbox or label: unhide + check */}
                     <button

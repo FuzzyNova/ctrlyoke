@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FinalStepFooter } from "@components/prompts/FinalStepFooter";
 import { FINAL_STEP_PHASES } from "@/types/messages";
@@ -33,7 +33,35 @@ describe("FinalStepFooter", () => {
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText("Loop 2")).not.toBeInTheDocument();
     expect(
-      screen.getByTitle("Final Step — Enabled — Loop 2")
+      screen.getByRole("button", { name: "Final step" })
     ).toBeInTheDocument();
+  });
+
+  it("activates the final-step row from Space", () => {
+    const props = buildProps();
+    props.isReadOnly = false;
+
+    render(<FinalStepFooter {...props} />);
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Final step" }), {
+      key: " ",
+    });
+
+    expect(props.onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("activates the expanded final-step row from Space", () => {
+    const props = buildProps();
+    props.isReadOnly = false;
+    props.isExpanded = true;
+
+    render(<FinalStepFooter {...props} />);
+
+    fireEvent.keyDown(
+      screen.getAllByRole("button", { name: "Final step" })[0],
+      { key: " " }
+    );
+
+    expect(props.onSelect).toHaveBeenCalledOnce();
   });
 });

@@ -23,6 +23,7 @@ import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -252,6 +253,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       }
       role="button"
       tabIndex={0}
+      aria-label={`Step ${displayNumber ?? index + 1}`}
       onKeyDown={(e) => {
         if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
@@ -279,8 +281,13 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               title={`Set step ${displayNumber ?? index + 1} as start position`}
               aria-label={`Set step ${displayNumber ?? index + 1} as start position`}
             >
-              <i
-                className={`codicon ${startPositionDirection === WORKTREE_POSITION_DIRECTIONS.REWIND ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-xs`}
+              <Icon
+                name={
+                  startPositionDirection === WORKTREE_POSITION_DIRECTIONS.REWIND
+                    ? "codicon-debug-reverse-continue"
+                    : "codicon-debug-step-over"
+                }
+                className="text-xs"
               />
             </button>
           )}
@@ -291,10 +298,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             // Script step variant
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i
-                  className={`codicon ${getStepKindIconClass(
-                    STEP_TYPES.SCRIPT
-                  )} text-xs opacity-60 flex-shrink-0`}
+                <Icon
+                  name={getStepKindIconClass(STEP_TYPES.SCRIPT)}
+                  className="text-xs opacity-60 flex-shrink-0"
                 />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
@@ -333,10 +339,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             // Prompt step variant (default)
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i
-                  className={`codicon ${getStepKindIconClass(
-                    STEP_TYPES.PROMPT
-                  )} text-xs opacity-60 flex-shrink-0`}
+                <Icon
+                  name={getStepKindIconClass(STEP_TYPES.PROMPT)}
+                  className="text-xs opacity-60 flex-shrink-0"
                 />
                 <span
                   className={`text-xs leading-relaxed truncate ${titleTextClass}`}
@@ -378,8 +383,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
                 className="flex-shrink-0 flex items-center justify-center"
                 title={`Compactions: ${compactionCount}`}
               >
-                <i
-                  className="codicon codicon-fold text-xxs text-description-fg opacity-90"
+                <Icon
+                  name="fold"
+                  className="text-xxs text-description-fg opacity-90"
                   aria-label={`Compactions: ${compactionCount}`}
                 />
               </span>
@@ -414,7 +420,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             {...dragHandleProps.attributes}
             aria-label="Drag to reorder"
           >
-            <i className="codicon codicon-grabber text-xs" />
+            <Icon name="grabber" className="text-xs" />
           </span>
         )}
       </div>

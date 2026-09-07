@@ -44,6 +44,7 @@ import {
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 let saveRequestSequence = 0;
 
@@ -73,7 +74,7 @@ function DryRunButton({
       title="Dry Run"
       aria-label="Dry Run"
     >
-      <i className={`codicon codicon-telescope ${btnSize.icon}`} />
+      <Icon name="telescope" className={`${btnSize.icon}`} />
     </button>
   );
 }
@@ -485,7 +486,7 @@ export const Header: React.FC<{
         title={saveTitle}
         aria-label="Save workflow"
       >
-        <i className={`codicon codicon-save ${btnSize.icon}`} />
+        <Icon name="save" className={`${btnSize.icon}`} />
       </button>
 
       <div className="fp-button-group-divider" />
@@ -575,7 +576,7 @@ export const Header: React.FC<{
           }
           aria-label={slot1.label}
         >
-          <i className={`codicon ${slot1.icon} ${btnSize.icon}`} />
+          <Icon name={slot1.icon} className={btnSize.icon} />
         </button>
 
         <div
@@ -603,8 +604,9 @@ export const Header: React.FC<{
           }
           aria-label={slot2.label}
         >
-          <i
-            className={`codicon ${slot2.icon} ${isPausing ? "animate-pulse-cancelling" : ""} ${btnSize.icon}`}
+          <Icon
+            name={slot2.icon}
+            className={`${isPausing ? "animate-pulse-cancelling" : ""} ${btnSize.icon}`}
           />
         </button>
 
@@ -637,7 +639,7 @@ export const Header: React.FC<{
           }
           aria-label={slot3.label}
         >
-          <i className={`codicon ${slot3.icon} ${btnSize.icon}`} />
+          <Icon name={slot3.icon} className={btnSize.icon} />
         </button>
       </div>
       {runContextMenu && (
@@ -679,7 +681,7 @@ export const Header: React.FC<{
               aria-label="Toggle steps panel"
               aria-pressed={mobileStepsOpen}
             >
-              <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
+              <Icon name="list-ordered" className={`${btnSize.icon}`} />
             </button>
           </div>
 
@@ -701,7 +703,7 @@ export const Header: React.FC<{
               title={saveTitle}
               aria-label="Save workflow"
             >
-              <i className={`codicon codicon-save ${btnSize.icon}`} />
+              <Icon name="save" className={`${btnSize.icon}`} />
             </button>
             <div className="fp-button-group-divider" />
             <DryRunButton
@@ -734,7 +736,7 @@ export const Header: React.FC<{
               aria-label="Search history"
               aria-pressed={isHistorySearchOpen}
             >
-              <i className={`codicon codicon-search ${btnSize.icon}`} />
+              <Icon name="search" className={`${btnSize.icon}`} />
             </button>
             {isStandalone && (
               <>
@@ -745,7 +747,7 @@ export const Header: React.FC<{
                   title="Explore files and changes"
                   aria-label="Explore files and changes"
                 >
-                  <i className={`codicon codicon-files ${btnSize.icon}`} />
+                  <Icon name="files" className={`${btnSize.icon}`} />
                 </button>
               </>
             )}
@@ -764,7 +766,7 @@ export const Header: React.FC<{
               aria-label="Open global settings"
               aria-pressed={globalSettingsOpen}
             >
-              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
+              <Icon name="settings-gear" className={`${btnSize.icon}`} />
             </button>
           </div>
 
@@ -783,7 +785,7 @@ export const Header: React.FC<{
               aria-label="Toggle workflow properties"
               aria-pressed={mobileWorkflowPropsOpen}
             >
-              <i className={`codicon codicon-settings ${btnSize.icon}`} />
+              <Icon name="settings" className={`${btnSize.icon}`} />
             </button>
           </div>
         </div>
@@ -890,7 +892,7 @@ export const Header: React.FC<{
               aria-label="Search history"
               aria-pressed={isHistorySearchOpen}
             >
-              <i className={`codicon codicon-search ${btnSize.icon}`} />
+              <Icon name="search" className={`${btnSize.icon}`} />
             </button>
 
             {/* Workspace Explorer — standalone (browser) mode only */}
@@ -903,7 +905,7 @@ export const Header: React.FC<{
                   title="Explore files and changes"
                   aria-label="Explore files and changes"
                 >
-                  <i className={`codicon codicon-files ${btnSize.icon}`} />
+                  <Icon name="files" className={`${btnSize.icon}`} />
                 </button>
               </>
             )}
@@ -924,7 +926,7 @@ export const Header: React.FC<{
               aria-label="Open global settings"
               aria-pressed={globalSettingsOpen}
             >
-              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
+              <Icon name="settings-gear" className={`${btnSize.icon}`} />
             </button>
           </div>
         </div>

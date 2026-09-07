@@ -17,6 +17,7 @@ import { CustomSelect } from "../shared/CustomSelect";
 import { NumberField, SettingInputRow, SettingToggleRow } from "../shared";
 import { clamp } from "@utils/number";
 import { TerminalControlBarEditor } from "./TerminalControlBarEditor";
+import { Icon } from "../shared/Icon";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -97,7 +98,7 @@ function FontStepper({
           disabled={value <= min}
           type="button"
         >
-          <i className="codicon codicon-sm codicon-remove" />
+          <Icon name="remove" className="codicon-sm" />
         </button>
         <span className="text-xs text-description-fg tabular-nums w-[28px] text-center select-none">
           {value}
@@ -110,7 +111,7 @@ function FontStepper({
           disabled={value >= max}
           type="button"
         >
-          <i className="codicon codicon-sm codicon-add" />
+          <Icon name="add" className="codicon-sm" />
         </button>
       </div>
     </SettingInputRow>

@@ -27,6 +27,7 @@ import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
+import { Icon } from "../shared/Icon";
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -484,8 +485,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             onClick={handleToggleCreateTemplateForm}
             className="mt-1.5 group flex items-center gap-1 text-sm text-link-fg cursor-pointer w-fit bg-transparent border-0 p-0 font-inherit"
           >
-            <i
-              className={`codicon ${showCreateTemplateForm ? "codicon-chevron-down" : "codicon-add"}`}
+            <Icon
+              name={
+                showCreateTemplateForm ? "codicon-chevron-down" : "codicon-add"
+              }
             />
             <span className="group-hover:underline">New template...</span>
           </button>

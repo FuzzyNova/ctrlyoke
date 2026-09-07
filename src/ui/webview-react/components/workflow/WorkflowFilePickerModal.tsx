@@ -6,6 +6,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
+import { Icon } from "../shared/Icon";
 
 interface WorkflowFilesResponse {
   files?: WorkflowFileEntry[];
@@ -163,8 +164,11 @@ export const WorkflowFilePickerModal: React.FC<
                     : "Hide git-ignored files"
                 }
               >
-                <i
-                  className={`codicon ${hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"} text-xs`}
+                <Icon
+                  name={
+                    hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"
+                  }
+                  className="text-xs"
                 />
                 <span>git-ignored</span>
               </button>

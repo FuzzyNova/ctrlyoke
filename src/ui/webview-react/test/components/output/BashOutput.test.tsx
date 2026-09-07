@@ -15,14 +15,20 @@ describe("BashOutput", () => {
     const longCommand = `node -e "${"x".repeat(220)}"`;
     const { container } = render(<BashOutput command={longCommand} />);
 
-    expect(screen.getByTitle("Show full command")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Show full command for:/ })
+    ).toBeInTheDocument();
     expect(screen.queryByText("Show full command")).not.toBeInTheDocument();
     expect(container.textContent).toContain("...");
     expect(container.textContent).not.toContain("x".repeat(200));
 
-    await user.click(screen.getByTitle("Show full command"));
+    await user.click(
+      screen.getByRole("button", { name: /^Show full command for:/ })
+    );
 
-    expect(screen.getByTitle("Hide full command")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Hide full command for:/ })
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain(`${"x".repeat(160)}...`);
     expect(container.textContent).toContain(longCommand);
   });
@@ -37,9 +43,13 @@ describe("BashOutput", () => {
       "text-[length:var(--fp-output-font-size-xs)]"
     );
 
-    await user.click(screen.getByTitle("Show full command"));
+    await user.click(
+      screen.getByRole("button", { name: /^Show full command for:/ })
+    );
 
-    expect(screen.getByText("Hide full command")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Hide full command for:/ })
+    ).toBeInTheDocument();
   });
 
   it("renders output when status is completed", () => {
@@ -174,8 +184,12 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    await user.click(screen.getByText(/show .* more line/i));
-    expect(screen.getByText(/show less/i)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /show .* more line/i })
+    );
+    expect(
+      screen.getByRole("button", { name: /show less/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/line 19/)).toBeInTheDocument();
   });
 
@@ -190,9 +204,13 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    await user.click(screen.getByText(/show .* more line/i));
-    await user.click(screen.getByText(/show less/i));
-    expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /show .* more line/i })
+    );
+    await user.click(screen.getByRole("button", { name: /show less/i }));
+    expect(
+      screen.getByRole("button", { name: /show .* more line/i })
+    ).toBeInTheDocument();
   });
 
   it("does not show expand link when output fits in maxLines", () => {

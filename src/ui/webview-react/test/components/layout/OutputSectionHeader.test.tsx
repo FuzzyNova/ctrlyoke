@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
   OutputSectionHeader,
@@ -51,11 +52,25 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
 }
 
 describe("OutputSectionHeader terminal execution identity", () => {
+  it("activates the collapse control from Space", async () => {
+    const user = userEvent.setup();
+    const onToggleCollapse = vi.fn();
+    renderHeader({ onToggleCollapse });
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse output",
+    });
+    collapseButton.focus();
+    await user.keyboard(" ");
+
+    expect(onToggleCollapse).toHaveBeenCalledOnce();
+  });
+
   it("shows the live run identity in the terminal tab", () => {
     renderHeader({ terminalExecutionRunLabel: "Live Run 1042" });
 
     expect(
-      screen.getByRole("button", {
+      screen.getByRole("tab", {
         name: "Terminal · Live Run 1042",
       })
     ).toHaveTextContent("Terminal· Live Run 1042");
@@ -68,7 +83,7 @@ describe("OutputSectionHeader terminal execution identity", () => {
     });
 
     expect(
-      screen.getByRole("button", {
+      screen.getByRole("tab", {
         name: "Terminal · Live Run 1042",
       })
     ).toHaveAttribute("title", "Terminal · Live Run 1042");
@@ -77,13 +92,32 @@ describe("OutputSectionHeader terminal execution identity", () => {
   it("keeps the ordinary terminal label when viewed and executing runs match", () => {
     renderHeader();
 
-    expect(
-      screen.getByRole("button", { name: "Terminal" })
-    ).not.toHaveAttribute("title");
+    expect(screen.getByRole("tab", { name: "Terminal" })).not.toHaveAttribute(
+      "title"
+    );
   });
 });
 
 describe("OutputSectionHeader tab icons", () => {
+  it("keeps the output tab named when its text is hidden", () => {
+    renderHeader({ isHeaderNarrow: true });
+
+    expect(screen.getByRole("tab", { name: "Output" })).toBeInTheDocument();
+  });
+
+  it("exposes output tab selection through aria-selected", () => {
+    renderHeader({ activeOutputTab: "output" });
+
+    expect(screen.getByRole("tab", { name: "Output" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.getByRole("tab", { name: "Terminal" })).toHaveAttribute(
+      "aria-selected",
+      "false"
+    );
+  });
+
   it("uses large icons in narrow headers and small icons otherwise", () => {
     const narrowHeader = renderHeader({ isHeaderNarrow: true });
 

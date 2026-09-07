@@ -4,6 +4,7 @@ import type { HarnessId } from "@/types/messages";
 import { TERMINAL_SESSION_STATUS } from "@/types/messages";
 import type { TerminalSession } from "@store/terminalStore";
 import { getShellCodiconName } from "@utils/terminalPresentation";
+import { Icon } from "../shared/Icon";
 
 interface TerminalSessionIconProps {
   session: Pick<
@@ -27,7 +28,7 @@ export const TerminalSessionIcon: React.FC<TerminalSessionIconProps> = ({
 
   const codiconName = getShellCodiconName(session.shellKind, session.stepName);
   if (codiconName) {
-    return <i className={`codicon ${codiconName} text-xs flex-shrink-0`} />;
+    return <Icon name={codiconName} className="text-xs flex-shrink-0" />;
   }
 
   if (session.status === TERMINAL_SESSION_STATUS.RUNNING) {

@@ -25,6 +25,7 @@ import {
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
+import { Icon } from "../shared/Icon";
 
 /** Width tiers for the editor header row, from the section's own content width. */
 const EDITOR_HEADER_TIERS = {
@@ -199,22 +200,23 @@ const EditorSectionInner: React.FC = () => {
       {/* Section Header */}
       <div className="flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
         {/* Left: Collapse trigger (chevron + icon + label) */}
-        <div
-          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
+        <button
+          type="button"
+          className="flex flex-shrink-0 appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
           onClick={handleToggle}
-          role="button"
           aria-label="Collapse editor"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()}
         >
-          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
-          <i className="codicon codicon-edit text-sm" />
+          <Icon
+            name="chevron-right"
+            className="text-xs rotate-90 transition-transform duration-150"
+          />
+          <Icon name="edit" className="text-sm" />
           {!isNarrow && (
             <span className="text-xs font-semibold uppercase tracking-wide">
               Editor
             </span>
           )}
-        </div>
+        </button>
 
         <div
           className="fp-mode-switch mx-2 select-none [-webkit-touch-callout:none]"
@@ -228,9 +230,11 @@ const EditorSectionInner: React.FC = () => {
             onClick={() => setStepType(STEP_TYPES.PROMPT)}
             title="Prompt step — sends text to an AI harness"
             aria-label="Prompt step"
+            aria-pressed={!isScriptMode}
           >
-            <i
-              className={`codicon codicon-comment codicon-sm ${isNarrow ? "px-1" : ""}`}
+            <Icon
+              name="comment"
+              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
             />
             {!isNarrow && <span>Prompt</span>}
           </button>
@@ -244,9 +248,11 @@ const EditorSectionInner: React.FC = () => {
             onClick={() => setStepType(STEP_TYPES.SCRIPT)}
             title="Script step — runs a shell command with no AI interaction"
             aria-label="Script step"
+            aria-pressed={isScriptMode}
           >
-            <i
-              className={`codicon codicon-terminal-powershell codicon-sm ${isNarrow ? "px-1" : ""}`}
+            <Icon
+              name="terminal-powershell"
+              className={`codicon-sm ${isNarrow ? "px-1" : ""}`}
             />
             {!isNarrow && <span>Script</span>}
           </button>
@@ -271,8 +277,9 @@ const EditorSectionInner: React.FC = () => {
                   : "text-description-fg hover:text-foreground cursor-pointer"
               }`}
             >
-              <i
-                className={`codicon text-sm ${stepEnabled ? "codicon-check" : "codicon-circle-slash"}`}
+              <Icon
+                name={stepEnabled ? "codicon-check" : "codicon-circle-slash"}
+                className="text-sm"
               />
             </button>
           )}
@@ -281,6 +288,7 @@ const EditorSectionInner: React.FC = () => {
               <StepColorQuickPicker />
             )}
           <span
+            data-testid="editor-mode"
             className={`editor-mode-indicator text-center text-xs text-description-fg min-w-0 ${
               showStackedTokens
                 ? "flex flex-col items-center leading-tight"
@@ -303,21 +311,15 @@ const EditorSectionInner: React.FC = () => {
                 style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
               />
             ) : (
-              <span
-                className={`cursor-pointer hover:text-foreground transition-colors truncate max-w-full${!stepEnabled ? " italic" : ""}`}
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                className={`max-w-full appearance-none truncate border-0 bg-transparent p-0 text-left font-inherit text-inherit transition-colors hover:text-foreground${!stepEnabled ? " italic" : ""}`}
                 onClick={startNameEditing}
-                onKeyDown={(e) => {
-                  if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
-                    e.preventDefault();
-                    startNameEditing();
-                  }
-                }}
                 title="Click to set prompt name"
+                aria-label="Set prompt name"
               >
                 {getModeText()}
-              </span>
+              </button>
             )}
             {!isEditingName &&
               (!stepEnabled ? (
@@ -354,9 +356,7 @@ const EditorSectionInner: React.FC = () => {
             aria-label={promptFileAction.tooltip}
             className="control-button flex items-center px-1 bg-transparent border-none cursor-pointer leading-none transition-colors select-none disabled:opacity-50 disabled:cursor-not-allowed text-description-fg hover:text-foreground"
           >
-            <i
-              className={`codicon codicon-lg codicon-${promptFileAction.icon}`}
-            />
+            <Icon name={promptFileAction.icon} className="codicon-lg" />
           </button>
         )}
         {!isExternallyManaged && <ExecutionModeQuickPicker />}
@@ -368,6 +368,7 @@ const EditorSectionInner: React.FC = () => {
             inactiveIcon="repo"
             activeTooltip="Respecting .gitignore for completions"
             inactiveTooltip="All files included for completions (ignoring .gitignore)"
+            ariaLabel="Respect .gitignore for completions"
           />
         )}
       </div>

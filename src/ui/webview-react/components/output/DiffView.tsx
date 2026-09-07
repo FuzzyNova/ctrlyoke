@@ -58,6 +58,7 @@ import {
   DIFF_VIEW_TYPES,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
@@ -581,11 +582,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         <button
           type="button"
           onClick={handleToggle}
+          aria-label="Toggle diff"
           className="flex min-w-0 items-center gap-1.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
           title={isExpanded ? "Collapse diff" : "Expand diff"}
         >
-          <i
-            className={`codicon codicon-chevron-right text-[length:var(--fp-output-font-size-xs)] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+          <Icon
+            name="chevron-right"
+            className={`text-[length:var(--fp-output-font-size-xs)] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
           />
           <span>
             {isExpanded ? "Hide" : "Show"} diff
@@ -646,7 +649,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     <Decoration key={`gap-${i}-${hunk.oldStart}`}>
                       {hasExpandableSource ? (
                         <div className="flex w-full items-center justify-center gap-x-3 bg-diff-hidden-bg px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)]">
-                          <i className="codicon codicon-triangle-right text-description-fg" />
+                          <Icon
+                            name="triangle-right"
+                            className="text-description-fg"
+                          />
                           <button
                             type="button"
                             onClick={() =>
@@ -680,7 +686,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
                               Show all
                             </button>
                           )}
-                          <i className="codicon codicon-triangle-left text-description-fg" />
+                          <Icon
+                            name="triangle-left"
+                            className="text-description-fg"
+                          />
                         </div>
                       ) : (
                         <div

@@ -21,6 +21,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { HEADER_BUTTON_SIZES } from "@/constants";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { Icon } from "./Icon";
 
 interface UndoRedoControlProps {
   isRunning: boolean;
@@ -578,7 +579,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         title="Undo"
         aria-label="Undo"
       >
-        <i className={`codicon codicon-discard ${btnSizes.icon}`} />
+        <Icon name="discard" className={`${btnSizes.icon}`} />
       </button>
 
       <div className={separatorClass}>
@@ -596,7 +597,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         title="Redo"
         aria-label="Redo"
       >
-        <i className={`codicon codicon-redo ${btnSizes.icon}`} />
+        <Icon name="redo" className={`${btnSizes.icon}`} />
       </button>
 
       {!isMobile && (
@@ -677,12 +678,13 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                     : "text-dropdown-fg"
                 }`}
               >
-                <i
-                  className={`codicon ${
+                <Icon
+                  name={
                     direction === UNDO_REDO_DIRECTIONS.REDO
                       ? "codicon-redo"
                       : "codicon-discard"
-                  } text-description-fg text-xs flex-shrink-0`}
+                  }
+                  className="text-description-fg text-xs flex-shrink-0"
                 />
                 <span className="flex-1 truncate">{label}</span>
                 {stepCount === 1 && (

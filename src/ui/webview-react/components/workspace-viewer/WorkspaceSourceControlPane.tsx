@@ -28,6 +28,7 @@ import { Modal } from "../shared/Modal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
 import { WorkspaceCommitHistoryPane } from "./WorkspaceCommitHistoryPane";
 import { WorkspaceDiffPane } from "./WorkspaceDiffPane";
+import { Icon } from "../shared/Icon";
 
 interface PendingDiscardAction {
   paths: string[];
@@ -513,9 +514,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleDiscardAll}
+                aria-label="Discard all changes"
                 className="inline-flex items-center gap-1 text-xs text-btn-fg hover:underline"
               >
-                <i className="codicon codicon-discard text-xs" />
+                <Icon name="discard" className="text-xs" />
                 <span>Discard All</span>
               </button>
               <button
@@ -551,7 +553,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <div className={filesRegionClass}>
         {sourceControlLoading ? (
           <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-            <i className="codicon codicon-loading animate-spin text-sm" />
+            <Icon name="loading" className="animate-spin text-sm" />
             <span className="text-xs">Refreshing…</span>
           </div>
         ) : (
@@ -578,9 +580,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
           <button
             onClick={handleDiffBack}
+            aria-label="Back to source control"
             className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
-            <i className="codicon codicon-arrow-left text-sm" />
+            <Icon name="arrow-left" className="text-sm" />
             <span className="text-sm">Back</span>
           </button>
         </div>
@@ -605,7 +608,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
             {sourceControlLoading ? (
               <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-                <i className="codicon codicon-loading animate-spin text-sm" />
+                <Icon name="loading" className="animate-spin text-sm" />
                 <span className="text-xs">Refreshing…</span>
               </div>
             ) : (

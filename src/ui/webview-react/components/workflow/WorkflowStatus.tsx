@@ -77,6 +77,7 @@ import {
   type DateRangeFilter,
 } from "../../utils/dateRangeFilter";
 import { formatMultiFilterLabel } from "../../utils/filterLabels";
+import { Icon } from "../shared/Icon";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -1586,8 +1587,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
           }`}
         >
-          <i
-            className={`codicon ${favoriteWorkflowsOnly ? "codicon-star-full" : "codicon-star-empty"} text-xs`}
+          <Icon
+            name={
+              favoriteWorkflowsOnly ? "codicon-star-full" : "codicon-star-empty"
+            }
+            className="text-xs"
           />
         </button>
       </div>
@@ -1600,7 +1604,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         aria-label="Clear workflow filters"
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
       >
-        <i className="codicon codicon-clear-all text-xxs" />
+        <Icon name="clear-all" className="text-xxs" />
       </button>
     </div>
   );
@@ -1641,6 +1645,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onClick={startEditing}
             className={`workflow-button-main fp-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
             title="Click to edit workflow name"
+            aria-label="Edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
               {/* Workflow Name */}
@@ -1654,7 +1659,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   title="Terminal session is still running"
                   aria-label="Terminal session is still running"
                 >
-                  <i className="codicon codicon-terminal text-sm" />
+                  <Icon name="terminal" className="text-sm" />
                 </span>
               )}
 
@@ -1664,7 +1669,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   title={worktreeIndicator.title}
                   aria-label={worktreeIndicator.title}
                 >
-                  <i className="codicon codicon-source-control text-sm" />
+                  <Icon name="source-control" className="text-sm" />
                 </span>
               )}
 

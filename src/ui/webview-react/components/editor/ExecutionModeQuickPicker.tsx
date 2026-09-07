@@ -14,6 +14,7 @@ import {
   EXECUTION_MODE_HELP_TEXT,
   type ExecutionMode,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 const POPUP_MIN_WIDTH = 200;
 
@@ -107,7 +108,7 @@ export const ExecutionModeQuickPicker: React.FC<
             : "text-description-fg hover:text-foreground"
         }`}
       >
-        <i className={`codicon codicon-lg ${iconClass}`} />
+        <Icon name={iconClass} className="codicon-lg" />
       </button>
 
       {isOpen && !disabled && (

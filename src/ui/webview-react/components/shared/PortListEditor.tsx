@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "./Button";
+import { Icon } from "./Icon";
 
 export interface PortListEditorProps {
   ports: number[];
@@ -109,7 +110,7 @@ export function PortListEditor({
                 aria-label={`Remove port ${port}`}
                 className="text-description-fg hover:text-error-fg"
               >
-                <i className="codicon codicon-close" aria-hidden="true" />
+                <Icon name="close" />
               </button>
             </span>
           ))}

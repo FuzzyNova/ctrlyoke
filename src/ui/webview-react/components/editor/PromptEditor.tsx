@@ -65,6 +65,7 @@ import {
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 import { filterExplicitSecretGrants } from "../shared/useSecretGrantOptions";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+import { Icon } from "../shared/Icon";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -1447,28 +1448,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         >
           {fileRefValidation?.exists === false ? (
             <>
-              <i
-                className="codicon codicon-warning"
-                style={{ fontSize: "11px" }}
-              />
+              <Icon name="warning" style={{ fontSize: "11px" }} />
               <span>
                 File not found — will be sent as literal text at execution
               </span>
             </>
           ) : fileRefValidation?.isEmpty ? (
             <>
-              <i
-                className="codicon codicon-warning"
-                style={{ fontSize: "11px" }}
-              />
+              <Icon name="warning" style={{ fontSize: "11px" }} />
               <span>Prompt file is empty</span>
             </>
           ) : (
             <>
-              <i
-                className="codicon codicon-file"
-                style={{ fontSize: "11px" }}
-              />
+              <Icon name="file" style={{ fontSize: "11px" }} />
               <span>
                 File reference — prompt will be read from this path at execution
               </span>

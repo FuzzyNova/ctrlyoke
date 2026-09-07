@@ -1,13 +1,10 @@
-import {
-  KEYBOARD_KEYS,
-  OUTPUT_TABS,
-  type OutputTab,
-} from "@root/types/DashboardConstants";
+import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { TerminalSession } from "@store/terminalStore";
+import { Icon } from "../../shared/Icon";
 
 export interface OutputSectionHeaderProps {
   activeOutputTab: OutputTab;
@@ -21,7 +18,7 @@ export interface OutputSectionHeaderProps {
   isHeaderNarrow: boolean;
   isHeaderVeryNarrow: boolean;
   isTerminalCompact: boolean;
-  refCallback: (node: HTMLDivElement | null) => void;
+  refCallback: (node: HTMLElement | null) => void;
   showTerminalTab: boolean;
   terminalCanCloseActiveSession: boolean;
   /** Executing run identity shown only while a different run/draft is viewed. */
@@ -102,33 +99,40 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
       className="relative z-header select-none [-webkit-touch-callout:none] flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
     >
       <div className="flex items-center gap-1">
-        <div
-          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+        <button
+          type="button"
+          className="flex appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
           onClick={onToggleCollapse}
-          role="button"
           aria-label="Collapse output"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === KEYBOARD_KEYS.ENTER) {
-              onToggleCollapse();
-            }
-          }}
         >
-          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
-        </div>
+          <Icon
+            name="chevron-right"
+            className="text-xs rotate-90 transition-transform duration-150"
+          />
+        </button>
 
         {showTerminalTab ? (
-          <div className="flex items-center ml-1">
+          <div
+            className="flex items-center ml-1"
+            role="tablist"
+            aria-label="Output views"
+          >
             <button
+              type="button"
               className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectOutputTab}
+              aria-label="Output"
+              aria-selected={activeOutputTab === OUTPUT_TABS.OUTPUT}
+              role="tab"
             >
-              <i
-                className={`codicon codicon-output ${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
+              <Icon
+                name="output"
+                className={`${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
               />
               {!isHeaderNarrow && <span>Output</span>}
             </button>
             <button
+              type="button"
               className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.TERMINAL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectTerminalTab}
               aria-label={
@@ -141,9 +145,12 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                   ? `Terminal · ${terminalExecutionRunLabel}`
                   : undefined
               }
+              aria-selected={activeOutputTab === OUTPUT_TABS.TERMINAL}
+              role="tab"
             >
-              <i
-                className={`codicon codicon-terminal ${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
+              <Icon
+                name="terminal"
+                className={`${isHeaderNarrow ? "codicon-lg px-1" : "codicon-sm"}`}
               />
               {!isHeaderNarrow && <span>Terminal</span>}
               {!isHeaderNarrow && terminalExecutionRunLabel && (
@@ -158,7 +165,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           </div>
         ) : (
           <span className="text-xs font-semibold uppercase tracking-wide text-description-fg ml-1 flex items-center gap-1">
-            <i className="codicon codicon-output text-sm" />
+            <Icon name="output" className="text-sm" />
             Output
           </span>
         )}
@@ -172,7 +179,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={() => onOutputFontSizeChange(outputFontSize - 1)}
               disabled={outputFontSize <= 10}
             >
-              <i className="codicon codicon-sm codicon-remove" />
+              <Icon name="remove" className="codicon-sm" />
             </button>
             {!isHeaderNarrow && (
               <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
@@ -186,7 +193,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={() => onOutputFontSizeChange(outputFontSize + 1)}
               disabled={outputFontSize >= 24}
             >
-              <i className="codicon codicon-sm codicon-add" />
+              <Icon name="add" className="codicon-sm" />
             </button>
           </div>
         ) : !isHeaderVeryNarrow && activeOutputTab === OUTPUT_TABS.TERMINAL ? (
@@ -198,7 +205,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={() => onTerminalFontSizeChange(terminalFontSize - 1)}
               disabled={terminalFontSize <= 8}
             >
-              <i className="codicon codicon-sm codicon-remove" />
+              <Icon name="remove" className="codicon-sm" />
             </button>
             {!isHeaderNarrow && (
               <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
@@ -212,7 +219,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={() => onTerminalFontSizeChange(terminalFontSize + 1)}
               disabled={terminalFontSize >= 24}
             >
-              <i className="codicon codicon-sm codicon-add" />
+              <Icon name="add" className="codicon-sm" />
             </button>
           </div>
         ) : null}
@@ -235,9 +242,10 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             <button
               className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors"
               title="New Terminal"
+              aria-label="New terminal"
               onClick={onNewTerminal}
             >
-              <i className="codicon codicon-add text-xs" />
+              <Icon name="add" className="text-xs" />
               {!isTerminalCompact && <span>New Terminal</span>}
             </button>
 
@@ -251,7 +259,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                   onClick={onTerminalSessionClose}
                   disabled={isExecutionActive && !terminalCanCloseActiveSession}
                 >
-                  <i className="codicon codicon-trash text-xs" />
+                  <Icon name="trash" className="text-xs" />
                 </button>
               )}
           </>
@@ -275,9 +283,10 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
                 style={{ touchAction: "manipulation" }}
                 title={`Undo workflow changes (${workflowUndoCount} file${workflowUndoCount !== 1 ? "s" : ""})`}
+                aria-label="Undo workflow changes"
                 onClick={onWorkflowUndo}
               >
-                <i className="codicon codicon-lg codicon-discard flex-shrink-0" />
+                <Icon name="discard" className="codicon-lg flex-shrink-0" />
                 {!isHeaderVeryNarrow && (
                   <span className="text-nowrap">
                     {useCompactLabels
@@ -293,9 +302,10 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0"
                 style={{ touchAction: "manipulation" }}
                 title={`Redo workflow changes (${workflowRedoCount} file${workflowRedoCount !== 1 ? "s" : ""})`}
+                aria-label="Redo workflow changes"
                 onClick={onWorkflowRedo}
               >
-                <i className="codicon codicon-lg codicon-redo flex-shrink-0" />
+                <Icon name="redo" className="codicon-lg flex-shrink-0" />
                 {!isHeaderVeryNarrow && (
                   <span>
                     {useCompactLabels
@@ -317,7 +327,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               aria-pressed={isFindOpen}
               onClick={onToggleFind}
             >
-              <i className="codicon codicon-lg codicon-search" />
+              <Icon name="search" className="codicon-lg" />
             </button>
             {hasOutput && (
               <ExpandCollapseAllDiffsButton
@@ -334,7 +344,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               onClick={onExport}
               disabled={!hasOutput}
             >
-              <i className="codicon codicon-lg codicon-share" />
+              <Icon name="share" className="codicon-lg" />
             </button>
           </>
         )}
@@ -350,8 +360,11 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           aria-pressed={isFullscreen}
           onClick={onToggleFullscreen}
         >
-          <i
-            className={`codicon codicon-lg ${isFullscreen ? "codicon-screen-normal" : "codicon-screen-full"}`}
+          <Icon
+            name={
+              isFullscreen ? "codicon-screen-normal" : "codicon-screen-full"
+            }
+            className="codicon-lg"
           />
         </button>
       </div>

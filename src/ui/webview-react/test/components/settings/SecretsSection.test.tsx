@@ -123,7 +123,7 @@ describe("SecretsSection", () => {
     ]);
 
     renderSecretsSection();
-    await user.click(screen.getByText("Used by (2)"));
+    await user.click(screen.getByRole("button", { name: "Used by (2)" }));
 
     expect(screen.getByText("release-api")).toBeInTheDocument();
     expect(screen.getByText("deploy.ctrlyoke.yaml")).toBeInTheDocument();

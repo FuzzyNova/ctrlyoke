@@ -1,5 +1,5 @@
 import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { useHideableOptions } from "@hooks/useHideableOptions";
@@ -10,6 +10,7 @@ import {
   dropdownWarningClass,
 } from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
+import { Icon } from "./Icon";
 
 interface SkillOption {
   name: string;
@@ -28,6 +29,8 @@ interface SkillsSelectProps extends HideableProps {
   inline?: boolean;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
+  /** Accessible name for the field represented by the trigger. */
+  triggerAriaLabel?: string;
 }
 
 /**
@@ -56,8 +59,13 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   onUnhideOption,
   nonHideableValues = [],
   warning,
+  triggerAriaLabel = "Skills",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const reactId = useId();
+  const listboxId = id
+    ? `${id}-listbox`
+    : `skills-listbox-${reactId.replace(/:/g, "")}`;
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -160,12 +168,21 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
             }`}
           >
-            <i
-              className={`codicon codicon-check text-xxs flex-shrink-0 ${
+            <Icon
+              name="check"
+              className={`text-xxs flex-shrink-0 ${
                 isSelected ? "visible" : "invisible"
               }`}
             />
-            <span>{label}</span>
+            <span
+              data-testid={
+                keyword === INHERIT_DEFAULT_OPTION
+                  ? "inherited-skills-label"
+                  : undefined
+              }
+            >
+              {label}
+            </span>
           </button>
         );
       })}
@@ -221,7 +238,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                     }}
                     className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
                   >
-                    <i className="codicon codicon-eye-closed text-xs" />
+                    <Icon name="eye-closed" className="text-xs" />
                   </button>
                 )}
               </div>
@@ -249,7 +266,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                       }}
                       className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
                     >
-                      <i className="codicon codicon-eye text-xs" />
+                      <Icon name="eye" className="text-xs" />
                     </button>
                     <button
                       type="button"
@@ -301,11 +318,16 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return !prev;
           })
         }
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        aria-label={triggerAriaLabel}
         className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>
-        <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
+        <Icon
+          name={`chevron-${isOpen ? "up" : "down"}`}
+          className="text-xxs flex-shrink-0 ml-1"
         />
       </button>
       {warning && (
@@ -316,7 +338,13 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         </span>
       )}
 
-      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+      <DropdownPortal
+        isOpen={isOpen}
+        popupPos={popupPos}
+        ref={popupRef}
+        id={listboxId}
+        role="listbox"
+      >
         {listContent}
         {hiddenToggleBar}
       </DropdownPortal>

@@ -23,6 +23,7 @@ import type {
 import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { Icon } from "../shared/Icon";
 
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
@@ -162,7 +163,7 @@ export const WorkspaceWorktreeOwnershipBanner: React.FC<{
   ownership: WorkspaceWorktreeOwnership;
 }> = ({ ownership }) => (
   <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
-    <i className="codicon codicon-source-control" aria-hidden="true" />
+    <Icon name="source-control" />
     <span>
       This is branch <code className="font-mono">{ownership.branchName}</code>,
       owned by <code className="font-mono">{ownership.sourceCheckoutRoot}</code>
@@ -231,7 +232,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     >
       <div className="flex items-center justify-between gap-2 min-w-0">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate min-w-0">
+          <span className="truncate min-w-0" data-testid="run-id-banner">
             Run {runId} &middot; {new Date(startedAt).toLocaleString()}
           </span>
           <ExecutionStateBadge state={executionState} />
@@ -260,9 +261,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             aria-pressed={isPinned}
             className="icon-btn py-0.5 px-1"
           >
-            <i
-              className={`codicon ${isPinned ? "codicon-pinned" : "codicon-pin"}`}
-            />
+            <Icon name={isPinned ? "codicon-pinned" : "codicon-pin"} />
           </button>
         </span>
       </div>
@@ -283,8 +282,9 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                 className={`inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap ${OUTCOME_TONE[worktreeOutcome.severity].className}`}
                 title={worktreeOutcome.text}
               >
-                <i
-                  className={`codicon ${OUTCOME_TONE[worktreeOutcome.severity].icon} text-xs`}
+                <Icon
+                  name={OUTCOME_TONE[worktreeOutcome.severity].icon}
+                  className="text-xs"
                 />
                 {worktreeOutcome.text}
               </span>
@@ -309,8 +309,8 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                   aria-label="Copy branch name"
                   className="icon-btn flex-shrink-0 py-0 px-1"
                 >
-                  <i
-                    className={`codicon ${copiedBranch ? "codicon-check" : "codicon-copy"}`}
+                  <Icon
+                    name={copiedBranch ? "codicon-check" : "codicon-copy"}
                   />
                 </button>
               </span>

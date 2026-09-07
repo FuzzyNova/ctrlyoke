@@ -14,6 +14,7 @@ import {
   toAgentSelectOption,
 } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import { Icon } from "../shared/Icon";
 
 interface AgentQuickPickerProps {
   isNarrow: boolean;
@@ -70,8 +71,9 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       isNarrow={isNarrow}
       showLabel={showLabel && properties.agent !== undefined}
       icon={
-        <i
-          className={`codicon codicon-agent codicon-sm transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
+        <Icon
+          name="agent"
+          className={`codicon-sm transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

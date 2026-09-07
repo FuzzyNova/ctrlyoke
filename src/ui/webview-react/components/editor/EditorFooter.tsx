@@ -12,6 +12,7 @@ import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 
@@ -112,12 +113,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           }`}
           onClick={onToggleProperties}
           title="Toggle prompt properties"
+          aria-label="Toggle prompt properties"
         >
-          <i className="codicon codicon-settings" />
+          <Icon name="settings" />
           {!isMediumWidth && <span>Properties</span>}
           {!isMediumWidth && (
-            <i
-              className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
+            <Icon
+              name={
+                propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"
+              }
             />
           )}
         </button>
@@ -183,6 +187,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <DrawerTabBar
               activeTab={drawerActivePage}
               onTabChange={onDrawerTabChange}
+              ariaLabel="Prompt properties"
               harnessId={drawerHarnessId}
               isNarrow={isMediumWidth}
               tabOverrides={drawerTabOverrides}
@@ -204,13 +209,14 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isExternallyManaged}
+              aria-label="Cancel"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : "Cancel editing and return to new prompt mode"
               }
             >
-              <i className="codicon codicon-close" />
+              <Icon name="close" />
               {!isMediumWidth && <span className="btn-text">Cancel</span>}
             </button>
 
@@ -218,6 +224,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
               disabled={isExternallyManaged || !hasContent || isPromptBeingSent}
+              aria-label="Update"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
@@ -228,7 +235,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                       : "Update prompt in queue"
               }
             >
-              <i className="codicon codicon-check" />
+              <Icon name="check" />
               {!isMediumWidth && <span className="btn-text">Update</span>}
             </button>
 
@@ -236,6 +243,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={isExternallyManaged || isPromptActivelyRunning}
+              aria-label={isFinalStepMode ? "Disable" : "Delete"}
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
@@ -246,7 +254,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                       : "Delete prompt from queue"
               }
             >
-              <i className="codicon codicon-trash" />
+              <Icon name="trash" />
               {!isMediumWidth && (
                 <span className="btn-text">
                   {isFinalStepMode ? "Disable" : "Delete"}
@@ -261,13 +269,14 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={isExternallyManaged || !hasContent}
+              aria-label="Queue"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : queueButtonTooltip
               }
             >
-              <i className="codicon codicon-add" />
+              <Icon name="add" />
               {!isMediumWidth && <span className="btn-text">Queue</span>}
             </button>
 
@@ -275,13 +284,14 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-run border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
               disabled={isExternallyManaged || !hasContent}
+              aria-label="Run"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
             >
-              <i className="codicon codicon-send" />
+              <Icon name="send" />
               {!isMediumWidth && (
                 <span className="btn-text">{runButtonText}</span>
               )}

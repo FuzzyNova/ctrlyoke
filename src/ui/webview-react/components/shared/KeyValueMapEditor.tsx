@@ -4,6 +4,7 @@ import {
   useSecretRegistryStore,
   type SecretRegistryState,
 } from "@store/secretRegistryStore";
+import { Icon } from "./Icon";
 
 export interface KeyValueMapEditorProps {
   label: string;
@@ -169,7 +170,7 @@ export function KeyValueMapEditor({
           className="flex items-start gap-1 text-xxs text-warning-fg"
           role="alert"
         >
-          <i className="codicon codicon-warning mt-px" aria-hidden="true" />
+          <Icon name="warning" className="mt-px" />
           <span>
             {literalCredentialKeys.join(", ")} looks like a pasted credential.
             Use the secret picker so the value is resolved at run time.

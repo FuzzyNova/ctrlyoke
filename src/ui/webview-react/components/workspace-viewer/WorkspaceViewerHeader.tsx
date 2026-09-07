@@ -7,6 +7,7 @@ import {
   WORKSPACE_VIEWER_TABS,
   type WorkspaceViewerTab,
 } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 interface WorkspaceViewerHeaderProps {
   activeTab: WorkspaceViewerTab;
@@ -83,30 +84,33 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.EXPLORER)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.EXPLORER}
+          aria-label="Explorer"
           role="tab"
           title="Explorer"
         >
-          <i className="codicon codicon-files codicon-sm px-1 sm:px-0" />
+          <Icon name="files" className="codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL}
+          aria-label="Source Control"
           role="tab"
           title="Source Control"
         >
-          <i className="codicon codicon-source-control codicon-sm px-1 sm:px-0" />
+          <Icon name="source-control" className="codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Source Control</span>
         </button>
         <button
           className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SEARCH ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SEARCH)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SEARCH}
+          aria-label="Search"
           role="tab"
           title="Search"
         >
-          <i className="codicon codicon-search codicon-sm px-1 sm:px-0" />
+          <Icon name="search" className="codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Search</span>
         </button>
         <NavHistoryControls className="ml-2" />
@@ -115,8 +119,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Title — takes remaining space, truncates before touching side elements */}
       <div className="flex-1 min-w-0 flex flex-col items-center px-2 select-none pointer-events-none">
         <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
-          <i
-            className={`codicon ${titleFilePath ? "codicon-file" : "codicon-project"} codicon-sm flex-shrink-0`}
+          <Icon
+            name={titleFilePath ? "codicon-file" : "codicon-project"}
+            className="codicon-sm flex-shrink-0"
           />
           <span className="truncate" data-testid="workspace-name">
             {titleFilePath

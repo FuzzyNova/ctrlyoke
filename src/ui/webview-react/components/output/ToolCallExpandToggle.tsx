@@ -1,4 +1,5 @@
 import React from "react";
+import { Icon } from "../shared/Icon";
 
 export interface ToolCallExpandToggleProps {
   expanded: boolean;
@@ -32,10 +33,9 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
       aria-label={ariaLabel ?? title ?? resolvedLabel}
       aria-expanded={expanded}
     >
-      <i
-        className={`codicon ${
-          expanded ? "codicon-fold" : "codicon-unfold"
-        } text-[length:var(--fp-output-font-size-sm)]`}
+      <Icon
+        name={expanded ? "codicon-fold" : "codicon-unfold"}
+        className="text-[length:var(--fp-output-font-size-sm)]"
       />
       {showLabel && resolvedLabel && (
         <span className="text-[length:var(--fp-output-font-size-xs)] uppercase">

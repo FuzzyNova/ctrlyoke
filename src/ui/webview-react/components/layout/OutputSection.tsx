@@ -92,6 +92,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { workflowViewAddressKey } from "@utils/viewAddress";
+import { Icon } from "../shared/Icon";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -356,12 +357,13 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.globalSettings.atomicContextReferences
   );
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(
+  const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLElement>(
     OUTPUT_SECTION_HEADER_NARROW_THRESHOLD
   );
-  const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
+  const [veryNarrowRef, isHeaderVeryNarrow] =
+    useElementNarrow<HTMLElement>(400);
   const mergedHeaderRef = useCallback(
-    (node: HTMLDivElement | null) => {
+    (node: HTMLElement | null) => {
       headerRef(node);
       veryNarrowRef(node);
     },
@@ -1521,28 +1523,24 @@ const OutputSectionInner: React.FC = () => {
   );
 
   const collapsedHeader = (
-    <div
+    <button
+      type="button"
       ref={mergedHeaderRef}
-      className="flex flex-row items-center w-full h-[30px] px-2 gap-1 border-b border-panel-border bg-sidebar-bg cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
+      className="flex h-[30px] w-full flex-shrink-0 appearance-none flex-row items-center gap-1 border-0 border-b border-panel-border bg-sidebar-bg px-2 text-left text-description-fg transition-colors hover:text-foreground"
       onClick={handleToggleOutputCollapse}
-      role="button"
       aria-label="Expand output"
-      tabIndex={0}
-      onKeyDown={(e) =>
-        e.key === KEYBOARD_KEYS.ENTER && handleToggleOutputCollapse()
-      }
     >
-      <i className="codicon codicon-chevron-right text-xs" />
-      <i className="codicon codicon-output text-sm" />
+      <Icon name="chevron-right" className="text-xs" />
+      <Icon name="output" className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         Output
       </span>
       <span className="text-xs text-description-fg mx-1">/</span>
-      <i className="codicon codicon-terminal text-sm" />
+      <Icon name="terminal" className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         Terminal
       </span>
-    </div>
+    </button>
   );
 
   if (outputCollapsed && editorCollapsed) {
@@ -1553,6 +1551,7 @@ const OutputSectionInner: React.FC = () => {
     <section
       ref={sectionRef}
       id="output-section"
+      aria-label="Output"
       className={`bg-editor-bg flex flex-col overflow-hidden ${
         // `inset-0` alone fills the fixed element to the viewport; pairing it
         // with an explicit h-screen/w-screen over-constrains position+size

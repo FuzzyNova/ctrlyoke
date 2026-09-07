@@ -8,6 +8,7 @@ import {
   parallelGroupHeaderTitle,
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
+import { Icon } from "../shared/Icon";
 
 const SHELL_WORKFLOW_ID = "_shell";
 
@@ -90,9 +91,10 @@ export const ParallelGroupHeaderRowView: React.FC<
                 row.promptUndo.undo.label,
                 row.members.length
               )}
+              aria-label="Undo parallel group changes"
               onClick={() => onUndo(row)}
             >
-              <i className="codicon codicon-discard shrink-0" />
+              <Icon name="discard" className="shrink-0" />
               <span className="min-w-0 truncate">
                 {row.promptUndo.undo.label}
               </span>
@@ -107,9 +109,10 @@ export const ParallelGroupHeaderRowView: React.FC<
                 row.promptUndo.redo.label,
                 row.members.length
               )}
+              aria-label="Redo parallel group changes"
               onClick={() => onRedo(row)}
             >
-              <i className="codicon codicon-redo shrink-0" />
+              <Icon name="redo" className="shrink-0" />
               <span className="min-w-0 truncate">
                 {row.promptUndo.redo.label}
               </span>

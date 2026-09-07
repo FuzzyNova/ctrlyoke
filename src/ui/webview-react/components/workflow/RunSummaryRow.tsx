@@ -20,6 +20,7 @@ import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { Icon } from "../shared/Icon";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
@@ -156,6 +157,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       data-scroll-key={rowKey}
       role="option"
       aria-selected={isViewed}
+      aria-label={accessibleName}
       title={accessibleName}
       className={`run-panel-row group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
         isViewed
@@ -181,7 +183,10 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
               aria-label="Executing now"
             />
           ) : isPending && !isViewed ? (
-            <i className="codicon codicon-loading codicon-modifier-spin text-xxs text-description-fg" />
+            <Icon
+              name="loading"
+              className="codicon-modifier-spin text-xxs text-description-fg"
+            />
           ) : undefined
         }
         badge={
@@ -217,7 +222,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
                 }}
                 className="flex h-5 w-5 items-center justify-center rounded text-terminal-ansiRed hover:bg-list-hover-bg"
               >
-                <i className="codicon codicon-check text-xs" />
+                <Icon name="check" className="text-xs" />
               </button>
               <button
                 type="button"
@@ -229,7 +234,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
                 }}
                 className="flex h-5 w-5 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg"
               >
-                <i className="codicon codicon-close text-xs" />
+                <Icon name="close" className="text-xs" />
               </button>
             </span>
           ) : (
@@ -243,7 +248,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
               }}
               className="flex h-5 w-5 items-center justify-center rounded text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
             >
-              <i className="codicon codicon-trash text-xs" />
+              <Icon name="trash" className="text-xs" />
             </button>
           ))}
       </RowActionRail>

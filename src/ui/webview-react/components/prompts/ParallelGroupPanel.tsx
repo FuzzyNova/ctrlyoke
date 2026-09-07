@@ -32,6 +32,7 @@ import {
   absoluteIndexFromStepDragId,
   groupDragId,
 } from "@utils/dndKit";
+import { Icon } from "../shared/Icon";
 
 export type ParallelGroupStatus =
   | "running"
@@ -263,10 +264,10 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
             {...attributes}
             aria-label="Drag to reorder parallel group"
           >
-            <i className="codicon codicon-grabber text-xs" />
+            <Icon name="grabber" className="text-xs" />
           </span>
         )}
-        <i className="codicon codicon-type-hierarchy text-description-fg" />
+        <Icon name="type-hierarchy" className="text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
         </span>

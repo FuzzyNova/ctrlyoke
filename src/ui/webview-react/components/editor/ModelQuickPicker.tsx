@@ -8,6 +8,7 @@ import { FOOTER_PICKERS } from "../../types/messages";
 import { modelNamespaceForHarness } from "../../types/dropdownNamespaces";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import { Icon } from "../shared/Icon";
 
 interface ModelQuickPickerProps {
   isNarrow: boolean;
@@ -58,8 +59,9 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       isNarrow={isNarrow}
       showLabel={showLabel}
       icon={
-        <i
-          className={`codicon codicon-robot codicon-sm transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`}
+        <Icon
+          name="robot"
+          className={`codicon-sm transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

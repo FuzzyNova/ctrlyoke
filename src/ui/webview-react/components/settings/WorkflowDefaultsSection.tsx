@@ -61,6 +61,7 @@ export function WorkflowDefaultsSection({
       <DrawerTabBar
         activeTab={activePage}
         onTabChange={setActivePage}
+        ariaLabel="Workflow defaults"
         isNarrow={false}
         tabOverrides={tabOverrides}
       />

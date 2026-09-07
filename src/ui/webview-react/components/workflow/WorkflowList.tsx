@@ -35,6 +35,7 @@ import { isDrillableRunNav } from "@utils/runNavigation";
 import { isWorkflowActive } from "../../utils/status";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
+import { Icon } from "../shared/Icon";
 
 /**
  * One row of the unified workflow dropdown list: either a lineage executing
@@ -154,6 +155,15 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const timeAgo = formatRelativeTimeVerbose(
     workflow.lastModifiedAt || workflow.startedAt
   );
+  const accessibleName = composeRowAccessibleName([
+    workflow.workflowName,
+    workflow.executionState,
+    showStepCount &&
+      `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
+    workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
+    timeAgo,
+    showTerminalIcon && "terminal session is still running",
+  ]);
   const openContextMenu = (
     x: number,
     y: number,
@@ -180,7 +190,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   );
 
   return (
-    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
@@ -191,6 +201,8 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           getContextMenuOpener(event.currentTarget, event.target)
         );
       }}
+      role="listitem"
+      aria-label={accessibleName}
       title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
         isCurrent
@@ -201,15 +213,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       <WorkflowRowLayout
         tier={tier}
         onClick={() => onSelect(workflow.address)}
-        ariaLabel={composeRowAccessibleName([
-          workflow.workflowName,
-          workflow.executionState,
-          showStepCount &&
-            `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`,
-          workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
-          timeAgo,
-          showTerminalIcon && "terminal session is still running",
-        ])}
+        ariaLabel={accessibleName}
         harness={
           workflow.harness && (
             <HarnessIcon harnessId={workflow.harness} size={14} />
@@ -233,8 +237,8 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         worktree={workflow.worktree}
         glyph={
           showTerminalIcon && (
-            <i
-              className="codicon codicon-terminal"
+            <Icon
+              name="terminal"
               title="Terminal session is still running"
               aria-label="Terminal session is still running"
             />
@@ -291,8 +295,11 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
                 : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
             }`}
           >
-            <i
-              className={`codicon block leading-none ${workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"}`}
+            <Icon
+              name={
+                workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"
+              }
+              className="block leading-none"
             />
           </button>
         )}
@@ -309,7 +316,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
             }}
             className="flex h-8 w-6 flex-shrink-0 items-center justify-center rounded px-0 py-0 leading-none text-description-fg opacity-0 transition-colors group-hover:opacity-100 hover:bg-toolbar-hover-bg hover:text-error-fg focus:opacity-100"
           >
-            <i className="codicon codicon-trash block leading-none" />
+            <Icon name="trash" className="block leading-none" />
           </button>
         )}
       </RowActionRail>
@@ -446,6 +453,8 @@ export const WorkflowList = React.forwardRef<
           (flex-1) so running rows can use the free space. */}
       {hasRunningRows && (
         <div
+          role="region"
+          aria-label="Running workflows"
           className={`running-workflows-region flex flex-col border-b border-dropdown-border ${
             hasRecentRows
               ? "flex-shrink-0 max-h-[min(260px,50%)]"
@@ -453,14 +462,13 @@ export const WorkflowList = React.forwardRef<
           }`}
         >
           <div className="flex flex-shrink-0 items-center gap-1.5 px-3 pt-1.5 pb-0.5 text-xxs font-semibold uppercase tracking-wider text-description-fg">
-            <i
-              className="codicon codicon-debug-line-by-line"
-              aria-hidden="true"
-            />
+            <Icon name="debug-line-by-line" />
             <span>Running ({runningRows.length})</span>
           </div>
           <div
             ref={runningScrollContainerRef}
+            role="list"
+            aria-label="Running workflows"
             className="running-workflow-items min-h-0 overflow-y-auto overflow-x-clip pb-1"
           >
             <VirtualizedDropdownList
@@ -499,6 +507,8 @@ export const WorkflowList = React.forwardRef<
           region, so running lineages stay reachable at any scroll depth */}
       <div
         ref={recentScrollContainerRef}
+        role="list"
+        aria-label="Recent workflows"
         className={`workflow-menu-items overflow-y-auto overflow-x-clip py-1 ${
           hasRecentRows || !hasRunningRows ? "flex-1 min-h-0" : "flex-shrink-0"
         }`}
@@ -537,7 +547,7 @@ export const WorkflowList = React.forwardRef<
             onClick={() => onNewWorkflow?.()}
             className="fp-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
           >
-            <i className="codicon codicon-add text-xs" />
+            <Icon name="add" className="text-xs" />
             New Workflow
           </button>
         )}

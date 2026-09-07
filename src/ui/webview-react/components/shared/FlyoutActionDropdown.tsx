@@ -7,6 +7,7 @@ import {
   ActionDropdownItemContent,
   type ActionDropdownItem,
 } from "./ActionDropdown";
+import { Icon } from "./Icon";
 
 // ============================================================================
 // Public types
@@ -205,11 +206,12 @@ export function FlyoutActionDropdown({
         }
       >
         <span className="flex min-w-0 items-center gap-1 truncate">
-          {icon && <i className={`codicon codicon-${icon} text-xxs`} />}
+          {icon && <Icon name={icon} className="text-xxs" />}
           {!iconOnly && <span className="truncate">{label}</span>}
         </span>
-        <i
-          className={`codicon codicon-chevron-${isLevelOneOpen ? "up" : "down"} text-[10px]`}
+        <Icon
+          name={`chevron-${isLevelOneOpen ? "up" : "down"}`}
+          className="text-[10px]"
         />
       </button>
 
@@ -232,7 +234,10 @@ export function FlyoutActionDropdown({
               }`}
           >
             <span>{group.label}</span>
-            <i className="codicon codicon-chevron-right text-[10px] opacity-60 ml-3" />
+            <Icon
+              name="chevron-right"
+              className="text-[10px] opacity-60 ml-3"
+            />
           </button>
         ))}
       </DropdownPortal>

@@ -14,6 +14,7 @@ import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
+import { Icon } from "../shared/Icon";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -319,7 +320,7 @@ export function LicenseSection() {
               })
             }
           >
-            <i className="codicon codicon-folder-opened text-xxs" />
+            <Icon name="folder-opened" className="text-xxs" />
             Browse for license file…
           </button>
         )}
@@ -378,7 +379,7 @@ export function LicenseSection() {
               onClick={requestMachines}
               disabled={machineListPending}
             >
-              <i className="codicon codicon-refresh text-xxs" />
+              <Icon name="refresh" className="text-xxs" />
               Refresh
             </button>
           </div>

@@ -17,6 +17,7 @@ import {
   buildPermissionsDefaultLabel,
 } from "../shared/permissionUtils";
 import { FooterQuickPicker } from "./FooterQuickPicker";
+import { Icon } from "../shared/Icon";
 
 interface PermissionsQuickPickerProps {
   isNarrow: boolean;
@@ -71,8 +72,9 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       isNarrow={isNarrow}
       showLabel={showLabel}
       icon={
-        <i
-          className={`codicon codicon-shield codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
+        <Icon
+          name="shield"
+          className={`codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

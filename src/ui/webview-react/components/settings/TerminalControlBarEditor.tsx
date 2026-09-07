@@ -34,6 +34,7 @@ import { useSortableDndSensors } from "@hooks/useSortableDndSensors";
 import { Button } from "../shared/Button";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { Icon } from "../shared/Icon";
 
 const CUSTOM_SHORTCUTS_PATH = "terminal.mobileCustomShortcuts";
 const BAR_LAYOUT_PATH = "terminal.mobileBarLayout";
@@ -404,7 +405,7 @@ function KeyCaptureInput({
           aria-label="Capture key combination"
           onClick={startCapture}
         >
-          <i className="codicon codicon-sm codicon-keyboard" />
+          <Icon name="keyboard" className="codicon-sm" />
         </button>
       </div>
     </div>
@@ -450,7 +451,7 @@ function SortableBarChip({
         {...attributes}
         aria-label={`Drag to reorder ${item.label}, position ${index + 1}`}
       >
-        <i className="codicon codicon-grabber text-xs" aria-hidden="true" />
+        <Icon name="grabber" className="text-xs" />
       </button>
       <span
         className="truncate text-center text-xs text-foreground"
@@ -473,10 +474,7 @@ function SortableBarChip({
             : `Move ${item.label} to shortcut list`
         }
       >
-        <i
-          className={`codicon codicon-${item.isCtrl ? "eye-closed" : "arrow-down"}`}
-          aria-hidden="true"
-        />
+        <Icon name={item.isCtrl ? "eye-closed" : "arrow-down"} />
       </button>
     </div>
   );
@@ -527,7 +525,7 @@ function SortablePopupRow({
         {...attributes}
         aria-label={`Drag to reorder ${item.label}, position ${index + 1}`}
       >
-        <i className="codicon codicon-grabber text-xs" aria-hidden="true" />
+        <Icon name="grabber" className="text-xs" />
       </button>
       <span className="w-5 shrink-0 text-center text-xs text-description-fg">
         {index + 1}
@@ -569,7 +567,7 @@ function SortablePopupRow({
           aria-label={`Move ${item.label} to control bar`}
           onClick={onPromote}
         >
-          <i className="codicon codicon-arrow-up" aria-hidden="true" />
+          <Icon name="arrow-up" />
         </button>
         <button
           type="button"
@@ -578,7 +576,7 @@ function SortablePopupRow({
           aria-label={`Hide ${item.label}`}
           onClick={onHide}
         >
-          <i className="codicon codicon-eye-closed" aria-hidden="true" />
+          <Icon name="eye-closed" />
         </button>
         {shortcut && (
           <button
@@ -588,7 +586,7 @@ function SortablePopupRow({
             aria-label={`Delete ${item.label}`}
             onClick={onDelete}
           >
-            <i className="codicon codicon-trash" aria-hidden="true" />
+            <Icon name="trash" />
           </button>
         )}
       </div>
@@ -869,7 +867,7 @@ export function TerminalControlBarEditor({
                     )
                   }
                 >
-                  <i className="codicon codicon-eye" aria-hidden="true" />
+                  <Icon name="eye" />
                 </button>
               </div>
             ))}

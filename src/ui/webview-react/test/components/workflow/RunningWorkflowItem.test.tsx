@@ -86,7 +86,7 @@ describe("RunningWorkflowItem", () => {
 
   it("keeps Copy unavailable when the running lineage is not in recent history", () => {
     const onOpenContextMenu = vi.fn();
-    const { container } = render(
+    render(
       <RunningWorkflowItem
         workflow={{
           id: "running",
@@ -105,10 +105,13 @@ describe("RunningWorkflowItem", () => {
       />
     );
 
-    fireEvent.contextMenu(container.querySelector(".running-workflow-item")!, {
-      clientX: 10,
-      clientY: 20,
-    });
+    fireEvent.contextMenu(
+      screen.getByRole("listitem", { name: /Running workflow/ }),
+      {
+        clientX: 10,
+        clientY: 20,
+      }
+    );
 
     expect(onOpenContextMenu).toHaveBeenCalledWith(
       10,

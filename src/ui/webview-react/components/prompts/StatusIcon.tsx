@@ -1,6 +1,7 @@
 import React from "react";
 import { STEP_STATUS, type StepStatus } from "../../types/messages";
 import { getStatusColorClass } from "@utils/status";
+import { Icon } from "../shared/Icon";
 
 interface StatusIconProps {
   status: StepStatus;
@@ -74,8 +75,9 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   const { icon, colorClass } = getIconConfig();
 
   return (
-    <i
-      className={`codicon ${icon} ${colorClass} text-sm ${className}`}
+    <Icon
+      name={icon}
+      className={`${colorClass} text-sm ${className}`}
       aria-label={disabled ? "disabled" : status}
     />
   );

@@ -17,6 +17,7 @@ import {
 } from "@root/types/PortabilityReport";
 import { formatCompatibilitySource } from "@utils/compatibilityDiagnostics";
 import { HarnessIcon } from "./HarnessIcon";
+import { Icon } from "./Icon";
 
 const STATUS_META: Record<
   PortabilityRowStatus,
@@ -279,10 +280,7 @@ function ReportBody({
                       className="inline-flex items-center gap-1"
                       aria-label={statusText(row)}
                     >
-                      <i
-                        className={`codicon codicon-${meta.icon}`}
-                        aria-hidden="true"
-                      />
+                      <Icon name={meta.icon} />
                       <span>{meta.label}</span>
                       {row.unverified && (
                         <span className="ml-1 text-xxs text-description-fg">
@@ -343,10 +341,7 @@ export const PortabilityReportSection: React.FC<
           className="flex items-center gap-2 text-sm text-description-fg"
           role="status"
         >
-          <i
-            className="codicon codicon-loading codicon-modifier-spin"
-            aria-hidden="true"
-          />
+          <Icon name="loading" className="codicon-modifier-spin" />
           Checking installed harness capabilities…
         </p>
       ) : (
