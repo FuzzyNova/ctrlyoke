@@ -123,17 +123,35 @@ Decisions, so this is not re-litigated at implement time:
   `DEFAULT_OUTPUT_CONTENT_WIDTH`, `MIN_OUTPUT_CONTENT_WIDTH`, and
   `resolveOutputContentWidth` — as `OUTPUT_CONTENT_WIDTH_BUCKET`, add a
   `bucketOutputContentWidth(width)` helper beside it, and delete both copies.
-- **`initialTier: 0`, meaning unmeasured.** Convert to a width with
-  `bucket > 0 ? bucket * OUTPUT_CONTENT_WIDTH_BUCKET : undefined`, mirroring
-  `DiffFileList.tsx:110`. Passing `undefined` (not `760`) keeps
-  `buildOutputRows`'s existing unknown-width branch — the `showParamsLabel`
-  behaviour at `outputRows.ts:2148` — behaving exactly as today.
+- **`initialTier: 0`, meaning unmeasured — and keep `0`, not `undefined`, as
+  the width the pane passes down.** Convert with
+  `bucket * OUTPUT_CONTENT_WIDTH_BUCKET`, which is already `0` when unmeasured.
+  `DiffFileList.tsx:110` maps its own unmeasured bucket to `undefined` because
+  `projectDiffFileListRows` takes an optional width; the output pane's two
+  consumers do not — `useOutputRowsModel.ts:72` and
+  `useOutputVirtualization.ts:75` both declare `outputContentWidth: number`,
+  and `OutputSection` has passed `useState(0)` since it was written. `0` and
+  `undefined` are already equivalent everywhere downstream
+  (`resolveOutputContentWidth` and `outputRows.ts`'s `showParamsLabel` branch
+  both test `== null || === 0`), so keeping `0` preserves behaviour exactly
+  while avoiding a widening of two hook prop types to `number | undefined`
+  that buys nothing.
+- **Expect the bucketed width to reach the virtualizer too.**
+  `useOutputVirtualization.ts:236` feeds `outputContentWidth` into
+  `estimateOutputRowHeight`, so flooring applies there as well. That is the
+  same safe direction as everywhere else — a narrower assumed pane
+  over-estimates wrapped height — and the bulk-remeasure path already corrects
+  the residual.
 - **Derive `outputDiffViewType` from the bucketed width and delete its
   `useState`.** It is a second piece of state recomputed in the same effect and
   a second rebuild trigger. `DIFF_SPLIT_VIEW_MIN_WIDTH`
   (`OutputSection.tsx:95`) and `DIFF_SPLIT_VIEW_THRESHOLD`
   (`DiffFileList.tsx:44`) are two module-private constants both equal to
-  `1024`; promote one alongside the bucket.
+  `1024`; promote one alongside the bucket. Take the same opportunity to drop
+  the inline `"split" | "unified"` literal unions at `OutputSection.tsx:366`
+  and `useOutputRowsModel.ts:70` in favour of the existing `DiffViewType` /
+  `DIFF_VIEW_TYPES` in `DashboardConstants.ts`, which `diffFileRows.ts` and
+  `outputLineMetrics.ts` already use.
 - **Fire the scroll correction once per bucket change**, not once per frame.
   `applyScrollTargetRef.current("width-change")` currently runs every frame,
   forcing a synchronous layout against a ~500 000 px scroll canvas each time.
