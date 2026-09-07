@@ -10,6 +10,12 @@ always queued: it waits for the current prompt to finish before it is sent,
 even if a harness session is already sitting there idle mid-turn, ready to
 take a follow-up.
 
+A companion plan, [`RUN_DISPATCH_MENU_PLAN.md`](./RUN_DISPATCH_MENU_PLAN.md),
+finishes the split button this plan introduces: it adds "Run in Parallel" and
+"Run in New Workflow" to the same drop-up, settles the disabled-vs-hidden
+policy for menu items, and keeps Queue as its own button. Either plan may land
+first; whichever does owns the split-button shell.
+
 This plan adds a **steer message**: a way to send the prompt editor's current
 draft directly into an already-running interactive PTY session, immediately,
 without adding a step to the queue. It reuses the follow-up detection already
