@@ -188,6 +188,7 @@ export function useOutputVirtualization({
   const measurementVersionFrameRef = useRef<number | null>(null);
   const [nonVirtualRenderedRowCount, setNonVirtualRenderedRowCount] =
     useState<number>(Number.MAX_SAFE_INTEGER);
+  const initialMeasurementCompletedRef = useRef(false);
   const nonVirtualRenderFrameRef = useRef<number | null>(null);
   const nonVirtualRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -769,19 +770,33 @@ export function useOutputVirtualization({
     // This keeps live and historical rows on the same measured-size path
     // without restoring the old per-append bulk sweep, whose forced scroll
     // target reconciliation caused the streaming snap-back regression.
-    for (const element of mountedRowElementsRef.current) {
-      if (!element.isConnected) {
-        mountedRowElementsRef.current.delete(element);
-        continue;
-      }
+    const phase = initialMeasurementCompletedRef.current
+      ? "virtualizerMeasurementPass"
+      : "virtualizerInitialMeasurement";
+    measurePhase(
+      phase,
+      {
+        rows: rows.length,
+        mountedRows: mountedRowElementsRef.current.size,
+        virtualRows: rowVirtualizer.getVirtualItems().length,
+      },
+      () => {
+        for (const element of mountedRowElementsRef.current) {
+          if (!element.isConnected) {
+            mountedRowElementsRef.current.delete(element);
+            continue;
+          }
 
-      const index = Number(element.dataset.index ?? -1);
-      if (index < 0 || index >= rows.length) {
-        continue;
-      }
+          const index = Number(element.dataset.index ?? -1);
+          if (index < 0 || index >= rows.length) {
+            continue;
+          }
 
-      rowVirtualizer.resizeItem(index, measureOutputRowElement(element));
-    }
+          rowVirtualizer.resizeItem(index, measureOutputRowElement(element));
+        }
+      }
+    );
+    initialMeasurementCompletedRef.current = true;
   }, [
     isOutputVirtualized,
     measureOutputRowElement,
@@ -1141,22 +1156,25 @@ export function useOutputVirtualization({
         return;
       }
 
-      logProfilerEvent("reactCommit", {
-        id,
-        phase,
-        actualDuration,
-        baseDuration,
-        renderToCommitGap: commitTime - startTime,
-        virtualRows: virtualRows.length,
-        overscan: outputOverscan,
-        scrollSeekPlaceholder: isOutputScrollSeeking,
-        scrollSeekRestorePendingMs:
-          scrollSeekRestoreRequestedAtRef.current != null
-            ? commitTime - scrollSeekRestoreRequestedAtRef.current
-            : undefined,
-        totalRows: rows.length,
-        measurementVersion,
-      });
+      logProfilerEvent(
+        id === "OutputMinimap" ? "outputMinimapRenderCommit" : "reactCommit",
+        {
+          id,
+          phase,
+          actualDuration,
+          baseDuration,
+          renderToCommitGap: commitTime - startTime,
+          virtualRows: virtualRows.length,
+          overscan: outputOverscan,
+          scrollSeekPlaceholder: isOutputScrollSeeking,
+          scrollSeekRestorePendingMs:
+            scrollSeekRestoreRequestedAtRef.current != null
+              ? commitTime - scrollSeekRestoreRequestedAtRef.current
+              : undefined,
+          totalRows: rows.length,
+          measurementVersion,
+        }
+      );
     },
     [
       isOutputScrollSeeking,
