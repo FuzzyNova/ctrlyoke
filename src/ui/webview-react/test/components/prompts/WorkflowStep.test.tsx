@@ -1,5 +1,5 @@
-import { render } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowStepItem } from "@components/prompts/WorkflowStep";
 import { STEP_STATUS, type CliOutput } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
@@ -71,6 +71,25 @@ describe("WorkflowStep token usage", () => {
     expect(
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();
+  });
+
+  it("activates the workflow-step row from Space", () => {
+    const onClick = vi.fn();
+
+    render(
+      <WorkflowStepItem
+        text="Review the changes"
+        index={0}
+        status={STEP_STATUS.COMPLETED}
+        onClick={onClick}
+      />
+    );
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Step 1" }), {
+      key: " ",
+    });
+
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it("always shows the attempt total in compact stats, uncompacted", () => {

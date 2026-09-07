@@ -348,12 +348,13 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.globalSettings.atomicContextReferences
   );
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(
+  const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLElement>(
     OUTPUT_SECTION_HEADER_NARROW_THRESHOLD
   );
-  const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
+  const [veryNarrowRef, isHeaderVeryNarrow] =
+    useElementNarrow<HTMLElement>(400);
   const mergedHeaderRef = useCallback(
-    (node: HTMLDivElement | null) => {
+    (node: HTMLElement | null) => {
       headerRef(node);
       veryNarrowRef(node);
     },
@@ -1525,16 +1526,12 @@ const OutputSectionInner: React.FC = () => {
   );
 
   const collapsedHeader = (
-    <div
+    <button
+      type="button"
       ref={mergedHeaderRef}
-      className="flex flex-row items-center w-full h-[30px] px-2 gap-1 border-b border-panel-border bg-sidebar-bg cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
+      className="flex h-[30px] w-full flex-shrink-0 appearance-none flex-row items-center gap-1 border-0 border-b border-panel-border bg-sidebar-bg px-2 text-left text-description-fg transition-colors hover:text-foreground"
       onClick={handleToggleOutputCollapse}
-      role="button"
       aria-label="Expand output"
-      tabIndex={0}
-      onKeyDown={(e) =>
-        e.key === KEYBOARD_KEYS.ENTER && handleToggleOutputCollapse()
-      }
     >
       <Icon name="chevron-right" className="text-xs" />
       <Icon name="output" className="text-sm" />
@@ -1546,7 +1543,7 @@ const OutputSectionInner: React.FC = () => {
       <span className="text-xs font-semibold uppercase tracking-wide">
         Terminal
       </span>
-    </div>
+    </button>
   );
 
   if (outputCollapsed && editorCollapsed) {

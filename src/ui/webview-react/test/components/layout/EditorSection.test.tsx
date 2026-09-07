@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorSection } from "@components/layout/EditorSection";
 import { useEditorStore } from "@store/editorStore";
@@ -123,6 +124,30 @@ describe("EditorSection", () => {
     expect(action.querySelector(`.codicon-${icon}`)).not.toBeNull();
     fireEvent.click(action);
     expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("activates the collapse control from Space", async () => {
+    const user = userEvent.setup();
+    render(<EditorSection />);
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse editor",
+    });
+    collapseButton.focus();
+    await user.keyboard(" ");
+
+    expect(useUiStore.getState().editorCollapsed).toBe(true);
+  });
+
+  it("activates the step-name editor from Space", async () => {
+    const user = userEvent.setup();
+    render(<EditorSection />);
+
+    const nameButton = screen.getByTitle("Click to set prompt name");
+    nameButton.focus();
+    await user.keyboard(" ");
+
+    expect(screen.getByRole("textbox", { name: "Step name" })).toBeVisible();
   });
 
   it("hides the prompt-file action for script steps and CLI-managed workflows", () => {

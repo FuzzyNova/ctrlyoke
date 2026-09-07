@@ -312,6 +312,11 @@ carried only by a class name cannot be asserted by any test or read by any user.
 
 ## Phase 5 — Keyboard parity for `role="button"` divs
 
+**Status:** Complete — standalone controls now use native buttons with reset styling;
+final-step/workflow rows and modal backdrops retain `role="button"` because they contain
+nested action buttons, and all remaining custom buttons handle Enter and Space with focusable
+`tabIndex={0}`. UI tests cover Space activation for the converted controls and protected rows.
+
 17 elements carry `role="button"` on a `<div>`/`<span>`. A real `<button>` responds to both Enter
 and Space; these must replicate that or assistive-tech users cannot activate them.
 

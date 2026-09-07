@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
   OutputSectionHeader,
@@ -51,6 +52,20 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
 }
 
 describe("OutputSectionHeader terminal execution identity", () => {
+  it("activates the collapse control from Space", async () => {
+    const user = userEvent.setup();
+    const onToggleCollapse = vi.fn();
+    renderHeader({ onToggleCollapse });
+
+    const collapseButton = screen.getByRole("button", {
+      name: "Collapse output",
+    });
+    collapseButton.focus();
+    await user.keyboard(" ");
+
+    expect(onToggleCollapse).toHaveBeenCalledOnce();
+  });
+
   it("shows the live run identity in the terminal tab", () => {
     renderHeader({ terminalExecutionRunLabel: "Live Run 1042" });
 

@@ -200,13 +200,11 @@ const EditorSectionInner: React.FC = () => {
       {/* Section Header */}
       <div className="flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
         {/* Left: Collapse trigger (chevron + icon + label) */}
-        <div
-          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
+        <button
+          type="button"
+          className="flex flex-shrink-0 appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
           onClick={handleToggle}
-          role="button"
           aria-label="Collapse editor"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()}
         >
           <Icon
             name="chevron-right"
@@ -218,7 +216,7 @@ const EditorSectionInner: React.FC = () => {
               Editor
             </span>
           )}
-        </div>
+        </button>
 
         <div
           className="fp-mode-switch mx-2 select-none [-webkit-touch-callout:none]"
@@ -312,21 +310,14 @@ const EditorSectionInner: React.FC = () => {
                 style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
               />
             ) : (
-              <span
-                className={`cursor-pointer hover:text-foreground transition-colors truncate max-w-full${!stepEnabled ? " italic" : ""}`}
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                className={`max-w-full appearance-none truncate border-0 bg-transparent p-0 text-left font-inherit text-inherit transition-colors hover:text-foreground${!stepEnabled ? " italic" : ""}`}
                 onClick={startNameEditing}
-                onKeyDown={(e) => {
-                  if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
-                    e.preventDefault();
-                    startNameEditing();
-                  }
-                }}
                 title="Click to set prompt name"
               >
                 {getModeText()}
-              </span>
+              </button>
             )}
             {!isEditingName &&
               (!stepEnabled ? (

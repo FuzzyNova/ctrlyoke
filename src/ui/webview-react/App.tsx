@@ -1,6 +1,5 @@
 import {
   DOCUMENT_VISIBILITY_STATES,
-  KEYBOARD_KEYS,
   MOBILE_STEPS_MODES,
 } from "@root/types/DashboardConstants";
 import { useEffect, useRef, useState } from "react";
@@ -689,16 +688,11 @@ function App() {
             <>
               {/* Backdrop — tap outside closes (hidden while closing) */}
               {!settingsOverlayClosing && (
-                <div
-                  className="absolute inset-0 z-overlay"
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
+                  className="absolute inset-0 z-overlay appearance-none border-0 bg-transparent p-0"
                   aria-label="Close settings"
                   onClick={handleSettingsRequestClose}
-                  onKeyDown={(e) => {
-                    if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ")
-                      handleSettingsRequestClose();
-                  }}
                 />
               )}
               <div

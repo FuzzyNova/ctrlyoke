@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { sendMessageMock } = vi.hoisted(() => ({
@@ -176,6 +176,26 @@ describe("McpManagerSection", () => {
         scope: SETTING_SCOPES.USER,
       }
     );
+  });
+
+  it("closes the location delete dialog backdrop from Space", async () => {
+    const user = userEvent.setup();
+    renderSection([createManagedServer("server-a")]);
+
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    await user.click(deleteButtons[deleteButtons.length - 1]);
+    await user.click(
+      screen
+        .getAllByRole("button", { name: /Claude Code/ })
+        .find((button) => button.className.includes("fp-dropdown-row"))!
+    );
+
+    const backdrop = screen.getByRole("button", {
+      name: "Close delete MCP location dialog",
+    });
+    fireEvent.keyDown(backdrop, { key: " " });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("preserves non-visible default MCP entries when bulk set default runs", async () => {

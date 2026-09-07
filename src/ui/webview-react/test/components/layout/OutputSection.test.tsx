@@ -1,5 +1,6 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OutputSection } from "@components/layout/OutputSection";
 import { useSettingsStore } from "@store/settingsStore";
@@ -416,6 +417,21 @@ describe("OutputSection", () => {
 
     expect(useUiStore.getState().outputCollapsed).toBe(true);
     expect(applyScrollTargetSpy).not.toHaveBeenCalledWith("width-change");
+  });
+
+  it("expands the collapsed output pane from Space", async () => {
+    const user = userEvent.setup();
+    render(<OutputSection />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse output" }));
+
+    const expandButton = screen.getByRole("button", {
+      name: "Expand output",
+    });
+    expandButton.focus();
+    await user.keyboard(" ");
+
+    expect(useUiStore.getState().outputCollapsed).toBe(false);
   });
 
   it("routes live auto-scroll through the shared scroll target", () => {

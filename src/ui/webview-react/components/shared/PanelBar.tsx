@@ -1,4 +1,3 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React from "react";
 import { Icon } from "./Icon";
 
@@ -27,35 +26,31 @@ export const PanelBar: React.FC<PanelBarProps> = ({
   if (orientation === "vertical") {
     // Thin vertical column: just chevron + icon, no title text
     return (
-      <div
-        className="flex flex-col justify-start items-center w-full h-full pt-1.5 gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+      <button
+        type="button"
+        className="flex h-full w-full appearance-none flex-col items-center justify-start gap-1 border-0 bg-transparent p-0 pt-1.5 text-description-fg transition-colors hover:text-foreground"
         onClick={onClick}
-        role="button"
         aria-label={`Expand ${title}`}
-        tabIndex={0}
-        onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
       >
         <Icon name="chevron-right" className="text-xs" />
         <Icon name={icon} className="text-sm" />
-      </div>
+      </button>
     );
   }
 
   // Thin horizontal strip: chevron + icon + title
   return (
-    <div
-      className="flex flex-row items-center w-full h-[30px] px-2 gap-1 border-b border-panel-border bg-sidebar-bg cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+    <button
+      type="button"
+      className="flex h-[30px] w-full appearance-none flex-row items-center gap-1 border-0 border-b border-panel-border bg-sidebar-bg px-2 text-left text-description-fg transition-colors hover:text-foreground"
       onClick={onClick}
-      role="button"
       aria-label={`Expand ${title}`}
-      tabIndex={0}
-      onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
     >
       <Icon name="chevron-right" className="text-xs" />
       <Icon name={icon} className="text-sm" />
       <span className="text-xs font-semibold uppercase tracking-wide">
         {title}
       </span>
-    </div>
+    </button>
   );
 };

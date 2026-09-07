@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PromptChipRail } from "@components/prompts/PromptChipRail";
 import {
@@ -7,7 +8,12 @@ import {
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
 import { getUniqueStepColor } from "@utils/stepColor";
-import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+} from "@/types/messages";
+import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import type { StepHarnessModel } from "@components/prompts/WorkflowStepRow";
@@ -70,6 +76,55 @@ describe("PromptChipRail", () => {
       scriptChip?.querySelector(".codicon-terminal-powershell")
     ).not.toBeNull();
     expect(scriptChip?.querySelector('[aria-label="pending"]')).not.toBeNull();
+  });
+
+  it("expands from the header when Space is pressed", async () => {
+    const user = userEvent.setup();
+    const onExpand = vi.fn();
+    render(<PromptChipRail onExpand={onExpand} />);
+
+    const expandButton = screen.getByRole("button", { name: "Expand prompts" });
+    expandButton.focus();
+    await user.keyboard(" ");
+
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("selects a prompt chip when Space is pressed", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "First prompt" }],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const chip = screen.getByRole("button", { name: "Prompt 1" });
+    chip.focus();
+    await user.keyboard(" ");
+
+    expect(useEditorStore.getState().selectedPromptIndex).toBe(0);
+  });
+
+  it("selects the final-step chip when Space is pressed", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [],
+      finalStep: { prompt: "Final prompt" },
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const chip = screen.getByRole("button", { name: "Final step" });
+    chip.focus();
+    await user.keyboard(" ");
+
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+    });
   });
 
   it("restores the status border when identity colors are disabled", () => {

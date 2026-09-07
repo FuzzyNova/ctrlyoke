@@ -1,8 +1,4 @@
-import {
-  KEYBOARD_KEYS,
-  OUTPUT_TABS,
-  type OutputTab,
-} from "@root/types/DashboardConstants";
+import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
@@ -22,7 +18,7 @@ export interface OutputSectionHeaderProps {
   isHeaderNarrow: boolean;
   isHeaderVeryNarrow: boolean;
   isTerminalCompact: boolean;
-  refCallback: (node: HTMLDivElement | null) => void;
+  refCallback: (node: HTMLElement | null) => void;
   showTerminalTab: boolean;
   terminalCanCloseActiveSession: boolean;
   /** Executing run identity shown only while a different run/draft is viewed. */
@@ -103,23 +99,17 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
       className="relative z-header select-none [-webkit-touch-callout:none] flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
     >
       <div className="flex items-center gap-1">
-        <div
-          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+        <button
+          type="button"
+          className="flex appearance-none items-center gap-1 border-0 bg-transparent p-0 text-description-fg transition-colors hover:text-foreground"
           onClick={onToggleCollapse}
-          role="button"
           aria-label="Collapse output"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === KEYBOARD_KEYS.ENTER) {
-              onToggleCollapse();
-            }
-          }}
         >
           <Icon
             name="chevron-right"
             className="text-xs rotate-90 transition-transform duration-150"
           />
-        </div>
+        </button>
 
         {showTerminalTab ? (
           <div
