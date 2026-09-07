@@ -46,6 +46,7 @@ import {
   type PromptFileAction,
 } from "@components/editor/PromptEditor";
 import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
@@ -59,6 +60,7 @@ import {
 import {
   HARNESS_IDS,
   SECRET_REGISTRY_STATES,
+  STEP_COLOR_MODES,
   STEP_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -609,6 +611,20 @@ describe("PromptEditor — script-step properties", () => {
     expect(message).toMatchObject({
       properties: { color: "#2468ac" },
     });
+  });
+
+  it("hides the script-step color control when step colors are off", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+    prepareScriptEditor();
+    render(<PromptEditor />);
+
+    expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
+
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.UNIQUE);
   });
 
   it("clears an inherited script-step color instead of writing the default hex", () => {

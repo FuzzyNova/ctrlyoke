@@ -171,6 +171,15 @@ describe("PropertiesDrawer execution mode", () => {
     fireEvent.click(reset);
     expect(useEditorStore.getState().properties.color).toBeUndefined();
   });
+
+  it("hides the step color control when step colors are off", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+    renderHarnessDrawer();
+
+    expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
+  });
 });
 
 describe("PropertiesDrawer Dry Run entry point", () => {

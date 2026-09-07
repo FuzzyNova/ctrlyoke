@@ -254,4 +254,13 @@ describe("EditorSection", () => {
     });
     expect(screen.getByLabelText("Step color")).toHaveValue("#808080");
   });
+
+  it("hides the header step color quick picker when step colors are off", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+    render(<EditorSection />);
+
+    expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
+  });
 });
