@@ -1,8 +1,8 @@
 # Output-Pane Resize & Mount Performance Plan
 
-**Status:** Partially implemented — the dominant cost was found and fixed
-2026-09-07 (see "Fixed" below). The remaining items are real but an order of
-magnitude smaller than they looked.
+**Status:** Partially implemented — the dominant cost was found and fixed;
+hosted resize-measurement closure is blocked on Playwright-capable browser
+access (2026-09-07).
 **Priority:** P2 (was P1 before the fix)
 
 ## Relationship to the paging plan
@@ -281,6 +281,49 @@ with two attempts for one target and spies on `buildOutputRows`; a stable-width
 load now produces exactly one invocation. The available session did not have
 the Playwright MCP attached, so no new hosted timing claim is recorded here.
 
+## Post-implementation measurement — 2026-09-07
+
+The prior implementation commits were checked against both `git log` and the
+current code: `229fb50c` memoizes undo actions per target,
+`1bc6d66a` quantizes minimap bars, `b5ff6f545` buckets output width through
+`useElementTier` and single-sources the geometry constants, and `4f5049015`
+initializes collapse-key state before the first row build. The corresponding
+tests and production call sites are present at `HEAD`.
+
+The requested hosted-dashboard reproduction could not be completed in this
+session. The shared dev host did start successfully and exposed its URL, but
+the Playwright MCP was not attached, the repository has no local Playwright
+package, and the available Edge process had no DevTools endpoint. Therefore no
+gesture was silently substituted for another and no frame number is claimed:
+
+| Resize source | Worst blocked frame | Frame count |
+| --- | ---: | ---: |
+| Internal `react-resizable-panels` splitter | not measured | not measured |
+| Outer VS Code panel edge / pane-width change | not measured | not measured |
+| Browser window / viewport resize | not measured | not measured |
+
+The earlier 477, 290, 193, and 119 ms viewport observations remain useful
+context, but they are not a post-2A three-source measurement and cannot settle
+the acceptance criterion. In particular, the original symptom was the VS Code
+panel edge, which does not touch `react-resizable-panels`.
+
+**1B (`deferWhile`): DON'T RECOMMEND / do not queue yet.** There is no
+source-agnostic post-1A drag result from which to say that dragging still
+stutters. The follow-up must measure a pane-width-moved-within-~150-ms signal
+across all three sources; an internal splitter callback would not cover the
+reported symptom.
+
+**2B (split minimap memoization): DON'T RECOMMEND / do not queue yet.** The
+post-2A resize commit is unmeasured, so the existing pre-closure ~1.9 s
+non-`buildOutputRows` hypothesis cannot establish that resize commits remain
+heavy. The named-phase attribution acceptance criterion consequently remains
+open as well.
+
+This plan is not yet satisfied. A review pass with Playwright-capable hosted
+browser access should collect the three gesture traces, compare the minimap
+before/after visually, attribute the remaining commit to named phases, and
+then revisit 1B and 2B from those numbers.
+
 ## Non-goals
 
 - **Do not optimize the `minimapSteps` nested scan.** 21–29 ms. A single
@@ -318,11 +361,13 @@ the Playwright MCP attached, so no new hosted timing claim is recorded here.
 - [ ] The rendered minimap is visually indistinguishable from today's at the
       same pane size (hosted before/after Playwright comparison pending).
 - [ ] The ~1.9 s of non-`buildOutputRows` time in the remaining 2 142 ms frame
-      is attributed to named phases and recorded here.
+      is attributed to named phases and recorded here (hosted profiler access
+      was unavailable for this measurement pass).
 - [x] `buildOutputRows` runs at most once per 32 px of width change during a
       gesture — asserted by spying on the builder, not by wall-clock timing.
 - [x] A single stable-width load invokes `buildOutputRows` exactly once.
 - [x] Exactly one bucketing helper and one split-view threshold constant across
       `OutputSection.tsx`, `DiffFileList.tsx`, and `diffFileRows.ts`.
 - [ ] Dragging the panel splitter, the VS Code panel edge, and the window with
-      the reproduction open holds interactive frame rates.
+      the reproduction open holds interactive frame rates (the three hosted
+      gestures were not measurable without Playwright-capable browser access).
