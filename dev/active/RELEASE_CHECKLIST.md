@@ -246,6 +246,238 @@ Not a Marketplace-release blocker. `package.json#bin.ctrlyoke` → `./out/cli.js
 
 ---
 
+## Phase 13 — Branching & Release Process (post-launch)
+
+**Recommendation: keep working on `main` and make releases tag-driven. Do not
+adopt a long-lived `dev` branch, and do not create standing release branches —
+cut a `release/X.Y` branch only the first time a hotfix actually needs one.**
+
+Phases 9–10 describe the **first** publish, done by hand so the mechanics get
+verified once. This section is how every release after that should work.
+
+### Why not a `dev` branch with "push to main = release"
+
+- **`main` is already the production website branch.** `deploy.yml` deploys
+  `ctrlyoke.dev` on push to `main` (path-filtered to `landing/**`, `docs/**`,
+  `images/**`, `netlify.toml`). If `main` were only touched at release time,
+  every docs fix, pricing tweak, or screenshot update would either wait for an
+  extension release or force the deploy trigger onto the dev branch — at which
+  point `main` is a fiction that exists only to carry tags. The site and the
+  extension ship on genuinely different cadences; coupling them is the real
+  cost of this model.
+- **A release is a point, not a branch state.** Phase 10 already tags `v0.1.0`
+  and builds from it. A merge to `main` adds a step whose only meaning is
+  "now" — which a tag says more precisely, since a tag can name any commit
+  (including one behind `HEAD`) while a merge always takes everything.
+- **`develop` exists to isolate in-flight work from a stabilizing release for a
+  team.** Solo, the two branches differ only by the time between merges, and
+  the permanent cost is a sync tax plus "which branch is this worktree based
+  on?" on every feature.
+
+### Why not standing release branches
+
+Real tool, wrong trigger. The Marketplace serves exactly one stable version and
+clients auto-update, so nobody is sitting on `0.3.x` while `0.4` ships — there
+is nothing to backport to. A release branch earns its keep only when a
+published version needs a fix and `main` has already moved somewhere
+unshippable. Cut it from the tag at that moment:
+
+```powershell
+git switch -c release/0.3 v0.3.1   # fix, bump to 0.3.2, tag, publish, cherry-pick back to main
+```
+
+### The model
+
+| Branch / ref              | Purpose                                                     | Triggers                                                                 |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `main`                    | Trunk. Plans, docs, and small changes commit here directly. | Site deploy (path-filtered), CI gate                                     |
+| feature branch / worktree | Big or risky changes (`big-feature`, `bug-fix`, …)          | `deploy-preview.yml` alias preview when it touches the site              |
+| `vX.Y.Z` tag              | **The release.** Names the exact commit that ships.         | Release workflow: package → Marketplace publish → GitHub Release         |
+| `release/X.Y`             | Hotfix for a published version `main` has outgrown.         | Created on demand from the tag; deleted after the patch is cherry-picked |
+
+### Where the checks run — local gate, cloud release
+
+Actions minutes are metered only while the repo is **private**, which it is
+today (an unauthenticated `api.github.com/repos/FuzzyNova/ctrlyoke` returns
+404): runs bill against the Free plan's 2,000 min/month (Pro: 3,000), Linux 1×,
+Windows 2×, macOS 10×. **Public repos get unlimited standard-runner minutes**,
+and ctrlyoke is meant to be source-available with public GitHub Issues
+(Phase 7) — so the metering ends at launch, which is exactly when the release
+process starts mattering. Flipping the repo public is itself an untracked
+release step; it is now the last item below.
+
+Even while private, the spend is not the real constraint: one Ubuntu run of
+typecheck + lint + tests is on the order of 5–10 minutes, so twenty pushes a
+month is under 10% of the free allowance — and `deploy.yml` already spends
+minutes on every site commit. **So do not choose local vs. cloud on cost.
+Choose on what each is actually good at:**
+
+| Check                                                                     | Where                                                             | Why                                                                                                                                                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`, `lint`, `test:ui` (vitest), `test:packaging` (`node --test`) | **Local pre-push hook**                                           | Fast, no Electron and no display needed. Local feedback beats waiting on a queued runner, and this catches nearly everything.                                                                   |
+| Full suite including `test:extension` (`@vscode/test-electron`)           | **Actions — `workflow_dispatch`**, optionally a weekly `schedule` | Needs a display; `test:headless` (`xvfb-run -a …`) already exists for exactly this. Run it before cutting a release, or after extension-host changes.                                           |
+| Release build + Marketplace publish                                       | **Actions — on the `v*` tag**                                     | The one build where a clean checkout _is_ the point: an uncommitted file, stale `node_modules`, or a local-only env var becomes a shipping bug. Never publish a VSIX built from a working tree. |
+
+**Decision (Nathan, September 7, 2026):** accepted as written — local pre-push
+gate for the fast checks, GitHub Actions for the clean-room ones. Metered
+minutes were the wrong axis to optimize; they are a rounding error today and
+free once the repo is public (Phase 14).
+
+A local hook verifies your **working tree**; the tag build verifies the
+**commit**. That difference is the whole argument — a hook cannot catch a file
+you forgot to `git add`, and it is advisory anyway (`--no-verify` exists, and
+you will reach for it). Keeping the un-bypassable check on the artifact that
+ships is what makes the bypassable one safe to have.
+
+### What to build
+
+- [ ] **Local pre-push hook — the fast gate.** There is no build or test
+      workflow of any kind today (the only three workflows are the Netlify
+      ones), and trunk-based development is safe exactly to the degree `main` is
+      verified, so this is the prerequisite for everything else here. Check in
+      `.githooks/pre-push` and set `git config core.hooksPath .githooks` — no
+      husky/lint-staged dependency, and because `core.hooksPath` lives in the
+      shared repo config it applies to every worktree. Run `typecheck`, `lint`,
+      `test:ui`, `test:packaging`; **never** `test:harness`, which spends real
+      money. Skip the run when the push touches only `dev/**`, `docs/**`, or
+      `*.md` — a plan commit should not pay for the suite. Caveat: each worktree
+      needs its own `npm ci` before the hook can run there.
+- [ ] **Full-suite workflow on `workflow_dispatch`** (optionally a weekly
+      `schedule`) — the Electron extension tests via `npm run test:headless`,
+      which is already `xvfb-run`-wrapped for Linux runners. This is the
+      clean-room check the local hook cannot give, without paying for it on
+      every push.
+- [ ] **`release.yml` on `push: tags: ["v*"]`** — runs `npm run package`, then
+      `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then creates the
+      GitHub Release from the matching `CHANGELOG.md` section and attaches the
+      VSIX. Needs a `VSCE_PAT` repo secret (the Azure DevOps PAT from Phase 9).
+      This automates Phase 9's publish steps and all of Phase 10.
+- [ ] **Version/tag guard in that workflow** — fail if the tag does not equal
+      `package.json#version`. Automates the "VSIX version matches
+      `package.json`" check in Phase 8 and prevents the classic mismatch.
+- [ ] **Release commit convention** — one commit that bumps `package.json` and
+      renames `CHANGELOG.md`'s `[Unreleased]` heading to `[X.Y.Z] - <date>`,
+      then an annotated tag on it. Keeps the tag, the VSIX, and the changelog
+      entry describing the same tree.
+- [ ] **Pre-release channel instead of a staging branch** — `vsce publish
+--pre-release` publishes to the Marketplace's pre-release channel for
+      opt-in users. VS Code's documented convention is `major.EVEN.patch` for
+      stable and `major.ODD.patch` for pre-release (the Marketplace requires a
+      plain `x.y.z`; semver pre-release suffixes like `-beta.1` are not
+      supported). This is the "release build I can test before everyone gets
+      it" that the dev-branch idea was reaching for, without a branch.
+- [ ] **Document the hotfix path** (the `git switch -c release/X.Y <tag>` recipe
+      above) in `CONTRIBUTING`/dev docs so it is a known move rather than an
+      improvisation during an incident.
+- [ ] **Flip the repo to public** — its own step now, with the scan procedure
+      and the decisions it depends on: **Phase 14**.
+
+---
+
+## Phase 14 — Repo Visibility Flip (private → public)
+
+`FuzzyNova/ctrlyoke` is **private today**. Phase 7's public GitHub Issues, the
+source-available EULA, and Phase 13's free Actions minutes all assume it becomes
+public, so this is a real launch step — and it has a real prerequisite, because
+**publishing exposes every commit on every branch and tag, not the working
+tree.**
+
+### 14.1 What a proper pre-flip scan covers
+
+Grepping the current files is not a secret scan. At 3,378 commits the exposure
+surface is all of history: a credential deleted in a later commit is still
+served forever by the public commit that added it. Run an entropy-based scanner
+over history, not a pattern grep over `HEAD`:
+
+```powershell
+gitleaks git . --redact
+trufflehog git file://. --results=verified
+```
+
+Both are single binaries — neither needs to become a project dependency. Also
+skim closed Issues and PRs (they become world-readable too) and any tags.
+
+If something _is_ found: **rotate first, rewrite second.** History rewriting
+(`git filter-repo`) hides a secret; it does not un-leak one that was ever pushed
+to a remote. Nothing here has been pushed anywhere public yet, so rotation is
+cheap — do it anyway rather than reasoning about who might have seen it.
+
+### 14.2 Already verified (September 7, 2026)
+
+Pattern scan across all 3,378 commits on all refs:
+
+- [x] `dev/test_keys.md` — two live Keygen license keys with the buyer email in
+      cleartext, the highest-value target in the repo. **Never committed**, and
+      gitignored at `.gitignore:46`. Clean.
+- [x] No `.env` / `.env.*` file has ever been added in any commit.
+- [x] Pickaxe scan for Resend (`re_…`), Keygen (`prod-…`, `activ-…`), GitHub
+      (`ghp_…`) and Slack (`xox…`) token shapes: **zero hits.**
+- [x] PEM `BEGIN … PRIVATE KEY` blocks: two hits, both test fixtures — a literal
+      `secret-material` placeholder in `PreviewRedactor.test.ts` and a format
+      regex in `WebviewSettingsSync.test.ts`. Not credentials.
+- [x] Tracked `.ctrlyoke/` content carries no credentials (`mcp/servers.json`
+      holds no keys; `settings.json` is untracked).
+- [x] `deploy-preview.yml` triggers on `push`, **not** `pull_request_target`, so
+      a fork PR cannot reach `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID`. **Keep it
+      that way** — switching to `pull_request_target` after going public would
+      hand repo secrets to any fork.
+
+That scan is prefix-based, so it cannot see a high-entropy secret with no
+recognizable shape. Run one scanner from 14.1 before the flip to cover the gap.
+
+### 14.3 Safe to publish (decided)
+
+- **Keygen Ed25519 public key** (4.1) — already embedded in every shipped VSIX as
+  a build constant (Phase 6). Anyone can extract it from the `.vsix`; publishing
+  it changes nothing.
+- **Vendor identifiers** — Keygen account/product/policy IDs, LS product/order/
+  webhook IDs, the test-mode Keygen license ID. Identifiers, not credentials;
+  Keygen's own UI instructs you to use the account ID in API URLs. Authentication
+  is the admin token, and only its **name** and a truncated id (`54927c5d…`)
+  appear in this document.
+- **`4242 4242 4242 4242`** — Stripe's published test card.
+
+### 14.4 Personal info — decide it, don't wave it through
+
+`admin@fuzzno.com` appears in 5.1–5.3 and is the account-owner address for
+**Keygen, Lemon Squeezy, and Resend** — the three systems that mint licenses and
+hold revenue. The payout bank last-4 (`•••• 0725`) is masked, but equally
+unnecessary to publish.
+
+Redacting the working tree does not help: the address is in history, and history
+is what gets published. A `git filter-repo` rewrite is possible while nothing is
+public, but it is disruptive for what is, in the end, a business contact address
+sitting alongside already-public `support@` / `sales@` / `security@`.
+
+**Recommendation: publish as-is and mitigate where the risk actually lives.** The
+exposure is targeted phishing and account recovery on the licensing/revenue
+accounts, so the effective control is account hardening, not redaction:
+
+- [ ] MFA — passkey or TOTP, **not** SMS — on Keygen, Lemon Squeezy, Resend,
+      Netlify, Cloudflare, GitHub, and Google Workspace.
+- [ ] Confirm each vendor's account-recovery address is not guessable from the
+      public docs.
+- [ ] Prefer role addresses (`licensing@`, `billing@`) over the personal owner
+      address in future checklist entries.
+
+### 14.5 The flip, and what changes
+
+Settings → General → Danger Zone → **Change repository visibility → Make
+public**.
+
+- [ ] Do it **after** the final EULA is in `LICENSE.md` (Phase 7). The repo is
+      forkable the instant it is public, and every fork inherits whatever license
+      text is present at that moment.
+- [ ] Actions minutes become free and unlimited on standard runners (Phase 13).
+- [ ] Existing Issues and PRs become world-readable — skim them for internal
+      notes before flipping, not after.
+- [ ] Immediately after: enable **Secret scanning + Push protection** and
+      **Dependabot alerts** (Settings → Code security; free for public repos).
+      Push protection is the durable form of 14.1 — it blocks the next accidental
+      commit instead of catching it at the next audit.
+
+---
+
 ## Summary Table
 
 | Item                                                                       | Status               | Notes                                                                                                                          |
@@ -271,6 +503,9 @@ Not a Marketplace-release blocker. `package.json#bin.ctrlyoke` → `./out/cli.js
 | Marketplace publish                                                        | BLOCKED on Phase 6   | Phase 9                                                                                                                        |
 | GitHub release                                                             | BLOCKED on Phase 9   | Phase 10                                                                                                                       |
 | npm CLI publish                                                            | DEFERRED             | Phase 11                                                                                                                       |
+| Post-launch branching + tag-driven release workflow                        | OPEN                 | Phase 13 — trunk on `main`, local pre-push gate, releases by tag                                                               |
+| Repo visibility flip to public                                             | OPEN                 | Phase 14 — history scan clean on pattern check; run gitleaks/trufflehog, then flip after the EULA lands                        |
+| Vendor-account MFA hardening                                               | OPEN                 | Phase 14.4 — the real mitigation for the owner email being public                                                              |
 
 ---
 
