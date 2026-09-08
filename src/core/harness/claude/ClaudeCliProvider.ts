@@ -908,7 +908,17 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Unset CLAUDECODE so Claude CLI doesn't refuse to start inside an active session.
+   * Strip inherited Claude Code session markers so the spawned Claude CLI
+   * behaves like a normal top-level launch instead of a nested child session.
+   * Without this, when ctrlyoke itself is driven from inside an active Claude
+   * Code session (e.g. an agent automating ctrlyoke), the spawned interactive
+   * Claude CLI inherits CLAUDE_CODE_CHILD_SESSION and disables transcript
+   * saving — which breaks ctrlyoke's own interactive parsing, since
+   * ClaudeLogParser.discoverSessionLog() reads the on-disk JSONL transcript
+   * as its only source of session ID, text, tool calls, and completion
+   * signal for interactive mode. CLAUDECODE unset separately so the CLI
+   * doesn't refuse to start; the MESSAGING_* vars unset so the child doesn't
+   * appear to share the outer session's IPC channel.
    */
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
     const env = {
@@ -916,6 +926,12 @@ export class ClaudeCliProvider implements ICliProvider {
       ...this.buildStatusLineSpawnEnv(),
     };
     delete env.CLAUDECODE;
+    delete env.CLAUDE_CODE_CHILD_SESSION;
+    delete env.CLAUDE_CODE_SESSION_ID;
+    delete env.CLAUDE_CODE_ENTRYPOINT;
+    delete env.CLAUDE_CODE_EXECPATH;
+    delete env.CLAUDE_CODE_MESSAGING_SOCKET;
+    delete env.CLAUDE_CODE_MESSAGING_TOKEN;
     return env;
   }
 

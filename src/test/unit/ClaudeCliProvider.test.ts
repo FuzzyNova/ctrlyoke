@@ -82,6 +82,41 @@ suite("ClaudeCliProvider", () => {
     assert.strictEqual(provider.shouldRetainWorkflowArtifactsForReuse(), true);
   });
 
+  test("strips inherited Claude Code session markers from interactive spawn env", () => {
+    const provider = new ClaudeCliProvider();
+    const markerVars = [
+      "CLAUDECODE",
+      "CLAUDE_CODE_CHILD_SESSION",
+      "CLAUDE_CODE_SESSION_ID",
+      "CLAUDE_CODE_ENTRYPOINT",
+      "CLAUDE_CODE_EXECPATH",
+      "CLAUDE_CODE_MESSAGING_SOCKET",
+      "CLAUDE_CODE_MESSAGING_TOKEN",
+    ] as const;
+    const originalValues = markerVars.map((name) => process.env[name]);
+
+    try {
+      for (const name of markerVars) {
+        process.env[name] = "test-value";
+      }
+      process.env.UNRELATED_VAR = "keep-me";
+
+      const env = provider.getInteractiveSpawnEnv();
+
+      for (const name of markerVars) {
+        assert.strictEqual(env[name], undefined, `${name} should be stripped`);
+      }
+      assert.strictEqual(env.UNRELATED_VAR, "keep-me");
+    } finally {
+      markerVars.forEach((name, index) => {
+        const original = originalValues[index];
+        if (original === undefined) delete process.env[name];
+        else process.env[name] = original;
+      });
+      delete process.env.UNRELATED_VAR;
+    }
+  });
+
   test("keeps invalid-session spawn errors recoverable", () => {
     const provider = new ClaudeCliProvider();
 
