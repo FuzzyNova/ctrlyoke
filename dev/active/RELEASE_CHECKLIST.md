@@ -79,17 +79,107 @@ The account is on the free **Dev 1** plan: 2,500 API requests/day and a **100 li
 
 - [x] **Decision (Nathan):** launch on Dev 1 and upgrade to a paid Keygen plan reactively, triggered by the **first 2 Pro sales** landing (not waiting until closer to the 100-user cap) — an early, cheap signal that real conversion is happening, monitored manually rather than pre-committing to paid infra before any revenue exists.
 
-### 4.4 Optional — Enterprise policy (defer until the SKU is needed)
+### 4.4 Enterprise SKU (self-serve site license) — full build-out
 
-When ready to build the self-serve Enterprise SKU ([`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.7.1):
+**Status: not started; promoted from a deferred stub to a real execution
+checklist September 8, 2026** (Nathan wants this in for this release, not a
+later one). The design itself is not new — everything below implements the
+already-resolved decisions in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
+§1.7.1 / Open Question 6. Nothing here re-opens a design question; this is
+the "how" for a "what" that's already decided.
 
-1. Keygen dashboard → **Policies** → **New Policy**.
-2. Name: `ctrlyoke Enterprise`.
-3. Duration: **1 Year** (annual, not perpetual — matches the subscription billing model).
-4. Scheme: `ED25519_SIGN` (same as Pro, for one shared verification path).
-5. Max Machines: leave blank / effectively unlimited (site license — "unlimited seats" is enforced by _not_ setting a machine cap, per the plan).
-6. Floating: checked. Strict: checked.
-7. Product: `ctrlyoke` (same product as Pro).
+**Price decided (Nathan, September 8, 2026): $5,999/yr**, flat, unlimited
+internal seats — revised up from the plan's original ~$2k–$5k/yr target
+(both updated in `PRO_LICENSE_PLAN.md` §1.7.1 and Open Question 6 to match).
+Still comfortably under the ~$10k line where buyers start expecting a
+PO/procurement process, so it stays self-serve — and it price-anchors
+sensibly against the $59 one-time individual price (~100x for unlimited
+seats, a normal ratio for a site license).
+
+1. **Keygen Enterprise policy** — dashboard steps:
+   - [ ] Keygen dashboard → **Policies** → **New Policy**.
+   - [ ] Name: `ctrlyoke Enterprise`.
+   - [ ] Duration: **1 Year** (annual, not perpetual — matches the subscription billing model).
+   - [ ] Scheme: `ED25519_SIGN` (same as Pro, for one shared verification path).
+   - [ ] **Max Machines: a real finite number (2,000–5,000), not blank/unlimited.**
+         Correction to the old stub here, which said "leave blank / effectively
+         unlimited" — that directly contradicts the plan's own resolved decision
+         (§1.7.1): `activateWithKey()` is self-serve with no human review, so an
+         uncapped policy turns one leaked key into an unbounded liability instead
+         of a bounded, detectable one. "Unlimited seats" stays the marketing line;
+         the policy field itself must still be finite.
+   - [ ] Floating: checked. Strict: checked.
+   - [ ] Product: `ctrlyoke` (same product as Pro — second policy on the same product).
+
+2. **Lemon Squeezy: second product — `ctrlyoke Enterprise`**
+   - [ ] Create as a **subscription** (annual billing interval), **$5,999.00/yr**.
+   - [ ] Tax category: **Software** (same reasoning as the Pro product, 5.1).
+   - [ ] Generate license keys: **OFF** — Keygen issues the real license, same as Pro.
+   - [ ] Pricing shape: **flat unlimited**, no size tiers (tiers explicitly deferred
+         per §1.7.1's "Open choice" note — don't build tiering now).
+   - [ ] Reuse the existing `ls-webhook` endpoint/secret — no second webhook needed
+         for a second product; LS fires the same event types regardless of which
+         product was purchased.
+
+3. **Netlify function (`netlify/functions/ls-webhook.ts`) — extend, don't fork**
+   - [ ] Route by `product_id`/`variant_id`: the existing Pro `order_created` path
+         is unchanged; the Enterprise product's events resolve to the **Enterprise
+         Keygen policy ID** instead of the Pro policy ID, with a 1-year expiry set
+         at issuance.
+   - [ ] Handle LS **subscription events**, not just one-time `order_created`:
+         `subscription_payment_success` → extend the Keygen license's expiry by a
+         year; `subscription_cancelled` / `subscription_expired` → let it lapse (no
+         explicit Keygen revoke call needed — the policy's `Restrict Access`
+         expiration strategy, same config as Pro, already locks it out at term end).
+   - [ ] Idempotency: key off the LS subscription/order id, same pattern the
+         existing Pro path already uses (`metadata.lsOrderId`).
+
+4. **Abuse detection — machine-count alerting**
+   - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
+         *inbound* Keygen webhook — 4.1 confirms none exist today; direction is
+         Keygen → Netlify, the reverse of the LS → Netlify → Keygen purchase flow).
+   - [ ] On receipt, compare the license's current activation count against an
+         alert threshold well under the 2,000–5,000 policy cap (e.g. a few hundred)
+         and notify (email/Slack) rather than block. Detection only, per the plan —
+         response stays the manual Keygen-dashboard suspend/reissue action that
+         already exists today; no new admin tooling required.
+
+5. **Self-serve legal — click-through Terms + DPA + trust page**
+   - [ ] Draft click-through Terms of Service for the Enterprise subscription
+         (confirm with the Phase 7 attorney whether this is an amendment to
+         `LICENSE.md` or a standalone document — the individual EULA and an
+         Enterprise site-license agreement are not the same instrument).
+   - [ ] Draft a standard DPA (Data Processing Agreement) — likely expected by
+         enterprise legal reviewers regardless of how little data ctrlyoke's
+         local-first architecture actually processes.
+   - [ ] Publish a trust/security page on `ctrlyoke.dev` (architecture summary,
+         data handling, subprocessor list — Keygen / Lemon Squeezy / Resend /
+         Netlify — the kind of thing an enterprise security review asks for).
+   - [ ] These three together are what let a buyer's legal team self-serve their
+         review without a custom MSA — the entire point of keeping this zero-touch
+         (§1.7.1). Skipping any one of them risks pulling every enterprise deal
+         into a manual sales/legal cycle.
+
+6. **PO fallback**
+   - [ ] `sales@ctrlyoke.dev` already exists (Phase 3) — confirm it's monitored.
+   - [ ] Add one line on the Enterprise pricing card: "Need an invoice or PO?
+         Email sales@ctrlyoke.dev." No automation required; kept deliberately rare
+         by design, not a funnel to build out.
+
+7. **Verification**
+   - [ ] Live test-mode purchase of the Enterprise product — same shape as the Pro
+         smoke test in 5.3: webhook fires → Enterprise-policy Keygen license
+         created with the correct 1-year expiry → key delivered.
+   - [ ] Simulate a renewal (`subscription_payment_success`) and a cancellation
+         (`subscription_cancelled`) against the test-mode license; confirm expiry
+         extends / lapses correctly in each case.
+   - [ ] Confirm the machine-count alert path works end-to-end against a scratch
+         policy temporarily capped low (a handful of test activations), before
+         relying on it at the real 2,000–5,000 threshold.
+
+**Not a launch blocker for Phases 6–12** — this is an independent checklist
+that can land before or after the individual-Pro Marketplace publish; nothing
+above gates the existing release-blocker chain.
 
 ---
 
@@ -210,7 +300,7 @@ Confirm:
 ## Phase 9 — Marketplace Publish
 
 - [x] Publisher `fuzzynova` confirmed, item id `fuzzynova.ctrlyoke` reserved (published-then-unpublished during the cutover).
-- [ ] Generate/verify an Azure DevOps PAT with Marketplace **Manage** scope (see [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) §"Create a Personal Access Token" — mechanics unchanged, just ignore the FlightPath naming in that doc).
+- [x] Generate/verify an Azure DevOps PAT with Marketplace **Manage** scope (see [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) §"Create a Personal Access Token" — mechanics unchanged, just ignore the FlightPath naming in that doc). Done September 8, 2026 — set as the `VSCE_PAT` GitHub repo secret, which `release.yml` reads directly; the `vsce login`/interactive-paste flow below is only needed for a manual local publish, not the CI path.
 - [ ] `npx vsce login fuzzynova`
 - [ ] `npm run package && npx vsce publish` (or `npx vsce publish --packagePath ctrlyoke-0.1.0.vsix`)
 - [ ] Post-publish: confirm listing loads, README renders, CHANGELOG tab shows `0.1.0`, install into a clean profile, run one workflow.
@@ -401,8 +491,12 @@ grows).
 
 **Still open, outside what file changes can accomplish:**
 
-- The `VSCE_PAT` repo secret itself — needs Phase 9's Azure DevOps PAT
-  (generated, then `gh secret set VSCE_PAT` or set via the GitHub UI).
+- ~~The `VSCE_PAT` repo secret itself~~ ✅ **done September 8, 2026** — Azure
+  DevOps PAT generated (Marketplace **Manage** scope, All accessible
+  organizations) and added as a GitHub repo secret. `release.yml` can now
+  complete the Marketplace-publish step on a real `vX.Y.Z` tag push; only
+  Phase 8's screenshots/package-inspection blockers stand between here and an
+  actual first release.
 - Branch protection rules on `main` and any other GitHub repo *settings* —
   intentionally not decided or configured here; Phase 13's own model is trunk
   commits directly to `main` with CI as the safety net, so protection rules
@@ -574,7 +668,7 @@ public**.
 | Keygen product + Pro policy                                                | DONE                 | Phase 4.1 — renamed live this session                                                                                          |
 | Keygen admin token custody confirmed                                       | DONE                 | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                     |
 | Keygen billing tier decision (Dev vs. paid)                                | DONE                 | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                             |
-| Keygen Enterprise policy                                                   | DEFERRED             | Phase 4.4 — not needed until the Enterprise SKU                                                                                |
+| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | OPEN                  | Phase 4.4 — full build-out, promoted from a deferred stub September 8, 2026; price decided at $5,999/yr, independent of Phases 6–12 |
 | Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
 | Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
 | Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
@@ -589,7 +683,7 @@ public**.
 | Marketplace publish                                                        | OPEN — unblocked     | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                               |
 | GitHub release                                                             | BLOCKED on Phase 9   | Phase 10                                                                                                                       |
 | npm CLI publish                                                            | DEFERRED             | Phase 11                                                                                                                       |
-| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, and docs all built Sept 7, 2026; still needs the `VSCE_PAT` secret and a live-run verification |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; still needs a live-run verification (a real `workflow_dispatch` of `full-suite.yml`, and the first real `vX.Y.Z` tag push) |
 | Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here |
 | Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point   |
 
