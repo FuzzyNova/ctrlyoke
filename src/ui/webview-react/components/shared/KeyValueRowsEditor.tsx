@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+} from "react";
 import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   SETTING_SCOPES,
@@ -8,7 +15,11 @@ import { validateKeyValueKey } from "@root/utils/KeyValueKeyKinds";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import type { FieldDiagnostic as FieldDiagnosticItem } from "@utils/fieldValidation";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
-import { looksLikeLiteralCredential } from "./KeyValueMapEditor";
+import {
+  keyValueMapObjectToString,
+  keyValueMapStringToObject,
+  looksLikeLiteralCredential,
+} from "./KeyValueMapEditor";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
@@ -31,6 +42,7 @@ interface KeyValueRow {
   id: string;
   key: string;
   value: string;
+  pasteParseError?: boolean;
 }
 
 interface RowDiagnostics {
@@ -60,6 +72,29 @@ function rowsToRecord(rows: readonly KeyValueRow[]): Record<string, string> {
     if (row.key.length > 0) result[row.key] = row.value;
   }
   return result;
+}
+
+function rowsFromPastedText(text: string, currentRowId: string): KeyValueRow[] {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+
+  return lines.map((line, index) => {
+    const parsed = keyValueMapStringToObject(line.trim());
+    const parsedEntry = parsed && Object.entries(parsed)[0];
+    if (parsedEntry) {
+      return {
+        id: index === 0 ? currentRowId : createRowId(),
+        key: parsedEntry[0],
+        value: parsedEntry[1],
+      };
+    }
+
+    return {
+      id: index === 0 ? currentRowId : createRowId(),
+      key: line,
+      value: "",
+      pasteParseError: true,
+    };
+  });
 }
 
 function recordsEqual(
@@ -124,6 +159,12 @@ function getRowDiagnostics(
     rows.map((candidate) => candidate.key),
     row.value
   );
+  if (row.pasteParseError) {
+    keyDiagnostics.unshift({
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR,
+      message: "Pasted lines must use KEY=value format.",
+    });
+  }
   const valueDiagnostics: FieldDiagnosticItem[] = [];
 
   if (allowSecretReferences) {
@@ -156,6 +197,11 @@ export function KeyValueRowsEditor({
   const [rows, setRows] = useState<KeyValueRow[]>(() => rowsFromRecord(value));
   const rowsRef = useRef(rows);
   const lastCommittedValueRef = useRef<Record<string, string> | null>(null);
+  const [isBulkEdit, setIsBulkEdit] = useState(false);
+  const [bulkValue, setBulkValue] = useState(() =>
+    keyValueMapObjectToString(value)
+  );
+  const bulkValueRef = useRef(bulkValue);
   const [openPickerRowId, setOpenPickerRowId] = useState<string | null>(null);
   const entriesByScope = useSecretRegistryStore(
     (state) => state.entriesByScope
@@ -223,11 +269,34 @@ export function KeyValueRowsEditor({
     [onChange]
   );
 
+  const enterBulkEdit = useCallback(() => {
+    const nextBulkValue = keyValueMapObjectToString(
+      rowsToRecord(rowsRef.current)
+    );
+    bulkValueRef.current = nextBulkValue;
+    setBulkValue(nextBulkValue);
+    setOpenPickerRowId(null);
+    setIsBulkEdit(true);
+  }, []);
+
+  const exitBulkEdit = useCallback(() => {
+    const nextRows = rowsFromRecord(
+      keyValueMapStringToObject(bulkValueRef.current) ?? {}
+    );
+    rowsRef.current = nextRows;
+    setRows(nextRows);
+    setIsBulkEdit(false);
+    setOpenPickerRowId(null);
+    commitRows(nextRows);
+  }, [commitRows]);
+
   const updateRow = useCallback(
     (rowId: string, field: "key" | "value", nextValue: string) => {
       setRows((currentRows) =>
         currentRows.map((row) =>
-          row.id === rowId ? { ...row, [field]: nextValue } : row
+          row.id === rowId
+            ? { ...row, [field]: nextValue, pasteParseError: false }
+            : row
         )
       );
     },
@@ -267,6 +336,35 @@ export function KeyValueRowsEditor({
       commitRows(nextRows);
     },
     [commitRows]
+  );
+
+  const handleKeyPaste = useCallback(
+    (rowId: string, event: ClipboardEvent<HTMLInputElement>) => {
+      const pastedText = event.clipboardData.getData("text");
+      if (
+        !pastedText ||
+        (!pastedText.includes("=") && !pastedText.includes("\n"))
+      ) {
+        return;
+      }
+
+      const currentRows = rowsRef.current;
+      const rowIndex = currentRows.findIndex((row) => row.id === rowId);
+      if (rowIndex < 0) return;
+
+      const pastedRows = rowsFromPastedText(pastedText, rowId);
+      if (pastedRows.length === 0) return;
+
+      event.preventDefault();
+      const nextRows = [
+        ...currentRows.slice(0, rowIndex),
+        ...pastedRows,
+        ...currentRows.slice(rowIndex + 1),
+      ];
+      rowsRef.current = nextRows;
+      setRows(nextRows);
+    },
+    []
   );
 
   const controlId = id ?? `key-value-rows-${entryNoun}`;
@@ -369,7 +467,32 @@ export function KeyValueRowsEditor({
         aria-label={ariaLabel}
         className="flex min-w-0 flex-col gap-2"
       >
-        {rows.length === 0 ? (
+        <button
+          type="button"
+          aria-label={
+            isBulkEdit ? "Exit bulk edit mode" : "Enter bulk edit mode"
+          }
+          aria-pressed={isBulkEdit}
+          disabled={disabled}
+          onClick={isBulkEdit ? exitBulkEdit : enterBulkEdit}
+          className="self-start text-xs text-link-fg underline hover:no-underline focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isBulkEdit ? "Exit bulk edit" : "Bulk edit"}
+        </button>
+        {isBulkEdit ? (
+          <textarea
+            aria-label={`${ariaLabel} bulk editor`}
+            placeholder="KEY=value\nANOTHER_KEY=value"
+            value={bulkValue}
+            onChange={(event) => {
+              bulkValueRef.current = event.target.value;
+              setBulkValue(event.target.value);
+            }}
+            disabled={disabled}
+            rows={Math.max(3, rows.length)}
+            className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        ) : rows.length === 0 ? (
           <p className="rounded border border-panel-border px-3 py-2 text-xs text-description-fg">
             No {entryNoun}s configured.
           </p>
@@ -407,6 +530,7 @@ export function KeyValueRowsEditor({
                       onChange={(event) =>
                         updateRow(row.id, "key", event.target.value)
                       }
+                      onPaste={(event) => handleKeyPaste(row.id, event)}
                       onBlur={() => commitRows(rowsRef.current)}
                       className={`h-7 w-full min-w-0 rounded border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${fieldValidationBorderClass(rowDiagnostics.key)}`}
                     />

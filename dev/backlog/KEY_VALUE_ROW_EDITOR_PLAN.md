@@ -350,7 +350,7 @@ field appends a row.
    step 5 performs the all-at-once migration. Its value diagnostics reuse
    `looksLikeLiteralCredential` from `KeyValueMapEditor.tsx`, whose helper
    must remain available until the migration removes that component.
-4. Add paste-expansion and the bulk-edit toggle.
+4. [x] Add paste-expansion and the bulk-edit toggle.
 5. Roll out all five call sites in one change (they share one component;
    staging them means maintaining both editors against the same store shapes).
 6. Tests (below).

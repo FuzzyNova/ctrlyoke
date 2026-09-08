@@ -63,6 +63,91 @@ describe("KeyValueRowsEditor", () => {
     expect(screen.getAllByRole("textbox")[2]).toHaveValue("SECOND");
   });
 
+  it("expands a multi-line env paste from the active key row", () => {
+    const onChange = vi.fn();
+    renderEditor({ FIRST: "one", LAST: "last" }, onChange);
+
+    fireEvent.paste(screen.getByLabelText("Name for FIRST"), {
+      clipboardData: {
+        getData: () => "API_URL=https://example.test\nTOKEN=abc",
+      },
+    });
+
+    expect(screen.getByLabelText("Name for API_URL")).toHaveValue("API_URL");
+    expect(screen.getByLabelText("Value for API_URL")).toHaveValue(
+      "https://example.test"
+    );
+    expect(screen.getByLabelText("Name for TOKEN")).toHaveValue("TOKEN");
+    expect(screen.getByLabelText("Name for LAST")).toHaveValue("LAST");
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(screen.getByLabelText("Name for API_URL"));
+    expect(onChange).toHaveBeenLastCalledWith({
+      API_URL: "https://example.test",
+      TOKEN: "abc",
+      LAST: "last",
+    });
+  });
+
+  it("keeps an unparseable pasted line as an errored row", () => {
+    renderEditor({ FIRST: "one" });
+
+    fireEvent.paste(screen.getByLabelText("Name for FIRST"), {
+      clipboardData: { getData: () => "GOOD=value\nBROKEN" },
+    });
+
+    const brokenInput = screen.getByLabelText("Name for BROKEN");
+    expect(brokenInput).toHaveValue("BROKEN");
+    expect(brokenInput).toHaveAttribute("aria-invalid", "true");
+    expect(
+      screen.getByText("Pasted lines must use KEY=value format.")
+    ).toBeInTheDocument();
+  });
+
+  it("commits the bulk-edit record when leaving bulk mode", () => {
+    const onChange = vi.fn();
+    renderEditor({ FIRST: "one", SECOND: "two" }, onChange);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enter bulk edit mode" })
+    );
+    const bulkEditor = screen.getByLabelText(
+      "Environment variables bulk editor"
+    );
+    expect(bulkEditor).toHaveValue("FIRST=one\nSECOND=two");
+    fireEvent.change(bulkEditor, {
+      target: { value: "SECOND=two\nFIRST=one\nTHIRD=three" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Exit bulk edit mode" })
+    );
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      SECOND: "two",
+      FIRST: "one",
+      THIRD: "three",
+    });
+  });
+
+  it("preserves equals signs in values through bulk mode", () => {
+    const onChange = vi.fn();
+    renderEditor({ TOKEN: "part-one=part-two" }, onChange);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enter bulk edit mode" })
+    );
+    expect(
+      screen.getByLabelText("Environment variables bulk editor")
+    ).toHaveValue("TOKEN=part-one=part-two");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Exit bulk edit mode" })
+    );
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      TOKEN: "part-one=part-two",
+    });
+  });
+
   it("does not replace live edits with the parent's echo of a commit", () => {
     const onChange = vi.fn();
     const { rerender } = renderEditor({ FIRST: "one" }, onChange);
@@ -254,5 +339,8 @@ describe("KeyValueRowsEditor", () => {
       screen.getByRole("button", { name: "Delete API_TOKEN" })
     ).toBeDisabled();
     expect(screen.getByRole("button", { name: "+ Add entry" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Enter bulk edit mode" })
+    ).toBeDisabled();
   });
 });
