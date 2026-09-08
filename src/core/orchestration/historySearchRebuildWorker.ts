@@ -8,6 +8,7 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
+  type CliOutputEventsAppendedEvent,
   type CliOutputRecordedEvent,
   type HistorySearchDocument,
   type StatusMessageRecordedEvent,
@@ -33,7 +34,7 @@ import {
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
 
-export const INDEX_SCHEMA_VERSION = "4.0.0" as const;
+export const INDEX_SCHEMA_VERSION = "4.1.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
 export const DOCUMENTS_DIR_NAME = "documents";
 export const DOCUMENTS_SHARD_EXTENSION = ".jsonl";
@@ -922,7 +923,10 @@ async function buildRunDocuments(
           attemptIndex:
             event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
               ? (event as CliOutputRecordedEvent).attemptIndex
-              : 0,
+              : event.eventType ===
+                  TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+                ? (event as CliOutputEventsAppendedEvent).attemptIndex
+                : 0,
           sequence: event.sequence,
           timestampMs: event.timestampMs,
           eventKind: candidate.eventKind,
@@ -951,6 +955,10 @@ function collectEventCandidates(
     case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
       return candidateExtractor.collectCliOutputCandidates(
         (event as CliOutputRecordedEvent).payload.cliOutput
+      );
+    case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
+      return candidateExtractor.collectStructuredEventsCandidates(
+        (event as CliOutputEventsAppendedEvent).payload.events
       );
     case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
       return candidateExtractor.collectStatusCandidates(

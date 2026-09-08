@@ -344,6 +344,54 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("indexes structured events streamed via cliOutputEventsAppended", async () => {
+    const workflowId = "streamed-events-2026-06-09T22-22-00";
+    await createRun(workflowId, 1, 3000, [
+      createCliOutputEventsAppendedDraft(3050, 0, [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "echo hi",
+            output: "streamed-appended-term",
+            error: "",
+          },
+        },
+      ]),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const response = await index.search(
+      { query: "streamed-appended-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(response.totalCount, 1);
+  });
+
+  test("does not double-count a streamed event once its attempt's completed snapshot supersedes it", async () => {
+    const workflowId = "streamed-then-sealed-2026-06-09T22-23-00";
+    const structuredEvents: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "echo hi",
+          output: "sealed-supersedes-term",
+          error: "",
+        },
+      },
+    ];
+    await createRun(workflowId, 1, 3000, [
+      createCliOutputEventsAppendedDraft(3050, 0, structuredEvents),
+      createCliOutputDraft(3100, HARNESS_IDS.CLAUDE_CLI, "", 0, structuredEvents),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const response = await index.search(
+      { query: "sealed-supersedes-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(response.totalCount, 1);
+  });
+
   test("runs a real worker rebuild and relays progress to the caller", async () => {
     await createRun("worker-success-2026-06-09T22-25-00", 1, 3500, [
       createStatusDraft(3550, "worker-success-term"),
@@ -1012,6 +1060,20 @@ suite("HistorySearchIndexService", () => {
           },
         },
       },
+    };
+  }
+
+  function createCliOutputEventsAppendedDraft(
+    timestampMs: number,
+    attemptIndex: number,
+    events: CliEvent[]
+  ): WorkflowTimelineEventDraft {
+    return {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+      timestampMs,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex,
+      payload: { events },
     };
   }
 

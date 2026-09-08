@@ -61,13 +61,27 @@ export class HistoryCandidateExtractor {
       ),
     ];
 
-    for (const structuredEvent of cliOutput.structured?.events ?? []) {
-      candidates.push(
-        ...this.collectStructuredEventCandidates(structuredEvent)
-      );
-    }
+    candidates.push(
+      ...this.collectStructuredEventsCandidates(cliOutput.structured?.events)
+    );
 
     return candidates;
+  }
+
+  /**
+   * Structured CLI events also arrive outside a `CliOutput` snapshot — see
+   * `CliOutputEventsAppendedEvent`, whose streamed deltas are folded into the
+   * rendered output the same way a completed `cliOutput.structured.events`
+   * snapshot is (`OutputHistoryTimelineAdapter`'s `StreamingCliOutputAccumulator`).
+   * Exposed separately so callers indexing that event type reuse the exact
+   * same per-event candidate extraction instead of duplicating it.
+   */
+  collectStructuredEventsCandidates(
+    events: CliEvent[] | undefined
+  ): MatchCandidate[] {
+    return (events ?? []).flatMap((event) =>
+      this.collectStructuredEventCandidates(event)
+    );
   }
 
   collectStatusCandidates(message: string): MatchCandidate[] {

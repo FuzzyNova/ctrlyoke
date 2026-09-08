@@ -191,6 +191,41 @@ suite("HistorySearchService", () => {
     assert.strictEqual(diffResults[0]?.filePath, "src/history-search.ts");
   });
 
+  test("disk-scan fallback indexes structured events streamed via cliOutputEventsAppended", async () => {
+    const workflowId = "streamed-events-fallback-2026-06-09T22-24-00";
+    await createRun(workflowId, 1, 1000, [
+      createCliOutputEventsAppendedDraft(
+        1050,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        0,
+        [
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            data: {
+              command: "echo hi",
+              output: "fallback-appended-term",
+              error: "",
+            },
+          },
+        ]
+      ),
+    ]);
+
+    const legacyResults = await (
+      service as unknown as {
+        searchLegacy: (
+          query: string,
+          workspaceFolderPath: string,
+          limit: number,
+          filters: undefined
+        ) => Promise<Array<{ matchField: string }>>;
+      }
+    ).searchLegacy("fallback-appended-term", workspaceRoot, 50, undefined);
+
+    assert.strictEqual(legacyResults.length, 1);
+    assert.strictEqual(legacyResults[0]?.matchField, "output");
+  });
+
   test("returns no results for short queries", async () => {
     const response = await service.search("a", workspaceRoot);
     assert.deepStrictEqual(response.results, []);
@@ -638,6 +673,23 @@ suite("HistorySearchService", () => {
       payload: {
         cliOutput,
       },
+    };
+  }
+
+  function createCliOutputEventsAppendedDraft(
+    timestampMs: number,
+    target:
+      | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
+      | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number },
+    attemptIndex: number,
+    events: CliEvent[]
+  ): WorkflowTimelineEventDraft {
+    return {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+      timestampMs,
+      target,
+      attemptIndex,
+      payload: { events },
     };
   }
 

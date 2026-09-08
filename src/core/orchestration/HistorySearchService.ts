@@ -8,6 +8,7 @@ import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   TIMELINE_EVENT_TYPES,
+  type CliOutputEventsAppendedEvent,
   type CliOutputRecordedEvent,
   type HistorySearchDocument,
   type HistorySearchFilters,
@@ -349,6 +350,14 @@ export class HistorySearchService {
           workflowKey,
           runRef
         );
+      case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
+        return this.collectCliOutputEventsAppendedDocuments(
+          event as CliOutputEventsAppendedEvent,
+          manifest,
+          metadata,
+          workflowKey,
+          runRef
+        );
       case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
         return this.collectStatusDocuments(
           event as StatusMessageRecordedEvent,
@@ -386,6 +395,46 @@ export class HistorySearchService {
         candidate,
         candidateIndex,
         cliOutput.structured?.metadata
+      )
+    );
+  }
+
+  /**
+   * `CliOutputEventsAppendedEvent` carries the same structured CLI events
+   * (bash output, tool calls, file edits, text/thinking blocks, …) a
+   * completed `CliOutputRecordedEvent` snapshot carries in
+   * `cliOutput.structured.events` — it's just how that content arrives while
+   * an attempt is still streaming (see `OutputHistoryTimelineAdapter`, which
+   * folds both into the same rendered output). Without this case, any
+   * content that only ever shows up via streamed appends — not reproduced
+   * verbatim in a later completed snapshot — was invisible to history
+   * search even though it's fully searchable in the live output pane's find
+   * bar, which reads the folded/rendered rows rather than raw timeline
+   * events.
+   */
+  private collectCliOutputEventsAppendedDocuments(
+    event: CliOutputEventsAppendedEvent,
+    manifest: WorkflowRunManifest,
+    metadata: WorkflowMetadata,
+    workflowKey: WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef
+  ): HistorySearchDocument[] {
+    const candidates = this.candidateExtractor.collectStructuredEventsCandidates(
+      event.payload.events
+    );
+
+    return candidates.map((candidate, candidateIndex) =>
+      this.buildDocument(
+        manifest,
+        metadata,
+        workflowKey,
+        runRef,
+        event.target,
+        event.attemptIndex,
+        event.sequence,
+        event.timestampMs,
+        candidate,
+        candidateIndex
       )
     );
   }
