@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/FuzzyNova/ctrlyoke/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately via security@ctrlyoke.dev, not a public issue.
+  - name: Documentation
+    url: https://ctrlyoke.dev/docs/
+    about: Check the docs before filing — your question might already be answered.

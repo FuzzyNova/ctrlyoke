@@ -1,0 +1,51 @@
+name: Release
+
+# Tag-driven publish. Pushing a vX.Y.Z tag (see CONTRIBUTING.md's "Cutting a
+# release") packages the extension, verifies the tag matches
+# package.json#version, publishes to the VS Code Marketplace, and creates a
+# GitHub Release with the matching CHANGELOG.md section attached.
+#
+# Requires a VSCE_PAT repo secret (the Azure DevOps PAT with Marketplace
+# "Manage" scope -- see RELEASE_CHECKLIST.md Phase 9).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package.json#version
+        run: node scripts/verify-release-tag.mjs
+
+      - name: Resolve VSIX filename
+        id: vsix
+        run: echo "path=ctrlyoke-$(node -p "require('./package.json').version").vsix" >> "$GITHUB_OUTPUT"
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}" -p "$VSCE_PAT"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: ctrlyoke-*.vsix

@@ -1,0 +1,67 @@
+name: Bug Report
+description: Something in ctrlyoke isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please don't use this form for security vulnerabilities — see [SECURITY.md](https://github.com/FuzzyNova/ctrlyoke/blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the bug. A minimal workflow file (`.ctrlyoke.yaml`/`.json`/`.prompt.md`) that reproduces it is extremely helpful.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness (if relevant)
+      description: Which AI harness were you running, if any?
+      options:
+        - Not applicable
+        - Copilot CLI
+        - Claude Code
+        - Codex CLI
+        - OpenCode CLI
+        - Qwen CLI
+        - Antigravity CLI
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: ctrlyoke version
+      description: Check the Extensions view in VS Code, or `package.json#version` if running from source.
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version and OS
+      placeholder: e.g. VS Code 1.106.0, Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Anything relevant from `.ctrlyoke/logs/` (redact anything sensitive first — these can contain workspace paths and command output).
+      render: shell

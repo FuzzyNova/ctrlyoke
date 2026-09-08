@@ -1,0 +1,28 @@
+name: Full Test Suite
+
+# The clean-room check the local pre-push hook can't give: the Electron
+# extension tests via @vscode/test-electron, which need a display. Run on
+# demand before cutting a release, after extension-host changes, or weekly as
+# a cheap safety net -- not on every push (that's what the pre-push hook is
+# for).
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 13 * * 1" # weekly, Monday 13:00 UTC
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full suite (headless, xvfb-wrapped)
+        run: npm run test:headless

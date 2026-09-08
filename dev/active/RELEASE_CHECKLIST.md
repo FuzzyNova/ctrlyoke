@@ -2,7 +2,7 @@
 
 **Created:** June 19, 2026 (as `FlightPath Release Checklist`)
 **Rewritten:** August 25, 2026 — consolidated into the single canonical, ctrlyoke-branded release checklist.
-**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) exist and were configured live in this session — see Phase 4/5 for exact current state. Extension-side `LicenseService` implementation (Phase 6) is the largest remaining blocker.
+**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) are fully configured — Lemon Squeezy's identity verification cleared September 7, 2026. Extension-side `LicenseService` implementation (Phase 6) is DONE. Attorney sign-off on the EULA also landed September 7, 2026, which unblocked Marketplace publish (Phase 9). Phase 14 (repo visibility flip) cleared every pre-flip gate the same day — entropy-based secret scan clean, Issues/PRs/tags skim clean, all vendor + Microsoft/Azure DevOps accounts MFA-hardened — and is now ready to execute whenever Nathan chooses to trigger the actual toggle. Phase 13's CI/release automation and GitHub public-contribution scaffolding (pre-push hook, full-suite + release workflows, `CONTRIBUTING.md`/`SECURITY.md`/issue+PR templates) were also built September 7, 2026. The largest remaining blockers now are Phase 8 (screenshots/demo GIF, final package inspection) and generating the `VSCE_PAT` Azure DevOps token so `release.yml` can actually publish.
 **Purpose:** the one place to look for "what's left before `ctrlyoke` ships" — product release, vendor/licensing setup with exact click-by-click steps, legal, and launch verification.
 
 > **This document supersedes [`RELEASE_PLAN.md`](RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
@@ -104,7 +104,7 @@ When ready to build the self-serve Enterprise SKU ([`PRO_LICENSE_PLAN.md`](../im
 | Store name                                | **ctrlyoke**                                                        | Changed live this session from `Fuzzy Nova`. Settings → General → "Store name" — appears on every receipt/invoice.                                                                                                                                                                                                                                                                                                                                                                |
 | Store URL                                 | **ctrlyoke.lemonsqueezy.com**                                       | Changed live this session from `fuzzynova.lemonsqueezy.com`.                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Contact email                             | **support@ctrlyoke.dev**                                            | Changed live this session from `admin@fuzzno.com`. This is the address shown to customers on receipts/invoices for support.                                                                                                                                                                                                                                                                                                                                                       |
-| Store activation                          | **"In Review"** (Identity verification)                             | Banner reads _"Your application has been received and will be reviewed as soon as possible."_ This is Lemon Squeezy's own KYC/underwriting step — **nothing to click, just waiting on LS.** No live payments can process until this clears.                                                                                                                                                                                                                                       |
+| Store activation                          | **Approved** (September 7, 2026)                                    | Lemon Squeezy's identity-verification/KYC review cleared. Live payments can now process once Test mode is flipped off (5.3 step 6).                                                                                                                                                                                                                                                                                                                                              |
 | Test mode                                 | **ON**                                                              | Toggle top-right of every LS dashboard page. Real charges are impossible while this is on, regardless of store-activation status.                                                                                                                                                                                                                                                                                                                                                 |
 | Product                                   | **ctrlyoke Pro**, id `1317307`                                      | Created live this session. Status: **Published** (August 26, 2026 — see 5.3).                                                                                                                                                                                                                                                                                                                                                                                                     |
 | — Price                                   | **$59.00**, Single payment (one-time)                               | Matches [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.7.                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -140,8 +140,9 @@ The plan's open question #4 ("LS custom fulfillment vs. our own transactional em
    - Resend delivered the license-key email to the buyer address (`admin@fuzzno.com`) from `licensing@ctrlyoke.dev`, containing the correct Keygen key and activation-command instructions. Email is plain text/unstyled — acceptable for now; logo/HTML styling is cosmetic polish, not a launch blocker.
    - **Note during checkout:** the Stripe card iframe presented an "I am an AI agent acting on behalf of someone else" disclosure checkbox; checking it revealed follow-on content instructing the agent to run a local shell command and install a third-party CLI tool from a GitHub link — treated as a possible prompt injection and not acted on. Completed checkout instead via the normal human-equivalent flow (checkbox left unchecked) with Nathan's explicit go-ahead. Worth knowing for any future automated/agent-driven checkout testing.
 4. ~~**Submit payout tax info**~~ ✅ done August 25, 2026 (5.1).
-5. **Wait for / follow up on** Lemon Squeezy's identity-verification review before flipping Test mode off for real charges.
-6. Only after 1–5: flip **Test mode OFF**, **create a second, live-mode LS webhook** (same URL/events as the test-mode one — LS scopes webhooks to the mode active when they're created, confirmed live August 26, 2026), set `CHECKOUT_URL` in `landing/src/config.ts` to the real LS checkout link for the published product, and flip `LAUNCHED = true` (Phase 9).
+5. ~~**Wait for / follow up on** Lemon Squeezy's identity-verification review~~ ✅ **approved September 7, 2026.**
+6. **Now unblocked:** flip **Test mode OFF**, **create a second, live-mode LS webhook** (same URL/events as the test-mode one — LS scopes webhooks to the mode active when they're created, confirmed live August 26, 2026). These two are manual LS-dashboard actions for Nathan — not something to do silently, since flipping Test mode off enables real charges.
+   - **Deliberately still held:** setting `CHECKOUT_URL` in `landing/src/config.ts` and flipping `LAUNCHED = true` (Phase 9) — those put a real "Buy" link in front of the public before the extension itself is Marketplace-published, which is still blocked on Phase 7's attorney EULA sign-off. Do those two together with the rest of Phase 9, not now.
 
 ### 5.4 Why the ordering matters (chicken-and-egg)
 
@@ -173,10 +174,10 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 
 - [x] Attorney-drafted EULA + Privacy Policy exist as canonical `LICENSE.md` / `PRIVACY.md`.
 - [x] Effective-date placeholders (`[DATE]`) replaced with real dates.
-- [ ] **Final attorney sign-off** on the custom commercial EULA text itself (draft exists at `LICENSE_DRAFT.md` — confirm it's actually been reviewed, not just drafted).
-- [ ] `package.json#license` → `SEE LICENSE IN LICENSE.md` once the final EULA replaces the current placeholder text.
+- [x] **Final attorney sign-off** on the custom commercial EULA text — approved September 7, 2026. (`LICENSE_DRAFT.md` no longer exists as a separate file; it was merged straight into `LICENSE.md`, which already carries a real effective date and no placeholder text.)
+- [x] `package.json#license` → already reads `SEE LICENSE IN LICENSE.md` — verified live September 7, 2026, no change needed now that the EULA is final.
 - [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
-- [ ] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist).
+- [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
 
 ---
 
@@ -331,46 +332,85 @@ ships is what makes the bypassable one safe to have.
 
 ### What to build
 
-- [ ] **Local pre-push hook — the fast gate.** There is no build or test
-      workflow of any kind today (the only three workflows are the Netlify
-      ones), and trunk-based development is safe exactly to the degree `main` is
-      verified, so this is the prerequisite for everything else here. Check in
-      `.githooks/pre-push` and set `git config core.hooksPath .githooks` — no
-      husky/lint-staged dependency, and because `core.hooksPath` lives in the
-      shared repo config it applies to every worktree. Run `typecheck`, `lint`,
-      `test:ui`, `test:packaging`; **never** `test:harness`, which spends real
-      money. Skip the run when the push touches only `dev/**`, `docs/**`, or
-      `*.md` — a plan commit should not pay for the suite. Caveat: each worktree
-      needs its own `npm ci` before the hook can run there.
-- [ ] **Full-suite workflow on `workflow_dispatch`** (optionally a weekly
-      `schedule`) — the Electron extension tests via `npm run test:headless`,
-      which is already `xvfb-run`-wrapped for Linux runners. This is the
-      clean-room check the local hook cannot give, without paying for it on
-      every push.
-- [ ] **`release.yml` on `push: tags: ["v*"]`** — runs `npm run package`, then
-      `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then creates the
-      GitHub Release from the matching `CHANGELOG.md` section and attaches the
-      VSIX. Needs a `VSCE_PAT` repo secret (the Azure DevOps PAT from Phase 9).
-      This automates Phase 9's publish steps and all of Phase 10.
-- [ ] **Version/tag guard in that workflow** — fail if the tag does not equal
-      `package.json#version`. Automates the "VSIX version matches
-      `package.json`" check in Phase 8 and prevents the classic mismatch.
-- [ ] **Release commit convention** — one commit that bumps `package.json` and
-      renames `CHANGELOG.md`'s `[Unreleased]` heading to `[X.Y.Z] - <date>`,
-      then an annotated tag on it. Keeps the tag, the VSIX, and the changelog
-      entry describing the same tree.
-- [ ] **Pre-release channel instead of a staging branch** — `vsce publish
---pre-release` publishes to the Marketplace's pre-release channel for
-      opt-in users. VS Code's documented convention is `major.EVEN.patch` for
-      stable and `major.ODD.patch` for pre-release (the Marketplace requires a
-      plain `x.y.z`; semver pre-release suffixes like `-beta.1` are not
-      supported). This is the "release build I can test before everyone gets
-      it" that the dev-branch idea was reaching for, without a branch.
-- [ ] **Document the hotfix path** (the `git switch -c release/X.Y <tag>` recipe
-      above) in `CONTRIBUTING`/dev docs so it is a known move rather than an
-      improvisation during an incident.
-- [ ] **Flip the repo to public** — its own step now, with the scan procedure
-      and the decisions it depends on: **Phase 14**.
+- [x] **Local pre-push hook — the fast gate.** ✅ Built September 7, 2026:
+      `.githooks/pre-push` (POSIX `sh`, portable across Git Bash on Windows and
+      CI shells) + `git config core.hooksPath .githooks` set locally. Runs
+      `typecheck`, `lint`, `test:ui`, `test:packaging` in sequence, stopping on
+      first failure; **never** runs `test:harness`. Skips the whole run when
+      every changed file in the push is under `dev/**`, `docs/**`, or matches
+      `*.md`, diffing each pushed ref against its remote SHA (or `main`'s
+      merge-base for a brand-new ref). Fails fast with a clear message if
+      `node_modules/.bin/tsc` is missing (the per-worktree `npm ci` caveat)
+      instead of letting the underlying scripts fail confusingly. Each worktree
+      still needs `git config core.hooksPath .githooks` run once locally — it's
+      a local config, not something a commit can propagate to other clones.
+- [x] **Full-suite workflow on `workflow_dispatch`** — ✅ Built September 7,
+      2026: `.github/workflows/full-suite.yml`, `workflow_dispatch` plus a
+      weekly `schedule` (Monday 13:00 UTC). Runs `npm run test:headless`
+      (already `xvfb-run`-wrapped) on `ubuntu-latest`. **Not yet verified live**
+      — the assumption that GitHub's `ubuntu-latest` image ships Xvfb
+      pre-installed (true for the standard `@vscode/test-electron` CI recipe)
+      should be confirmed on the first real `workflow_dispatch` run.
+- [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
+      `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
+      package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
+      creates the GitHub Release via `softprops/action-gh-release@v2` with the
+      matching `CHANGELOG.md` section (from the new
+      `scripts/verify-release-tag.mjs`) as the body and the VSIX attached.
+      Declares an explicit `permissions: contents: write` block (the two
+      existing Netlify workflows don't need one; this one does, to create a
+      Release). **Not yet functional** — needs the `VSCE_PAT` repo secret,
+      which needs the Azure DevOps PAT from Phase 9 (still open below). The
+      workflow is correctly wired but will fail at the publish step until that
+      secret exists.
+- [x] **Version/tag guard in that workflow** — ✅ Built September 7, 2026, as
+      part of the same script: `scripts/verify-release-tag.mjs` compares the
+      pushed tag (minus its leading `v`) against `package.json#version` and
+      fails loudly on mismatch, before packaging happens. Covered by
+      `scripts/verify-release-tag.test.mjs` (5 tests), wired into
+      `test:packaging`. Verified locally against the real `CHANGELOG.md` and
+      the real `package.json#version` (`0.1.0`), plus a deliberate mismatch
+      (`v9.9.9`) failing as expected.
+- [x] **Release commit convention** — ✅ Documented September 7, 2026 in
+      `CONTRIBUTING.md`'s new "Cutting a release" section: bump
+      `package.json#version`, rename `CHANGELOG.md`'s `[Unreleased]` heading to
+      `[X.Y.Z] - <date>`, annotated tag, push. Not automated (deliberately a
+      manual, deliberate act, not a script) — `release.yml` picks up from the
+      tag onward.
+- [x] **Pre-release channel instead of a staging branch** — ✅ Documented
+      September 7, 2026 in `CONTRIBUTING.md`: `vsce publish --pre-release`,
+      `major.EVEN.patch` stable / `major.ODD.patch` pre-release convention, run
+      manually (not automated in `release.yml`, which only handles stable `v*`
+      tags).
+- [x] **Document the hotfix path** — ✅ Done September 7, 2026: the
+      `git switch -c release/X.Y <tag>` recipe now lives in `CONTRIBUTING.md`'s
+      "Cutting a release" section, alongside the reasoning for why standing
+      release branches aren't used otherwise.
+- [x] **Flip the repo to public** — Phase 14's pre-flip gates (EULA, secret
+      scan, Issues/PRs skim, MFA hardening) all cleared September 7, 2026; the
+      actual toggle in 14.5 remains Nathan's call to trigger.
+
+**Also built this pass, not originally itemized above but needed to support
+it:** GitHub public-contribution scaffolding — `CONTRIBUTING.md`, `SECURITY.md`
+(vulnerability reports to `security@ctrlyoke.dev`, not public Issues),
+`.github/ISSUE_TEMPLATE/{bug_report,feature_request,config}.yml`, and
+`.github/PULL_REQUEST_TEMPLATE.md`. None of this existed before — the repo had
+zero community-health files. Deliberately **no `CODE_OF_CONDUCT.md`** (Nathan's
+call, September 7, 2026 — solo maintainer, revisit if the contributor base
+grows).
+
+**Still open, outside what file changes can accomplish:**
+
+- The `VSCE_PAT` repo secret itself — needs Phase 9's Azure DevOps PAT
+  (generated, then `gh secret set VSCE_PAT` or set via the GitHub UI).
+- Branch protection rules on `main` and any other GitHub repo *settings* —
+  intentionally not decided or configured here; Phase 13's own model is trunk
+  commits directly to `main` with CI as the safety net, so protection rules
+  need a deliberate decision about what they'd restrict for a solo maintainer
+  who pushes directly, not a default-on assumption.
+- `gh` CLI isn't installed in this dev environment yet — recommended follow-up
+  (`winget install --id GitHub.cli`, then `gh auth login` interactively) to
+  make the secret-setting step and future repo administration easier.
 
 ---
 
@@ -425,6 +465,36 @@ Pattern scan across all 3,378 commits on all refs:
 That scan is prefix-based, so it cannot see a high-entropy secret with no
 recognizable shape. Run one scanner from 14.1 before the flip to cover the gap.
 
+### 14.3-scan — Entropy-based scan (September 7, 2026) ✅ CLEAN
+
+Ran both scanners from 14.1 over full history (no repo-portable binaries were
+installed system-wide — both were downloaded standalone to a scratch dir and
+run from there, per the "single binary, not a project dependency" note above):
+
+- [x] **`gitleaks git . --redact`** — 3,272 commits / 52.55 MB scanned, **19
+      matches, all confirmed false positives** by reading each flagged line at
+      its commit:
+      - 4 hits are `KEYGEN_ACCOUNT_ID` / `KEYGEN_PRO_POLICY_ID` in
+        `src/license/LicenseService.ts` and `netlify/functions/ls-webhook.ts` —
+        the same Keygen account/policy identifiers from 4.1, already decided
+        safe-to-publish in 14.3 above (identifiers, not credentials).
+      - 14 hits are literal fake-token fixtures (`abcdefghijk123`, `sk-1234567890abcdef`,
+        `ghp_12345678901234567890`, `Bearer abcdefghijklmnopqrstuvwxyz123456`, …) inside
+        the test suites that exist specifically to test the secret-redaction logic
+        (`SecretRedactionMiddleware.test.ts`, `PreviewRedactor.test.ts`,
+        `McpServerForm.test.ts`, `KeyValueMapEditor.test.tsx`, `outputUtils.test.ts`) —
+        consistent with the PEM-fixture false positives already noted in 14.2.
+      - 1 hit is a SHA-256 file-content hash (high-entropy, no credential shape) in
+        `.bmad/_cfg/files-manifest.csv`, part of a since-removed third-party BMAD
+        tooling install (`git log` shows it added then fully removed by
+        `33105e4d7`; the path doesn't exist in `HEAD`).
+- [x] **`trufflehog git file://. --results=verified`** — 78,802 chunks / 54.25 MB
+      scanned: **0 verified secrets, 0 unverified secrets.**
+- [x] **Skim closed Issues/PRs and tags** — done manually by Nathan (September 7,
+      2026); nothing found. No tool-assisted pass was possible in this
+      environment (no `gh`/GitHub auth available), so this was a direct manual
+      review.
+
 ### 14.3 Safe to publish (decided)
 
 - **Keygen Ed25519 public key** (4.1) — already embedded in every shipped VSIX as
@@ -453,10 +523,26 @@ sitting alongside already-public `support@` / `sales@` / `security@`.
 exposure is targeted phishing and account recovery on the licensing/revenue
 accounts, so the effective control is account hardening, not redaction:
 
-- [ ] MFA — passkey or TOTP, **not** SMS — on Keygen, Lemon Squeezy, Resend,
-      Netlify, Cloudflare, GitHub, and Google Workspace.
-- [ ] Confirm each vendor's account-recovery address is not guessable from the
-      public docs.
+- [x] MFA — passkey or TOTP, **not** SMS — on Keygen, Lemon Squeezy, Resend,
+      Netlify, Cloudflare, GitHub, and Google Workspace. **Done September 7,
+      2026.** Also extended, on Nathan's own initiative, to the Microsoft/Azure
+      DevOps account behind the Marketplace publish PAT (Phase 9) — not on the
+      original list here, but it holds equivalent blast radius and got the same
+      treatment. That account uses passwordless passkey sign-in (key held in
+      1Password) rather than password+TOTP; passkey auth is phishing-resistant
+      by design (bound to the real domain, unlike a password or TOTP code) and
+      NIST/FIDO both treat platform-passkey sign-in as satisfying MFA, so this
+      counts as done, not as a gap.
+- [x] Confirm each vendor's account-recovery address is not guessable from the
+      public docs. The Microsoft/Azure DevOps account's passkey-unavailable
+      fallback (lost device) is "email a code to `admin@fuzzno.com`" — confirmed
+      September 7, 2026 that `admin@fuzzno.com` is not a separate legacy inbox
+      but the business admin address on the same Google Workspace (Fuzzy Nova,
+      the DBA `ctrlyoke` ships under) that already hosts `support@ctrlyoke.dev`
+      and the other `@ctrlyoke.dev` aliases covered by the Google Workspace MFA
+      item above — same 2FA-enforced workspace, not a separate weak point. The
+      recovery fallback is a standard email-a-code flow, not SMS or a guessable
+      security question, so this closes the loop rather than reopening it.
 - [ ] Prefer role addresses (`licensing@`, `billing@`) over the personal owner
       address in future checklist entries.
 
@@ -465,9 +551,9 @@ accounts, so the effective control is account hardening, not redaction:
 Settings → General → Danger Zone → **Change repository visibility → Make
 public**.
 
-- [ ] Do it **after** the final EULA is in `LICENSE.md` (Phase 7). The repo is
+- [x] Final EULA is in `LICENSE.md` (Phase 7) — attorney sign-off landed September 7, 2026. The repo is
       forkable the instant it is public, and every fork inherits whatever license
-      text is present at that moment.
+      text is present at that moment, so this gate is what made the flip safe to schedule.
 - [ ] Actions minutes become free and unlimited on standard runners (Phase 13).
 - [ ] Existing Issues and PRs become world-readable — skim them for internal
       notes before flipping, not after.
@@ -491,21 +577,21 @@ public**.
 | Keygen Enterprise policy                                                   | DEFERRED             | Phase 4.4 — not needed until the Enterprise SKU                                                                                |
 | Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
 | Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
-| Lemon Squeezy identity verification                                        | OPEN (waiting on LS) | Phase 5.1 — nothing to click                                                                                                   |
+| Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
 | Lemon Squeezy payout tax info                                              | DONE                 | Phase 5.1 — submitted August 25, 2026                                                                                          |
 | Netlify webhook function (deployed + smoke-tested)                         | DONE                 | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered) |
 | Transactional email provider for key delivery                              | DONE                 | Phase 5.2 — Resend, verified working live                                                                                      |
-| Live-mode LS webhook (separate from test-mode one)                         | OPEN                 | Phase 5.3 step 6 — create once flipping Test mode off                                                                          |
+| Live-mode LS webhook (separate from test-mode one)                         | OPEN                 | Phase 5.3 step 6 — create once Nathan flips Test mode off in the LS dashboard                                                  |
 | **`LicenseService` implementation**                                        | **DONE**             | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred   |
-| Attorney sign-off on final EULA                                            | OPEN                 | Phase 7                                                                                                                        |
-| Screenshots + demo GIF                                                     | OPEN                 | Phase 8                                                                                                                        |
+| Attorney sign-off on final EULA                                            | DONE                 | Phase 7 — approved September 7, 2026                                                                                            |
+| Screenshots + demo GIF                                                     | OPEN                 | Phase 8 — now unblocked, Phase 6 UI is final                                                                                    |
 | Final `vsce ls` package inspection                                         | OPEN                 | Phase 8 — run right before publish                                                                                             |
-| Marketplace publish                                                        | BLOCKED on Phase 6   | Phase 9                                                                                                                        |
+| Marketplace publish                                                        | OPEN — unblocked     | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                               |
 | GitHub release                                                             | BLOCKED on Phase 9   | Phase 10                                                                                                                       |
 | npm CLI publish                                                            | DEFERRED             | Phase 11                                                                                                                       |
-| Post-launch branching + tag-driven release workflow                        | OPEN                 | Phase 13 — trunk on `main`, local pre-push gate, releases by tag                                                               |
-| Repo visibility flip to public                                             | OPEN                 | Phase 14 — history scan clean on pattern check; run gitleaks/trufflehog, then flip after the EULA lands                        |
-| Vendor-account MFA hardening                                               | OPEN                 | Phase 14.4 — the real mitigation for the owner email being public                                                              |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, and docs all built Sept 7, 2026; still needs the `VSCE_PAT` secret and a live-run verification |
+| Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here |
+| Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point   |
 
 ---
 

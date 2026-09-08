@@ -675,7 +675,7 @@
     "pretest:headless": "npm run compile",
     "test:headless": "npm run compile-tests && xvfb-run -a node ./out/test/runTest.js && npm run test:ui",
     "test:ui": "vitest run --config src/ui/webview-react/vitest.config.ts",
-    "test:packaging": "node --test scripts/assert-no-copilot-runtime.test.mjs scripts/generate-compatibility-docs.test.mjs scripts/generate-step-palette.test.mjs scripts/statusline-format-packaging.test.mjs scripts/find-hardcoded-strings.test.mjs scripts/check-a11y-names.test.mjs",
+    "test:packaging": "node --test scripts/assert-no-copilot-runtime.test.mjs scripts/generate-compatibility-docs.test.mjs scripts/generate-step-palette.test.mjs scripts/statusline-format-packaging.test.mjs scripts/find-hardcoded-strings.test.mjs scripts/check-a11y-names.test.mjs scripts/verify-release-tag.test.mjs",
     "test:ui:watch": "vitest --config src/ui/webview-react/vitest.config.ts",
     "test:ui:coverage": "vitest run --coverage --config src/ui/webview-react/vitest.config.ts",
     "posttest:ui:coverage": "node scripts/generate-testing-gaps.mjs",
