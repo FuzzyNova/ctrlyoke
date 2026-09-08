@@ -42,6 +42,11 @@ import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { pathsEqual } from "./utils/PathCasing";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
+import { initTelemetry, disposeTelemetry } from "./utils/TelemetryReporter";
+import {
+  reportExtensionActivationFailed,
+  getErrorTypeName,
+} from "./utils/TelemetryEvents";
 import { Log } from "./utils/Log";
 import { secretRedactionService } from "./utils/SecretRedactionService";
 import { saveIfDirty } from "./utils/FileSystemUtils";
@@ -153,6 +158,8 @@ export async function activate(context: vscode.ExtensionContext) {
   if (IS_DEV_MODE) {
     Log.debug(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
   }
+
+  initTelemetry();
 
   const runnerHostIdentity: RunnerHostIdentity = {
     runner: RUNNER_IDS.VSCODE,
@@ -544,6 +551,7 @@ export async function activate(context: vscode.ExtensionContext) {
   } catch (error) {
     Log.error("ctrlyoke: Failed to activate extension:", error);
     vscode.window.showErrorMessage(`ctrlyoke: Activation failed: ${error}`);
+    reportExtensionActivationFailed(getErrorTypeName(error));
   }
 }
 
@@ -1644,6 +1652,8 @@ export async function deactivate(): Promise<void> {
   if (workflowOrchestrator) {
     workflowOrchestrator.dispose();
   }
+
+  disposeTelemetry();
 
   Log.debug("ctrlyoke: Extension deactivated");
 }

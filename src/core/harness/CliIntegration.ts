@@ -31,6 +31,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
+import { reportCliNotFound } from "../../utils/TelemetryEvents";
 import {
   CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
@@ -1559,6 +1560,7 @@ export class CliIntegration extends HarnessIntegration {
     this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
 
     Log.error(`❌ ${this.provider.config.displayName} not available`, error);
+    reportCliNotFound(this.getIntegrationMode());
   }
 
   /**

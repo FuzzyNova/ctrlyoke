@@ -923,6 +923,19 @@ export const WORKFLOW_RUNTIME_COMMANDS = {
   REOPEN_FOR_CONTINUATION: "reopenForContinuation",
 } as const;
 
+/**
+ * Terminal outcome tags for `workflow/completed` telemetry, derived from which
+ * `WORKFLOW_RUNTIME_COMMANDS` terminal transition fired (COMPLETE/FAIL/CONFIRM_STOPPED).
+ */
+export const WORKFLOW_TELEMETRY_OUTCOMES = {
+  SUCCESS: "success",
+  ERROR: "error",
+  CANCELLED: "cancelled",
+} as const;
+
+export type WorkflowTelemetryOutcome =
+  (typeof WORKFLOW_TELEMETRY_OUTCOMES)[keyof typeof WORKFLOW_TELEMETRY_OUTCOMES];
+
 /** Actions exposed by the workflow execution control buttons. */
 export const WORKFLOW_EXECUTION_CONTROL_ACTIONS = {
   RUN_DRAFT: "run-draft",

@@ -57,6 +57,8 @@ import {
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { PropertyResolver } from "../utils/PropertyResolver";
+import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
@@ -1133,16 +1135,49 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const prompt = this.state.steps[index];
     if (prompt) {
       const now = Date.now();
+      const startedAt =
+        prompt._runtime?.startedAt ?? metadata?.startedAt ?? now;
+      const outcome: PromptTerminalStatus =
+        terminalStatus ??
+        metadata?.terminalStatus ??
+        PROMPT_TERMINAL_STATUS.COMPLETED;
       prompt._runtime = {
         ...prompt._runtime,
         ...metadata,
-        startedAt: prompt._runtime?.startedAt ?? metadata?.startedAt ?? now,
+        startedAt,
         completedAt: now,
-        terminalStatus:
-          terminalStatus ??
-          metadata?.terminalStatus ??
-          PROMPT_TERMINAL_STATUS.COMPLETED,
+        terminalStatus: outcome,
       };
+
+      const workflowFile = this.getWorkflowFile();
+      const isScript = isScriptStep(prompt);
+      reportPromptCompleted({
+        harness: PropertyResolver.resolveHarnessValue(
+          prompt._runtime.harness ?? (isScript ? undefined : prompt.harness),
+          workflowFile.harness
+        ),
+        executionMode: PropertyResolver.resolveExecutionMode(
+          {
+            executionMode:
+              prompt._runtime.executionMode ??
+              (isScript ? undefined : prompt.executionMode),
+          },
+          workflowFile
+        ),
+        promptIndex: index,
+        durationMs: now - startedAt,
+        outcome,
+        failureKind:
+          outcome === PROMPT_TERMINAL_STATUS.FAILED
+            ? prompt._runtime.failureKind
+            : undefined,
+        endConditionUsed: !isScript && prompt.endCondition != null,
+        resumeSession: Boolean(
+          prompt._runtime.resumeSession ??
+          (isScript ? false : prompt.resumeSession)
+        ),
+        injectMode: ConfigurationUtils.isInjectModeEnabled(),
+      });
     }
     // Update in-memory fast-lookup cache (key = prompt index as string)
     this.state.completedIndices.add(String(index));

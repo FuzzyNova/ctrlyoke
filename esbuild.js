@@ -5,12 +5,44 @@ const path = require("path");
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
+/**
+ * Minimal .env loader (no external dependency). Only supports simple
+ * KEY=VALUE lines; sufficient for the telemetry connection strings.
+ * @returns {Record<string, string>}
+ */
+function loadDotEnv(envPath) {
+  if (!fs.existsSync(envPath)) {
+    return {};
+  }
+  const result = {};
+  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) {
+      continue;
+    }
+    result[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return result;
+}
+
+const dotEnv = loadDotEnv(path.join(__dirname, ".env"));
+// In dev builds, use the isolated dev Application Insights resource so dev
+// noise never lands in the prod telemetry stream (see TELEMETRY_PLAN.md).
+const telemetryConnectionString = production
+  ? dotEnv.TELEMETRY_CONNECTION_STRING || ""
+  : dotEnv.TELEMETRY_CONNECTION_STRING_DEV || "";
+
 // Build-time constants for conditional compilation
 // In production: dev commands are stripped via dead code elimination
 const buildDate = new Date().toISOString();
 const defineConstants = {
   __DEV_MODE__: production ? "false" : "true",
   __BUILD_DATE__: JSON.stringify(buildDate),
+  __TELEMETRY_CONNECTION_STRING__: JSON.stringify(telemetryConnectionString),
 };
 const isolatedRuntimePackages = ["@resvg/resvg-wasm"];
 

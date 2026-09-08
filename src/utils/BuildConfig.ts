@@ -43,3 +43,15 @@ export const BUILD_DATE: string =
   typeof __BUILD_DATE__ !== "undefined"
     ? __BUILD_DATE__
     : new Date().toISOString();
+
+/**
+ * Azure Application Insights connection string for @vscode/extension-telemetry.
+ * Injected by esbuild from `.env` (never committed) — dev builds get the
+ * isolated dev resource, production builds get the prod resource. Empty
+ * string when no `.env` value is configured (telemetry stays disabled).
+ */
+declare const __TELEMETRY_CONNECTION_STRING__: string;
+export const TELEMETRY_CONNECTION_STRING: string =
+  typeof __TELEMETRY_CONNECTION_STRING__ !== "undefined"
+    ? __TELEMETRY_CONNECTION_STRING__
+    : "";

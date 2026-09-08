@@ -76,10 +76,12 @@ import {
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_RUNTIME_COMMANDS,
+  WORKFLOW_TELEMETRY_OUTCOMES,
   WORKTREE_MODES,
   type ActionType,
   type ExecutionMode,
   type QueuePosition,
+  type WorkflowTelemetryOutcome,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
@@ -91,6 +93,10 @@ import type {
   TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import {
+  reportWorkflowStarted,
+  reportWorkflowCompleted,
+} from "../utils/TelemetryEvents";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PropertyResolver } from "../utils/PropertyResolver";
@@ -5570,17 +5576,69 @@ export class WorkflowInstance {
       `Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
       `(step ${state.currentIndex}/${state.steps.length})`;
     switch (transition.command) {
-      case WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION:
+      case WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION: {
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow started`);
+        const workflowFile = this.promptQueue.getWorkflowFile();
+        const hasEndCondition =
+          workflowFile.endCondition != null ||
+          state.steps.some(
+            (step) => !isScriptStep(step) && step.endCondition != null
+          );
+        reportWorkflowStarted({
+          harness: PropertyResolver.resolveHarnessValue(
+            undefined,
+            workflowFile.harness
+          ),
+          executionMode: PropertyResolver.resolveExecutionMode(
+            { executionMode: undefined },
+            workflowFile
+          ),
+          stepCount: state.steps.length,
+          hasFinalStep:
+            workflowFile.finalStep != null &&
+            workflowFile.finalStep.enabled !== false,
+          hasEndCondition,
+          resumeSession: Boolean(workflowFile.resumeSession),
+          dynamicQueueEnabled: state.parallelGroups.length > 0,
+          mcpEnabled: Boolean(workflowFile.mcpServers?.length),
+        });
         break;
+      }
       case WORKFLOW_RUNTIME_COMMANDS.COMPLETE:
-        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow completed`);
-        break;
       case WORKFLOW_RUNTIME_COMMANDS.FAIL:
-        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow failed`);
+      case WORKFLOW_RUNTIME_COMMANDS.CONFIRM_STOPPED: {
+        let outcome: WorkflowTelemetryOutcome;
+        switch (transition.command) {
+          case WORKFLOW_RUNTIME_COMMANDS.COMPLETE:
+            Log.info(`[inst:${this.id.slice(0, 8)}] Workflow completed`);
+            outcome = WORKFLOW_TELEMETRY_OUTCOMES.SUCCESS;
+            break;
+          case WORKFLOW_RUNTIME_COMMANDS.FAIL:
+            Log.info(`[inst:${this.id.slice(0, 8)}] Workflow failed`);
+            outcome = WORKFLOW_TELEMETRY_OUTCOMES.ERROR;
+            break;
+          default:
+            Log.info(`[inst:${this.id.slice(0, 8)}] Workflow stopped`);
+            outcome = WORKFLOW_TELEMETRY_OUTCOMES.CANCELLED;
+            break;
+        }
+        const workflowFile = this.promptQueue.getWorkflowFile();
+        reportWorkflowCompleted({
+          harness: PropertyResolver.resolveHarnessValue(
+            undefined,
+            workflowFile.harness
+          ),
+          executionMode: PropertyResolver.resolveExecutionMode(
+            { executionMode: undefined },
+            workflowFile
+          ),
+          outcome,
+          stepCount: state.steps.length,
+          totalDurationMs: this.workflowRuntime.getActiveExecutionTime(),
+        });
         break;
+      }
       case WORKFLOW_RUNTIME_COMMANDS.REQUEST_STOP:
-      case WORKFLOW_RUNTIME_COMMANDS.CONFIRM_STOPPED:
         Log.info(`[inst:${this.id.slice(0, 8)}] Workflow stopped`);
         break;
       default:

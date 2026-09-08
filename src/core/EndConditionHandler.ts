@@ -24,6 +24,8 @@ import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
+import { PropertyResolver } from "../utils/PropertyResolver";
+import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
 
 /**
  * Context needed to handle retry prompts
@@ -215,10 +217,7 @@ export class EndConditionHandler {
           }
 
           if (
-            this.promptQueue.canPassRetry(
-              prompt,
-              retryContext.attemptTarget
-            )
+            this.promptQueue.canPassRetry(prompt, retryContext.attemptTarget)
           ) {
             const retryResult = await this.sendRetryPromptAndEvaluate(
               prompt,
@@ -277,9 +276,7 @@ export class EndConditionHandler {
         return { shouldContinue: true };
       }
 
-      if (
-        !this.promptQueue.canRetry(prompt, retryContext.attemptTarget)
-      ) {
+      if (!this.promptQueue.canRetry(prompt, retryContext.attemptTarget)) {
         const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
         const retryCount = this.promptQueue.getCurrentRetryCount(
           retryContext.attemptTarget
@@ -509,6 +506,18 @@ export class EndConditionHandler {
     } else {
       this.promptQueue.recordFinalStepEndConditionSummary(summary);
     }
+
+    reportEndConditionEvaluated({
+      harness: PropertyResolver.resolveHarnessValue(prompt.harness, undefined),
+      result: evaluationResult.errored
+        ? "error"
+        : evaluationResult.passed
+          ? "pass"
+          : "fail",
+      attempt: this.promptQueue.getCurrentRetryCount(target) + 1,
+      maxRetries: this.promptQueue.getEffectiveMaxRetries(prompt),
+      durationMs: evaluationResult.duration,
+    });
   }
 
   /**

@@ -88,83 +88,133 @@ The reporter automatically:
 
 ## Events to Track
 
+> **Sanity-check pass (2026-09-08):** the schemas below were revised after reviewing actual
+> insertion points in the codebase, not just the original speculative draft. Key changes:
+> - Outcome/failure fields now reuse existing enums (`FAILURE_KINDS`, `STEP_STATUS`,
+>   `WORKFLOW_RUNTIME_COMMANDS`) instead of inventing new string literals, per the project's
+>   "no hardcoded strings for flow control" rule.
+> - `prompt/completed` gained an `outcome`/`failureKind` pair — the original draft silently
+>   assumed every prompt succeeds.
+> - `continuationMode: "restart"|"inject"` was dropped: that setting exists
+>   (`execution.continuationMode` from `CONTINUATION_MODE_PLAN.md`) but nothing in the
+>   per-step runtime path exposes it as cheaply as the boolean `injectMode` signal
+>   (`ConfigurationUtils.isInjectModeEnabled()` / `CliIntegration`'s per-call `injectMode`
+>   flag) already used at the real per-step decision point — using that instead.
+> - `dynamicQueueEnabled` was redefined to mean "workflow has parallel groups configured"
+>   (`state.parallelGroups.length > 0`) — the original name didn't map to any single existing
+>   flag; this is the closest real, cheap-to-read boolean.
+> - Token usage (`inputTokens`/`outputTokens`/`cachedInputTokens`) is **not wired in the first
+>   pass** — the cheapest correct hook for `prompt/completed` (`PromptQueue.markPromptCompleted`)
+>   doesn't have per-step `TokenUsage` in scope, and reaching into the usage-tracking services
+>   from there would be a much larger, riskier change. Tracked as a follow-up.
+> - Added `extension/activationFailed` (see Error Events below) — the original list had no
+>   signal for "the extension didn't come up," which the existing top-level catch in
+>   `extension.ts`'s `activate()` currently swallows with just a log line + toast.
+> - **Cut:** a generic command-handler error-wrapper (to catch errors in the ~10 individual
+>   `vscode.commands.registerCommand` catch blocks in `extension.ts` uniformly) was considered
+>   and deliberately deferred — touching every command registration is a much larger, separate
+>   refactor with its own risk, disproportionate to this pass.
+> - **Hard limit (not fixable by this plan):** true process crashes (extension-host V8 heap
+>   OOM, native Electron crashes) cannot be captured by in-process telemetry at all — the
+>   process dies before anything flushes. That failure mode is already covered separately by
+>   VS Code/Electron's own crash reporter (see `copilot-instructions.md`'s crash-investigation
+>   section on `%APPDATA%\Code\Crashpad\reports\*.dmp`). This plan only adds telemetry for
+>   *handled* errors/exceptions.
+
 ### `workflow/started`
+
+Fired from `WorkflowInstance.onRuntimeTransition` on `WORKFLOW_RUNTIME_COMMANDS.START_EXECUTION`
+(the one-shot true start; `RESUME` from a pause is a separate command and does not refire this).
 
 ```typescript
 reporter.sendTelemetryEvent("workflow/started", {
-  harness: "claude-cli", // HarnessId enum value
-  executionMode: "interactive", // "interactive" | "headless"
-  stepCount: "3", // number of queued prompts (as string — telemetry values are strings)
-  hasFinalStep: "true",
-  hasEndCondition: "true",
-  resumeSession: "false",
-  dynamicQueueEnabled: "false",
-  mcpEnabled: "false",
+  harness: "claude-cli", // PropertyResolver.resolveHarnessValue(undefined, workflowFile.harness)
+  executionMode: "interactive", // PropertyResolver.resolveExecutionMode(...)
+  stepCount: "3", // state.steps.length
+  hasFinalStep: "true", // workflowFile.finalStep present and enabled !== false
+  hasEndCondition: "true", // workflow- or any step-level endCondition set
+  resumeSession: "false", // workflow-level default
+  dynamicQueueEnabled: "false", // state.parallelGroups.length > 0 (see note above)
+  mcpEnabled: "false", // workflowFile.mcpServers non-empty
 });
 ```
 
 ### `workflow/completed`
 
+Fired from the same `onRuntimeTransition` funnel, only on the true terminal commands:
+`COMPLETE` → success, `FAIL` → error, `CONFIRM_STOPPED` → cancelled. (`REQUEST_STOP` is the
+request, not yet applied, and must not fire this.)
+
 ```typescript
 reporter.sendTelemetryEvent("workflow/completed", {
   harness: "claude-cli",
   executionMode: "interactive",
-  outcome: "success", // "success" | "error" | "cancelled"
+  outcome: "success", // "success" | "error" | "cancelled", mapped from WORKFLOW_RUNTIME_COMMANDS
   stepCount: "3",
-  totalDurationMs: "42000", // total wall-clock ms
+  totalDurationMs: "42000", // workflowRuntime.getActiveExecutionTime() — excludes paused time
 });
 ```
 
 ### `prompt/completed`
 
-Fired once per prompt step. Most granular event — drives per-harness usage analytics.
+Fired once per prompt step from `PromptQueue.markPromptCompleted()` — the single funnel already
+called by `completeStepState`/`failStepState`/`cancelStepState`/`skipStepState`, so no new call
+sites are needed inside `WorkflowExecutor`'s many status-transition branches.
 
 ```typescript
 reporter.sendTelemetryEvent("prompt/completed", {
-  harness: "claude-cli",
+  harness: "claude-cli", // from the merged PromptRuntimeMetadata (ExecutionProperties)
   executionMode: "interactive",
-  promptIndex: "0", // 0-based position in workflow
-  durationMs: "14200",
-  inputTokens: "8400", // omit if unavailable for this harness
-  outputTokens: "1200",
-  cachedInputTokens: "6000", // omit if 0 or unavailable
-  endConditionUsed: "false",
+  promptIndex: "0", // the stepIndex passed to markPromptCompleted
+  durationMs: "14200", // completedAt - startedAt, both already on PromptRuntimeMetadata
+  outcome: "completed", // terminalStatus: "completed" | "failed" | "cancelled" | "skipped"
+  failureKind: "harnessError", // PromptRuntimeMetadata.failureKind (FAILURE_KINDS), omitted when outcome is not "failed"
+  endConditionUsed: "false", // step.endCondition != null
   resumeSession: "false",
-  continuationMode: "restart", // "restart" | "inject" (when CONTINUATION_MODE_PLAN ships)
+  injectMode: "false", // whether this attempt reused a live PTY via inject mode
+  // inputTokens / outputTokens / cachedInputTokens: deferred, see note above
 });
 ```
 
 ### `endcondition/evaluated`
 
+Fired from `EndConditionHandler.recordEndConditionEvaluation()` — the single funnel already
+shared by the passing, failing, and errored paths.
+
 ```typescript
 reporter.sendTelemetryEvent("endcondition/evaluated", {
-  harness: "claude-cli",
-  result: "pass", // "pass" | "fail"
-  attempt: "1", // which retry attempt (1 = first try)
-  maxRetries: "3",
-  durationMs: "850",
+  harness: "claude-cli", // PropertyResolver.resolveHarnessValue(prompt.harness, undefined)
+  result: "pass", // "pass" | "fail" | "error" (evaluationResult.errored adds a third state the original draft missed)
+  attempt: "1", // promptQueue.getCurrentRetryCount(target) + 1 (1 = first evaluation)
+  maxRetries: "3", // promptQueue.getEffectiveMaxRetries(prompt)
+  durationMs: "850", // evaluationResult.duration
 });
 ```
 
 ### `cli/not_found`
 
-Signals which harness CLIs users are missing — helps prioritize install docs.
+Signals which harness CLIs users are missing — helps prioritize install docs. Fired from
+`CliIntegration.handleInitializationError()`, the single funnel for both the "not available"
+and "exception during check" branches of `initialize()`.
 
 ```typescript
 reporter.sendTelemetryEvent("cli/not_found", {
-  harness: "claude-cli",
+  harness: "claude-cli", // this.provider.config.harnessId
 });
 ```
 
-### `error` (use `sendTelemetryErrorEvent`)
+### Error events (use `sendTelemetryErrorEvent`)
 
 ```typescript
-reporter.sendTelemetryErrorEvent("workflow/error", {
-  harness: "claude-cli",
-  errorType: "CliProcessCrashed", // type/class name only, never message
-  executionMode: "headless",
+reporter.sendTelemetryErrorEvent("extension/activationFailed", {
+  errorType: "TypeError", // error.constructor.name — never the message
 });
 ```
+
+`extension/activationFailed` fires from `extension.ts`'s top-level `activate()` catch block
+(previously just `Log.error` + a toast, no telemetry — the extension failing to come up at all
+had zero signal). A generic `workflow/error`/per-command error event was considered for the
+~10 scattered command-handler catch blocks but deferred — see the sanity-check note above.
 
 ---
 
@@ -183,13 +233,12 @@ These are tempting but premature or risky:
 
 ## Disclosure
 
-Add to `package.json` under `contributes`:
-
-```json
-"telemetry": {
-  "telemetryLevel": "all"
-}
-```
+> **Correction (verified 2026-09-08):** there is no `contributes.telemetry.telemetryLevel`
+> field in the VS Code extension manifest — this was not a real contribution point. The
+> actual optional mechanism is a `telemetry.json` file at the extension root, which lets
+> users dump declared telemetry events via the `--telemetry` CLI flag. Add it once real
+> events exist (it documents event schemas), not as part of the foundation work. See
+> https://code.visualstudio.com/api/extension-guides/telemetry.
 
 Add a brief note to the README and marketplace description:
 
@@ -209,16 +258,20 @@ Add a brief note to the README and marketplace description:
 
 ## Implementation Checklist
 
-- [ ] Create Azure Application Insights resource, store connection string in `.env` (never commit)
+- [x] Create Azure Application Insights resource, store connection string in `.env` (never commit)
   - Use esbuild `define` to inject `TELEMETRY_CONNECTION_STRING` at build time (same pattern as `IS_DEV_MODE`)
   - In dev builds, use a separate dev Application Insights resource so dev noise is isolated
-- [ ] Add `@vscode/extension-telemetry` dependency
-- [ ] Create `src/utils/TelemetryReporter.ts` singleton
-- [ ] Initialize in `extension.ts` activate, dispose in deactivate
-- [ ] Add `workflow/started` + `workflow/completed` events to `WorkflowExecutor`
-- [ ] Add `prompt/completed` event to `CliIntegration` / `HarnessIntegration` after each step
-- [ ] Add `endcondition/evaluated` to `EndConditionHandler`
-- [ ] Add `cli/not_found` to harness availability checks
-- [ ] Add error events to key catch blocks
-- [ ] Update README + marketplace description with disclosure text
+  - Resource group `ctrlyoke` (Azure subscription 1, East US): `ctrlyoke-telemetry` (prod) + `ctrlyoke-telemetry-dev` (dev)
+- [x] Add `@vscode/extension-telemetry` dependency
+- [x] Create `src/utils/TelemetryReporter.ts` singleton
+- [x] Initialize in `extension.ts` activate, dispose in deactivate
+- [x] Add `workflow/started` + `workflow/completed` events to `WorkflowInstance.onRuntimeTransition`
+- [x] Add `prompt/completed` event to `PromptQueue.markPromptCompleted`
+- [x] Add `endcondition/evaluated` to `EndConditionHandler.recordEndConditionEvaluation`
+- [x] Add `cli/not_found` to `CliIntegration.handleInitializationError`
+- [x] Add `extension/activationFailed` to `extension.ts`'s top-level activate() catch
+- [x] Update README with disclosure text (marketplace listing renders the README directly, so no separate marketplace-only copy is needed; `PRIVACY.md` §3.1 already covered this accurately)
+- [ ] Optionally add a `telemetry.json` at the extension root once events are defined (not a package.json field — see Disclosure note above)
 - [ ] Verify events appear in Application Insights Live Metrics before shipping
+- [ ] Follow-up (not in this pass): wire `inputTokens`/`outputTokens`/`cachedInputTokens` into `prompt/completed`
+- [ ] Follow-up (not in this pass): generic command-handler error telemetry across `extension.ts`'s `registerCommand` catch blocks

@@ -427,6 +427,17 @@ Design documents and implementation notes are in `dev/implemented/`.
 
 ---
 
+## Privacy & Telemetry
+
+ctrlyoke collects limited usage telemetry (harness type, execution mode, step counts,
+durations, outcome and error type names, and standard environment metadata such as
+extension/VS Code version and OS) to improve the extension. It does not collect prompt
+content, code, file paths, or workspace names. Telemetry respects your VS Code
+`telemetry.telemetryLevel` setting — set it to `off` to disable. See our
+[Privacy Policy](https://ctrlyoke.dev/privacy) for details.
+
+---
+
 ## Support
 
 - **Issues:** [github.com/FuzzyNova/ctrlyoke/issues](https://github.com/FuzzyNova/ctrlyoke/issues)

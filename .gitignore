@@ -44,3 +44,6 @@ docs/.vitepress/cache
 
 # Real Keygen test license keys (embed buyer email in cleartext, base64-encoded)
 dev/test_keys.md
+
+# Azure Application Insights connection strings (see dev/backlog/TELEMETRY_PLAN.md)
+.env
