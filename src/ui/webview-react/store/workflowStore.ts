@@ -164,30 +164,61 @@ function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
 }
 
 /**
- * Merge an incoming batch of streamed events into an existing CliOutput.
+ * Decide what a batch of incoming streamed events should open with, prefixing
+ * the one-time "follow-up" divider when `existing` is already complete
+ * (`isStreaming: false`) — post-completion follow-up activity, a harness
+ * auto-resuming a backgrounded task or a human typing into the still-open
+ * terminal (see `SessionActivityWatcher` /
+ * `WorkflowInstance.handleSessionActivityResumed`). `CONTEXT_WINDOW_SYNC` is
+ * an invisible marker, filtered out here rather than rendered as a row.
  *
- * When `existing` is already complete (`isStreaming: false`), the batch is
- * post-completion follow-up activity — a harness auto-resuming a backgrounded
- * task, or a human typing into the still-open terminal (see
- * `SessionActivityWatcher` / `WorkflowInstance.handleSessionActivityResumed`).
- * In that case: insert a one-time "follow-up" divider before the new content
- * (so later batches from the same follow-up burst just append past it), and
- * refresh the stats footer (elapsed/context window) so it doesn't go stale
- * while resumed activity streams in. `CONTEXT_WINDOW_SYNC` is an invisible
- * marker consumed here, never rendered as a row.
- *
- * When `existing` is still mid-flight (`isStreaming: true`), this is an
- * ordinary incremental append — no divider, no footer refresh (those only
- * apply once the step is actually done).
+ * Single-sourced so the aggregate CliOutput merge below and the raw activity
+ * entry recorded alongside it (`appendStreamingEventsToOutputState`) always
+ * agree on whether this batch carries the divider: `mapOrderedHistoryEntriesToMessages`
+ * renders a target from its activity entries whenever any exist, so a divider
+ * only the aggregate saw would never reach the rendered rows.
+ */
+function computeStreamingEventsToMerge(
+  existing: CliOutput | undefined,
+  incomingEvents: any[]
+): any[] {
+  const isFollowUp = existing?.isStreaming === false;
+  const contentEvents = incomingEvents.filter(
+    (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
+  );
+  if (!isFollowUp) {
+    return contentEvents;
+  }
+
+  const existingStructured = existing?.structured as any;
+  const existingEvents = existingStructured?.events || [];
+  const hasFollowUpDivider = existingEvents.some(
+    (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+  );
+
+  return contentEvents.length > 0 && !hasFollowUpDivider
+    ? [
+        {
+          type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+          timestamp: Date.now(),
+          data: { resumedAt: Date.now() },
+        },
+        ...contentEvents,
+      ]
+    : contentEvents;
+}
+
+/**
+ * Merge an incoming batch of streamed events into an existing CliOutput. When
+ * the batch is post-completion follow-up activity, also refreshes the stats
+ * footer (elapsed/context window) so it doesn't go stale while resumed
+ * activity streams in — otherwise this is an ordinary incremental append.
  */
 function mergeResumedActivityIntoOutput(
   existing: CliOutput,
   incomingEvents: any[]
 ): CliOutput {
   const isFollowUp = existing.isStreaming === false;
-  const contentEvents = incomingEvents.filter(
-    (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
-  );
   const latestContextWindowSync = [...incomingEvents]
     .reverse()
     .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
@@ -195,21 +226,7 @@ function mergeResumedActivityIntoOutput(
 
   const existingStructured = existing.structured as any;
   const existingEvents = existingStructured?.events || [];
-  const hasFollowUpDivider = existingEvents.some(
-    (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-  );
-
-  const eventsToMerge =
-    isFollowUp && contentEvents.length > 0 && !hasFollowUpDivider
-      ? [
-          {
-            type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-            timestamp: Date.now(),
-            data: { resumedAt: Date.now() },
-          },
-          ...contentEvents,
-        ]
-      : contentEvents;
+  const eventsToMerge = computeStreamingEventsToMerge(existing, incomingEvents);
 
   return {
     ...existing,
@@ -693,6 +710,36 @@ function appendStreamingEventsToOutputState(
       )
     : undefined;
 
+  // The activity entry below feeds `mapOrderedHistoryEntriesToMessages`,
+  // which renders a target from its activity entries whenever any exist —
+  // so it must carry the same follow-up divider the aggregate merge above
+  // just decided on, computed against the same pre-merge existing output, or
+  // the divider row would exist in the aggregate but never reach the screen.
+  // A "retired run" (see workflowStore.test.ts) has no live entry yet, so
+  // fall back to the persisted history entry exactly like the fallback below.
+  const existingLiveIdx = findCliEntryIndexByIdentity(
+    state.liveOrderedEntries,
+    identity
+  );
+  const existingHistoryIdx = state.historyOutputs
+    ? findCliEntryIndexByIdentity(state.historyOutputs.orderedEntries, identity)
+    : -1;
+  const existingOutputForActivity =
+    existingLiveIdx >= 0
+      ? (state.liveOrderedEntries[existingLiveIdx] as OrderedCliHistoryEntry)
+          .cliOutput
+      : existingHistoryIdx >= 0
+        ? (
+            state.historyOutputs!.orderedEntries[
+              existingHistoryIdx
+            ] as OrderedCliHistoryEntry
+          ).cliOutput
+        : undefined;
+  const eventsForActivity = computeStreamingEventsToMerge(
+    existingOutputForActivity,
+    events
+  );
+
   let liveOrderedEntries = liveMerge.entries;
   let liveSequence = state.liveSequence;
   if (!liveMerge.matchedEntry) {
@@ -733,7 +780,7 @@ function appendStreamingEventsToOutputState(
     attemptIndex,
     phase,
     kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
-    events,
+    events: eventsForActivity,
   };
   const liveActivityEntries = mergeActivityEntry(
     state.liveActivityEntries,

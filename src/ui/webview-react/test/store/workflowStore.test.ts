@@ -616,6 +616,44 @@ describe("appendStreamingEvents", () => {
     expect(dividerCount).toBe(1);
   });
 
+  it("carries the follow-up divider onto the recorded activity entry too", () => {
+    // mapOrderedHistoryEntriesToMessages renders a target from its activity
+    // entries whenever any exist for that target, so a divider only the
+    // aggregate CliOutput saw would never reach the projected/rendered rows
+    // (see OutputRow's FOLLOW_UP_RESUMED case). The activity entry recorded
+    // alongside the aggregate merge must carry the same divider.
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+          metadata: {},
+        },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    });
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "one more thing" } },
+    ]);
+
+    const activityEntry = store().liveActivityEntries.find(
+      (entry) =>
+        entry.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        entry.target.stepIndex === 0
+    );
+    expect(activityEntry?.events?.map((e) => e.type)).toEqual([
+      CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+      CLI_EVENT_TYPES.USER_STEER,
+    ]);
+  });
+
   it("refreshes tokens from a CONTEXT_WINDOW_SYNC marker without rendering it as a row", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 
