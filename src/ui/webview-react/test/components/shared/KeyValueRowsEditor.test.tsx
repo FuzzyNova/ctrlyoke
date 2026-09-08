@@ -195,6 +195,12 @@ describe("KeyValueRowsEditor", () => {
     expect(screen.getByRole("textbox", { name: "entry name" })).toBeVisible();
     expect(onChange).toHaveBeenLastCalledWith({});
 
+    // A row that has only just been added has not been typed in yet, so it
+    // must not be flagged as invalid before the user does anything.
+    expect(
+      screen.getByRole("textbox", { name: "entry name" })
+    ).not.toHaveAttribute("aria-invalid");
+
     const valueInput = screen.getByRole("textbox", { name: "entry value" });
     fireEvent.change(valueInput, { target: { value: "orphaned" } });
     fireEvent.blur(valueInput);

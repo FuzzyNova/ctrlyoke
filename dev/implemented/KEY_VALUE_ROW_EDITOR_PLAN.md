@@ -360,6 +360,20 @@ field appends a row.
 The parsing and credential helpers live in
 `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`.
 
+**Implemented.** Delivered across commits `66664225` (validation foundation),
+`4a837db8` (row editor), `c6b51412` (paste + bulk edit), and `197baa1d`
+(call-site migration).
+
+One rule was corrected during review: `validateKeyValueKey` originally ran the
+per-kind name-pattern and exact-duplicate checks over an empty key, so every
+row created by `+ Add …` rendered a red error before the user typed anything
+(an empty string matches none of `^\w+$`, `^[A-Za-z_][A-Za-z0-9_]*$`, or the
+RFC 7230 token pattern, and two blank rows read as exact duplicates of each
+other). A half-typed row is the normal state right after adding one, so an
+empty key now yields only the "this row will not be saved" advisory — and that
+only once it has a value. §3's rule table always said the empty-key case is a
+warning; the implementation just reached the pattern rules first.
+
 ## Test coverage
 
 The former `KeyValueMapEditor.test.tsx` asserted textarea mechanics and is

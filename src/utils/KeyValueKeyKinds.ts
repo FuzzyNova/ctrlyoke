@@ -64,14 +64,21 @@ export function validateKeyValueKey(
 ): KeyValueKeyDiagnostic[] {
   const diagnostics: KeyValueKeyDiagnostic[] = [];
 
-  if (allKeys.filter((candidate) => candidate === key).length > 1) {
-    diagnostics.push(error("This key is duplicated exactly."));
+  // A half-typed row is the normal state right after "+ Add", so an empty key
+  // gets only the "this row is not saved" advisory. Running the name-pattern
+  // and duplicate rules over it would flag every freshly added row as an
+  // error before the user has typed anything.
+  if (key.length === 0) {
+    if (value !== undefined && value.length > 0) {
+      diagnostics.push(
+        warning("This row will not be saved because its key is empty.")
+      );
+    }
+    return diagnostics;
   }
 
-  if (key.length === 0 && value !== undefined && value.length > 0) {
-    diagnostics.push(
-      warning("This row will not be saved because its key is empty.")
-    );
+  if (allKeys.filter((candidate) => candidate === key).length > 1) {
+    diagnostics.push(error("This key is duplicated exactly."));
   }
 
   switch (kind) {

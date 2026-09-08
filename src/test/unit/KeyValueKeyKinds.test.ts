@@ -111,4 +111,29 @@ suite("KeyValueKeyKinds", () => {
       )
     );
   });
+
+  test("stays silent for a freshly added row with no key and no value", () => {
+    for (const kind of Object.values(KEY_VALUE_KEY_KINDS)) {
+      assert.deepStrictEqual(
+        validateKeyValueKey(kind, "", [""], ""),
+        [],
+        `expected no diagnostics for an untouched ${kind} row`
+      );
+    }
+  });
+
+  test("does not report name-pattern or duplicate errors for empty keys", () => {
+    for (const kind of Object.values(KEY_VALUE_KEY_KINDS)) {
+      const diagnostics = validateKeyValueKey(kind, "", ["", ""], "value");
+
+      assert.deepStrictEqual(
+        diagnostics.filter(
+          (diagnostic) =>
+            diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+        ),
+        [],
+        `expected no error diagnostics for two blank ${kind} rows`
+      );
+    }
+  });
 });
