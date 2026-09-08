@@ -28,11 +28,25 @@ export interface OutputMinimapBar {
   row: number;
   addedLines: number;
   removedLines: number;
+  /**
+   * True only when a genuinely paired (split-view delete+insert) row
+   * contributed to this bar. A bar can end up with both `addedLines` and
+   * `removedLines` simply because two unrelated solo (unified-view) lines
+   * were quantized onto the same rail pixel — that case renders solid, not
+   * split, matching how a unified diff never mixes colors on one row.
+   */
+  mixed: boolean;
 }
 
 interface WeightedRow {
   row: number;
   weight: number;
+}
+
+interface BarAccumulator {
+  addedLines: number;
+  removedLines: number;
+  mixed: boolean;
 }
 
 function finiteNonNegative(value: number): number {
@@ -80,12 +94,13 @@ function allocateLines(lines: number, rows: readonly WeightedRow[]): number[] {
 }
 
 function addContribution(
-  bars: Array<{ addedLines: number; removedLines: number }>,
+  bars: BarAccumulator[],
   start: number,
   end: number,
   addedLines: number,
   removedLines: number,
-  railRows: number
+  railRows: number,
+  isMixedSource: boolean
 ): void {
   const rows = rowsForInterval(start, end, railRows);
   if (rows.length === 0) return;
@@ -93,8 +108,10 @@ function addContribution(
   const added = allocateLines(finiteNonNegative(addedLines), rows);
   const removed = allocateLines(finiteNonNegative(removedLines), rows);
   for (let index = 0; index < rows.length; index++) {
-    bars[rows[index].row].addedLines += added[index];
-    bars[rows[index].row].removedLines += removed[index];
+    const bar = bars[rows[index].row];
+    bar.addedLines += added[index];
+    bar.removedLines += removed[index];
+    if (isMixedSource) bar.mixed = true;
   }
 }
 
@@ -106,6 +123,13 @@ function addContribution(
  * blocks from different steps to accumulate in the same bar. A block's run
  * data is used when present because it is the more detailed representation
  * painted by the unquantized minimap.
+ *
+ * A bar's `mixed` flag is set only when a genuinely paired split-view row (a
+ * single run carrying both `addedLines` and `removedLines`) touches it, or
+ * for a collapsed block's summary line — never merely because two unrelated
+ * solo (unified-view) lines were quantized onto the same pixel. That keeps a
+ * unified diff rendering solid full-width bars even when zoomed out, matching
+ * the live diff view's own per-row coloring.
  */
 export function quantizeOutputMinimapBars(
   steps: readonly MinimapBarStep[],
@@ -114,27 +138,35 @@ export function quantizeOutputMinimapBars(
   const railRows = Math.floor(finiteNonNegative(railHeightPx));
   if (railRows === 0) return [];
 
-  const bars = Array.from({ length: railRows }, () => ({
+  const bars: BarAccumulator[] = Array.from({ length: railRows }, () => ({
     addedLines: 0,
     removedLines: 0,
+    mixed: false,
   }));
 
   for (const step of steps) {
     for (const block of step.diffBlocks) {
-      const blockStart = finiteNonNegative(block.scrollFraction) * railRows;
+      // Clamped into [0, railRows - 1) so a block whose scrollFraction rounds
+      // up to (or past) the rail's last row still starts inside bounds —
+      // otherwise rowsForInterval sees an empty interval and the whole block
+      // is silently dropped instead of clipped, which is exactly what makes
+      // diffs near the end of a long run vanish from the rail even though the
+      // scroll thumb sits right on top of them.
+      const blockStart = Math.min(
+        finiteNonNegative(block.scrollFraction) * railRows,
+        Math.max(0, railRows - 1)
+      );
 
       if (block.isCollapsed) {
-        const collapsedStart = Math.min(
-          Math.max(0, blockStart),
-          Math.max(0, railRows - 2)
-        );
+        const collapsedStart = Math.min(blockStart, Math.max(0, railRows - 2));
         addContribution(
           bars,
           collapsedStart,
           collapsedStart + 2,
           block.addedLines,
           block.removedLines,
-          railRows
+          railRows,
+          true
         );
         continue;
       }
@@ -164,7 +196,8 @@ export function quantizeOutputMinimapBars(
               runEnd,
               run.addedLines,
               run.removedLines,
-              railRows
+              railRows,
+              run.addedLines > 0 && run.removedLines > 0
             );
           }
           offsetRows += runRows;
@@ -176,7 +209,8 @@ export function quantizeOutputMinimapBars(
           blockStart + blockHeight,
           block.addedLines,
           block.removedLines,
-          railRows
+          railRows,
+          block.addedLines > 0 && block.removedLines > 0
         );
       }
     }

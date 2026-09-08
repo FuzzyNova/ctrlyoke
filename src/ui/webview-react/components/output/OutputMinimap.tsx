@@ -576,10 +576,27 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         ref={diffColumnRef}
         className="relative flex-shrink-0 w-[var(--fp-output-minimap-diff-width)] bg-sidebar-bg"
       >
-        {/* Diff overlays — one bar per occupied rail pixel, below thumb and markers */}
+        {/* Diff overlays — one bar per occupied rail pixel, below thumb and
+            markers. Only a genuinely paired split-view row (or a collapsed
+            block's summary line) renders as a red/green split; a bar that
+            only has both colors because unrelated solo lines were quantized
+            onto the same pixel renders solid, matching the live unified diff
+            view where a row is never part red and part green. */}
         {diffBars.map((bar) => {
           const significantLines = bar.addedLines + bar.removedLines;
-          const removedFraction = bar.removedLines / significantLines;
+          const background = bar.mixed
+            ? (() => {
+                const removedFraction = bar.removedLines / significantLines;
+                return `linear-gradient(to right,
+                  var(--fp-minimap-diff-removed) 0%,
+                  var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
+                  var(--fp-minimap-diff-added) ${removedFraction * 100}%,
+                  var(--fp-minimap-diff-added) 100%
+                )`;
+              })()
+            : bar.removedLines >= bar.addedLines
+              ? "var(--fp-minimap-diff-removed)"
+              : "var(--fp-minimap-diff-added)";
           return (
             <div
               key={bar.row}
@@ -588,12 +605,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               style={{
                 top: `${bar.row}px`,
                 height: "1px",
-                background: `linear-gradient(to right,
-                  var(--fp-minimap-diff-removed) 0%,
-                  var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
-                  var(--fp-minimap-diff-added) ${removedFraction * 100}%,
-                  var(--fp-minimap-diff-added) 100%
-                )`,
+                background,
               }}
             />
           );
