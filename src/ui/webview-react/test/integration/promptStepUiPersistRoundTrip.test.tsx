@@ -85,13 +85,19 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
     render(<PromptEditor />);
     act(() => useUiStore.getState().openPropertiesDrawer());
 
-    // Drive the real Validation-tab env control.
+    // Drive the real Validation-tab environment row controls.
     fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
-    const preEnv = screen.getByLabelText("prop-pre-env");
-    fireEvent.change(preEnv, {
-      target: { value: "PRE_TOKEN=${secret:PRE_TOKEN}" },
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add environment variable" })
+    );
+    const preEnvName = screen.getByLabelText("environment variable name");
+    fireEvent.change(preEnvName, { target: { value: "PRE_TOKEN" } });
+    fireEvent.blur(preEnvName);
+    const preEnvValue = screen.getByLabelText("Value for PRE_TOKEN");
+    fireEvent.change(preEnvValue, {
+      target: { value: "${secret:PRE_TOKEN}" },
     });
-    fireEvent.blur(preEnv);
+    fireEvent.blur(preEnvValue);
 
     // Drive the real Permissions-tab allow/deny-list controls.
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
@@ -134,8 +140,11 @@ describe("PropertiesDrawer — prompt-step persist/reload round trip", () => {
     // enterEditMode resets the drawer back to the Harness tab, mirroring what
     // happens when a user reopens a step in the real app.
     fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
-    expect(screen.getByLabelText("prop-pre-env")).toHaveValue(
-      "PRE_TOKEN=${secret:PRE_TOKEN}"
+    expect(screen.getByLabelText("Name for PRE_TOKEN")).toHaveValue(
+      "PRE_TOKEN"
+    );
+    expect(screen.getByLabelText("Value for PRE_TOKEN")).toHaveValue(
+      "${secret:PRE_TOKEN}"
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));

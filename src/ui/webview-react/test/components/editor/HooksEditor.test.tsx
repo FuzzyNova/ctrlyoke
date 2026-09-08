@@ -146,16 +146,23 @@ describe("HooksEditor compatibility diagnostics", () => {
       />
     );
 
-    expect(screen.getByLabelText("hook-0-env")).toHaveValue(
-      "HOOK_TOKEN=${secret:HOOK_TOKEN}"
+    expect(screen.getByLabelText("Name for HOOK_TOKEN")).toHaveValue(
+      "HOOK_TOKEN"
+    );
+    expect(screen.getByLabelText("Value for HOOK_TOKEN")).toHaveValue(
+      "${secret:HOOK_TOKEN}"
     );
     expect(screen.getByLabelText("Timeout (seconds)")).toHaveValue(30);
 
-    const hookEnv = screen.getByLabelText("hook-0-env");
-    fireEvent.change(hookEnv, {
-      target: { value: "HOOK_TOKEN=${secret:HOOK_TOKEN}\nMODE=ci" },
-    });
-    fireEvent.blur(hookEnv);
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add environment variable" })
+    );
+    const modeName = screen.getByLabelText("environment variable name");
+    fireEvent.change(modeName, { target: { value: "MODE" } });
+    fireEvent.blur(modeName);
+    const modeValue = screen.getByLabelText("Value for MODE");
+    fireEvent.change(modeValue, { target: { value: "ci" } });
+    fireEvent.blur(modeValue);
     expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({
         env: {
@@ -227,11 +234,7 @@ describe("HooksEditor compatibility diagnostics", () => {
       />
     );
 
-    const hookEnvToClear = screen.getByLabelText("hook-0-env");
-    fireEvent.change(hookEnvToClear, {
-      target: { value: "" },
-    });
-    fireEvent.blur(hookEnvToClear);
+    fireEvent.click(screen.getByRole("button", { name: "Delete HOOK_TOKEN" }));
     const clearedEnv = onChange.mock.lastCall?.[0]?.[0] as {
       env?: Record<string, string>;
     };

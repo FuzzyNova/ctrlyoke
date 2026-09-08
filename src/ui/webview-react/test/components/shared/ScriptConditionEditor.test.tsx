@@ -287,12 +287,21 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      const env = screen.getByLabelText(`test-${variant}-env`);
-      expect(env).toHaveValue("CI_TOKEN=${secret:CI_TOKEN}");
-      fireEvent.change(env, {
-        target: { value: "CI_TOKEN=${secret:CI_TOKEN}\nMODE=ci" },
-      });
-      fireEvent.blur(env);
+      expect(screen.getByLabelText("Name for CI_TOKEN")).toHaveValue(
+        "CI_TOKEN"
+      );
+      expect(screen.getByLabelText("Value for CI_TOKEN")).toHaveValue(
+        "${secret:CI_TOKEN}"
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "+ Add environment variable" })
+      );
+      const modeName = screen.getByLabelText("environment variable name");
+      fireEvent.change(modeName, { target: { value: "MODE" } });
+      fireEvent.blur(modeName);
+      const modeValue = screen.getByLabelText("Value for MODE");
+      fireEvent.change(modeValue, { target: { value: "ci" } });
+      fireEvent.blur(modeValue);
 
       expect(onChange).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -322,11 +331,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      const env = screen.getByLabelText(`test-${variant}-env`);
-      fireEvent.change(env, {
-        target: { value: "" },
-      });
-      fireEvent.blur(env);
+      fireEvent.click(screen.getByRole("button", { name: "Delete CI_TOKEN" }));
 
       const updated = onChange.mock.lastCall?.[0] as {
         env?: Record<string, string>;
@@ -673,10 +678,16 @@ describe("ScriptConditionEditor", () => {
           />
         );
 
-        const env = screen.getByLabelText(`test-${variant}-env`);
-        expect(env).toHaveValue("CI=true");
-        fireEvent.change(env, { target: { value: "CI=true\nTOKEN=value" } });
-        fireEvent.blur(env);
+        expect(screen.getByLabelText("Value for CI")).toHaveValue("true");
+        fireEvent.click(
+          screen.getByRole("button", { name: "+ Add environment variable" })
+        );
+        const tokenName = screen.getByLabelText("environment variable name");
+        fireEvent.change(tokenName, { target: { value: "TOKEN" } });
+        fireEvent.blur(tokenName);
+        const tokenValue = screen.getByLabelText("Value for TOKEN");
+        fireEvent.change(tokenValue, { target: { value: "value" } });
+        fireEvent.blur(tokenValue);
 
         expect(onChange).toHaveBeenCalledWith(
           expect.objectContaining({

@@ -160,7 +160,17 @@ export const KEY_VALUE_KEY_KINDS = {
   ENV: "env",
   HEADER: "header",
 } as const;
+
+export type KeyValueKeyKind =
+  (typeof KEY_VALUE_KEY_KINDS)[keyof typeof KEY_VALUE_KEY_KINDS];
 ```
+
+The module also owns the rule evaluation itself, not just the constants: a
+pure `validateKeyValueKey(kind, key, allKeys)` returning `FieldDiagnostic`-shaped
+`{ severity, message }` entries, so the component renders diagnostics and does
+not author them. That is what makes the "reuse extension-side in
+`PromptFileParser`" future extension possible without a second copy of the
+rules.
 
 Rules, by kind:
 
@@ -217,6 +227,14 @@ applies step `env` _after_ the `CTRLYOKE_VAR_*` block
 Worth a **warning** on `env` rows whose key starts with `CTRLYOKE_VAR_`. Cheap
 and self-contained; include it if the row-diagnostic slot is already built,
 skip it without regret if v1 is running long.
+
+**Secret references are not enabled on the Variables field, and stay that
+way.** `WorkflowPropertiesPanel.tsx:2104` is the one call site that omits
+`allowSecretReferences`; the other four pass it. So the per-row secret picker,
+the credential heuristic, and the unknown-reference warning are all inert on
+Variables by design. Do not "fix" that as part of this work — enabling secret
+references for workflow variables is a separate decision about whether
+`${secret:}` resolves in `vars:`, which it does not today.
 
 Validation runs synchronously in the webview against the current rows — no
 message plumbing, no extension-host round trip, nothing new in
@@ -303,37 +321,63 @@ field appends a row.
 | `src/utils/KeyValueKeyKinds.ts`                                     | Create  | Dependency-free key kinds, name patterns, and diagnostic rules                                                                             |
 | `src/utils/VarSubstitutor.ts`                                       | Modify  | Build `PLACEHOLDER_RE` from the shared variable-name pattern                                                                               |
 | `src/ui/webview-react/components/shared/KeyValueRowsEditor.tsx`     | Create  | The row editor, bulk-edit mode, per-row secret picker                                                                                      |
-| `src/ui/webview-react/components/shared/KeyValueMapEditor.tsx`      | Modify  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper); drop the textarea component |
-| `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types; drop `KeyValueMapEditor`                                                                                   |
+| `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`      | Create  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper) in a helpers-only module |
+| `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types and helpers; drop `KeyValueMapEditor`                                                                       |
 | `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Modify | Variables field → `keyKind="variable"`                                                                                                     |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                |
-| `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                 |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`                                                                           |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                 |
+| `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                  |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact |
 | `src/ui/webview-react/components/shared/McpServersEditor.tsx`       | Modify  | Import path for the plural credential helper                                                                                               |
-| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Replace | Rewritten as `KeyValueRowsEditor.test.tsx`                                                                                              |
+| `src/ui/webview-react/test/components/shared/McpServerForm.test.ts` | Modify  | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case           |
+| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Delete  | Obsolete textarea assertions; equivalent row and bulk-mode coverage lives in `KeyValueRowsEditor.test.tsx`                              |
 | `src/test/unit/KeyValueKeyKinds.test.ts`                            | Create  | Pure validation-rule tests                                                                                                                 |
 
 ## Implementation steps
 
-1. `KeyValueKeyKinds.ts` + its unit tests; point `VarSubstitutor` at the shared
+1. [x] `KeyValueKeyKinds.ts` + its unit tests; point `VarSubstitutor` at the shared
    variable-name pattern and confirm the existing `VarSubstitutor` coverage
-   still passes unchanged.
-2. Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
+   still passes unchanged. Exports: `KEY_VALUE_KEY_KINDS`, `KeyValueKeyKind`,
+   `VARIABLE_NAME_PATTERN_SOURCE`, `VARIABLE_NAME_PATTERN`, and
+   `validateKeyValueKey`.
+2. [x] Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
    fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
-   as a wrapper (`McpServersEditor` depends on it).
-3. Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
-   per-row secret picker, add/delete, stacked/wide layout.
-4. Add paste-expansion and the bulk-edit toggle.
-5. Roll out all five call sites in one change (they share one component;
+   as a wrapper (`McpServersEditor` depends on it). Both helpers remain
+   exported from `KeyValueMapHelpers.ts`.
+3. [x] Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
+   per-row secret picker, add/delete, stacked/wide layout. The component is
+   intentionally not exported from `shared/index.ts` and no call site is wired
+   yet; step 4 can add paste/bulk-edit behavior in the same component before
+   step 5 performs the all-at-once migration. Its value diagnostics reuse
+   `looksLikeLiteralCredential` from `KeyValueMapHelpers.ts`, whose helper
+   remains available after the component migration.
+4. [x] Add paste-expansion and the bulk-edit toggle.
+5. [x] Roll out all five call sites in one change (they share one component;
    staging them means maintaining both editors against the same store shapes).
-6. Tests (below).
-7. Gate: `npm run typecheck`, `npm run lint`, `npm test`. Never
+6. [x] Tests (below).
+7. [x] Gate: `npm run typecheck`, `npm run lint`, `npm test`. Never
    `npm run test:harness`.
+
+The parsing and credential helpers live in
+`src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`.
+
+**Implemented.** Delivered across commits `66664225` (validation foundation),
+`4a837db8` (row editor), `c6b51412` (paste + bulk edit), and `197baa1d`
+(call-site migration).
+
+One rule was corrected during review: `validateKeyValueKey` originally ran the
+per-kind name-pattern and exact-duplicate checks over an empty key, so every
+row created by `+ Add …` rendered a red error before the user typed anything
+(an empty string matches none of `^\w+$`, `^[A-Za-z_][A-Za-z0-9_]*$`, or the
+RFC 7230 token pattern, and two blank rows read as exact duplicates of each
+other). A half-typed row is the normal state right after adding one, so an
+empty key now yields only the "this row will not be saved" advisory — and that
+only once it has a value. §3's rule table always said the empty-key case is a
+warning; the implementation just reached the pattern rules first.
 
 ## Test coverage
 
-The existing `KeyValueMapEditor.test.tsx` asserts textarea mechanics and will
-not survive, but each of its behaviors has a row-editor analogue that must be
+The former `KeyValueMapEditor.test.tsx` asserted textarea mechanics and is
+deleted, but each of its behaviors has a row-editor analogue that must be
 carried over, not dropped:
 
 | Existing assertion                                   | Row-editor analogue                                                                     |

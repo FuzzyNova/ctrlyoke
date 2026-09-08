@@ -74,11 +74,20 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     render(<WorkflowPropertiesPanel />);
 
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
-    const varsField = screen.getByLabelText("Variables");
-    fireEvent.change(varsField, {
-      target: { value: "region=us-east-1\nstage=prod" },
-    });
-    fireEvent.blur(varsField);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add variable" }));
+    const regionName = screen.getByLabelText("variable name");
+    fireEvent.change(regionName, { target: { value: "region" } });
+    fireEvent.blur(regionName);
+    const regionValue = screen.getByLabelText("Value for region");
+    fireEvent.change(regionValue, { target: { value: "us-east-1" } });
+    fireEvent.blur(regionValue);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add variable" }));
+    const stageName = screen.getByLabelText("variable name");
+    fireEvent.change(stageName, { target: { value: "stage" } });
+    fireEvent.blur(stageName);
+    const stageValue = screen.getByLabelText("Value for stage");
+    fireEvent.change(stageValue, { target: { value: "prod" } });
+    fireEvent.blur(stageValue);
 
     const message = findUpdatePropertyMessage("vars");
     expect(message?.value).toEqual({ region: "us-east-1", stage: "prod" });
@@ -93,9 +102,8 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
-    expect(screen.getByLabelText("Variables")).toHaveValue(
-      "region=us-east-1\nstage=prod"
-    );
+    expect(screen.getByLabelText("Value for region")).toHaveValue("us-east-1");
+    expect(screen.getByLabelText("Value for stage")).toHaveValue("prod");
   });
 
   it("custom tool-permission lists survive a save -> reload cycle", () => {

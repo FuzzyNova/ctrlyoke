@@ -7,8 +7,8 @@ changes; see the audit below before scheduling this. What remains uncovered is
 narrow but real: inline substitution, composability into other syntax, and
 names that survive step reordering.
 
-**Related:** `KEY_VALUE_ROW_EDITOR_PLAN.md` (the authoring surface this lands
-in), `USER_INPUT_STEP_PLAN.md` (the same "script produces a value the workflow
+**Related:** `dev/implemented/KEY_VALUE_ROW_EDITOR_PLAN.md` (the authoring
+surface this lands in, now built), `USER_INPUT_STEP_PLAN.md` (the same "script produces a value the workflow
 consumes" shape, for a human instead of a script)
 
 ## The ask
