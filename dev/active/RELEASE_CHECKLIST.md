@@ -66,7 +66,7 @@ Everything in [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md) §1�
 | Admin token                               | `admin-token` named **`fuzzynova-admin`**, id `54927c5d…`, created August 25, 2026                                                                 | Regenerated live this session, value saved in 1Password. This is the one integration credential — see 4.2 below.                                                                                                               |
 | Billing plan                              | **Dev 1** — $0/mo, 2,500 API requests/day, 100 licensed-user limit, 1 product limit, 10 policy limit                                               | Decision made — see 4.3 below.                                                                                                                                                                                                 |
 | Webhook endpoints                         | None configured                                                                                                                                    | Not required for the Phase 1 flow (Lemon Squeezy → Netlify Function → Keygen API is one-directional; Keygen doesn't need to call back out). Leave empty unless a future feature needs Keygen-initiated events.                 |
-| Enterprise policy (§1.7.1 self-serve SKU) | Does not exist yet                                                                                                                                 | Not urgent — only needed when the Enterprise SKU ships (Phase 6, step 13 in the implementation order).                                                                                                                         |
+| Enterprise policy (§1.7.1 self-serve SKU) | **`ctrlyoke Enterprise`**, id `1700d3bb-06b7-4087-96ce-e08aa6c6a817`                                                                                | Created September 8, 2026 — see 4.4 item 1 for full config. 1-year duration, 3000 max machines, otherwise mirrors `ctrlyoke Pro`.                                                                                              |
 
 ### 4.2 Admin token custody ✅ RESOLVED (August 25, 2026)
 
@@ -88,51 +88,150 @@ already-resolved decisions in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE
 §1.7.1 / Open Question 6. Nothing here re-opens a design question; this is
 the "how" for a "what" that's already decided.
 
-**Price decided (Nathan, September 8, 2026): $5,999/yr**, flat, unlimited
-internal seats — revised up from the plan's original ~$2k–$5k/yr target
-(both updated in `PRO_LICENSE_PLAN.md` §1.7.1 and Open Question 6 to match).
-Still comfortably under the ~$10k line where buyers start expecting a
-PO/procurement process, so it stays self-serve — and it price-anchors
-sensibly against the $59 one-time individual price (~100x for unlimited
-seats, a normal ratio for a site license).
+**Price decided (Nathan, September 8, 2026): $5,000/yr**, flat, unlimited
+internal seats. An initial $5,999/yr (a straight 100x of the $59 individual
+price) was the first pick, but Lemon Squeezy's product form rejected any
+price above $5,000.00 for this store — likely a new-account/low-volume risk
+limit (the store's identity verification only cleared September 7, 2026),
+though LS support wasn't contacted to confirm. Rather than treat that as a
+temporary blocker to route around later, $5,000 was kept as the real,
+final price (both updated in `PRO_LICENSE_PLAN.md` §1.7.1 and Open Question 6
+to match). Still comfortably under the ~$10k line where buyers start
+expecting a PO/procurement process, so it stays self-serve.
 
-1. **Keygen Enterprise policy** — dashboard steps:
-   - [ ] Keygen dashboard → **Policies** → **New Policy**.
-   - [ ] Name: `ctrlyoke Enterprise`.
-   - [ ] Duration: **1 Year** (annual, not perpetual — matches the subscription billing model).
-   - [ ] Scheme: `ED25519_SIGN` (same as Pro, for one shared verification path).
-   - [ ] **Max Machines: a real finite number (2,000–5,000), not blank/unlimited.**
-         Correction to the old stub here, which said "leave blank / effectively
-         unlimited" — that directly contradicts the plan's own resolved decision
-         (§1.7.1): `activateWithKey()` is self-serve with no human review, so an
-         uncapped policy turns one leaked key into an unbounded liability instead
-         of a bounded, detectable one. "Unlimited seats" stays the marketing line;
-         the policy field itself must still be finite.
-   - [ ] Floating: checked. Strict: checked.
-   - [ ] Product: `ctrlyoke` (same product as Pro — second policy on the same product).
+1. **Keygen Enterprise policy** ✅ **done September 8, 2026**, created live via the
+   Keygen dashboard (Nathan signed in, agent drove the form):
+   - [x] Name: `ctrlyoke Enterprise`, id `1700d3bb-06b7-4087-96ce-e08aa6c6a817`.
+   - [x] Duration: **1 Year** (`31556952`s — annual, not perpetual, matches the
+         subscription billing model).
+   - [x] Scheme: `ED25519_SIGN` (same as Pro, one shared verification path).
+   - [x] **Max Machines: 3000** — a real finite number in the plan's 2,000–5,000
+         range, not blank/unlimited. Correction applied to the old stub here,
+         which said "leave blank / effectively unlimited" — that directly
+         contradicted the plan's own resolved decision (§1.7.1):
+         `activateWithKey()` is self-serve with no human review, so an uncapped
+         policy turns one leaked key into an unbounded liability instead of a
+         bounded, detectable one. "Unlimited seats" stays the marketing line; the
+         policy field itself is finite.
+   - [x] Floating: true. Strict: true.
+   - [x] Product: `ctrlyoke` (same product as Pro — second policy on the same
+         product, id `f4af3c3b-4350-4a6e-af09-744797abb4b0`).
+   - [x] Every other field mirrors the `ctrlyoke Pro` policy exactly (verified
+         field-by-field against the live Pro policy before submitting): Auth
+         Strategy `LICENSE`, Expiration Strategy `RESTRICT_ACCESS`, Expiration
+         Basis `FROM_CREATION`, Renewal Basis `FROM_EXPIRY`, Transfer Strategy
+         `KEEP_EXPIRY`, Machine Uniqueness `UNIQUE_PER_LICENSE`, Machine Matching
+         `MATCH_ANY`, Component Uniqueness `UNIQUE_PER_MACHINE`, Component
+         Matching `MATCH_ANY`, Machine Leasing `PER_LICENSE`, Process Leasing
+         `PER_MACHINE`, Overage `NO_OVERAGE`, Heartbeat Cull `DEACTIVATE_DEAD`,
+         Heartbeat Resurrection `NO_REVIVE`, Heartbeat Basis `FROM_FIRST_PING`,
+         Heartbeat Duration `null`, Require Heartbeat `false`.
 
-2. **Lemon Squeezy: second product — `ctrlyoke Enterprise`**
-   - [ ] Create as a **subscription** (annual billing interval), **$5,999.00/yr**.
-   - [ ] Tax category: **Software** (same reasoning as the Pro product, 5.1).
-   - [ ] Generate license keys: **OFF** — Keygen issues the real license, same as Pro.
-   - [ ] Pricing shape: **flat unlimited**, no size tiers (tiers explicitly deferred
-         per §1.7.1's "Open choice" note — don't build tiering now).
-   - [ ] Reuse the existing `ls-webhook` endpoint/secret — no second webhook needed
-         for a second product; LS fires the same event types regardless of which
-         product was purchased.
+2. **Lemon Squeezy: second product — `ctrlyoke Enterprise`** ✅ **created
+   September 8, 2026** as a **test-mode draft**, product id `1347884` (store
+   was in Test mode at creation time — see the note on test-vs-live below):
+   - [x] Created as a **subscription**, billing interval **1 Year** (LS
+         defaulted to this automatically once Subscription was selected).
+   - [x] Price: **$5,000.00/yr** — see the price-decision note above this list
+         for why (LS rejected $5,999 with "must not be greater than $5,000.00").
+   - [x] Tax category: **Software** (same as the Pro product, 5.1).
+   - [x] Generate license keys: **OFF** — Keygen issues the real license, same
+         as Pro (this was already LS's default, unchanged).
+   - [x] Display on storefront: **ON** (LS default, unchanged, matches Pro).
+   - [x] Pricing shape: **flat unlimited**, no size tiers (tiers explicitly
+         deferred per §1.7.1's "Open choice" note).
+   - [x] Confirmation modal customized to match Pro's pattern (title "Welcome
+         to ctrlyoke Enterprise!", message explaining the license key arrives
+         by separate email, same "ctrlyoke: Activate Pro License" command
+         reference as the Pro product's copy).
+   - [ ] Reuse the existing `ls-webhook` endpoint/secret — no second webhook
+         needed for a second product; LS fires the same event types regardless
+         of which product was purchased. Not yet verified against this product
+         specifically (needs item 3's routing logic + item 7's test purchase).
+
+   **Test mode vs. live, and why this stayed in test mode:** Lemon Squeezy
+   scopes products (and webhooks — see 5.3/5.4) separately per Test/Live
+   mode; a product created in Test mode does not exist in the live store and
+   has to be deliberately copied over once ready to sell. Nathan confirmed
+   the store is currently in Test mode; built here rather than live so item
+   7's verification (test purchase, simulated renewal/cancellation) can run
+   safely, matching the same test-mode-first approach documented for the Pro
+   product in 5.3. **Copying this product to live mode is still open** and
+   should happen alongside 5.3 step 6 (flip Test mode off, create the live
+   webhook) — not yet done.
+   - **Implementation note (agent-driven form quirk):** the Price field is a
+     currency-masked input that mishandles a bulk `fill()`/paste-style value
+     set — it concatenated digits instead of replacing them (typing "5000.00"
+     over an existing "5,999" produced "59995000" = $59,995,000/yr). Fixed by
+     setting the native input value via JS and dispatching real `input`/
+     `change` events. Worth knowing for any future automated Lemon Squeezy
+     form filling.
 
 3. **Netlify function (`netlify/functions/ls-webhook.ts`) — extend, don't fork**
-   - [ ] Route by `product_id`/`variant_id`: the existing Pro `order_created` path
-         is unchanged; the Enterprise product's events resolve to the **Enterprise
-         Keygen policy ID** instead of the Pro policy ID, with a 1-year expiry set
-         at issuance.
-   - [ ] Handle LS **subscription events**, not just one-time `order_created`:
-         `subscription_payment_success` → extend the Keygen license's expiry by a
-         year; `subscription_cancelled` / `subscription_expired` → let it lapse (no
-         explicit Keygen revoke call needed — the policy's `Restrict Access`
-         expiration strategy, same config as Pro, already locks it out at term end).
-   - [ ] Idempotency: key off the LS subscription/order id, same pattern the
-         existing Pro path already uses (`metadata.lsOrderId`).
+   ✅ **code done September 8, 2026** (not yet deployed/tested live — see the note
+   below this list):
+   - [x] Route by `variant_id`: `KEYGEN_POLICY_BY_LS_VARIANT` maps LS's two variant
+         ids (Pro `2059579`, Enterprise `2105478` — pulled live from the LS
+         dashboard's Inertia page payload via Playwright, since neither the REST
+         API nor the checkout-link UUID exposes the plain numeric id used in
+         webhook payloads) to the Pro/Enterprise Keygen policy ids. `order_created`
+         reads `variant_id` off `data.attributes.first_order_item` (confirmed
+         against LS's published Order object schema) and throws (→ 500, LS
+         retries) on an unrecognized variant rather than silently defaulting to
+         Pro. The Enterprise policy's own 1-year/`FROM_CREATION` duration is what
+         gives a fresh Enterprise license its 1yr expiry — no separate expiry is
+         set explicitly at issuance.
+   - [x] Handle LS **subscription events**. Verified against LS's published event
+         list (`docs.lemonsqueezy.com/help/webhooks/event-types`) rather than
+         assumed:
+         - `subscription_created` (Subscription object — has `product_id`/
+           `variant_id`/`order_id` directly, unlike Order) → looks up the license
+           already created by `order_created` via `metadata.lsOrderId ==
+           subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
+           so renewal events can find it later. LS doesn't guarantee this fires
+           after `order_created` completes (only "alongside" it) — a race throws
+           and lets LS's webhook retry catch it up, the same idempotent-retry
+           shape as everything else here.
+         - `subscription_payment_success` sends a **Subscription Invoice**
+           object, not the Subscription object — it has `subscription_id` and
+           `billing_reason` (`initial`/`renewal`/`updated`) but no product info.
+           It fires on every payment including the first, so only
+           `billing_reason: "renewal"` calls Keygen's `/actions/renew` (extends
+           expiry by the policy's duration from current expiry, honoring
+           `Renewal Basis: FROM_EXPIRY`); `initial` is a no-op since
+           `order_created` already created the license, and `updated` is a
+           plan-change proration, not a renewal cycle.
+         - `subscription_cancelled` / `subscription_expired` → explicit no-op
+           case (not just falling through to `default`), documenting that this
+           is deliberate: `Restrict Access` expiration already locks the license
+           out at term end.
+   - [x] Idempotency: license creation still keys off `metadata.lsOrderId`
+         (unchanged). Renewals additionally key off `metadata.lastRenewedInvoiceId`
+         (the subscription-invoice id) so a retried `subscription_payment_success`
+         doesn't double-extend expiry. **Keygen metadata writes replace the whole
+         object** (confirmed against Keygen's Metadata API docs), so every writer
+         (`updateLicenseMetadata`) now fetches the license first and merges in
+         JS rather than PATCHing a partial object that would clobber
+         `buyerEmail`/`buyerName`/`lsOrderId`.
+   - [x] `sendLicenseEmail`'s subject/body no longer say "Pro" — it's shared by
+         both policies now that Enterprise also flows through `createLicense`.
+   - [x] `npx tsc -p netlify/tsconfig.json --noEmit` and `npx prettier --check`
+         both pass. TypeScript doesn't narrow a discriminated union through a
+         nested path like `payload.meta.event_name` (the union only narrows on a
+         top-level discriminant), so the handler parses the body as `unknown`
+         and casts to the concrete per-event interface inside each `switch`
+         case instead of relying on inference — each cast is guarded by the
+         `eventName` switch itself, not a blind structural cast.
+
+   **Not yet done:** deploying this (needs a manual `workflow_dispatch` run of
+   `deploy.yml`, same mechanic as 5.3 step 1 — function-only changes aren't in
+   the paths filter) and adding `subscription_created` + `subscription_payment_success`
+   to the test-mode LS webhook's subscribed events (it currently only sends
+   `order_created` + `order_refunded`, confirmed in 4.1's summary table above —
+   without this the new code paths can't receive traffic to test against). Both
+   are needed before item 7's Enterprise test purchase can exercise the
+   subscription/renewal paths, not just the initial `order_created` path Pro
+   already proved out in 5.3.
 
 4. **Abuse detection — machine-count alerting**
    - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
@@ -668,7 +767,7 @@ public**.
 | Keygen product + Pro policy                                                | DONE                 | Phase 4.1 — renamed live this session                                                                                          |
 | Keygen admin token custody confirmed                                       | DONE                 | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                     |
 | Keygen billing tier decision (Dev vs. paid)                                | DONE                 | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                             |
-| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | OPEN                  | Phase 4.4 — full build-out, promoted from a deferred stub September 8, 2026; price decided at $5,999/yr, independent of Phases 6–12 |
+| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy + test-mode LS draft product + `ls-webhook.ts` routing/subscription-event code done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: deploy the function, add the two new event types to the LS test webhook, abuse-detection webhook, legal docs, live-mode copy; independent of Phases 6–12 |
 | Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
 | Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
 | Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
