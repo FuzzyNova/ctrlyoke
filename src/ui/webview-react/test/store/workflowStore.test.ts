@@ -267,9 +267,9 @@ describe("appendStreamingChunk", () => {
   it("concatenates chunks for a step", () => {
     store().appendStreamingChunk(0, "Hello");
     store().appendStreamingChunk(0, " World");
-    expect(
-      store().streamingChunks[getStreamingChunkKey(0)]
-    ).toBe("Hello World");
+    expect(store().streamingChunks[getStreamingChunkKey(0)]).toBe(
+      "Hello World"
+    );
   });
 
   it("does not affect other steps", () => {
@@ -313,9 +313,9 @@ describe("clearStreamingChunk", () => {
     expect(
       store().streamingChunks[getStreamingChunkKey(0, undefined, 0, 1)]
     ).toBe("retry");
-    expect(
-      getStreamingChunkKey(0, undefined, 0, 0)
-    ).not.toBe(getStreamingChunkKey(0, undefined, 0, 1));
+    expect(getStreamingChunkKey(0, undefined, 0, 0)).not.toBe(
+      getStreamingChunkKey(0, undefined, 0, 1)
+    );
   });
 });
 
@@ -1192,6 +1192,28 @@ describe("getLatestOutput", () => {
 
   it("returns null when no outputs", () => {
     expect(store().getLatestOutput(99)).toBeNull();
+  });
+
+  it("ignores a later end-condition entry for the same step", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "ai output" }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex: 0,
+      phase: EXECUTION_PHASES.END_CONDITION,
+      cliOutput: makeOutput({ response: "npm test output" }),
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    expect(store().getLatestOutput(0)?.response).toBe("ai output");
   });
 });
 

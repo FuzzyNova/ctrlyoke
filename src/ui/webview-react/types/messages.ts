@@ -47,6 +47,7 @@ export {
   SCRIPT_OUTPUT_SOURCES,
   EXECUTION_PHASES,
   getExecutionPhaseForScriptOutputSource,
+  isPromptExecutionPhase,
   getStreamingChunkKey,
   SETTING_SCOPES,
   SECRET_REGISTRY_STATES,

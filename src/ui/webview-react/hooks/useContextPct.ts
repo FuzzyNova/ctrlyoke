@@ -1,10 +1,12 @@
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { calcContextPct } from "@utils/tokenUtils";
+import type { OrderedCliHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   OUTPUT_HISTORY_KINDS,
   FINAL_STEP_PHASES,
   STEP_STATUS,
+  isPromptExecutionPhase,
 } from "../types/messages";
 import { isWorkflowRunning } from "@utils/status";
 
@@ -46,11 +48,14 @@ export function useContextPct() {
       isViewingHistory && historyOutputs
         ? historyOutputs.orderedEntries
         : liveOrderedEntries;
+    // Condition/setup scripts emit later CLI entries at this same stepIndex and
+    // carry no tokens, so only the step's own prompt phase can answer this.
     const cliEntry = [...entries]
       .reverse()
       .find(
         (e) =>
           e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          isPromptExecutionPhase((e as OrderedCliHistoryEntry).phase) &&
           "target" in e &&
           (e as any).target?.kind === FINAL_STEP_PHASES.QUEUE &&
           (e as any).target?.stepIndex === index

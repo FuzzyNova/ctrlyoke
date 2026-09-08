@@ -3856,6 +3856,15 @@ export function getExecutionPhaseKeySuffix(phase?: ExecutionPhase): string {
   return phase && phase !== EXECUTION_PHASES.PROMPT ? `:phase:${phase}` : "";
 }
 
+/**
+ * True when a phase is the step's own prompt/script execution rather than a
+ * condition or setup script that shares the same step index. Absent means the
+ * default prompt phase, so every consumer must fold `undefined` in the same way.
+ */
+export function isPromptExecutionPhase(phase?: ExecutionPhase): boolean {
+  return phase === undefined || phase === EXECUTION_PHASES.PROMPT;
+}
+
 export type RetryPromptPlaceholder =
   (typeof RETRY_PROMPT_PLACEHOLDERS)[keyof typeof RETRY_PROMPT_PLACEHOLDERS];
 

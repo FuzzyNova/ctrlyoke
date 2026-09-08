@@ -1,11 +1,17 @@
 import { useCallback, useMemo } from "react";
 import { useWorkflowStore, type CliOutput } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
+import {
+  OUTPUT_HISTORY_KINDS,
+  FINAL_STEP_PHASES,
+  isPromptExecutionPhase,
+} from "../types/messages";
 
 /**
  * Returns the most recent CLI output for the final step's current loop
  * iteration. History-aware, mirroring `useLatestStepOutput` above.
+ *
+ * Condition/setup phases are skipped for the same reason as `useLatestStepOutput`.
  *
  * Shared by WorkflowStepsPanel and PromptChipRail.
  */
@@ -24,6 +30,7 @@ export function useFinalStepLatestOutput(): CliOutput | null {
       const entry = entries[i];
       if (
         entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        isPromptExecutionPhase(entry.phase) &&
         entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
         entry.target.loopIndex === finalStepLoopCount
       ) {
@@ -40,6 +47,14 @@ export function useFinalStepLatestOutput(): CliOutput | null {
  * a historical run, entries are sourced from `historyOutputs` instead of
  * `liveOrderedEntries`.
  *
+ * Only the step's own prompt/script phase counts. A step with a pre/end
+ * condition emits *later* CLI entries at the same `stepIndex` for the condition
+ * script, and those carry no tokens, no session ID, and the script's own
+ * runtime — so taking the last entry regardless of phase silently replaced the
+ * step row's context-window bar, token total, and duration with the condition
+ * script's (a step whose `npm test` end condition ran for 2.3s reported "2.3s"
+ * and no context bar, while its sibling steps without conditions were fine).
+ *
  * Shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useLatestStepOutput() {
@@ -55,6 +70,7 @@ export function useLatestStepOutput() {
     for (const entry of entries) {
       if (
         entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
+        !isPromptExecutionPhase(entry.phase) ||
         !("target" in entry) ||
         entry.target.kind !== FINAL_STEP_PHASES.QUEUE
       ) {

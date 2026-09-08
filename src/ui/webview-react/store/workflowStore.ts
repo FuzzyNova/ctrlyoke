@@ -16,6 +16,7 @@ import {
   type RetryState,
   type ExecutionPhase,
   getStreamingChunkKey,
+  isPromptExecutionPhase,
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -1785,10 +1786,13 @@ export const useWorkflowStore = create<
 
       getLatestOutput: (stepIndex) => {
         const entries = get().liveOrderedEntries;
+        // Prompt phase only — a condition script's entry shares this stepIndex
+        // but carries none of the step's own tokens/session/duration.
         const cliEntries = entries
           .filter(
             (e): e is OrderedCliHistoryEntry =>
               e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+              isPromptExecutionPhase((e as OrderedCliHistoryEntry).phase) &&
               "target" in e &&
               (e as OrderedCliHistoryEntry).target.kind ===
                 FINAL_STEP_PHASES.QUEUE &&
