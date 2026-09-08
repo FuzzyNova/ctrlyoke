@@ -210,6 +210,68 @@ describe("OutputMinimap diff bars", () => {
       clientHeight.mockRestore();
     }
   });
+
+  it("renders a solid color when two solo runs share a bar, and a split only for a genuinely paired run", () => {
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockReturnValue(1);
+
+    try {
+      // Unrelated solo added-only and removed-only runs quantized onto the
+      // same single-pixel rail — must stay solid (last-write-wins in the old
+      // per-run rendering), never a red/green blend.
+      const { unmount } = renderMinimap([
+        makeStep({
+          diffBlocks: [
+            {
+              key: "diff-solo",
+              rowKey: "row-solo",
+              scrollFraction: 0,
+              heightFraction: 1,
+              addedLines: 1,
+              removedLines: 1,
+              runs: [
+                { count: 1, addedLines: 1, removedLines: 0 },
+                { count: 1, addedLines: 0, removedLines: 1 },
+              ],
+              isCollapsed: false,
+            },
+          ],
+        }),
+      ]);
+
+      const soloBar = document.querySelector("[data-minimap-diff-bar]");
+      expect(soloBar).not.toBeNull();
+      expect(soloBar).toHaveStyle({
+        background: "var(--fp-minimap-diff-removed)",
+      });
+      unmount();
+
+      // A single split-view paired delete+insert run is genuinely mixed and
+      // should render as a red/green split.
+      renderMinimap([
+        makeStep({
+          diffBlocks: [
+            {
+              key: "diff-paired",
+              rowKey: "row-paired",
+              scrollFraction: 0,
+              heightFraction: 1,
+              addedLines: 1,
+              removedLines: 1,
+              runs: [{ count: 1, addedLines: 1, removedLines: 1 }],
+              isCollapsed: false,
+            },
+          ],
+        }),
+      ]);
+
+      const pairedBar = document.querySelector("[data-minimap-diff-bar]");
+      expect(pairedBar?.getAttribute("style")).toContain("linear-gradient");
+    } finally {
+      clientHeight.mockRestore();
+    }
+  });
 });
 
 describe("computeDeclutteredTopsPx", () => {
