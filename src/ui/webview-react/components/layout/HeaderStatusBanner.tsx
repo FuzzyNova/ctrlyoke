@@ -10,6 +10,18 @@ import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useUiStore } from "@store/uiStore";
 import { Icon } from "../shared/Icon";
 
+/**
+ * Text treatment for every banner in this row. The banner backgrounds are
+ * theme-driven severity colors (`--status-error`/`--status-warning`), which
+ * range from pale to saturated depending on the active theme — no single
+ * themed foreground token (e.g. `text-btn-fg`) stays legible against all of
+ * them. White text with a black outline reads clearly against any of these
+ * backgrounds regardless of theme, so it replaces per-banner foreground
+ * choices instead of trying to pick a themed one for each severity color.
+ */
+const BANNER_TEXT_CLASS =
+  "font-bold text-white [text-shadow:_-1px_-1px_0_#000,_1px_-1px_0_#000,_-1px_1px_0_#000,_1px_1px_0_#000]";
+
 export interface HeaderStatusBannerProps {
   isPausing: boolean;
   handleCancelPause: () => void;
@@ -55,7 +67,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
     <>
       {props.isViewingDeletedWorkflow && props.viewingDeletedWorkflow && (
         <div
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] text-white border-b border-btn-border"
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
           role="status"
           aria-label={`Workflow "${props.viewingDeletedWorkflow.workflowName}" has been deleted`}
         >
@@ -76,7 +88,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
       )}
       {!props.isViewingDeletedWorkflow && isLocked && (
         <div
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] text-white border-b border-btn-border"
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
           role="status"
           aria-label={lockedLabel}
         >
@@ -100,7 +112,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
         <div
-          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-black border-b border-btn-border"
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
           role="status"
           aria-label="Workflow will pause after the current step completes"
         >
@@ -120,7 +132,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
         props.pendingRewind &&
         props.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && (
           <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning text-btn-fg border-b border-btn-border"
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning ${BANNER_TEXT_CLASS} border-b border-btn-border`}
             role="status"
             aria-label={`Continuing run from step ${props.pendingRewind.fromStepIndex + 1}`}
           >

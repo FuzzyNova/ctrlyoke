@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   EXECUTION_STATES,
-  RUNNER_IDS,
   HARNESS_INFO,
   workflowDisplayStep,
 } from "../../types/messages";
@@ -26,6 +25,10 @@ import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import { Icon } from "../shared/Icon";
+import {
+  getExternalOwnerBadgeLabel,
+  getExternalReadOnlyLabel,
+} from "@utils/externalRunner";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
@@ -268,6 +271,16 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           ) : undefined
         }
         time={<span className="font-mono">{elapsed}</span>}
+        metaBadge={
+          workflow.externalOwner != null ? (
+            <span
+              className="whitespace-nowrap rounded border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg"
+              title={getExternalReadOnlyLabel(workflow.externalOwner)}
+            >
+              {getExternalOwnerBadgeLabel(workflow.externalOwner)}
+            </span>
+          ) : undefined
+        }
       />
 
       {/* Run indicator — same track and position as the recent rows', so a
@@ -281,15 +294,12 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         />
       )}
 
-      {/* Action buttons — external-owner pill, pause/stop for local workflows */}
+      {/* Action buttons — pause/stop for locally-owned workflows only; an
+          externally-owned row shows its ownership badge in the meta line
+          instead (see WorkflowRowLayout's `metaBadge`) and has no local
+          controls to offer here. */}
       <RowActionRail>
-        {workflow.externalOwner != null ? (
-          <span className="rounded border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg">
-            {workflow.externalOwner.runner === RUNNER_IDS.CLI
-              ? "CLI"
-              : "VS Code"}
-          </span>
-        ) : (
+        {workflow.externalOwner == null &&
           (isRunning || isPausing || isPaused) && (
             <>
               {isRunning ? (
@@ -350,8 +360,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 <Icon name="debug-stop" />
               </button>
             </>
-          )
-        )}
+          )}
       </RowActionRail>
     </div>
   );

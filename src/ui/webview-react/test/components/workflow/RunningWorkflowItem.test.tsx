@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
-import { EXECUTION_STATES } from "@/types/messages";
+import { EXECUTION_STATES, RUNNER_IDS } from "@/types/messages";
 
 const callbacks = {
   onClick: vi.fn(),
@@ -154,5 +154,57 @@ describe("RunningWorkflowItem", () => {
       "title",
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
     );
+  });
+
+  it("badges a sibling-VS-Code-owned row as 'Other VS Code Window' and hides local controls", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "sibling-owned",
+          workflowName: "Sibling-owned workflow",
+          filePath: "sibling.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          externalOwner: { locality: "external", runner: RUNNER_IDS.VSCODE },
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    const badge = screen.getByText("Other VS Code Window");
+    expect(badge).toHaveAttribute(
+      "title",
+      "Read-only — workflow is running via another ctrlyoke window"
+    );
+    expect(
+      screen.queryByRole("button", { name: "Pause" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Stop" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("badges a CLI-owned row as 'CLI'", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "cli-owned",
+          workflowName: "CLI-owned workflow",
+          filePath: "cli.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    expect(screen.getByText("CLI")).toBeInTheDocument();
   });
 });

@@ -46,6 +46,17 @@ interface WorkflowRowLayoutProps {
   usage?: React.ReactNode;
   /** Column 7 / last meta item — relative time or elapsed timer. */
   time?: React.ReactNode;
+  /**
+   * Small fixed-content pill in the meta line (e.g. an external-owner badge).
+   * Lives here rather than in the trailing action rail because that rail is a
+   * reserved-width sibling shared by every row — content-sizing it for one
+   * row kind shifts the primary button's width for that row alone, sitting
+   * its state badge out of line with its neighbours (see
+   * `webview-react-components.instructions.md`). The meta line has no such
+   * constraint: it already truncates its own content. `flex-shrink-0` keeps
+   * the badge itself intact while the truncatable meta parts give way first.
+   */
+  metaBadge?: React.ReactNode;
 }
 
 function hasContent(node: React.ReactNode): boolean {
@@ -166,6 +177,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   badge,
   usage,
   time,
+  metaBadge,
 }) => {
   const visibleUsage = tier === WORKFLOW_ROW_TIERS.COMPACT ? undefined : usage;
   const buttonClassName = `workflow-row-primary workflow-row-primary-stacked min-w-0 flex-1 appearance-none overflow-hidden border-none bg-transparent p-0 text-left text-inherit cursor-pointer ${className}`;
@@ -210,6 +222,9 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
             <span className="truncate">{part.node}</span>
           </React.Fragment>
         ))}
+        {hasContent(metaBadge) && (
+          <span className="flex-shrink-0">{metaBadge}</span>
+        )}
         {hasContent(glyph) && (
           <span className="flex w-4 flex-shrink-0 items-center justify-center">
             {glyph}
