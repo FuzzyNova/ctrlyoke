@@ -541,4 +541,38 @@ describe("HistorySearchDrawer filters", () => {
 
     expect(screen.getByText("Using fallback search")).toBeInTheDocument();
   });
+
+  it("does not re-issue or clear the listing when the displayed workflow changes in the background", () => {
+    // Regression test: `displayedViewAddress.workflowKey` changes whenever the
+    // dashboard's own view navigates (e.g. a live workflow elsewhere advances
+    // to a new run) while the drawer stays open. With `workflowOnly` off
+    // (the default), that key has no effect on the search payload, so it must
+    // not retrigger a search — a spurious re-search wipes every page already
+    // fetched beyond the first, and previously-requested offsets were never
+    // re-fetched afterwards, leaving permanent gaps in the results list.
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        offset: 950,
+        totalCount: 1000,
+      });
+    });
+    expect(useUiStore.getState().historySearchResults[950]).toBeDefined();
+
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: {
+          workflowKey: "some-other-workflow" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-9" as never,
+        },
+      });
+    });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(useUiStore.getState().historySearchResults[950]).toBeDefined();
+  });
 });

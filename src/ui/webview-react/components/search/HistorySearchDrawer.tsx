@@ -206,6 +206,23 @@ export function HistorySearchDrawer() {
   const inputRef = useRef<HTMLInputElement>(null);
   const filtersRef = useRef<HistorySearchFilterState>(historySearchFilters);
   filtersRef.current = historySearchFilters;
+  // `issueSearch` reads the workflow scope through this ref rather than
+  // depending on `workflowKey` directly. `displayedViewAddress` (and thus
+  // `workflowKey`) changes freely in the background as other workflows run
+  // while the drawer is open; if `issueSearch` depended on it directly, its
+  // identity would change on every such background navigation, retriggering
+  // the query-change effect below and silently re-issuing a full page-0
+  // search — wiping already-loaded pages out from under the user with no
+  // query or filter change to justify it.
+  const workflowKeyRef = useRef(workflowKey);
+  workflowKeyRef.current = workflowKey;
+  // Offsets already asked for in this listing. Declared here (rather than
+  // beside `listingId` below) so `issueSearch` can reset it whenever it
+  // (re)issues a page-0 search — otherwise a page fetched before that reset
+  // stays marked "already requested" even after the results array it
+  // belonged to has been replaced, and the paged list permanently skips
+  // re-fetching it.
+  const requestedOffsetsRef = useRef(new Set<number>());
   const pathSearchPendingRef = useRef(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const trimmedQuery = query.trim();
@@ -218,15 +235,16 @@ export function HistorySearchDrawer() {
         return;
       }
 
+      requestedOffsetsRef.current = new Set<number>();
       setHistorySearchResults([], true, { totalCount: 0 });
       vscode.postMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: trimmedQuery,
         limit: RESULT_LIMIT,
-        filters: toHistorySearchFilters(filters, workflowKey),
+        filters: toHistorySearchFilters(filters, workflowKeyRef.current),
       });
     },
-    [setHistorySearchResults, trimmedQuery, vscode, workflowKey]
+    [setHistorySearchResults, trimmedQuery, vscode]
   );
 
   useEffect(() => {
@@ -389,11 +407,10 @@ export function HistorySearchDrawer() {
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Offsets already asked for in this listing. Pages are addressed by absolute
-  // offset rather than chained through a cursor, so scrolling to the end of a
-  // large result set fetches only the window under the viewport instead of
-  // every page leading up to it.
-  const requestedOffsetsRef = useRef(new Set<number>());
+  // Pages are addressed by absolute offset rather than chained through a
+  // cursor, so scrolling to the end of a large result set fetches only the
+  // window under the viewport instead of every page leading up to it.
+  // `requestedOffsetsRef` itself is declared above, alongside `issueSearch`.
   useEffect(() => {
     requestedOffsetsRef.current = new Set<number>();
   }, [listingId]);
