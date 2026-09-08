@@ -343,8 +343,13 @@ field appends a row.
    fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
    as a wrapper (`McpServersEditor` depends on it). Both helpers remain
    exported from `KeyValueMapEditor.tsx`.
-3. Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
-   per-row secret picker, add/delete, stacked/wide layout.
+3. [x] Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
+   per-row secret picker, add/delete, stacked/wide layout. The component is
+   intentionally not exported from `shared/index.ts` and no call site is wired
+   yet; step 4 can add paste/bulk-edit behavior in the same component before
+   step 5 performs the all-at-once migration. Its value diagnostics reuse
+   `looksLikeLiteralCredential` from `KeyValueMapEditor.tsx`, whose helper
+   must remain available until the migration removes that component.
 4. Add paste-expansion and the bulk-edit toggle.
 5. Roll out all five call sites in one change (they share one component;
    staging them means maintaining both editors against the same store shapes).
