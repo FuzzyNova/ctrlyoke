@@ -221,6 +221,7 @@ describe("McpServerForm round trips", () => {
     expect(
       findLiteralCredentialEnvKeys({
         API_TOKEN: "ghp_12345678901234567890",
+        AUTHORIZATION: "Bearer ${secret:TOKEN}",
         SAFE_VALUE: "ordinary text",
       })
     ).toEqual(["API_TOKEN"]);

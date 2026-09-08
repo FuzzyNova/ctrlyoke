@@ -48,9 +48,29 @@ export function keyValueMapStringToObject(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-const SECRET_REFERENCE_PATTERN = /^\$\{secret:[A-Z][A-Z0-9_]*\}$/;
+// Keep this aligned with SecretResolver.ts's SECRET_INTERPOLATION_PATTERN.
+// Secret references resolve when embedded anywhere in a value, not only when
+// they are the complete value.
+const SECRET_INTERPOLATION_PATTERN = /\$\{secret:([^}]+)\}/;
 const SENSITIVE_ENV_KEY_PATTERN =
   /(api|access|auth|credential|key|password|secret|token)/i;
+
+/** Identify one map entry that looks like a pasted credential. */
+export function looksLikeLiteralCredential(
+  key: string,
+  value: string
+): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || SECRET_INTERPOLATION_PATTERN.test(trimmed)) return false;
+  return (
+    (SENSITIVE_ENV_KEY_PATTERN.test(key) && trimmed.length >= 12) ||
+    /^Bearer\s+\S{8,}$/i.test(trimmed) ||
+    /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/i.test(trimmed) ||
+    /^(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{12,}$/.test(
+      trimmed
+    )
+  );
+}
 
 /** Identify map entries that look like pasted credentials rather than references. */
 export function findLiteralCredentialEnvKeys(
@@ -58,18 +78,7 @@ export function findLiteralCredentialEnvKeys(
 ): string[] {
   if (!value) return [];
   return Object.entries(value)
-    .filter(([key, entryValue]) => {
-      const trimmed = entryValue.trim();
-      if (!trimmed || SECRET_REFERENCE_PATTERN.test(trimmed)) return false;
-      return (
-        (SENSITIVE_ENV_KEY_PATTERN.test(key) && trimmed.length >= 12) ||
-        /^Bearer\s+\S{8,}$/i.test(trimmed) ||
-        /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/i.test(trimmed) ||
-        /^(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{12,}$/.test(
-          trimmed
-        )
-      );
-    })
+    .filter(([key, entryValue]) => looksLikeLiteralCredential(key, entryValue))
     .map(([key]) => key);
 }
 

@@ -324,8 +324,8 @@ field appends a row.
 | `src/ui/webview-react/components/shared/KeyValueMapEditor.tsx`      | Modify  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper); drop the textarea component |
 | `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types; drop `KeyValueMapEditor`                                                                                   |
 | `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Modify | Variables field → `keyKind="variable"`                                                                                                     |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                |
-| `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                 |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                 |
+| `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                  |
 | `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact |
 | `src/ui/webview-react/components/shared/McpServersEditor.tsx`       | Modify  | Import path for the plural credential helper                                                                                               |
 | `src/ui/webview-react/test/components/shared/McpServerForm.test.ts` | Modify  | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case           |
@@ -334,12 +334,15 @@ field appends a row.
 
 ## Implementation steps
 
-1. `KeyValueKeyKinds.ts` + its unit tests; point `VarSubstitutor` at the shared
+1. [x] `KeyValueKeyKinds.ts` + its unit tests; point `VarSubstitutor` at the shared
    variable-name pattern and confirm the existing `VarSubstitutor` coverage
-   still passes unchanged.
-2. Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
+   still passes unchanged. Exports: `KEY_VALUE_KEY_KINDS`, `KeyValueKeyKind`,
+   `VARIABLE_NAME_PATTERN_SOURCE`, `VARIABLE_NAME_PATTERN`, and
+   `validateKeyValueKey`.
+2. [x] Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
    fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
-   as a wrapper (`McpServersEditor` depends on it).
+   as a wrapper (`McpServersEditor` depends on it). Both helpers remain
+   exported from `KeyValueMapEditor.tsx`.
 3. Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
    per-row secret picker, add/delete, stacked/wide layout.
 4. Add paste-expansion and the bulk-edit toggle.

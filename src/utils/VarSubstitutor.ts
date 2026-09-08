@@ -7,6 +7,7 @@ import type {
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
 import { maskFencedCodeBlocks } from "./FileReferenceParser";
+import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -36,7 +37,10 @@ import { maskFencedCodeBlocks } from "./FileReferenceParser";
  * workflows that document ctrlyoke syntax runnable.
  */
 export class VarSubstitutor {
-  private static readonly PLACEHOLDER_RE = /\{\{(\w+)\}\}/g;
+  private static readonly PLACEHOLDER_RE = new RegExp(
+    `\\{\\{(${VARIABLE_NAME_PATTERN_SOURCE})\\}\\}`,
+    "g"
+  );
 
   /**
    * Substitute all `{{key}}` placeholders in `text` using `vars`.
