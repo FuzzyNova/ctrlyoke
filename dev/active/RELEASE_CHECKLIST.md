@@ -232,9 +232,8 @@ expecting a PO/procurement process, so it stays self-serve.
    `subscription_created`, `subscription_payment_success`,
    `subscription_cancelled`, and `subscription_expired` (was `order_created`
    + `order_refunded` only) — 6 events total, confirmed via LS's own "Webhook
-   settings saved!" confirmation. **Still open:** item 7's actual Enterprise
-   test purchase + simulated renewal/cancellation hasn't been run yet — this
-   only gets the code and event subscriptions in place to exercise it.
+   settings saved!" confirmation. Item 7 below covers the actual test purchase
+   and renewal/cancellation verification this made possible.
 
 4. **Abuse detection — machine-count alerting**
    - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
@@ -268,13 +267,61 @@ expecting a PO/procurement process, so it stays self-serve.
          Email sales@ctrlyoke.dev." No automation required; kept deliberately rare
          by design, not a funnel to build out.
 
-7. **Verification**
-   - [ ] Live test-mode purchase of the Enterprise product — same shape as the Pro
-         smoke test in 5.3: webhook fires → Enterprise-policy Keygen license
-         created with the correct 1-year expiry → key delivered.
-   - [ ] Simulate a renewal (`subscription_payment_success`) and a cancellation
-         (`subscription_cancelled`) against the test-mode license; confirm expiry
-         extends / lapses correctly in each case.
+7. **Verification** ✅ **purchase + renewal + expiry paths verified September 8,
+   2026** (machine-count alerting below is still open — that's item 4, not yet built):
+   - [x] Live test-mode purchase of the Enterprise product — same shape as the Pro
+         smoke test in 5.3, plus the subscription-specific paths Pro doesn't have.
+         Product had to be flipped from Draft to Published first (same "no
+         checkout link for a Draft product" constraint hit in 5.3). Full chain
+         confirmed on Keygen license `59561958-e0ca-4127-a658-c0bc9b9734ba`:
+         - `order_created` (order `9415949`) → 200 → license created under the
+           **Enterprise** policy (not Pro), confirming variant-based routing works
+           against a real purchase, not just code review.
+         - `subscription_created` (subscription `2511452`) → 200 → license
+           metadata gained `lsSubscriptionId: "2511452"` while `lsOrderId`,
+           `buyerEmail`, `buyerName` all survived the merge (proves
+           `updateLicenseMetadata`'s fetch-then-merge, not LS's simulator, since
+           this ran against the real purchase).
+         - `subscription_payment_success` (invoice `8404222`, `billing_reason:
+           "initial"`) → 200, correctly ignored (no renewal on the invoice that
+           accompanies the purchase itself).
+         - License: policy **ctrlyoke Enterprise**, product **ctrlyoke**, status
+           **ACTIVE**, expiry **2027-09-08 (1 year out)**, machine cap **0 of
+           3000** — matches the policy's own duration, no explicit expiry needed
+           at issuance as designed.
+         - Both emails arrived: LS's payment receipt and the Resend
+           license-key email (confirmed by Nathan directly).
+   - [x] Renewal and no-op-cancellation paths, tested **two different ways**
+         because LS's dashboard "Simulate event" tool for `subscription_created`
+         to `subscription_expired` (found live on a subscription's detail page —
+         `/subscriptions/{id}` → **Simulate event**, not just the more limited
+         event list `docs.lemonsqueezy.com/help/webhooks/simulate-webhook-events`
+         documents) turned out to just **replay the subscription's real,
+         already-existing invoice** rather than fabricate a new one — so it
+         can't produce a `billing_reason: "renewal"` payload on a subscription
+         that has only ever had its initial invoice. Re-running it against
+         `subscription_payment_success` reliably replayed invoice `8404222`
+         (`billing_reason: "initial"`) and got 200/"Ignored (not a renewal)"
+         both times — a correct but redundant re-test of the same no-op path
+         above, not a renewal test.
+         - **Renewal**, tested by hand-crafting a real subscription-invoice
+           payload (`billing_reason: "renewal"`, real `subscription_id: 2511452`,
+           synthetic invoice id) and POSTing it directly to
+           `https://ctrlyoke.dev/.netlify/functions/ls-webhook` with a correct
+           `X-Signature` (HMAC-SHA256 over the raw body using the real webhook
+           signing secret from the LS dashboard) — the same mechanism LS itself
+           uses, just invoked directly since neither LS's UI nor its documented
+           simulate-event list can generate this specific payload shape on
+           demand. Result: 200, and the Keygen license's expiry moved from
+           **2027-09-08 to 2028-09-08** — exactly +1 year, honoring the policy's
+           `Renewal Basis: FROM_EXPIRY`. Re-posting the identical signed payload
+           a second time returned 200 but left expiry at 2028-09-08 unchanged,
+           confirming the `lastRenewedInvoiceId` idempotency guard.
+         - **Cancellation/expiry no-op**, tested via LS's real "Simulate event"
+           → `subscription_expired` against the live subscription. 200 response;
+           Keygen license confirmed unchanged (expiry still 2028-09-08, status
+           still `ACTIVE`, `Suspended: false`) — verifies the explicit no-op
+           branch actually does nothing, not just that it returns 200.
    - [ ] Confirm the machine-count alert path works end-to-end against a scratch
          policy temporarily capped low (a handful of test activations), before
          relying on it at the real 2,000–5,000 threshold.
@@ -770,7 +817,7 @@ public**.
 | Keygen product + Pro policy                                                | DONE                 | Phase 4.1 — renamed live this session                                                                                          |
 | Keygen admin token custody confirmed                                       | DONE                 | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                     |
 | Keygen billing tier decision (Dev vs. paid)                                | DONE                 | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                             |
-| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy + test-mode LS draft product + `ls-webhook.ts` routing/subscription-event code, deployed and wired to the test-mode LS webhook, done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: item 7's actual Enterprise test purchase, abuse-detection webhook, legal docs, live-mode copy; independent of Phases 6–12 |
+| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy, test-mode LS draft product, `ls-webhook.ts` routing/subscription-event code (deployed), and a full test-mode purchase + renewal + no-op-cancellation verification all done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: machine-count abuse-detection webhook (item 4), legal docs (item 5), live-mode copy; independent of Phases 6–12 |
 | Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
 | Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
 | Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
