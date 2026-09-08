@@ -223,15 +223,18 @@ expecting a PO/procurement process, so it stays self-serve.
          case instead of relying on inference — each cast is guarded by the
          `eventName` switch itself, not a blind structural cast.
 
-   **Not yet done:** deploying this (needs a manual `workflow_dispatch` run of
-   `deploy.yml`, same mechanic as 5.3 step 1 — function-only changes aren't in
-   the paths filter) and adding `subscription_created` + `subscription_payment_success`
-   to the test-mode LS webhook's subscribed events (it currently only sends
-   `order_created` + `order_refunded`, confirmed in 4.1's summary table above —
-   without this the new code paths can't receive traffic to test against). Both
-   are needed before item 7's Enterprise test purchase can exercise the
-   subscription/renewal paths, not just the initial `order_created` path Pro
-   already proved out in 5.3.
+   ✅ **deployed and wired live September 8, 2026:** committed at `f387238f`,
+   pushed to `main`, deployed via a manual `workflow_dispatch` run of
+   `deploy.yml` (function-only changes aren't in the push-triggered paths
+   filter — same mechanic as 5.3 step 1), run
+   [`34250687935`](https://github.com/FuzzyNova/ctrlyoke/actions/runs/34250687935)
+   succeeded. The test-mode LS webhook (`129600`) now also subscribes to
+   `subscription_created`, `subscription_payment_success`,
+   `subscription_cancelled`, and `subscription_expired` (was `order_created`
+   + `order_refunded` only) — 6 events total, confirmed via LS's own "Webhook
+   settings saved!" confirmation. **Still open:** item 7's actual Enterprise
+   test purchase + simulated renewal/cancellation hasn't been run yet — this
+   only gets the code and event subscriptions in place to exercise it.
 
 4. **Abuse detection — machine-count alerting**
    - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
@@ -301,7 +304,7 @@ above gates the existing release-blocker chain.
 | — Generate license keys                   | **OFF (unchecked)**                                                 | Correct per plan — Keygen issues the real license, not Lemon Squeezy's native key system.                                                                                                                                                                                                                                                                                                                                                                                         |
 | — Display on storefront                   | **ON**                                                              | Will show once published.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | — Confirmation modal / email receipt copy | Set to explain the Keygen key arrives by separate email             | See 5.2 — this is the resolution of the plan's previously-open "key delivery" question.                                                                                                                                                                                                                                                                                                                                                                                           |
-| Webhooks                                  | **One configured (test mode)**, id `129600`                         | Created live August 26, 2026: `https://ctrlyoke.dev/.netlify/functions/ls-webhook`, listening for `order_created` + `order_refunded`. Signing secret set by us (LS lets you choose your own, ≤40 chars — it does not auto-generate and reveal one). Smoke-tested successfully (see 5.3). **Note:** this webhook only fires for test-mode data — a second, live-mode webhook (same URL/events) will need to be created when Test mode is flipped off for real launch (5.3 step 6). |
+| Webhooks                                  | **One configured (test mode)**, id `129600`                         | Created live August 26, 2026: `https://ctrlyoke.dev/.netlify/functions/ls-webhook`, listening for `order_created` + `order_refunded` (+ `subscription_created`, `subscription_payment_success`, `subscription_cancelled`, `subscription_expired` added September 8, 2026 for the Enterprise SKU — see 4.4 item 3). Signing secret set by us (LS lets you choose your own, ≤40 chars — it does not auto-generate and reveal one). Smoke-tested successfully (see 5.3). **Note:** this webhook only fires for test-mode data — a second, live-mode webhook (same URL/events) will need to be created when Test mode is flipped off for real launch (5.3 step 6). |
 | API keys                                  | **None created**                                                    | Not needed for the Phase 1 flow — the Netlify function only _receives_ LS webhooks and _calls out_ to Keygen; it doesn't need to call back into the LS API for the MVP (order/refund payloads carry enough data). Skip unless a future feature needs it.                                                                                                                                                                                                                          |
 | Payouts                                   | Bank account connected (**•••• 0725, USD**)                         | Good — a payout method exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Payout tax info                           | ✅ Submitted (August 25, 2026), via Stripe Connect tax-details flow | Confirmed live: the "[Action Required]" banner is gone from Settings → Payouts.                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -767,7 +770,7 @@ public**.
 | Keygen product + Pro policy                                                | DONE                 | Phase 4.1 — renamed live this session                                                                                          |
 | Keygen admin token custody confirmed                                       | DONE                 | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                     |
 | Keygen billing tier decision (Dev vs. paid)                                | DONE                 | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                             |
-| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy + test-mode LS draft product + `ls-webhook.ts` routing/subscription-event code done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: deploy the function, add the two new event types to the LS test webhook, abuse-detection webhook, legal docs, live-mode copy; independent of Phases 6–12 |
+| Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy + test-mode LS draft product + `ls-webhook.ts` routing/subscription-event code, deployed and wired to the test-mode LS webhook, done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: item 7's actual Enterprise test purchase, abuse-detection webhook, legal docs, live-mode copy; independent of Phases 6–12 |
 | Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
 | Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
 | Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
