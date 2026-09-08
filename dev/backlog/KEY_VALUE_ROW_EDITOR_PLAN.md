@@ -160,7 +160,17 @@ export const KEY_VALUE_KEY_KINDS = {
   ENV: "env",
   HEADER: "header",
 } as const;
+
+export type KeyValueKeyKind =
+  (typeof KEY_VALUE_KEY_KINDS)[keyof typeof KEY_VALUE_KEY_KINDS];
 ```
+
+The module also owns the rule evaluation itself, not just the constants: a
+pure `validateKeyValueKey(kind, key, allKeys)` returning `FieldDiagnostic`-shaped
+`{ severity, message }` entries, so the component renders diagnostics and does
+not author them. That is what makes the "reuse extension-side in
+`PromptFileParser`" future extension possible without a second copy of the
+rules.
 
 Rules, by kind:
 
@@ -217,6 +227,14 @@ applies step `env` _after_ the `CTRLYOKE_VAR_*` block
 Worth a **warning** on `env` rows whose key starts with `CTRLYOKE_VAR_`. Cheap
 and self-contained; include it if the row-diagnostic slot is already built,
 skip it without regret if v1 is running long.
+
+**Secret references are not enabled on the Variables field, and stay that
+way.** `WorkflowPropertiesPanel.tsx:2104` is the one call site that omits
+`allowSecretReferences`; the other four pass it. So the per-row secret picker,
+the credential heuristic, and the unknown-reference warning are all inert on
+Variables by design. Do not "fix" that as part of this work — enabling secret
+references for workflow variables is a separate decision about whether
+`${secret:}` resolves in `vars:`, which it does not today.
 
 Validation runs synchronously in the webview against the current rows — no
 message plumbing, no extension-host round trip, nothing new in
@@ -308,8 +326,9 @@ field appends a row.
 | `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Modify | Variables field → `keyKind="variable"`                                                                                                     |
 | `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                |
 | `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                 |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`                                                                           |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact |
 | `src/ui/webview-react/components/shared/McpServersEditor.tsx`       | Modify  | Import path for the plural credential helper                                                                                               |
+| `src/ui/webview-react/test/components/shared/McpServerForm.test.ts` | Modify  | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case           |
 | `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Replace | Rewritten as `KeyValueRowsEditor.test.tsx`                                                                                              |
 | `src/test/unit/KeyValueKeyKinds.test.ts`                            | Create  | Pure validation-rule tests                                                                                                                 |
 
