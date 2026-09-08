@@ -321,15 +321,15 @@ field appends a row.
 | `src/utils/KeyValueKeyKinds.ts`                                     | Create  | Dependency-free key kinds, name patterns, and diagnostic rules                                                                             |
 | `src/utils/VarSubstitutor.ts`                                       | Modify  | Build `PLACEHOLDER_RE` from the shared variable-name pattern                                                                               |
 | `src/ui/webview-react/components/shared/KeyValueRowsEditor.tsx`     | Create  | The row editor, bulk-edit mode, per-row secret picker                                                                                      |
-| `src/ui/webview-react/components/shared/KeyValueMapEditor.tsx`      | Modify  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper); drop the textarea component |
-| `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types; drop `KeyValueMapEditor`                                                                                   |
+| `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`      | Create  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper) in a helpers-only module |
+| `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types and helpers; drop `KeyValueMapEditor`                                                                       |
 | `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Modify | Variables field → `keyKind="variable"`                                                                                                     |
 | `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                 |
 | `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                  |
 | `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact |
 | `src/ui/webview-react/components/shared/McpServersEditor.tsx`       | Modify  | Import path for the plural credential helper                                                                                               |
 | `src/ui/webview-react/test/components/shared/McpServerForm.test.ts` | Modify  | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case           |
-| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Replace | Rewritten as `KeyValueRowsEditor.test.tsx`                                                                                              |
+| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Delete  | Obsolete textarea assertions; equivalent row and bulk-mode coverage lives in `KeyValueRowsEditor.test.tsx`                              |
 | `src/test/unit/KeyValueKeyKinds.test.ts`                            | Create  | Pure validation-rule tests                                                                                                                 |
 
 ## Implementation steps
@@ -342,25 +342,28 @@ field appends a row.
 2. [x] Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
    fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
    as a wrapper (`McpServersEditor` depends on it). Both helpers remain
-   exported from `KeyValueMapEditor.tsx`.
+   exported from `KeyValueMapHelpers.ts`.
 3. [x] Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
    per-row secret picker, add/delete, stacked/wide layout. The component is
    intentionally not exported from `shared/index.ts` and no call site is wired
    yet; step 4 can add paste/bulk-edit behavior in the same component before
    step 5 performs the all-at-once migration. Its value diagnostics reuse
-   `looksLikeLiteralCredential` from `KeyValueMapEditor.tsx`, whose helper
-   must remain available until the migration removes that component.
+   `looksLikeLiteralCredential` from `KeyValueMapHelpers.ts`, whose helper
+   remains available after the component migration.
 4. [x] Add paste-expansion and the bulk-edit toggle.
-5. Roll out all five call sites in one change (they share one component;
+5. [x] Roll out all five call sites in one change (they share one component;
    staging them means maintaining both editors against the same store shapes).
-6. Tests (below).
-7. Gate: `npm run typecheck`, `npm run lint`, `npm test`. Never
+6. [x] Tests (below).
+7. [x] Gate: `npm run typecheck`, `npm run lint`, `npm test`. Never
    `npm run test:harness`.
+
+The parsing and credential helpers live in
+`src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`.
 
 ## Test coverage
 
-The existing `KeyValueMapEditor.test.tsx` asserts textarea mechanics and will
-not survive, but each of its behaviors has a row-editor analogue that must be
+The former `KeyValueMapEditor.test.tsx` asserted textarea mechanics and is
+deleted, but each of its behaviors has a row-editor analogue that must be
 carried over, not dropped:
 
 | Existing assertion                                   | Row-editor analogue                                                                     |

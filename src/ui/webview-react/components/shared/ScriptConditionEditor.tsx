@@ -28,7 +28,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { notifyUser } from "@utils/notifyUser";
-import { KeyValueMapEditor } from "./KeyValueMapEditor";
+import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
@@ -364,12 +364,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       </div>
 
       {/* Every variant runs a process, so all three author `env`. */}
-      <KeyValueMapEditor
+      <KeyValueRowsEditor
         id={`${idPrefix}-env`}
         label="Environment"
         ariaLabel={`${idPrefix}-env`}
         value={v.env ?? {}}
         onChange={handleEnvironmentChange}
+        keyKind="env"
+        entryNoun="environment variable"
         allowSecretReferences
         disabled={disabled}
       />
@@ -583,9 +585,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             />
           </div>
         </DrawerRow>
-      ) : (
-        null
-      )}
+      ) : null}
 
       {/* endCondition-only: retry fields (shown when retry is an action) */}
       {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry && (

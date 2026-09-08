@@ -59,7 +59,7 @@ import {
   type ScriptConditionValue,
   ScriptCommandEditor,
   AdditionalArgsEditor,
-  KeyValueMapEditor,
+  KeyValueRowsEditor,
   TrustedRootsListEditor,
   BranchNameEditor,
   AnimatedSection,
@@ -2101,13 +2101,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 label="Variables"
                 description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
               >
-                <KeyValueMapEditor
+                <KeyValueRowsEditor
                   label="name=value"
                   id="settings-vars"
                   ariaLabel="Variables"
                   value={workflowProperties.vars ?? {}}
                   onChange={handleVarsChange}
-                  rows={4}
+                  keyKind="variable"
+                  entryNoun="variable"
                 />
               </FormField>
             </>

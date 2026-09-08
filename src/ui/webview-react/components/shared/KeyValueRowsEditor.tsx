@@ -19,7 +19,7 @@ import {
   keyValueMapObjectToString,
   keyValueMapStringToObject,
   looksLikeLiteralCredential,
-} from "./KeyValueMapEditor";
+} from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
@@ -379,7 +379,7 @@ export function KeyValueRowsEditor({
     const valueLabel = row.key ? `Value for ${row.key}` : `${entryNoun} value`;
 
     return (
-      <div className="relative min-w-0">
+      <div className="relative col-span-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">
         <div className="flex min-w-0 gap-1">
           <input
             type="text"
@@ -549,7 +549,7 @@ export function KeyValueRowsEditor({
                     onClick={() => removeRow(row.id)}
                     aria-label={`Delete ${row.key || "empty row"}`}
                     title="Delete row"
-                    className="h-7 shrink-0 px-1.5"
+                    className="col-start-2 row-start-1 h-7 shrink-0 px-1.5 sm:col-start-3 sm:row-start-1"
                   >
                     <Icon name="trash" />
                   </Button>

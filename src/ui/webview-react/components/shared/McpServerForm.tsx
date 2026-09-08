@@ -2,9 +2,9 @@ import { useId } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { MCP_FORM_TABS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "./CustomSelect";
-import { KeyValueMapEditor } from "./KeyValueMapEditor";
+import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
 
-export { findLiteralCredentialEnvKeys } from "./KeyValueMapEditor";
+export { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 
 export type McpServerFormTab =
   (typeof MCP_FORM_TABS)[keyof typeof MCP_FORM_TABS];
@@ -268,12 +268,14 @@ export function McpServerForm({
             }
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
-          <KeyValueMapEditor
+          <KeyValueRowsEditor
             id="mcp-server-env"
-            label="env (KEY=VALUE, one per line)"
-            ariaLabel="Environment variables (KEY=VALUE, one per line)"
+            label="env"
+            ariaLabel="Environment variables"
             value={value.env}
             onChange={(env) => onChange({ ...value, env })}
+            keyKind="env"
+            entryNoun="environment variable"
             allowSecretReferences
           />
         </>
@@ -301,11 +303,14 @@ export function McpServerForm({
             triggerAriaLabel="Choose remote transport"
             triggerTitle="Choose the transport used by the remote MCP server"
           />
-          <KeyValueMapEditor
+          <KeyValueRowsEditor
             id="mcp-server-headers"
-            label="headers (KEY=VALUE, one per line)"
+            label="headers"
+            ariaLabel="Headers"
             value={value.headers}
             onChange={(headers) => onChange({ ...value, headers })}
+            keyKind="header"
+            entryNoun="header"
             allowSecretReferences
           />
         </>

@@ -20,7 +20,7 @@ import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
 import { useMcpManagerStore } from "../../store/useMcpManagerStore";
 import { useUiStore } from "@store/uiStore";
-import { findLiteralCredentialEnvKeys } from "./KeyValueMapEditor";
+import { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { Icon } from "./Icon";

@@ -59,6 +59,7 @@ describe("McpServerForm round trips", () => {
           id: "remote",
           activeTab: "remote",
           url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer token" },
         },
         onChange,
         onSubmit: vi.fn(),
@@ -67,11 +68,11 @@ describe("McpServerForm round trips", () => {
       })
     );
 
-    const headers = screen.getByLabelText("headers (KEY=VALUE, one per line)");
-    fireEvent.change(headers, {
-      target: { value: "Authorization=${secret:API_TOKEN}" },
+    const headerValue = screen.getByLabelText("Value for Authorization");
+    fireEvent.change(headerValue, {
+      target: { value: "${secret:API_TOKEN}" },
     });
-    fireEvent.blur(headers);
+    fireEvent.blur(headerValue);
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -206,9 +207,21 @@ describe("McpServerForm round trips", () => {
       })
     );
 
-    fireEvent.change(screen.getByLabelText("Insert secret reference"), {
-      target: { value: "API_TOKEN" },
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Add environment variable" })
+    );
+    const environmentName = screen.getByRole("textbox", {
+      name: "environment variable name",
     });
+    fireEvent.change(environmentName, { target: { value: "API_TOKEN" } });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Insert secret reference for API_TOKEN",
+      })
+    );
+    fireEvent.click(
+      screen.getByRole("option", { name: "Use secret API_TOKEN" })
+    );
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -241,8 +254,8 @@ describe("McpServerForm round trips", () => {
       })
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "looks like a pasted credential"
-    );
+    expect(
+      screen.getByText(/looks like a pasted credential/)
+    ).toBeInTheDocument();
   });
 });

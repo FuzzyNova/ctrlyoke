@@ -340,20 +340,23 @@ describe("WorkflowPropertiesPanel variables", () => {
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
 
-    expect(screen.getByLabelText("Variables")).toHaveValue(
-      "region=us-east-1\nretries=3"
-    );
+    expect(screen.getByLabelText("Name for region")).toHaveValue("region");
+    expect(screen.getByLabelText("Value for region")).toHaveValue("us-east-1");
+    expect(screen.getByLabelText("Name for retries")).toHaveValue("retries");
+    expect(screen.getByLabelText("Value for retries")).toHaveValue("3");
   });
 
   it("posts a new variable through workflow-property updates", () => {
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
 
-    const vars = screen.getByLabelText("Variables");
-    fireEvent.change(vars, {
-      target: { value: "region=us-east-1" },
-    });
-    fireEvent.blur(vars);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add variable" }));
+    const name = screen.getByLabelText("variable name");
+    fireEvent.change(name, { target: { value: "region" } });
+    fireEvent.blur(name);
+    const value = screen.getByLabelText("Value for region");
+    fireEvent.change(value, { target: { value: "us-east-1" } });
+    fireEvent.blur(value);
 
     expect(postMessage).toHaveBeenLastCalledWith({
       type: "updateWorkflowProperty",
@@ -369,11 +372,9 @@ describe("WorkflowPropertiesPanel variables", () => {
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
-    const vars = screen.getByLabelText("Variables");
-    fireEvent.change(vars, {
-      target: { value: "region=eu-west-1" },
-    });
-    fireEvent.blur(vars);
+    const value = screen.getByLabelText("Value for region");
+    fireEvent.change(value, { target: { value: "eu-west-1" } });
+    fireEvent.blur(value);
 
     expect(useSettingsStore.getState().workflowProperties.vars).toEqual({
       region: "eu-west-1",
@@ -392,11 +393,7 @@ describe("WorkflowPropertiesPanel variables", () => {
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Context" }));
-    const vars = screen.getByLabelText("Variables");
-    fireEvent.change(vars, {
-      target: { value: "" },
-    });
-    fireEvent.blur(vars);
+    fireEvent.click(screen.getByRole("button", { name: "Delete region" }));
 
     expect(useSettingsStore.getState().workflowProperties.vars).toBeUndefined();
     expect(postMessage).toHaveBeenLastCalledWith({

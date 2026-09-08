@@ -556,8 +556,11 @@ describe("PromptEditor — script-step properties", () => {
     expect(screen.queryByLabelText("script-step-env")).not.toBeInTheDocument();
     render(<PromptEditor />);
 
-    expect(screen.getByLabelText("script-step-env")).toHaveValue(
-      "DEPLOY_TOKEN=${secret:DEPLOY_TOKEN}"
+    expect(screen.getByLabelText("Name for DEPLOY_TOKEN")).toHaveValue(
+      "DEPLOY_TOKEN"
+    );
+    expect(screen.getByLabelText("Value for DEPLOY_TOKEN")).toHaveValue(
+      "${secret:DEPLOY_TOKEN}"
     );
     expect(screen.getByText("Secrets")).toBeInTheDocument();
     expect(screen.getByText("Error Behavior")).toBeInTheDocument();

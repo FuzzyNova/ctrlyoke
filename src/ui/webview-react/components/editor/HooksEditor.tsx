@@ -8,7 +8,7 @@ import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
-import { KeyValueMapEditor } from "../shared/KeyValueMapEditor";
+import { KeyValueRowsEditor } from "../shared/KeyValueRowsEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
 import { Button } from "../shared/Button";
 import { Icon } from "../shared/Icon";
@@ -241,7 +241,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               aria-label={`hook-${index}-command`}
               className="w-full min-w-0 rounded border border-input-border bg-input-bg text-xs font-mono text-input-fg"
             />
-            <KeyValueMapEditor
+            <KeyValueRowsEditor
               id={`hook-${index}-env`}
               label="Environment"
               ariaLabel={`hook-${index}-env`}
@@ -251,8 +251,9 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                   env: Object.keys(env).length > 0 ? env : undefined,
                 })
               }
+              keyKind="env"
+              entryNoun="environment variable"
               allowSecretReferences
-              rows={2}
             />
           </div>
         ))}
