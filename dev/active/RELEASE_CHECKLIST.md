@@ -246,20 +246,47 @@ expecting a PO/procurement process, so it stays self-serve.
          already exists today; no new admin tooling required.
 
 5. **Self-serve legal — click-through Terms + DPA + trust page**
-   - [ ] Draft click-through Terms of Service for the Enterprise subscription
-         (confirm with the Phase 7 attorney whether this is an amendment to
-         `LICENSE.md` or a standalone document — the individual EULA and an
-         Enterprise site-license agreement are not the same instrument).
-   - [ ] Draft a standard DPA (Data Processing Agreement) — likely expected by
-         enterprise legal reviewers regardless of how little data ctrlyoke's
-         local-first architecture actually processes.
-   - [ ] Publish a trust/security page on `ctrlyoke.dev` (architecture summary,
-         data handling, subprocessor list — Keygen / Lemon Squeezy / Resend /
-         Netlify — the kind of thing an enterprise security review asks for).
+   ✅ **first-pass drafts written September 8, 2026**, all three as standalone
+   root-level `*_DRAFT.md` files (matching the old `LICENSE_DRAFT.md` /
+   `PRIVACY.md`-drafting precedent — not yet attorney-reviewed, not yet wired
+   into `ctrlyoke.dev`, not yet renamed to their final filenames):
+   - [x] [`ENTERPRISE_TERMS_DRAFT.md`](../../ENTERPRISE_TERMS_DRAFT.md) — drafted
+         as a **standalone document that supplements `LICENSE.md`** rather than
+         amending it, since `LICENSE.md` §6(d) already grants the Enterprise
+         license itself (term, coverage, revocation) — these Terms cover only
+         what §6(d) doesn't: billing, auto-renewal, price-change notice,
+         cancellation, refunds, payment-failure suspension, and a pointer to the
+         DPA. Confirm this split (standalone vs. amendment) with the attorney —
+         flagged as an open question in the plan itself.
+   - [x] [`DPA_DRAFT.md`](../../DPA_DRAFT.md) — standard controller/processor
+         structure (definitions, roles, sub-processor authorization with a
+         14-day objection window, SCCs for EU/UK/Swiss transfers, audit rights,
+         Annexes I–III for processing details / sub-processors / technical
+         measures). **Surfaced a real gap while drafting:** `PRIVACY.md` §6's
+         sub-processor table is missing **Resend** (added to `ls-webhook.ts`
+         August 25, 2026 to deliver license-key emails, but the privacy policy's
+         table was never updated to match) — the DPA draft includes Resend and
+         flags this inline; `PRIVACY.md` needs the same row added before/with
+         publishing, and since `PRIVACY.md` already has attorney sign-off, that
+         edit itself should go back through the attorney rather than being
+         patched silently.
+   - [x] [`TRUST_PAGE_DRAFT.md`](../../TRUST_PAGE_DRAFT.md) — architecture
+         summary, what is/isn't collected, sub-processor table (six vendors,
+         Resend included), licensing-security section (offline Ed25519
+         verification, bounded machine-cap blast radius, fast suspend/reissue),
+         vulnerability-reporting pointer to `SECURITY.md`, and an honest "no
+         SOC 2/ISO yet, minimal-data-by-design instead" compliance-posture
+         paragraph rather than an empty compliance-badge wall.
    - [ ] These three together are what let a buyer's legal team self-serve their
          review without a custom MSA — the entire point of keeping this zero-touch
          (§1.7.1). Skipping any one of them risks pulling every enterprise deal
          into a manual sales/legal cycle.
+   - [ ] **Still open:** attorney review of all three drafts (same Phase 7
+         attorney who signed off on `LICENSE.md`/`PRIVACY.md`); the `PRIVACY.md`
+         Resend fix; renaming the three `*_DRAFT.md` files to their final names
+         and wiring them into `ctrlyoke.dev` as pages (`/enterprise-terms`,
+         `/dpa`, `/trust`) the same way `terms.astro`/`privacy.astro` render
+         `LICENSE.md`/`PRIVACY.md` today via `import { Content } from "..."`.
 
 6. **PO fallback**
    - [ ] `sales@ctrlyoke.dev` already exists (Phase 3) — confirm it's monitored.
