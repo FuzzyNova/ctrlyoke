@@ -81,7 +81,7 @@ The account is on the free **Dev 1** plan: 2,500 API requests/day and a **100 li
 
 ### 4.4 Enterprise SKU (self-serve site license) — full build-out
 
-**Status: not started; promoted from a deferred stub to a real execution
+**Status: in progress; promoted from a deferred stub to a real execution
 checklist September 8, 2026** (Nathan wants this in for this release, not a
 later one). The design itself is not new — everything below implements the
 already-resolved decisions in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
@@ -246,46 +246,75 @@ expecting a PO/procurement process, so it stays self-serve.
          already exists today; no new admin tooling required.
 
 5. **Self-serve legal — click-through Terms + DPA + trust page**
-   ✅ **first-pass drafts written September 8, 2026**, all three as standalone
+   ✅ **second-pass attorney-review drafts completed September 8, 2026**, all three as standalone
    root-level `*_DRAFT.md` files (matching the old `LICENSE_DRAFT.md` /
    `PRIVACY.md`-drafting precedent — not yet attorney-reviewed, not yet wired
    into `ctrlyoke.dev`, not yet renamed to their final filenames):
    - [x] [`ENTERPRISE_TERMS_DRAFT.md`](../../ENTERPRISE_TERMS_DRAFT.md) — drafted
          as a **standalone document that supplements `LICENSE.md`** rather than
          amending it, since `LICENSE.md` §6(d) already grants the Enterprise
-         license itself (term, coverage, revocation) — these Terms cover only
-         what §6(d) doesn't: billing, auto-renewal, price-change notice,
-         cancellation, refunds, payment-failure suspension, and a pointer to the
-         DPA. Confirm this split (standalone vs. amendment) with the attorney —
-         flagged as an open question in the plan itself.
+         license itself. The second pass fixes the single-legal-entity scope,
+         makes checkout/order acceptance explicit (activation alone is not the
+         Enterprise clickwrap), discloses the real 3,000-machine ceiling and a
+         no-per-seat-fee increase path, aligns cancellation/refunds/dunning with
+         Lemon Squeezy's buyer terms and actual webhook behavior, corrects the
+         false "then-current list price" renewal promise (Lemon Squeezy keeps an
+         existing subscription's price unless it is deliberately changed), and
+         adds document precedence, notices, liability, and B2B-only language.
    - [x] [`DPA_DRAFT.md`](../../DPA_DRAFT.md) — standard controller/processor
-         structure (definitions, roles, sub-processor authorization with a
-         14-day objection window, SCCs for EU/UK/Swiss transfers, audit rights,
-         Annexes I–III for processing details / sub-processors / technical
-         measures). **Surfaced a real gap while drafting:** `PRIVACY.md` §6's
-         sub-processor table is missing **Resend** (added to `ls-webhook.ts`
-         August 25, 2026 to deliver license-key emails, but the privacy policy's
-         table was never updated to match) — the DPA draft includes Resend and
-         flags this inline; `PRIVACY.md` needs the same row added before/with
-         publishing, and since `PRIVACY.md` already has attorney sign-off, that
-         edit itself should go back through the attorney rather than being
-         patched silently.
+         structure. The second pass adds the missing controller/processor role
+         split, Customer obligations, unlawful-instruction notice, complete
+         Article 28 assistance/deletion/audit mechanics, CCPA service-provider
+         restrictions, downstream-equivalent Sub-processor obligations, and
+         workable EU SCC Module 2/3, UK Addendum, and Swiss adaptations with
+         the commercial selections substantially completed. Annexes distinguish
+         the actual Customer-directed Sub-processors (Keygen, Netlify, Resend)
+         from vendors used for Fuzzy Nova's independent-controller activity
+         (for example, telemetry and merchant-of-record processing), and
+         document specific technical and organizational measures instead of
+         generic assurances.
    - [x] [`TRUST_PAGE_DRAFT.md`](../../TRUST_PAGE_DRAFT.md) — architecture
-         summary, what is/isn't collected, sub-processor table (six vendors,
+         summary, what is/isn't collected, provider table (six vendors,
          Resend included), licensing-security section (offline Ed25519
-         verification, bounded machine-cap blast radius, fast suspend/reissue),
-         vulnerability-reporting pointer to `SECURITY.md`, and an honest "no
-         SOC 2/ISO yet, minimal-data-by-design instead" compliance-posture
-         paragraph rather than an empty compliance-badge wall.
+         verification, the actual 3,000-machine cap, fast suspend/reissue),
+         accurate Marketplace signature language, vulnerability-reporting
+         pointer to `SECURITY.md`, and an honest "no SOC 2/ISO yet,
+         minimal-data-by-design instead" compliance-posture paragraph.
+   - [x] `PRIVACY.md` Resend gap fixed in the September 8, 2026 version 1.1
+         attorney-review changes: Resend is now disclosed both where the data is
+         collected/used and in the provider table, Netlify's webhook-processing
+         role is explicit, and the misleading all-vendors-as-"Sub-processors"
+         heading is corrected to account for independent controllers such as the
+         merchant of record. Keep the planned Azure Application Insights
+         telemetry disclosure — telemetry implementation is a high-priority
+         pre-attorney-review dependency and will be present before these files
+         are sent.
    - [ ] These three together are what let a buyer's legal team self-serve their
          review without a custom MSA — the entire point of keeping this zero-touch
          (§1.7.1). Skipping any one of them risks pulling every enterprise deal
          into a manual sales/legal cycle.
-   - [ ] **Still open:** attorney review of all three drafts (same Phase 7
-         attorney who signed off on `LICENSE.md`/`PRIVACY.md`); the `PRIVACY.md`
-         Resend fix; renaming the three `*_DRAFT.md` files to their final names
-         and wiring them into `ctrlyoke.dev` as pages (`/enterprise-terms`,
-         `/dpa`, `/trust`) the same way `terms.astro`/`privacy.astro` render
+   - [ ] **Before sending to the attorney:** finish the telemetry implementation;
+         use VS Code's telemetry trace to verify every custom and library-added
+         field against `PRIVACY.md`; confirm Azure's 90-day retention and default
+         IP-masking configuration; add `telemetry.json` for inspectable event
+         declarations; confirm the Article 28 agreements and transfer terms in
+         place with Keygen, Netlify, and Resend; and give the attorney the three
+         drafts plus the `PRIVACY.md` v1.1 changes in one review packet.
+   - [ ] **Before accepting a live Enterprise order:** make the Enterprise Terms,
+         EULA, and Privacy Policy conspicuous at checkout with affirmative assent
+         by an authorized representative on behalf of the named legal entity;
+         collect that entity's legal name and business address; retain the
+         accepted document versions, timestamp, and order/customer identifiers;
+         configure a 30-day annual renewal notice (Lemon Squeezy's built-in
+         reminder is only seven days); and verify the cancellation path and legal
+         links in a live-mode checkout.
+   - [ ] **Still open:** attorney review of all three drafts and `PRIVACY.md` v1.1
+         (same Phase 7 attorney who signed off on `LICENSE.md`/`PRIVACY.md`),
+         including whether `LICENSE.md` should receive a conforming update from
+         the DBA-only "Fuzzy Nova" name to "Nathan Hickey d/b/a Fuzzy Nova";
+         renaming the three `*_DRAFT.md` files to their final names and wiring
+         them into `ctrlyoke.dev` as pages (`/enterprise-terms`, `/dpa`, `/trust`)
+         the same way `terms.astro`/`privacy.astro` render
          `LICENSE.md`/`PRIVACY.md` today via `import { Content } from "..."`.
 
 6. **PO fallback**

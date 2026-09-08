@@ -2,93 +2,138 @@
 
 **DRAFT — for attorney review. Not yet effective or published.**
 
-**Licensor:** Fuzzy Nova
+**Licensor:** Nathan Hickey d/b/a Fuzzy Nova
+
 **Product:** ctrlyoke Enterprise (annual site-license subscription)
-**Version:** 0.1 (draft)
 
-## 0. Relationship to the ctrlyoke Commercial License
+**Version:** 0.2 (draft)
 
-These Enterprise Subscription Terms ("**Enterprise Terms**") supplement, and do not replace, the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) ("**EULA**"). The EULA governs Your rights to install, access, and use the Software, including the Enterprise license grant in EULA Section 6(d). These Enterprise Terms govern the commercial subscription relationship: billing, term, renewal, and cancellation. If these Enterprise Terms conflict with the EULA on a matter of software usage rights, the EULA controls; if they conflict on a matter of billing or subscription administration, these Enterprise Terms control.
+**Effective Date:** The date Customer accepts these Enterprise Terms as described in Section 2
 
-Capitalized terms not defined here have the meaning given in the EULA.
+## 1. Agreement and Definitions
 
-## 1. Acceptance
+These ctrlyoke Enterprise Subscription Terms (the **Enterprise Terms**) supplement the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) (the **EULA**). The EULA governs rights to install, access, and use the Software, including the Enterprise license grant in EULA Section 6(d). These Enterprise Terms govern the related subscription, billing, renewal, cancellation, and support terms.
 
-By completing checkout for a ctrlyoke Enterprise subscription, or by activating a ctrlyoke Enterprise license key, You (or, if You are acting on behalf of an entity, that entity — "**Customer**") agree to be bound by these Enterprise Terms.
+An **Order** means the applicable checkout record, order form, or invoice identifying the Enterprise subscription. **Customer** means the single legal entity identified in the Order. **Authorized Users** means Customer's employees and officers, and contractors engaged to perform work for Customer, who use the Software in the course of that work. **Subscription Term** means the Initial Term or a Renewal Term described in Section 4.
 
-## 2. What the Subscription Covers
+Capitalized terms not defined in these Enterprise Terms have the meanings given in the EULA.
 
-### (a) Site license scope
+The Order, these Enterprise Terms, the EULA, and the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) (the **DPA**) constitute the agreement between Customer and Licensor concerning the Enterprise subscription (collectively, the **Agreement**). For an Enterprise subscription, this paragraph replaces EULA Section 16(a). If the documents conflict: (a) the DPA controls concerning the processing of Customer Personal Data; (b) an Order signed by Licensor controls concerning transaction-specific commercial terms; (c) these Enterprise Terms control concerning subscription administration; and (d) the EULA otherwise controls concerning Software use and intellectual-property rights. Section 3 of these Enterprise Terms clarifies and controls over EULA Section 6(d) concerning the entities, users, and machines covered by this Enterprise subscription.
 
-A ctrlyoke Enterprise subscription is an annual, unlimited-internal-seat license covering all employees, officers, and contractors of Customer's Organization (as defined in EULA Section 1) engaged to perform work for Customer, for their use of the Software in the course of that work. There is no per-seat fee and no contractual cap on the number of individuals who may use the Software under the subscription.
+Lemon Squeezy's buyer terms separately govern Customer's payment transaction with Lemon Squeezy as merchant of record. Those buyer terms control to the extent required for Lemon Squeezy to process a payment, tax, refund, or chargeback.
 
-### (b) Machine activation limit
+## 2. Business Use and Acceptance
 
-For abuse-prevention purposes, the underlying Keygen license enforces a generous, finite machine-activation ceiling well above any realistic Customer headcount. This is an anti-abuse safeguard, not a usage restriction — see Section 8 below.
+The Enterprise subscription is offered for business and organizational use, not for personal, family, or household use.
 
-### (c) Support
+Customer accepts these Enterprise Terms by either:
 
-Enterprise subscribers receive priority email support at `support@ctrlyoke.dev`. Response-time commitments, if any, will be stated separately at time of purchase or in a support addendum; absent such a commitment, Licensor provides support on a commercially reasonable, best-efforts basis, consistent with EULA Section 9.
+- completing checkout after being presented with conspicuous notice of, and links to, these Enterprise Terms, the EULA, the Privacy Policy, and the DPA; or
+- signing or otherwise accepting an Order that incorporates these Enterprise Terms.
 
-## 3. Term, Billing, and Renewal
+The individual accepting on Customer's behalf represents and warrants that the individual has authority to bind Customer. If the individual lacks that authority, the individual must not complete the purchase.
 
-### (a) Initial term
+Activation of a license key by an Authorized User is governed by the EULA but, standing alone, does not bind an entity to the commercial terms of an Order.
 
-The subscription begins on the date of Customer's first successful payment and continues for an initial term of one (1) year (the "**Initial Term**").
+## 3. Subscription Scope
 
-### (b) Automatic renewal
+### (a) Site license
 
-Unless cancelled in accordance with Section 4 before the end of the then-current term, the subscription **automatically renews** for successive one (1) year terms (each, a "**Renewal Term**") at the then-current list price, billed to the payment method on file.
+During a paid Subscription Term, Customer may permit an unlimited number of Authorized Users within the single legal entity identified in the Order to use Pro Tier capabilities. Customer affiliates, parents, subsidiaries, and other entities under common control are not covered unless an Order signed by Licensor expressly includes them.
 
-### (c) Payment and merchant of record
+Customer is responsible for its Authorized Users' compliance with the Agreement and must not disclose the license key or signed license file outside Customer and its Authorized Users.
 
-All payments are processed by Lemon Squeezy, acting as merchant of record. Lemon Squeezy calculates, collects, and remits applicable sales tax, VAT, or similar transaction taxes. Licensor does not separately invoice Customer unless Customer has arranged a purchase-order/invoice path under Section 9.
+### (b) Machine activations
 
-### (d) Price changes
+The standard Enterprise license permits up to 3,000 registered machines at one time. This technical ceiling is an abuse-prevention control, not a purchased-seat count. Licensor will, on reasonable request and without an additional per-seat license fee, reasonably increase or reissue the license for documented legitimate internal use that would otherwise exceed the ceiling, subject to technical feasibility and Customer's compliance with the Agreement.
 
-Licensor may change the subscription price for future Renewal Terms. Licensor will provide notice of a price change at least thirty (30) days before it takes effect on Customer's next renewal. A price change never applies retroactively to a term Customer has already paid for.
+### (c) Reservation of rights
 
-## 4. Cancellation
+Except for the Enterprise coverage stated in this Section, all use remains subject to the EULA, including its restrictions, ownership provisions, and revocation rights.
 
-Customer may cancel auto-renewal at any time through the Lemon Squeezy customer portal (link provided in the purchase receipt and renewal emails) or by emailing `support@ctrlyoke.dev`. Cancellation takes effect at the end of the then-current paid term; Customer's license remains active and fully usable through that date. Licensor does not prorate or refund the unused portion of a term except as required by applicable law or as Licensor agrees in writing.
+## 4. Term and Automatic Renewal
 
-## 5. Refunds
+### (a) Initial Term
 
-Purchases are handled under Lemon Squeezy's standard refund process. Absent a separate written agreement, Licensor does not guarantee refunds for partial terms, and renewal charges are non-refundable once processed, except as required by applicable law.
+The subscription begins when the initial payment is successfully completed, or on another start date stated in the Order, and continues for one (1) year (the **Initial Term**).
 
-## 6. Suspension and Termination
+### (b) Automatic Renewal
 
-In addition to Licensor's rights under EULA Section 6(e) (Revocation) and Section 15 (Term and Termination), Licensor may suspend Customer's Enterprise license if a subscription payment fails and is not cured within a commercially reasonable period (currently the retry/dunning window used by Lemon Squeezy). Suspension is lifted automatically once payment succeeds. Suspension or lapse under this Section does not, by itself, constitute termination of the underlying EULA.
+Unless Customer cancels in accordance with Section 6, the subscription automatically renews for successive one-year periods (each a **Renewal Term**). The payment method on file will be charged on the renewal date shown in the Lemon Squeezy customer portal or Order.
 
-## 7. Data Processing
+Licensor or Lemon Squeezy will send the billing contact a renewal reminder at least thirty (30) days before each annual renewal. Customer is responsible for keeping its billing email address current.
 
-If Customer requires a Data Processing Agreement to cover personal data of Customer's employees or contractors processed in connection with the Software (see [Privacy Policy](https://ctrlyoke.dev/privacy) Section 3), the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) is incorporated into these Enterprise Terms by reference and applies automatically upon Customer's acceptance of these Enterprise Terms, without requiring a separately countersigned copy — though Licensor will provide one on request.
+### (c) Renewal price
 
-## 8. Abuse Prevention; Machine Cap
+The renewal price is the price shown for Customer's subscription in the customer portal or applicable renewal notice. A change to the public list price does not, by itself, change the price of an existing subscription.
 
-The Enterprise license's machine-activation ceiling exists so that a single leaked or shared license key produces a bounded, detectable event rather than unlimited unauthorized use. Licensor may investigate activation patterns consistent with license sharing outside Customer's Organization and, where warranted, suspend and reissue the license consistent with EULA Section 6(e). This is a fraud/abuse safeguard; it does not reduce the "unlimited internal seats" grant in Section 2(a) for legitimate use within Customer's Organization.
+Licensor may propose a price change for a future Renewal Term by giving at least thirty (30) days' notice. A proposed increase will apply only if Customer affirmatively accepts it where required by applicable law or the payment platform; otherwise, Customer may cancel before renewal. No price change applies retroactively to a paid Subscription Term.
 
-## 9. Purchase Orders and Invoicing
+## 5. Billing, Taxes, and Payment
 
-The self-serve checkout flow described above is the default path. Customer that requires a purchase order, a formal invoice with net payment terms, or a signed order form outside the self-serve flow should email `sales@ctrlyoke.dev`. That path is handled manually and may involve additional terms.
+Lemon Squeezy acts as merchant of record and authorized reseller for self-serve purchases. Customer authorizes Lemon Squeezy to charge the payment method provided at checkout for the initial purchase and each renewal, together with taxes Lemon Squeezy is required to collect. Lemon Squeezy handles payment processing, receipts, refunds, chargebacks, and applicable transaction-tax calculation, collection, and remittance under its buyer terms.
 
-## 10. General
+Customer must provide accurate billing and tax information. Except where the Order states otherwise, fees are charged in advance and are exclusive of taxes that Customer is legally required to self-assess or pay directly.
+
+If a renewal payment is not successfully completed, the subscription does not renew and the Enterprise license may expire at the end of the paid Subscription Term. Lemon Squeezy may retry the payment under its recovery and dunning process; a successful recovered payment renews the subscription when processed. A full refund, fraudulent purchase, unauthorized payment reversal, or chargeback may result in suspension or revocation under EULA Section 6(e).
+
+## 6. Cancellation
+
+Customer may turn off automatic renewal through the Lemon Squeezy customer portal. Portal cancellation must be completed before the scheduled renewal charge. Customer may also request cancellation by emailing `billing@ctrlyoke.dev`; to allow time for processing, an email request must be received at least forty-eight (48) hours before the scheduled renewal.
+
+Cancellation stops future renewal and takes effect at the end of the then-current paid Subscription Term. Customer's Enterprise license remains usable through that date unless earlier suspended or terminated under the Agreement. Cancellation does not entitle Customer to a refund for the unused portion of a paid Subscription Term.
+
+## 7. Refunds
+
+Except as required by applicable law or expressly stated in an Order, fees are non-refundable and there are no credits or refunds for a partially used Subscription Term. Refund requests are administered under Lemon Squeezy's buyer terms and refund process. If Lemon Squeezy grants a full or partial refund, Licensor may suspend, terminate, or adjust the corresponding Enterprise license and Subscription Term to reflect that refund.
+
+## 8. Support and Availability
+
+Enterprise subscribers receive priority email support at `support@ctrlyoke.dev`. Unless an Order or support addendum expressly states a service level, support is provided on a commercially reasonable, best-efforts basis, with no guaranteed response or resolution time. Software support, updates, and availability otherwise remain subject to EULA Section 9.
+
+## 9. Data Protection
+
+Licensor's processing of personal data is described in the [Privacy Policy](https://ctrlyoke.dev/privacy). The DPA is incorporated into the Agreement and applies automatically to the extent Licensor processes Customer Personal Data on Customer's behalf. No separate countersignature is required, although Licensor will provide an execution copy on request.
+
+## 10. Suspension and Termination
+
+Licensor may suspend or terminate the Enterprise license as permitted by EULA Sections 6(e) and 15. Expiration or cancellation of the subscription ends Customer's right to use Pro Tier capabilities but does not, by itself, terminate any Free Tier rights for which Customer remains eligible under the EULA.
+
+Sections that by their nature should survive expiration or termination survive, including accrued payment obligations and the EULA provisions identified in EULA Section 15(c).
+
+## 11. Purchase Orders and Invoicing
+
+Customer requiring a purchase order, formal invoice with payment terms, or negotiated order form should contact `sales@ctrlyoke.dev` before purchasing. A purchase order is for Customer's administrative convenience only; preprinted or incorporated purchase-order terms do not modify the Agreement unless Licensor expressly agrees to them in a signed Order.
+
+## 12. Warranties, Liability, and Disputes
+
+The warranty disclaimers and limitations of liability in EULA Sections 12 and 13 apply to these Enterprise Terms and the subscription. For purposes of the liability cap in EULA Section 13, amounts Customer pays for the Enterprise subscription through Licensor's authorized reseller are treated as amounts paid to Licensor. EULA Sections 16(b) (Governing Law; Venue) and 16(g) (Dispute Resolution; Arbitration) are incorporated into these Enterprise Terms.
+
+## 13. General
 
 ### (a) Entire agreement
 
-These Enterprise Terms, together with the EULA and, where applicable, the DPA, constitute the entire agreement between the parties regarding the Enterprise subscription and supersede any prior discussions regarding it.
+The Agreement is the entire agreement between Customer and Licensor regarding the Enterprise subscription and supersedes prior or contemporaneous discussions and representations about it.
 
-### (b) Governing law; dispute resolution
+### (b) Changes
 
-These Enterprise Terms are governed by, and disputes under them are resolved under, EULA Sections 16(b) (Governing Law; Venue) and 16(g) (Dispute Resolution; Arbitration), incorporated here by reference.
+Licensor may update these Enterprise Terms prospectively. Material changes will not apply during a paid Subscription Term. Licensor will give the billing contact at least thirty (30) days' notice before material changes take effect for a Renewal Term. Renewal after the effective date of the notified terms constitutes acceptance, except where applicable law requires a different form of consent.
 
-### (c) Updates
+### (c) Electronic communications
 
-Licensor may update these Enterprise Terms for future renewal terms, consistent with EULA Section 16(e). Material changes will be notified at least thirty (30) days before Customer's next renewal.
+Customer consents to receive contractual, billing, renewal, and service notices electronically at the email address associated with the Order. Notices to Licensor must be sent to the applicable address below. Notices are effective when received, except that cancellation requests are subject to Section 6.
 
 ### (d) Contact
 
-Billing: `billing@ctrlyoke.dev` · Sales/PO: `sales@ctrlyoke.dev` · Support: `support@ctrlyoke.dev`
+Billing and cancellation: `billing@ctrlyoke.dev`
+
+Sales and purchase orders: `sales@ctrlyoke.dev`
+
+Support: `support@ctrlyoke.dev`
+
+Privacy: `privacy@ctrlyoke.dev`
+
+Legal notices: Nathan Hickey d/b/a Fuzzy Nova, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 ---
 
