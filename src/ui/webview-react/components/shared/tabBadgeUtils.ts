@@ -26,32 +26,64 @@ export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
   activeColor: "text-focus-highlight",
 };
 
+/** Default codicon for the Permissions tab/quick-picker (workspace-trust shield shape). */
+export const PERMISSIONS_DEFAULT_CODICON = "workspace-trusted";
+
+type PermissionModeVisual = Required<
+  Pick<TabIconOverride, "codicon" | "color" | "hoverColor" | "activeColor">
+>;
+
+/**
+ * Full icon/color visual for every permission mode, including "none" — the
+ * single source of truth for how permission state is drawn, shared by the
+ * Permissions tab (DrawerTabBar/SegmentedTabBar) and PermissionsQuickPicker.
+ */
+const PERMISSION_MODE_VISUALS: Record<string, PermissionModeVisual> = {
+  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: {
+    codicon: "workspace-untrusted",
+    color: "text-error-fg",
+    hoverColor: "hover:text-terminal-ansiBrightRed",
+    activeColor: "text-terminal-ansiBrightRed",
+  },
+  [PERMISSION_MODES.ALLOW_ALL]: {
+    codicon: PERMISSIONS_DEFAULT_CODICON,
+    color: "text-warning-fg",
+    hoverColor: "hover:text-terminal-ansiBrightYellow",
+    activeColor: "text-terminal-ansiBrightYellow",
+  },
+  [PERMISSION_MODES.CUSTOM]: {
+    codicon: PERMISSIONS_DEFAULT_CODICON,
+    color: "text-terminal-ansiGreen",
+    hoverColor: "hover:text-terminal-ansiBrightGreen",
+    activeColor: "text-terminal-ansiBrightGreen",
+  },
+  [PERMISSION_MODES.NONE]: {
+    codicon: PERMISSIONS_DEFAULT_CODICON,
+    color: "text-description-fg",
+    hoverColor: "hover:text-foreground",
+    activeColor: "text-foreground",
+  },
+};
+
+/**
+ * Resolves the icon/color visual for a permission mode, always falling back
+ * to the "none" look for an unrecognized mode. Unlike `getPermissionTabOverride`,
+ * this never returns undefined — callers that need their own dimmed/inherited
+ * treatment (e.g. PermissionsQuickPicker) can rely on getting a real color back
+ * for every mode, including "none".
+ */
+export function getPermissionModeVisual(mode: string): PermissionModeVisual {
+  return (
+    PERMISSION_MODE_VISUALS[mode] ?? PERMISSION_MODE_VISUALS[PERMISSION_MODES.NONE]
+  );
+}
+
 /** Per-mode icon shape/color for the Permissions tab. None returns undefined. */
 function permissionModeIconOverride(mode: string): TabIconOverride | undefined {
-  switch (mode) {
-    case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-      return {
-        codicon: "workspace-untrusted",
-        color: "text-error-fg",
-        hoverColor: "hover:text-terminal-ansiBrightRed",
-        activeColor: "text-terminal-ansiBrightRed",
-      };
-    case PERMISSION_MODES.ALLOW_ALL:
-      return {
-        color: "text-warning-fg",
-        hoverColor: "hover:text-terminal-ansiBrightYellow",
-        activeColor: "text-terminal-ansiBrightYellow",
-      };
-    case PERMISSION_MODES.CUSTOM:
-      return {
-        color: "text-terminal-ansiGreen",
-        hoverColor: "hover:text-terminal-ansiBrightGreen",
-        activeColor: "text-terminal-ansiBrightGreen",
-      };
-    case PERMISSION_MODES.NONE:
-    default:
-      return undefined;
+  if (mode === PERMISSION_MODES.NONE) {
+    return undefined;
   }
+  return getPermissionModeVisual(mode);
 }
 
 /**

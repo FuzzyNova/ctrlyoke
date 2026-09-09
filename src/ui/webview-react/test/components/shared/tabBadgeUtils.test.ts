@@ -4,6 +4,7 @@ import {
   getMcpTabOverride,
   getHooksTabOverride,
   getPermissionModeBadge,
+  getPermissionModeVisual,
   getPermissionTabOverride,
 } from "@components/shared/tabBadgeUtils";
 
@@ -69,6 +70,21 @@ describe("permission tab badges", () => {
       badgeCodicon: "warning",
       badgeColor: "text-warning-fg",
     });
+  });
+
+  it("resolves a real color/codicon for 'none' too, unlike getPermissionTabOverride", () => {
+    expect(getPermissionModeVisual(PERMISSION_MODES.NONE)).toEqual({
+      codicon: "workspace-trusted",
+      color: "text-description-fg",
+      hoverColor: "hover:text-foreground",
+      activeColor: "text-foreground",
+    });
+  });
+
+  it("falls back to the 'none' visual for an unrecognized mode", () => {
+    expect(getPermissionModeVisual("bogus-mode")).toEqual(
+      getPermissionModeVisual(PERMISSION_MODES.NONE)
+    );
   });
 
   it("layers a warning badge over the configured MCP icon", () => {

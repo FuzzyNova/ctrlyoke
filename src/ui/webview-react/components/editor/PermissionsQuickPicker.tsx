@@ -16,6 +16,7 @@ import {
   PERMISSION_MODE_OPTIONS,
   buildPermissionsDefaultLabel,
 } from "../shared/permissionUtils";
+import { getPermissionModeVisual } from "../shared/tabBadgeUtils";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { Icon } from "../shared/Icon";
 
@@ -27,7 +28,7 @@ interface PermissionsQuickPickerProps {
 
 export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   isNarrow,
-  showLabel,
+  showLabel: _showLabel,
   disabled = false,
 }) => {
   const properties = useEditorStore((s) => s.properties);
@@ -40,27 +41,30 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   const isOpen = footerOpenPicker === FOOTER_PICKERS.PERMISSIONS;
   const isOverride = properties.toolPermissions !== undefined;
 
-  const resolvedModeLabel = (() => {
-    const wf = workflowProperties.toolPermissions;
-    // Fall back to global settings when no workflow-level override is set
-    const effective = wf !== undefined ? wf : globalSettings.toolPermissions;
-    if (effective === undefined || effective === null) return "None";
-    return (
-      PERMISSION_MODE_OPTIONS.find((o) => o.value === effective.mode)?.label ??
-      effective.mode ??
-      "None"
-    );
-  })();
+  const wfPerms = workflowProperties.toolPermissions;
+  const inheritedMode =
+    wfPerms === null
+      ? PERMISSION_MODES.NONE
+      : (wfPerms?.mode ??
+        globalSettings.toolPermissions.mode ??
+        PERMISSION_MODES.ALLOW_ALL);
+  const overrideMode =
+    properties.toolPermissions === undefined
+      ? undefined
+      : properties.toolPermissions === null
+        ? PERMISSION_MODES.NONE
+        : ((properties.toolPermissions as ToolPermissionsOverride).mode ??
+          PERMISSION_MODES.ALLOW_ALL);
+  const visual = getPermissionModeVisual(overrideMode ?? inheritedMode);
+
+  const resolvedModeLabel =
+    PERMISSION_MODE_OPTIONS.find((o) => o.value === inheritedMode)?.label ??
+    "None";
 
   const valueLabel = !isOverride
     ? resolvedModeLabel
-    : properties.toolPermissions === null
-      ? "None"
-      : (PERMISSION_MODE_OPTIONS.find(
-          (o) =>
-            o.value ===
-            (properties.toolPermissions as ToolPermissionsOverride).mode
-        )?.label ?? "Allow All");
+    : (PERMISSION_MODE_OPTIONS.find((o) => o.value === overrideMode)?.label ??
+      "None");
 
   const defaultLabel = buildPermissionsDefaultLabel(
     workflowProperties.toolPermissions,
@@ -70,11 +74,13 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
-      showLabel={showLabel}
+      showLabel={false}
       icon={
         <Icon
-          name="shield"
-          className={`codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
+          name={visual.codicon}
+          className={`codicon-sm transition-opacity ${visual.color} ${
+            isOverride ? "" : "opacity-40"
+          }`}
         />
       }
       valueLabel={valueLabel}
@@ -82,7 +88,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       isOpen={isOpen}
       onToggle={() => setFooterOpenPicker(isOpen ? null : "permissions")}
       onClose={() => setFooterOpenPicker(null)}
-      title="Permissions override"
+      title={`Permissions: ${valueLabel}`}
       heading="Permissions"
       popupMinWidth="220px"
       disabled={disabled}
