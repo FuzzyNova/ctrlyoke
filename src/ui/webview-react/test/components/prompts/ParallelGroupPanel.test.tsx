@@ -153,7 +153,9 @@ describe("ParallelGroupPanel", () => {
     );
     expect(rails).toHaveLength(2);
     expect(rails[0]).toHaveClass("bg-indicator-error");
-    expect(rails[1]).toHaveClass("bg-indicator-success");
+    // A step that hasn't run yet must not read as completed (green).
+    expect(rails[1]).toHaveClass("bg-transparent");
+    expect(rails[1]).not.toHaveClass("bg-indicator-success");
   });
 
   it("locks terminal members of an active partially settled group only", () => {

@@ -69,15 +69,16 @@ function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
 }
 
+/**
+ * Chip-specific override of `getStepAccentClass`: RUNNING gets a pulsing
+ * accent here because the chip has no other live-execution indicator at this
+ * density. Every other status (including PENDING) defers to the shared
+ * fallback so it stays in lockstep with the full panel and group rails.
+ */
 function getChipBorderClass(status: StepStatus): string {
-  switch (status) {
-    case STEP_STATUS.RUNNING:
-      return "bg-status-idle animate-pulse-custom";
-    case STEP_STATUS.PENDING:
-      return "bg-transparent";
-    default:
-      return getStepAccentClass(status);
-  }
+  return status === STEP_STATUS.RUNNING
+    ? "bg-status-idle animate-pulse-custom"
+    : getStepAccentClass(status);
 }
 
 // ─── ChipContent ─────────────────────────────────────────────────────────────

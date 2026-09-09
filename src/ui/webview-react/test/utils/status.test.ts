@@ -109,6 +109,21 @@ describe("getStepAccentClass", () => {
   it("uses error accents for failed steps", () => {
     expect(getStepAccentClass(STEP_STATUS.FAILED)).toBe("bg-indicator-error");
   });
+
+  it("uses success accent for completed steps", () => {
+    expect(getStepAccentClass(STEP_STATUS.COMPLETED)).toBe(
+      "bg-indicator-success"
+    );
+  });
+
+  it("renders no accent for a step that has not run yet", () => {
+    expect(getStepAccentClass(STEP_STATUS.PENDING)).toBe("bg-transparent");
+  });
+
+  it("uses an in-progress accent for sent and running steps", () => {
+    expect(getStepAccentClass(STEP_STATUS.SENT)).toBe("bg-charts-blue");
+    expect(getStepAccentClass(STEP_STATUS.RUNNING)).toBe("bg-charts-blue");
+  });
 });
 
 describe("getExecutionStateIconClass", () => {
