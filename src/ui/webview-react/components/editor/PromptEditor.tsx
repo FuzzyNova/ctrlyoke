@@ -1289,19 +1289,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Get button tooltip based on workflow state
   const getRunButtonTooltip = () => {
     if (!hasActiveQueue) {
-      return "Queue to new workflow and run";
+      return "Queue step to new workflow and run";
     }
 
     switch (executionState) {
       case EXECUTION_STATES.IDLE:
-        return "Queue and run workflow";
+        return "Queue step and run workflow";
       case EXECUTION_STATES.RUNNING:
       case EXECUTION_STATES.PAUSING:
-        return "Queue to current workflow";
+        return "Queue step to current workflow";
       case EXECUTION_STATES.COMPLETED:
-        return "Queue and resume workflow";
+        return "Queue step and resume workflow";
       default:
-        return "Run prompt";
+        return "Run step";
     }
   };
 
@@ -1309,7 +1309,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (!hasActiveQueue) {
       return "Queue to new workflow";
     }
-    return "Add prompt to execution queue";
+    return "Add step to workflow queue (won't auto-start the workflow)";
   };
 
   return (
