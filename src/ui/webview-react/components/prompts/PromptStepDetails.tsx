@@ -95,14 +95,15 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
 
   return (
     <>
-      {/* Harness / model metadata */}
+      {/* Harness / model metadata — model wraps to its own line under the
+          harness so neither is squeezed into a shared row and truncated. */}
       {(harnessLabel || modelLabel) && (
         <div
-          className={`mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {harnessLabel && (
-            <span
-              className="min-w-0 inline-flex items-center gap-1 truncate"
+            <div
+              className="flex min-w-0 items-center gap-1 overflow-hidden truncate"
               title={
                 harnessIsDefault ? `${harnessLabel} (default)` : harnessLabel
               }
@@ -111,7 +112,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                 <HarnessIcon
                   harnessId={harnessId}
                   size={12}
-                  className="opacity-90"
+                  className="opacity-90 flex-shrink-0"
                 />
               )}
               <span className="truncate">
@@ -120,19 +121,16 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                   <span className="opacity-60"> (default)</span>
                 )}
               </span>
-            </span>
-          )}
-          {harnessLabel && modelLabel && (
-            <span className="mx-0.5 flex-shrink-0 opacity-40">·</span>
+            </div>
           )}
           {modelLabel && (
-            <span
+            <div
               className="min-w-0 truncate"
               title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
             >
               {modelLabel}
               {modelIsDefault && <span className="opacity-60"> (default)</span>}
-            </span>
+            </div>
           )}
         </div>
       )}

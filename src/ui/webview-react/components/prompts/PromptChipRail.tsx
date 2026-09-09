@@ -139,24 +139,29 @@ function ChipContent({
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
-      {/* Slot number spans both rows (enlarged); status icon (enlarged) sits
-          beside it on row 1, type icon (unchanged size) sits beside it on
-          row 2 — swapped from the prior status-icon-on-its-own-row layout. */}
-      <div className="grid grid-cols-[auto_1fr] grid-rows-2 items-center w-full gap-x-0.5">
-        <span className="row-span-2 text-sm font-semibold text-description-fg leading-none select-none justify-self-start">
+      {/* Row 1: slot number alone, so a wide number never pushes the icons
+          below off screen. Numbers >= 1000 shrink to fit and get a tooltip
+          with the full value instead of continuing to grow. */}
+      <div className="flex w-full items-center overflow-hidden">
+        <span
+          className={`truncate font-semibold text-description-fg leading-none select-none ${
+            slotNumber >= 1000 ? "text-xxs" : "text-sm"
+          }`}
+          title={slotNumber >= 1000 ? String(slotNumber) : undefined}
+        >
           {slotNumber}
         </span>
-        <div className="flex h-4 items-center justify-start">
-          <StatusIcon status={status} className="!text-base" />
-        </div>
-        <div className="flex h-3 items-center justify-start">
-          <Icon
-            name={getStepKindIconClass(
-              isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
-            )}
-            className="text-xs text-description-fg"
-          />
-        </div>
+      </div>
+      {/* Row 2: status icon + step type icon side by side, both fixed size
+          so they never grow and crowd each other out. */}
+      <div className="mt-0.5 flex h-4 items-center justify-start gap-x-1">
+        <StatusIcon status={status} className="!text-base flex-shrink-0" />
+        <Icon
+          name={getStepKindIconClass(
+            isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
+          )}
+          className="flex-shrink-0 text-xs text-description-fg"
+        />
       </div>
 
       {/* Row 3: context % on its own row */}

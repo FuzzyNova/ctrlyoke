@@ -3,7 +3,7 @@ import {
   WORKTREE_POSITION_DIRECTIONS,
   type WorktreePositionDirection,
 } from "@root/types/DashboardConstants";
-import React, { useState } from "react";
+import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import type { DraggableAttributes } from "@dnd-kit/core";
 type SyntheticListenerMap = Record<string, Function>;
@@ -158,7 +158,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   isScript = false,
   onContextMenu,
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const hideCost = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
   );
@@ -236,8 +235,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       className={containerClasses.join(" ")}
       data-prompt-index={index}
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onContextMenu={
         onContextMenu
           ? (e) => {
@@ -271,9 +268,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
           <span className="mt-0.5">
             <StatusIcon status={status} disabled={isDisabled} />
           </span>
-          {canSetStartPosition && isHovered && (
+          {canSetStartPosition && (
             <button
-              className="mt-auto w-4 flex items-center justify-center text-description-fg hover:text-foreground mb-0.5"
+              className="mt-auto w-4 flex items-center justify-center text-description-fg hover:text-foreground mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation();
                 onSetStartPosition?.();
