@@ -34,22 +34,21 @@ describe("quantizeOutputMinimapBars", () => {
     expect(bars.length).toBeLessThanOrEqual(20);
   });
 
-  it("conserves added and removed totals across quantization", () => {
+  it("paints every pixel a merged run spans", () => {
+    // `appendRenderedDiffRun` merges consecutive identically-painted rows and
+    // only grows `count`, so a 40-row insertion block arrives with
+    // addedLines: 1. Treating that 1 as the run's total once collapsed the
+    // whole band to a single lit pixel, leaving the rail blank under a
+    // viewport that was solid green.
     const bars = quantizeOutputMinimapBars(
       [
         {
           diffBlocks: [
             makeBlock({
-              scrollFraction: 0.1,
-              heightFraction: 0.4,
-              addedLines: 7,
-              removedLines: 3,
-            }),
-            makeBlock({
-              scrollFraction: 0.35,
-              heightFraction: 0.2,
-              addedLines: 2,
-              removedLines: 5,
+              scrollFraction: 0,
+              heightFraction: 1,
+              addedLines: 40,
+              runs: [{ count: 40, addedLines: 1, removedLines: 0 }],
             }),
           ],
         },
@@ -57,8 +56,31 @@ describe("quantizeOutputMinimapBars", () => {
       10
     );
 
-    expect(bars.reduce((sum, bar) => sum + bar.addedLines, 0)).toBe(9);
-    expect(bars.reduce((sum, bar) => sum + bar.removedLines, 0)).toBe(8);
+    expect(bars.map((bar) => bar.row)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(bars.every((bar) => bar.addedCoverage === 1)).toBe(true);
+    expect(bars.every((bar) => bar.removedCoverage === 0)).toBe(true);
+  });
+
+  it("leaves context-only runs unpainted", () => {
+    const bars = quantizeOutputMinimapBars(
+      [
+        {
+          diffBlocks: [
+            makeBlock({
+              heightFraction: 1,
+              addedLines: 1,
+              runs: [
+                { count: 1, addedLines: 1, removedLines: 0 },
+                { count: 3, addedLines: 0, removedLines: 0 },
+              ],
+            }),
+          ],
+        },
+      ],
+      4
+    );
+
+    expect(bars.map((bar) => bar.row)).toEqual([0]);
   });
 
   it("returns no bars before the rail has a measurable height", () => {
@@ -89,6 +111,36 @@ describe("quantizeOutputMinimapBars", () => {
     expect(bars.map((bar) => bar.row)).toEqual([2, 3, 4, 5, 6]);
   });
 
+  it("splits a run-less block vertically by its totals", () => {
+    // Without run detail the block keeps the unquantized minimap's
+    // top-to-bottom gradient: the removed share on top, added below.
+    const bars = quantizeOutputMinimapBars(
+      [
+        {
+          diffBlocks: [
+            makeBlock({
+              heightFraction: 1,
+              addedLines: 6,
+              removedLines: 2,
+            }),
+          ],
+        },
+      ],
+      8
+    );
+
+    expect(bars.map((bar) => bar.removedCoverage > bar.addedCoverage)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   it("quantizes run contributions within a block", () => {
     const bars = quantizeOutputMinimapBars(
       [
@@ -97,8 +149,8 @@ describe("quantizeOutputMinimapBars", () => {
             makeBlock({
               heightFraction: 1,
               runs: [
-                { count: 2, addedLines: 2, removedLines: 0 },
-                { count: 2, addedLines: 0, removedLines: 2 },
+                { count: 2, addedLines: 1, removedLines: 0 },
+                { count: 2, addedLines: 0, removedLines: 1 },
               ],
             }),
           ],
@@ -107,14 +159,12 @@ describe("quantizeOutputMinimapBars", () => {
       4
     );
 
-    expect(bars).toEqual(
-      [
-        { row: 0, addedLines: 1, removedLines: 0, mixed: false },
-        { row: 1, addedLines: 1, removedLines: 0, mixed: false },
-        { row: 2, addedLines: 0, removedLines: 1, mixed: false },
-        { row: 3, addedLines: 0, removedLines: 1, mixed: false },
-      ].filter((bar) => bar.addedLines > 0 || bar.removedLines > 0)
-    );
+    expect(bars).toEqual([
+      { row: 0, addedCoverage: 1, removedCoverage: 0, mixed: false },
+      { row: 1, addedCoverage: 1, removedCoverage: 0, mixed: false },
+      { row: 2, addedCoverage: 0, removedCoverage: 1, mixed: false },
+      { row: 3, addedCoverage: 0, removedCoverage: 1, mixed: false },
+    ]);
   });
 
   it("marks a bar mixed only when a genuinely paired split-view run touches it", () => {
@@ -138,7 +188,7 @@ describe("quantizeOutputMinimapBars", () => {
       1
     );
     expect(solo).toEqual([
-      { row: 0, addedLines: 1, removedLines: 1, mixed: false },
+      { row: 0, addedCoverage: 0.5, removedCoverage: 0.5, mixed: false },
     ]);
 
     // A single split-view paired delete+insert run is genuinely mixed.
@@ -156,7 +206,7 @@ describe("quantizeOutputMinimapBars", () => {
       1
     );
     expect(paired).toEqual([
-      { row: 0, addedLines: 1, removedLines: 1, mixed: true },
+      { row: 0, addedCoverage: 0.5, removedCoverage: 0.5, mixed: true },
     ]);
   });
 
@@ -201,6 +251,6 @@ describe("quantizeOutputMinimapBars", () => {
     );
 
     expect(bars.length).toBeGreaterThan(0);
-    expect(bars.reduce((sum, bar) => sum + bar.addedLines, 0)).toBe(4);
+    expect(bars.every((bar) => bar.addedCoverage > 0)).toBe(true);
   });
 });

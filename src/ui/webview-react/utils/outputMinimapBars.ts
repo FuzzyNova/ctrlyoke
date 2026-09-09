@@ -5,7 +5,15 @@
  * objects.
  */
 export interface MinimapBarRun {
+  /** Rendered diff rows this run spans. */
   count: number;
+  /**
+   * Lines added/removed by *each row* of the run — not the run's total.
+   * `appendRenderedDiffRun` merges consecutive rows that paint identically
+   * and only grows `count`, so a 40-row block of insertions arrives as one
+   * `{ count: 40, addedLines: 1, removedLines: 0 }` run. These two numbers
+   * therefore only choose the run's color; its extent comes from `count`.
+   */
   addedLines: number;
   removedLines: number;
 }
@@ -26,14 +34,20 @@ export interface MinimapBarStep {
 export interface OutputMinimapBar {
   /** Zero-based pixel row in the minimap rail. */
   row: number;
-  addedLines: number;
-  removedLines: number;
+  /**
+   * How much of this pixel row is painted in each color. A source region
+   * spanning the row fully contributes 1, and overlapping regions accumulate
+   * — these are coverage weights, not line counts. The diff track shows
+   * *where* changes sit, so every pixel a change touches gets a bar.
+   */
+  addedCoverage: number;
+  removedCoverage: number;
   /**
    * True only when a genuinely paired (split-view delete+insert) row
-   * contributed to this bar. A bar can end up with both `addedLines` and
-   * `removedLines` simply because two unrelated solo (unified-view) lines
-   * were quantized onto the same rail pixel — that case renders solid, not
-   * split, matching how a unified diff never mixes colors on one row.
+   * contributed to this bar. A bar can end up with both coverages simply
+   * because two unrelated solo (unified-view) runs were quantized onto the
+   * same rail pixel — that case renders solid, not split, matching how a
+   * unified diff never mixes colors on one row.
    */
   mixed: boolean;
 }
@@ -44,8 +58,8 @@ interface WeightedRow {
 }
 
 interface BarAccumulator {
-  addedLines: number;
-  removedLines: number;
+  addedCoverage: number;
+  removedCoverage: number;
   mixed: boolean;
 }
 
@@ -70,30 +84,13 @@ function rowsForInterval(
   return rows;
 }
 
-function allocateLines(lines: number, rows: readonly WeightedRow[]): number[] {
-  if (lines <= 0 || rows.length === 0) return rows.map(() => 0);
-
-  const totalWeight = rows.reduce((sum, entry) => sum + entry.weight, 0);
-  if (totalWeight <= 0) return rows.map(() => 0);
-
-  const exact = rows.map((entry) => (lines * entry.weight) / totalWeight);
-  if (!Number.isInteger(lines)) return exact;
-
-  const allocated = exact.map(Math.floor);
-  let remainder = lines - allocated.reduce((sum, value) => sum + value, 0);
-  const byFraction = exact
-    .map((value, index) => ({ index, fraction: value - allocated[index] }))
-    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-
-  for (const { index } of byFraction) {
-    if (remainder === 0) break;
-    allocated[index]++;
-    remainder--;
-  }
-  return allocated;
-}
-
-function addContribution(
+/**
+ * Paints `[start, end)` of the rail in the color implied by `addedLines` /
+ * `removedLines`, which are read only for their ratio. Every pixel the
+ * interval touches receives coverage, so a tall region reads as a solid band
+ * instead of collapsing to however many lines it happens to carry.
+ */
+function addCoverage(
   bars: BarAccumulator[],
   start: number,
   end: number,
@@ -102,15 +99,20 @@ function addContribution(
   railRows: number,
   isMixedSource: boolean
 ): void {
+  const added = finiteNonNegative(addedLines);
+  const removed = finiteNonNegative(removedLines);
+  const changed = added + removed;
+  // A context-only run paints nothing, exactly like the transparent run band
+  // the unquantized minimap rendered for it.
+  if (changed === 0) return;
+
   const rows = rowsForInterval(start, end, railRows);
   if (rows.length === 0) return;
 
-  const added = allocateLines(finiteNonNegative(addedLines), rows);
-  const removed = allocateLines(finiteNonNegative(removedLines), rows);
-  for (let index = 0; index < rows.length; index++) {
-    const bar = bars[rows[index].row];
-    bar.addedLines += added[index];
-    bar.removedLines += removed[index];
+  for (const { row, weight } of rows) {
+    const bar = bars[row];
+    bar.addedCoverage += (weight * added) / changed;
+    bar.removedCoverage += (weight * removed) / changed;
     if (isMixedSource) bar.mixed = true;
   }
 }
@@ -118,16 +120,17 @@ function addContribution(
 /**
  * Projects all diff overlays onto the minimap's pixel rows.
  *
- * Each source region's line counts are distributed across the pixels it
- * occupies, preserving added/removed totals while allowing overlapping
- * blocks from different steps to accumulate in the same bar. A block's run
- * data is used when present because it is the more detailed representation
- * painted by the unquantized minimap.
+ * Each source region covers the pixels it occupies in its own color, so the
+ * rail reproduces the bands the unquantized minimap drew per run — the diff
+ * track is a map of *where* changes are, and its bars have to line up with
+ * whatever the viewport thumb is sitting over. Line counts never decide a
+ * bar's extent (that comes from run row counts and block heights), only which
+ * color it takes and, where colors meet inside one pixel, in what proportion.
  *
  * A bar's `mixed` flag is set only when a genuinely paired split-view row (a
- * single run carrying both `addedLines` and `removedLines`) touches it, or
- * for a collapsed block's summary line — never merely because two unrelated
- * solo (unified-view) lines were quantized onto the same pixel. That keeps a
+ * single run carrying both added and removed lines) touches it, or for a
+ * collapsed block's summary line — never merely because two unrelated solo
+ * (unified-view) runs were quantized onto the same pixel. That keeps a
  * unified diff rendering solid full-width bars even when zoomed out, matching
  * the live diff view's own per-row coloring.
  */
@@ -139,8 +142,8 @@ export function quantizeOutputMinimapBars(
   if (railRows === 0) return [];
 
   const bars: BarAccumulator[] = Array.from({ length: railRows }, () => ({
-    addedLines: 0,
-    removedLines: 0,
+    addedCoverage: 0,
+    removedCoverage: 0,
     mixed: false,
   }));
 
@@ -159,7 +162,7 @@ export function quantizeOutputMinimapBars(
 
       if (block.isCollapsed) {
         const collapsedStart = Math.min(blockStart, Math.max(0, railRows - 2));
-        addContribution(
+        addCoverage(
           bars,
           collapsedStart,
           collapsedStart + 2,
@@ -190,7 +193,7 @@ export function quantizeOutputMinimapBars(
             const runEnd =
               blockStart +
               ((offsetRows + runRows) / totalRunRows) * blockHeight;
-            addContribution(
+            addCoverage(
               bars,
               runStart,
               runEnd,
@@ -202,21 +205,33 @@ export function quantizeOutputMinimapBars(
           }
           offsetRows += runRows;
         }
-      } else {
-        addContribution(
-          bars,
-          blockStart,
-          blockStart + blockHeight,
-          block.addedLines,
-          block.removedLines,
-          railRows,
-          block.addedLines > 0 && block.removedLines > 0
-        );
+        continue;
       }
+
+      // No run detail: split the block vertically by its totals — the same
+      // top-to-bottom red-then-green gradient the unquantized minimap drew.
+      const blockLines =
+        finiteNonNegative(block.addedLines) +
+        finiteNonNegative(block.removedLines);
+      if (blockLines === 0) continue;
+
+      const removedEnd =
+        blockStart +
+        (blockHeight * finiteNonNegative(block.removedLines)) / blockLines;
+      addCoverage(bars, blockStart, removedEnd, 0, 1, railRows, false);
+      addCoverage(
+        bars,
+        removedEnd,
+        blockStart + blockHeight,
+        1,
+        0,
+        railRows,
+        false
+      );
     }
   }
 
   return bars.flatMap((bar, row) =>
-    bar.addedLines > 0 || bar.removedLines > 0 ? [{ row, ...bar }] : []
+    bar.addedCoverage > 0 || bar.removedCoverage > 0 ? [{ row, ...bar }] : []
   );
 }

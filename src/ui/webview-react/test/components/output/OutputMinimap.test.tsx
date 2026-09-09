@@ -211,6 +211,47 @@ describe("OutputMinimap diff bars", () => {
     }
   });
 
+  it("fills the whole band a merged run spans", () => {
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockReturnValue(10);
+
+    try {
+      renderMinimap([
+        makeStep({
+          diffBlocks: [
+            {
+              key: "diff-run",
+              rowKey: "row-run",
+              scrollFraction: 0.2,
+              heightFraction: 0.5,
+              addedLines: 20,
+              removedLines: 0,
+              // One merged run of 20 identical insertion rows — `addedLines`
+              // is per row, so this must paint all five rail pixels the block
+              // covers, not the single pixel one "added line" would buy.
+              runs: [{ count: 20, addedLines: 1, removedLines: 0 }],
+              isCollapsed: false,
+            },
+          ],
+        }),
+      ]);
+
+      const bars = document.querySelectorAll("[data-minimap-diff-bar]");
+      expect(bars).toHaveLength(5);
+      expect(bars[0]).toHaveStyle({
+        top: "2px",
+        background: "var(--fp-minimap-diff-added)",
+      });
+      expect(bars[4]).toHaveStyle({
+        top: "6px",
+        background: "var(--fp-minimap-diff-added)",
+      });
+    } finally {
+      clientHeight.mockRestore();
+    }
+  });
+
   it("renders a solid color when two solo runs share a bar, and a split only for a genuinely paired run", () => {
     const clientHeight = vi
       .spyOn(HTMLElement.prototype, "clientHeight", "get")

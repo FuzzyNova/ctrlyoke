@@ -583,10 +583,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             onto the same pixel renders solid, matching the live unified diff
             view where a row is never part red and part green. */}
         {diffBars.map((bar) => {
-          const significantLines = bar.addedLines + bar.removedLines;
+          const coverage = bar.addedCoverage + bar.removedCoverage;
           const background = bar.mixed
             ? (() => {
-                const removedFraction = bar.removedLines / significantLines;
+                const removedFraction = bar.removedCoverage / coverage;
                 return `linear-gradient(to right,
                   var(--fp-minimap-diff-removed) 0%,
                   var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
@@ -594,7 +594,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                   var(--fp-minimap-diff-added) 100%
                 )`;
               })()
-            : bar.removedLines >= bar.addedLines
+            : bar.removedCoverage >= bar.addedCoverage
               ? "var(--fp-minimap-diff-removed)"
               : "var(--fp-minimap-diff-added)";
           return (
