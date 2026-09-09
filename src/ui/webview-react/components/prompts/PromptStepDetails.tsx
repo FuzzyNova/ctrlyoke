@@ -95,15 +95,16 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
 
   return (
     <>
-      {/* Harness / model metadata — model wraps to its own line under the
-          harness so neither is squeezed into a shared row and truncated. */}
+      {/* Harness / model metadata — shares a line when there's room; the
+          model (with its separator) wraps to its own line instead of
+          truncating when the row is too narrow to fit both. */}
       {(harnessLabel || modelLabel) && (
         <div
-          className={`mt-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {harnessLabel && (
-            <div
-              className="flex min-w-0 items-center gap-1 overflow-hidden truncate"
+            <span
+              className="inline-flex min-w-0 max-w-full items-center gap-1"
               title={
                 harnessIsDefault ? `${harnessLabel} (default)` : harnessLabel
               }
@@ -121,16 +122,25 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                   <span className="opacity-60"> (default)</span>
                 )}
               </span>
-            </div>
+            </span>
           )}
           {modelLabel && (
-            <div
-              className="min-w-0 truncate"
-              title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
-            >
-              {modelLabel}
-              {modelIsDefault && <span className="opacity-60"> (default)</span>}
-            </div>
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+              {harnessLabel && (
+                <span className="flex-shrink-0 opacity-40">·</span>
+              )}
+              <span
+                className="truncate"
+                title={
+                  modelIsDefault ? `${modelLabel} (default)` : modelLabel
+                }
+              >
+                {modelLabel}
+                {modelIsDefault && (
+                  <span className="opacity-60"> (default)</span>
+                )}
+              </span>
+            </span>
           )}
         </div>
       )}
