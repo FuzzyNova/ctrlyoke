@@ -145,6 +145,9 @@ function xtermModNum(e: KeyboardEvent): number {
   return (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0) + 1;
 }
 
+// Human labels here ("Ctrl+C" etc.) describe literal PTY control-key byte
+// sequences, not app-level shortcuts — terminals never remap these to Cmd on
+// macOS, so do not run them through @utils/platform's formatShortcut.
 function keyEventToCapture(
   e: KeyboardEvent
 ): { sequence: string; humanLabel: string } | null {

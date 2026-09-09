@@ -17,6 +17,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
+import { formatShortcut } from "@utils/platform";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -732,7 +733,7 @@ export const Header: React.FC<{
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               }`}
               onClick={toggleHistorySearch}
-              title="Search History (Ctrl+Shift+F)"
+              title={`Search History (${formatShortcut("Ctrl", "Shift", "F")})`}
               aria-label="Search history"
               aria-pressed={isHistorySearchOpen}
             >
@@ -888,7 +889,7 @@ export const Header: React.FC<{
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               }`}
               onClick={toggleHistorySearch}
-              title="Search History (Ctrl+Shift+F)"
+              title={`Search History (${formatShortcut("Ctrl", "Shift", "F")})`}
               aria-label="Search history"
               aria-pressed={isHistorySearchOpen}
             >

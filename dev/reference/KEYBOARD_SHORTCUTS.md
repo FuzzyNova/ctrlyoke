@@ -191,18 +191,19 @@ When a webview shortcut needs to trigger extension host logic, use `postMessage`
 
 ### Global (window/document-level, work anywhere in the webview)
 
-| Key                                      | Location                                     | Effect                                                                                                                                                                        |
-| ---------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Ctrl+Z` / `Cmd+Z`                       | `useUndoRedoKeyHandler` (window)             | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running. |
-| `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)             | Redo — same focus/active-workflow guards as undo.                                                                                                                             |
-| `Ctrl+F` / `Cmd+F`                       | `OutputSection` (window, capture)            | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first).                                                 |
-| `Ctrl+N` / `Cmd+N`                       | `useNewWorkflowKeyHandler` (window, capture) | New blank workflow — same action as the "New" split button's main click (posts `CLEAR_WORKFLOW`). Ignored when a text input, textarea, or CodeMirror editor has focus.        |
-| `Ctrl+Shift+N` / `Cmd+Shift+N`           | `useNewWorkflowKeyHandler` (window, capture) | New workflow from template — same action as "New From Template..." in the split button dropdown (posts `NEW_WORKFLOW`, which opens the template modal). Same focus guard.     |
-| `Escape`                                 | `Modal`                                      | Close the open modal                                                                                                                                                          |
-| `Escape`                                 | `GlobalSettingsDrawer`                       | Close the global settings drawer                                                                                                                                              |
-| `Escape`                                 | `PromptEditor`                               | Close the properties drawer                                                                                                                                                   |
-| `Escape`                                 | `HistorySearchDrawer`                        | Close the history search drawer                                                                                                                                               |
-| `Escape`                                 | `StepContextMenu`                            | Close the open context menu                                                                                                                                                   |
+| Key                                      | Location                                       | Effect                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ctrl+Z` / `Cmd+Z`                       | `useUndoRedoKeyHandler` (window)               | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running.                                                                                                                                                                                                                           |
+| `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)               | Redo — same focus/active-workflow guards as undo.                                                                                                                                                                                                                                                                                                                                                       |
+| `Ctrl+F` / `Cmd+F`                       | `OutputSection` (window, capture)              | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first).                                                                                                                                                                                                                                                                           |
+| `Ctrl+N` / `Cmd+N`                       | `useNewWorkflowKeyHandler` (window, capture)   | New blank workflow — same action as the "New" split button's main click (posts `CLEAR_WORKFLOW`). Ignored when a text input, textarea, or CodeMirror editor has focus.                                                                                                                                                                                                                                  |
+| `Ctrl+Shift+N` / `Cmd+Shift+N`           | `useNewWorkflowKeyHandler` (window, capture)   | New workflow from template — same action as "New From Template..." in the split button dropdown (posts `NEW_WORKFLOW`, which opens the template modal). Same focus guard.                                                                                                                                                                                                                               |
+| `Ctrl+Shift+F` / `Cmd+Shift+F`           | `useHistorySearchKeyHandler` (window, capture) | Toggle the history search drawer (`HistorySearchDrawer`) — same action as the search button in `Header.tsx`. Fires even while a CodeMirror editor is focused: `createFindKeyHandlerExtension`'s own Ctrl/Cmd+F check ignores `shiftKey`, so this handler must win the capture phase before the event ever reaches the editor's DOM node, rather than deferring to it the way plain `Ctrl+F` below does. |
+| `Escape`                                 | `Modal`                                        | Close the open modal                                                                                                                                                                                                                                                                                                                                                                                    |
+| `Escape`                                 | `GlobalSettingsDrawer`                         | Close the global settings drawer                                                                                                                                                                                                                                                                                                                                                                        |
+| `Escape`                                 | `PromptEditor`                                 | Close the properties drawer                                                                                                                                                                                                                                                                                                                                                                             |
+| `Escape`                                 | `HistorySearchDrawer`                          | Close the history search drawer                                                                                                                                                                                                                                                                                                                                                                         |
+| `Escape`                                 | `StepContextMenu`                              | Close the open context menu                                                                                                                                                                                                                                                                                                                                                                             |
 
 ### Output find bar (`useOutputFind` / `OutputFindBar`)
 
@@ -241,6 +242,29 @@ When making a non-button element keyboard-interactive:
 Always handle both `Enter` and `Space` for `role="button"` elements per ARIA spec.
 
 ---
+
+## Platform-aware tooltips
+
+Most global webview shortcuts already accept `e.ctrlKey || e.metaKey`, so Cmd
+genuinely triggers them on macOS — but several tooltips used to hardcode
+`"Ctrl+..."` regardless of platform. `@utils/platform`'s `formatShortcut(...)`
+is the single source for swapping `"Ctrl"` → `"Cmd"` in a displayed label
+(`detectPlatform()` is the same file's platform sniff, reused from the
+terminal shell picker).
+
+**Do not apply it everywhere `"Ctrl+"` appears in a tooltip** — two categories
+are deliberately exempt:
+
+- `Ctrl+Enter` / `Ctrl+Shift+Enter` (Run/Queue, `PromptEditor.tsx`) stay
+  literal `Ctrl` on every OS, including macOS — a deliberate branding choice
+  (see the CodeMirror keymap section above), not an oversight.
+- Terminal control-bar labels (`TerminalControlBarEditor.tsx`) describe
+  literal PTY control-key byte sequences (e.g. `Ctrl+C` = the SIGINT byte);
+  terminals never remap these to Cmd on macOS.
+
+`formatShortcut` only belongs on tooltips for shortcuts whose handler truly
+treats Ctrl and Cmd as interchangeable — currently the history search
+tooltip (`Header.tsx`) and the undo/redo `<kbd>` labels (`UndoRedoControl.tsx`).
 
 ## Key Formatting Cheat Sheet
 

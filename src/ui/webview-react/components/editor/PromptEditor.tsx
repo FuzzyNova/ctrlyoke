@@ -1286,7 +1286,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return hasPendingPrompts() ? "Run Next" : "Run";
   };
 
-  // Get button tooltip based on workflow state
+  // Get button tooltip based on workflow state.
+  // "Ctrl+Enter"/"Ctrl+Shift+Enter" stay literal on every OS, including macOS
+  // — a deliberate branding choice (see dev/reference/KEYBOARD_SHORTCUTS.md).
+  // Do not run these through @utils/platform's formatShortcut.
   const getRunButtonTooltip = () => {
     if (!hasActiveQueue) {
       return "Queue step to new workflow and run (Ctrl+Enter)";

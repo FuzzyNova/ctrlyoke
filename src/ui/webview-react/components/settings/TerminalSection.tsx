@@ -6,8 +6,8 @@ import {
   UI_PLATFORMS,
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
-  type UiPlatform,
 } from "@root/types/DashboardConstants";
+import { detectPlatform } from "@utils/platform";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -49,18 +49,6 @@ const WINDOWS_SHELL_OPTIONS = [
   { value: "C:\\Windows\\System32\\wsl.exe", label: "WSL" },
   { value: "__custom__", label: "Custom path..." },
 ];
-
-function detectPlatform(): UiPlatform {
-  const platform = navigator.platform.toLowerCase();
-  const userAgent = navigator.userAgent.toLowerCase();
-  if (platform.includes("win") || userAgent.includes("windows")) {
-    return UI_PLATFORMS.WINDOWS;
-  }
-  if (platform.includes("mac")) {
-    return UI_PLATFORMS.MAC;
-  }
-  return UI_PLATFORMS.LINUX;
-}
 
 function FontStepper({
   value,

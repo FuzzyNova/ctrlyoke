@@ -10,6 +10,7 @@ import {
 } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
+import { useHistorySearchKeyHandler } from "@hooks/useHistorySearchKeyHandler";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
 import {
@@ -327,6 +328,7 @@ function App() {
   useMessageHandler();
   useUndoRedoKeyHandler();
   useNewWorkflowKeyHandler();
+  useHistorySearchKeyHandler();
   // Bounds how long a run-view request may stay outstanding — a lost one
   // suppresses every server-initiated view update until it is retired.
   useRunViewLoadWatchdog();

@@ -13,6 +13,7 @@ import {
   rememberUndoRedoRuntime,
 } from "@hooks/useUndoRedoKeyHandler";
 import { MESSAGE_TYPES } from "../../types/messages";
+import { formatShortcut } from "@utils/platform";
 import { STEP_STATUS } from "../../types/messages";
 import {
   DEFAULT_WORKFLOW_NAME,
@@ -690,8 +691,8 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                 {stepCount === 1 && (
                   <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono flex-shrink-0">
                     {direction === UNDO_REDO_DIRECTIONS.REDO
-                      ? "Ctrl+Y"
-                      : "Ctrl+Z"}
+                      ? formatShortcut("Ctrl", "Y")
+                      : formatShortcut("Ctrl", "Z")}
                   </kbd>
                 )}
               </button>
