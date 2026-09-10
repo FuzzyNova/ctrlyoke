@@ -97,11 +97,11 @@ export class QwenToolPermissionMapper
       // is permitted, including ignored deny lists. If Qwen enforces deny rules
       // in YOLO mode that is a Qwen bug, not something ctrlyoke works around.
       args.push("-y");
-      Log.debug("🔓 Qwen YOLO mode enabled (dangerouslyAllowAll)");
+      Log.debug("[QwenToolPermissionMapper] Qwen YOLO mode enabled (dangerouslyAllowAll)");
     } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       // Auto-approve most operations but still respect deny lists.
       args.push("--approval-mode", "auto-edit");
-      Log.debug("✅ Qwen auto-edit mode enabled (allowAll)");
+      Log.debug("[QwenToolPermissionMapper] Qwen auto-edit mode enabled (allowAll)");
 
       // Denied tools apply in allowAll mode (e.g. MCP tool filtering during
       // commit message generation: mcp__ctrlyoke-commit__*).
@@ -112,13 +112,13 @@ export class QwenToolPermissionMapper
         );
         if (deniedArgs.length > 0) {
           args.push("--exclude-tools", deniedArgs.join(","));
-          Log.debug(`🚫 Qwen excluded tools: ${deniedArgs.join(", ")}`);
+          Log.debug(`[QwenToolPermissionMapper] Qwen excluded tools: ${deniedArgs.join(", ")}`);
         }
       }
     } else {
       // Custom mode - use default approval with allow/deny lists
       args.push("--approval-mode", "default");
-      Log.debug("🔧 Qwen default approval mode (custom)");
+      Log.debug("[QwenToolPermissionMapper] Qwen default approval mode (custom)");
 
       // Add allowed tools if specified
       if (config.allowedTools.length > 0) {
@@ -128,7 +128,7 @@ export class QwenToolPermissionMapper
         );
         if (allowedArgs.length > 0) {
           args.push("--allowed-tools", allowedArgs.join(","));
-          Log.debug(`📋 Qwen allowed tools: ${allowedArgs.join(", ")}`);
+          Log.debug(`[QwenToolPermissionMapper] Qwen allowed tools: ${allowedArgs.join(", ")}`);
         }
       }
 
@@ -140,7 +140,7 @@ export class QwenToolPermissionMapper
         );
         if (deniedArgs.length > 0) {
           args.push("--exclude-tools", deniedArgs.join(","));
-          Log.debug(`🚫 Qwen excluded tools: ${deniedArgs.join(", ")}`);
+          Log.debug(`[QwenToolPermissionMapper] Qwen excluded tools: ${deniedArgs.join(", ")}`);
         }
       }
     }

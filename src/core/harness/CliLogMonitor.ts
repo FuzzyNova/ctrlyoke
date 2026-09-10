@@ -423,7 +423,7 @@ export class CliLogMonitor {
       const runBackgroundWorkHold = async (): Promise<void> => {
         holdingForBackgroundWork = true;
         Log.info(
-          "⏸️ Background task still pending — holding completion until the harness auto-resumes and truly finishes"
+          "[CliLogMonitor] Background task still pending — holding completion until the harness auto-resumes and truly finishes"
         );
 
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -441,7 +441,7 @@ export class CliLogMonitor {
           const remaining = backstopMs - (Date.now() - holdStarted);
           if (remaining <= 0) {
             Log.warn(
-              `⏱️ Background-work hold backstop (${backstopMs}ms) elapsed with no confirmed idle — committing anyway`
+              `[CliLogMonitor] Background-work hold backstop (${backstopMs}ms) elapsed with no confirmed idle — committing anyway`
             );
             break;
           }
@@ -521,7 +521,7 @@ export class CliLogMonitor {
             }
           } catch (error) {
             Log.trace(
-              `⚠️ Catch-up read during background-work hold failed: ${error}`
+              `[CliLogMonitor] Catch-up read during background-work hold failed: ${error}`
             );
           }
           // Loop again — the while condition re-checks hasPendingBackgroundWork().
@@ -543,7 +543,7 @@ export class CliLogMonitor {
           return;
         }
 
-        Log.info(`✅ Completion detected via ${source}`);
+        Log.info(`[CliLogMonitor] Completion detected via ${source}`);
 
         // Catch up on any log content written just before this signal arrived,
         // so hasPendingBackgroundWork() below reflects the latest launch/notify
@@ -559,7 +559,7 @@ export class CliLogMonitor {
           }
         } catch (error) {
           Log.trace(
-            `⚠️ Catch-up read before completion check failed: ${error}`
+            `[CliLogMonitor] Catch-up read before completion check failed: ${error}`
           );
         }
 
@@ -641,7 +641,7 @@ export class CliLogMonitor {
           processEvent(entry, "log file (initial)");
         }
       } catch (error) {
-        Log.warn(`⚠️ Failed initial log read: ${error}`);
+        Log.warn(`[CliLogMonitor] Failed initial log read: ${error}`);
       }
 
       if (this.deps.notificationMonitor) {
@@ -653,7 +653,7 @@ export class CliLogMonitor {
             );
 
           Log.debug(
-            "🔔 Starting notification monitor for completion detection"
+            "[CliLogMonitor] Starting notification monitor for completion detection"
           );
 
           const monitoringSessionId = this.deps.notificationMonitor
@@ -663,11 +663,11 @@ export class CliLogMonitor {
 
           if (monitoringSessionId) {
             Log.debug(
-              `📋 Monitoring notification file for session: ${monitoringSessionId}`
+              `[CliLogMonitor] Monitoring notification file for session: ${monitoringSessionId}`
             );
           } else {
             Log.debug(
-              "📋 Monitoring notification directory for any new completion file"
+              "[CliLogMonitor] Monitoring notification directory for any new completion file"
             );
           }
 
@@ -737,7 +737,7 @@ export class CliLogMonitor {
                 );
               }
             } catch (error) {
-              Log.trace(`Notification monitoring error: ${error}`);
+              Log.trace(`[CliLogMonitor] Notification monitoring error: ${error}`);
             }
           })();
         }
@@ -745,7 +745,7 @@ export class CliLogMonitor {
 
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
-          Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
+          Log.warn(`[CliLogMonitor] Log monitoring timeout after ${timeoutMs}ms`);
           void resolveFailure({
             failureKind: FAILURE_KINDS.TIMEOUT,
             failureMessage: "Log monitoring timeout",
@@ -776,7 +776,7 @@ export class CliLogMonitor {
         }
 
         if (this.deps.runtimeState.isCancelling()) {
-          Log.info("⏹️ Log monitoring cancelled by user");
+          Log.info("[CliLogMonitor] Log monitoring cancelled by user");
           // Same as resolveFailure — unblocks a background-work hold in progress.
           completed = true;
           if (cancellationInterval) {
@@ -844,7 +844,7 @@ export class CliLogMonitor {
           watcher?.close();
 
           Log.warn(
-            `⚠️ CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
+            `[CliLogMonitor] CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
           );
           void resolveFailure({
             failureKind: FAILURE_KINDS.PROCESS_EXIT,

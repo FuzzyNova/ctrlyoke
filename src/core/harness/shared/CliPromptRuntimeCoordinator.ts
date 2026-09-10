@@ -70,7 +70,7 @@ export class CliPromptRuntimeCoordinator {
 
     await params.workingFilePersistence.updateWorkingFile();
     Log.debug(
-      `💾 Saved cancelled-prompt runtime to working file (sessionId: ${sessionId || "none"})`
+      `[CliPromptRuntimeCoordinator] Saved cancelled-prompt runtime to working file (sessionId: ${sessionId || "none"})`
     );
   }
 
@@ -135,7 +135,7 @@ export class CliPromptRuntimeCoordinator {
     if (params.workingFilePersistence) {
       await params.workingFilePersistence.updateWorkingFile();
       Log.debug(
-        `💾 Saved runtime metadata to working file (sessionId: ${params.extractedSessionId || "none"})`
+        `[CliPromptRuntimeCoordinator] Saved runtime metadata to working file (sessionId: ${params.extractedSessionId || "none"})`
       );
     }
 

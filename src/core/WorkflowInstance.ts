@@ -1491,9 +1491,9 @@ export class WorkflowInstance {
   async loadWorkingFile(filePath: string): Promise<void> {
     try {
       await this.restoreWorkflowFromWorkingFile(filePath);
-      Log.info(`Loaded workflow: ${filePath}`);
+      Log.info(`[WorkflowInstance] Loaded workflow: ${filePath}`);
     } catch (loadError) {
-      Log.error("Failed to load workflow:", loadError as Error);
+      Log.error("[WorkflowInstance] Failed to load workflow:", loadError as Error);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
@@ -1848,7 +1848,7 @@ export class WorkflowInstance {
     }
 
     try {
-      Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
+      Log.info(`[executeLoadedPromptFile] ctrlyoke: Executing loaded prompt file: ${filePath}`);
 
       const workflow = this.promptQueue.getWorkflowFile();
       await this.approveSecretGrants?.(
@@ -1892,7 +1892,7 @@ export class WorkflowInstance {
         // state to make room for it otherwise.
         this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
         Log.error(
-          "ctrlyoke: Compatibility preflight failed:",
+          "[executeLoadedPromptFile] ctrlyoke: Compatibility preflight failed:",
           compatibilityErrors.map((diagnostic) => diagnostic.message).join(" ")
         );
         this.workflowRuntime.fail();
@@ -1916,7 +1916,7 @@ export class WorkflowInstance {
         detailedStatus.initializationStatus === HarnessStatus.Waiting
       ) {
         Log.info(
-          `ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
+          `[executeLoadedPromptFile] ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
         );
         await new Promise<void>((resolve) => {
           let settled = false;
@@ -1936,7 +1936,7 @@ export class WorkflowInstance {
 
       if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
         const errorMessage = detailedStatus.message || "Harness is unavailable";
-        Log.error(`ctrlyoke: Harness not ready: ${errorMessage}`);
+        Log.error(`[executeLoadedPromptFile] ctrlyoke: Harness not ready: ${errorMessage}`);
         const preflightStepCount = this.promptQueue.getState().steps.length;
         if (this.dashboardSink && preflightStepCount > 0) {
           this.dashboardSink.updateExecutionStarted(
@@ -1987,20 +1987,20 @@ export class WorkflowInstance {
       if (!continueFromCurrent && !isAppendContinuation) {
         if (isRestartFromBeginning) {
           Log.info(
-            `ctrlyoke: Queue in ${executionState} state, restarting from beginning`
+            `[executeLoadedPromptFile] ctrlyoke: Queue in ${executionState} state, restarting from beginning`
           );
           await this.promptQueue.restart();
         }
       } else if (isAppendContinuation) {
         Log.info(
-          `ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
+          `[executeLoadedPromptFile] ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
         );
         if (executionState === EXECUTION_STATES.IDLE) {
           await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
         }
       } else {
         Log.info(
-          `ctrlyoke: Continuing from current position (append mode), preserving history`
+          `[executeLoadedPromptFile] ctrlyoke: Continuing from current position (append mode), preserving history`
         );
       }
 
@@ -2068,7 +2068,7 @@ export class WorkflowInstance {
           runRef
         );
         Log.debug(
-          `🟢 [APPEND-DEBUG] Reusing explicit history file for append continuation: ${historyFilePath}`
+          `[WorkflowInstance] [APPEND-DEBUG] Reusing explicit history file for append continuation: ${historyFilePath}`
         );
 
         // Cache historical step outputs in completedStepOutputs so they can be
@@ -2142,7 +2142,7 @@ export class WorkflowInstance {
           historyFilePath ||
           this.outputHistoryManager.getHistoryFilePath(workflowKey, runRef);
         Log.debug(
-          `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
+          `[WorkflowInstance] [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
         );
       } else if (isIdleContinuation && workflowKey) {
         const runRef = currentQueueState.runRef;
@@ -2156,7 +2156,7 @@ export class WorkflowInstance {
           runRef
         );
         Log.debug(
-          `🟢 [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
+          `[WorkflowInstance] [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
         );
       }
 
@@ -2301,7 +2301,7 @@ export class WorkflowInstance {
         continueFromCurrent || isAppendContinuation || isIdleContinuation
       );
       Log.debug(
-        `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
+        `[WorkflowInstance] [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
       );
       await this.startWorkflowExecution(
         integration,
@@ -2310,7 +2310,7 @@ export class WorkflowInstance {
         targetRunIndices
       );
     } catch (error) {
-      Log.error("Failed to execute prompt file:", error);
+      Log.error("[executeLoadedPromptFile] Failed to execute prompt file:", error);
       this.promptQueue.finalizeFailedInFlightPrompt();
       this.workflowRuntime.fail();
       await this.promptQueue.commitRuntimeTransition();
@@ -2345,7 +2345,7 @@ export class WorkflowInstance {
       if (!this.startPending) {
         await this.releaseRunnerLock().catch((lockError) =>
           Log.warn(
-            "Failed to release runner lock after setup failure:",
+            "[executeLoadedPromptFile] Failed to release runner lock after setup failure:",
             lockError
           )
         );
@@ -2381,7 +2381,7 @@ export class WorkflowInstance {
             this.promptQueue.getState().totalExecutionTime
           )
           .catch((err) =>
-            Log.warn("Failed to finalize history run on early error:", err)
+            Log.warn("[executeLoadedPromptFile] Failed to finalize history run on early error:", err)
           );
       }
       const executionFailureMessage =
@@ -2486,13 +2486,13 @@ export class WorkflowInstance {
 
     if (this.workflowExecutor.isAwaitingResponse()) {
       Log.info(
-        "▶️ Resuming while Copilot is still responding - will continue when response completes"
+        "[WorkflowInstance] Resuming while Copilot is still responding - will continue when response completes"
       );
       return;
     }
 
     if (this.startPending) {
-      Log.info("▶️ Waiting for the paused execution cycle to settle");
+      Log.info("[WorkflowInstance] Waiting for the paused execution cycle to settle");
       await this.executionSettledPromise;
       if (this.workflowRuntime.status !== EXECUTION_STATES.RUNNING) {
         return;
@@ -2518,7 +2518,7 @@ export class WorkflowInstance {
     );
     await this.prepareExecutionWorktree(resolvedHistoryFilePath);
 
-    Log.info("▶️ Resuming workflow from paused position");
+    Log.info("[WorkflowInstance] Resuming workflow from paused position");
     await this.startWorkflowExecution(
       undefined,
       resolvedHistoryFilePath,
@@ -2533,7 +2533,7 @@ export class WorkflowInstance {
   async stop(): Promise<void> {
     const stopReason = "Workflow stopped by user";
 
-    Log.info(`⏹️ WorkflowInstance.stop() - stopping active target resources`);
+    Log.info(`[WorkflowInstance] stop() - stopping active target resources`);
 
     this.promptQueue.markInFlightPromptCancelled();
     const activeAttempts = this.workflowRuntime.getActiveAttempts();
@@ -2565,7 +2565,7 @@ export class WorkflowInstance {
       confirmedStoppedCalled = true;
       if (this.promptQueue.getCurrentParallelGroup()) {
         Log.info(
-          "Parallel group cancellation requested; coordinator will commit member cancellations before STOPPED"
+          "[WorkflowInstance] Parallel group cancellation requested; coordinator will commit member cancellations before STOPPED"
         );
         return;
       }
@@ -2580,10 +2580,10 @@ export class WorkflowInstance {
       await this.promptQueue.commitRuntimeTransition();
       if (advancedPastQueuePrompt) {
         Log.info(
-          `Queue execution fully stopped - advanced past cancelled step ${stoppedIndex}`
+          `[WorkflowInstance] Queue execution fully stopped - advanced past cancelled step ${stoppedIndex}`
         );
       } else {
-        Log.info("Queue execution fully stopped");
+        Log.info("[WorkflowInstance] Queue execution fully stopped");
       }
     };
 
@@ -2625,11 +2625,11 @@ export class WorkflowInstance {
         timeoutHandle = setTimeout(() => {
           if (!confirmedStoppedCalled) {
             Log.warn(
-              "⏱️ Stop timeout: cancellation did not settle within 10s, forcing confirmedStopped()"
+              "[WorkflowInstance] Stop timeout: cancellation did not settle within 10s, forcing confirmedStopped()"
             );
             confirmStopped()
               .catch((err) => {
-                Log.error("Failed to update working file after stop:", err);
+                Log.error("[WorkflowInstance] Failed to update working file after stop:", err);
               })
               .finally(resolve);
           } else {
@@ -2660,7 +2660,7 @@ export class WorkflowInstance {
       executionState === EXECUTION_STATES.PAUSED
     ) {
       Log.warn(
-        `clearWorkflow called on active instance inst:${this.id.slice(0, 8)} (${executionState}) — ignoring`
+        `[WorkflowInstance] clearWorkflow called on active instance inst:${this.id.slice(0, 8)} (${executionState}) — ignoring`
       );
       return;
     }
@@ -2671,7 +2671,7 @@ export class WorkflowInstance {
     this.lastKnownStepCount = 0;
     this.pendingRunAfterCancel = null;
     this.propagateWorkflowNameToIntegrations();
-    Log.debug("Workflow state cleared");
+    Log.debug("[WorkflowInstance] Workflow state cleared");
   }
 
   /**
@@ -2713,7 +2713,7 @@ export class WorkflowInstance {
       const currentSize = queueState.steps.length;
 
       if (currentSize === 0) {
-        Log.debug("Empty workflow, creating new workflow in IDLE state");
+        Log.debug("[WorkflowInstance] Empty workflow, creating new workflow in IDLE state");
         const workflowType = queueState.workflowName
           ? `workflow "${queueState.workflowName}"`
           : DEFAULT_WORKFLOW_NAME;
@@ -2781,7 +2781,7 @@ export class WorkflowInstance {
       }
 
       if (!this.currentPromptFile) {
-        Log.debug("No prompt file loaded, updating context (append mode)");
+        Log.debug("[WorkflowInstance] No prompt file loaded, updating context (append mode)");
         this.currentPromptFile = { filePath, promptFile: parsed };
         const appendWorkingFilePath =
           this.promptQueue.getState().workingFilePath;
@@ -2800,7 +2800,7 @@ export class WorkflowInstance {
         `Queued ${parsed.steps.length} prompt(s) ${positionText}`
       );
     } catch (error) {
-      Log.error("Failed to queue prompts:", error);
+      Log.error("[WorkflowInstance] Failed to queue prompts:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
@@ -2895,7 +2895,7 @@ export class WorkflowInstance {
         [],
         workspaceFolderPath
       );
-      Log.info(`✅ Eagerly created working file: ${workingFilePath}`);
+      Log.info(`[WorkflowInstance] Eagerly created working file: ${workingFilePath}`);
 
       // Keep currentPromptFile in sync so executeLoadedPromptFile doesn't
       // fail with "No prompt file loaded" when the user runs an ephemeral
@@ -2907,7 +2907,7 @@ export class WorkflowInstance {
           promptFile: { steps: [] },
         };
         Log.debug(
-          `[inst:${this.id.slice(0, 8)}] ensureEphemeralWorkingFile: set currentPromptFile → ${path.basename(workingFilePath)}`
+          `[inst:${this.id.slice(0, 8)}] ensureEphemeralWorkingFile: set currentPromptFile ${path.basename(workingFilePath)}`
         );
       }
 
@@ -2946,7 +2946,7 @@ export class WorkflowInstance {
         );
       }
     } catch (error) {
-      Log.error("Failed to eagerly create working file:", error);
+      Log.error("[WorkflowInstance] Failed to eagerly create working file:", error);
     }
   }
 
@@ -3024,7 +3024,7 @@ export class WorkflowInstance {
     }
 
     Log.debug(
-      `Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
+      `[WorkflowInstance] Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
     );
   }
 
@@ -3060,7 +3060,7 @@ export class WorkflowInstance {
         currentState.definitionRevision
       );
     }
-    Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
+    Log.debug(`[WorkflowInstance] Updated prompt ${index}: ${text.substring(0, 50)}...`);
   }
 
   async updateStepColorInQueue(
@@ -3121,7 +3121,7 @@ export class WorkflowInstance {
       this.dashboardSink?.updateFinalStepStatus(null, 0, null);
     }
 
-    Log.debug(`Updated finalStep (${finalStep ? "enabled" : "disabled"})`);
+    Log.debug(`[WorkflowInstance] Updated finalStep (${finalStep ? "enabled" : "disabled"})`);
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
@@ -3139,7 +3139,7 @@ export class WorkflowInstance {
       );
     }
     await this.reconcileExecutionStateAfterStepChange();
-    Log.debug(`Deleted prompt ${index}`);
+    Log.debug(`[WorkflowInstance] Deleted prompt ${index}`);
   }
 
   /**
@@ -3289,7 +3289,7 @@ export class WorkflowInstance {
     );
     const stepHarness = isScriptStep(step) ? undefined : step.harness;
     if (forceNewWorkflow) {
-      Log.info("Force new workflow requested...");
+      Log.info(`[inst:${this.id.slice(0, 8)}] Force new workflow requested...`);
       this.clearWorkflow();
     }
 
@@ -3349,7 +3349,7 @@ export class WorkflowInstance {
         this.promptQueue.setWorkflowName(generatedWorkflowName);
         await this.promptQueue.updateWorkingFile(true);
         Log.debug(
-          `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: updated workflow name from first prompt → "${generatedWorkflowName}"`
+          `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: updated workflow name from first prompt "${generatedWorkflowName}"`
         );
       }
 
@@ -3997,7 +3997,7 @@ export class WorkflowInstance {
           resolvedHarness !== currentIntegration.getIntegrationMode()
         ) {
           Log.info(
-            `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}; retaining the previous harness terminal`
+            `[inst:${this.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}; retaining the previous harness terminal`
           );
           const overrideIntegration =
             this.createIntegrationForMode(resolvedHarness);
@@ -4371,8 +4371,8 @@ export class WorkflowInstance {
       }
 
       if (harnessOverride) {
-        Log.info(`🔀 Using harness override: ${harnessOverride}`);
-      }
+        Log.info(`[WorkflowInstance] Using harness override: ${harnessOverride}`);
+}
       const targetIntegration = this.integrationFactory.createForExecution(
         harness,
         this.executionWorkspace
@@ -4399,7 +4399,7 @@ export class WorkflowInstance {
         live.setSourceDefinitionPath(this.sourceDefinitionPath);
         this.executionIntegrations.set(harness, live);
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] ♻️ Reusing live inject integration (harness=${harness}) from previous run`
+          `[inst:${this.id.slice(0, 8)}] Reusing live inject integration (harness=${harness}) from previous run`
         );
         return live;
       }
@@ -4408,11 +4408,11 @@ export class WorkflowInstance {
     const cached = this.executionIntegrations.get(harness);
     if (cached) {
       cached.setSourceDefinitionPath(this.sourceDefinitionPath);
-      Log.debug(`♻️ Reusing cached integration for harness: ${harness}`);
+      Log.debug(`[WorkflowInstance] Reusing cached integration for harness: ${harness}`);
       return cached;
     }
     if (harnessOverride) {
-      Log.info(`🔀 Using harness override: ${harnessOverride}`);
+      Log.info(`[WorkflowInstance] Using harness override: ${harnessOverride}`);
     }
     const integration = this.integrationFactory.createForExecution(
       harness,
@@ -4914,7 +4914,7 @@ export class WorkflowInstance {
   ): Promise<void> {
     if (this.startPending) {
       Log.debug(
-        `[inst:${this.id.slice(0, 8)}] ⚠️ Workflow start already pending, skipping duplicate start request`
+        `[inst:${this.id.slice(0, 8)}] Workflow start already pending, skipping duplicate start request`
       );
       return;
     }
@@ -5314,7 +5314,7 @@ export class WorkflowInstance {
             runStepCount,
             this.promptQueue.getState().totalExecutionTime
           )
-          .catch((err) => Log.warn("Failed to finalize history run:", err));
+          .catch((err) => Log.warn(`[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`, err));
       }
       this.releaseActiveRunRedactor?.();
       this.releaseActiveRunRedactor = undefined;
@@ -5400,7 +5400,7 @@ export class WorkflowInstance {
 
     await integration
       .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
-      .catch((err) => Log.warn("Failed to clean up workflow artifacts:", err));
+      .catch((err) => Log.warn("[WorkflowInstance] Failed to clean up workflow artifacts:", err));
   }
 
   private async cleanupIntegrationArtifactsForSettlement(
@@ -5537,7 +5537,7 @@ export class WorkflowInstance {
     }
 
     Log.info(
-      `appendSteps: Setting to STOPPED (appended to ${status} queue, ${this.promptQueue.getCompletedCount()} steps previously completed, user can Resume)`
+      `[WorkflowInstance] appendSteps: Setting to STOPPED (appended to ${status} queue, ${this.promptQueue.getCompletedCount()} steps previously completed, user can Resume)`
     );
     this.workflowRuntime.reopenForContinuation();
   }
@@ -5781,7 +5781,7 @@ export class WorkflowInstance {
   private onQueueStateChanged(state: QueueState): void {
     const executionState = this.getAuthoritativeExecutionState();
     Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.steps.length})`
+      `[inst:${this.id.slice(0, 8)}] Queue state ${executionState} (step ${state.currentIndex}/${state.steps.length})`
     );
     this.onStatusBarUpdate();
 
@@ -5802,7 +5802,7 @@ export class WorkflowInstance {
 
       if (hasNewPrompts) {
         Log.info(
-          `Detected prompt count increase: ${this.lastKnownStepCount} → ${state.steps.length}. Notifying dashboard.`
+          `[inst:${this.id.slice(0, 8)}] Detected prompt count increase: ${this.lastKnownStepCount} ${state.steps.length}. Notifying dashboard.`
         );
         // Include executionState so both updates reach the webview in one message.
         this.dashboardSink.updateStepsExtended(
@@ -5848,7 +5848,7 @@ export class WorkflowInstance {
       const queueState = this.promptQueue.getState();
       workingFilePath = queueState.workingFilePath;
       if (workingFilePath) {
-        Log.debug(`Reusing existing working file: ${workingFilePath}`);
+        Log.debug(`[WorkflowInstance] Reusing existing working file: ${workingFilePath}`);
       }
     }
 
@@ -5864,7 +5864,7 @@ export class WorkflowInstance {
           undefined,
           parallelGroups
         );
-        Log.info(`✅ Created working file: ${workingFilePath}`);
+        Log.info(`[WorkflowInstance] Created working file: ${workingFilePath}`);
 
         // Populate all execution properties from VS Code settings so the
         // working file always has explicit values for every workflow-level
@@ -5879,11 +5879,11 @@ export class WorkflowInstance {
           });
         }
       } catch (error) {
-        Log.error("Failed to create working file:", error);
+        Log.error("[WorkflowInstance] Failed to create working file:", error);
       }
     } else if (!workingFilePath) {
       Log.warn(
-        "No workspace folder, skipping working file creation (MCP won't work)"
+        "[WorkflowInstance] No workspace folder, skipping working file creation (MCP won't work)"
       );
     }
 

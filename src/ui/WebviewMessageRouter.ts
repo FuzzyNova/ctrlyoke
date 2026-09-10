@@ -309,11 +309,16 @@ export class WebviewMessageRouter {
       if (handler) {
         await handler(message, ctx);
       } else {
-        Log.warn(`Unknown message type: ${message.type}`);
+        Log.warn(
+          `[WebviewMessageRouter] Unknown message type: ${message.type}`
+        );
       }
     } catch (error) {
       const errorMsg = getErrorMessage(error);
-      Log.error(`Error handling webview message (${message.type}):`, errorMsg);
+      Log.error(
+        `[WebviewMessageRouter] Error handling webview message (${message.type}):`,
+        errorMsg
+      );
       // An addressed mutation that throws here never reached its success path,
       // so the client was never handed the revisions its next mutation needs.
       // Left alone, one rejection wedges every later edit on that address.
@@ -776,7 +781,10 @@ export class WebviewMessageRouter {
           });
         } catch (error) {
           const errorMessage = getErrorMessage(error);
-          Log.error("Failed to create end-condition script:", errorMessage);
+          Log.error(
+            "[WebviewMessageRouter] Failed to create end-condition script:",
+            errorMessage
+          );
           ctx.emit({
             type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
             requestId: request.requestId,
@@ -982,7 +990,10 @@ export class WebviewMessageRouter {
         });
         await vscode.window.showTextDocument(doc, { preview: true });
       } catch (error) {
-        Log.error("EXPORT_CONTENT_PREVIEW: failed to open document", error);
+        Log.error(
+          "[WebviewMessageRouter] EXPORT_CONTENT_PREVIEW: failed to open document",
+          error
+        );
       }
     });
 
@@ -1650,7 +1661,10 @@ export class WebviewMessageRouter {
         });
       } catch (error) {
         const errorMessage = getErrorMessage(error);
-        Log.error("Failed to retry harness detection:", errorMessage);
+        Log.error(
+          "[WebviewMessageRouter] Failed to retry harness detection:",
+          errorMessage
+        );
         ctx.emit({
           type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
           requestId: request.requestId,
@@ -1724,7 +1738,9 @@ export class WebviewMessageRouter {
           !isStatusLineTrackingHarnessId(message.harnessId) ||
           typeof message.restoreCustomCommand !== "boolean"
         ) {
-          Log.warn("Rejected unsupported statusline tracking disable request");
+          Log.warn(
+            "[WebviewMessageRouter] Rejected unsupported statusline tracking disable request"
+          );
           return;
         }
 
@@ -1739,7 +1755,9 @@ export class WebviewMessageRouter {
       MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
       async (message, ctx) => {
         if (typeof message.useDifferentFormatPerHarness !== "boolean") {
-          Log.warn("Rejected unsupported statusline format mode request");
+          Log.warn(
+            "[WebviewMessageRouter] Rejected unsupported statusline format mode request"
+          );
           return;
         }
 
@@ -2108,7 +2126,9 @@ export class WebviewMessageRouter {
           ctx.clientId
         );
       } catch (err) {
-        Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`);
+        Log.warn(
+          `[WebviewMessageRouter] SWITCH_WORKFLOW per-client replay failed: ${err}`
+        );
       }
     });
   }
@@ -2417,10 +2437,7 @@ export interface WebviewRouterCallbacks {
     id: string,
     result: { approvedValues: string[]; deniedValues: string[] } | undefined
   ) => void;
-  handleChoiceResponse?: (
-    id: string,
-    value: string | undefined
-  ) => void;
+  handleChoiceResponse?: (id: string, value: string | undefined) => void;
 }
 
 export interface WebviewRouteOptions {

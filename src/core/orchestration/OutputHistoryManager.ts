@@ -312,7 +312,7 @@ export class OutputHistoryManager {
 
       return { filePath, runCount };
     } catch (error) {
-      Log.error("Failed to initialize history run:", error);
+      Log.error("[OutputHistoryManager] Failed to initialize history run:", error);
       return { filePath: "", runCount: 0 };
     }
   }
@@ -349,7 +349,7 @@ export class OutputHistoryManager {
         phase
       );
     } catch (error) {
-      Log.warn("Failed to save step output to history:", error);
+      Log.warn("[OutputHistoryManager] Failed to save step output to history:", error);
     }
   }
 
@@ -405,7 +405,7 @@ export class OutputHistoryManager {
       ]);
       await this.applyTokenEvents(historyFilePath, events);
     } catch (error) {
-      Log.warn("Failed to start streaming output history:", error);
+      Log.warn("[OutputHistoryManager] Failed to start streaming output history:", error);
     }
   }
 
@@ -426,7 +426,10 @@ export class OutputHistoryManager {
         Date.now()
       );
     } catch (error) {
-      Log.warn("Failed to commit definition revision snapshot:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to commit definition revision snapshot:",
+        error
+      );
     }
   }
 
@@ -670,7 +673,10 @@ export class OutputHistoryManager {
       );
       return { sequences: events.map((event) => event.sequence) };
     } catch (error) {
-      Log.warn("Failed to append streamed output deltas to history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to append streamed output deltas to history:",
+        error
+      );
       return { sequences: [] };
     }
   }
@@ -743,7 +749,10 @@ export class OutputHistoryManager {
       ]);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("Failed to append status message to history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to append status message to history:",
+        error
+      );
     }
   }
 
@@ -795,7 +804,7 @@ export class OutputHistoryManager {
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
-        "Failed to append workflow runtime transition to history:",
+        "[OutputHistoryManager] Failed to append workflow runtime transition to history:",
         error
       );
     }
@@ -838,7 +847,10 @@ export class OutputHistoryManager {
       ]);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("Failed to save workspace snapshot to history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to save workspace snapshot to history:",
+        error
+      );
     }
   }
 
@@ -880,7 +892,7 @@ export class OutputHistoryManager {
       this.feedUsageStores(historyFilePath);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.error("Failed to finalize history run:", error);
+      Log.error("[OutputHistoryManager] Failed to finalize history run:", error);
     }
   }
 
@@ -941,7 +953,10 @@ export class OutputHistoryManager {
         );
       }
     } catch (error) {
-      Log.warn("Failed to recover interrupted history run:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to recover interrupted history run:",
+        error
+      );
     }
   }
 
@@ -1357,7 +1372,7 @@ export class OutputHistoryManager {
           protectedRunRefs
         );
       } catch (error) {
-        Log.warn(`Failed to delete old run ${runRef}:`, error);
+        Log.warn(`[OutputHistoryManager] Failed to delete old run ${runRef}:`, error);
       }
     }
     if (toDelete.length > 0) {
@@ -1473,7 +1488,7 @@ export class OutputHistoryManager {
       ]);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("Failed to save undo record to history:", error);
+      Log.warn("[OutputHistoryManager] Failed to save undo record to history:", error);
     }
   }
 
@@ -1517,7 +1532,10 @@ export class OutputHistoryManager {
       ]);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("Failed to mark undo record as redone:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to mark undo record as redone:",
+        error
+      );
     }
   }
 
@@ -1728,7 +1746,7 @@ export class OutputHistoryManager {
         ]);
       })
       .catch((error) => {
-        Log.warn("Failed to persist usage rollups:", error);
+        Log.warn("[OutputHistoryManager] Failed to persist usage rollups:", error);
       });
   }
 

@@ -63,7 +63,7 @@ export class SkillExpander {
 
       if (!skill) {
         Log.warn(
-          `⚠️ Skill "${skillName}" not found among discovered skills — skipping`
+          `[SkillExpander] Skill "${skillName}" not found among discovered skills — skipping`
         );
         continue;
       }
@@ -77,7 +77,7 @@ export class SkillExpander {
       }
 
       resolvedBlocks.push(block);
-      Log.debug(`🎯 Skill "${skillName}" resolved from ${skill.path}`);
+      Log.debug(`[SkillExpander] Skill "${skillName}" resolved from ${skill.path}`);
     }
 
     if (resolvedBlocks.length === 0) {
@@ -122,7 +122,7 @@ export class SkillExpander {
         return await fs.promises.readFile(resolvedSkillPath, "utf-8");
       } catch (error) {
         Log.warn(
-          `⚠️ Failed to read out-of-trust-root skill file "${skill.path}": ${error}`
+          `[SkillExpander] Failed to read out-of-trust-root skill file "${skill.path}": ${error}`
         );
         return null;
       }

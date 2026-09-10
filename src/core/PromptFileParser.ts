@@ -89,9 +89,9 @@ export class PromptFileParser {
 
       this.promptSchema = JSON.parse(promptSchemaContent);
 
-      Log.debug("JSON schema loaded successfully");
+      Log.debug("[PromptFileParser] JSON schema loaded successfully");
     } catch (error) {
-      Log.error("Failed to load JSON schema:", error);
+      Log.error("[PromptFileParser] Failed to load JSON schema:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
@@ -141,7 +141,7 @@ export class PromptFileParser {
 
       return await this.validateAndNormalize(parsed, filePath);
     } catch (error) {
-      Log.error(`Failed to parse file ${filePath}:`, error);
+      Log.error(`[PromptFileParser] Failed to parse file ${filePath}:`, error);
       if (this.userFeedbackSink) {
         notifyUserFeedback(
           this.userFeedbackSink,
@@ -150,7 +150,7 @@ export class PromptFileParser {
         );
       } else {
         Log.error(
-          `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
+          `[PromptFileParser] ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       }
       return null;
@@ -206,7 +206,7 @@ export class PromptFileParser {
         ],
       };
     } catch (error) {
-      Log.error(`Failed to read markdown prompt file ${filePath}:`, error);
+      Log.error(`[PromptFileParser] Failed to read markdown prompt file ${filePath}:`, error);
       if (this.userFeedbackSink) {
         notifyUserFeedback(
           this.userFeedbackSink,
@@ -215,7 +215,7 @@ export class PromptFileParser {
         );
       } else {
         Log.error(
-          `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
+          `[PromptFileParser] ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
         );
       }
       return null;
@@ -653,7 +653,7 @@ export class PromptFileParser {
       return files;
     } catch (error) {
       Log.trace(
-        `ctrlyoke: Prompts directory ${promptsDirPath} not found or inaccessible`
+        `[PromptFileParser] ctrlyoke: Prompts directory ${promptsDirPath} not found or inaccessible`
       );
       return [];
     }

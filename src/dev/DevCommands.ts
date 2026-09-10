@@ -87,7 +87,7 @@ function appendBuildLog(stream: "stdout" | "stderr", chunk: string): void {
   const prefix = stream === "stderr" ? "[dev build stderr]" : "[dev build]";
   // Build output is already streamed to the dashboard; keep the log copy
   // available for diagnostics without echoing every output chunk at INFO.
-  Log.trace(`${prefix} ${trimmed}`);
+  Log.trace(`[DevCommands] ${prefix} ${trimmed}`);
 }
 
 function summarizeBuildError(stderr: string, stdout: string): string {
@@ -338,9 +338,9 @@ async function listAndDisplayCommands(
     ? allCommands.filter(filterFn).sort()
     : allCommands.sort();
 
-  Log.trace(`=== ${title.toUpperCase()} ===`);
-  Log.trace(`Found ${filteredCommands.length} commands:`);
-  filteredCommands.forEach((cmd) => Log.trace(`  ${cmd}`));
+  Log.trace(`[DevCommands] === ${title.toUpperCase()} ===`);
+  Log.trace(`[DevCommands] Found ${filteredCommands.length} commands:`);
+  filteredCommands.forEach((cmd) => Log.trace(`[DevCommands]   ${cmd}`));
 
   // Generate markdown content
   const timestamp = new Date().toISOString();
@@ -372,7 +372,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
 
     try {
       fs.writeFileSync(fullPath, content, "utf8");
-      Log.info(`✅ Saved to ${fullPath}`);
+      Log.info(`[DevCommands] Saved to ${fullPath}`);
 
       // Open the file
       const doc = await vscode.workspace.openTextDocument(fullPath);
@@ -382,7 +382,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
         `Saved ${filteredCommands.length} commands to ${outputFilePath}`
       );
     } catch (error) {
-      Log.error(`❌ Failed to save to ${fullPath}:`, error);
+      Log.error(`[DevCommands] Failed to save to ${fullPath}:`, error);
       vscode.window.showErrorMessage(`Failed to save commands: ${error}`);
     }
   } else {
@@ -474,7 +474,7 @@ async function dumpVsCodeCssVariables(
 
       try {
         fs.writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
-        Log.info(`✅ Dumped ${message.count} CSS variables to ${outputPath}`);
+        Log.info(`[DevCommands] Dumped ${message.count} CSS variables to ${outputPath}`);
 
         const action = await vscode.window.showInformationMessage(
           `Dumped ${message.count} --vscode-* CSS variables to ${outputPath}`,
@@ -485,7 +485,7 @@ async function dumpVsCodeCssVariables(
           await vscode.window.showTextDocument(doc);
         }
       } catch (error) {
-        Log.error("❌ Failed to write CSS vars file:", error);
+        Log.error("[DevCommands] Failed to write CSS vars file:", error);
         vscode.window.showErrorMessage(`Failed to write CSS vars: ${error}`);
       }
     },
@@ -550,11 +550,11 @@ export async function writeUxSnapshot(
       .relative(workspaceRoot, fullPath)
       .split(path.sep)
       .join("/");
-    Log.info(`📸 ctrlyoke: Wrote UX snapshot to ${fullPath}`);
+    Log.info(`[DevCommands] Wrote UX snapshot to ${fullPath}`);
     return { path: relativePath };
   } catch (error) {
     const message = getErrorMessage(error);
-    Log.error("❌ Failed to write UX snapshot:", message);
+    Log.error("[DevCommands] Failed to write UX snapshot:", message);
     return { error: message };
   }
 }
@@ -575,7 +575,7 @@ export function registerDevCommands(
   context: vscode.ExtensionContext,
   handlers: DevCommandHandlers = {}
 ): void {
-  Log.info("🔧 ctrlyoke: Registering development commands...");
+  Log.info("[DevCommands] Registering development commands...");
 
   // Set context key so the devMenu command is visible in the command palette
   vscode.commands.executeCommand("setContext", "ctrlyoke.devMode", true);
@@ -678,5 +678,5 @@ export function registerDevCommands(
     })
   );
 
-  Log.info("🔧 ctrlyoke: Development commands registered");
+  Log.info("[DevCommands] Development commands registered");
 }

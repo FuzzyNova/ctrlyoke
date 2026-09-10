@@ -127,7 +127,9 @@ async function sweepOrphanedTempFiles(primaryWorkspaceRoot: string) {
       }
     }
   } catch (err) {
-    Log.trace(`ctrlyoke: Worktree discovery for temp cleanup failed: ${err}`);
+    Log.trace(
+      `[Extension] ctrlyoke: Worktree discovery for temp cleanup failed: ${err}`
+    );
   }
 
   let totalCleaned = 0;
@@ -136,12 +138,12 @@ async function sweepOrphanedTempFiles(primaryWorkspaceRoot: string) {
       const count = await new TempFileManager(root).cleanupOrphanedFiles();
       totalCleaned += count;
     } catch (err) {
-      Log.warn(`ctrlyoke: Temp cleanup failed for ${root}: ${err}`);
+      Log.warn(`[Extension] ctrlyoke: Temp cleanup failed for ${root}: ${err}`);
     }
   }
   if (totalCleaned > 0) {
     Log.info(
-      `ctrlyoke: Cleaned up ${totalCleaned} orphaned temp file(s) across ${roots.size} root(s)`
+      `[Extension] ctrlyoke: Cleaned up ${totalCleaned} orphaned temp file(s) across ${roots.size} root(s)`
     );
   }
 }
@@ -154,9 +156,9 @@ function openGettingStartedWalkthrough(): void {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  Log.info("ctrlyoke: Extension activating...");
+  Log.info("[Extension] ctrlyoke: Extension activating...");
   if (IS_DEV_MODE) {
-    Log.debug(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
+    Log.debug(`[Extension] Development mode enabled (Build: ${BUILD_DATE})`);
   }
 
   initTelemetry();
@@ -193,7 +195,7 @@ export async function activate(context: vscode.ExtensionContext) {
             )
             .catch((error) => {
               Log.warn(
-                `ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
+                `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
               );
             });
         }
@@ -230,7 +232,7 @@ export async function activate(context: vscode.ExtensionContext) {
       gitToplevel ? [gitToplevel] : []
     );
     if (stateHomeWarning) {
-      Log.warn(`ctrlyoke: ${stateHomeWarning}`);
+      Log.warn(`[Extension] ctrlyoke: ${stateHomeWarning}`);
     }
     if (resolvedStateRoot) {
       await new ProjectStateRegistry().initialize(
@@ -242,7 +244,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
-      Log.warn("ctrlyoke: Model registry initialization failed:", err);
+      Log.warn(
+        "[Extension] ctrlyoke: Model registry initialization failed:",
+        err
+      );
     });
 
     // Initialize workspace and clean up orphaned temp files.
@@ -256,7 +261,10 @@ export async function activate(context: vscode.ExtensionContext) {
       if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
         // Already initialized — idempotently ensure scaffold is up to date
         WorkspaceInitializer.initializeIfNeeded(workspaceRoot).catch((err) => {
-          Log.warn("ctrlyoke: Workspace initialization failed:", err);
+          Log.warn(
+            "[Extension] ctrlyoke: Workspace initialization failed:",
+            err
+          );
         });
 
         // Clean up orphaned temp prompt files (from previous sessions), across
@@ -290,7 +298,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-    Log.debug("ctrlyoke: React webview provider registered");
+    Log.debug("[Extension] ctrlyoke: React webview provider registered");
     if (workspaceFolders && workspaceFolders.length > 0) {
       void webviewProvider
         .awaitPanelReady()
@@ -302,7 +310,7 @@ export async function activate(context: vscode.ExtensionContext) {
         )
         .catch((error) => {
           Log.warn(
-            `ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
+            `[Extension] ctrlyoke: Workspace external-root approval failed: ${getErrorMessage(error)}`
           );
         });
     }
@@ -324,7 +332,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     );
     context.subscriptions.push(ptyManager);
-    Log.debug("ctrlyoke: PTY process manager initialized");
+    Log.debug("[Extension] ctrlyoke: PTY process manager initialized");
 
     // Initialize ctrlyoke orchestrator with React webview provider
     const browserUserFeedbackSink = new HostedWebSocketUserFeedbackSink(
@@ -394,7 +402,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // WorkflowOrchestrator.setDashboardReady() handles the race: if READY
     // arrives before init completes, auto-load is deferred until init finishes.
     workflowOrchestrator.initialize().catch((err) => {
-      Log.error("Manager initialization failed:", err);
+      Log.error("[Extension] Manager initialization failed:", err);
       vscode.window.showErrorMessage(`ctrlyoke: Initialization failed: ${err}`);
     });
 
@@ -428,7 +436,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const previousRoot = resolvedWorkspaceRoot;
         resolvedWorkspaceRoot = nextRoot;
         Log.warn(
-          `ctrlyoke: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .ctrlyoke.`
+          `[Extension] ctrlyoke: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .ctrlyoke.`
         );
         vscode.window
           .showWarningMessage(
@@ -501,7 +509,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug(
-      "ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, $, and ! triggers"
+      "[Extension] ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, $, and ! triggers"
     );
 
     // Register property key completion provider for YAML workflow files.
@@ -521,7 +529,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug(
-      "ctrlyoke: Registered property key completion provider for YAML workflow files"
+      "[Extension] ctrlyoke: Registered property key completion provider for YAML workflow files"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)
@@ -532,11 +540,13 @@ export async function activate(context: vscode.ExtensionContext) {
         promptLinkProvider
       )
     );
-    Log.debug("ctrlyoke: Registered link provider for prompt files");
+    Log.debug("[Extension] ctrlyoke: Registered link provider for prompt files");
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
-    Log.debug("ctrlyoke: Initialized completion helpers with config watcher");
+    Log.debug(
+      "[Extension] ctrlyoke: Initialized completion helpers with config watcher"
+    );
 
     // Register commands
     registerCommands(context, runnerHostIdentity);
@@ -547,9 +557,9 @@ export async function activate(context: vscode.ExtensionContext) {
       void context.globalState.update(GETTING_STARTED_SHOWN_KEY, true);
     }
 
-    Log.info("ctrlyoke: Extension activated successfully!");
+    Log.info("[Extension] ctrlyoke: Extension activated successfully!");
   } catch (error) {
-    Log.error("ctrlyoke: Failed to activate extension:", error);
+    Log.error("[Extension] ctrlyoke: Failed to activate extension:", error);
     vscode.window.showErrorMessage(`ctrlyoke: Activation failed: ${error}`);
     reportExtensionActivationFailed(getErrorTypeName(error));
   }
@@ -1481,10 +1491,10 @@ function registerCommands(
         hostedServer?.updateThemeVars(vars)
       );
       webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
-      Log.info(`ctrlyoke: Hosted server started at ${url}`);
+      Log.info(`[Extension] ctrlyoke: Hosted server started at ${url}`);
       if (portFallback) {
         Log.warn(
-          `ctrlyoke: Port ${portFallback.requestedPort} was already in use — server started on port ${portFallback.actualPort} instead.`
+          `[Extension] ctrlyoke: Port ${portFallback.requestedPort} was already in use — server started on port ${portFallback.actualPort} instead.`
         );
         notifyUserFeedback(
           workflowOrchestrator.getUserFeedbackSink(),
@@ -1505,7 +1515,7 @@ function registerCommands(
       webviewProvider.setRunningServerUrl(undefined);
       webviewProvider.setThemeVarsCapturedCallback(undefined);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
-      Log.info("ctrlyoke: Hosted server stopped");
+      Log.info("[Extension] ctrlyoke: Hosted server stopped");
     }
   );
 
@@ -1518,7 +1528,7 @@ function registerCommands(
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });
-      Log.info("ctrlyoke: Server token regenerated");
+      Log.info("[Extension] ctrlyoke: Server token regenerated");
     }
   );
 
@@ -1629,11 +1639,11 @@ function registerCommands(
     });
   }
 
-  Log.debug("ctrlyoke: Commands registered successfully");
+  Log.debug("[Extension] ctrlyoke: Commands registered successfully");
 }
 
 export async function deactivate(): Promise<void> {
-  Log.debug("ctrlyoke: Extension deactivating...");
+  Log.debug("[Extension] ctrlyoke: Extension deactivating...");
 
   // Run concurrently: the Ctrl+C sweep tells every AI CLI session to stop while
   // workflow instances cancel and flush their durable state. Sequencing these
@@ -1655,5 +1665,5 @@ export async function deactivate(): Promise<void> {
 
   disposeTelemetry();
 
-  Log.debug("ctrlyoke: Extension deactivated");
+  Log.debug("[Extension] ctrlyoke: Extension deactivated");
 }

@@ -111,7 +111,7 @@ export async function executeNativeOutputCaptureCommand(
         });
       } catch (cleanupError) {
         Log.error(
-          `Failed to remove output capture placeholder: ${getErrorMessage(
+          `[NativeOutputCaptureCommand] Failed to remove output capture placeholder: ${getErrorMessage(
             cleanupError
           )}`
         );

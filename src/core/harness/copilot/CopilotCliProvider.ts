@@ -310,7 +310,7 @@ export class CopilotCliProvider implements ICliProvider {
         workflowContext?.resolvedProperties?.mcpServers ?? [];
       if (mcpServersResolved.includes("ctrlyoke")) {
         args.push("--allow-tool", "ctrlyoke");
-        Log.debug("🔧 ctrlyoke MCP tools auto-approved");
+        Log.debug("[CopilotCliProvider] ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -321,7 +321,7 @@ export class CopilotCliProvider implements ICliProvider {
             // Approve all tools from this server
             args.push("--allow-tool", server.id);
             Log.debug(
-              `🔧 Auto-approved all tools from MCP server: ${server.id}`
+              `[CopilotCliProvider] Auto-approved all tools from MCP server: ${server.id}`
             );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
@@ -329,7 +329,7 @@ export class CopilotCliProvider implements ICliProvider {
               args.push("--allow-tool", pattern);
             }
             Log.debug(
-              `🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+              `[CopilotCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
             );
           }
         }
@@ -342,7 +342,7 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(`[CopilotCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -380,14 +380,14 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[CopilotCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[CopilotCliProvider] Resume requested but no session ID available");
     } else {
-      Log.info("Starting new session");
+      Log.info("[CopilotCliProvider] Starting new session");
     }
 
-    Log.trace(`🔧 CLI arguments: ${JSON.stringify(args)}`);
+    Log.trace(`[CopilotCliProvider] CLI arguments: ${JSON.stringify(args)}`);
 
     return {
       cliArgs: args,
@@ -457,7 +457,7 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Model not supported - warn user and fallback
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
-    Log.warn(`⚠️ ${message}`);
+    Log.warn(`[CopilotCliProvider] ${message}`);
 
     return defaultModel;
   }
@@ -742,7 +742,7 @@ export class CopilotCliProvider implements ICliProvider {
       }
       return result;
     } catch (error) {
-      Log.warn(`Failed to register Copilot statusline: ${error}`);
+      Log.warn(`[CopilotCliProvider] Failed to register Copilot statusline: ${error}`);
       return { kind: "no-op", captured: false };
     }
   }
@@ -885,7 +885,7 @@ export class CopilotCliProvider implements ICliProvider {
       const resolvedHookDir = path.resolve(hookDir);
       if (!resolvedHookDir.startsWith(normalizedWorkspaceRoot)) {
         Log.error(
-          `Security: Hook directory "${resolvedHookDir}" is outside workspace root "${normalizedWorkspaceRoot}"`
+          `[CopilotCliProvider] Security: Hook directory "${resolvedHookDir}" is outside workspace root "${normalizedWorkspaceRoot}"`
         );
         return;
       }
@@ -901,9 +901,9 @@ export class CopilotCliProvider implements ICliProvider {
       );
 
       this.hookFilePaths.push(hookPath);
-      Log.debug(`📁 Created hook file: ${hookPath}`);
+      Log.debug(`[CopilotCliProvider] Created hook file: ${hookPath}`);
     } catch (error) {
-      Log.warn(`⚠️ Failed to create hook file: ${error}`);
+      Log.warn(`[CopilotCliProvider] Failed to create hook file: ${error}`);
     }
   }
 

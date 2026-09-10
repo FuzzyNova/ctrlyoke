@@ -84,7 +84,7 @@ suite("CliSessionResolverAdapter", () => {
 
       assert.strictEqual(result.resolvedSessionId, undefined);
       assert.deepStrictEqual(messages, [
-        "🔄 Starting new session due to invalid session ID format",
+        "[CliSessionResolverAdapter] Starting new session due to invalid session ID format",
       ]);
     } finally {
       (Log as unknown as { info(message: string): void }).info = originalInfo;

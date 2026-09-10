@@ -205,7 +205,7 @@ export class EndConditionEvaluator {
       workingDirectory ?? this.executionWorkspace.executionRoot;
 
     try {
-      Log.info(`Evaluating end condition script: ${condition.script}`);
+      Log.info(`[EndConditionEvaluator] Evaluating end condition script: ${condition.script}`);
 
       const hasMeaningfulNewline =
         EndConditionEvaluator.isMultilineInlineScript(condition.script);
@@ -265,7 +265,7 @@ export class EndConditionEvaluator {
         // interactive script steps — the same script text no longer runs
         // under a different, silently-chosen shell depending on execution mode.
         Log.info(
-          `Script file not found, treating as direct command: ${condition.script}`
+          `[EndConditionEvaluator] Script file not found, treating as direct command: ${condition.script}`
         );
         const shellInvocation = resolveShellInvocation(
           condition.script,
@@ -279,7 +279,7 @@ export class EndConditionEvaluator {
           throw new Error(shellError);
         }
         Log.debug(
-          `Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
+          `[EndConditionEvaluator] Resolved shell (${shellInvocation.shellKind}) for direct command: ${shellInvocation.executable} ${shellInvocation.args
             .map((a) => JSON.stringify(a))
             .join(" ")}`
         );
@@ -409,7 +409,7 @@ export class EndConditionEvaluator {
           !(await this.isAllowedPath(canonical, workspaceRoot, homeScriptsDir))
         ) {
           Log.error(
-            `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+            `[EndConditionEvaluator] Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
           throw new Error(
             `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
@@ -435,7 +435,7 @@ export class EndConditionEvaluator {
           !(await this.isAllowedPath(canonical, workspaceRoot, homeScriptsDir))
         ) {
           Log.error(
-            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+            `[EndConditionEvaluator] Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
           throw new Error(
             `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
@@ -463,7 +463,7 @@ export class EndConditionEvaluator {
           !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
         ) {
           Log.error(
-            `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
+            `[EndConditionEvaluator] Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
           );
           throw new Error(
             `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
@@ -493,7 +493,7 @@ export class EndConditionEvaluator {
           !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
         ) {
           Log.error(
-            `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
+            `[EndConditionEvaluator] Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
           );
           throw new Error(
             `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
@@ -523,7 +523,7 @@ export class EndConditionEvaluator {
         )
       ) {
         Log.error(
-          `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
+          `[EndConditionEvaluator] Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
         );
         throw new Error(
           `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
@@ -889,7 +889,7 @@ export class EndConditionEvaluator {
     }
 
     pythonExecutables.set(platform, executable);
-    Log.debug(`🐍 Python executable resolved for ${platform}: ${executable}`);
+    Log.debug(`[EndConditionEvaluator] Python executable resolved for ${platform}: ${executable}`);
     return executable;
   }
 
@@ -919,7 +919,7 @@ export class EndConditionEvaluator {
 
     powerShellExecutables.set(platform, executable);
     Log.debug(
-      `💠 PowerShell executable resolved for ${platform}: ${executable}`
+      `[EndConditionEvaluator] PowerShell executable resolved for ${platform}: ${executable}`
     );
     return executable;
   }
@@ -1221,10 +1221,10 @@ export class EndConditionEvaluator {
         }
       }
 
-      Log.info(`Created sample script from template: ${destinationPath}`);
+      Log.info(`[EndConditionEvaluator] Created sample script from template: ${destinationPath}`);
       return destinationPath;
     } catch (error) {
-      Log.error("Failed to create sample script from template:", error);
+      Log.error("[EndConditionEvaluator] Failed to create sample script from template:", error);
       return null;
     }
   }
@@ -1264,7 +1264,7 @@ export class EndConditionEvaluator {
       runner.dispose();
     }
     this.processRunners.clear();
-    Log.info("Killed all running end condition processes");
+    Log.info("[EndConditionEvaluator] Killed all running end condition processes");
   }
 
   /**
@@ -1272,6 +1272,6 @@ export class EndConditionEvaluator {
    */
   dispose(): void {
     this.killAllProcesses();
-    Log.trace("EndConditionEvaluator disposed");
+    Log.trace("[EndConditionEvaluator] disposed");
   }
 }

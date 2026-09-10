@@ -671,7 +671,10 @@ export class RunOutputResolver {
         }
       }
     } catch (error) {
-      Log.error("Unable to read run output projection history", error);
+      Log.error(
+        "[RunOutputResolver] Unable to read run output projection history",
+        error
+      );
       return this.createEmptyProjection(
         queueTargets,
         finalStepTargets,
@@ -762,7 +765,7 @@ export class RunOutputResolver {
     });
     if (!access.allowed || !access.matchedRoot) {
       Log.trace(
-        `Ignoring unscoped file event in run projection (${manifestPath})`
+        `[RunOutputResolver] Ignoring unscoped file event in run projection (${manifestPath})`
       );
       return undefined;
     }

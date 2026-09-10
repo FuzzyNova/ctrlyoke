@@ -161,7 +161,7 @@ export function useOutputExport({
         }
       );
     } catch (error) {
-      WebviewLog.error("Failed to generate markdown export", error);
+      WebviewLog.error("[useOutputExport] Failed to generate markdown export", error);
       return;
     }
 

@@ -498,7 +498,7 @@ export class HarnessFileManager {
       }
       return files;
     } catch (error) {
-      Log.error("HarnessFileManager.resolveAllLocations:", error);
+      Log.error("[HarnessFileManager] resolveAllLocations:", error);
       return [];
     }
   }
@@ -539,7 +539,7 @@ export class HarnessFileManager {
         throw new Error(`File already exists: ${destFile}`);
       }
       await copyFile(sourcePath, destFile);
-      Log.info(`Exported agent "${internalName}" to ${destFile}`);
+      Log.info(`[HarnessFileManager] Exported agent "${internalName}" to ${destFile}`);
     } else {
       const sourceStat = await fs.promises.stat(sourcePath);
       const skillName = sourceStat.isDirectory()
@@ -551,7 +551,7 @@ export class HarnessFileManager {
         throw new Error(`Skill directory already exists: ${destDir}`);
       }
       await copySkill(sourcePath, destDir, skillName);
-      Log.info(`Exported skill "${skillName}" to ${destDir}`);
+      Log.info(`[HarnessFileManager] Exported skill "${skillName}" to ${destDir}`);
     }
   }
 
@@ -601,11 +601,11 @@ export class HarnessFileManager {
         : ".agent.md";
       const filePath = path.join(targetDir, `${name}${ext}`);
       await fs.promises.rm(filePath, { force: true });
-      Log.info(`Deleted agent "${name}" from ${filePath}`);
+      Log.info(`[HarnessFileManager] Deleted agent "${name}" from ${filePath}`);
     } else {
       const dirPath = path.join(targetDir, name);
       await fs.promises.rm(dirPath, { recursive: true, force: true });
-      Log.info(`Deleted skill "${name}" from ${dirPath}`);
+      Log.info(`[HarnessFileManager] Deleted skill "${name}" from ${dirPath}`);
     }
   }
 

@@ -983,7 +983,7 @@ export class HostedWorkspaceViewerService {
     const resolved = this.safeResolve(request.path);
     if (!resolved) {
       Log.warn(
-        `WorkspaceViewer: path escape attempt rejected: ${request.path}`
+        `[HostedWorkspaceViewerService] Path escape attempt rejected: ${request.path}`
       );
       throw new WorkspaceTreeBadRequestError("Path is not allowed");
     }
@@ -1040,7 +1040,7 @@ export class HostedWorkspaceViewerService {
       dirents = await fs.promises.readdir(resolved, { withFileTypes: true });
     } catch (error) {
       Log.warn(
-        `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(error)}`
+        `[HostedWorkspaceViewerService] listDirectory failed for ${resolved}: ${String(error)}`
       );
       throw new WorkspaceTreeBadRequestError("Directory could not be read");
     }

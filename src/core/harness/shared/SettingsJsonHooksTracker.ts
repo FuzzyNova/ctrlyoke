@@ -341,7 +341,7 @@ export class SettingsJsonHooksTracker {
       );
     } catch (error) {
       Log.warn(
-        `Failed to restore hooks baseline for ${this.toolName}: ${error}`
+        `[SettingsJsonHooksTracker] Failed to restore hooks baseline for ${this.toolName}: ${error}`
       );
     }
   }

@@ -333,7 +333,7 @@ export class CodexCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("🔧 MCP server config added for dynamic queue extension");
+      Log.debug("[CodexCliProvider] MCP server config added for dynamic queue extension");
     }
 
     // Headless mode: add exec command and --json flag
@@ -368,7 +368,7 @@ export class CodexCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(`[CodexCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     // Hook setup (interactive notification hooks) is dispatched by
@@ -381,9 +381,9 @@ export class CodexCliProvider implements ICliProvider {
       sessionId
     );
     if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[CodexCliProvider] Resume requested but no session ID available");
     } else if (!shouldResume) {
-      Log.info("Starting new session");
+      Log.info("[CodexCliProvider] Starting new session");
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
@@ -419,7 +419,7 @@ export class CodexCliProvider implements ICliProvider {
       sessionId
     );
     if (shouldResume) {
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[CodexCliProvider] Resuming session: ${sessionId}`);
       return ["resume", sessionId!];
     }
     return [];
@@ -473,7 +473,7 @@ export class CodexCliProvider implements ICliProvider {
       hookEvents
     );
     Log.debug(
-      `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
+      `[CodexCliProvider] Configured SessionStart + Stop hooks for Codex completion detection`
     );
     return {
       cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
@@ -522,7 +522,7 @@ export class CodexCliProvider implements ICliProvider {
       userHooks,
       enabledNotificationHookEvents
     );
-    Log.debug(`🔔 Configured user hooks for Codex headless mode`);
+    Log.debug(`[CodexCliProvider] Configured user hooks for Codex headless mode`);
     return {
       cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
       mutations: [],
@@ -655,7 +655,7 @@ export class CodexCliProvider implements ICliProvider {
 
     // Model not supported - warn user and fallback
     const message = `Model "${requestedModel}" not supported by Codex CLI. Using default: ${defaultModel}`;
-    Log.warn(`⚠️ ${message}`);
+    Log.warn(`[CodexCliProvider] ${message}`);
 
     return defaultModel;
   }
@@ -794,14 +794,14 @@ export class CodexCliProvider implements ICliProvider {
       for (const server of userServers ?? []) {
         if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
           Log.warn(
-            `⚠️ Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
+            `[CodexCliProvider] Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
           );
           continue;
         }
 
         if (!server.url && !server.command) {
           Log.warn(
-            `⚠️ Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
+            `[CodexCliProvider] Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
           );
           continue;
         }
@@ -856,7 +856,7 @@ export class CodexCliProvider implements ICliProvider {
 
       if (configArgs.length > 0) {
         Log.debug(
-          `🔧 Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
+          `[CodexCliProvider] Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
         );
       }
 
@@ -866,7 +866,7 @@ export class CodexCliProvider implements ICliProvider {
         diagnostics: [],
       };
     } catch (error) {
-      Log.error("Failed to generate MCP config for Codex CLI", error);
+      Log.error("[CodexCliProvider] Failed to generate MCP config for Codex CLI", error);
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }

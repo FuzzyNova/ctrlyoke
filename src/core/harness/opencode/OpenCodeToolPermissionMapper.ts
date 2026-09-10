@@ -105,7 +105,7 @@ export class OpenCodeToolPermissionMapper
       (config.allowedTools.length > 0 || config.deniedTools.length > 0)
     ) {
       Log.debug(
-        "OpenCode: custom tool permissions are config-file driven, not via CLI flags"
+        "[OpenCodeToolPermissionMapper] Custom tool permissions are config-file driven, not via CLI flags"
       );
     }
     return {

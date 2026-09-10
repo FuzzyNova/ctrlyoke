@@ -341,7 +341,10 @@ export class ContextMenuReferenceCommands {
         mapSymbolKindToReferenceKind(symbol.kind)
       );
     } catch (error) {
-      Log.warn("ctrlyoke: Failed to resolve symbol for editor context", error);
+      Log.warn(
+        "[ContextMenuReferenceCommands] ctrlyoke: Failed to resolve symbol for editor context",
+        error
+      );
       return undefined;
     }
   }

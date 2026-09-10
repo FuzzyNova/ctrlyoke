@@ -241,7 +241,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
 
     this.emitStateChange();
-    Log.info("Queue cleared - ready for new workflow");
+    Log.info("[PromptQueue] Queue cleared - ready for new workflow");
   }
 
   public getRuntimeStateMachine(): WorkflowStateMachine {
@@ -380,7 +380,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
 
     this.emitStateChange();
-    Log.info(`Loaded ${prompts.length} prompts into queue`);
+    Log.info(`[PromptQueue] Loaded ${prompts.length} prompts into queue`);
   }
 
   /**
@@ -432,7 +432,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       } else if (runtime?.currentIndex && runtime.currentIndex > 0) {
         // Old format: treat prompts before currentIndex as completed
         Log.info(
-          "Old working file format detected: using currentIndex for completion boundary"
+          "[PromptQueue] Old working file format detected: using currentIndex for completion boundary"
         );
         for (let i = 0; i < runtime.currentIndex; i++) {
           completedIndices.add(String(i));
@@ -469,7 +469,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         executionState = EXECUTION_STATES.STOPPED;
         forcedToStopped = true;
         Log.info(
-          "Working file load: forced active state to STOPPED to prevent auto-start"
+          "[PromptQueue] Working file load: forced active state to STOPPED to prevent auto-start"
         );
       }
 
@@ -561,7 +561,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       if (forcedToStopped) {
         await this.updateWorkingFile().catch((err) =>
           Log.warn(
-            "Working file load: failed to persist STOPPED state to disk:",
+            "[PromptQueue] Working file load: failed to persist STOPPED state to disk:",
             err
           )
         );
@@ -572,14 +572,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         (p) => p._runtime
       ).length;
       Log.info(
-        `Restored queue from working file: ${prompts.length} prompts, ` +
+        `[PromptQueue] Restored queue from working file: ${prompts.length} prompts, ` +
           `currentIndex=${this.state.currentIndex}, ` +
           `completed=${this.state.completedIndices.size}, ` +
           `status=${executionState}, ` +
           `_runtime: ${promptsWithRuntime}/${prompts.length} prompts`
       );
     } catch (error) {
-      Log.error("Failed to restore from working file:", error as Error);
+      Log.error("[PromptQueue] Failed to restore from working file:", error as Error);
       throw error;
     }
   }
@@ -616,7 +616,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
 
     this.emitStateChange();
-    Log.info("Queue restarted from beginning");
+    Log.info("[PromptQueue] Queue restarted from beginning");
 
     // Update working file immediately to clear completedPrompts array
     // This prevents race condition where MCP appends during first prompt
@@ -640,7 +640,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.state.currentIndex = cap;
     this.emitStateChange();
-    Log.info(`Restored ${cap} completed step(s) for append continuation`);
+    Log.info(`[PromptQueue] Restored ${cap} completed step(s) for append continuation`);
   }
 
   /**
@@ -660,7 +660,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       };
     }
     this.emitStateChange();
-    Log.debug("Queue cleared");
+    Log.debug("[PromptQueue] Queue cleared");
   }
 
   /**
@@ -1533,7 +1533,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async mergeStepsFromDisk(): Promise<number> {
     if (!this.state.workingFilePath) {
-      Log.warn("mergeStepsFromDisk: No working file path set");
+      Log.warn("[PromptQueue] mergeStepsFromDisk: No working file path set");
       return -1;
     }
 
@@ -1545,7 +1545,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const diskSteps = workingFile.steps || [];
 
       Log.trace(
-        `mergeStepsFromDisk: Disk has ${diskSteps.length} steps, memory has ${this.state.steps.length} steps`
+        `[PromptQueue] mergeStepsFromDisk: Disk has ${diskSteps.length} steps, memory has ${this.state.steps.length} steps`
       );
 
       const newStepsFromDisk = this.mergeDiskSteps(
@@ -1554,12 +1554,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
 
       if (newStepsFromDisk.length === 0) {
-        Log.trace("mergeStepsFromDisk: No new steps found");
+        Log.trace("[PromptQueue] mergeStepsFromDisk: No new steps found");
         return 0;
       }
 
       Log.info(
-        `mergeStepsFromDisk: Found ${newStepsFromDisk.length} new steps from disk (MCP append), merging into queue`
+        `[PromptQueue] mergeStepsFromDisk: Found ${newStepsFromDisk.length} new steps from disk (MCP append), merging into queue`
       );
 
       // Update queue extension tracking
@@ -1572,7 +1572,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return newStepsFromDisk.length;
     } catch (error) {
       Log.error(
-        "mergeStepsFromDisk: Failed to read working file",
+        "[PromptQueue] mergeStepsFromDisk: Failed to read working file",
         error as Error
       );
       return -1;
@@ -1639,7 +1639,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.results.splice(insertIndex, 0, ...newResults);
 
       Log.info(
-        `appendSteps: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
+        `[PromptQueue] appendSteps: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
       );
 
       this.bumpDefinitionRevision();
@@ -1657,7 +1657,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // pre-append disk snapshot and let disk-authoritative merge replace it.
       await this.workingFileManager.updateWorkingFileDirect(true);
       Log.info(
-        `Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
+        `[PromptQueue] Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
       );
     });
   }
@@ -1746,7 +1746,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // pre-insert disk snapshot and drop the step that was just inserted.
       await this.workingFileManager.updateWorkingFileDirect(true);
       Log.info(
-        `Inserted step from ${source} after index ${afterIndex} (insertIndex=${insertIndex})`
+        `[PromptQueue] Inserted step from ${source} after index ${afterIndex} (insertIndex=${insertIndex})`
       );
     });
   }
@@ -2121,7 +2121,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // Emit state change
     this.emitStateChange();
 
-    Log.debug(`Updated prompt at index ${index}`);
+    Log.debug(`[PromptQueue] Updated prompt at index ${index}`);
   }
 
   /**
@@ -2158,7 +2158,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.bumpDefinitionRevision();
     await this.updateWorkingFile(true);
     this.emitStateChange();
-    Log.debug(`Replaced step at index ${index}`);
+    Log.debug(`[PromptQueue] Replaced step at index ${index}`);
   }
 
   /**
@@ -2232,7 +2232,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // Emit state change
     this.emitStateChange();
 
-    Log.debug(`Deleted prompt at index ${index}`);
+    Log.debug(`[PromptQueue] Deleted prompt at index ${index}`);
   }
 
   /**
@@ -2252,7 +2252,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
 
     this.emitStateChange();
-    Log.debug(`Updated workflow name to: ${workflowName}`);
+    Log.debug(`[PromptQueue] Updated workflow name to: ${workflowName}`);
   }
 
   /**

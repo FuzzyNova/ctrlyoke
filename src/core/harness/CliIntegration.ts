@@ -577,7 +577,7 @@ export class CliIntegration extends HarnessIntegration {
     );
     if (reason) {
       Log.info(
-        `↩️ Inject mode skipped for prompt ${promptIndex + 1}: ${reason} — using restart`
+        `[CliIntegration] Inject mode skipped for prompt ${promptIndex + 1}: ${reason} — using restart`
       );
       return false;
     }
@@ -770,7 +770,7 @@ export class CliIntegration extends HarnessIntegration {
     if (this.suppressPtyExitSessionId === session.id) {
       this.suppressPtyExitSessionId = undefined;
       Log.info(
-        `🛑 AI CLI PTY session ${session.id} exited after intentional mode handoff`
+        `[CliIntegration] AI CLI PTY session ${session.id} exited after intentional mode handoff`
       );
       return;
     }
@@ -787,13 +787,13 @@ export class CliIntegration extends HarnessIntegration {
 
     if (exitCode !== 0) {
       Log.warn(
-        `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
+        `[CliIntegration] AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
       );
       return;
     }
 
     Log.info(
-      `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
+      `[CliIntegration] AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
     );
   }
 
@@ -1127,7 +1127,7 @@ export class CliIntegration extends HarnessIntegration {
         return injectResult.success;
       }
       // Fall through to restart mode if the PTY is no longer available.
-      Log.info("↩️ Inject mode unavailable — falling back to restart mode");
+      Log.info("[CliIntegration] Inject mode unavailable — falling back to restart mode");
       await this.retireInteractivePtyForRestartFallback();
     } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
       // Inject mode was preemptively skipped (settings changed, resumeSession: false,
@@ -1214,7 +1214,7 @@ export class CliIntegration extends HarnessIntegration {
     if (!session.effectiveSessionId && session.resolvedSessionId) {
       session.setExtractedSessionId(session.resolvedSessionId);
       Log.debug(
-        `📝 Reusing resolved session ID (no new ID extracted): ${session.effectiveSessionId}`
+        `[CliIntegration] Reusing resolved session ID (no new ID extracted): ${session.effectiveSessionId}`
       );
     }
 
@@ -1300,7 +1300,7 @@ export class CliIntegration extends HarnessIntegration {
     if (lastId) {
       this.suppressPtyExitSessionId = lastId;
       Log.info(
-        `🛑 Suppressing exit for abandoned PTY ${lastId.slice(0, 8)} after inject fallback`
+        `[CliIntegration] Suppressing exit for abandoned PTY ${lastId.slice(0, 8)} after inject fallback`
       );
     }
     this.executionRunner.clearInteractiveContext();
@@ -1338,7 +1338,7 @@ export class CliIntegration extends HarnessIntegration {
     if (ptySessionId) {
       this.suppressPtyExitSessionId = ptySessionId;
       Log.info(
-        `🛑 Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
+        `[CliIntegration] Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
       );
     }
   }
@@ -1431,7 +1431,7 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
     await this.deleteTempFiles(tempFilePaths);
-    Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
+    Log.debug(`[CliIntegration] Cleaned up ${tempFilePaths.length} temp file(s)`);
   }
 
   // ============================================================
@@ -1535,7 +1535,7 @@ export class CliIntegration extends HarnessIntegration {
         }
 
         Log.debug(
-          `✅ ${this.provider.config.displayName} available${versionInfo}`
+          `[CliIntegration] ${this.provider.config.displayName} available${versionInfo}`
         );
         this.isAvailable = true;
         this.initializationStatus = HarnessStatus.Ready;
@@ -1559,7 +1559,7 @@ export class CliIntegration extends HarnessIntegration {
     this.initializationStatus = HarnessStatus.Unavailable;
     this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
 
-    Log.error(`❌ ${this.provider.config.displayName} not available`, error);
+    Log.error(`[CliIntegration] ${this.provider.config.displayName} not available`, error);
     reportCliNotFound(this.getIntegrationMode());
   }
 
@@ -1673,7 +1673,7 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected async cancelImplementation(): Promise<void> {
     Log.debug(
-      `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
+      `[CliIntegration] Cancel called (harness: ${this.provider.config.displayName})`
     );
 
     const hadActiveProcess = await this.transportCoordinator.cancel();
@@ -1681,7 +1681,7 @@ export class CliIntegration extends HarnessIntegration {
     if (!hadActiveProcess) {
       // No active process anywhere - fire responseComplete immediately
       Log.debug(
-        "⏹️ No active process/execution - firing responseComplete immediately"
+        "[CliIntegration] No active process/execution - firing responseComplete immediately"
       );
       this.lastFailureReason = "Stopped by user";
       this.responseCompleteEmitter.fire("Cancelled before process started");
@@ -1690,9 +1690,9 @@ export class CliIntegration extends HarnessIntegration {
 
     // Active process exists: Kill it. responseComplete will be fired by the
     // process close handler (in spawnProcess) when the process actually exits.
-    Log.info("⏹️ Active process found - sending kill signal");
+    Log.info("[CliIntegration] Active process found - sending kill signal");
 
-    Log.info("⏹️ Kill signal sent - waiting for process to exit");
+    Log.info("[CliIntegration] Kill signal sent - waiting for process to exit");
   }
 
   /**
@@ -1918,7 +1918,7 @@ export class CliIntegration extends HarnessIntegration {
 
       return success;
     } catch (error) {
-      Log.error("❌ Error sending prompt", error);
+      Log.error("[CliIntegration] Error sending prompt", error);
       this.lastFailureReason =
         error instanceof Error ? error.message : "Unknown error";
       return false;

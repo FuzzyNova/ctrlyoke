@@ -50,17 +50,17 @@ export class AgentExpander {
     // Find the requested agent by name
     const agent = AgentDiscovery.findAgentByName(agents, agentName);
     if (!agent || !agent.path) {
-      Log.warn(`⚠️ Agent "${agentName}" not found among discovered agents`);
+      Log.warn(`[AgentExpander] Agent "${agentName}" not found among discovered agents`);
       return null;
     }
 
     // Read agent file content
     try {
       const content = await fs.promises.readFile(agent.path, "utf-8");
-      Log.debug(`🤖 Agent "${agentName}" loaded from ${agent.path}`);
+      Log.debug(`[AgentExpander] Agent "${agentName}" loaded from ${agent.path}`);
       return AgentExpander.stripFrontmatter(content, agentName);
     } catch (error) {
-      Log.warn(`⚠️ Failed to read agent file "${agent.path}": ${error}`);
+      Log.warn(`[AgentExpander] Failed to read agent file "${agent.path}": ${error}`);
       return null;
     }
   }
@@ -91,12 +91,12 @@ export class AgentExpander {
 
     if (/^\s*model\s*:/m.test(frontmatter)) {
       Log.warn(
-        `⚠️ Agent "${agentName}" specifies a model override — ctrlyoke ignores agent-level model settings and uses its own harness/model configuration.`
+        `[AgentExpander] Agent "${agentName}" specifies a model override — ctrlyoke ignores agent-level model settings and uses its own harness/model configuration.`
       );
     }
     if (/^\s*tools\s*:/m.test(frontmatter)) {
       Log.warn(
-        `⚠️ Agent "${agentName}" specifies tool overrides — ctrlyoke ignores agent-level tool settings and uses its own permission configuration (ctrlyoke.cliToolPermissions).`
+        `[AgentExpander] Agent "${agentName}" specifies tool overrides — ctrlyoke ignores agent-level tool settings and uses its own permission configuration (ctrlyoke.cliToolPermissions).`
       );
     }
 

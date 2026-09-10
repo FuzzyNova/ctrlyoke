@@ -273,11 +273,11 @@ export class AntigravityCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--conversation", sessionId!);
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[AntigravityCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[AntigravityCliProvider] Resume requested but no session ID available");
     } else {
-      Log.info("Starting new session");
+      Log.info("[AntigravityCliProvider] Starting new session");
     }
 
     if (workspaceRoot) {
@@ -812,7 +812,7 @@ export class AntigravityCliProvider implements ICliProvider {
                 hasSecretMcpValues ? { fileMode: 0o600 } : undefined
               );
               Log.debug(
-                "🔧 Antigravity MCP servers written to .agents/mcp_config.json"
+                "[AntigravityCliProvider] Antigravity MCP servers written to .agents/mcp_config.json"
               );
             },
           },
@@ -820,7 +820,7 @@ export class AntigravityCliProvider implements ICliProvider {
         diagnostics: [],
       };
     } catch (error) {
-      Log.warn(`Failed to register Antigravity MCP servers: ${error}`);
+      Log.warn(`[AntigravityCliProvider] Failed to register Antigravity MCP servers: ${error}`);
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
@@ -873,7 +873,7 @@ export class AntigravityCliProvider implements ICliProvider {
     } catch (error) {
       // agy treats a broken statusline as non-fatal. Match that behavior so a
       // settings-file problem never prevents the harness itself from running.
-      Log.warn(`Failed to register Antigravity statusline: ${error}`);
+      Log.warn(`[AntigravityCliProvider] Failed to register Antigravity statusline: ${error}`);
       return { kind: "no-op", captured: false };
     }
   }

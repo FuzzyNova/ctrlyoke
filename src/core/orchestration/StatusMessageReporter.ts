@@ -126,10 +126,16 @@ export class StatusMessageReporter {
             statusMessage
           )
           .catch((error: unknown) =>
-            Log.warn("Failed to append status message to history:", error)
+            Log.warn(
+              "[StatusMessageReporter] Failed to append status message to history:",
+              error
+            )
           );
       } catch (error) {
-        Log.warn("Failed to append status message to history:", error);
+        Log.warn(
+          "[StatusMessageReporter] Failed to append status message to history:",
+          error
+        );
       }
     }
   }

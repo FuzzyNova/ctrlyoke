@@ -149,7 +149,9 @@ export class TerminalMessageHandlers {
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      Log.warn(`Failed to spawn embedded shell: ${errorMessage}`);
+      Log.warn(
+        `[TerminalMessageHandlers] Failed to spawn embedded shell: ${errorMessage}`
+      );
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "spawn embedded shell",
@@ -185,7 +187,9 @@ export class TerminalMessageHandlers {
       );
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      Log.warn(`Failed to restart embedded shell: ${errorMessage}`);
+      Log.warn(
+        `[TerminalMessageHandlers] Failed to restart embedded shell: ${errorMessage}`
+      );
       notifyUserFeedback(
         this.getUserFeedbackSink(),
         USER_FEEDBACK_SEVERITY.WARNING,

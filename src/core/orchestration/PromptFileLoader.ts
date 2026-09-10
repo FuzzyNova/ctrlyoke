@@ -71,7 +71,7 @@ export class PromptFileLoader {
     workspaceFolderPath?: string
   ): Promise<string | undefined> {
     try {
-      Log.debug(`Loading prompt file: ${filePath}`);
+      Log.debug(`[PromptFileLoader] Loading prompt file: ${filePath}`);
 
       // Parse prompt file (parser handles all formats including .prompt.md)
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
@@ -92,7 +92,7 @@ export class PromptFileLoader {
         filePath // real source file path — stored as originalFile
       );
     } catch (error) {
-      Log.error("Failed to load prompt file:", error);
+      Log.error("[PromptFileLoader] Failed to load prompt file:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -125,7 +125,7 @@ export class PromptFileLoader {
         undefined // no source file — Save As is the only export path
       );
     } catch (error) {
-      Log.error("Failed to load workflow from template:", error);
+      Log.error("[PromptFileLoader] Failed to load workflow from template:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -203,11 +203,11 @@ export class PromptFileLoader {
             if (result?.appliedKeys.length) {
               for (const key of result.appliedKeys) {
                 Log.trace(
-                  `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
+                  `[PromptFileLoader] Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
                 );
               }
               Log.trace(
-                "Persisted workflow-level properties from loaded file to working file"
+                "[PromptFileLoader] Persisted workflow-level properties from loaded file to working file"
               );
             }
           }
@@ -222,16 +222,18 @@ export class PromptFileLoader {
             await this.promptQueue.updateWorkingFileProperties(defaults);
             Object.assign(promptFile, defaults);
             Log.trace(
-              `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
+              `[PromptFileLoader] Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
             );
           }
         }
       } catch (error) {
-        Log.error("Failed to create working file:", error);
+        Log.error("[PromptFileLoader] Failed to create working file:", error);
         // Continue without working file (fallback to in-memory queue)
       }
     } else {
-      Log.warn("No workspace folder, skipping working file creation");
+      Log.warn(
+        "[PromptFileLoader] No workspace folder, skipping working file creation"
+      );
     }
 
     // Load prompts into queue with working file path
@@ -257,7 +259,7 @@ export class PromptFileLoader {
     );
 
     Log.debug(
-      `Loaded ${promptFile.steps.length} step(s)` +
+      `[PromptFileLoader] Loaded ${promptFile.steps.length} step(s)` +
         `${promptFile.finalStep ? " + final step" : ""} from ${displayName}`
     );
 
@@ -296,7 +298,10 @@ export class PromptFileLoader {
         );
         if (!validation.valid) {
           const errorMessage = validation.errors.join(",");
-          Log.error("Working file validation failed:", errorMessage);
+          Log.error(
+            "[PromptFileLoader] Working file validation failed:",
+            errorMessage
+          );
           throw new Error(`Working file validation failed: ${errorMessage}`);
         }
       }
@@ -318,7 +323,7 @@ export class PromptFileLoader {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
-          `Restoring session from working file (${workingFile.steps?.length ?? 0} prompts, mode: ${mode}, preventRunningAutoStart: ${preventRunningAutoStart})`
+          `[PromptFileLoader] Restoring session from working file (${workingFile.steps?.length ?? 0} prompts, mode: ${mode}, preventRunningAutoStart: ${preventRunningAutoStart})`
         );
         await this.promptQueue.restoreFromWorkingFile(
           workingFilePath,
@@ -358,7 +363,7 @@ export class PromptFileLoader {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
         // Merge new prompts preserving state and send STEPS_EXTENDED
         Log.trace(
-          `Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
+          `[PromptFileLoader] Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
         const newStepsCount = await this.promptQueue.mergeStepsFromDisk();
 
@@ -367,7 +372,7 @@ export class PromptFileLoader {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
           Log.info(
-            `Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}). Sending STEPS_EXTENDED to dashboard.`
+            `[PromptFileLoader] Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}). Sending STEPS_EXTENDED to dashboard.`
           );
 
           // send STEPS_EXTENDED message with updated step list
@@ -380,7 +385,9 @@ export class PromptFileLoader {
             updatedState.parallelGroups
           );
         } else if (newStepsCount === 0) {
-          Log.trace("Working file changed but no new steps detected");
+          Log.trace(
+            "[PromptFileLoader] Working file changed but no new steps detected"
+          );
         }
       }
 
@@ -391,10 +398,10 @@ export class PromptFileLoader {
       );
 
       Log.trace(
-        `Reloaded ${workingFile.steps?.length ?? 0} prompts from working file`
+        `[PromptFileLoader] Reloaded ${workingFile.steps?.length ?? 0} prompts from working file`
       );
     } catch (error) {
-      Log.error("Failed to reload working file:", error);
+      Log.error("[PromptFileLoader] Failed to reload working file:", error);
       // Re-throw so caller knows the operation failed
       throw error;
     }
@@ -451,7 +458,7 @@ export class PromptFileLoader {
         persistDedupeKey: dedupeKey,
       }
     );
-    Log.warn(`ctrlyoke: ${message}`);
+    Log.warn(`[PromptFileLoader] ctrlyoke: ${message}`);
   }
 
   private async validateAndReportCompatibility(

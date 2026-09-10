@@ -308,7 +308,7 @@ export class ClaudeCliProvider implements ICliProvider {
         workflowContext?.resolvedProperties?.mcpServers ?? [];
       if (mcpServersResolved.includes("ctrlyoke")) {
         args.push("--allowed-tools", "mcp__ctrlyoke");
-        Log.debug("🔧 ctrlyoke MCP tools auto-approved");
+        Log.debug("[ClaudeCliProvider] ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -319,7 +319,7 @@ export class ClaudeCliProvider implements ICliProvider {
             // Approve all tools from this server
             args.push("--allowed-tools", `mcp__${server.id}`);
             Log.debug(
-              `🔧 Auto-approved all tools from MCP server: ${server.id}`
+              `[ClaudeCliProvider] Auto-approved all tools from MCP server: ${server.id}`
             );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
@@ -327,7 +327,7 @@ export class ClaudeCliProvider implements ICliProvider {
               args.push("--allowed-tools", `mcp__${server.id}__${pattern}`);
             }
             Log.debug(
-              `🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+              `[ClaudeCliProvider] Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
             );
           }
         }
@@ -373,11 +373,11 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("-r", sessionId!);
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[ClaudeCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[ClaudeCliProvider] Resume requested but no session ID available");
     } else {
-      Log.info("Starting new session");
+      Log.info("[ClaudeCliProvider] Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args).
@@ -388,7 +388,7 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(`[ClaudeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -486,8 +486,8 @@ export class ClaudeCliProvider implements ICliProvider {
     const supportedFormats =
       "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
     const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
-    Log.warn(`⚠️ ${message}`);
-    Log.warn(`   Accepted formats: ${supportedFormats}`);
+    Log.warn(`[ClaudeCliProvider] ${message}`);
+    Log.warn(`[ClaudeCliProvider]    Accepted formats: ${supportedFormats}`);
 
     const defaultFullName = getClaudeModelName(defaultModel);
     return defaultFullName || defaultModel;
@@ -686,7 +686,7 @@ export class ClaudeCliProvider implements ICliProvider {
         await fs.mkdir(path.dirname(settingsPath), { recursive: true });
         await fs.writeFile(settingsPath, content, "utf-8");
         this.hookSettingsPaths.push(settingsPath);
-        Log.debug(`🔔 Configured Claude hook settings`);
+        Log.debug(`[ClaudeCliProvider] Configured Claude hook settings`);
       },
       restore: async () => {
         await fs.unlink(settingsPath).catch(() => undefined);
@@ -976,7 +976,7 @@ export class ClaudeCliProvider implements ICliProvider {
       return result;
     } catch (error) {
       // A statusline failure must never prevent Claude itself from running.
-      Log.warn(`Failed to register Claude statusline: ${error}`);
+      Log.warn(`[ClaudeCliProvider] Failed to register Claude statusline: ${error}`);
       return { kind: "no-op", captured: false };
     }
   }

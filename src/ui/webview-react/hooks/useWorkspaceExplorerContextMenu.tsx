@@ -101,7 +101,7 @@ export function useWorkspaceExplorerContextMenu({
         await workspaceDeleteEntry({ path });
         onRefresh(path);
       } catch (err) {
-        WebviewLog.error("Delete failed:", err);
+        WebviewLog.error("[useWorkspaceExplorerContextMenu] Delete failed:", err);
       }
     },
     [onRefresh]
@@ -126,7 +126,7 @@ export function useWorkspaceExplorerContextMenu({
         onOpenFile(buildPastedFilePath(clipboard.path, destDir));
       }
     } catch (err) {
-      WebviewLog.error("Paste failed:", err);
+      WebviewLog.error("[useWorkspaceExplorerContextMenu] Paste failed:", err);
     }
   }, [clipboard, explorerPath, isRootsList, onOpenFile, onRefresh]);
 

@@ -95,7 +95,7 @@ export class ClaudeToolPermissionMapper
         );
         if (convertedAllowTools.length > 0) {
           args.push("--allowedTools", ...convertedAllowTools);
-          Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+          Log.debug(`[ClaudeToolPermissionMapper] Allowed tools: ${convertedAllowTools.join(", ")}`);
         }
       }
 
@@ -104,7 +104,7 @@ export class ClaudeToolPermissionMapper
       );
       if (convertedDenyTools.length > 0) {
         args.push("--disallowedTools", ...convertedDenyTools);
-        Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+        Log.debug(`[ClaudeToolPermissionMapper] Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
     return {

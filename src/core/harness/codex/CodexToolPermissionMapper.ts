@@ -135,7 +135,7 @@ export class CodexToolPermissionMapper
     // Warn if tool patterns are configured (unsupported by Codex)
     if (config.allowedTools.length > 0 || config.deniedTools.length > 0) {
       Log.warn(
-        "⚠️ Codex CLI does not support granular tool patterns (cliAllowedTools/cliDeniedTools). Use Codex-specific sandbox/approval settings for custom control."
+        "[CodexToolPermissionMapper] Codex CLI does not support granular tool patterns (cliAllowedTools/cliDeniedTools). Use Codex-specific sandbox/approval settings for custom control."
       );
     }
 
@@ -167,7 +167,7 @@ export class CodexToolPermissionMapper
           return ["-s", sandboxMode];
         } else {
           Log.warn(
-            "⚠️ Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
+            "[CodexToolPermissionMapper] Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
           );
           if (includeApprovalFlag) {
             return [...this.AUTO_PRESET_ARGS];

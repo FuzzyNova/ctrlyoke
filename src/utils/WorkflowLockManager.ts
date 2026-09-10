@@ -85,7 +85,7 @@ export class WorkflowLockManager {
             await handle.close();
           }
           Log.debug(
-            `[WorkflowLockManager] acquireLock: ${workflowKey} → ${lock.runRef}`
+            `[WorkflowLockManager] acquireLock: ${workflowKey} ${lock.runRef}`
           );
           return;
         } catch (error) {
@@ -283,7 +283,7 @@ export class WorkflowLockManager {
 
       // "absent" or "stale"
       Log.info(
-        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${lockInspection.liveness})`
+        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} stopped (lock=${lockInspection.liveness})`
       );
 
       if (runningFile._runtime) {

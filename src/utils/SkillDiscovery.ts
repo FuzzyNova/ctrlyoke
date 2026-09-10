@@ -163,9 +163,12 @@ export class SkillDiscovery {
         ...builtInSkills.filter((skill) => !discoveredNames.has(skill.name))
       );
 
-      Log.trace(`Discovered ${skills.length} skills`);
+      Log.trace(`[SkillDiscovery] Discovered ${skills.length} skills`);
     } catch (error) {
-      Log.warn("Error discovering skills; returning partial results:", error);
+      Log.warn(
+        "[SkillDiscovery] Error discovering skills; returning partial results:",
+        error
+      );
     }
 
     return skills;
@@ -195,7 +198,7 @@ export class SkillDiscovery {
     try {
       return path.join(os.homedir(), ...parts);
     } catch (error) {
-      Log.warn("Error building user directory path:", error);
+      Log.warn("[SkillDiscovery] Error building user directory path:", error);
       return null;
     }
   }
@@ -272,13 +275,13 @@ export class SkillDiscovery {
 
       if (skills.length > 0) {
         Log.trace(
-          `Found ${skills.length} skill(s) in ${directoryPath}:`,
+          `[SkillDiscovery] Found ${skills.length} skill(s) in ${directoryPath}:`,
           skills.map((s) => s.name).join(", ")
         );
       }
     } catch (error) {
       Log.warn(
-        `Error discovering skills in ${directoryPath}; skipping:`,
+        `[SkillDiscovery] Error discovering skills in ${directoryPath}; skipping:`,
         error
       );
     }
@@ -338,7 +341,7 @@ export class SkillDiscovery {
         : "";
     } catch (error) {
       Log.warn(
-        `⚠️ Failed to parse frontmatter for skill "${skillName}": ${error}`
+        `[SkillDiscovery] Failed to parse frontmatter for skill "${skillName}": ${error}`
       );
       return "";
     }
@@ -354,7 +357,7 @@ export class SkillDiscovery {
     }
 
     Log.error(
-      `Unable to locate built-in skills directory. Checked: ${candidateDirectories.join(", ")}`
+      `[SkillDiscovery] Unable to locate built-in skills directory. Checked: ${candidateDirectories.join(", ")}`
     );
     return null;
   }

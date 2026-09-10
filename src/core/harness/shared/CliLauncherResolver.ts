@@ -116,7 +116,7 @@ async function resolveWindowsLauncher(
 
   if (!metadata) {
     Log.warn(
-      `⚠️ Failed to resolve Windows launcher for ${commandName}; using direct invocation`
+      `[CliLauncherResolver] Failed to resolve Windows launcher for ${commandName}; using direct invocation`
     );
     return {
       kind: "direct",
@@ -136,7 +136,7 @@ async function resolveWindowsLauncher(
 
   const extension = path.extname(resolvedPath).toLowerCase();
   Log.debug(
-    `[CliLauncherResolver] ${commandName} → "${resolvedPath}" (${extension || "no ext"})`
+    `[CliLauncherResolver] ${commandName} "${resolvedPath}" (${extension || "no ext"})`
   );
 
   if (extension === ".ps1") {
@@ -153,7 +153,7 @@ async function resolveWindowsLauncher(
       await resolvePowerShellBatchProxyTarget(resolvedPath);
     if (powershellProxyTarget) {
       Log.debug(
-        `[CliLauncherResolver] bypassing PowerShell batch proxy "${resolvedPath}" → "${powershellProxyTarget}"`
+        `[CliLauncherResolver] bypassing PowerShell batch proxy "${resolvedPath}" "${powershellProxyTarget}"`
       );
       return {
         kind: "powershell-file",
@@ -172,7 +172,7 @@ async function resolveWindowsLauncher(
     const nodeShimTarget = await resolveNodeCliShimTarget(resolvedPath, shell);
     if (nodeShimTarget) {
       Log.debug(
-        `[CliLauncherResolver] bypassing npm cmd shim "${resolvedPath}" → "${nodeShimTarget.nodePath}" "${nodeShimTarget.scriptPath}"`
+        `[CliLauncherResolver] bypassing npm cmd shim "${resolvedPath}" "${nodeShimTarget.nodePath}" "${nodeShimTarget.scriptPath}"`
       );
       return {
         kind: "node-shim",
@@ -389,7 +389,7 @@ async function getWindowsCommandMetadata(
     return Array.isArray(parsed) ? parsed[0] : parsed;
   } catch (error) {
     Log.warn(
-      `⚠️ Windows launcher resolution failed for ${commandName}: ${String(error)}`
+      `[CliLauncherResolver] Windows launcher resolution failed for ${commandName}: ${String(error)}`
     );
     return undefined;
   }

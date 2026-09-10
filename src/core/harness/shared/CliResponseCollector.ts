@@ -125,7 +125,7 @@ export class CliResponseCollector {
     let extractedSessionId = parsedOutput.metadata.sessionId;
     if (extractedSessionId) {
       Log.debug(
-        `📝 Session ID from output${params.label || ""}: ${extractedSessionId}`
+        `[CliResponseCollector] Session ID from output${params.label || ""}: ${extractedSessionId}`
       );
     } else if (
       succeeded &&
@@ -140,7 +140,7 @@ export class CliResponseCollector {
       if (logSessionId) {
         extractedSessionId = logSessionId;
         Log.debug(
-          `📝 Session ID from logs${params.label || ""}: ${logSessionId}`
+          `[CliResponseCollector] Session ID from logs${params.label || ""}: ${logSessionId}`
         );
       }
     }

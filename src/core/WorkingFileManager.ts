@@ -594,7 +594,7 @@ export class WorkingFileManager {
     // Write atomically (temp + rename)
     await this.writeWorkingFileAtomic(draftFilePath, workingFile);
 
-    Log.info(` Created draft working file: ${draftFilePath}`);
+    Log.info(`[WorkingFileManager] Created draft working file: ${draftFilePath}`);
     return { workingFilePath: draftFilePath, workflowKey };
   }
 
@@ -709,7 +709,7 @@ export class WorkingFileManager {
     );
 
     Log.info(
-      ` Promoted lineage ${workflowKey} to new run ${allocation.runRef}`
+      `[WorkingFileManager] Promoted lineage ${workflowKey} to new run ${allocation.runRef}`
     );
     return {
       workingFilePath: allocation.runFilePath,
@@ -864,7 +864,7 @@ export class WorkingFileManager {
     );
 
     Log.info(
-      ` Seeded lineage ${workflowKey} run ${fromRunRef} into new run ${allocation.runRef}`
+      `[WorkingFileManager] Seeded lineage ${workflowKey} run ${fromRunRef} into new run ${allocation.runRef}`
     );
     return {
       workingFilePath: allocation.runFilePath,
@@ -1904,7 +1904,7 @@ export class WorkingFileManager {
           // would erase the append's optimistic-concurrency boundary.
           this.queueAccess.setDefinitionRevision(diskDefinitionRevision);
           Log.info(
-            `updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
+            `[WorkingFileManager] updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
           );
 
           // Emit state change so dashboard updates
@@ -1946,7 +1946,7 @@ export class WorkingFileManager {
         (p) => p._runtime
       ).length;
       Log.trace(
-        `updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
+        `[WorkingFileManager] updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
 
@@ -2280,7 +2280,7 @@ export class WorkingFileManager {
       () => undefined,
       (err) => {
         Log.error(
-          `operationQueue: serialized operation failed: ${getErrorMessage(err)}`
+          `[WorkingFileManager] operationQueue: serialized operation failed: ${getErrorMessage(err)}`
         );
       }
     );

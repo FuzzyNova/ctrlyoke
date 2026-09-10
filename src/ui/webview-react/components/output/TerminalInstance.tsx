@@ -113,7 +113,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
       if (shouldSendResize) {
         WebviewLog.trace(
-          `[TerminalInstance] controller → TERMINAL_RESIZE (${reason}) wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+          `[TerminalInstance] controller TERMINAL_RESIZE (${reason}) wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `container=${container.offsetWidth}x${container.offsetHeight}px ` +
             `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
             `previous=${previousCols}x${previousRows} xtermRendered=${entry.term.cols}x${entry.term.rows} ` +

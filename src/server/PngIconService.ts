@@ -118,7 +118,7 @@ class PngIconService {
       try {
         await this.render(svgPath, bgColor, fgColor);
       } catch (err) {
-        Log.warn(`PngIconService: render failed: ${err}`);
+        Log.warn(`[PngIconService] render failed: ${err}`);
         return null;
       }
     }
@@ -134,7 +134,7 @@ class PngIconService {
       try {
         await this.render(svgPath, bgColor, fgColor);
       } catch (err) {
-        Log.warn(`PngIconService: render failed: ${err}`);
+        Log.warn(`[PngIconService] render failed: ${err}`);
         return null;
       }
     }

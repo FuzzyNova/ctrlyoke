@@ -105,7 +105,7 @@ export class PromptFileWatcher {
       }
     });
 
-    Log.trace(`Set up file watcher for ${filePath}`);
+    Log.trace(`[PromptFileWatcher] Set up file watcher for ${filePath}`);
     this.watchedFilePath = filePath;
     this.startExternalFilePolling(filePath);
   }
@@ -155,7 +155,10 @@ export class PromptFileWatcher {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {
-        Log.trace(`Unable to poll external working file ${filePath}:`, error);
+        Log.trace(
+          `[PromptFileWatcher] Unable to poll external working file ${filePath}:`,
+          error
+        );
       }
     } finally {
       this.pollingInFlight = false;
@@ -183,12 +186,12 @@ export class PromptFileWatcher {
 
     if (shouldReload) {
       Log.trace(
-        `Working file changed during execution, reloading queue: ${uri.fsPath}`
+        `[PromptFileWatcher] Working file changed during execution, reloading queue: ${uri.fsPath}`
       );
       await onReload(uri.fsPath);
     } else {
       Log.trace(
-        `Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
+        `[PromptFileWatcher] Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
       );
     }
   }
@@ -203,7 +206,7 @@ export class PromptFileWatcher {
     uri: vscode.Uri,
     onDelete: (filePath: string) => void
   ): void {
-    Log.trace(`Working file deleted: ${uri.fsPath}`);
+    Log.trace(`[PromptFileWatcher] Working file deleted: ${uri.fsPath}`);
 
     // A promoted draft is moved, not lost: `WorkingFileManager.finalizeRun`
     // removes `draft/workflow.ctrlyoke.json` once its content lives on in
@@ -218,7 +221,7 @@ export class PromptFileWatcher {
     const activeWorkingFile = this.promptQueue.getState().workingFilePath;
     if (activeWorkingFile && !pathsEqual(activeWorkingFile, uri.fsPath)) {
       Log.trace(
-        `Ignoring delete for superseded working file (active: ${activeWorkingFile})`
+        `[PromptFileWatcher] Ignoring delete for superseded working file (active: ${activeWorkingFile})`
       );
       return;
     }

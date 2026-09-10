@@ -459,7 +459,7 @@ async function downloadImage(uri: string, filename: string): Promise<void> {
     anchor.remove();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   } catch (error) {
-    WebviewLog.warn("Image thumbnail download failed", error);
+    WebviewLog.warn("[MarkdownText] Image thumbnail download failed", error);
   }
 }
 
@@ -850,7 +850,7 @@ function MermaidBlock({ code }: { code: string }) {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      WebviewLog.warn("Mermaid PNG export failed", e);
+      WebviewLog.warn("[MarkdownText] Mermaid PNG export failed", e);
     }
   }, [svg]);
 

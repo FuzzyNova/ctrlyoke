@@ -476,7 +476,7 @@ export class WorkspaceSnapshotService {
       stdout = result.stdout;
     } catch (err) {
       Log.warn(
-        `WorkspaceSnapshotService: git diff for commit range failed: ${err}`
+        `[WorkspaceSnapshotService] git diff for commit range failed: ${err}`
       );
       return changes;
     }
@@ -655,7 +655,7 @@ export class WorkspaceSnapshotService {
           const result = await execFileAsync("git", args, { cwd: root });
           stdout = result.stdout;
         } catch (err) {
-          Log.warn(`WorkspaceSnapshotService: git status failed: ${err}`);
+          Log.warn(`[WorkspaceSnapshotService] git status failed: ${err}`);
           return { git, files };
         }
 
@@ -705,7 +705,7 @@ export class WorkspaceSnapshotService {
         await walkDirectory(root, root, gitignoreMatcher, files);
       }
     } catch (err) {
-      Log.warn(`WorkspaceSnapshotService: captureSegment error: ${err}`);
+      Log.warn(`[WorkspaceSnapshotService] captureSegment error: ${err}`);
       return { git, files: new Map() };
     }
 

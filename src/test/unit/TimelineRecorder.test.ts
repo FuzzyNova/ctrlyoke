@@ -221,7 +221,7 @@ suite("TimelineRecorder", () => {
       workflowId: secret,
     }));
     Log.initializeCli(tempDir, true);
-    Log.error(`session log failure: ${secret}`);
+    Log.error(`[TimelineRecorder] session log failure: ${secret}`);
     release();
 
     const events = await fs.readFile(

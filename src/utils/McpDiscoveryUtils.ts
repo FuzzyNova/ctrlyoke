@@ -974,7 +974,7 @@ export async function safeDiscoverLocalMcpServers(
     return { servers };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    Log.warn("McpDiscovery: local scan failed:", msg);
+    Log.warn("[McpDiscovery] local scan failed:", msg);
     return { servers: [], error: msg };
   }
 }
@@ -995,7 +995,7 @@ export async function safeFetchMcpRegistry(
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    Log.warn("McpDiscovery: registry fetch failed:", msg);
+    Log.warn("[McpDiscovery] registry fetch failed:", msg);
     return { servers: [], error: msg };
   }
 }

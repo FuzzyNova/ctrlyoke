@@ -722,7 +722,7 @@ export abstract class HarnessIntegration {
     }
     if (!ConfigurationUtils.shouldAutoDeleteTempFiles()) {
       Log.debug(
-        `🗂️ Keeping ${tempFilePaths.length} temp file(s) (autoDeleteTempFiles=false)`
+        `[HarnessIntegration] Keeping ${tempFilePaths.length} temp file(s) (autoDeleteTempFiles=false)`
       );
       return;
     }
@@ -779,13 +779,13 @@ export abstract class HarnessIntegration {
     // If anything else exists, use file-based passing.
     if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(promptText)) {
       Log.debug(
-        "📁 Prompt contains special characters, using file-based passing for safety"
+        "[HarnessIntegration] Prompt contains special characters, using file-based passing for safety"
       );
       return false;
     }
 
     if (/[\n\r\t]/.test(promptText)) {
-      Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
+      Log.debug("[HarnessIntegration] Prompt contains newlines/tabs, using file-based passing");
       return false;
     }
 
@@ -813,7 +813,7 @@ export abstract class HarnessIntegration {
   protected isInjectablePrompt(promptText: string): boolean {
     if (/[\x00-\x1f\x7f]/.test(promptText)) {
       Log.debug(
-        "📁 Prompt contains control characters, using file-based passing for inject mode"
+        "[HarnessIntegration] Prompt contains control characters, using file-based passing for inject mode"
       );
       return false;
     }

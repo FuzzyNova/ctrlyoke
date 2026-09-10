@@ -186,7 +186,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                   result.data
                 );
               Log.info(
-                `✅ Stop hook detected — terminating interactive session` +
+                `[CliTransportCoordinator] Stop hook detected — terminating interactive session` +
                   (hookSessionId ? ` (session: ${hookSessionId})` : "")
               );
               this.deps.processManager.disposeProcess();
@@ -323,7 +323,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         );
       } catch (error) {
         const message = getErrorMessage(error);
-        Log.warn(`Failed to start embedded terminal: ${message}`);
+        Log.warn(
+          `[CliTransportCoordinator] Failed to start embedded terminal: ${message}`
+        );
         postMessage({
           type: MESSAGE_TYPES.TERMINAL_OUTPUT,
           workflowId,
@@ -343,7 +345,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       this.lastPtySessionId = session.id;
       this.currentPtySession = session;
       Log.info(
-        `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
+        `[CliTransportCoordinator] PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
       );
     }
   }
@@ -407,10 +409,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     try {
       if (tempFilePaths.length > 0) {
         Log.info(
-          `🚀 Starting headless mode with ${tempFilePaths.length} file(s)`
+          `[CliTransportCoordinator] Starting headless mode with ${tempFilePaths.length} file(s)`
         );
       } else {
-        Log.info("🚀 Starting headless mode with direct prompt (fast path)");
+        Log.info("[CliTransportCoordinator] Starting headless mode with direct prompt (fast path)");
       }
 
       const command =
@@ -477,7 +479,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       }
 
       if (this.deps.runtimeState.isCancelling()) {
-        Log.info("⏹️ Prompt execution cancelled by user");
+        Log.info("[CliTransportCoordinator] Prompt execution cancelled by user");
         await executeCallback(
           source?.logTail
             ? { ...result, headlessLogTail: source.logTail }
@@ -495,7 +497,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       if (source?.logTail) {
         await source.logTail.finish();
       }
-      Log.error("❌ Headless execution error", error);
+      Log.error("[CliTransportCoordinator] Headless execution error", error);
       return false;
     } finally {
       await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
@@ -553,7 +555,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     const ptySession = this.currentPtySession;
     this.currentPtySession = undefined; // clear immediately so no other code touches it during the wait
     Log.info(
-      `🛑 Terminating PTY session ${sessionId.slice(0, 8)} before ${reason}`
+      `[CliTransportCoordinator] Terminating PTY session ${sessionId.slice(0, 8)} before ${reason}`
     );
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
     if (ptyManager) {
@@ -646,7 +648,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         })
     );
 
-    Log.info("✅ Process exited - execution complete");
+    Log.info("[CliTransportCoordinator] Process exited - execution complete");
     return result;
   }
 

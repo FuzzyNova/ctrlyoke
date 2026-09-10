@@ -208,7 +208,7 @@ export class WorkflowMutationCoordinator {
       return true;
     }
     Log.warn(
-      `Refused to ${action}: ctrlyoke is still starting up. Run-starting commands are ignored until initialization completes.`
+      `[WorkflowMutationCoordinator] Refused to ${action}: ctrlyoke is still starting up. Run-starting commands are ignored until initialization completes.`
     );
     this.showRunActionFailure(
       ctx,
@@ -223,7 +223,7 @@ export class WorkflowMutationCoordinator {
     action: string,
     error: unknown
   ): void {
-    Log.error(`Failed to ${action}:`, error);
+    Log.error(`[WorkflowMutationCoordinator] Failed to ${action}:`, error);
     // A hosted browser client never sees the VS Code notification, so without
     // this the rejected run action is indistinguishable from a dead button.
     void this.reportActionFailure(ctx, action, error);

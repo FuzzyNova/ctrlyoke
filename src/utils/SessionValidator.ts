@@ -95,7 +95,7 @@ export class SessionValidator {
 
       default:
         Log.warn(
-          `⚠️ Unknown harness: ${harness}. Cannot validate session ID format.`
+          `[SessionValidator] Unknown harness: ${harness}. Cannot validate session ID format.`
         );
         return false;
     }
@@ -111,7 +111,7 @@ export class SessionValidator {
   private static validateUuid(sessionId: string, harnessName: string): boolean {
     if (!this.UUID_REGEX.test(sessionId)) {
       Log.warn(
-        `⚠️ Session ID "${sessionId}" is not a valid UUID for ${harnessName}. ` +
+        `[SessionValidator] Session ID "${sessionId}" is not a valid UUID for ${harnessName}. ` +
           `Starting new session instead. ` +
           `Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
       );
@@ -132,7 +132,7 @@ export class SessionValidator {
   private static validateCodexThreadId(sessionId: string): boolean {
     const trimmed = sessionId.trim();
     if (trimmed.length === 0) {
-      Log.warn(`⚠️ Empty session ID for Codex. Starting new session instead.`);
+      Log.warn(`[SessionValidator] Empty session ID for Codex. Starting new session instead.`);
       return false;
     }
     return true;
@@ -150,7 +150,7 @@ export class SessionValidator {
   private static validateOpenCodeSessionId(sessionId: string): boolean {
     if (!this.OPENCODE_SESSION_REGEX.test(sessionId)) {
       Log.warn(
-        `⚠️ Session ID "${sessionId}" is not a valid OpenCode session ID. ` +
+        `[SessionValidator] Session ID "${sessionId}" is not a valid OpenCode session ID. ` +
           `Starting new session instead. ` +
           `Expected format: ses_<alphanumeric> (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)`
       );

@@ -38,7 +38,7 @@ export class ScriptProcessRunner {
 
   constructor(processManagerRoot: string) {
     this.processManager = new CliProcessManager(processManagerRoot, (msg) =>
-      Log.trace(msg)
+      Log.trace(`[ScriptProcessRunner] ${msg}`)
     );
   }
 
@@ -54,11 +54,11 @@ export class ScriptProcessRunner {
     }
 
     Log.debug(
-      `Spawning command - executable: "${executable}", args: [${args
+      `[ScriptProcessRunner] Spawning command - executable: "${executable}", args: [${args
         .map((arg) => `"${arg}"`)
         .join(", ")}]${options.viaShell ? " (via shell)" : ""}`
     );
-    Log.debug(`Working directory: ${options.cwd}`);
+    Log.debug(`[ScriptProcessRunner] Working directory: ${options.cwd}`);
 
     const cleanEnv = { ...process.env };
     const vsCodeEnvVars = [
@@ -72,7 +72,7 @@ export class ScriptProcessRunner {
       delete cleanEnv[key];
     }
     Log.trace(
-      `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
+      `[ScriptProcessRunner] Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
     );
 
     if (options.vars && Object.keys(options.vars).length > 0) {

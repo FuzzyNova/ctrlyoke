@@ -55,7 +55,7 @@ export class WorkspaceSessionManager {
       );
 
       Log.debug(
-        `ctrlyoke: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
+        `[WorkspaceSessionManager] ctrlyoke: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
       );
 
       // Optional: Show subtle notification (not intrusive)
@@ -63,7 +63,10 @@ export class WorkspaceSessionManager {
       //   `ctrlyoke: Resumed session: ${workflowName}`
       // );
     } catch (error) {
-      Log.error("ctrlyoke: Failed to auto-load recent session:", error);
+      Log.error(
+        "[WorkspaceSessionManager] ctrlyoke: Failed to auto-load recent session:",
+        error
+      );
       // Don't show error to user - just log and continue
     }
   }
@@ -85,7 +88,7 @@ export class WorkspaceSessionManager {
         return undefined;
       }
       Log.error(
-        "ctrlyoke: Failed to resolve most recent working file path:",
+        "[WorkspaceSessionManager] ctrlyoke: Failed to resolve most recent working file path:",
         error
       );
       return undefined;
@@ -102,10 +105,15 @@ export class WorkspaceSessionManager {
     try {
       const promptFiles =
         await this.promptFileParser.discoverPromptFiles(workspaceFolderPath);
-      Log.debug(`ctrlyoke: Discovered ${promptFiles.length} prompt files`);
+      Log.debug(
+        `[WorkspaceSessionManager] ctrlyoke: Discovered ${promptFiles.length} prompt files`
+      );
       return promptFiles;
     } catch (error) {
-      Log.error("ctrlyoke: Failed to discover prompt files:", error);
+      Log.error(
+        "[WorkspaceSessionManager] ctrlyoke: Failed to discover prompt files:",
+        error
+      );
       return [];
     }
   }
@@ -155,7 +163,10 @@ export class WorkspaceSessionManager {
 
           return { filePath, workingFile, timestamp };
         } catch (error) {
-          Log.warn(`Failed to read lineage ${workflowKey}:`, error);
+          Log.warn(
+            `[WorkspaceSessionManager] Failed to read lineage ${workflowKey}:`,
+            error
+          );
           return undefined;
         }
       })
@@ -267,7 +278,7 @@ export class WorkspaceSessionManager {
         } catch (error) {
           // Skip invalid files
           Log.warn(
-            `Failed to read session file ${path.basename(filePath)}:`,
+            `[WorkspaceSessionManager] Failed to read session file ${path.basename(filePath)}:`,
             error
           );
         }
@@ -275,7 +286,7 @@ export class WorkspaceSessionManager {
 
       return sessions;
     } catch (error) {
-      Log.error("Failed to discover sessions:", error);
+      Log.error("[WorkspaceSessionManager] Failed to discover sessions:", error);
       return [];
     }
   }

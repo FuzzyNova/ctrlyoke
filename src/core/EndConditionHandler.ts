@@ -190,7 +190,7 @@ export class EndConditionHandler {
       }
 
       if (evaluationResult.passed) {
-        Log.info("✅ End condition passed");
+        Log.info("[EndConditionHandler] End condition passed");
         this.recordPassingEvaluation(
           prompt,
           evaluationResult,
@@ -236,7 +236,7 @@ export class EndConditionHandler {
           }
 
           Log.info(
-            `✅ Pass-retry budget exhausted after ${this.promptQueue.getCurrentRetryCount(
+            `[EndConditionHandler] Pass-retry budget exhausted after ${this.promptQueue.getCurrentRetryCount(
               retryContext.attemptTarget
             )} retries; advancing`
           );
@@ -259,7 +259,7 @@ export class EndConditionHandler {
         retryContext.attemptTarget
       );
       if (retryContext.runtime.stopped) {
-        Log.info("⚠️ Workflow stopped, aborting retry");
+        Log.info("[EndConditionHandler] Workflow stopped, aborting retry");
         return this.workflowStopped(
           "Workflow stopped by user",
           retryContext.attemptTarget
@@ -267,7 +267,7 @@ export class EndConditionHandler {
       }
 
       if (onFail === CONDITION_ACTIONS.CONTINUE) {
-        Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
+        Log.warn("[EndConditionHandler] End condition failed, continuing due to onFail: continue");
         retryContext.runtime.completeAttempt(
           retryContext.attemptTarget,
           currentAttemptIndex
@@ -287,7 +287,7 @@ export class EndConditionHandler {
             : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
 
         Log.error(
-          `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
+          `[EndConditionHandler] End condition failed after ${retryCount} retries (max: ${maxRetries})`
         );
         this.statusMessageReporter.report(
           retryContext.attemptTarget,
@@ -382,8 +382,8 @@ export class EndConditionHandler {
 
     Log.info(
       retryKind === RETRY_KINDS.PASS
-        ? `🔄 End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
-        : `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+        ? `End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
+        : `Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
     );
 
     const hasQueueStep =
@@ -437,7 +437,7 @@ export class EndConditionHandler {
     }
 
     if (retryContext.runtime.stopped) {
-      Log.info("⚠️ Workflow stopped during retry");
+      Log.info("[EndConditionHandler] Workflow stopped during retry");
       return {
         handlerResult: this.workflowStopped(
           "Workflow stopped during retry",

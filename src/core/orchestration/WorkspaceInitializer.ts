@@ -175,7 +175,7 @@ export class WorkspaceInitializer {
 
     if (isNew) {
       Log.info(
-        `ctrlyoke: Initialized .ctrlyoke workspace directory at ${ctrlyokeDir}`
+        `[WorkspaceInitializer] ctrlyoke: Initialized .ctrlyoke workspace directory at ${ctrlyokeDir}`
       );
     }
 
@@ -189,7 +189,7 @@ export class WorkspaceInitializer {
    */
   static async reinitialize(workspaceRoot: string): Promise<void> {
     await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
-    Log.info("ctrlyoke: Workspace re-initialized");
+    Log.info("[WorkspaceInitializer] ctrlyoke: Workspace re-initialized");
   }
 
   private static async ensureGitignore(gitignorePath: string): Promise<void> {

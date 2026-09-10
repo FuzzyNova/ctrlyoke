@@ -143,7 +143,7 @@ export class CliExecutionRunner {
       );
       if (logSessionId) {
         await this.persistResolvedSessionId(session, logSessionId);
-        Log.debug(`📝 Session ID from logs (interactive): ${logSessionId}`);
+        Log.debug(`[CliExecutionRunner] Session ID from logs (interactive): ${logSessionId}`);
       }
     }
 
@@ -193,7 +193,7 @@ export class CliExecutionRunner {
   ): Promise<{ injected: false } | { injected: true; success: boolean }> {
     if (!this.lastInteractiveContext) {
       Log.warn(
-        "⚠️ Inject mode: no previous interactive context — PTY may not be running"
+        "[CliExecutionRunner] Inject mode: no previous interactive context — PTY may not be running"
       );
       return { injected: false };
     }
@@ -231,7 +231,7 @@ export class CliExecutionRunner {
         this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
       if (!focused) {
         Log.warn(
-          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
         );
         return { injected: false };
       }
@@ -243,7 +243,7 @@ export class CliExecutionRunner {
         this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
       if (!promptWritten) {
         Log.warn(
-          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
         );
         return { injected: false };
       }
@@ -262,7 +262,7 @@ export class CliExecutionRunner {
 
       if (!submitWritten) {
         Log.warn(
-          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
         );
         return { injected: false };
       }
@@ -281,7 +281,7 @@ export class CliExecutionRunner {
 
     if (this.deps.failureTracker.getPtyTermination()) {
       Log.warn(
-        "⚠️ Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
+        "[CliExecutionRunner] Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
       );
       return { injected: false };
     }
@@ -291,7 +291,7 @@ export class CliExecutionRunner {
     );
 
     Log.info(
-      `🔤 Injected prompt into existing PTY session (${session.promptArgument.length} chars)`
+      `[CliExecutionRunner] Injected prompt into existing PTY session (${session.promptArgument.length} chars)`
     );
 
     try {
@@ -399,7 +399,7 @@ export class CliExecutionRunner {
 
           if (currentHarness === HARNESS_IDS.CLAUDE_CLI) {
             Log.warn(
-              `⚠️ Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
+              `[CliExecutionRunner] Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
                 `Retrying without resume flag.`
             );
 
@@ -453,7 +453,7 @@ export class CliExecutionRunner {
       return success;
     } catch (error) {
       hookMonitor?.stop();
-      Log.error("❌ Headless execution error", error);
+      Log.error("[CliExecutionRunner] Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;
     }
@@ -466,11 +466,11 @@ export class CliExecutionRunner {
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
       if (session.workflowContext && session.workflowContext.promptIndex > 0) {
-        Log.info(`\n${"─".repeat(52)}`);
+        Log.info(`[CliExecutionRunner] \n${"".repeat(52)}`);
         Log.info(
-          `Prompt ${session.workflowContext.promptIndex + 1} / ${session.workflowContext.allPrompts.length}`
+          `[CliExecutionRunner] Prompt ${session.workflowContext.promptIndex + 1} / ${session.workflowContext.allPrompts.length}`
         );
-        Log.info("\n");
+        Log.info("[CliExecutionRunner] \n");
       }
 
       return await this.deps.transportCoordinator.executeStandaloneInteractiveProcess(
@@ -483,7 +483,7 @@ export class CliExecutionRunner {
         session.resolvedProperties?.secrets
       );
     } catch (error) {
-      Log.error("❌ CLI interactive execution error", error);
+      Log.error("[CliExecutionRunner] CLI interactive execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return { success: false };
     }
@@ -555,12 +555,12 @@ export class CliExecutionRunner {
 
     try {
       if (!this.deps.provider.logParser) {
-        Log.error("❌ Harness does not support log file monitoring");
+        Log.error("[CliExecutionRunner] Harness does not support log file monitoring");
         return { success: false };
       }
 
       const startTime = new Date();
-      Log.trace(`⏱️ Recording start time: ${startTime.toISOString()}`);
+      Log.trace(`[CliExecutionRunner] Recording start time: ${startTime.toISOString()}`);
 
       if (session.resolvedSessionId && this.deps.provider.notificationMonitor) {
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -577,7 +577,7 @@ export class CliExecutionRunner {
             try {
               fs.unlinkSync(staleStopFile);
               Log.trace(
-                `🧹 Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
+                `[CliExecutionRunner] Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
               );
             } catch {
               // Ignore cleanup failures for stale stop files.
@@ -664,7 +664,7 @@ export class CliExecutionRunner {
 
       return result;
     } catch (error) {
-      Log.error("❌ Interactive execution error", error);
+      Log.error("[CliExecutionRunner] Interactive execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       throw error;
     } finally {
@@ -931,9 +931,12 @@ export class CliExecutionRunner {
     if (context && persistence?.persistSessionId) {
       try {
         await persistence.persistSessionId(context.promptIndex, sessionId);
-        Log.debug(`💾 Persisted live session ID: ${sessionId}`);
+        Log.debug(`[CliExecutionRunner] Persisted live session ID: ${sessionId}`);
       } catch (error) {
-        Log.warn(`Failed to persist live session ID ${sessionId}:`, error);
+        Log.warn(
+          `[CliExecutionRunner] Failed to persist live session ID ${sessionId}:`,
+          error
+        );
         return;
       }
     }

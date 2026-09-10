@@ -104,7 +104,7 @@ export class CopilotToolPermissionMapper
       );
       if (convertedAllowTools.length > 0) {
         args.push("--allow-tool", ...convertedAllowTools);
-        Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        Log.debug(`[CopilotToolPermissionMapper] Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
 
@@ -116,13 +116,13 @@ export class CopilotToolPermissionMapper
       );
       if (convertedDenyTools.length > 0) {
         args.push("--deny-tool", ...convertedDenyTools);
-        Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+        Log.debug(`[CopilotToolPermissionMapper] Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
 
     if (filteredTools.length > 0) {
       Log.debug(
-        `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
+        `[CopilotToolPermissionMapper] Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
       );
     }
 
@@ -157,7 +157,7 @@ export class CopilotToolPermissionMapper
     // Parse pattern to extract tool name
     const parsed = this.parsePattern(pattern);
     if (!parsed) {
-      Log.warn(`⚠️ Invalid tool pattern: ${pattern}`);
+      Log.warn(`[CopilotToolPermissionMapper] Invalid tool pattern: ${pattern}`);
       return null;
     }
 

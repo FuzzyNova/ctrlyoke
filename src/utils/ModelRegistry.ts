@@ -108,7 +108,7 @@ export async function initializeModelRegistry(): Promise<void> {
 async function queryCopilotCliModels(): Promise<void> {
   try {
     Log.debug(
-      "Querying Copilot CLI for available models via 'copilot help config'..."
+      "[ModelRegistry] Querying Copilot CLI for available models via 'copilot help config'..."
     );
 
     const result = await retryWithBackoff(
@@ -130,7 +130,7 @@ async function queryCopilotCliModels(): Promise<void> {
 
     if (!result) {
       Log.info(
-        "Copilot CLI unavailable after retries (file lock), using fallback list"
+        "[ModelRegistry] Copilot CLI unavailable after retries (file lock), using fallback list"
       );
       cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
       return;
@@ -151,16 +151,18 @@ async function queryCopilotCliModels(): Promise<void> {
       if (models && models.length > 0) {
         cachedCopilotCliModelIds = models.map((m) => m.replace(/"/g, ""));
         Log.debug(
-          `Copilot CLI supports ${cachedCopilotCliModelIds.length} models: ${cachedCopilotCliModelIds.join(", ")}`
+          `[ModelRegistry] Copilot CLI supports ${cachedCopilotCliModelIds.length} models: ${cachedCopilotCliModelIds.join(", ")}`
         );
         return;
       }
     }
 
-    Log.info("Could not parse Copilot CLI models, using fallback list");
+    Log.info(
+      "[ModelRegistry] Could not parse Copilot CLI models, using fallback list"
+    );
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   } catch (error) {
-    Log.warn(`Failed to query Copilot CLI models: ${error}`);
+    Log.warn(`[ModelRegistry] Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   }
 }
@@ -181,14 +183,14 @@ async function queryOpenCodeModels(): Promise<void> {
       });
     } catch {
       Log.debug(
-        "OpenCode CLI not available, skipping model query — using fallback list"
+        "[ModelRegistry] OpenCode CLI not available, skipping model query — using fallback list"
       );
       cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
       return;
     }
 
     Log.debug(
-      "Querying OpenCode for available models via 'opencode models --verbose'..."
+      "[ModelRegistry] Querying OpenCode for available models via 'opencode models --verbose'..."
     );
     let stdout = "";
     try {
@@ -204,21 +206,23 @@ async function queryOpenCodeModels(): Promise<void> {
         throw execError;
       }
       Log.debug(
-        `opencode models --verbose exited non-zero but stdout has content — attempting parse`
+        `[ModelRegistry] opencode models --verbose exited non-zero but stdout has content — attempting parse`
       );
     }
     const ids = parseOpenCodeVerboseOutput(stdout);
     if (ids.length > 0) {
       cachedOpenCodeModelIds = ids;
       Log.debug(
-        `OpenCode reports ${ids.length} models, ${cachedOpenCodeContextWindows.size} with context window sizes`
+        `[ModelRegistry] OpenCode reports ${ids.length} models, ${cachedOpenCodeContextWindows.size} with context window sizes`
       );
     } else {
-      Log.info("opencode models --verbose returned empty list, using fallback");
+      Log.info(
+        "[ModelRegistry] opencode models --verbose returned empty list, using fallback"
+      );
       cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
     }
   } catch (error) {
-    Log.warn(`Failed to query opencode models: ${error}`);
+    Log.warn(`[ModelRegistry] Failed to query opencode models: ${error}`);
     cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
   }
 }
@@ -308,17 +312,17 @@ async function queryQwenModels(): Promise<void> {
     if (ids.length > 0) {
       cachedQwenModelIds = ids;
       Log.debug(
-        `Discovered ${ids.length} Qwen models from ~/.qwen/settings.json: ${ids.join(", ")}`
+        `[ModelRegistry] Discovered ${ids.length} Qwen models from ~/.qwen/settings.json: ${ids.join(", ")}`
       );
     } else {
       Log.debug(
-        "No models found in ~/.qwen/settings.json, using fallback model"
+        "[ModelRegistry] No models found in ~/.qwen/settings.json, using fallback model"
       );
       cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
     }
   } catch {
     Log.debug(
-      "Could not read ~/.qwen/settings.json, using fallback Qwen model"
+      "[ModelRegistry] Could not read ~/.qwen/settings.json, using fallback Qwen model"
     );
     cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
   }
@@ -389,25 +393,31 @@ async function queryAntigravityModels(): Promise<void> {
       });
     } catch {
       Log.debug(
-        "Antigravity CLI not available, skipping model query — using fallback list"
+        "[ModelRegistry] Antigravity CLI not available, skipping model query — using fallback list"
       );
       cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
       return;
     }
 
-    Log.debug("Querying Antigravity for available models via 'agy models'...");
+    Log.debug(
+      "[ModelRegistry] Querying Antigravity for available models via 'agy models'..."
+    );
     const stdout = await execWithClosedStdin("agy", ["models"], 10000);
     const ids = parseAntigravityModelsOutput(stdout);
 
     if (ids.length > 0) {
       cachedAntigravityModelIds = ids;
-      Log.debug(`Antigravity reports ${ids.length} models: ${ids.join(", ")}`);
+      Log.debug(
+        `[ModelRegistry] Antigravity reports ${ids.length} models: ${ids.join(", ")}`
+      );
     } else {
-      Log.info("'agy models' returned no models, using fallback list");
+      Log.info(
+        "[ModelRegistry] 'agy models' returned no models, using fallback list"
+      );
       cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
     }
   } catch (error) {
-    Log.warn(`Failed to query Antigravity models: ${error}`);
+    Log.warn(`[ModelRegistry] Failed to query Antigravity models: ${error}`);
     cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
   }
 }

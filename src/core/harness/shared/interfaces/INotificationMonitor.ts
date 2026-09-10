@@ -268,7 +268,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     while (Date.now() - startTime.getTime() < config.timeoutMs) {
       if (onCancel?.()) {
         Log.debug(
-          "⏹️ Stop hook monitoring stopped (cancelled or already completed)"
+          "[NotificationMonitorBase] Stop hook monitoring stopped (cancelled or already completed)"
         );
         return { completed: false, error: "Execution cancelled" };
       }
@@ -284,13 +284,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
             if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
               Log.warn(
-                `⚠️ Harness error detected via notification hook (session: ${sessionId})`
+                `[NotificationMonitorBase] Harness error detected via notification hook (session: ${sessionId})`
               );
               try {
                 fs.unlinkSync(errorFile);
-                Log.trace("🗑️ Cleaned up error notification file");
+                Log.trace("[NotificationMonitorBase] Cleaned up error notification file");
               } catch (error) {
-                Log.trace(`Failed to cleanup error file: ${error}`);
+                Log.trace(`[NotificationMonitorBase] Failed to cleanup error file: ${error}`);
               }
               return {
                 completed: false,
@@ -313,13 +313,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               data?.status === STEP_STATUS.COMPLETED
             ) {
               Log.info(
-                `✅ Completion detected via Stop hook (session: ${sessionId})`
+                `[NotificationMonitorBase] Completion detected via Stop hook (session: ${sessionId})`
               );
               try {
                 fs.unlinkSync(stopFile);
-                Log.trace("🗑️ Cleaned up Stop notification file");
+                Log.trace("[NotificationMonitorBase] Cleaned up Stop notification file");
               } catch (error) {
-                Log.trace(`Failed to cleanup Stop file: ${error}`);
+                Log.trace(`[NotificationMonitorBase] Failed to cleanup Stop file: ${error}`);
               }
               return { completed: true, kind: "completion", data };
             }
@@ -336,13 +336,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
               if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
                 Log.warn(
-                  `⚠️ Harness error detected via notification hook (file: ${file})`
+                  `[NotificationMonitorBase] Harness error detected via notification hook (file: ${file})`
                 );
                 try {
                   fs.unlinkSync(file);
-                  Log.trace("🗑️ Cleaned up error notification file");
+                  Log.trace("[NotificationMonitorBase] Cleaned up error notification file");
                 } catch (error) {
-                  Log.trace(`Failed to cleanup error file: ${error}`);
+                  Log.trace(`[NotificationMonitorBase] Failed to cleanup error file: ${error}`);
                 }
                 return {
                   completed: false,
@@ -368,13 +368,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 data?.status === STEP_STATUS.COMPLETED
               ) {
                 Log.info(
-                  `✅ Completion detected via Stop hook (file: ${file})`
+                  `[NotificationMonitorBase] Completion detected via Stop hook (file: ${file})`
                 );
                 try {
                   fs.unlinkSync(file);
-                  Log.trace("🗑️ Cleaned up Stop notification file");
+                  Log.trace("[NotificationMonitorBase] Cleaned up Stop notification file");
                 } catch (error) {
-                  Log.trace(`Failed to cleanup Stop file: ${error}`);
+                  Log.trace(`[NotificationMonitorBase] Failed to cleanup Stop file: ${error}`);
                 }
                 return { completed: true, kind: "completion", data };
               }
@@ -382,13 +382,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           }
         }
       } catch (error) {
-        Log.trace(`Stop notification check error: ${error}`);
+        Log.trace(`[NotificationMonitorBase] Stop notification check error: ${error}`);
       }
 
       await this.delay(pollMs);
     }
 
-    Log.warn(`⏱️ Stop hook monitoring timed out`);
+    Log.warn(`[NotificationMonitorBase] Stop hook monitoring timed out`);
     return {
       completed: false,
       error: "Timeout waiting for Stop hook notification",
@@ -440,10 +440,12 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             try {
               fs.unlinkSync(file);
               Log.trace(
-                "🗑️ Cleaned up run-scoped SessionStart notification file"
+                "[NotificationMonitorBase] Cleaned up run-scoped SessionStart notification file"
               );
             } catch (error) {
-              Log.trace(`Failed to cleanup SessionStart file: ${error}`);
+              Log.trace(
+                `[NotificationMonitorBase] Failed to cleanup SessionStart file: ${error}`
+              );
             }
             return { completed: true, data };
           }
@@ -503,7 +505,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
       const file = path.join(directory, `${sessionId}${suffix}`);
       try {
         fs.unlinkSync(file);
-        Log.trace(`🗑️ Cleaned up notification file: ${path.basename(file)}`);
+        Log.trace(`[NotificationMonitorBase] Cleaned up notification file: ${path.basename(file)}`);
       } catch {
         // Ignore — file may not exist (already deleted or never created)
       }

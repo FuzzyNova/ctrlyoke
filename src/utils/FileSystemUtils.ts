@@ -34,11 +34,11 @@ export async function saveIfDirty(
     pathsEqual(doc.uri.fsPath, filePath)
   );
   if (openDocument?.isDirty) {
-    Log.info(`Auto-saving dirty file: ${filePath}`);
+    Log.info(`[FileSystemUtils] Auto-saving dirty file: ${filePath}`);
     try {
       await openDocument.save();
     } catch (error) {
-      Log.error("Failed to auto-save file:", error);
+      Log.error("[FileSystemUtils] Failed to auto-save file:", error);
       notifyUserFeedback(
         userFeedbackSink,
         USER_FEEDBACK_SEVERITY.WARNING,

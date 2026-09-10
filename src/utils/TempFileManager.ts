@@ -85,7 +85,7 @@ export class TempFileManager {
     try {
       await fs.promises.mkdir(this.tempDir, { recursive: true });
     } catch (err) {
-      Log.error(`Failed to create temp directory: ${err}`);
+      Log.error(`[TempFileManager] Failed to create temp directory: ${err}`);
       throw new Error(`Cannot create temp directory: ${this.tempDir}`);
     }
   }
@@ -127,7 +127,7 @@ export class TempFileManager {
       await fs.promises.writeFile(filePath, promptText, "utf-8");
       return filePath;
     } catch (err) {
-      Log.error(`Failed to write temp prompt file: ${err}`);
+      Log.error(`[TempFileManager] Failed to write temp prompt file: ${err}`);
       throw new Error(`Cannot write temp file: ${filePath}`);
     }
   }
@@ -190,7 +190,7 @@ export class TempFileManager {
       return filePaths;
     } catch (err) {
       // Clean up any files created before the error
-      Log.error(`Failed to create split prompt files: ${err}`);
+      Log.error(`[TempFileManager] Failed to create split prompt files: ${err}`);
       await this.deleteFiles(filePaths); // Clean up partial files
       throw new Error(
         `Cannot create split temp files: ${err instanceof Error ? err.message : String(err)}`
@@ -261,7 +261,7 @@ export class TempFileManager {
     try {
       await fs.promises.writeFile(filePath, content, "utf-8");
     } catch (err) {
-      Log.error(`Failed to write category temp file: ${err}`);
+      Log.error(`[TempFileManager] Failed to write category temp file: ${err}`);
       throw new Error(`Cannot write category temp file: ${filePath}`);
     }
   }
@@ -312,7 +312,9 @@ export class TempFileManager {
       }
       return filePaths;
     } catch (err) {
-      Log.error(`Failed to create category split files: ${err}`);
+      Log.error(
+        `[TempFileManager] Failed to create category split files: ${err}`
+      );
       await this.deleteFiles(filePaths);
       throw new Error(
         `Cannot create category split temp files: ${err instanceof Error ? err.message : String(err)}`
@@ -370,7 +372,7 @@ export class TempFileManager {
         await fs.promises.writeFile(filePath, data);
         return filePath;
       } catch (err) {
-        Log.error(`Failed to write pasted image file: ${err}`);
+        Log.error(`[TempFileManager] Failed to write pasted image file: ${err}`);
         throw new Error(`Cannot write pasted image file: ${filePath}`);
       }
     }
@@ -434,7 +436,9 @@ export class TempFileManager {
         await fs.promises.writeFile(filePath, finalText, "utf-8");
         return filePath;
       } catch (err) {
-        Log.error(`Failed to write output snapshot file: ${err}`);
+        Log.error(
+          `[TempFileManager] Failed to write output snapshot file: ${err}`
+        );
         throw new Error(`Cannot write output snapshot file: ${filePath}`);
       }
     }
@@ -462,7 +466,7 @@ export class TempFileManager {
         return;
       }
       // Log but don't throw - cleanup is best-effort
-      Log.warn(`Failed to delete temp file ${filePath}: ${err}`);
+      Log.warn(`[TempFileManager] Failed to delete temp file ${filePath}: ${err}`);
     }
   }
 
@@ -533,21 +537,21 @@ export class TempFileManager {
             if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
               await fs.promises.unlink(filePath);
               cleanedCount++;
-              Log.trace(`🗑️ Cleaned up orphaned temp file: ${file}`);
+              Log.trace(`[TempFileManager] Cleaned up orphaned temp file: ${file}`);
             }
           } catch (err) {
             // A sibling ctrlyoke instance (or the periodic sweep's own prior
             // pass) may have already deleted this stale file — benign race,
             // not a failure worth surfacing.
             if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
-              Log.warn(`Failed to process temp file ${file}: ${err}`);
+              Log.warn(`[TempFileManager] Failed to process temp file ${file}: ${err}`);
             }
           }
         }
       }
     } catch (err) {
       // Log error but don't throw - cleanup is best-effort
-      Log.warn(`Temp file cleanup failed: ${err}`);
+      Log.warn(`[TempFileManager] Temp file cleanup failed: ${err}`);
     }
 
     return cleanedCount;
@@ -576,19 +580,21 @@ export class TempFileManager {
             await fs.promises.unlink(filePath);
             cleanedCount++;
             Log.trace(
-              `🗑️ Cleaned up orphaned notification file: ${path.basename(dirPath)}/${file}`
+              `[TempFileManager] Cleaned up orphaned notification file: ${path.basename(dirPath)}/${file}`
             );
           }
         } catch (err) {
           // Benign race with a sibling instance/prior sweep pass — see the
           // matching comment in cleanupOrphanedFiles().
           if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
-            Log.warn(`Failed to process notification file ${file}: ${err}`);
+            Log.warn(
+              `[TempFileManager] Failed to process notification file ${file}: ${err}`
+            );
           }
         }
       }
     } catch (err) {
-      Log.warn(`Failed to clean notification dir ${dirPath}: ${err}`);
+      Log.warn(`[TempFileManager] Failed to clean notification dir ${dirPath}: ${err}`);
     }
     return cleanedCount;
   }

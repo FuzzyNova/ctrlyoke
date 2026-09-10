@@ -1104,7 +1104,10 @@ export class CtrlYokeWebviewProvider
           : {}),
       });
     } catch (error) {
-      Log.warn("Failed to load output history for workflow:", error);
+      Log.warn(
+        "[CtrlYokeWebviewProvider] Failed to load output history for workflow:",
+        error
+      );
     }
   }
 
@@ -1201,14 +1204,18 @@ export class CtrlYokeWebviewProvider
    */
   public async handleClearWorkflow(): Promise<void> {
     if (!this.workflowOrchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error(
+        "[CtrlYokeWebviewProvider] WorkflowOrchestrator not initialized"
+      );
       return;
     }
 
     this.settingsSync.sendWorkflowUnloadedToSettings();
     await this.workflowOrchestrator.clearWorkflow();
     this.updateFileSelected(DEFAULT_WORKFLOW_NAME, [], undefined);
-    Log.info("Workflow cleared, ready for new prompts");
+    Log.info(
+      "[CtrlYokeWebviewProvider] Workflow cleared, ready for new prompts"
+    );
   }
 
   /**

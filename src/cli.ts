@@ -410,7 +410,7 @@ function warnAboutClampedInteractiveSteps(
   }
 
   Log.warn(
-    `CLI cannot provide an interactive PTY; downgraded step(s) to headless: ${downgradedSteps.join(", ")}`
+    `[Cli] CLI cannot provide an interactive PTY; downgraded step(s) to headless: ${downgradedSteps.join(", ")}`
   );
 }
 
@@ -607,7 +607,7 @@ async function runCommand(
     gitToplevel ? [gitToplevel] : []
   );
   if (stateHomeWarning) {
-    Log.warn(`ctrlyoke: ${stateHomeWarning}`);
+    Log.warn(`[Cli] ctrlyoke: ${stateHomeWarning}`);
   }
   await new ProjectStateRegistry().initialize(
     workingDir,

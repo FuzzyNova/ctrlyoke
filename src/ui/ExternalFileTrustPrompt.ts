@@ -369,7 +369,7 @@ async function readWorkflowTrustState(
     };
   } catch (error) {
     Log.warn(
-      `Unable to inspect workflow trust settings at "${sourcePath}": ${error}`
+      `[ExternalFileTrustPrompt] Unable to inspect workflow trust settings at "${sourcePath}": ${error}`
     );
     return undefined;
   }

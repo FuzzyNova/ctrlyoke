@@ -688,10 +688,10 @@ export class WorkflowSerializer {
         plan: analysis.plan,
       });
       for (const warning of writeResult.warnings) {
-        Log.warn(`Save As bundle warning: ${warning}`);
+        Log.warn(`[WorkflowSerializer] Save As bundle warning: ${warning}`);
       }
 
-      Log.info(`Saved workflow to: ${absolutePath}`);
+      Log.info(`[WorkflowSerializer] Saved workflow to: ${absolutePath}`);
 
       // Remember this directory so the next unsaved workflow's Save As
       // defaults here instead of the repo root.
@@ -710,7 +710,7 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       const msg = getErrorMessage(error);
-      Log.error("Failed to save workflow:", error);
+      Log.error("[WorkflowSerializer] Failed to save workflow:", error);
       this.sendSaveFailure(pm, msg, requestId);
     }
   }
@@ -769,7 +769,9 @@ export class WorkflowSerializer {
       );
 
       for (const warning of analysis.plan.warnings) {
-        Log.warn(`Template export warning: ${warning.message}`);
+        Log.warn(
+          `[WorkflowSerializer] Template export warning: ${warning.message}`
+        );
       }
 
       const templates = await this.templateManager.getAvailableTemplates();
@@ -783,7 +785,10 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       const msg = getErrorMessage(error);
-      Log.error("Failed to save workflow as template:", error);
+      Log.error(
+        "[WorkflowSerializer] Failed to save workflow as template:",
+        error
+      );
       this.sendSaveFailure(pm, msg, requestId);
     }
   }
@@ -824,7 +829,7 @@ export class WorkflowSerializer {
       }
 
       Log.debug(
-        `handleExportOutput: showing save dialog, defaultUri=${defaultUri.fsPath}, contentLength=${content.length}`
+        `[WorkflowSerializer] handleExportOutput: showing save dialog, defaultUri=${defaultUri.fsPath}, contentLength=${content.length}`
       );
 
       const uri = await vscode.window.showSaveDialog({
@@ -839,11 +844,13 @@ export class WorkflowSerializer {
       if (uri) {
         await fs.writeFile(uri.fsPath, content, "utf-8");
       } else {
-        Log.debug("handleExportOutput: save dialog cancelled by user");
+        Log.debug(
+          "[WorkflowSerializer] handleExportOutput: save dialog cancelled by user"
+        );
       }
     } catch (error) {
       const msg = getErrorMessage(error);
-      Log.error("Failed to export output:", error);
+      Log.error("[WorkflowSerializer] Failed to export output:", error);
       this.sendActionFailure(
         pm,
         "export output",
@@ -901,7 +908,7 @@ export class WorkflowSerializer {
         template,
       });
     } catch (error) {
-      Log.error("Failed to load template:", error);
+      Log.error("[WorkflowSerializer] Failed to load template:", error);
     }
   }
 
@@ -918,7 +925,7 @@ export class WorkflowSerializer {
         templateId,
       });
     } catch (error) {
-      Log.error("Failed to set default template:", error);
+      Log.error("[WorkflowSerializer] Failed to set default template:", error);
     }
   }
 
@@ -997,7 +1004,9 @@ export class WorkflowSerializer {
         const doc = await vscode.workspace.openTextDocument(templatePath);
         await vscode.window.showTextDocument(doc);
       } catch (openError) {
-        Log.warn(`Failed to open newly created template: ${openError}`);
+        Log.warn(
+          `[WorkflowSerializer] Failed to open newly created template: ${openError}`
+        );
       }
 
       const templates = await this.templateManager.getAvailableTemplates();
@@ -1155,7 +1164,7 @@ export class WorkflowSerializer {
   ): Promise<void> {
     const manager = this.getManager();
     if (!manager) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowSerializer] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -1233,7 +1242,7 @@ export class WorkflowSerializer {
               : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
           } catch (error) {
             Log.warn(
-              `Failed to read lineage descriptor ${workflowKey}:`,
+              `[WorkflowSerializer] Failed to read lineage descriptor ${workflowKey}:`,
               error
             );
             return null;
@@ -1310,7 +1319,7 @@ export class WorkflowSerializer {
                 // so the next GET_WORKFLOWS_LIST will move it to the Running section.
               } else {
                 Log.trace(
-                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${workflowKey}" running→stopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
+                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${workflowKey}" runningstopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
                 );
                 executionState = EXECUTION_STATES.STOPPED;
               }
@@ -1347,7 +1356,10 @@ export class WorkflowSerializer {
               runNav,
             };
           } catch (error) {
-            Log.warn(`Failed to parse workflow file ${workflowKey}:`, error);
+            Log.warn(
+              `[WorkflowSerializer] Failed to parse workflow file ${workflowKey}:`,
+              error
+            );
             return null;
           }
         })
@@ -1362,7 +1374,7 @@ export class WorkflowSerializer {
         workflows: validWorkflows,
       });
     } catch (error) {
-      Log.error("Failed to get recent workflows:", error);
+      Log.error("[WorkflowSerializer] Failed to get recent workflows:", error);
       pm({
         type: MESSAGE_TYPES.RECENT_WORKFLOWS,
         workflows: [],
@@ -1380,7 +1392,7 @@ export class WorkflowSerializer {
     try {
       await this.getManager()?.loadWorkingFile(filePath);
     } catch (error) {
-      Log.error("Failed to load workflow:", error);
+      Log.error("[WorkflowSerializer] Failed to load workflow:", error);
       this.sendActionFailure(
         pm,
         "load workflow",
@@ -1401,7 +1413,10 @@ export class WorkflowSerializer {
         (descriptor) => ({ ...descriptor, isFavorite: !descriptor.isFavorite })
       );
     } catch (error) {
-      Log.error("Failed to toggle workflow favorite:", error);
+      Log.error(
+        "[WorkflowSerializer] Failed to toggle workflow favorite:",
+        error
+      );
     }
   }
 
@@ -1435,7 +1450,10 @@ export class WorkflowSerializer {
         });
         return true;
       } catch (error) {
-        Log.error("Failed to delete workflow files:", error);
+        Log.error(
+          "[WorkflowSerializer] Failed to delete workflow files:",
+          error
+        );
         this.sendActionFailure(
           pm,
           "delete workflow history",
@@ -1443,7 +1461,10 @@ export class WorkflowSerializer {
         );
       }
     } catch (error) {
-      Log.error("Failed to clear workflow history:", error);
+      Log.error(
+        "[WorkflowSerializer] Failed to clear workflow history:",
+        error
+      );
     }
     return false;
   }
@@ -1471,16 +1492,19 @@ export class WorkflowSerializer {
           }
         );
         Log.debug(
-          `handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
+          `[WorkflowSerializer] handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
         );
       } catch (error) {
         Log.warn(
-          `handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
+          `[WorkflowSerializer] handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
           error
         );
       }
     } catch (error) {
-      Log.error("Failed to remove workflow history entry:", error);
+      Log.error(
+        "[WorkflowSerializer] Failed to remove workflow history entry:",
+        error
+      );
     }
   }
 

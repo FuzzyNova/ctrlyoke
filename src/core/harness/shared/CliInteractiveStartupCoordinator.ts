@@ -62,7 +62,7 @@ export class CliInteractiveStartupCoordinator {
     resolvedSessionId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
     Log.debug(
-      `🔄 Resuming session ${params.resolvedSessionId} - discovering log file directly...`
+      `[CliInteractiveStartupCoordinator] Resuming session ${params.resolvedSessionId} - discovering log file directly...`
     );
 
     const discovery = await this.discoverAndExtractSession(
@@ -82,14 +82,14 @@ export class CliInteractiveStartupCoordinator {
       }
 
       Log.error(
-        `❌ Could not find log file for resumed session ${params.resolvedSessionId}\n` +
+        `[CliInteractiveStartupCoordinator] Could not find log file for resumed session ${params.resolvedSessionId}\n` +
           `   The session may have been deleted or never existed.\n` +
           `   To fix: Remove the sessionId property to start a new session.`
       );
       return null;
     }
 
-    Log.info(`✅ Found log file for resumed session: ${discovery.logPath}`);
+    Log.info(`[CliInteractiveStartupCoordinator] Found log file for resumed session: ${discovery.logPath}`);
 
     this.deps.logParser.seekToEnd?.(discovery.logPath);
     return discovery;
@@ -100,11 +100,11 @@ export class CliInteractiveStartupCoordinator {
     startTime: Date;
     runId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info("🔍 Waiting for SessionStart hook and log file creation...");
+    Log.info("[CliInteractiveStartupCoordinator] Waiting for SessionStart hook and log file creation...");
 
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
-      Log.error("❌ No workspace root for session start monitoring");
+      Log.error("[CliInteractiveStartupCoordinator] No workspace root for session start monitoring");
       return null;
     }
 
@@ -130,11 +130,11 @@ export class CliInteractiveStartupCoordinator {
       }
 
       Log.warn(
-        `⚠️ SessionStart hook did not arrive within ${timeouts.sessionStartSoftTimeoutMs}ms: ` +
+        `[CliInteractiveStartupCoordinator] SessionStart hook did not arrive within ${timeouts.sessionStartSoftTimeoutMs}ms: ` +
           `${startResult.error || "still waiting"}`
       );
       Log.info(
-        `🔄 Keeping interactive startup alive and polling for a delayed session log ` +
+        `[CliInteractiveStartupCoordinator] Keeping interactive startup alive and polling for a delayed session log ` +
           `for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
       );
       const recovered = await this.recoverFromLateInteractiveStartup({
@@ -156,7 +156,7 @@ export class CliInteractiveStartupCoordinator {
       const timeoutReason =
         `Timed out waiting for interactive session startup after ` +
         `${timeouts.sessionStartHardTimeoutMs}ms`;
-      Log.error(`❌ ${timeoutReason}`);
+      Log.error(`[CliInteractiveStartupCoordinator] ${timeoutReason}`);
       this.deps.setFailureReason(timeoutReason);
       return null;
     }
@@ -164,12 +164,12 @@ export class CliInteractiveStartupCoordinator {
     const hookSessionId = startResult.data?.sessionId || null;
 
     if (hookSessionId) {
-      Log.debug(`✅ SessionStart hook provided session ID: ${hookSessionId}`);
+      Log.debug(`[CliInteractiveStartupCoordinator] SessionStart hook provided session ID: ${hookSessionId}`);
     } else {
       Log.debug(
-        "✅ SessionStart hook confirmed (session ID not provided by CLI)"
+        "[CliInteractiveStartupCoordinator] SessionStart hook confirmed (session ID not provided by CLI)"
       );
-      Log.debug("🔍 Discovering session log file via prompt text matching...");
+      Log.debug("[CliInteractiveStartupCoordinator] Discovering session log file via prompt text matching...");
     }
 
     const discovery = await this.discoverAndExtractSession(
@@ -180,7 +180,7 @@ export class CliInteractiveStartupCoordinator {
     );
 
     if (discovery) {
-      Log.info(`✅ Found session log: ${discovery.logPath}`);
+      Log.info(`[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`);
       return discovery;
     }
 
@@ -193,7 +193,7 @@ export class CliInteractiveStartupCoordinator {
     }
 
     Log.info(
-      `🔄 Session start confirmed${hookSessionId ? ` for ${hookSessionId}` : ""}, but the session log is not ready yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
+      `[CliInteractiveStartupCoordinator] Session start confirmed${hookSessionId ? ` for ${hookSessionId}` : ""}, but the session log is not ready yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
     );
 
     const recovered = await this.recoverFromLateInteractiveStartup({
@@ -216,7 +216,7 @@ export class CliInteractiveStartupCoordinator {
     const timeoutReason =
       `Timed out waiting for interactive session startup after ` +
       `${timeouts.sessionStartHardTimeoutMs}ms`;
-    Log.error(`❌ ${timeoutReason}`);
+    Log.error(`[CliInteractiveStartupCoordinator] ${timeoutReason}`);
     this.deps.setFailureReason(timeoutReason);
     return null;
   }
@@ -225,7 +225,7 @@ export class CliInteractiveStartupCoordinator {
     promptForDiscovery: string;
     startTime: Date;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info("🔍 Discovering session log file (no SessionStart hook)...");
+    Log.info("[CliInteractiveStartupCoordinator] Discovering session log file (no SessionStart hook)...");
 
     const discovery = await this.discoverAndExtractSession(
       params.promptForDiscovery,
@@ -235,7 +235,7 @@ export class CliInteractiveStartupCoordinator {
     );
 
     if (discovery) {
-      Log.info(`✅ Found session log: ${discovery.logPath}`);
+      Log.info(`[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`);
       return discovery;
     }
 
@@ -245,7 +245,7 @@ export class CliInteractiveStartupCoordinator {
 
     const timeouts = this.getStartupTimeouts();
     Log.info(
-      `🔄 Session log not found yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
+      `[CliInteractiveStartupCoordinator] Session log not found yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
     );
 
     const recovered = await this.recoverFromLateInteractiveStartup({
@@ -267,7 +267,7 @@ export class CliInteractiveStartupCoordinator {
     const timeoutReason =
       `Timed out waiting for interactive session startup after ` +
       `${timeouts.sessionStartHardTimeoutMs}ms`;
-    Log.error(`❌ ${timeoutReason}`);
+    Log.error(`[CliInteractiveStartupCoordinator] ${timeoutReason}`);
     this.deps.setFailureReason(timeoutReason);
     return null;
   }
@@ -303,7 +303,7 @@ export class CliInteractiveStartupCoordinator {
       const events = await this.deps.logParser.readNewLines(discoveredLogPath);
       const extractedId = this.deps.logParser.extractSessionId(events);
       if (extractedId) {
-        Log.debug(`💾 Extracted session ID from log: ${extractedId}`);
+        Log.debug(`[CliInteractiveStartupCoordinator] Extracted session ID from log: ${extractedId}`);
       }
       return { logPath: discoveredLogPath, sessionId: extractedId };
     }
@@ -318,7 +318,7 @@ export class CliInteractiveStartupCoordinator {
     }
 
     if (abortState.kind === INTERACTIVE_ABORT_KINDS.USER_CANCELLED) {
-      Log.info(`⏹️ Interactive execution cancelled while ${stage}`);
+      Log.info(`[CliInteractiveStartupCoordinator] Interactive execution cancelled while ${stage}`);
       return true;
     }
 
@@ -326,7 +326,7 @@ export class CliInteractiveStartupCoordinator {
       this.deps.markProcessExitDuringStage(stage, abortState.exitCode)
     );
     Log.warn(
-      `⚠️ CLI process exited while ${stage} (exit code ${abortState.exitCode})`
+      `[CliInteractiveStartupCoordinator] CLI process exited while ${stage} (exit code ${abortState.exitCode})`
     );
     return true;
   }
@@ -356,7 +356,7 @@ export class CliInteractiveStartupCoordinator {
       );
       if (discovery) {
         Log.info(
-          `✅ Recovered interactive startup after SessionStart timeout via session log discovery`
+          `[CliInteractiveStartupCoordinator] Recovered interactive startup after SessionStart timeout via session log discovery`
         );
         return discovery;
       }

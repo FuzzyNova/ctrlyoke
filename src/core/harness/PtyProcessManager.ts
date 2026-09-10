@@ -41,7 +41,7 @@ function resolveUnixShell(): string {
   _unixShell =
     process.env.SHELL ??
     (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
-  Log.debug(`🐚 Unix shell resolved: ${_unixShell}`);
+  Log.debug(`[PtyProcessManager] Unix shell resolved: ${_unixShell}`);
   return _unixShell;
 }
 
@@ -70,7 +70,7 @@ export function resolveWindowsShell(): string {
   } catch {
     _windowsShell = "powershell.exe";
   }
-  Log.debug(`🐚 Windows shell resolved: ${_windowsShell}`);
+  Log.debug(`[PtyProcessManager] Windows shell resolved: ${_windowsShell}`);
   return _windowsShell;
 }
 
@@ -507,7 +507,7 @@ export class PtyProcessManager {
       this.fallbackCols = saved.cols;
       this.fallbackRows = saved.rows;
       Log.debug(
-        `🖥️ Restored terminal spawn size ${saved.cols}x${saved.rows} from persisted state`
+        `[PtyProcessManager] Restored terminal spawn size ${saved.cols}x${saved.rows} from persisted state`
       );
     }
   }
@@ -705,7 +705,7 @@ export class PtyProcessManager {
       });
       options.onExit(session, exitCode ?? 1);
       Log.debug(
-        `🖥️ PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`
+        `[PtyProcessManager] PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`
       );
     });
 
@@ -718,7 +718,7 @@ export class PtyProcessManager {
       ? options.args.map((a) => JSON.stringify(a)).join(" ")
       : options.args;
     Log.debug(
-      `🖥️ Spawned PTY session ${sessionId} (${options.kind}): ${options.command} ` +
+      `[PtyProcessManager] Spawned PTY session ${sessionId} (${options.kind}): ${options.command} ` +
         `${argsForLog} ` +
         `— initial size ${spawnCols}x${spawnRows} ` +
         `(${sizeSource}; harness first-render width until webview resize arrives)`
@@ -784,8 +784,8 @@ export class PtyProcessManager {
       // width, not `cols`. A large jump from DEFAULT_COLS on the first resize is
       // the tell that the harness painted its startup frame too wide.
       Log.trace(
-        `🖥️ resizeSession ${sessionId.slice(0, 8)} (${session.kind}) ` +
-          `${session.lastReportedCols}x${session.lastReportedRows} → ${cols}x${rows} ` +
+        `[PtyProcessManager] resizeSession ${sessionId.slice(0, 8)} (${session.kind}) ` +
+          `${session.lastReportedCols}x${session.lastReportedRows} ${cols}x${rows} ` +
           `${changed ? "(changed)" : "(no-op)"} +${elapsedMs}ms since spawn`
       );
       session.pty.resize(cols, rows);
@@ -805,7 +805,7 @@ export class PtyProcessManager {
     const session = this.sessions.get(sessionId);
     if (session) {
       Log.debug(
-        `🖥️ killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+        `[PtyProcessManager] killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
       );
       session.pty.kill();
       this.sessions.delete(sessionId);
@@ -821,7 +821,7 @@ export class PtyProcessManager {
     const session = this.sessions.get(sessionId);
     if (session) {
       Log.debug(
-        `🖥️ gracefulKillAiCliSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+        `[PtyProcessManager] gracefulKillAiCliSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
       );
       session.pty.write("\x03");
       session.pty.write("\x03");
@@ -915,7 +915,7 @@ export class PtyProcessManager {
       return;
     }
     Log.debug(
-      `🖥️ gracefulShutdownAllAiCliSessions — sending Ctrl+C to ${aiSessions.length} session(s)`
+      `[PtyProcessManager] gracefulShutdownAllAiCliSessions — sending Ctrl+C to ${aiSessions.length} session(s)`
     );
     for (const session of aiSessions) {
       try {
@@ -941,7 +941,7 @@ export class PtyProcessManager {
     }
     this.sessions.clear();
     this.workflowRunControllers.clear();
-    Log.debug("🖥️ PtyProcessManager disposed — all PTY sessions killed");
+    Log.debug("[PtyProcessManager] disposed — all PTY sessions killed");
   }
 }
 

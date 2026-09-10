@@ -948,7 +948,7 @@ export function createMessageHandlers(
     });
 
     WebviewLog.debug(
-      `[STEPS_EXTENDED] ${currentSteps.length} → ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
+      `[STEPS_EXTENDED] ${currentSteps.length} ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
     );
     // Only record an undo entry when the user actually changed something.
     // Count changes cover add/remove. Content changes (same count, any

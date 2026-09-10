@@ -143,11 +143,11 @@ export class SessionResolver {
       if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
         if (finalStepSessionId) {
           Log.debug(
-            `✅ Resuming finalStep loop session: ${finalStepSessionId}`
+            `[SessionResolver] Resuming finalStep loop session: ${finalStepSessionId}`
           );
         } else {
           Log.debug(
-            `ℹ️ sessionId "finalStep": no prior loop session, starting new session`
+            `[SessionResolver] sessionId "finalStep": no prior loop session, starting new session`
           );
         }
         return finalStepSessionId;
@@ -208,7 +208,7 @@ export class SessionResolver {
     if (refIndex < 0 || refIndex >= groupStartBoundary) {
       if (logWarnings) {
         Log.warn(
-          `⚠️ Invalid sessionId reference: ${refNumber}. ` +
+          `[SessionResolver] Invalid sessionId reference: ${refNumber}. ` +
             `Must reference a completed prompt (1-${groupStartBoundary}). ` +
             `Starting new session instead.\n` +
             `   To fix: Use a valid prompt number (1-${groupStartBoundary}) or remove sessionId to auto-resume.`
@@ -223,7 +223,7 @@ export class SessionResolver {
     if (!sessionId) {
       if (logWarnings) {
         Log.warn(
-          `⚠️ Prompt ${refNumber} has no session ID. Starting new session instead.\n` +
+          `[SessionResolver] Prompt ${refNumber} has no session ID. Starting new session instead.\n` +
             `   This usually means prompt ${refNumber} hasn't been executed yet.\n` +
             `   To fix: Ensure prompts run in order, or use a different prompt number.`
         );
@@ -236,7 +236,7 @@ export class SessionResolver {
     if (typeof sessionId === "number") {
       if (logWarnings) {
         Log.warn(
-          `⚠️ Prompt ${refNumber} has invalid runtime sessionId (number instead of string). ` +
+          `[SessionResolver] Prompt ${refNumber} has invalid runtime sessionId (number instead of string). ` +
             `Starting new session.`
         );
       }
@@ -250,9 +250,9 @@ export class SessionResolver {
     if (!this.areHarnessesCompatible(refHarness, currentHarness)) {
       if (logWarnings) {
         Log.warn(
-          `⚠️ Cross-harness session reference detected!\n` +
+          `[SessionResolver] Cross-harness session reference detected!\n` +
             `   Prompt ${refNumber} used ${refHarness}, but current prompt uses ${currentHarness}.\n` +
-            `   Sessions cannot be shared across different harnesses (Copilot ↔ Claude ↔ Codex).\n` +
+            `   Sessions cannot be shared across different harnesses (Copilot Claude Codex).\n` +
             `   Starting new ${currentHarness} session instead.\n` +
             `   To fix: Either:\n` +
             `     1. Use same harness for all prompts that share a session, OR\n` +
@@ -262,7 +262,7 @@ export class SessionResolver {
       return undefined;
     }
 
-    Log.debug(`✅ Resolved sessionId from prompt ${refNumber}: ${sessionId}`);
+    Log.debug(`[SessionResolver] Resolved sessionId from prompt ${refNumber}: ${sessionId}`);
     return sessionId;
   }
 
@@ -305,7 +305,7 @@ export class SessionResolver {
       // Skip prompts with mismatched harnesses (log for debugging)
       if (!harnessesMatch && prevSessionId) {
         Log.debug(
-          `⏭️ Skipping prompt ${i + 1} (harness mismatch: ${prevHarness} vs ${currentHarness})`
+          `[SessionResolver] Skipping prompt ${i + 1} (harness mismatch: ${prevHarness} vs ${currentHarness})`
         );
         continue;
       }
@@ -315,7 +315,7 @@ export class SessionResolver {
         if (typeof prevSessionId === "number") {
           if (logWarnings) {
             Log.warn(
-              `⚠️ Prompt ${i + 1} has invalid runtime sessionId (number instead of string). ` +
+              `[SessionResolver] Prompt ${i + 1} has invalid runtime sessionId (number instead of string). ` +
                 `Skipping auto-resume.`
             );
           }
@@ -323,7 +323,7 @@ export class SessionResolver {
         }
 
         Log.debug(
-          `✅ Auto-resuming session from prompt ${i + 1}: ${prevSessionId}`
+          `[SessionResolver] Auto-resuming session from prompt ${i + 1}: ${prevSessionId}`
         );
         return prevSessionId;
       }

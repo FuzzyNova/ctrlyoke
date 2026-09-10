@@ -71,7 +71,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     );
     assert.strictEqual(updateCount, 1);
     assert.deepStrictEqual(debugMessages, [
-      "💾 Saved cancelled-prompt runtime to working file (sessionId: session-123)",
+      "[CliPromptRuntimeCoordinator] Saved cancelled-prompt runtime to working file (sessionId: session-123)",
     ]);
   });
 
@@ -178,7 +178,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     assert.strictEqual(parsedOutput?.metadata.sessionId, "session-456");
     assert.strictEqual(updateCount, 1);
     assert.deepStrictEqual(debugMessages, [
-      "💾 Saved runtime metadata to working file (sessionId: session-456)",
+      "[CliPromptRuntimeCoordinator] Saved runtime metadata to working file (sessionId: session-456)",
     ]);
   });
 

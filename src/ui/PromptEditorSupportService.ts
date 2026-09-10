@@ -278,7 +278,7 @@ export class PromptEditorSupportService {
       const items = await this.getCompletionItems(trigger, prefix);
       this.emitCompletionsResponse(ctx, items, position, seq, false);
     } catch (error) {
-      Log.trace("Failed to get completions:", error);
+      Log.trace("[Dashboard] Failed to get completions:", error);
       this.emitCompletionsResponse(ctx, [], position, seq, false);
     }
   }
@@ -307,7 +307,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.trace("Failed to get script completions:", error);
+      Log.trace("[Dashboard] Failed to get script completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
         items: [],
@@ -341,7 +341,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.trace("Failed to get harness flag completions:", error);
+      Log.trace("[Dashboard] Failed to get harness flag completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
         items: [],
@@ -370,7 +370,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.error("Failed to get permission completions:", error);
+      Log.error("[Dashboard] Failed to get permission completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE,
         items: [],
@@ -396,7 +396,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.trace("Failed to get branch completions:", error);
+      Log.trace("[Dashboard] Failed to get branch completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
         items: [],
@@ -413,7 +413,7 @@ export class PromptEditorSupportService {
     partial: boolean
   ): void {
     Log.trace(
-      `[Dashboard] Completion response: position=${position}, partial=${partial} → ${items.length} items`
+      `[Dashboard] Completion response: position=${position}, partial=${partial} ${items.length} items`
     );
 
     ctx.emit({
@@ -562,7 +562,9 @@ export class PromptEditorSupportService {
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      Log.error(`Failed to create prompt file: ${errorMessage}`);
+      Log.error(
+        `[PromptEditorSupportService] Failed to create prompt file: ${errorMessage}`
+      );
       ctx.emit({
         type: MESSAGE_TYPES.PROMPT_FILE_CREATED,
         seq,
@@ -640,7 +642,10 @@ export class PromptEditorSupportService {
       }
       await openResolvedTarget(target);
     } catch (error) {
-      Log.error("Error opening prompt file:", error);
+      Log.error(
+        "[PromptEditorSupportService] Error opening prompt file:",
+        error
+      );
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "open prompt file",
@@ -710,7 +715,9 @@ export class PromptEditorSupportService {
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      Log.error(`Failed to save pasted image: ${errorMessage}`);
+      Log.error(
+        `[PromptEditorSupportService] Failed to save pasted image: ${errorMessage}`
+      );
       ctx.emit({
         type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
         seq,
@@ -742,7 +749,9 @@ export class PromptEditorSupportService {
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      Log.error(`Failed to save output snapshot: ${errorMessage}`);
+      Log.error(
+        `[PromptEditorSupportService] Failed to save output snapshot: ${errorMessage}`
+      );
       ctx.emit({
         type: MESSAGE_TYPES.OUTPUT_SNAPSHOT_SAVED,
         seq,
@@ -1159,7 +1168,7 @@ export class PromptEditorSupportService {
   ): Promise<void> {
     try {
       if (!vscode.workspace.workspaceFolders?.length) {
-        Log.warn("No workspace folder open");
+        Log.warn("[PromptEditorSupportService] No workspace folder open");
         return;
       }
       const workspaceRoot = getVsCodeWorkspaceRoot();
@@ -1220,7 +1229,7 @@ export class PromptEditorSupportService {
 
       if (!decision.allowed) {
         Log.warn(
-          `Blocked dashboard request to open path outside every trusted root: ${relativePath}`
+          `[PromptEditorSupportService] Blocked dashboard request to open path outside every trusted root: ${relativePath}`
         );
         await confirmExternalFileTrustAndOpen(target, {
           port: ctx.interactionPort ?? new NullUserInteractionPort(),
@@ -1241,7 +1250,7 @@ export class PromptEditorSupportService {
 
       await openResolvedTarget(target);
     } catch (error) {
-      Log.error("Error opening file:", error);
+      Log.error("[PromptEditorSupportService] Error opening file:", error);
       ctx.emit({
         type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
         action: "open file",
@@ -1265,7 +1274,9 @@ export class PromptEditorSupportService {
         ? configService.getWorkspaceFilePath()
         : configService.getUserFilePath();
     if (!filePath) {
-      Log.warn(`No settings file available to open for scope: ${scope}`);
+      Log.warn(
+        `[PromptEditorSupportService] No settings file available to open for scope: ${scope}`
+      );
       return;
     }
     await openResolvedTarget({ path: filePath });
@@ -1282,7 +1293,9 @@ export class PromptEditorSupportService {
       skillName
     );
     if (!skill) {
-      Log.warn(`Unable to resolve ctrlyoke skill link: ${skillName}`);
+      Log.warn(
+        `[PromptEditorSupportService] Unable to resolve ctrlyoke skill link: ${skillName}`
+      );
       return;
     }
 
@@ -1348,7 +1361,10 @@ export class PromptEditorSupportService {
       });
       await vscode.window.showTextDocument(doc, { preview: true });
     } catch (error) {
-      Log.warn("handleOpenPriorContext: failed to open document", error);
+      Log.warn(
+        "[PromptEditorSupportService] handleOpenPriorContext: failed to open document",
+        error
+      );
     }
   }
 
@@ -1445,7 +1461,10 @@ export class PromptEditorSupportService {
           );
           counts[rawRef] = encode(attachmentContent).length;
         } catch (error) {
-          Log.warn(`Failed to count tokens for reference "${rawRef}":`, error);
+          Log.warn(
+            `[PromptEditorSupportService] Failed to count tokens for reference "${rawRef}":`,
+            error
+          );
           counts[rawRef] = 0;
         }
       })

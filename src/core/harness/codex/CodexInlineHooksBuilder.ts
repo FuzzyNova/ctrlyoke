@@ -109,7 +109,7 @@ export function buildCodexInlineHooks(
   };
 
   Log.trace(
-    `Codex inline hook trust keys (${trustKeyCount}): ${JSON.stringify(Object.keys(trustState))}`
+    `[CodexInlineHooksBuilder] Codex inline hook trust keys (${trustKeyCount}): ${JSON.stringify(Object.keys(trustState))}`
   );
 
   const commandLineLength = Buffer.byteLength(

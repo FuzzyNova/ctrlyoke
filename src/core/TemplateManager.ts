@@ -234,7 +234,7 @@ export class TemplateManager {
           autoFillAssigned = true;
         } else {
           Log.warn(
-            `Template "${templateName}": variable "${variable.name}" declares autoFillFilename but a prior variable already claims it; ignoring.`
+            `[TemplateManager] Template "${templateName}": variable "${variable.name}" declares autoFillFilename but a prior variable already claims it; ignoring.`
           );
         }
       }
@@ -398,7 +398,7 @@ export class TemplateManager {
           isBuiltIn: true,
         });
       } catch (error) {
-        Log.warn(`Failed to load built-in template: ${id}`, error);
+        Log.warn(`[TemplateManager] Failed to load built-in template: ${id}`, error);
       }
     }
 
@@ -776,7 +776,7 @@ export class TemplateManager {
 
           if (seenNames.has(name)) {
             Log.warn(
-              `Ignoring duplicate custom template basename in ${dirPath}: ${file}`
+              `[TemplateManager] Ignoring duplicate custom template basename in ${dirPath}: ${file}`
             );
             continue;
           }
@@ -801,12 +801,12 @@ export class TemplateManager {
             });
             seenNames.add(name);
           } catch (error) {
-            Log.warn(`Failed to read custom template: ${file}`, error);
+            Log.warn(`[TemplateManager] Failed to read custom template: ${file}`, error);
           }
         }
       }
     } catch (error) {
-      Log.warn(`Failed to discover custom templates in ${dirPath}:`, error);
+      Log.warn(`[TemplateManager] Failed to discover custom templates in ${dirPath}:`, error);
     }
 
     return templates;

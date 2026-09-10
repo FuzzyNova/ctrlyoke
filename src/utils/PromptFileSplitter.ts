@@ -187,7 +187,7 @@ export class PromptFileSplitter {
       return tokenCount;
     } catch (error) {
       Log.warn(
-        `Token counting failed, using character approximation: ${error}`
+        `[PromptFileSplitter] Token counting failed, using character approximation: ${error}`
       );
       // Fallback: rough approximation (1 token ≈ 4 characters for English)
       return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
@@ -423,7 +423,9 @@ export class PromptFileSplitter {
 
     // Validate: ensure we have at least one chunk
     if (chunks.length === 0) {
-      Log.warn("Splitting produced no chunks, returning original text");
+      Log.warn(
+        "[PromptFileSplitter] Splitting produced no chunks, returning original text"
+      );
       return [promptText];
     }
 

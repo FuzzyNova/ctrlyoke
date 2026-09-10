@@ -223,7 +223,7 @@ export class WebviewSettingsSync {
 
       this.sendAgentsUpdate();
     } catch (error) {
-      Log.warn("Failed to discover agents:", error);
+      Log.warn("[WebviewSettingsSync] Failed to discover agents:", error);
     }
   }
 
@@ -238,7 +238,7 @@ export class WebviewSettingsSync {
 
       this.sendSkillsUpdate();
     } catch (error) {
-      Log.warn("Failed to discover skills:", error);
+      Log.warn("[WebviewSettingsSync] Failed to discover skills:", error);
     }
   }
 
@@ -261,7 +261,7 @@ export class WebviewSettingsSync {
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
     Log.debug(
-      `sendInitialState() clientId=${clientId} — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
+      `[WebviewSettingsSync] sendInitialState() clientId=${clientId} — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
     );
 
     const workflowState = this.getCurrentState(clientId);
@@ -337,7 +337,7 @@ export class WebviewSettingsSync {
       postMessage
     );
     this.writeCapabilities(modelOptions).catch((err) =>
-      Log.warn("Failed to write capabilities.json:", err)
+      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err)
     );
   }
 
@@ -353,7 +353,7 @@ export class WebviewSettingsSync {
       postMessage
     );
     this.writeCapabilities(this.buildModelOptions()).catch((err) =>
-      Log.warn("Failed to write capabilities.json:", err)
+      Log.warn("[WebviewSettingsSync] Failed to write capabilities.json:", err)
     );
   }
 
@@ -380,7 +380,10 @@ export class WebviewSettingsSync {
         postMessage
       );
     } catch (error) {
-      Log.warn("Failed to publish harness capability snapshot:", error);
+      Log.warn(
+        "[WebviewSettingsSync] Failed to publish harness capability snapshot:",
+        error
+      );
     }
   }
 
@@ -477,7 +480,10 @@ export class WebviewSettingsSync {
         postMessage
       );
     } catch (error) {
-      Log.error("Failed to send workflow properties to settings:", error);
+      Log.error(
+        "[WebviewSettingsSync] Failed to send workflow properties to settings:",
+        error
+      );
       // Send empty properties so the panel doesn't display stale values from the
       // previous workflow (applyWorkflowChange no longer clears them proactively).
       this.emitMessage(
@@ -545,7 +551,7 @@ export class WebviewSettingsSync {
 
   async handleHarnessChange(harness: string): Promise<void> {
     if (!WebviewSettingsSync.VALID_HARNESSES.includes(harness as any)) {
-      Log.warn(`Invalid harness: ${harness}`);
+      Log.warn(`[WebviewSettingsSync] Invalid harness: ${harness}`);
       return;
     }
 
@@ -630,7 +636,7 @@ export class WebviewSettingsSync {
 
       if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
         Log.warn(
-          `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
+          `[WebviewSettingsSync] handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
         );
         return false;
       }
@@ -734,7 +740,9 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
-      Log.warn(`Rejected config read for non-ctrlyoke key: ${key}`);
+      Log.warn(
+        `[WebviewSettingsSync] Rejected config read for non-ctrlyoke key: ${key}`
+      );
       return;
     }
 
@@ -753,7 +761,9 @@ export class WebviewSettingsSync {
 
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
-      Log.warn(`Rejected config write for non-ctrlyoke key: ${key}`);
+      Log.warn(
+        `[WebviewSettingsSync] Rejected config write for non-ctrlyoke key: ${key}`
+      );
       return;
     }
 
@@ -1350,7 +1360,7 @@ export class WebviewSettingsSync {
       message,
       detail
     );
-    Log.error(message, detail ?? "");
+    Log.error(`[WebviewSettingsSync] ${message}`, detail ?? "");
   }
 
   async handleUpdateGlobalSetting(
@@ -1561,7 +1571,7 @@ export class WebviewSettingsSync {
         : undefined;
     if (!workspaceRoot || !workflowSourcePath) {
       Log.debug(
-        `Unable to record workflow external-root decisions for ${clientId}: workflow identity unavailable`
+        `[WebviewSettingsSync] Unable to record workflow external-root decisions for ${clientId}: workflow identity unavailable`
       );
       return;
     }
@@ -1764,7 +1774,10 @@ export class WebviewSettingsSync {
         postMessage
       );
     } catch (error) {
-      Log.error("Failed to save server certificate:", error);
+      Log.error(
+        "[WebviewSettingsSync] Failed to save server certificate:",
+        error
+      );
       this.emitMessage(
         {
           type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED,

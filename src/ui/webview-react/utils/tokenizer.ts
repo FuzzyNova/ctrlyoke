@@ -11,7 +11,7 @@ export function countTokens(text: string): number {
     return tokens.length;
   } catch (error) {
     WebviewLog.error(
-      `Token counting failed: ${error instanceof Error ? error.message : String(error)}`
+      `[tokenizer] Token counting failed: ${error instanceof Error ? error.message : String(error)}`
     );
     return 0;
   }

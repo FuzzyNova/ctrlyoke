@@ -173,7 +173,7 @@ export class CliPromptPreparer {
     // bypass; the regex intentionally recognizes only plain slash commands.
     if (isPureSlashCommand) {
       Log.debug(
-        `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
+        `[CliPromptPreparer] Slash command detected ("${slashCommand}") — skipping instruction assembly`
       );
       return this.createInlinePlan(originalPromptText, [
         ...conditionOutputDiagnostics,

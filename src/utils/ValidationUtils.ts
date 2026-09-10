@@ -275,7 +275,7 @@ export class ValidationUtils {
       condition.maxRetries !== -1
     ) {
       Log.warn(
-        `High maxRetries value (${condition.maxRetries}). Consider using -1 for unlimited or a lower value.`
+        `[ValidationUtils] High maxRetries value (${condition.maxRetries}). Consider using -1 for unlimited or a lower value.`
       );
     }
 
@@ -358,7 +358,7 @@ export class ValidationUtils {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
       .replace(/\${[^}]*}/g, (match) => {
         // Keep template variables but log them
-        Log.trace(`Template variable found: ${match}`);
+        Log.trace(`[ValidationUtils] Template variable found: ${match}`);
         return match;
       });
   }

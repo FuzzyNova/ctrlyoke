@@ -39,7 +39,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -59,7 +59,10 @@ export class WorkflowStepHandlers {
       // without this the following property edit would carry a stale revision.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to execute ephemeral prompt:", error);
+      Log.error(
+        "[WorkflowStepHandlers] Failed to execute ephemeral prompt:",
+        error
+      );
       ctx.emit({
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text,
@@ -76,7 +79,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -129,7 +132,7 @@ export class WorkflowStepHandlers {
       // erasing the undo entry STEPS_EXTENDED just recorded for this edit.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to update prompt:", error);
+      Log.error("[WorkflowStepHandlers] Failed to update prompt:", error);
     }
   }
 
@@ -139,7 +142,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -153,7 +156,7 @@ export class WorkflowStepHandlers {
       );
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to update step color:", error);
+      Log.error("[WorkflowStepHandlers] Failed to update step color:", error);
     }
   }
 
@@ -163,7 +166,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -181,7 +184,10 @@ export class WorkflowStepHandlers {
       // STEPS_EXTENDED broadcast.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to insert workflow step:", error);
+      Log.error(
+        "[WorkflowStepHandlers] Failed to insert workflow step:",
+        error
+      );
     }
   }
 
@@ -191,7 +197,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -207,7 +213,7 @@ export class WorkflowStepHandlers {
       // Identity-only — see the comment in handleUpdatePrompt above.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to update finalStep:", error);
+      Log.error("[WorkflowStepHandlers] Failed to update finalStep:", error);
     }
   }
 
@@ -217,7 +223,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -236,7 +242,7 @@ export class WorkflowStepHandlers {
       // PROMPT_DELETED broadcast.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
-      Log.error("Failed to delete prompt:", error);
+      Log.error("[WorkflowStepHandlers] Failed to delete prompt:", error);
     }
   }
 
@@ -247,7 +253,7 @@ export class WorkflowStepHandlers {
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 
@@ -579,7 +585,7 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
-      Log.error("WorkflowOrchestrator not initialized");
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
       return;
     }
 

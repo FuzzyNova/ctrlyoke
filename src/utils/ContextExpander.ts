@@ -247,7 +247,7 @@ export class ContextExpander {
       const attachmentsSection = allAttachments.join("\n\n");
       return `${attachmentsSection}\n\n${promptText}`;
     } catch (error) {
-      Log.error("Error expanding context:", error);
+      Log.error("[ContextExpander] Error expanding context:", error);
       // Return original prompt on error
       return promptText;
     }
@@ -909,7 +909,7 @@ export class ContextExpander {
 
     // Skip if already attached
     if (this.attachmentIds.has(attachmentId)) {
-      Log.trace(`Skipping duplicate attachment: ${attachmentId}`);
+      Log.trace(`[ContextExpander] Skipping duplicate attachment: ${attachmentId}`);
       return ""; // Return empty string for duplicates
     }
 

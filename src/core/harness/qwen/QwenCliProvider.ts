@@ -265,7 +265,7 @@ export class QwenCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("🔧 ctrlyoke MCP config added inline for Qwen");
+      Log.debug("[QwenCliProvider] ctrlyoke MCP config added inline for Qwen");
     }
 
     // Note: Headless-specific flags (--output-format) are added by
@@ -287,11 +287,11 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[QwenCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[QwenCliProvider] Resume requested but no session ID available");
     } else {
-      Log.info("Starting new session");
+      Log.info("[QwenCliProvider] Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args)
@@ -300,7 +300,7 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(`[QwenCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -310,7 +310,7 @@ export class QwenCliProvider implements ICliProvider {
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
     Log.trace(
-      `🔧 Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
+      `[QwenCliProvider] Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
     );
 
     return {
@@ -391,7 +391,7 @@ export class QwenCliProvider implements ICliProvider {
       }
       return result;
     } catch (error) {
-      Log.warn(`Failed to register Qwen statusline: ${error}`);
+      Log.warn(`[QwenCliProvider] Failed to register Qwen statusline: ${error}`);
       return { kind: "no-op", captured: false };
     }
   }
@@ -514,7 +514,7 @@ export class QwenCliProvider implements ICliProvider {
               userHooks,
               wrappedCtrlYokeEvents
             );
-            Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
+            Log.debug(`[QwenCliProvider] Configured Stop hook for Qwen completion detection`);
           },
         },
       ],
@@ -596,7 +596,7 @@ export class QwenCliProvider implements ICliProvider {
               userHooks,
               enabledNotificationHookEvents
             );
-            Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
+            Log.debug(`[QwenCliProvider] Configured user hooks for Qwen headless mode`);
           },
         },
       ],

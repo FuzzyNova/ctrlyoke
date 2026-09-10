@@ -224,7 +224,7 @@ export async function findSymbolKindForReference(
       endLine
     );
   } catch (error) {
-    Log.error("Failed to resolve symbol kind for reference:", error);
+    Log.error("[Completions] Failed to resolve symbol kind for reference:", error);
     return undefined;
   }
 }
@@ -947,7 +947,7 @@ async function getSymbolCompletions(
       items.push(item);
     }
   } catch (error) {
-    Log.error("Failed to get symbol completions:", error);
+    Log.error("[Completions] Failed to get symbol completions:", error);
   }
 
   return items;

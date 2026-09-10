@@ -415,7 +415,7 @@ export class SettingsJsonMcpTracker {
       }
     }
     Log.debug(
-      `📋 ${this.toolName} MCP baseline captured for ${projectSettings}: [${[...baselineServers].join(", ")}]`
+      `[SettingsJsonMcpTracker] ${this.toolName} MCP baseline captured for ${projectSettings}: [${[...baselineServers].join(", ")}]`
     );
   }
 
@@ -498,7 +498,7 @@ export class SettingsJsonMcpTracker {
           await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
         }
         Log.debug(
-          `🔧 ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
+          `[SettingsJsonMcpTracker] ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
 
         if (!this.getBaseline(settingsPath).settingsFileExisted) {
@@ -509,7 +509,7 @@ export class SettingsJsonMcpTracker {
           await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
         }
         Log.debug(
-          `♻️ ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
+          `[SettingsJsonMcpTracker] ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
         );
       }
     });
@@ -579,7 +579,7 @@ export class SettingsJsonMcpTracker {
                 delete mcpServers[name];
               } else if (managedValue !== undefined) {
                 Log.warn(
-                  `${this.toolName} MCP cleanup preserved user-modified server "${name}"`
+                  `[SettingsJsonMcpTracker] ${this.toolName} MCP cleanup preserved user-modified server "${name}"`
                 );
               }
               this.managedServerValues.delete(name);
@@ -595,7 +595,7 @@ export class SettingsJsonMcpTracker {
 
             await this.writeOrRemoveManagedConfig(settingsPath, settings);
             Log.debug(
-              `🧹 ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
+              `[SettingsJsonMcpTracker] ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
             );
           }
         } catch {
@@ -839,7 +839,7 @@ export class SettingsJsonMcpTracker {
       });
       this.valueLeases.set(leaseKey, lease);
       Log.debug(
-        `🔐 ${this.toolName} ${key} value lease applied to ${settingsPath}`
+        `[SettingsJsonMcpTracker] ${this.toolName} ${key} value lease applied to ${settingsPath}`
       );
       await this.writeLeaseSidecar(settingsPath, key, lease);
       return "acquired";
@@ -904,7 +904,7 @@ export class SettingsJsonMcpTracker {
       });
     } catch (error) {
       Log.warn(
-        `${this.toolName} ${key} lease cleanup failed: ${
+        `[SettingsJsonMcpTracker] ${this.toolName} ${key} lease cleanup failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -928,7 +928,7 @@ export class SettingsJsonMcpTracker {
       });
     } catch (error) {
       Log.warn(
-        `${this.toolName} ${key} dead-owner cleanup failed: ${
+        `[SettingsJsonMcpTracker] ${this.toolName} ${key} dead-owner cleanup failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -1121,7 +1121,7 @@ export class SettingsJsonMcpTracker {
       delete settings[key];
     }
     await this.writeOrRemoveManagedConfig(settingsPath, settings);
-    Log.debug(`🧹 ${this.toolName} ${key} value restored in ${settingsPath}`);
+    Log.debug(`[SettingsJsonMcpTracker] ${this.toolName} ${key} value restored in ${settingsPath}`);
   }
 
   private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {

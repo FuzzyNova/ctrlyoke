@@ -157,9 +157,12 @@ export class AgentDiscovery {
         ...builtInAgents.filter((agent) => !discoveredNames.has(agent.name))
       );
 
-      Log.trace(`Discovered ${agents.length} agents`);
+      Log.trace(`[AgentDiscovery] Discovered ${agents.length} agents`);
     } catch (error) {
-      Log.warn("Error discovering agents; returning partial results:", error);
+      Log.warn(
+        "[AgentDiscovery] Error discovering agents; returning partial results:",
+        error
+      );
     }
 
     return agents;
@@ -260,13 +263,13 @@ export class AgentDiscovery {
 
       if (agents.length > 0) {
         Log.trace(
-          `Found ${agents.length} agent(s) in ${directoryPath}:`,
+          `[AgentDiscovery] Found ${agents.length} agent(s) in ${directoryPath}:`,
           agents.map((a) => a.name).join(", ")
         );
       }
     } catch (error) {
       Log.warn(
-        `Error discovering agents in ${directoryPath}; skipping:`,
+        `[AgentDiscovery] Error discovering agents in ${directoryPath}; skipping:`,
         error
       );
     }
@@ -300,7 +303,7 @@ export class AgentDiscovery {
     }
 
     Log.error(
-      `Unable to locate built-in agents directory. Checked: ${candidateDirectories.join(", ")}`
+      `[AgentDiscovery] Unable to locate built-in agents directory. Checked: ${candidateDirectories.join(", ")}`
     );
     return null;
   }

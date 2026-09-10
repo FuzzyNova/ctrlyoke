@@ -590,7 +590,7 @@ export class WorkflowExecutor {
 
         if (
           await this.confirmPauseAndStop(
-            "Workflow paused after final step appended queue work"
+            "[WorkflowExecutor] Workflow paused after final step appended queue work"
           )
         ) {
           break;
@@ -607,14 +607,18 @@ export class WorkflowExecutor {
         completedAt: Date.now(),
       });
 
-      if (await this.confirmPauseAndStop("Workflow paused after final step")) {
+      if (
+        await this.confirmPauseAndStop(
+          "[WorkflowExecutor] Workflow paused after final step"
+        )
+      ) {
         break;
       }
 
       break;
     }
 
-    Log.info("Workflow execution complete");
+    Log.info("[WorkflowExecutor] Workflow execution complete");
     await this.finalizeWorkflowExecution();
     this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
   }
@@ -669,7 +673,7 @@ export class WorkflowExecutor {
     });
 
     Log.info(
-      `Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
     );
     if (preflight.issues.length > 0) {
       await Promise.all(
@@ -689,7 +693,7 @@ export class WorkflowExecutor {
         member.resolvedSessionId === undefined
       ) {
         Log.warn(
-          `Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
+          `[WorkflowExecutor] Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
         );
       }
     }
@@ -735,7 +739,7 @@ export class WorkflowExecutor {
             context.executionWorkspace.namedWorkspaceRoots
           );
       } catch (error) {
-        Log.warn("Failed to capture parallel group workspace snapshot:", error);
+        Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error);
       }
     }
     const pendingIndices: number[] = [];
@@ -764,7 +768,7 @@ export class WorkflowExecutor {
             context,
             group.id
           ).catch((error) =>
-            Log.warn("Failed to capture parallel group workspace snapshot:", error)
+            Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error)
           );
         }
       } else {
@@ -849,7 +853,7 @@ export class WorkflowExecutor {
           context,
           group.id
         ).catch((error) =>
-          Log.warn("Failed to capture parallel group workspace snapshot:", error)
+          Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error)
         );
       }
       await context.releaseTargetResources?.(target);
@@ -932,7 +936,7 @@ export class WorkflowExecutor {
     if (paused) {
       stopWatcher.dispose();
       await this.confirmPauseAndStop(
-        "Workflow paused after parallel group members settled"
+        "[WorkflowExecutor] Workflow paused after parallel group members settled"
       );
       return {
         group,
@@ -1016,7 +1020,7 @@ export class WorkflowExecutor {
       }
       return false;
     }
-    if (await this.confirmPauseAndStop("Workflow paused")) {
+    if (await this.confirmPauseAndStop("[WorkflowExecutor] Workflow paused")) {
       return false;
     }
     return true;
@@ -1145,7 +1149,7 @@ export class WorkflowExecutor {
       currentStatus === EXECUTION_STATES.STOPPED ||
       currentStatus === EXECUTION_STATES.CANCELLING
     ) {
-      Log.info("Workflow stopped before executing next prompt");
+      Log.info("[WorkflowExecutor] Workflow stopped before executing next prompt");
       return false;
     }
 
@@ -1305,11 +1309,11 @@ export class WorkflowExecutor {
             : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
 
           Log.info(
-            `Pre-condition ${
+            `[WorkflowExecutor] Pre-condition ${
               preResult.passed
                 ? SCRIPT_VERDICT_OUTCOMES.PASSED
                 : SCRIPT_VERDICT_OUTCOMES.FAILED
-            } → action: ${preAction}`
+            } action: ${preAction}`
           );
 
           await this.trackConditionResult(
@@ -1325,7 +1329,7 @@ export class WorkflowExecutor {
             return this.handleSkippedStep(step, target, context);
           }
           if (preAction === CONDITION_ACTIONS.STOP_WORKFLOW) {
-            Log.info("Pre-condition stopWorkflow triggered");
+            Log.info("[WorkflowExecutor] Pre-condition stopWorkflow triggered");
             await this.failStepForInternalError(
               context,
               target,
@@ -1453,9 +1457,9 @@ export class WorkflowExecutor {
           resolvedProperties
         );
         integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
-        Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
+        Log.info(`[WorkflowExecutor] Executing prompt ${target.stepIndex + 1}/${progress.total}`);
       } else {
-        Log.info(`Executing finalStep loop ${target.loopIndex + 1}`);
+        Log.info(`[WorkflowExecutor] Executing finalStep loop ${target.loopIndex + 1}`);
       }
 
       const signedStepIndex = this.getSignedStepIndex(target);
@@ -1610,7 +1614,7 @@ export class WorkflowExecutor {
         }
 
         if (endDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
-          Log.info("Workflow stopped due to end condition failure");
+          Log.info("[WorkflowExecutor] Workflow stopped due to end condition failure");
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
             await this.promptQueue.failStep(
               target.stepIndex,
@@ -1759,7 +1763,7 @@ export class WorkflowExecutor {
       this.promptQueue.getWorkflowFile()
     );
     await this.registerResolvedSecrets(secretNames, context, target);
-    Log.info(`Executing script step: ${stepLabel}`);
+    Log.info(`[WorkflowExecutor] Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
     if (context.dashboardProvider && stepIndex >= 0) {
@@ -1999,15 +2003,15 @@ export class WorkflowExecutor {
 
       if (!succeeded && onFail === CONDITION_ACTIONS.STOP_WORKFLOW) {
         Log.error(
-          `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
+          `[WorkflowExecutor] Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
         );
       } else if (succeeded && onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
         Log.info(
-          `Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
+          `[WorkflowExecutor] Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
         );
       } else if (!succeeded) {
         Log.warn(
-          `Script step failed but onFail=continue, continuing: ${stepLabel}`
+          `[WorkflowExecutor] Script step failed but onFail=continue, continuing: ${stepLabel}`
         );
       }
 
@@ -2220,7 +2224,7 @@ export class WorkflowExecutor {
             context
           );
         } catch (e) {
-          Log.warn("Failed to capture workspace snapshot:", e);
+          Log.warn("[WorkflowExecutor] Failed to capture workspace snapshot:", e);
         }
       }
       return outcome;
@@ -2310,7 +2314,7 @@ export class WorkflowExecutor {
         context.getDefinitionRevisionContext?.()
       )
       .catch((err) =>
-        Log.warn(`Failed to save ${logContext} to history:`, err)
+        Log.warn(`[WorkflowExecutor] Failed to save ${logContext} to history:`, err)
       );
   }
 
@@ -2876,12 +2880,12 @@ export class WorkflowExecutor {
     secretNames: readonly string[] = []
   ): Promise<PhaseDisposition> {
     Log.trace(
-      `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
+      `[WorkflowExecutor] Evaluating end condition for ${this.describeExecutionTarget(target)}...`
     );
 
     if (!prompt.endCondition?.script) {
       Log.error(
-        `End condition for ${this.describeExecutionTarget(target)} is missing required 'script' property`
+        `[WorkflowExecutor] End condition for ${this.describeExecutionTarget(target)} is missing required 'script' property`
       );
       const missingScriptResult = {
         passed: false,
@@ -3900,7 +3904,7 @@ export class WorkflowExecutor {
     try {
       this.platform.focusDashboard?.();
     } catch (error) {
-      Log.error("Could not focus dashboard panel:", error);
+      Log.error("[WorkflowExecutor] Could not focus dashboard panel:", error);
     }
   }
 
@@ -3926,7 +3930,7 @@ export class WorkflowExecutor {
       const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
 
       notifyUserFeedback(this.userFeedbackSink, "warning", message);
-      Log.trace(`⏱️ ${message}`);
+      Log.trace(`[WorkflowExecutor] ${message}`);
 
       this.promptQueue.getRuntimeStateMachine().fail();
       await this.promptQueue.commitRuntimeTransition();
@@ -3950,7 +3954,7 @@ export class WorkflowExecutor {
 
     const message = `Workflow stopped - Maximum queue size reached (${totalSteps}/${dynamicConfig.maxQueueSize}).`;
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
-    Log.trace(`📏 ${message}`);
+    Log.trace(`[WorkflowExecutor] ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();
     await this.promptQueue.commitRuntimeTransition();
     return true;

@@ -291,7 +291,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("🔧 ctrlyoke MCP config prepared for OpenCode inline delivery");
+      Log.debug("[OpenCodeCliProvider] ctrlyoke MCP config prepared for OpenCode inline delivery");
     }
 
     // Headless mode: add "run" subcommand and "--format json"
@@ -317,11 +317,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
     if (shouldResume) {
       args.push("-s", sessionId!);
-      Log.info(`Resuming session: ${sessionId}`);
+      Log.info(`[OpenCodeCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("Resume requested but no session ID available");
+      Log.warn("[OpenCodeCliProvider] Resume requested but no session ID available");
     } else {
-      Log.info("Starting new session");
+      Log.info("[OpenCodeCliProvider] Starting new session");
     }
 
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
@@ -336,7 +336,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(`[OpenCodeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     return {
@@ -710,7 +710,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     const size = Buffer.byteLength(content, "utf8");
     if (size > OPENCODE_INLINE_CONFIG_MAX_BYTES) {
       Log.warn(
-        `OpenCode inline config is ${size} bytes; refusing to launch above the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
+        `[OpenCodeCliProvider] OpenCode inline config is ${size} bytes; refusing to launch above the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
       );
       throw new Error(
         `OpenCode inline config exceeds the ${OPENCODE_INLINE_CONFIG_MAX_BYTES}-byte defensive limit`
@@ -761,7 +761,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // If resolved model is set but wrong format, warn and fall back to configured default
     if (resolvedModel) {
       Log.warn(
-        `OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+        `[OpenCodeCliProvider] OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
           `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using configured default.`
       );
     }
@@ -820,7 +820,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       await this.pluginPathIsReadable(sourcePath);
     } catch (error) {
       Log.warn(
-        `OpenCode external plugin could not be loaded from ${sourcePath}; ` +
+        `[OpenCodeCliProvider] OpenCode external plugin could not be loaded from ${sourcePath}; ` +
           `falling back to .opencode/plugin/: ${error}`
       );
       try {
@@ -830,7 +830,7 @@ export class OpenCodeCliProvider implements ICliProvider {
           userHooks
         );
       } catch (fallbackError) {
-        Log.warn(`OpenCode plugin fallback was unavailable: ${fallbackError}`);
+        Log.warn(`[OpenCodeCliProvider] OpenCode plugin fallback was unavailable: ${fallbackError}`);
       }
     }
   }
@@ -865,7 +865,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // An auto-scanned fallback plugin must not remain in the inline list.
     this.pendingInlineConfig.plugin = [];
     Log.warn(
-      "OpenCode plugin fallback deployed under .opencode/plugin/; " +
+      "[OpenCodeCliProvider] OpenCode plugin fallback deployed under .opencode/plugin/; " +
         "this compatibility path writes workspace files"
     );
   }

@@ -24,7 +24,10 @@ export class WorkflowCommandHandler {
     try {
       await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
     } catch (error) {
-      Log.error("Failed to focus ctrlyoke dashboard:", error);
+      Log.error(
+        "[WorkflowCommandHandler] Failed to focus ctrlyoke dashboard:",
+        error
+      );
       throw error; // Let caller handle fallback
     }
   }
@@ -46,9 +49,11 @@ export class WorkflowCommandHandler {
 
     try {
       await this.openPromptFile(currentFilePath);
-      Log.info(`ctrlyoke: Opened prompt file: ${currentFilePath}`);
+      Log.info(
+        `[WorkflowCommandHandler] ctrlyoke: Opened prompt file: ${currentFilePath}`
+      );
     } catch (error) {
-      Log.error("ctrlyoke: Failed to open prompt file:", error);
+      Log.error("[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -79,7 +84,7 @@ export class WorkflowCommandHandler {
         await vscode.window.showTextDocument(document);
       }
     } catch (error) {
-      Log.error("ctrlyoke: Failed to open prompt file:", error);
+      Log.error("[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:", error);
     }
   }
 }

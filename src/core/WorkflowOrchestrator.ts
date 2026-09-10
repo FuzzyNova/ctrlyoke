@@ -583,7 +583,7 @@ export class WorkflowOrchestrator {
       context.subscriptions.push(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
-            Log.trace(`🔄 Copilot status changed to: ${status}`);
+            Log.trace(`[WorkflowOrchestrator] Copilot status changed to: ${status}`);
             this.updateStatusBar();
           }
           if (
@@ -602,7 +602,7 @@ export class WorkflowOrchestrator {
 
     this.updateStatusBar();
     void this.harnessUsageService?.initialize();
-    Log.debug("WorkflowOrchestrator initialized");
+    Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator initialized");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -693,7 +693,7 @@ export class WorkflowOrchestrator {
   ): Promise<WorkflowInstance | undefined> {
     const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     Log.debug(
-      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
+      `[WorkflowOrchestrator] createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
     );
     // ── Duplicate detection: only running/paused instances are in the Map ──
     if (_filePath) {
@@ -708,7 +708,7 @@ export class WorkflowOrchestrator {
           existingStatus === EXECUTION_STATES.PAUSED
         ) {
           Log.info(
-            `createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
+            `[WorkflowOrchestrator] createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
           );
           // The running-instance policy is to reuse the existing workflow.
           // Keep this safe default explicit now that the native choice prompt
@@ -733,7 +733,7 @@ export class WorkflowOrchestrator {
       : null;
     if (retiredInstance) {
       Log.debug(
-        `createWorkflow: disposing retired viewedInstance inst:${retiredInstance.id.slice(0, 8)}`
+        `[WorkflowOrchestrator] createWorkflow: disposing retired viewedInstance inst:${retiredInstance.id.slice(0, 8)}`
       );
       retiredInstance.dispose();
       this.retiredInstances.delete(currentPanelId!);
@@ -745,14 +745,14 @@ export class WorkflowOrchestrator {
         viewedStatus !== EXECUTION_STATES.PAUSED;
       if (isIdle) {
         Log.debug(
-          `createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
+          `[WorkflowOrchestrator] createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
         );
         currentViewed.dispose();
         this.instances.delete(currentPanelId!);
       } else {
         // It is running/paused — keep it in the registry but do not deactivate
         Log.debug(
-          `createWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
+          `[WorkflowOrchestrator] createWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
         );
       }
     }
@@ -820,7 +820,7 @@ export class WorkflowOrchestrator {
     const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.debug(
-        `retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
+        `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
       );
       return;
     }
@@ -834,7 +834,7 @@ export class WorkflowOrchestrator {
       : [];
     const hasActivePty = activePtySessions.length > 0;
     Log.debug(
-      `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.getSummary().workflowName || "(empty)"}\" ` +
+      `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.getSummary().workflowName || "(empty)"}\" ` +
         `status=${instance.getQueueState().status}, isViewed=${isViewed}, hasActivePty=${hasActivePty}(${activePtySessions.length}), remaining=${this.instances.size - 1}`
     );
     this.instances.delete(workflowId);
@@ -1073,7 +1073,7 @@ export class WorkflowOrchestrator {
       );
     } else {
       Log.warn(
-        `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
+        `[replayWorkflowStateTo] workflowId "${workflowId.slice(0, 8)}" not found`
       );
     }
   }
@@ -1556,7 +1556,7 @@ export class WorkflowOrchestrator {
 
   async initialize(): Promise<void> {
     try {
-      Log.debug("WorkflowOrchestrator: Initializing...");
+      Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator: Initializing...");
 
       const integrationMode = ConfigurationUtils.getIntegrationMode();
       const modeLabel =
@@ -1568,7 +1568,7 @@ export class WorkflowOrchestrator {
           [HARNESS_IDS.QWEN_CLI]: "Qwen Code CLI",
           [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity CLI",
         }[integrationMode] || "Copilot CLI";
-      Log.info(`🔄 Default integration: ${modeLabel}`);
+      Log.info(`[WorkflowOrchestrator] Default integration: ${modeLabel}`);
 
       await Promise.all([
         this.copilotCliIntegration.initialize(),
@@ -1590,19 +1590,19 @@ export class WorkflowOrchestrator {
       }
 
       this.orchestratorInitialized = true;
-      Log.debug("WorkflowOrchestrator: Initialization complete");
+      Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator: Initialization complete");
 
       await this.restoreState(); // no-op
 
       if (this.dashboardReady) {
         Log.debug(
-          "Dashboard was ready before init — triggering deferred auto-load"
+          "[WorkflowOrchestrator] Dashboard was ready before init — triggering deferred auto-load"
         );
         await this.triggerStartupAutoLoadIfReady();
       }
     } catch (error) {
       this.orchestratorInitialized = true;
-      Log.error("Failed to initialize WorkflowOrchestrator:", error);
+      Log.error("[WorkflowOrchestrator] Failed to initialize WorkflowOrchestrator:", error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -1658,7 +1658,7 @@ export class WorkflowOrchestrator {
     this.workspaceInitPending = true;
     this.pendingInitWorkspaceRoot = workspaceRoot;
     Log.info(
-      `ctrlyoke: Workspace initialization pending for "${workspaceRoot}"`
+      `[WorkflowOrchestrator] ctrlyoke: Workspace initialization pending for "${workspaceRoot}"`
     );
   }
 
@@ -1673,7 +1673,7 @@ export class WorkflowOrchestrator {
 
     if (!workspaceRoot) {
       Log.warn(
-        "ctrlyoke: handleInitializeWorkspace called with no workspace root"
+        "[WorkflowOrchestrator] ctrlyoke: handleInitializeWorkspace called with no workspace root"
       );
       return;
     }
@@ -1684,7 +1684,7 @@ export class WorkflowOrchestrator {
       // .ctrlyoke/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
     } catch (err) {
-      Log.warn("ctrlyoke: Workspace initialization failed:", err);
+      Log.warn("[WorkflowOrchestrator] ctrlyoke: Workspace initialization failed:", err);
     }
 
     this.workspaceInitPending = false;
@@ -1702,7 +1702,7 @@ export class WorkflowOrchestrator {
   }
 
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
-    Log.info("✅ Dashboard is ready");
+    Log.info("[WorkflowOrchestrator] Dashboard is ready");
     this.dashboardReady = true;
     if (!this.dashboardReadyAt) {
       this.dashboardReadyAt = Date.now();
@@ -1747,7 +1747,7 @@ export class WorkflowOrchestrator {
       await this.triggerStartupAutoLoadIfReady();
     } else {
       Log.debug(
-        "Orchestrator not yet initialized — deferring auto-load until init completes"
+        "[startup] Orchestrator not yet initialized — deferring auto-load until init completes"
       );
     }
   }
@@ -1811,8 +1811,8 @@ export class WorkflowOrchestrator {
         // disk and is still reachable from the workflow dropdown.
         if (panelViewedId && panelViewedId !== this.startupPanelViewedId) {
           Log.info(
-            `triggerAutoLoad: skipping auto-load — panel view moved during startup ` +
-              `(inst:${this.startupPanelViewedId?.slice(0, 8) ?? "null"} → inst:${panelViewedId.slice(0, 8)}); ` +
+            `[startup] triggerAutoLoad: skipping auto-load — panel view moved during startup ` +
+              `(inst:${this.startupPanelViewedId?.slice(0, 8) ?? "null"} inst:${panelViewedId.slice(0, 8)}); ` +
               `keeping the user's workflow`
           );
           loadedWorkflowId = panelViewedId;
@@ -1821,7 +1821,7 @@ export class WorkflowOrchestrator {
 
         if (panelViewedId && panelWorkingFilePath) {
           Log.debug(
-            `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
+            `[startup] triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
           );
           loadedWorkflowId = panelViewedId;
           // Replay state to the panel now that startup is complete. Skip the replay
@@ -1838,12 +1838,12 @@ export class WorkflowOrchestrator {
             );
           } else if (alreadyReplayed) {
             Log.debug(
-              `triggerAutoLoad: skipping panel replay — already replayed during startup for inst:${panelViewedId.slice(0, 8)}`
+              `[startup] triggerAutoLoad: skipping panel replay — already replayed during startup for inst:${panelViewedId.slice(0, 8)}`
             );
           }
           return;
         }
-        Log.debug("Triggering auto-load of recent session");
+        Log.debug("[startup] Triggering auto-load of recent session");
 
         await this.workspaceSessionManager.autoLoadRecentSession(
           this.currentWorkspaceFolder.uri.fsPath,
@@ -1860,7 +1860,7 @@ export class WorkflowOrchestrator {
               EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
             ) {
               Log.debug(
-                `triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
+                `[startup] triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
               );
               return;
             }
@@ -1918,7 +1918,7 @@ export class WorkflowOrchestrator {
         ? Date.now() - this.dashboardReadyAt
         : -1;
       Log.debug(
-        `[startup] Broadcasting STARTUP_COMPLETE — session: ${loadedWorkflowId ?? "none"}, READY→COMPLETE: ${readyToCompleteMs}ms`
+        `[startup] Broadcasting STARTUP_COMPLETE — session: ${loadedWorkflowId ?? "none"}, READYCOMPLETE: ${readyToCompleteMs}ms`
       );
       this._autoLoadHasSettled = true;
       this.resolveStartupAutoLoad(loadedWorkflowId);
@@ -1963,7 +1963,7 @@ export class WorkflowOrchestrator {
     }
 
     if (!instance) {
-      Log.warn(`executeWorkflow: workflow ${workflowId ?? "viewed"} not found`);
+      Log.warn(`[WorkflowOrchestrator] executeWorkflow: workflow ${workflowId ?? "viewed"} not found`);
       return;
     }
 
@@ -1995,7 +1995,7 @@ export class WorkflowOrchestrator {
   ): Promise<void> {
     // Phase 2: load into a new instance (same as loadPromptFile), then execute.
     Log.debug(
-      `executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
+      `[WorkflowOrchestrator] executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
         `(${this.instances.size} workflow(s) currently in registry)`
     );
     const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
@@ -2099,11 +2099,11 @@ export class WorkflowOrchestrator {
     const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
-        `pauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+        `[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
       );
       return;
     }
-    Log.info(`pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.pause();
   }
 
@@ -2116,11 +2116,11 @@ export class WorkflowOrchestrator {
     const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
-        `cancelPauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+        `[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
       );
       return;
     }
-    Log.info(`cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.cancelPause();
   }
 
@@ -2144,7 +2144,7 @@ export class WorkflowOrchestrator {
         // the resume can proceed. loadWorkflowForClient handles deduplication (reuses
         // any existing retired instance by file path) and replays state to the panel.
         Log.debug(
-          `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found — reloading from ${path.basename(workingFilePath)}`
+          `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} not found — reloading from ${path.basename(workingFilePath)}`
         );
         await this.loadWorkflowForClient(
           workingFilePath,
@@ -2156,13 +2156,13 @@ export class WorkflowOrchestrator {
         );
         if (!instance) {
           Log.warn(
-            `resumeWorkflow: inst:${workflowId.slice(0, 8)} reload from working file produced no instance`
+            `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} reload from working file produced no instance`
           );
           return;
         }
       } else {
         Log.warn(
-          `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+          `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
         );
         return;
       }
@@ -2173,7 +2173,7 @@ export class WorkflowOrchestrator {
     if (this.retiredInstances.has(instance.id)) {
       this.retiredInstances.delete(instance.id);
     }
-    Log.info(`resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.resume();
   }
 
@@ -2187,7 +2187,7 @@ export class WorkflowOrchestrator {
     const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
-        `stopWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+        `[WorkflowOrchestrator] stopWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
       );
       return;
     }
@@ -2203,7 +2203,7 @@ export class WorkflowOrchestrator {
     const entry = this.externalRunSessions.get(workflowId);
     if (!entry) {
       Log.warn(
-        `stopExternalRunSession: no external run session found for workflowId="${workflowId}"`
+        `[WorkflowOrchestrator] stopExternalRunSession: no external run session found for workflowId="${workflowId}"`
       );
       return;
     }
@@ -2211,7 +2211,7 @@ export class WorkflowOrchestrator {
     const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceFolderPath || !entry.summary.workingFilePath) {
       Log.warn(
-        `stopExternalRunSession: no active external run for workflowId="${workflowId}"`
+        `[WorkflowOrchestrator] stopExternalRunSession: no active external run for workflowId="${workflowId}"`
       );
       return;
     }
@@ -2229,14 +2229,14 @@ export class WorkflowOrchestrator {
       resolution.inspection.lock.ownerToken !== entry.session.getOwnerToken()
     ) {
       Log.warn(
-        `stopExternalRunSession: external lock acquisition is no longer owned by the tracked session for workflowId="${workflowId}"`
+        `[WorkflowOrchestrator] stopExternalRunSession: external lock acquisition is no longer owned by the tracked session for workflowId="${workflowId}"`
       );
       return;
     }
     const lock = resolution.inspection.lock;
 
     Log.info(
-      `stopExternalRunSession: sending stop request to ${lock.runner} pid=${lock.pid} for workflowId="${workflowId}"`
+      `[WorkflowOrchestrator] stopExternalRunSession: sending stop request to ${lock.runner} pid=${lock.pid} for workflowId="${workflowId}"`
     );
     try {
       process.kill(lock.pid, "SIGTERM");
@@ -2245,7 +2245,7 @@ export class WorkflowOrchestrator {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ESRCH") {
         Log.warn(
-          `stopExternalRunSession: process.kill(${lock.pid}) failed:`,
+          `[WorkflowOrchestrator] stopExternalRunSession: process.kill(${lock.pid}) failed:`,
           err
         );
       }
@@ -2456,7 +2456,7 @@ export class WorkflowOrchestrator {
         return;
       } catch (error) {
         Log.warn(
-          `handleClientReady: preferred view is not available, falling back: ${JSON.stringify(options.preferredViewAddress)}`,
+          `[WorkflowOrchestrator] handleClientReady: preferred view is not available, falling back: ${JSON.stringify(options.preferredViewAddress)}`,
           error
         );
       }
@@ -2503,7 +2503,7 @@ export class WorkflowOrchestrator {
         }
       } else {
         Log.debug(
-          `handleClientReady: skipping duplicate panel startup replay for inst:${viewedId.slice(0, 8)}`
+          `[WorkflowOrchestrator] handleClientReady: skipping duplicate panel startup replay for inst:${viewedId.slice(0, 8)}`
         );
       }
     }
@@ -3866,7 +3866,7 @@ export class WorkflowOrchestrator {
         const existingExternalEntry = this.externalRunSessions.get(workflowId);
         if (existingExternalEntry) {
           Log.debug(
-            `loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
+            `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
           );
           this.storedPanelSend?.({
             type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
@@ -3881,7 +3881,7 @@ export class WorkflowOrchestrator {
         }
 
         Log.debug(
-          `loadWorkingFile: "${workflowId}" has a proven external lock — starting external run watch session`
+          `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" has a proven external lock — starting external run watch session`
         );
         await this.startExternalRunWatchSession(
           filePath,
@@ -4680,7 +4680,7 @@ export class WorkflowOrchestrator {
         if (!prepared) {
           rejectPrepared(error);
         }
-        Log.error(`Failed to execute seeded run: ${getErrorMessage(error)}`);
+        Log.error(`[WorkflowOrchestrator] Failed to execute seeded run: ${getErrorMessage(error)}`);
       });
     // The action is not complete until the initiating client is visibly bound
     // to the seeded run. Execution itself continues in the background.
@@ -4852,7 +4852,7 @@ export class WorkflowOrchestrator {
         if (!prepared) {
           rejectPrepared(error);
         }
-        Log.error(`Failed to execute draft: ${getErrorMessage(error)}`);
+        Log.error(`[WorkflowOrchestrator] Failed to execute draft: ${getErrorMessage(error)}`);
       });
     await preparedPromise;
   }
@@ -5746,9 +5746,9 @@ export class WorkflowOrchestrator {
             selected.filePath
           );
           await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
-          Log.info(`Resumed session: ${selected.label}`);
+          Log.info(`[WorkflowOrchestrator] Resumed session: ${selected.label}`);
         } catch (loadError) {
-          Log.error("Failed to load session:", loadError as Error);
+          Log.error("[WorkflowOrchestrator] Failed to load session:", loadError as Error);
           notifyUserFeedback(
             this.userFeedbackSink,
             USER_FEEDBACK_SEVERITY.ERROR,
@@ -5757,7 +5757,7 @@ export class WorkflowOrchestrator {
         }
       }
     } catch (error) {
-      Log.error("Failed to resume session:", error as Error);
+      Log.error("[WorkflowOrchestrator] Failed to resume session:", error as Error);
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -5813,7 +5813,7 @@ export class WorkflowOrchestrator {
     );
     for (const result of results) {
       if (result.status === "rejected") {
-        Log.warn("Workflow shutdown did not settle cleanly:", result.reason);
+        Log.warn("[WorkflowOrchestrator] Workflow shutdown did not settle cleanly:", result.reason);
       }
     }
   }
@@ -5857,7 +5857,7 @@ export class WorkflowOrchestrator {
     // The run-summary cache is module-level, so nothing else drops it when the
     // host tears down (workspace close, extension deactivate).
     clearRunSummaryCache();
-    Log.debug("WorkflowOrchestrator disposed");
+    Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator disposed");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -5909,7 +5909,7 @@ export class WorkflowOrchestrator {
   private getInstanceForClient(clientId: string): WorkflowInstance {
     if (!this.viewerRegistry.has(clientId)) {
       Log.warn(
-        `getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
+        `[WorkflowOrchestrator] getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
       );
     }
     return this.getBoundInstance(clientId) ?? this.getActiveInstance();
@@ -5962,7 +5962,7 @@ export class WorkflowOrchestrator {
       Log.debug(
         `[setViewedWorkflowId] clientId=${clientId.slice(0, 12)} ` +
           `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
-          `→ inst:${workflowId?.slice(0, 8) ?? "null"}`
+          `inst:${workflowId?.slice(0, 8) ?? "null"}`
       );
 
       if (clientId === this.PANEL_CLIENT_ID) {
@@ -6121,7 +6121,7 @@ export class WorkflowOrchestrator {
       this.runnerHostIdentity
     );
 
-    Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
+    Log.debug(`[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
 
     // Tracks the lineage identity this instance last reported, so the address
     // registry is refreshed on the transition rather than on every state change.
@@ -6192,7 +6192,7 @@ export class WorkflowOrchestrator {
         }
         const wasRetired = this.promoteInstanceToLive(instance);
         Log.debug(
-          `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
+          `[onDidChangeState] registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
             `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})` +
             (wasRetired ? " — removed stale retiredInstances entry" : "")
         );
@@ -6219,7 +6219,7 @@ export class WorkflowOrchestrator {
           if (panelViewedIsBlank) {
             this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
             Log.debug(
-              `onDidChangeState: auto-switched panel viewerRegistry to running inst:${instance.id.slice(0, 8)} (panel had blank placeholder)`
+              `[onDidChangeState] auto-switched panel viewerRegistry to running inst:${instance.id.slice(0, 8)} (panel had blank placeholder)`
             );
           }
         }
@@ -6260,7 +6260,7 @@ export class WorkflowOrchestrator {
           state.status === EXECUTION_STATES.STOPPED)
       ) {
         Log.debug(
-          `onDidChangeState: inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
+          `[onDidChangeState] inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
         );
         this.retireWorkflow(instance.id);
       }
@@ -6921,7 +6921,7 @@ export class WorkflowOrchestrator {
               };
               if (wf.steps) {
                 Log.info(
-                  `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} → ${updatedSummary.totalSteps} steps`
+                  `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} ${updatedSummary.totalSteps} steps`
                 );
                 provider.notifyCliPromptsExtended(
                   workflowId,

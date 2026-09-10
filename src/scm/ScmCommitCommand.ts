@@ -145,7 +145,7 @@ export class ScmCommitCommand {
             ) {
               return;
             }
-            Log.error("Commit message generation failed", err);
+            Log.error("[ScmCommitCommand] Commit message generation failed", err);
             const message = err instanceof Error ? err.message : String(err);
             void vscode.window.showErrorMessage(`ctrlyoke: ${message}`);
           }
