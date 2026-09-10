@@ -216,7 +216,7 @@ describe("PromptChipRail", () => {
     );
   });
 
-  it("renders the status row before the context row in the three-row layout", () => {
+  it("renders the status icon before the context fill bar", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
       steps: [
@@ -236,11 +236,12 @@ describe("PromptChipRail", () => {
 
     const chip = document.querySelector('[data-workflow-chip-index="0"]');
     const statusIcon = chip?.querySelector('[aria-label="pending"]');
-    const contextLabel = screen.getByText("50%");
+    const contextFillBar = chip?.querySelector(".animate-ctx-update");
     expect(statusIcon).not.toBeNull();
-    expect(contextLabel).toBeInTheDocument();
+    expect(contextFillBar).not.toBeNull();
+    expect(contextFillBar).toHaveStyle("height: 50%");
     expect(
-      (statusIcon?.compareDocumentPosition(contextLabel) ?? 0) &
+      (statusIcon?.compareDocumentPosition(contextFillBar!) ?? 0) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
