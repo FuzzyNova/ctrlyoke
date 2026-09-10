@@ -139,10 +139,12 @@ function ChipContent({
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : getChipBorderClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
-      {/* Row 1: slot number alone, so a wide number never pushes the icons
-          below off screen. Numbers >= 1000 shrink to fit and get a tooltip
-          with the full value instead of continuing to grow. */}
-      <div className="flex w-full items-center overflow-hidden">
+      {/* One centered row per piece of info, so nothing ever has to share
+          horizontal space and crowd something else out:
+          number, status icon, type icon. Numbers >= 1000 shrink to fit and
+          get a tooltip with the full value instead of continuing to grow.
+          Context % is conveyed by the right-edge fill bar below, not text. */}
+      <div className="flex w-full flex-col items-center gap-y-0.5 overflow-hidden">
         <span
           className={`truncate font-semibold text-description-fg leading-none select-none ${
             slotNumber >= 1000 ? "text-xxs" : "text-sm"
@@ -151,27 +153,15 @@ function ChipContent({
         >
           {slotNumber}
         </span>
-      </div>
-      {/* Row 2: status icon + step type icon side by side, both fixed size
-          so they never grow and crowd each other out. */}
-      <div className="mt-0.5 flex h-4 items-center justify-start gap-x-1">
-        <StatusIcon status={status} className="!text-base flex-shrink-0" />
+        <StatusIcon status={status} />
         <Icon
           name={getStepKindIconClass(
             isScript ? STEP_TYPES.SCRIPT : STEP_TYPES.PROMPT
           )}
-          className="flex-shrink-0 text-xs text-description-fg"
+          className="text-xs text-description-fg"
         />
       </div>
 
-      {/* Row 3: context % on its own row */}
-      {contextPct !== undefined && (
-        <div className="flex h-3 items-center justify-end w-full">
-          <span className="text-xxs text-description-fg leading-none">
-            {contextPct}%
-          </span>
-        </div>
-      )}
       {/* 2px right-edge context fill bar */}
       {contextPct !== undefined && (
         <div className="absolute right-0 top-0 bottom-0 w-[2px] overflow-hidden">
