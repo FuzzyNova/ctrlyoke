@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button, ScopeToggle, SettingToggleRow } from "../shared";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
@@ -10,6 +11,7 @@ import {
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
+import { toWorkspaceRelative } from "../workspace-viewer/fileBrowserShared";
 import {
   KEYBOARD_KEYS,
   SETTING_SCOPES,
@@ -84,6 +86,7 @@ export const SaveWorkflowDialog: React.FC = () => {
   const setSaveLocationSelection = useUiStore(
     (s) => s.setSaveLocationSelection
   );
+  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const pathCheckSequence = useRef(0);
@@ -139,9 +142,13 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   const handleBrowseLocation = useCallback(() => {
     if (isStandalone) {
+      // `location` may hold an absolute filesystem path (SAVE_WORKFLOW_DIALOG_DATA's
+      // defaultPath is extension-supplied and absolute) or a user-typed relative
+      // path, but the hosted file browser's directory listing only understands
+      // workspace-relative viewer paths — convert before opening it.
       openFileBrowser({
         mode: "directory",
-        initialPath: location,
+        initialPath: toWorkspaceRelative(location, workspaceRoot),
         onSelect: setLocation,
       });
       return;
@@ -150,7 +157,7 @@ export const SaveWorkflowDialog: React.FC = () => {
       type: MESSAGE_TYPES.BROWSE_SAVE_LOCATION,
       defaultDir: location,
     });
-  }, [vscode, openFileBrowser, location]);
+  }, [vscode, openFileBrowser, location, workspaceRoot]);
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
