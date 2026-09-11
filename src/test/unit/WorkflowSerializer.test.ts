@@ -1329,9 +1329,10 @@ suite("WorkflowSerializer", () => {
           dialog.type,
           MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA
         );
+        assert.strictEqual(dialog.title, "Save Pending save");
         assert.strictEqual(
-          dialog.title,
-          `Save run ${run.runId} — pending continuation`
+          dialog.subtitle,
+          `Run ${run.runId} — pending continuation`
         );
         assert.strictEqual(dialog.address.runRef, run.runRef);
         assert.strictEqual(

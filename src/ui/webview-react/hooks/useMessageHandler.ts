@@ -2801,6 +2801,7 @@ export function createMessageHandlers(
       requestId: message.requestId,
       address: message.address,
       title: message.title,
+      subtitle: message.subtitle,
       defaultPath: message.defaultPath,
       defaultFormat: message.defaultFormat,
     });

@@ -315,6 +315,7 @@ export const SaveWorkflowDialog: React.FC = () => {
       isOpen={saveWorkflowDialogOpen && !fileBrowserState}
       onClose={closeSaveWorkflowDialog}
       title={saveWorkflowDialogData?.title ?? "Save workflow"}
+      headerSubtitle={saveWorkflowDialogData?.subtitle}
       size="md"
       footer={
         <div className="flex items-center justify-between w-full">

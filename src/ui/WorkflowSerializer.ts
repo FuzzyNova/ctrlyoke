@@ -382,18 +382,19 @@ export class WorkflowSerializer {
           )
         : undefined;
 
+      const workflowDisplayName =
+        descriptor?.workflowName ||
+        workingFile.workflowName ||
+        path
+          .basename(workingFilePath)
+          .replace(/\.ctrlyoke\.(ya?ml|json)$/i, "");
+
       let defaultPath: string;
       if (descriptor?.originalFile) {
         defaultPath = descriptor.originalFile;
       } else {
-        const rawName =
-          descriptor?.workflowName ||
-          workingFile.workflowName ||
-          path
-            .basename(workingFilePath)
-            .replace(/\.ctrlyoke\.(ya?ml|json)$/i, "");
         const name =
-          rawName
+          workflowDisplayName
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-+|-+$/g, "") || "workflow";
@@ -406,7 +407,8 @@ export class WorkflowSerializer {
         ? "json"
         : "yaml";
 
-      let title = "Save draft";
+      const title = `Save ${workflowDisplayName}`;
+      let subtitle: string | undefined;
       if (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
         const summary = workspaceRoot
           ? await new OutputHistoryManager(workspaceRoot)
@@ -419,12 +421,12 @@ export class WorkflowSerializer {
           : undefined;
         const runId = summary?.runId ?? address.runRef;
         if (workingFile._runtime?.pendingRewind) {
-          title = `Save run ${runId} — pending continuation`;
+          subtitle = `Run ${runId} — pending continuation`;
         } else {
           const date = summary
             ? new Date(summary.startedAt).toISOString().slice(0, 10)
             : "unknown date";
-          title = `Save run ${runId} (${date})`;
+          subtitle = `Run ${runId} (${date})`;
         }
       }
 
@@ -433,6 +435,7 @@ export class WorkflowSerializer {
         requestId,
         address,
         title,
+        subtitle,
         defaultPath,
         defaultFormat,
       });

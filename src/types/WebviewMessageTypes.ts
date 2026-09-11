@@ -1083,8 +1083,10 @@ export interface SaveWorkflowDialogDataMessage {
   requestId: string;
   /** The exact viewed definition this export is allowed to snapshot. */
   address: WorkflowViewAddress;
-  /** User-facing framing for the addressed draft/run. */
+  /** User-facing framing for the addressed draft/run — the workflow's display name. */
   title: string;
+  /** Run number/date (or pending-continuation note) shown under the title; undefined for a draft. */
+  subtitle?: string;
   defaultPath: string;
   defaultFormat: WorkflowFileFormat;
 }

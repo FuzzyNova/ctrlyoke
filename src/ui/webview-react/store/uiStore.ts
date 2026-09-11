@@ -223,6 +223,7 @@ export interface SaveWorkflowDialogData {
   requestId: string;
   address: WorkflowViewAddress;
   title: string;
+  subtitle?: string;
   defaultPath: string;
   defaultFormat: WorkflowFileFormat;
 }
