@@ -112,7 +112,7 @@ Unchanged from the previous revision — restated because it still narrows the
 design the same way, just applied to a wider "who" than just group siblings.
 
 | Primitive                      | Who uses it                                                              | Verdict for ctrlyoke                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Shared task list + deps**    | Claude Code Agent Teams; most orchestrators                              | **Already ours.** The workflow definition _is_ the task list; `append_step`/`edit_step`/`reorder_steps` are its mutation API. Do not rebuild it. |
 | **Mailbox / peer messaging**   | Agent Teams (`inboxes/{agent}.json`), cross-session messaging            | **Take it**, but as a filtered read of one board rather than N files.                                                                            |
 | **Blackboard / shared board**  | Blackboard architectures; L2MAC; shared-KV "Shared File System Protocol" | **Take it.** One append-only artifact, indirect coordination, no rendezvous.                                                                     |
@@ -197,12 +197,12 @@ reaching a terminal `_runtime`, or (for group members) at the join.
 
 ### 2. Four MCP tools, available to any step in the scope — not just group members
 
-| Tool            | Shape                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `post_note`     | `{ text, to?: Array<{ workflowKey, runRef, stepIndex }> }` → `{ seq }`                                     |
-| `read_notes`    | `{ since?: number, from?: Array<{ workflowKey, runRef, stepIndex? }> }` → `{ entries, nextCursor }`        |
-| `claim_paths`   | `{ paths: string[], reason? }` → `{ granted: string[], denied: [{ path, owner }], claims }`                |
-| `release_paths` | `{ paths: string[] }` → `{ released: string[] }`                                                           |
+| Tool            | Shape                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `post_note`     | `{ text, to?: Array<{ workflowKey, runRef, stepIndex }> }` → `{ seq }`                              |
+| `read_notes`    | `{ since?: number, from?: Array<{ workflowKey, runRef, stepIndex? }> }` → `{ entries, nextCursor }` |
+| `claim_paths`   | `{ paths: string[], reason? }` → `{ granted: string[], denied: [{ path, owner }], claims }`         |
+| `release_paths` | `{ paths: string[] }` → `{ released: string[] }`                                                    |
 
 `claim_paths` returns the full current ownership map, so a separate
 `list_claims` tool is unnecessary. `paths` are workspace-relative and
@@ -306,12 +306,12 @@ The current ban is all-or-nothing and is scoped to group membership. It
 becomes a **tool-availability mode** that applies uniformly, whether or not
 the calling step is part of a `parallel:` group:
 
-| Tool                                                       | Inside a parallel group                                                                                                                                                         | Ordinary sequential step |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `post_note`, `read_notes`, `claim_paths`, `release_paths`  | allowed                                                                                                                                                                          | allowed |
-| `workflow_status`, `capabilities`, `global_status`         | allowed (read-only)                                                                                                                                                              | allowed (unchanged) |
-| `read_output`                                              | allowed, but restricted to steps before the group's start boundary — matching Decision 5 of `PARALLEL_STEPS_PLAN.md`, so sibling output stays an explicit note, never an implicit read | unchanged |
-| `append_step`, `edit_step`, `remove_step`, `reorder_steps` | **still refused** — they would race the coordinator's join and topology invariants                                                                                              | unaffected (already allowed) |
+| Tool                                                       | Inside a parallel group                                                                                                                                                                | Ordinary sequential step     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `post_note`, `read_notes`, `claim_paths`, `release_paths`  | allowed                                                                                                                                                                                | allowed                      |
+| `workflow_status`, `capabilities`, `global_status`         | allowed (read-only)                                                                                                                                                                    | allowed (unchanged)          |
+| `read_output`                                              | allowed, but restricted to steps before the group's start boundary — matching Decision 5 of `PARALLEL_STEPS_PLAN.md`, so sibling output stays an explicit note, never an implicit read | unchanged                    |
+| `append_step`, `edit_step`, `remove_step`, `reorder_steps` | **still refused** — they would race the coordinator's join and topology invariants                                                                                                     | unaffected (already allowed) |
 
 The `DYNAMIC_QUEUE` diagnostic narrows to "this member enables queue-mutating
 MCP tools while inside a group", and group members that only want coordination
