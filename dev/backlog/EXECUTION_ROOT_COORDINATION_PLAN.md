@@ -23,6 +23,12 @@
 > revision's identity model was both more plumbing than the feature needs and too
 > narrow to admit a participant class that genuinely collides on files: an
 > external agent session the user is running in the same checkout.**
+>
+> A code audit later the same day corrected four claims below against the current
+> tree: `CTRLYOKE_EXECUTION_ROOT` is required rather than optional (Decision 6),
+> step-index plumbing already exists and the stale-index hazard is live today
+> (Decision 7), `global_status` currently refuses external callers outright
+> (Decision 8), and open questions 5 and 6 are resolved.
 
 ## Problem
 
@@ -329,7 +335,7 @@ two unrelated jobs:
 
 - it is the tool subset the built-in `ctrlyoke-mcp-tools` skill documents
   (`McpToolSkillGenerator.MCP_TOOL_SKILL_TOOL_NAMES` is literally
-  `= MCP_WORKFLOW_TOOL_NAMES`, `McpToolSkillGenerator.ts:118-119`), and
+  `= MCP_WORKFLOW_TOOL_NAMES`, `McpToolSkillGenerator.ts:88-89`), and
 - it is the deny-list `CommitMessageGenerator` hands the commit-message run
   (`deniedTools: [...MCP_WORKFLOW_TOOL_NAMES]`, `CommitMessageGenerator.ts:347`).
 
@@ -381,12 +387,21 @@ A bounded `wait_for_release` is a plausible later addition. It is not in v1.
 
 - **Attested (`ctrlyoke-step`).** Derived by the server. `CTRLYOKE_WORKING_FILE`
   is already set for every run and yields `workflowKey`/`runRef` via
-  `WorkflowPaths.parseWorkingFileAddressFromPath`. The execution root follows from
-  the run itself: worktree runs persist it at
-  `WorkingFileWorktreeRuntime.executionRoot` (`src/types/CtrlYokeTypes.ts:480`),
-  and non-worktree runs use the workspace root the server already holds. An
-  explicit `CTRLYOKE_EXECUTION_ROOT` is therefore an optimisation that saves a
-  file read, not a prerequisite.
+  `WorkflowPaths.parseWorkingFileAddressFromPath`.
+
+  **`CTRLYOKE_EXECUTION_ROOT` is required, not an optimisation.** An earlier
+  revision said the server could fall back to "the workspace root it already
+  holds". It cannot: `this.workspaceRoot` comes from `CTRLYOKE_WORKSPACE`, which
+  `CliMcpConfigGenerator.buildCtrlyokeStdioServerEntry` sets to
+  `stateRoot ?? workspaceRoot` — the **state** root, which in the default user
+  mode is `<ctrlyokeStateHome>/projects/<slug>-<hash12>` and has nothing to do
+  with the checkout being edited. Using it as the execution root would put the
+  board in the wrong scope for every user-mode run. Resolve in this order:
+  `CTRLYOKE_EXECUTION_ROOT` → the run file's
+  `WorkingFileWorktreeRuntime.executionRoot` (worktree runs) → `process.cwd()`.
+  The env var is added in exactly one place, now that the single env-block
+  builder has landed.
+
 - **External.** `process.cwd()` of the stdio server the external harness spawned,
   resolved to its Git common directory by the same shared helper.
 
@@ -400,21 +415,32 @@ cheap, and it should be protected in review.
 Far less than the previous revision assumed, because of Decision 1's granularity
 rule. Ordered by necessity:
 
-| Value                    | Needed for                                                                         | Source                                                |
-| ------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `workflowKey` / `runRef` | participant identity; letting the orchestrator close the right lease at settlement | **already free** — `CTRLYOKE_WORKING_FILE`            |
-| execution root           | scope selection                                                                    | derivable from the run (Decision 6); env var optional |
-| `stepIndex` / `stepName` | attribution only                                                                   | new, and only where stable                            |
-| `parallelGroupId`        | releasing member claims at the join                                                | new, group members only                               |
+| Value                    | Needed for                                                                         | Source                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `workflowKey` / `runRef` | participant identity; letting the orchestrator close the right lease at settlement | **already free** — `CTRLYOKE_WORKING_FILE`                  |
+| execution root           | scope selection                                                                    | `CTRLYOKE_EXECUTION_ROOT`, **required** (Decision 6)        |
+| `stepIndex` / `stepName` | attribution only                                                                   | **already free** — `CTRLYOKE_PROMPT_INDEX` / `_PROMPT_NAME` |
+| `parallelGroupId`        | releasing member claims at the join                                                | the only genuinely new variable; group members only         |
 
-Only the last two need new plumbing, and only for **parallel-group members** —
-the one participant class where two agents share a run and therefore cannot be
-told apart by run address alone.
+Only one new variable is needed. An earlier revision assumed step identity had to
+be added; it is already there. `CliExecutionRunner.buildHookEnvVars()` sets
+`CTRLYOKE_PROMPT_INDEX` and `CTRLYOKE_PROMPT_NAME` from the execution context, and
+both spawn paths already spread it — `headlessEnv` for headless runs and
+`terminalEnv` for the interactive PTY. So step-level attribution costs nothing but
+reading two variables the runner already exports, and the new plumbing reduces to
+`CTRLYOKE_PARALLEL_GROUP_ID` for **parallel-group members** — the one participant
+class where two agents share a run and therefore cannot be told apart by run
+address alone.
 
-For those, identity travels on the **CLI process environment**, which the stdio
-MCP server inherits as a child process. `CliExecutionRunner`'s `headlessEnv`
-(`:351`) is built fresh per invocation and is already unconditional, so this is
-additive. Two properties of that channel matter:
+**That discovery makes the stale-index hazard below a live bug rather than a
+hypothetical.** `CTRLYOKE_PROMPT_INDEX` is _already_ frozen at the spawning step's
+value on every inject path, so a server that naively trusted it today would
+misattribute board entries from the first prompt injected into a reused PTY. The
+mitigation is not optional hardening; it is a precondition for reading the
+variable at all.
+
+Identity travels on the **CLI process environment**, which the stdio MCP server
+inherits as a child process. Two properties of that channel matter:
 
 - **Per-harness MCP config shape is irrelevant to it.** The concern that a
   workspace-global, ref-counted `settings.json` MCP block (Qwen, Antigravity,
@@ -431,12 +457,23 @@ additive. Two properties of that channel matter:
   `CTRLYOKE_WORKING_FILE` in the config `env` block. That is a far softer failure
   than the previous revision's "no coordination tools for that harness."
 
-**Never emit a stale step index.** Set `CTRLYOKE_STEP_INDEX` only on spawn-per-step
+**Never read a stale step index.** `CTRLYOKE_PROMPT_INDEX` and
+`CTRLYOKE_PARALLEL_GROUP_ID` are trustworthy only on spawn-per-step
 paths. An injected follow-up prompt reuses an already-running PTY
 (`CliExecutionRunner.ts:105-110`), so its env is frozen at the spawning step's
 values; such a prompt must carry run-level identity with no step index rather than
 the wrong one. This costs nothing — injected prompts are sequential, and
 sequential steps never needed step identity for correctness.
+
+**The server detects this itself; no new spawn-time flag is needed.** It already
+reads the run file to resolve the address, and that file's
+`_runtime.currentIndex` is authoritative. Accept `CTRLYOKE_PROMPT_INDEX` only when
+it agrees with `currentIndex`, and drop it to `undefined` otherwise. A frozen
+index from an earlier step disagrees and is discarded; a group member disagrees
+too (the run's `currentIndex` is the group's start index), which is precisely why
+group members need the explicit `CTRLYOKE_PARALLEL_GROUP_ID` and carry their own
+index alongside it. Since `stepIndex` is attribution-only (Decision 1), dropping
+it is always safe.
 
 The one case where that is not enough is a parallel-group member that would
 inject into a PTY left behind by an earlier sequential step (legal: preflight
@@ -605,7 +642,7 @@ Two things must be fixed for any of it to work:
 
 - **Generated skills emit placeholders, not values.** `McpToolSkillGenerator`
   renders literal `<mcp-server.js path>` and `<path>` tokens
-  (`McpToolSkillGenerator.ts:9-11, 80-84`) because
+  (`McpToolSkillGenerator.ts:15-17, 51-54`) because
   `SkillExpander.expandSkills(skillNames, workspaceRoot, executionCheckoutRoot)`
   and `generateBuiltInSkillContent(skillName, staticContent)` receive no run
   context at all. `MCP_AS_SKILL_PLAN.md` §1.5 specified literal values; that part
@@ -661,6 +698,15 @@ reporting truncation explicitly; change no scope and add no path/note data, whic
 would blur it into the board. Share the run-address type with the board so the two
 read consistently.
 
+**Also drop its `requireRunAddress` gate.** `handleGlobalStatus` opens with
+`this.requireRunAddress(MCP_GLOBAL_STATUS_TOOL_NAME)` and therefore refuses every
+external caller today, which contradicts Decision 8's table. The gate is
+vestigial here: the tool reads nothing run-scoped — it scans the lineage
+repository under `this.workspaceRoot` — so per Decision 1 it is a scope tool, not
+a run-addressed one, and the blast-radius argument that justifies the gate on the
+queue tools does not apply. Keep the gate on `workflow_status`, `read_output`, and
+every queue tool, which genuinely act on one run.
+
 ## Schema, settings, and types
 
 - New top-level `coordination` settings group in `schemas/settings-schema.json` +
@@ -675,7 +721,7 @@ read consistently.
   thresholds stay in `LockSafetyPrimitives`, shared with runner locks and execution
   leases. Making them configurable per-scope would fork the one staleness model the
   codebase deliberately single-sources.
-- `MCP_SKILL_NAMES` (`src/types/DashboardConstants.ts:3678-3681`) gains
+- `MCP_SKILL_NAMES` (`src/types/DashboardConstants.ts:3686-3689`) gains
   `COORDINATION: "ctrlyoke-coordination-tools"`. The existing comment already warns
   these names are workflow-referenced and must stay stable.
 - `src/utils/McpToolDefinitions.ts`: rename `MCP_WORKFLOW_TOOL_NAMES` to
@@ -792,14 +838,20 @@ correctness fix on its own:
 4. Should claims ever be enforceable — a pre-edit hook rejecting a write to another
    participant's path? Far stronger, far more disruptive, and needs per-harness hook
    support. Advisory first; revisit with usage data.
-5. Should external participants be admitted by default, or behind a setting that
-   defaults off? Defaulting on maximises the zero-configuration property of
-   Decision 6; defaulting off is the conservative read of "a process ctrlyoke did
-   not launch can write a file under `.git/`."
-6. Should coordination eligibility be authorable (`coordination: true|false`) or
-   stay implied by `mcpServers: ["ctrlyoke"]`? Implied costs no schema surface and
-   matches the queue tools, but leaves no way for a step to ask for coordination
-   without queue mutation outside a group.
+5. ~~Should external participants be admitted by default?~~ **Resolved: yes.**
+   `coordination.allowExternalParticipants` defaults `true`. The conservative
+   reading — "a process ctrlyoke did not launch can write a file under `.git/`" —
+   does not survive Decision 1: any process that can reach the execution root can
+   already write the board file, the claimed files, and `.git/` itself, so
+   defaulting off buys no safety and costs the zero-configuration property that is
+   most of why external participants are cheap to support. The setting exists so a
+   user who wants ctrlyoke-only coordination can have it, not as a default posture.
+6. ~~Authorable `coordination: true|false`, or implied by `mcpServers:
+["ctrlyoke"]`?~~ **Resolved: implied.** No new workflow-schema surface. The
+   case that motivated an explicit flag — wanting coordination without queue
+   mutation — is the parallel-group case, and Decision 8 already answers it by
+   filtering `ListTools` rather than by authoring. Outside a group the gap is
+   theoretical and no usage data justifies the surface yet; revisit if it appears.
 7. Does `queue.maxParallelSteps` need a per-group override once members actually
    contend? Out of scope here; contention data from this feature is what would
    justify it.
