@@ -629,34 +629,15 @@ function registerCommands(
     }
   );
 
+  const openLicensePanel = async () => {
+    await workflowOrchestrator.openPanel();
+    await webviewProvider.awaitPanelReady();
+    webviewProvider.openGlobalSettingsTab("license");
+  };
+
   const activateProCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.ACTIVATE_PRO,
-    async () => {
-      const key = await vscode.window.showInputBox({
-        prompt: "Paste your ctrlyoke Pro license key",
-        placeHolder: "Your Keygen license key",
-        password: true,
-        ignoreFocusOut: true,
-      });
-      if (!key) {
-        return;
-      }
-
-      try {
-        await licenseService.activateWithKey(key);
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.SUCCESS,
-          "ctrlyoke: Pro license activated successfully."
-        );
-      } catch (error) {
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.ERROR,
-          `ctrlyoke: Pro license activation failed — ${getErrorMessage(error)}`
-        );
-      }
-    }
+    openLicensePanel
   );
 
   const activateOfflineProCommand = vscode.commands.registerCommand(
@@ -715,42 +696,12 @@ function registerCommands(
 
   const deactivateProCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.DEACTIVATE_PRO,
-    async () => {
-      const confirmation = await vscode.window.showQuickPick(
-        [LICENSE_UI.DEACTIVATE],
-        {
-          title: "Deactivate the ctrlyoke Pro license on this machine?",
-          placeHolder: "Choose Deactivate to continue",
-          ignoreFocusOut: true,
-        }
-      );
-      if (confirmation !== LICENSE_UI.DEACTIVATE) {
-        return;
-      }
-
-      try {
-        await licenseService.deactivate();
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.SUCCESS,
-          "ctrlyoke: Pro license deactivated."
-        );
-      } catch (error) {
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.ERROR,
-          `ctrlyoke: Pro license deactivation failed — ${getErrorMessage(error)}`
-        );
-      }
-    }
+    openLicensePanel
   );
 
   const manageLicenseCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.MANAGE_LICENSE,
-    async () => {
-      await workflowOrchestrator.openPanel();
-      webviewProvider.openGlobalSettingsTab("license");
-    }
+    openLicensePanel
   );
 
   // Pause execution command

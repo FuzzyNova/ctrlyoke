@@ -175,7 +175,6 @@ export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
 /** User-facing licensing command actions and destinations. */
 export const LICENSE_UI = {
   OPEN_PRICING: "Open pricing",
-  DEACTIVATE: "Deactivate",
   PRICING_URL: "https://ctrlyoke.dev/pricing/",
   SUPPORT_EMAIL: "support@ctrlyoke.dev",
   REMOTE_ACCESS_UPSELL:

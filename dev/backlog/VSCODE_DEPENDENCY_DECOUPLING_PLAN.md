@@ -47,29 +47,32 @@ out."** That check only looked at `LicenseSettingsHandlers.ts` and
 `ACTIVATE_LICENSE_KEY` and the deactivate flow are already built-in modals —
 see `LicenseSection.tsx` lines ~237-271 for the key-entry form and
 ~454-498 for the deactivate confirm modal) and missed `extension.ts`'s three
-Command Palette license commands entirely. Two of them are real violations
-of this policy, found 2026-09-02:
+Command Palette license commands entirely. Two of them were real violations
+of this policy, found 2026-09-02 and **fixed 2026-09-11**:
 
-- **`ctrlyoke.activatePro`** (`extension.ts:586-613`) shows a native
-  `showInputBox` (password-masked) for pasting a license key and calls
+- **`ctrlyoke.activatePro`** used to show a native `showInputBox`
+  (password-masked) for pasting a license key and call
   `licenseService.activateWithKey()` directly — a second, native-only
   implementation of the form that already exists in `LicenseSection.tsx`.
-- **`ctrlyoke.deactivatePro`** (`extension.ts:670-700`) shows a native
-  `showQuickPick` used as a single-choice confirm ("Deactivate" or dismiss)
-  and calls `licenseService.deactivate()` directly — duplicating the confirm
-  modal that already exists in `LicenseSection.tsx`.
+- **`ctrlyoke.deactivatePro`** used to show a native `showQuickPick` used as
+  a single-choice confirm ("Deactivate" or dismiss) and call
+  `licenseService.deactivate()` directly — duplicating the confirm modal
+  that already exists in `LicenseSection.tsx`.
 
-Both should be fixed to match **`ctrlyoke.manageLicense`**'s existing
-pattern (`extension.ts:702-708`: `workflowOrchestrator.openPanel()` +
-`webviewProvider.openGlobalSettingsTab("license")`, no native dialog at
-all) instead of running a second, divergent implementation of a flow the
-webview already owns. `ctrlyoke.activateOfflinePro`
-(`extension.ts:616-668`, native `showOpenDialog` for the license file) is
-the legitimate OS-file-picker carve-out and needs no change — it is already
-reachable from a connected webview client too, via `LicenseSection.tsx`'s
-narrowly-scoped `EXECUTE_VSCODE_COMMAND` bridge
-(`WebviewMessageRouter.ts:1639-1648`, which only ever forwards
-`ACTIVATE_OFFLINE_PRO`, nothing else).
+Both now share `ctrlyoke.manageLicense`'s pattern via one `openLicensePanel`
+helper (`extension.ts`, in `registerCommands`): `workflowOrchestrator.openPanel()`
++ `webviewProvider.awaitPanelReady()` + `webviewProvider.openGlobalSettingsTab("license")`,
+no native dialog at all — instead of running a second, divergent
+implementation of a flow the webview already owns. All three commands
+(`activatePro`, `deactivatePro`, `manageLicense`) now register the same
+helper, which also closed a pre-existing race where `manageLicense` called
+`openGlobalSettingsTab` without waiting for `awaitPanelReady()` first (the
+other two already awaited it). `ctrlyoke.activateOfflinePro` (native
+`showOpenDialog` for the license file) is the legitimate OS-file-picker
+carve-out and needed no change — it is already reachable from a connected
+webview client too, via `LicenseSection.tsx`'s narrowly-scoped
+`EXECUTE_VSCODE_COMMAND` bridge (`WebviewMessageRouter.ts:1639-1648`, which
+only ever forwards `ACTIVATE_OFFLINE_PRO`, nothing else).
 
 There are exactly two carve-outs, both already reflected in the inventory
 below, and neither is scheduled to move to a built-in modal:
