@@ -148,6 +148,14 @@ export const BOOLEAN_STRING_VALUES = {
   FALSE: "false",
 } as const;
 
+/** Workspace-local paths shared by the extension and standalone MCP server. */
+export const CTRLYOKE_DIR = ".ctrlyoke";
+export const LOGS_DIR = "logs";
+export const CAPABILITIES_FILE = "capabilities.json";
+
+/** Default queue limit shared by settings and the standalone MCP server. */
+export const DEFAULT_MAX_QUEUE_SIZE = 100;
+
 /** Boolean-like stdout values accepted by script condition evaluation. */
 export const SCRIPT_BOOLEAN_OUTPUT_VALUES = {
   TRUE_NUMERIC: "1",

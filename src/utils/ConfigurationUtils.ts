@@ -19,6 +19,9 @@ import type { StatusLineSegment } from "./StatuslineFormat";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
+  CTRLYOKE_DIR,
+  LOGS_DIR,
+  CAPABILITIES_FILE,
   SETTING_PATHS,
   type StatusLineTrackingProvider,
   type HarnessId,
@@ -147,7 +150,7 @@ export const CONFIG_SCOPE = {
  */
 export const PATH_CONSTANTS = {
   /** Root ctrlyoke directory name (default: ".ctrlyoke") */
-  CTRLYOKE_DIR: ".ctrlyoke",
+  CTRLYOKE_DIR,
 
   /**
    * Run storage root (subdirectory of CTRLYOKE_DIR). Holds one directory per workflow
@@ -200,7 +203,7 @@ export const PATH_CONSTANTS = {
   ATTACHMENTS_DIR: "attachments",
 
   /** Logs directory name (subdirectory of CTRLYOKE_DIR) */
-  LOGS_DIR: "logs",
+  LOGS_DIR,
 
   /**
    * UX snapshots directory name (subdirectory of CTRLYOKE_DIR).
@@ -224,7 +227,7 @@ export const PATH_CONSTANTS = {
   NOTIFICATIONS_DIR: "notifications",
 
   /** Capabilities file name (written by extension, read by MCP server) */
-  CAPABILITIES_FILE: "capabilities.json",
+  CAPABILITIES_FILE,
 
   /** Persisted push subscription registry file (inside NOTIFICATIONS_DIR) */
   PUSH_SUBSCRIPTIONS_FILE: "push-subscriptions.json",

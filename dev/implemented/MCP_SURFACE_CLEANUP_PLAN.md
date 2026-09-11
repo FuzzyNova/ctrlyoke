@@ -1,14 +1,16 @@
 # MCP Surface Cleanup Plan
 
-> **Status:** Backlog. Nothing here is implemented. Every item is a fix to
-> already-implemented code, not new capability.
+> **Status:** Fully implemented across commits `2cd043d5`, `5fb83d44`,
+> `feb73f8e` and `4b4c8673`. Every item was a fix to already-implemented code,
+> not new capability. The rationale below is kept as the record of why each
+> change was made.
 >
 > **Why now:** ctrlyoke is pre-release, so none of this carries a compatibility
 > cost. One item — the `capabilities` → `list_harnesses` rename — is genuinely
 > irreversible later, because tool names are the agent-facing contract that skill
 > documents, prompt preambles, and user-written prompts all reference. The rest are
 > internal and could be done any time, but are worth doing **before** the surface
-> grows: [`EXECUTION_ROOT_COORDINATION_PLAN.md`](./EXECUTION_ROOT_COORDINATION_PLAN.md)
+> grows: [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../backlog/EXECUTION_ROOT_COORDINATION_PLAN.md)
 > adds four more tools, and each smell below gets proportionally more expensive
 > with every tool added.
 >
@@ -18,6 +20,8 @@
 > are documented there, in their design context, and are not duplicated here.
 
 ## 1. Rename `capabilities` to `list_harnesses`
+
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
 
 The only change here that cannot be made later.
 
@@ -30,14 +34,27 @@ other tool in the set is verb-or-noun-precise about what it returns
 
 Touch points, all verified:
 
-| Site                          | Change                                                    |
-| ----------------------------- | --------------------------------------------------------- |
-| `McpToolDefinitions.ts:33`    | constant value `"capabilities"` → `"list_harnesses"`      |
-| `McpToolDefinitions.ts:219`   | the definition entry's `name`                             |
-| `McpToolDefinitions.ts:296`   | membership in the queue-tool name list                    |
-| `mcp-server.ts:59`, `:278`    | import and dispatch case                                  |
-| `mcp-server.ts:724`           | `handleCapabilities` → `handleListHarnesses` (see item 8) |
-| `docs/reference/mcp-tools.md` | the built-in tool table                                   |
+| Site                                                 | Change                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `src/utils/McpToolDefinitions.ts:33`                 | constant value `"capabilities"` → `"list_harnesses"`                 |
+| `src/utils/McpToolDefinitions.ts:219`                | the definition entry's `name`                                        |
+| `src/utils/McpToolDefinitions.ts:296`                | membership in `MCP_WORKFLOW_TOOL_NAMES`                              |
+| `src/mcp-server.ts:59`, `:278`                       | import and dispatch case                                             |
+| `src/mcp-server.ts:724`                              | `handleCapabilities` → `handleListHarnesses` (see item 8)            |
+| `McpServersEditor.tsx:8,62`                          | the `CTRLYOKE_USER_TOOLS` entry: `id` and the `"Capabilities"` label |
+| `src/templates/agents/spec-orchestrator.agent.md:43` | the prose telling agents to "call `capabilities` first"              |
+| `docs/reference/mcp-tools.md`                        | the built-in tool table                                              |
+
+The last two were missing from an earlier draft of this table and are the reason
+the rename is irreversible: `CTRLYOKE_USER_TOOLS[].id` is the persisted key for a
+user's per-tool disable switch, and the orchestrator agent template is
+agent-facing prose that no compiler checks. `McpServersEditor.test.tsx` asserts
+`CTRLYOKE_USER_TOOLS` stays exhaustive over `MCP_WORKFLOW_TOOL_NAMES`, so the
+editor half fails loudly; the template half does not. Grep the repo for the bare
+word rather than trusting the constant — `CommitMessageGenerator.ts:347` and
+`McpRegistryFileManager.ts:259` consume the name through constants and need no
+edit. Pre-release, a stale persisted `"capabilities"` id in someone's
+`.ctrlyoke/settings.json` is acceptable fallout and needs no migration.
 
 Rename the constant `MCP_CAPABILITIES_TOOL_NAME` → `MCP_LIST_HARNESSES_TOOL_NAME`
 in the same change so the constant and its value do not disagree. Note that
@@ -45,6 +62,8 @@ in the same change so the constant and its value do not disagree. Note that
 and the MCP server reads — and keeps its name. Only the _tool_ is renamed.
 
 ## 2. Enforce `inputSchema` instead of hand-validating every tool
+
+**Status: done —** refactor(mcp): validate tool arguments against their declared input schema
 
 **The smell.** Every tool declares a JSON Schema `inputSchema` in
 `MCP_TOOL_DEFINITIONS`, and that schema is used for exactly two things: advertising
@@ -83,6 +102,10 @@ why would be a regression for the calling agent.
 
 ## 3. Remove `any` from the tool boundary
 
+**Status: done —** refactor(mcp): type validated MCP tool arguments and transport errors
+
+The deliberate variadic logger and the capabilities-file casts remain for item 4.
+
 15 occurrences in `src/mcp-server.ts`. The ones that matter are at the untrusted
 input boundary, where they defeat strict mode precisely where it is load-bearing:
 
@@ -101,6 +124,8 @@ logger and can stay.
 
 ## 4. Give `capabilities.json` a shared type
 
+**Status: done —** shared capabilities contract now types both the extension writer and MCP reader.
+
 **The smell.** The file is written by `WebviewSettingsSync.writeCapabilities`
 (`src/ui/WebviewSettingsSync.ts:339,355`) and read by
 `readCapabilities(): Promise<any | null>` (`src/mcp-server.ts:706`), whose consumer
@@ -117,6 +142,8 @@ the writing side fails at runtime in a different process.
 The writer already builds the object; the reader stops casting.
 
 ## 5. De-duplicate the path constants
+
+**Status: done —** shared path names now live in `DashboardConstants` and feed the existing `PATH_CONSTANTS` surface.
 
 `src/mcp-server.ts:72-75` reads:
 
@@ -140,7 +167,14 @@ obvious home — and delete the local copies. Pulling `ConfigurationUtils` itsel
 the MCP bundle is the option to avoid, since it drags in `configService` and
 `ExternalRootsTrustStore` for three strings.
 
+`PATH_CONSTANTS` must then consume the moved names from `DashboardConstants`
+rather than keeping its own copies, or the duplication has simply moved rather
+than gone. Verified: neither `ConfigurationUtils.ts` nor `DashboardConstants.ts`
+imports `vscode`, so the move is safe in both directions.
+
 ## 6. Single-source the max-queue default
+
+**Status: done —** the queue setting and MCP fallback now consume the shared dashboard default.
 
 `getMaxQueueSize()` (`src/mcp-server.ts:134-144`) falls back to `100` with the
 comment _"Default, matches package.json default"_. That comment cites a surface the
@@ -149,11 +183,20 @@ project explicitly declares non-authoritative — per `copilot-instructions.md`,
 property there is a do-nothing duplicate. The real default is
 `CtrlYokeSettings.ts:472` (`queue.maxSize: 100`).
 
-Import the default from the settings defaults and fix the comment. The env var
-(`CTRLYOKE_MAX_QUEUE_SIZE`) remains the primary source; this is only about where the
-fallback constant comes from.
+Fix the comment, and single-source the constant — but **not by importing
+`DEFAULT_SETTINGS` from `CtrlYokeSettings.ts`.** That module pulls in
+`IconColorDefaults`, `CtrlYokeTypes`, `StatuslineFormat` and
+`TerminalControlBarFormat`, which is the same bundle-weight objection item 5
+raises against pulling in `ConfigurationUtils` — and `mcp-server.ts` is a
+per-tool-call spawned bundle. Declare the number in `DashboardConstants` (which
+`CtrlYokeSettings.ts` already imports, and which `mcp-server.ts` already depends
+on) and have **both** `CtrlYokeSettings.ts:472` and `getMaxQueueSize()` read it
+from there. The env var (`CTRLYOKE_MAX_QUEUE_SIZE`) remains the primary source;
+this is only about where the fallback constant comes from.
 
 ## 7. Single-source the ctrlyoke MCP server env block
+
+**Status: done —** refactor(harness): single-source the ctrlyoke MCP server env block
 
 The same env block is constructed independently in three places:
 
@@ -178,6 +221,8 @@ formats serialise the same object.
 
 ## 8. Rename handlers to match their tools
 
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
+
 `handleQueueStatus` (`:325`) serves `workflow_status`; `handleQueueAppend` (`:390`)
 serves `append_step`. The tools were renamed from `queue_status`/`append_queue` in an
 earlier pass and the handlers were not, so grepping a tool name does not find the
@@ -185,6 +230,8 @@ code that implements it. Mechanical, and worth doing in the same pass as item 1 
 the dispatch table reads uniformly.
 
 ## 9. Fill the two gaps in the public tool docs
+
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
 
 `docs/reference/mcp-tools.md` lists 7 tools. `global_status` and
 `submit_commit_message` are missing. `global_status` matters most: agents are told it

@@ -1,4 +1,8 @@
-import { QUEUE_POSITION } from "../types/DashboardConstants";
+import {
+  QUEUE_POSITION,
+  type QueuePosition,
+} from "../types/DashboardConstants";
+import type { PromptStep } from "../types/CtrlYokeTypes";
 
 /**
  * JSON-schema shape used by ctrlyoke's MCP tools.
@@ -7,7 +11,7 @@ import { QUEUE_POSITION } from "../types/DashboardConstants";
  * without importing the MCP server entrypoint (and its transport setup).
  */
 export interface McpToolInputSchema {
-  type?: string;
+  type?: "object" | "string" | "number" | "boolean" | "array";
   description?: string;
   properties?: Record<string, McpToolInputSchema>;
   required?: readonly string[];
@@ -15,6 +19,70 @@ export interface McpToolInputSchema {
   enum?: readonly string[];
   oneOf?: readonly McpToolInputSchema[];
   minimum?: number;
+}
+
+export type McpAppendStepInput = Pick<
+  PromptStep,
+  "prompt" | "name" | "model" | "harness" | "resumeSession"
+> & {
+  sessionId?: number;
+};
+
+export interface McpAppendStepArguments {
+  steps: McpAppendStepInput[];
+  position: QueuePosition | number;
+  source?: string;
+}
+
+export type McpStepUpdateArguments = Omit<
+  Partial<
+    Pick<
+      PromptStep,
+      | "prompt"
+      | "name"
+      | "model"
+      | "harness"
+      | "resumeSession"
+      | "sessionId"
+      | "agent"
+      | "enabled"
+      | "color"
+      | "skills"
+    >
+  >,
+  "additionalArgs"
+> & {
+  additionalArgs?: string[];
+};
+
+export interface McpEditStepArguments {
+  index: number;
+  updates: McpStepUpdateArguments;
+  clearProperties?: string[];
+}
+
+export interface McpRemoveStepArguments {
+  index: number;
+}
+
+export interface McpReorderStepsArguments {
+  indices: number[];
+}
+
+export interface McpReadOutputArguments {
+  indices?: number[];
+  cursor?: string;
+  limit?: number;
+  tail?: number;
+}
+
+export interface McpGlobalStatusArguments {
+  workflowKey?: string;
+  runRef?: string;
+}
+
+export interface McpSubmitCommitMessageArguments {
+  message: string;
 }
 
 export interface McpToolDefinition {
@@ -30,7 +98,7 @@ export const MCP_WORKFLOW_STATUS_TOOL_NAME = "workflow_status";
 export const MCP_APPEND_STEP_TOOL_NAME = "append_step";
 
 /** Tool that lists the installed harnesses and supported models. */
-export const MCP_CAPABILITIES_TOOL_NAME = "capabilities";
+export const MCP_LIST_HARNESSES_TOOL_NAME = "list_harnesses";
 
 /** Tool that reads output from earlier workflow steps. */
 export const MCP_READ_OUTPUT_TOOL_NAME = "read_output";
@@ -94,7 +162,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call capabilities first if you want to choose a harness or model for the new steps.",
+      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -216,7 +284,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
     },
   },
   {
-    name: MCP_CAPABILITIES_TOOL_NAME,
+    name: MCP_LIST_HARNESSES_TOOL_NAME,
     description:
       "List the harnesses installed on this machine and the models each one supports. Call this before setting a harness or model on a step so you pick values that exist.",
     inputSchema: { type: "object", properties: {} },
@@ -293,10 +361,40 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
 export const MCP_WORKFLOW_TOOL_NAMES = [
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   MCP_APPEND_STEP_TOOL_NAME,
-  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_LIST_HARNESSES_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
 ] as const;
+
+export type McpToolName =
+  | typeof MCP_WORKFLOW_STATUS_TOOL_NAME
+  | typeof MCP_APPEND_STEP_TOOL_NAME
+  | typeof MCP_LIST_HARNESSES_TOOL_NAME
+  | typeof MCP_READ_OUTPUT_TOOL_NAME
+  | typeof MCP_GLOBAL_STATUS_TOOL_NAME
+  | typeof MCP_EDIT_STEP_TOOL_NAME
+  | typeof MCP_REMOVE_STEP_TOOL_NAME
+  | typeof MCP_REORDER_STEPS_TOOL_NAME
+  | typeof MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
+
+export interface McpToolArgumentsByName {
+  [MCP_WORKFLOW_STATUS_TOOL_NAME]: Record<string, unknown>;
+  [MCP_APPEND_STEP_TOOL_NAME]: McpAppendStepArguments;
+  [MCP_LIST_HARNESSES_TOOL_NAME]: Record<string, unknown>;
+  [MCP_READ_OUTPUT_TOOL_NAME]: McpReadOutputArguments;
+  [MCP_GLOBAL_STATUS_TOOL_NAME]: McpGlobalStatusArguments;
+  [MCP_EDIT_STEP_TOOL_NAME]: McpEditStepArguments;
+  [MCP_REMOVE_STEP_TOOL_NAME]: McpRemoveStepArguments;
+  [MCP_REORDER_STEPS_TOOL_NAME]: McpReorderStepsArguments;
+  [MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME]: McpSubmitCommitMessageArguments;
+}
+
+export type ValidatedMcpToolCall = {
+  [Name in McpToolName]: {
+    name: Name;
+    args: McpToolArgumentsByName[Name];
+  };
+}[McpToolName];

@@ -21,6 +21,28 @@ export interface McpHarnessServerConfig {
   tools?: string[];
 }
 
+/** The shared stdio entry shape used to launch ctrlyoke's MCP server. */
+export interface McpStdioServerEntry {
+  command: "node";
+  args: string[];
+  env: Record<string, string>;
+}
+
+interface McpConfigServerEntry extends Record<string, unknown> {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  type?: string;
+  tools?: string[];
+  url?: string;
+  headers?: Record<string, string>;
+  autoApprove?: boolean | string[];
+}
+
+interface McpJsonConfig {
+  mcpServers: Record<string, McpConfigServerEntry>;
+}
+
 /**
  * Harness-specific formatting options for user-defined MCP server entries.
  * Allows each harness to map transport values to its own type field syntax
@@ -311,6 +333,40 @@ export class CliMcpConfigGenerator {
   }
 
   /**
+   * Build the shared ctrlyoke MCP stdio entry.
+   *
+   * Format-specific generators may add their own fields around this base
+   * entry, but the server path and ctrlyoke environment must stay identical.
+   */
+  static buildCtrlyokeStdioServerEntry(
+    serverPath: string,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    stateRoot?: string
+  ): McpStdioServerEntry {
+    const normalizedWorkspaceRoot = (stateRoot ?? workspaceRoot).replace(
+      /\\/g,
+      "/"
+    );
+    const env: Record<string, string> = {
+      CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
+    };
+    if (workingFilePath) {
+      env.CTRLYOKE_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
+    }
+    if (additionalEnv) {
+      Object.assign(env, additionalEnv);
+    }
+
+    return {
+      command: "node",
+      args: [serverPath.replace(/\\/g, "/")],
+      env,
+    };
+  }
+
+  /**
    * Generate JSON MCP configuration
    *
    * @param serverPath Path to MCP server script
@@ -328,29 +384,17 @@ export class CliMcpConfigGenerator {
     stateRoot?: string,
     _secretOptions?: McpSecretConfigOptions
   ): string {
-    // Normalize paths (forward slashes work on Windows and Unix)
-    const normalizedServerPath = serverPath.replace(/\\/g, "/");
-    const normalizedWorkspaceRoot = (stateRoot ?? workspaceRoot).replace(
-      /\\/g,
-      "/"
-    );
-
-    const env: Record<string, string> = {
-      CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
+    const ctrlyokeEntry: McpConfigServerEntry = {
+      ...this.buildCtrlyokeStdioServerEntry(
+        serverPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        stateRoot
+      ),
     };
-    if (workingFilePath) {
-      env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
-    }
-    if (additionalEnv) {
-      Object.assign(env, additionalEnv);
-    }
-
-    const mcpServers: any = {
-      ctrlyoke: {
-        command: "node",
-        args: [normalizedServerPath],
-        env,
-      },
+    const mcpServers: Record<string, McpConfigServerEntry> = {
+      ctrlyoke: ctrlyokeEntry,
     };
 
     // Add optional server configuration fields
@@ -402,7 +446,7 @@ export class CliMcpConfigGenerator {
         additionalEnv,
         stateRoot
       )
-    );
+    ) as McpJsonConfig;
 
     // Merge user-defined servers
     for (const server of userServers) {
@@ -431,7 +475,7 @@ export class CliMcpConfigGenerator {
     userServerConfig?: McpUserServerHarnessConfig,
     secretOptions?: McpSecretConfigOptions
   ): string {
-    const mcpServers: any = {};
+    const mcpServers: Record<string, McpConfigServerEntry> = {};
     for (const server of userServers) {
       mcpServers[server.id] = this.buildUserServerEntry(
         server,
@@ -451,8 +495,8 @@ export class CliMcpConfigGenerator {
     server: McpServerConfig,
     userServerConfig?: McpUserServerHarnessConfig,
     secretOptions?: McpSecretConfigOptions
-  ): Record<string, unknown> {
-    const entry: Record<string, unknown> = {};
+  ): McpConfigServerEntry {
+    const entry: McpConfigServerEntry = {};
 
     if (server.url) {
       // Remote server
@@ -505,28 +549,19 @@ export class CliMcpConfigGenerator {
     stateRoot?: string,
     secretOptions?: McpSecretConfigOptions
   ): string {
-    // Normalize paths (forward slashes)
-    const escapedServerPath = serverPath.replace(/\\/g, "/");
-    const escapedWorkspaceRoot = (stateRoot ?? workspaceRoot).replace(
-      /\\/g,
-      "/"
+    const ctrlyokeEntry = this.buildCtrlyokeStdioServerEntry(
+      serverPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      stateRoot
     );
-
-    const env: Record<string, string> = {
-      CTRLYOKE_WORKSPACE: escapedWorkspaceRoot,
-    };
-    if (workingFilePath) {
-      env.CTRLYOKE_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
-    }
-    if (additionalEnv) {
-      Object.assign(env, additionalEnv);
-    }
 
     return this.generateInlineTomlStdioServerConfig(
       serverName,
-      "node",
-      [escapedServerPath],
-      env,
+      ctrlyokeEntry.command,
+      ctrlyokeEntry.args,
+      ctrlyokeEntry.env,
       undefined,
       secretOptions
     );

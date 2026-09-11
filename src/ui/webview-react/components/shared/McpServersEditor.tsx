@@ -5,7 +5,7 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
-  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_LIST_HARNESSES_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
@@ -59,8 +59,8 @@ export const CTRLYOKE_USER_TOOLS: {
     description: "Add prompts after the current step or at the end",
   },
   {
-    id: MCP_CAPABILITIES_TOOL_NAME,
-    label: "Capabilities",
+    id: MCP_LIST_HARNESSES_TOOL_NAME,
+    label: "List harnesses",
     description: "List installed harnesses and their available models",
   },
   {

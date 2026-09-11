@@ -28,6 +28,10 @@ import {
   NETWORK_INTERFACE_FAMILIES,
   TRUST_DECISIONS,
 } from "../types/DashboardConstants";
+import type {
+  CapabilitiesFile,
+  CapabilitiesModel,
+} from "../types/CapabilitiesTypes";
 import {
   ConfigurationUtils,
   CONFIG_KEYS,
@@ -780,7 +784,7 @@ export class WebviewSettingsSync {
    * Read by the MCP server (separate process) for harness/model validation.
    */
   private async writeCapabilities(
-    modelOptions: Record<string, Array<{ value: string; label: string }>>
+    modelOptions: Record<string, CapabilitiesModel[]>
   ): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -810,7 +814,7 @@ export class WebviewSettingsSync {
       };
     });
 
-    const capabilities = {
+    const capabilities: CapabilitiesFile = {
       generatedAt: Date.now(),
       harnesses: harnessEntries,
     };
@@ -1003,7 +1007,7 @@ export class WebviewSettingsSync {
   /**
    * Build model options for all harnesses.
    */
-  buildModelOptions(): Record<string, Array<{ value: string; label: string }>> {
+  buildModelOptions(): Record<string, CapabilitiesModel[]> {
     const cliModelIds = getCliSupportedModelIdsSync();
     const hiddenModels = new Set(["copilot-fast"]);
 

@@ -4,15 +4,17 @@ ctrlyoke exposes built-in tools for workflows that need to inspect or adjust the
 
 ## Built-in tool list
 
-| Tool              | Purpose                                         |
-| ----------------- | ----------------------------------------------- |
-| `workflow_status` | Return workflow metadata and step state         |
-| `append_step`     | Add prompts to the current workflow             |
-| `edit_step`       | Change a pending step's prompt or configuration |
-| `remove_step`     | Remove a pending step                           |
-| `reorder_steps`   | Reorder the pending steps                       |
-| `capabilities`    | Return available harnesses and supported models |
-| `read_output`     | Read output from completed prompts              |
+| Tool                    | Purpose                                            |
+| ----------------------- | -------------------------------------------------- |
+| `workflow_status`       | Return workflow metadata and step state            |
+| `append_step`           | Add prompts to the current workflow                |
+| `edit_step`             | Change a pending step's prompt or configuration    |
+| `remove_step`           | Remove a pending step                              |
+| `reorder_steps`         | Reorder the pending steps                          |
+| `list_harnesses`        | Return available harnesses and supported models    |
+| `read_output`           | Read output from completed prompts                 |
+| `global_status`         | List other workflows in the workspace              |
+| `submit_commit_message` | Submit a commit message when explicitly instructed |
 
 ## `append_step`
 
@@ -50,6 +52,17 @@ several indices is an error rather than a silently ignored argument.
 A step's entry gains `nextCursor` only when the slice returned stopped short of the end
 of that step's output; its absence means you have read to the end. Tail reads never
 return one. Omitting all three arguments reproduces the unpaged response exactly.
+
+## `global_status`
+
+This is a cross-worktree radar for noticing what other workflows are doing and for
+recognizing failures they may have caused. It is informational only: it is not a
+collision check and it does not act as a lock.
+
+## `submit_commit_message`
+
+Submit the complete generated commit message. Call this tool only when explicitly
+instructed to do so.
 
 ## When these tools are available
 
