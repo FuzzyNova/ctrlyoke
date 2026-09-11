@@ -48,3 +48,14 @@ export function groupDragId(groupId: string): string {
 export function isGroupDragId(id: string): boolean {
   return id.startsWith(GROUP_DRAG_ID_PREFIX);
 }
+
+/**
+ * Droppable id for the slot *after* the last pending container. It is rendered
+ * only when that container is a parallel group, because a group is the one
+ * container with no reachable slot below it: its own id means "the group's
+ * position in the order", and a step leaving the group takes that position
+ * from above. Without this id there is simply nothing a drop can resolve to
+ * that means "after the trailing group", so a step dragged to the bottom of
+ * the list could only ever land above it — or be absorbed into it.
+ */
+export const PENDING_TAIL_DRAG_ID = "pending-tail";

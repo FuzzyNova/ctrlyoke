@@ -60,6 +60,7 @@ import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   DndContext,
   closestCenter,
+  useDroppable,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
@@ -90,6 +91,7 @@ import {
 } from "@utils/stepClipboard";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
 import {
+  PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
   groupDragId,
   isStepDragId,
@@ -126,6 +128,12 @@ const PENDING_DROP_TARGET_KINDS = {
  * top-level slot (see `pendingDragCollisionDetection`), where before, every
  * collision over a group resolved to one of its members and the step could
  * only ever be absorbed into it.
+ *
+ * `PENDING_TAIL_DRAG_ID` is the one id that is not a container: it is the slot
+ * past the end of `order`, which exists because a group's own id can only ever
+ * mean the position it already occupies. That is enough for a *leading* group
+ * — taking its slot is what "above it" means — but leaves a *trailing* group
+ * with no slot below it at all.
  */
 type PendingDropTarget =
   | {
@@ -142,6 +150,12 @@ export function resolvePendingDropTarget(
   state: PendingDragState,
   overId: string
 ): PendingDropTarget | undefined {
+  if (overId === PENDING_TAIL_DRAG_ID) {
+    return {
+      kind: PENDING_DROP_TARGET_KINDS.SIBLING,
+      orderIndex: state.order.length,
+    };
+  }
   if (state.containers[overId]) {
     const orderIndex = state.order.indexOf(overId);
     return orderIndex < 0
@@ -214,6 +228,16 @@ function findPendingDragContainer(
   return state.order.find((containerId) =>
     state.containers[containerId]?.items.includes(id)
   );
+}
+
+/**
+ * Whether the pending list ends in a parallel group, and therefore needs the
+ * tail slot rendered. Every other container ends in a step row whose own id is
+ * already a reachable "drop below everything" target.
+ */
+export function hasTrailingPendingGroup(state: PendingDragState): boolean {
+  const lastId = state.order[state.order.length - 1];
+  return lastId ? Boolean(state.containers[lastId]?.groupId) : false;
 }
 
 function clonePendingDragState(state: PendingDragState): PendingDragState {
@@ -372,6 +396,13 @@ function movePendingDragMemberWithinGroup(
  * put the step into the group pushed its row down past the group header, which
  * is enough for the next collision to resolve to the group's own slot, which
  * folds it straight back out. See `handleDragOver` for why that loop is fatal.
+ *
+ * The tail slot below a trailing group is a crossing, and has to be: `over` is
+ * then an outer id while the row still lives in the group's nested context, so
+ * without the fold the row stops following the cursor exactly as it clears the
+ * group. It does not bounce the way the group's own slot does, because a fold
+ * into a group only ever pushes the group's last member *down* — away from a
+ * drag position that had to be below it to reach the tail in the first place.
  */
 export function isParallelGroupDragMove(
   state: PendingDragState,
@@ -515,6 +546,14 @@ export function resolvePendingDragEnd(
  * first or last in the list needs this; anywhere else the neighbouring step is
  * already the nearer collision.
  *
+ * Past the last row of a *trailing* group the re-point goes to the tail slot
+ * instead, because the group's own slot means "above the group" there: the
+ * group keeps its position in `order` when a step leaves it, so inserting at
+ * that position puts the step in front of it. The tail is the only id that
+ * says "after everything". It is kept out of `closestCenter`'s own candidates
+ * and injected only by this rule, so it cannot poach the lower half of the
+ * last member row — which is still a perfectly good place to join the group.
+ *
  * Dragging a group has the mirror-image problem: its own members sit under the
  * pointer for the entire drag and would be the only collisions ever reported,
  * leaving `overIndex` outside the outer list and killing every transform. A
@@ -535,7 +574,12 @@ export function pendingDragCollisionDetection(
       });
     }
 
-    const collisions = closestCenter(args);
+    const collisions = closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (container) => String(container.id) !== PENDING_TAIL_DRAG_ID
+      ),
+    });
     const overId = collisions[0] ? String(collisions[0].id) : undefined;
     if (!overId) return collisions;
     const target = resolvePendingDropTarget(state, overId);
@@ -549,12 +593,40 @@ export function pendingDragCollisionDetection(
     if (!firstMemberRect || !lastMemberRect) return collisions;
 
     const centerY = args.collisionRect.top + args.collisionRect.height / 2;
-    if (centerY < firstMemberRect.top || centerY >= lastMemberRect.bottom) {
+    if (centerY < firstMemberRect.top) {
       return [{ id: target.containerId }, ...collisions];
+    }
+    if (centerY >= lastMemberRect.bottom) {
+      const isTrailingGroup =
+        state.order[state.order.length - 1] === target.containerId;
+      return [
+        { id: isTrailingGroup ? PENDING_TAIL_DRAG_ID : target.containerId },
+        ...collisions,
+      ];
     }
     return collisions;
   };
 }
+
+/**
+ * The drop slot below a trailing parallel group. Its id has to be listed in the
+ * enclosing `SortableContext` as well as registered as a droppable:
+ * `useSortable` throws away *every* transform — including the one keeping the
+ * dragged row under the cursor — the moment `over` is not one of the context's
+ * own items, so a droppable the outer list has never heard of would freeze the
+ * drag the instant the pointer cleared the group.
+ */
+const PendingTailDropSlot: React.FC = () => {
+  const { setNodeRef } = useDroppable({ id: PENDING_TAIL_DRAG_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      className="h-2"
+      data-testid="pending-tail-drop-slot"
+      aria-hidden="true"
+    />
+  );
+};
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -1223,6 +1295,19 @@ const WorkflowStepsPanelInner: React.FC<{
     };
   }, [pendingDragState]);
 
+  // A trailing parallel group is the only container with no slot below it, so
+  // the tail is rendered (and listed) only for that case — everywhere else the
+  // last step row's own id already means "drop below everything".
+  const showPendingTail =
+    canReorder && hasTrailingPendingGroup(pendingDragState);
+  const pendingDragItems = useMemo(
+    () =>
+      showPendingTail
+        ? [...pendingDragState.order, PENDING_TAIL_DRAG_ID]
+        : pendingDragState.order,
+    [pendingDragState.order, showPendingTail]
+  );
+
   /** Drag position at which the last group crossing was folded in. */
   const foldedAtPositionRef = useRef<number | null>(null);
 
@@ -1591,7 +1676,7 @@ const WorkflowStepsPanelInner: React.FC<{
               onDragCancel={resetFoldGuard}
             >
               <SortableContext
-                items={pendingDragState.order}
+                items={pendingDragItems}
                 strategy={verticalListSortingStrategy}
               >
                 {(() => {
@@ -1666,6 +1751,7 @@ const WorkflowStepsPanelInner: React.FC<{
                     );
                   });
                 })()}
+                {showPendingTail && <PendingTailDropSlot />}
               </SortableContext>
             </DndContext>
           </div>

@@ -7,6 +7,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { PENDING_TAIL_DRAG_ID } from "@utils/dndKit";
 import type { CollisionDetection } from "@dnd-kit/core";
 
 type DragEventLike = { active: { id: string }; over: { id: string } | null };
@@ -385,6 +386,129 @@ describe("WorkflowStepsPanel parallel group drag", () => {
         type: MESSAGE_TYPES.REORDER_PROMPTS,
         newPendingOrder: [0, 2, 1, 3],
         pendingGroups: [{ id: "g1", start: 0, end: 2, failFast: false }],
+      }),
+    ]);
+  });
+
+  it("renders no tail slot when the group does not end the list", () => {
+    render(<WorkflowStepsPanel />);
+    expect(screen.queryByTestId("pending-tail-drop-slot")).toBeNull();
+  });
+});
+
+describe("WorkflowStepsPanel trailing parallel group drag", () => {
+  beforeEach(() => {
+    useWorkflowStore.getState().resetWorkflow();
+    useWorkflowStore.temporal.getState().clear();
+    useEditorStore.getState().resetEditor();
+    useSettingsStore.getState().resetSettings();
+    useUiStore.getState().resetUi();
+    useUiStore.setState({ stepsCollapsed: false });
+    postMessage.mockReset();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: {
+        postMessage,
+        getState: vi.fn(() => null),
+        setState: vi.fn(),
+      },
+    });
+    // Two ungrouped steps, then a parallel group that ends the list.
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "trailing-group.prompt.md",
+      steps: [
+        { prompt: "aaa" },
+        { prompt: "bbb" },
+        { prompt: "ccc" },
+        { prompt: "ddd" },
+      ],
+      parallelGroups: [
+        { id: "g1", startIndex: 2, endIndex: 3, failFast: false },
+      ],
+    });
+  });
+
+  afterEach(() => cleanup());
+
+  it("renders a tail slot below the group", () => {
+    render(<WorkflowStepsPanel />);
+    expect(screen.getByTestId("pending-tail-drop-slot")).toBeTruthy();
+  });
+
+  // The reported bug: dragging a step down past a trailing group absorbed it
+  // into the group, and the only slot it could then be released to was the
+  // group's own — which is the position *above* the group, because the group
+  // keeps that position when a step leaves it.
+  it("drops a step below a trailing group instead of back above it", () => {
+    render(<WorkflowStepsPanel />);
+    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
+
+    act(() => {
+      dnd.onDragStart?.();
+      measureDragAt(40);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-0" },
+        over: { id: "step-pending-3" },
+      });
+    });
+    // On the way down the step is absorbed into the group it passes over.
+    expect(renderedPrompts()).toEqual(["bbb", "ccc", "aaa", "ddd"]);
+
+    act(() => {
+      measureDragAt(160);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-0" },
+        over: { id: PENDING_TAIL_DRAG_ID },
+      });
+    });
+    // Clearing the last member releases it again, below the group — folding
+    // the crossing in is also what keeps the row animated, since `over` is an
+    // outer id while the row still lives in the group's nested context.
+    expect(renderedPrompts()).toEqual(["bbb", "ccc", "ddd", "aaa"]);
+
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-0" },
+        over: { id: PENDING_TAIL_DRAG_ID },
+      });
+    });
+
+    expect(reorderMessages()).toEqual([
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 2, 3, 0],
+        pendingGroups: [{ id: "g1", start: 1, end: 2, failFast: false }],
+      }),
+    ]);
+  });
+
+  // Nothing is folded for an ungrouped step heading straight for the tail: the
+  // sorting strategy displaces a stationary list for a plain top-level move.
+  it("sends a tail drop that never entered the group", () => {
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.();
+      measureDragAt(40);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-1" },
+        over: { id: PENDING_TAIL_DRAG_ID },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
+
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-1" },
+        over: { id: PENDING_TAIL_DRAG_ID },
+      });
+    });
+
+    expect(reorderMessages()).toEqual([
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [0, 2, 3, 1],
+        pendingGroups: [{ id: "g1", start: 1, end: 2, failFast: false }],
       }),
     ]);
   });

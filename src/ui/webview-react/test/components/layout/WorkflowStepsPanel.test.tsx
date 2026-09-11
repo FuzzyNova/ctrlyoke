@@ -11,12 +11,14 @@ import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
 import {
   buildPendingDragState,
   buildPendingReorderPayload,
+  hasTrailingPendingGroup,
   isParallelGroupDragMove,
   movePendingDragContainer,
   movePendingDragItem,
   pendingDragCollisionDetection,
   resolvePendingDragEnd,
 } from "@components/layout/WorkflowStepsPanel";
+import { PENDING_TAIL_DRAG_ID } from "@utils/dndKit";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -832,6 +834,122 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       pendingGroups: [],
     });
   });
+
+  // A group at the *end* of the list has no slot below it: its own id means the
+  // position it already occupies, and it keeps that position when a step leaves
+  // it, so a drop there inserts the step in front of the group. The tail is the
+  // only id that means "after everything".
+  describe("trailing group", () => {
+    // Steps 0-1 are ungrouped; the group holds 2-3 and ends the list.
+    const trailingGroups = [
+      { id: "group-1", startIndex: 2, endIndex: 3, failFast: false },
+    ];
+
+    it("is the only container that needs a tail slot", () => {
+      expect(
+        hasTrailingPendingGroup(buildPendingDragState(steps, 0, trailingGroups))
+      ).toBe(true);
+      expect(
+        hasTrailingPendingGroup(buildPendingDragState(steps, 0, groups))
+      ).toBe(false);
+      expect(hasTrailingPendingGroup(buildPendingDragState(steps, 0, []))).toBe(
+        false
+      );
+    });
+
+    it("takes a step below it when the step is dropped on the tail", () => {
+      const initial = buildPendingDragState(steps, 0, trailingGroups);
+      const next = movePendingDragItem(
+        initial,
+        "step-pending-0",
+        PENDING_TAIL_DRAG_ID
+      );
+
+      expect(buildPendingReorderPayload(next, 0, trailingGroups)).toEqual({
+        newPendingOrder: [1, 2, 3, 0],
+        pendingGroups: [{ id: "group-1", start: 1, end: 2, failFast: false }],
+      });
+    });
+
+    // The reported bug. Dragging a step down past a trailing group folds it
+    // into the group on the way, so by the time the pointer clears the last
+    // member the step's container *is* the group — and dropping on the group's
+    // own slot from there put it back above the group, with no way to reach the
+    // other side.
+    it("releases a step it has already absorbed to the slot below it", () => {
+      const committed = buildPendingDragState(steps, 0, trailingGroups);
+      const folded = movePendingDragItem(
+        committed,
+        "step-pending-0",
+        "step-pending-3"
+      );
+
+      const outcome = resolvePendingDragEnd(
+        folded,
+        committed,
+        "step-pending-0",
+        PENDING_TAIL_DRAG_ID,
+        0,
+        trailingGroups
+      );
+
+      expect(outcome?.payload).toEqual({
+        newPendingOrder: [1, 2, 3, 0],
+        pendingGroups: [{ id: "group-1", start: 1, end: 2, failFast: false }],
+      });
+    });
+
+    it("dissolves when the tail takes its second-to-last member", () => {
+      const initial = buildPendingDragState(steps, 0, trailingGroups);
+      const next = movePendingDragItem(
+        initial,
+        "step-pending-2",
+        PENDING_TAIL_DRAG_ID
+      );
+
+      expect(buildPendingReorderPayload(next, 0, trailingGroups)).toEqual({
+        newPendingOrder: [0, 1, 3, 2],
+        pendingGroups: [],
+      });
+    });
+
+    // Folding is what keeps the dragged row animated: `over` is an outer id
+    // while the row still lives in the group's nested sortable context, and
+    // `useSortable` drops every transform when the two disagree.
+    it("counts a member leaving for the tail as a group crossing", () => {
+      const committed = buildPendingDragState(steps, 0, trailingGroups);
+
+      expect(
+        isParallelGroupDragMove(
+          committed,
+          "step-pending-2",
+          PENDING_TAIL_DRAG_ID
+        )
+      ).toBe(true);
+      // An ungrouped step heading for the tail is a plain top-level reorder,
+      // which the sorting strategy animates without any mutation.
+      expect(
+        isParallelGroupDragMove(
+          committed,
+          "step-pending-0",
+          PENDING_TAIL_DRAG_ID
+        )
+      ).toBe(false);
+    });
+
+    it("leaves a step already at the tail where it is", () => {
+      const initial = buildPendingDragState(steps, 0, trailingGroups);
+      const atTail = movePendingDragItem(
+        initial,
+        "step-pending-0",
+        PENDING_TAIL_DRAG_ID
+      );
+
+      expect(
+        movePendingDragItem(atTail, "step-pending-0", PENDING_TAIL_DRAG_ID)
+      ).toEqual(atTail);
+    });
+  });
 });
 
 describe("WorkflowStepsPanel pending drag collision detection", () => {
@@ -894,6 +1012,75 @@ describe("WorkflowStepsPanel pending drag collision detection", () => {
     // The group's members sit under the pointer for the whole drag; reporting
     // one would put `over` outside the outer list and kill every transform.
     expect(firstCollisionFor("group-group-1", 30)).toBe("step-pending-2");
+  });
+
+  describe("with the group at the end of the list", () => {
+    const trailingSteps = [
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+      { prompt: "four" },
+    ];
+    const trailingGroups = [
+      { id: "group-1", startIndex: 2, endIndex: 3, failFast: false },
+    ];
+    const trailingState = buildPendingDragState(
+      trailingSteps,
+      0,
+      trailingGroups
+    );
+
+    // Two ungrouped rows (0-60, 60-120), then the group at 120-270: header
+    // 120-150, members 150-210 and 210-270, and the tail slot just under it.
+    const trailingRects = new Map<string, ReturnType<typeof rect>>([
+      ["step-pending-0", rect(0, 60)],
+      ["step-pending-1", rect(60, 60)],
+      ["group-group-1", rect(120, 150)],
+      ["step-pending-2", rect(150, 60)],
+      ["step-pending-3", rect(210, 60)],
+      [PENDING_TAIL_DRAG_ID, rect(270, 8)],
+    ]);
+
+    function trailingCollisionFor(activeId: string, draggedTop: number) {
+      const detect = pendingDragCollisionDetection(trailingState);
+      const collisions = detect({
+        active: { id: activeId },
+        collisionRect: rect(draggedTop, 60),
+        droppableRects: trailingRects,
+        droppableContainers: [...trailingRects.keys()].map((id) => ({ id })),
+        pointerCoordinates: null,
+      } as never);
+      return collisions[0] ? String(collisions[0].id) : undefined;
+    }
+
+    it("targets the tail when a step is dragged past the last member", () => {
+      // Centre at 270 — clear of the group. The group's own slot would mean
+      // "above the group" here, since the group keeps its place in the order
+      // when a step leaves it.
+      expect(trailingCollisionFor("step-pending-0", 240)).toBe(
+        PENDING_TAIL_DRAG_ID
+      );
+    });
+
+    it("still targets the group itself over its header", () => {
+      // Centre at 140 — above the first member row, so still "beside it".
+      expect(trailingCollisionFor("step-pending-0", 110)).toBe("group-group-1");
+    });
+
+    it("keeps the tail out of the collisions it did not ask for", () => {
+      // Centre at 265, inside the last member's own row: the tail's centre is
+      // nearer, so plain closestCenter would report it and steal the bottom of
+      // a row that is still a perfectly good place to join the group.
+      expect(trailingCollisionFor("step-pending-0", 235)).toBe(
+        "step-pending-3"
+      );
+    });
+
+    it("never offers the tail to a dragged group", () => {
+      // A group reaches every slot through its top-level neighbours, so the
+      // tail would only be a second id for a position it can already take.
+      expect(trailingCollisionFor("group-group-1", 240)).toBe("step-pending-1");
+    });
   });
 });
 describe("WorkflowStepsPanel identity rails", () => {
