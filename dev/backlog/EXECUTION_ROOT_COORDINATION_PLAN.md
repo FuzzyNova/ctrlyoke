@@ -697,7 +697,17 @@ read consistently.
 
 ## Prerequisite fixes
 
-Independent of the feature, and each a correctness fix on its own:
+[`MCP_SURFACE_CLEANUP_PLAN.md`](./MCP_SURFACE_CLEANUP_PLAN.md) covers the rest of
+the prerequisite work — the `capabilities` → `list_harnesses` rename plus eight
+structural fixes to the existing MCP surface. Two of those matter directly to this
+plan: schema-driven argument validation (so the four new tools cannot drift from
+their advertised shape) and extracting the single MCP env-block builder (so
+Decision 7's `CTRLYOKE_EXECUTION_ROOT` is added once rather than in three places,
+where missing one would silently misattribute board entries for one harness
+family).
+
+The three below are specific to this plan's own subject matter, and each is a
+correctness fix on its own:
 
 1. **The disabled-mode preflight hole** (Decision 8) — a group member can be handed
    `append_step` instructions today with no diagnostic.
