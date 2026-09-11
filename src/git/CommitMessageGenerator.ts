@@ -16,8 +16,8 @@ import { Log } from "../utils/Log";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
+  MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
-  MCP_WORKFLOW_TOOL_NAMES,
 } from "../utils/McpToolDefinitions";
 import {
   CLI_EVENT_TYPES,
@@ -343,8 +343,7 @@ export class CommitMessageGenerator {
             CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
           },
           autoApprove: true,
-          // Deny all workflow tools — the AI only needs submit_commit_message.
-          deniedTools: [...MCP_WORKFLOW_TOOL_NAMES],
+          deniedTools: [...MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES],
         }
       : undefined;
 

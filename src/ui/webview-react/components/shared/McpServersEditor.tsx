@@ -39,7 +39,7 @@ interface ListedServer {
 
 /**
  * User-visible ctrlyoke MCP tools that can be selectively disabled. Must stay
- * exhaustive over `MCP_WORKFLOW_TOOL_NAMES` — a tool missing here has no off
+ * exhaustive over `MCP_QUEUE_TOOL_NAMES` — a tool missing here has no off
  * switch in the UI, and the "N of M tools enabled" count silently under-reports.
  * `McpServersEditor.test.tsx` asserts the coverage.
  */

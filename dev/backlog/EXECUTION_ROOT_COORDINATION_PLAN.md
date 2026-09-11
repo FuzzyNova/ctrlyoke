@@ -724,14 +724,15 @@ every queue tool, which genuinely act on one run.
 - `MCP_SKILL_NAMES` (`src/types/DashboardConstants.ts:3686-3689`) gains
   `COORDINATION: "ctrlyoke-coordination-tools"`. The existing comment already warns
   these names are workflow-referenced and must stay stable.
-- `src/utils/McpToolDefinitions.ts`: rename `MCP_WORKFLOW_TOOL_NAMES` to
-  `MCP_QUEUE_TOOL_NAMES`, add `MCP_COORDINATION_TOOL_NAMES`, and add a derived
-  "everything except the commit tool" export for `CommitMessageGenerator`'s
-  `deniedTools` (Decision 4). `McpToolSkillGenerator` loses the
-  `MCP_TOOL_SKILL_TOOL_NAMES` alias, gains `MCP_COORDINATION_SKILL_TOOL_NAMES`,
-  and gains a third branch in `generateBuiltInSkillContent`. Worth a test that the
-  derived deny-list plus the commit tool covers `MCP_TOOL_DEFINITIONS` exactly, so
-  a future tool cannot slip through either side.
+- `src/utils/McpToolDefinitions.ts`: **the Decision 4 structural fix landed** —
+  the queue skill/UI list is now `MCP_QUEUE_TOOL_NAMES`, coordination has an
+  empty reserved `MCP_COORDINATION_TOOL_NAMES` list, and
+  `MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES` derives every definition except the
+  commit tool for `CommitMessageGenerator`'s `deniedTools`. The
+  `MCP_TOOL_SKILL_TOOL_NAMES` alias was removed, and coverage now asserts that
+  the derived deny-list plus the commit tool exactly covers
+  `MCP_TOOL_DEFINITIONS`. The coordination skill and its generator branch remain
+  future work for the coordination-tool implementation.
 - New bundled `src/templates/skills/ctrlyoke-coordination-tools/SKILL.md`.
   `esbuild.js`'s `copy-templates` plugin already globs the directory.
 - `parseMcpToolCliArgs` gains `--step-index` / `--parallel-group-id` (and
@@ -763,6 +764,9 @@ correctness fix on its own:
 3. **`global_status` filtering and capping** — landed 2026-09-11. It now uses
    `ACTIVE_EXECUTION_STATES`, caps responses at 100 workflows, reports
    truncation explicitly, and works for callers without an attached run.
+4. **Decision 4 MCP tool-list separation** — landed 2026-09-11. Queue-tool
+   membership is separate from the derived commit-run denial list, with an
+   empty coordination-tool list reserved for the later tool definitions.
 
 No decisions in this plan were changed. The implementation keeps the existing
 workspace-wide, cross-worktree scope and leaves path and note data to the

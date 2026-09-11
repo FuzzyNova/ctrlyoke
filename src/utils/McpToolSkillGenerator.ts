@@ -1,5 +1,5 @@
 import {
-  MCP_WORKFLOW_TOOL_NAMES,
+  MCP_QUEUE_TOOL_NAMES,
   MCP_TOOL_DEFINITIONS,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
@@ -75,7 +75,7 @@ export class McpToolSkillGenerator {
       skillName === MCP_SKILL_NAMES.COMMIT_MESSAGE
         ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
         : skillName === MCP_SKILL_NAMES.TOOLS
-          ? MCP_TOOL_SKILL_TOOL_NAMES
+          ? MCP_QUEUE_TOOL_NAMES
           : undefined;
 
     return toolNames
@@ -83,10 +83,6 @@ export class McpToolSkillGenerator {
       : undefined;
   }
 }
-
-/** The built-in skill's workflow-tool subset. */
-export const MCP_TOOL_SKILL_TOOL_NAMES: readonly string[] =
-  MCP_WORKFLOW_TOOL_NAMES;
 
 /** The built-in skill's commit-message tool subset. */
 export const MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES: readonly string[] = [

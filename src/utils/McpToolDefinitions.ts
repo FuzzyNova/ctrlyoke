@@ -357,8 +357,8 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
 ];
 
-/** Workflow tools documented by the built-in MCP skill. */
-export const MCP_WORKFLOW_TOOL_NAMES = [
+/** Queue tools documented by the built-in MCP skill. */
+export const MCP_QUEUE_TOOL_NAMES = [
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_LIST_HARNESSES_TOOL_NAME,
@@ -368,6 +368,22 @@ export const MCP_WORKFLOW_TOOL_NAMES = [
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
 ] as const;
+
+/**
+ * Coordination tools planned in dev/backlog/EXECUTION_ROOT_COORDINATION_PLAN.md.
+ * Definitions will be added with the coordination-tool implementation.
+ */
+export const MCP_COORDINATION_TOOL_NAMES = [] as const;
+
+/**
+ * Commit runs allow only submit_commit_message. McpServerConfig exposes
+ * deniedTools but no allowedTools, so express that allow-list as a derived
+ * denial list and keep it exhaustive as new MCP tools are added.
+ */
+export const MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES =
+  MCP_TOOL_DEFINITIONS.filter(
+    (tool) => tool.name !== MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
+  ).map((tool) => tool.name);
 
 export type McpToolName =
   | typeof MCP_WORKFLOW_STATUS_TOOL_NAME

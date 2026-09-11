@@ -3,8 +3,13 @@ import { suite, test } from "mocha";
 import {
   McpToolSkillGenerator,
   MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
-  MCP_TOOL_SKILL_TOOL_NAMES,
 } from "../../utils/McpToolSkillGenerator";
+import {
+  MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
+  MCP_QUEUE_TOOL_NAMES,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_TOOL_DEFINITIONS,
+} from "../../utils/McpToolDefinitions";
 
 suite("McpToolSkillGenerator", () => {
   test("renders descriptions, parameters, and executable examples", () => {
@@ -54,12 +59,22 @@ suite("McpToolSkillGenerator", () => {
 
   test("includes the step mutation tools in the workflow skill subset", () => {
     const reference = McpToolSkillGenerator.generateToolReference([
-      ...MCP_TOOL_SKILL_TOOL_NAMES,
+      ...MCP_QUEUE_TOOL_NAMES,
     ]);
 
     assert.ok(reference.includes("### edit_step"));
     assert.ok(reference.includes("### remove_step"));
     assert.ok(reference.includes("### reorder_steps"));
     assert.ok(reference.includes("zero-based step index"));
+  });
+
+  test("keeps the commit-run denial list exhaustive", () => {
+    assert.deepStrictEqual(
+      [
+        ...MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
+        MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+      ].sort(),
+      MCP_TOOL_DEFINITIONS.map((tool) => tool.name).sort()
+    );
   });
 });
