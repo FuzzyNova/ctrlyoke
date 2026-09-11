@@ -30,14 +30,27 @@ other tool in the set is verb-or-noun-precise about what it returns
 
 Touch points, all verified:
 
-| Site                          | Change                                                    |
-| ----------------------------- | --------------------------------------------------------- |
-| `McpToolDefinitions.ts:33`    | constant value `"capabilities"` → `"list_harnesses"`      |
-| `McpToolDefinitions.ts:219`   | the definition entry's `name`                             |
-| `McpToolDefinitions.ts:296`   | membership in the queue-tool name list                    |
-| `mcp-server.ts:59`, `:278`    | import and dispatch case                                  |
-| `mcp-server.ts:724`           | `handleCapabilities` → `handleListHarnesses` (see item 8) |
-| `docs/reference/mcp-tools.md` | the built-in tool table                                   |
+| Site                                                 | Change                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `src/utils/McpToolDefinitions.ts:33`                 | constant value `"capabilities"` → `"list_harnesses"`                 |
+| `src/utils/McpToolDefinitions.ts:219`                | the definition entry's `name`                                        |
+| `src/utils/McpToolDefinitions.ts:296`                | membership in `MCP_WORKFLOW_TOOL_NAMES`                              |
+| `src/mcp-server.ts:59`, `:278`                       | import and dispatch case                                             |
+| `src/mcp-server.ts:724`                              | `handleCapabilities` → `handleListHarnesses` (see item 8)            |
+| `McpServersEditor.tsx:8,62`                          | the `CTRLYOKE_USER_TOOLS` entry: `id` and the `"Capabilities"` label |
+| `src/templates/agents/spec-orchestrator.agent.md:43` | the prose telling agents to "call `capabilities` first"              |
+| `docs/reference/mcp-tools.md`                        | the built-in tool table                                              |
+
+The last two were missing from an earlier draft of this table and are the reason
+the rename is irreversible: `CTRLYOKE_USER_TOOLS[].id` is the persisted key for a
+user's per-tool disable switch, and the orchestrator agent template is
+agent-facing prose that no compiler checks. `McpServersEditor.test.tsx` asserts
+`CTRLYOKE_USER_TOOLS` stays exhaustive over `MCP_WORKFLOW_TOOL_NAMES`, so the
+editor half fails loudly; the template half does not. Grep the repo for the bare
+word rather than trusting the constant — `CommitMessageGenerator.ts:347` and
+`McpRegistryFileManager.ts:259` consume the name through constants and need no
+edit. Pre-release, a stale persisted `"capabilities"` id in someone's
+`.ctrlyoke/settings.json` is acceptable fallout and needs no migration.
 
 Rename the constant `MCP_CAPABILITIES_TOOL_NAME` → `MCP_LIST_HARNESSES_TOOL_NAME`
 in the same change so the constant and its value do not disagree. Note that
@@ -140,6 +153,11 @@ obvious home — and delete the local copies. Pulling `ConfigurationUtils` itsel
 the MCP bundle is the option to avoid, since it drags in `configService` and
 `ExternalRootsTrustStore` for three strings.
 
+`PATH_CONSTANTS` must then consume the moved names from `DashboardConstants`
+rather than keeping its own copies, or the duplication has simply moved rather
+than gone. Verified: neither `ConfigurationUtils.ts` nor `DashboardConstants.ts`
+imports `vscode`, so the move is safe in both directions.
+
 ## 6. Single-source the max-queue default
 
 `getMaxQueueSize()` (`src/mcp-server.ts:134-144`) falls back to `100` with the
@@ -149,9 +167,16 @@ project explicitly declares non-authoritative — per `copilot-instructions.md`,
 property there is a do-nothing duplicate. The real default is
 `CtrlYokeSettings.ts:472` (`queue.maxSize: 100`).
 
-Import the default from the settings defaults and fix the comment. The env var
-(`CTRLYOKE_MAX_QUEUE_SIZE`) remains the primary source; this is only about where the
-fallback constant comes from.
+Fix the comment, and single-source the constant — but **not by importing
+`DEFAULT_SETTINGS` from `CtrlYokeSettings.ts`.** That module pulls in
+`IconColorDefaults`, `CtrlYokeTypes`, `StatuslineFormat` and
+`TerminalControlBarFormat`, which is the same bundle-weight objection item 5
+raises against pulling in `ConfigurationUtils` — and `mcp-server.ts` is a
+per-tool-call spawned bundle. Declare the number in `DashboardConstants` (which
+`CtrlYokeSettings.ts` already imports, and which `mcp-server.ts` already depends
+on) and have **both** `CtrlYokeSettings.ts:472` and `getMaxQueueSize()` read it
+from there. The env var (`CTRLYOKE_MAX_QUEUE_SIZE`) remains the primary source;
+this is only about where the fallback constant comes from.
 
 ## 7. Single-source the ctrlyoke MCP server env block
 
