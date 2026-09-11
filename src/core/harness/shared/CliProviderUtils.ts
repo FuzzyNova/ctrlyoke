@@ -20,8 +20,11 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "./interfaces/PreparedMutation";
-import type { McpSecretConfigOptions } from "./CliMcpConfigGenerator";
-import { transformMcpSecretMap } from "./CliMcpConfigGenerator";
+import {
+  CliMcpConfigGenerator,
+  transformMcpSecretMap,
+  type McpSecretConfigOptions,
+} from "./CliMcpConfigGenerator";
 import {
   MCP_AVAILABILITY_MODES,
   MCP_SERVER_IDS,
@@ -614,26 +617,14 @@ export class CliProviderUtils {
 
     // ctrlyoke server (when included in mcpServers list)
     if (mcpServerPath) {
-      const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
-      const normalizedWorkspace = (stateRoot ?? workspaceRoot).replace(
-        /\\/g,
-        "/"
-      );
-
-      const env: Record<string, string> = {
-        CTRLYOKE_WORKSPACE: normalizedWorkspace,
-      };
-      if (workingFilePath) {
-        env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
-      }
-      if (additionalEnv) {
-        Object.assign(env, additionalEnv);
-      }
-
       const ctrlyokeEntry: Record<string, unknown> = {
-        command: "node",
-        args: [normalizedServerPath],
-        env,
+        ...CliMcpConfigGenerator.buildCtrlyokeStdioServerEntry(
+          mcpServerPath,
+          workspaceRoot,
+          workingFilePath,
+          additionalEnv,
+          stateRoot
+        ),
       };
       if (includeTrust) {
         // ctrlyoke is the orchestrator — auto-approve its tools

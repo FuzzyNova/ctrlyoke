@@ -7,12 +7,59 @@ import { AntigravityCliProvider } from "../../core/harness/antigravity/Antigravi
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 import {
   CliProviderUtils,
   RetryableAsyncCache,
 } from "../../core/harness/shared/CliProviderUtils";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+
+function parseInlineTomlEnv(toml: string): Record<string, string> {
+  const envStart = toml.indexOf("env=");
+  assert.ok(envStart >= 0, "TOML entry should contain an env table");
+
+  const tableStart = toml.indexOf("{", envStart);
+  assert.ok(tableStart >= 0, "TOML env should start with an inline table");
+
+  let depth = 0;
+  let tableEnd = -1;
+  let inString = false;
+  for (let index = tableStart; index < toml.length; index += 1) {
+    const character = toml[index];
+    if (character === "'") {
+      if (inString && toml[index + 1] === "'") {
+        index += 1;
+      } else {
+        inString = !inString;
+      }
+    } else if (!inString && character === "{") {
+      depth += 1;
+    } else if (!inString && character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        tableEnd = index;
+        break;
+      }
+    }
+  }
+  assert.ok(tableEnd > tableStart, "TOML env should close its inline table");
+
+  const entries: Record<string, string> = {};
+  const inner = toml.slice(tableStart + 1, tableEnd);
+  for (const pair of inner.split(",")) {
+    const separator = pair.indexOf("=");
+    assert.ok(separator > 0, "TOML env entries should contain an equals sign");
+    const key = pair.slice(0, separator).trim();
+    const value = pair.slice(separator + 1).trim();
+    assert.ok(
+      value.startsWith("'") && value.endsWith("'"),
+      "TOML env values should be quoted strings"
+    );
+    entries[key] = value.slice(1, -1).replace(/''/g, "'");
+  }
+  return entries;
+}
 
 suite("CliProviderUtils", () => {
   setup(() => {
@@ -259,6 +306,52 @@ suite("CliProviderUtils", () => {
         .Authorization,
       "Bearer {env:API_TOKEN}"
     );
+  });
+
+  test("emits the same ctrlyoke env through JSON, TOML, and settings JSON", () => {
+    const serverPath = String.raw`C:\extension\out\mcp-server.js`;
+    const workspaceRoot = String.raw`C:\workspace\execution`;
+    const stateRoot = String.raw`C:\workspace\state`;
+    const workingFilePath = String.raw`C:\workspace\state\workflow.json`;
+    const additionalEnv = {
+      CTRLYOKE_MAX_QUEUE_SIZE: "25",
+      CTRLYOKE_CUSTOM_FLAG: "enabled",
+    };
+
+    const jsonEntry = (
+      JSON.parse(
+        CliMcpConfigGenerator.generateJsonConfig(
+          serverPath,
+          workspaceRoot,
+          undefined,
+          workingFilePath,
+          additionalEnv,
+          stateRoot
+        )
+      ) as { mcpServers: { ctrlyoke: { env: Record<string, string> } } }
+    ).mcpServers.ctrlyoke;
+    const tomlEnv = parseInlineTomlEnv(
+      CliMcpConfigGenerator.generateInlineTomlConfig(
+        "ctrlyoke",
+        serverPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        stateRoot
+      )
+    );
+    const settingsEntry = CliProviderUtils.buildSettingsJsonMcpEntries(
+      serverPath,
+      workspaceRoot,
+      workingFilePath,
+      additionalEnv,
+      undefined,
+      undefined,
+      stateRoot
+    ).ctrlyoke as { env: Record<string, string> };
+
+    assert.deepStrictEqual(settingsEntry.env, jsonEntry.env);
+    assert.deepStrictEqual(tomlEnv, jsonEntry.env);
   });
 
   test("creates a restrictive substitution strategy for non-expanding providers", () => {

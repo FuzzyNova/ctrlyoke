@@ -704,7 +704,7 @@ plan: schema-driven argument validation (so the four new tools cannot drift from
 their advertised shape) and extracting the single MCP env-block builder (so
 Decision 7's `CTRLYOKE_EXECUTION_ROOT` is added once rather than in three places,
 where missing one would silently misattribute board entries for one harness
-family).
+family). The prerequisite is now satisfied by the shared env-block builder.
 
 The three below are specific to this plan's own subject matter, and each is a
 correctness fix on its own:

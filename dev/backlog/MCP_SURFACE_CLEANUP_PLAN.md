@@ -1,7 +1,7 @@
 # MCP Surface Cleanup Plan
 
-> **Status:** Backlog. Nothing here is implemented. Every item is a fix to
-> already-implemented code, not new capability.
+> **Status:** Fully implemented. Every item is a fix to already-implemented
+> code, not new capability.
 >
 > **Why now:** ctrlyoke is pre-release, so none of this carries a compatibility
 > cost. One item — the `capabilities` → `list_harnesses` rename — is genuinely
@@ -193,6 +193,8 @@ from there. The env var (`CTRLYOKE_MAX_QUEUE_SIZE`) remains the primary source;
 this is only about where the fallback constant comes from.
 
 ## 7. Single-source the ctrlyoke MCP server env block
+
+**Status: done —** refactor(harness): single-source the ctrlyoke MCP server env block
 
 The same env block is constructed independently in three places:
 
