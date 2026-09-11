@@ -54,9 +54,9 @@ export function getMcpSchemaExampleValue(schema: McpToolInputSchema): unknown {
     }
     case MCP_SCHEMA_TYPES.ARRAY:
       return schema.items ? [getMcpSchemaExampleValue(schema.items)] : [];
-    case "number":
+    case MCP_SCHEMA_TYPES.NUMBER:
       return schema.minimum ?? 0;
-    case "boolean":
+    case MCP_SCHEMA_TYPES.BOOLEAN:
       return false;
     case MCP_SCHEMA_TYPES.STRING:
       return "example";
@@ -115,7 +115,7 @@ function validateSchema(
   }
 
   switch (schema.type) {
-    case "object": {
+    case MCP_SCHEMA_TYPES.OBJECT: {
       if (value === null || typeof value !== "object" || Array.isArray(value)) {
         throw new Error(`${fieldPath} must be an object`);
       }
@@ -132,7 +132,7 @@ function validateSchema(
       }
       return;
     }
-    case "array":
+    case MCP_SCHEMA_TYPES.ARRAY:
       if (!Array.isArray(value)) {
         throw new Error(`${fieldPath} must be an array`);
       }
@@ -142,7 +142,7 @@ function validateSchema(
         );
       }
       return;
-    case "string":
+    case MCP_SCHEMA_TYPES.STRING:
       if (typeof value !== "string") {
         throw new Error(`${fieldPath} must be a string`);
       }
