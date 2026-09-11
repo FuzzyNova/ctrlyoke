@@ -241,6 +241,18 @@ expecting a PO/procurement process, so it stays self-serve.
          and notify (email/Slack) rather than block. Detection only, per the plan —
          response stays the manual Keygen-dashboard suspend/reissue action that
          already exists today; no new admin tooling required.
+   - [x] **Hid self-service "Activated Machines" management for Enterprise**
+         (September 11, 2026) — the shared, floating Enterprise key means any
+         employee who activates it can otherwise see and deactivate every
+         other employee's machine through the same table a solo Pro user uses
+         to manage their own devices. `LicenseSection.tsx` now hides that
+         section whenever `LicenseAccessState.isEnterprise` is true (set in
+         `LicenseService.ts` by comparing the license file's `policy`
+         relationship id against `KEYGEN_ENTERPRISE_POLICY_ID`) and shows a
+         note pointing to `support@ctrlyoke.dev` instead. Freeing a slot or
+         raising an org's cap above 3,000 stays a manual Keygen-dashboard
+         action by us — same as this item's alerting response, and consistent
+         with the deliberately-manual PO fallback in item 6 below.
 
 5. **Self-serve legal — click-through Terms + DPA + trust page**
    ✅ **second-pass attorney-review drafts completed September 8, 2026**, all three as standalone

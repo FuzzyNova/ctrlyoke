@@ -187,6 +187,7 @@ export class CtrlYokeWebviewProvider
               trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
               source: entitlement.source ?? null,
               expiresAt: entitlement.expiresAt,
+              isEnterprise: entitlement.isEnterprise ?? false,
             };
           }
         : undefined

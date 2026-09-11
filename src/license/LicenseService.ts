@@ -72,6 +72,8 @@ export interface Entitlement {
   expiresAt: number | null;
   licenseId?: string;
   source?: LicenseSource;
+  /** True when this Pro entitlement was issued under the Enterprise policy. */
+  isEnterprise?: boolean;
 }
 
 export interface LicenseMachineSummary {
@@ -956,7 +958,26 @@ function entitlementFromPayload(
       ? { licenseId: readLicenseId(payload, attributes) }
       : {}),
     source,
+    ...(tier === LICENSE_TIERS.PRO &&
+    readPolicyId(payload) === KEYGEN_ENTERPRISE_POLICY_ID
+      ? { isEnterprise: true }
+      : {}),
   };
+}
+
+/** Reads the policy relationship id off a Keygen license resource payload. */
+function readPolicyId(payload: JsonRecord): string | undefined {
+  const data = payload.data;
+  const resource = isRecord(data)
+    ? data
+    : Array.isArray(data) && isRecord(data[0])
+      ? data[0]
+      : undefined;
+  const relationship = asRecord(asRecord(resource?.relationships)?.policy);
+  const relationshipData = asRecord(relationship?.data);
+  return typeof relationshipData?.id === "string"
+    ? relationshipData.id
+    : undefined;
 }
 
 function licenseAttributes(payload: JsonRecord): JsonRecord | undefined {

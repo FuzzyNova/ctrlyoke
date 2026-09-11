@@ -7,7 +7,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LicenseSection } from "@components/settings/LicenseSection";
-import { LICENSE_ACTIONS, MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  LICENSE_ACTIONS,
+  LICENSE_UI,
+  MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
 import { LICENSE_SOURCES } from "../../../../../license/LicenseService";
 import { useSettingsStore } from "@store/settingsStore";
 
@@ -168,5 +172,32 @@ describe("LicenseSection", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.DEACTIVATE_LICENSE,
     });
+  });
+
+  it("hides self-service machine management for Enterprise and points to support", () => {
+    useSettingsStore.setState({
+      licenseAccess: {
+        isPro: true,
+        hasRemoteAccess: true,
+        trialEndsAt: null,
+        source: LICENSE_SOURCES.ONLINE,
+        expiresAt: null,
+        isEnterprise: true,
+      },
+    });
+    render(<LicenseSection />);
+
+    expect(
+      screen.queryByRole("heading", { name: "Activated machines" })
+    ).not.toBeNull();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES,
+      })
+    );
+    expect(
+      screen.getByRole("link", { name: LICENSE_UI.SUPPORT_EMAIL })
+    ).toHaveAttribute("href", `mailto:${LICENSE_UI.SUPPORT_EMAIL}`);
   });
 });

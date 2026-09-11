@@ -432,6 +432,8 @@ export interface LicenseAccessState {
   source?: LicenseSource | null;
   /** Unix epoch milliseconds, or null for a perpetual entitlement. */
   expiresAt?: number | null;
+  /** True when the active Pro entitlement was issued under the Enterprise policy. */
+  isEnterprise?: boolean;
 }
 
 /** Webview → Extension: activate this machine with an online license key. */

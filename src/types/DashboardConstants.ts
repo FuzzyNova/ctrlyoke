@@ -177,6 +177,7 @@ export const LICENSE_UI = {
   OPEN_PRICING: "Open pricing",
   DEACTIVATE: "Deactivate",
   PRICING_URL: "https://ctrlyoke.dev/pricing/",
+  SUPPORT_EMAIL: "support@ctrlyoke.dev",
   REMOTE_ACCESS_UPSELL:
     "Remote access is a Pro feature. Your localhost dashboard remains free; start a 14-day trial or view Pro pricing.",
   CUSTOM_ICON_UPSELL:

@@ -66,10 +66,12 @@ export function LicenseSection() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const isEnterprise = licenseAccess.isEnterprise === true;
   const showMachines =
-    activationLimit ||
-    (licenseAccess.isPro &&
-      licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE);
+    !isEnterprise &&
+    (activationLimit ||
+      (licenseAccess.isPro &&
+        licenseAccess.source !== LICENSE_SOURCES.OFFLINE_FILE));
 
   const requestMachines = useCallback(() => {
     setMachineListPending(true);
@@ -446,6 +448,30 @@ export function LicenseSection() {
               </table>
             </div>
           )}
+        </section>
+      )}
+
+      {licenseAccess.isPro && isEnterprise && (
+        <section
+          className="rounded border border-panel-border bg-input-bg p-3"
+          aria-label="Enterprise machine management"
+        >
+          <h4 className="text-sm font-semibold text-foreground">
+            Activated machines
+          </h4>
+          <p className="mt-1 text-xs text-description-fg">
+            Enterprise licenses are shared across your company, so machine
+            activations aren't self-service here — any employee with the key
+            would otherwise be able to see and deactivate every other machine.
+            To free up a slot or increase your seat limit, email{" "}
+            <a
+              href={`mailto:${LICENSE_UI.SUPPORT_EMAIL}`}
+              className="text-link-fg hover:underline"
+            >
+              {LICENSE_UI.SUPPORT_EMAIL}
+            </a>
+            .
+          </p>
         </section>
       )}
 

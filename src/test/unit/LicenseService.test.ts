@@ -362,7 +362,9 @@ suite("LicenseService", () => {
 
   test("activates a key issued under the Enterprise policy", async () => {
     const secrets = new InMemorySecretStore();
-    const file = await createLicenseFile();
+    const file = await createLicenseFile({
+      policyId: KEYGEN_ENTERPRISE_POLICY_ID,
+    });
     const calls: RequestCall[] = [];
     const fetch = createKeygenFetch(calls, {
       validate: new Response(
@@ -391,6 +393,41 @@ suite("LicenseService", () => {
     const entitlement = await service.activateWithKey("enterprise-key");
 
     assert.strictEqual(entitlement.tier, "pro");
+    assert.strictEqual(entitlement.isEnterprise, true);
+  });
+
+  test("does not mark a Pro-policy activation as Enterprise", async () => {
+    const secrets = new InMemorySecretStore();
+    const file = await createLicenseFile({ policyId: KEYGEN_PRO_POLICY_ID });
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NO_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_PRO_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machine: new Response(JSON.stringify({ data: { id: "machine-123" } }), {
+        status: 201,
+      }),
+      checkout: new Response(file, { status: 200 }),
+    });
+
+    const service = createService(secrets, {
+      fetch,
+      machineFingerprint: "fingerprint-123",
+    });
+    const entitlement = await service.activateWithKey("pro-key");
+
+    assert.strictEqual(entitlement.tier, "pro");
+    assert.strictEqual(entitlement.isEnterprise, undefined);
   });
 
   test("rejects a key issued under an unrecognized policy", async () => {
@@ -755,7 +792,7 @@ async function cache(
 }
 
 async function createLicenseFile(
-  overrides: { issued?: number; expiry?: number } = {},
+  overrides: { issued?: number; expiry?: number; policyId?: string } = {},
   licenseKey?: string,
   encrypted = false,
   signer: CryptoKey = signingKey
@@ -771,6 +808,9 @@ async function createLicenseFile(
       type: "licenses",
       id: "license-123",
       attributes: { tier: "pro" },
+      relationships: {
+        policy: { data: { id: overrides.policyId ?? KEYGEN_PRO_POLICY_ID } },
+      },
     },
   };
 
