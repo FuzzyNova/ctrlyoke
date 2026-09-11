@@ -1,6 +1,8 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useIsMobile } from "@hooks/useMediaQuery";
+import { useIosVisualViewportRootStyle } from "@hooks/useIosVisualViewportRootStyle";
 import { ExitButton } from "./ExitButton";
 
 interface ModalProps {
@@ -50,6 +52,16 @@ export const Modal: React.FC<ModalProps> = ({
   const titleId = useId();
   const backdropZ = elevated ? "z-viewer-modal-backdrop" : "z-modal-backdrop";
   const contentZ = elevated ? "z-viewer-modal" : "z-modal";
+  const isMobile = useIsMobile();
+  // Modal portals to document.body as its own `fixed inset-0` tree, outside
+  // App's root div — App's own use of this hook only pins App's root, so the
+  // mobile-keyboard treatment must be reproduced locally here too (see
+  // useIosVisualViewportRootStyle's doc comment). Without it, this wrapper
+  // stays sized to the stale window height instead of shrinking to
+  // visualViewport.height, so the iOS keyboard can cover part of the dialog
+  // with no way to scroll to it (nothing here overflows as far as layout is
+  // concerned).
+  const iosVisualViewportRootStyle = useIosVisualViewportRootStyle(isMobile);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -87,6 +99,16 @@ export const Modal: React.FC<ModalProps> = ({
     full: "max-w-none w-full h-full rounded-none border-0",
   };
   const isFullScreen = size === "full";
+  // Non-fullscreen dialogs rely on this wrapper's own overflow-y-auto as a
+  // last-resort scroll path when the dialog box is taller than the pinned
+  // (keyboard-shrunk) height, so the header/footer stay reachable — keep it
+  // scrollable instead of taking the hook's `overflow: hidden`, which is
+  // meant for roots (like WorkspaceViewerModal's) that manage scrolling
+  // internally instead.
+  const contentWrapperStyle: React.CSSProperties =
+    isFullScreen || iosVisualViewportRootStyle.position !== "fixed"
+      ? iosVisualViewportRootStyle
+      : { ...iosVisualViewportRootStyle, overflowY: "auto", overflowX: "hidden" };
 
   return createPortal(
     <>
@@ -100,6 +122,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal content wrapper */}
       <div
         className={`fixed inset-0 ${contentZ} ${isFullScreen ? "flex flex-col overflow-hidden" : "flex items-center justify-center overflow-y-auto"} pointer-events-none`}
+        style={contentWrapperStyle}
       >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
