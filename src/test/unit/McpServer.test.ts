@@ -601,7 +601,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     await assert.rejects(
       () => server.invokeTool("read_output", { indices: [0], tail: "2" }),
-      /tail must be a non-negative integer/
+      /read_output\.tail must be a number/
     );
 
     const output = responseJson(

@@ -61,6 +61,8 @@ and the MCP server reads — and keeps its name. Only the _tool_ is renamed.
 
 ## 2. Enforce `inputSchema` instead of hand-validating every tool
 
+**Status: done —** refactor(mcp): validate tool arguments against their declared input schema
+
 **The smell.** Every tool declares a JSON Schema `inputSchema` in
 `MCP_TOOL_DEFINITIONS`, and that schema is used for exactly two things: advertising
 the tool through `ListTools` (`mcp-server.ts:230-235`) and generating the built-in
@@ -97,6 +99,10 @@ validator that reports "invalid arguments" where the old code said which field a
 why would be a regression for the calling agent.
 
 ## 3. Remove `any` from the tool boundary
+
+**Status: done —** refactor(mcp): type validated MCP tool arguments and transport errors
+
+The deliberate variadic logger and the capabilities-file casts remain for item 4.
 
 15 occurrences in `src/mcp-server.ts`. The ones that matter are at the untrusted
 input boundary, where they defeat strict mode precisely where it is load-bearing:

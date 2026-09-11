@@ -5,46 +5,20 @@ import {
   type McpToolInputSchema,
 } from "./McpToolDefinitions";
 import { MCP_SKILL_NAMES } from "../types/DashboardConstants";
+import {
+  getMcpSchemaExampleValue,
+  getMcpSchemaProperties,
+  getMcpSchemaRequiredProperties,
+  getMcpSchemaTypeDescription,
+} from "./McpSchemaValidator";
 
 const MCP_SERVER_PATH_PLACEHOLDER = "<mcp-server.js path>";
 const PATH_PLACEHOLDER = "<path>";
 const COMMIT_OUTPUT_PATH_PLACEHOLDER = "<commit output path>";
 
-function exampleValue(schema: McpToolInputSchema): unknown {
-  if (schema.enum && schema.enum.length > 0) {
-    return schema.enum[0];
-  }
-  if (schema.oneOf && schema.oneOf.length > 0) {
-    return exampleValue(schema.oneOf[0]);
-  }
-
-  switch (schema.type) {
-    case "object": {
-      const properties = schema.properties ?? {};
-      const required = new Set(schema.required ?? Object.keys(properties));
-      return Object.fromEntries(
-        Object.entries(properties)
-          .filter(([name]) => required.has(name))
-          .map(([name, property]) => [name, exampleValue(property)])
-      );
-    }
-    case "array":
-      return schema.items ? [exampleValue(schema.items)] : [];
-    case "number":
-      return 0;
-    case "boolean":
-      return false;
-    case "string":
-      return "example";
-    default:
-      return null;
-  }
-}
-
 function renderParameters(schema: McpToolInputSchema): string {
-  const properties = schema.properties ?? {};
-  const required = new Set(schema.required ?? []);
-  const entries = Object.entries(properties);
+  const required = getMcpSchemaRequiredProperties(schema);
+  const entries = getMcpSchemaProperties(schema);
 
   if (entries.length === 0) {
     return "Parameters: none.";
@@ -52,11 +26,7 @@ function renderParameters(schema: McpToolInputSchema): string {
 
   const lines = entries.map(([name, property]) => {
     const requirement = required.has(name) ? "required" : "optional";
-    const type = property.oneOf
-      ? property.oneOf.map((variant) => variant.type).join(" or ")
-      : property.items
-        ? `${property.type} of ${property.items.type}`
-        : property.type;
+    const type = getMcpSchemaTypeDescription(property);
     const description = property.description
       ? ` — ${property.description}`
       : "";
@@ -77,7 +47,7 @@ export class McpToolSkillGenerator {
     return [
       "## Available ctrlyoke MCP tools",
       ...tools.map((tool) => {
-        const args = JSON.stringify(exampleValue(tool.inputSchema));
+        const args = JSON.stringify(getMcpSchemaExampleValue(tool.inputSchema));
         const command =
           tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
             ? `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --commit-output \"${COMMIT_OUTPUT_PATH_PLACEHOLDER}\"`
