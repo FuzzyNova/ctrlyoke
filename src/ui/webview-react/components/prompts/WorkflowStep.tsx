@@ -17,9 +17,11 @@ import {
   formatTokenCount,
   resolveTokenTotal,
   buildAttemptTokenTooltipLines,
+  buildStepHoverTooltip,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
+import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -166,21 +168,12 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   // Derive context window percentage from live data only while this row is the
   // running step. After completion, the CLI output/runtime metadata is durable
   // and must win over any late live telemetry.
-  const completedContext = latestOutput?.tokens?.contextWindowSize
-    ? {
-        used: latestOutput.tokens.contextWindowUsed ?? 0,
-        size: latestOutput.tokens.contextWindowSize,
-      }
-    : runtimeMeta?.contextWindowSize
-      ? {
-          used: runtimeMeta.contextWindowUsed ?? 0,
-          size: runtimeMeta.contextWindowSize,
-        }
-      : undefined;
-  const ctx =
-    isCurrent && liveContextWindow
-      ? liveContextWindow
-      : (completedContext ?? liveContextWindow);
+  const ctx = resolveEffectiveContextWindow({
+    isCurrent,
+    liveContextWindow,
+    latestOutputTokens: latestOutput?.tokens,
+    runtimeContextWindow: runtimeMeta,
+  });
   const contextPct = ctx?.size
     ? Math.round((ctx.used / ctx.size) * 100)
     : undefined;
@@ -200,6 +193,15 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     attemptTokens,
     hideCost,
   }).join("\n");
+  const hoverTooltip = buildStepHoverTooltip({
+    primaryAction: onContextMenu
+      ? "Click to edit — right-click for options"
+      : "Click to edit",
+    contextWindow: ctx,
+    harness: harnessId,
+    attemptTokens,
+    hideCost,
+  });
 
   // Build class names for the container
   const containerClasses = [
@@ -245,9 +247,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
           : undefined
       }
       {...longPressHandlers}
-      title={
-        tokenTooltip ? `Click to edit\n\n${tokenTooltip}` : "Click to edit"
-      }
+      title={hoverTooltip}
       role="button"
       tabIndex={0}
       aria-label={`Step ${displayNumber ?? index + 1}`}

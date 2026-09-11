@@ -50,6 +50,8 @@ import {
   isWorkflowRunning,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
+import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
+import { buildStepHoverTooltip } from "@root/utils/TokenFormatting";
 import type { StepHarnessModel } from "./WorkflowStepRow";
 import {
   buildWorkflowStepEnabledState,
@@ -94,6 +96,7 @@ type ChipProps = {
   showPauseBoundaryBefore: boolean;
   isScript: boolean;
   stepColor?: string;
+  tooltip: string;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -107,6 +110,7 @@ function ChipContent({
   showPauseBoundaryBefore,
   isScript,
   stepColor,
+  tooltip,
   onChipClick,
   onOpenContextMenu,
 }: ChipProps) {
@@ -123,7 +127,7 @@ function ChipContent({
         onOpenContextMenu(e.clientX, e.clientY);
       }}
       {...longPressHandlers}
-      title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
+      title={tooltip}
       aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
     >
       {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
@@ -285,6 +289,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
   const { globalSettings, workflowProperties } = useSettingsStore();
+  const hideCost = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  );
 
   const activeExternalOwner = useActiveWorkflowExternalOwner();
   const isExternallyManaged = activeExternalOwner != null;
@@ -391,6 +398,33 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       group,
       offsetInGroup,
       groupMembers,
+    });
+  };
+
+  // Full hover tooltip for a chip: same primary-action + context/token detail
+  // lines as the expanded WorkflowStep row, single-sourced via
+  // buildStepHoverTooltip/resolveEffectiveContextWindow so the two surfaces
+  // never drift out of sync.
+  const buildChipTooltip = (
+    step: WorkflowStep,
+    index: number,
+    status: StepStatus,
+    isCurrentChip: boolean
+  ): string => {
+    const latestOutput = getLatestOutput(index);
+    const runtimeMeta = !isScriptWorkflowStep(step) ? step._runtime : undefined;
+    const ctx = resolveEffectiveContextWindow({
+      isCurrent: isCurrentChip,
+      liveContextWindow: liveContextWindow?.[index],
+      latestOutputTokens: latestOutput?.tokens,
+      runtimeContextWindow: runtimeMeta,
+    });
+    return buildStepHoverTooltip({
+      primaryAction: `${isScriptStep(step) ? "Script" : "Prompt"} ${index + 1} — click to edit, right-click for options`,
+      contextWindow: ctx,
+      harness: getChipHarnessId(step, status),
+      attemptTokens: latestOutput?.tokens,
+      hideCost,
     });
   };
 
@@ -522,6 +556,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                   isExecuting={false}
                   showPauseBoundaryBefore={false}
                   isScript={isScriptStep(prompt)}
+                  tooltip={buildChipTooltip(prompt, i, status, false)}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {
@@ -581,6 +616,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                     isPaused && currentStep > 0 && visualIdx === 0
                   }
                   isScript={isScriptStep(prompt)}
+                  tooltip={buildChipTooltip(
+                    prompt,
+                    index,
+                    status,
+                    isRunning && isCurrentStep
+                  )}
                   onChipClick={() => handleStepClick(index)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {

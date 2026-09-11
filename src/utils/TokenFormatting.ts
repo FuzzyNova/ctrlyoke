@@ -270,3 +270,22 @@ export function buildAttemptTokenTooltipLines(params: {
       : null,
   ].filter((part): part is string => part !== null);
 }
+
+/**
+ * Builds the full hover-tooltip text for a step row or chip: a primary-action
+ * line (e.g. "Click to edit — right-click for options") followed by the same
+ * context/token detail lines everywhere they're shown, so the full panel row
+ * and the collapsed chip rail never drift out of sync.
+ */
+export function buildStepHoverTooltip(params: {
+  primaryAction: string;
+  contextWindow?: { used: number; size: number };
+  harness?: HarnessId;
+  attemptTokens?: AttemptTokenSnapshot;
+  hideCost?: boolean;
+}): string {
+  const detailLines = buildAttemptTokenTooltipLines(params);
+  return detailLines.length
+    ? `${params.primaryAction}\n\n${detailLines.join("\n")}`
+    : params.primaryAction;
+}
