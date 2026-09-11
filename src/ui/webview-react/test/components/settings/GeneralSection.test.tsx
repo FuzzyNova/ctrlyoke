@@ -11,7 +11,8 @@ function settings(stepColorMode: string): FullGlobalSettings {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
       ui: {
         ...CTRLYOKE_SETTINGS_DEFAULTS.ui,
-        stepColorMode: stepColorMode as (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES],
+        stepColorMode:
+          stepColorMode as (typeof STEP_COLOR_MODES)[keyof typeof STEP_COLOR_MODES],
       },
     },
     sources: {},

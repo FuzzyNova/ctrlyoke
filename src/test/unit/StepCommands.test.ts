@@ -289,7 +289,11 @@ suite("CLI step command handlers", () => {
         {
           workflowKey,
           runRef,
-          runDirectory: WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef),
+          runDirectory: WorkflowPaths.runDir(
+            workspaceRoot,
+            workflowKey,
+            runRef
+          ),
           runId: 1,
           startedAt: 0,
           executionState: EXECUTION_STATES.IDLE,
@@ -314,10 +318,15 @@ suite("CLI step command handlers", () => {
     currentIndex: number,
     steps: WorkflowStep[]
   ): Promise<void> {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-step-"));
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-step-")
+    );
     stateHome = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-state-"));
     process.env.CTRLYOKE_HOME = stateHome;
-    const descriptorPath = WorkflowPaths.descriptorPath(workspaceRoot, workflowKey);
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
     await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
     await fs.writeFile(
       descriptorPath,

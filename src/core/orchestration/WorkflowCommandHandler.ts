@@ -53,7 +53,10 @@ export class WorkflowCommandHandler {
         `[WorkflowCommandHandler] ctrlyoke: Opened prompt file: ${currentFilePath}`
       );
     } catch (error) {
-      Log.error("[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:", error);
+      Log.error(
+        "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",
+        error
+      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -84,7 +87,10 @@ export class WorkflowCommandHandler {
         await vscode.window.showTextDocument(document);
       }
     } catch (error) {
-      Log.error("[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:", error);
+      Log.error(
+        "[WorkflowCommandHandler] ctrlyoke: Failed to open prompt file:",
+        error
+      );
     }
   }
 }

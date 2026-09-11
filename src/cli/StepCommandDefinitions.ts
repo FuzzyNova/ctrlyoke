@@ -56,7 +56,10 @@ export function registerStepCommands(
       "-p, --prompt <text>",
       "Replace the step prompt (alternative to a one-step file)"
     )
-    .option("-d, --cwd <path>", "Working directory (default: current directory)")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
     .option("--json", "Output the mutation result as JSON")
     .action(async (file: string | undefined, options: StepEditOptions) =>
       handlers.edit(file, options)
@@ -74,7 +77,10 @@ export function registerStepCommands(
       "--index <index>",
       "Zero-based absolute index of the pending step"
     )
-    .option("-d, --cwd <path>", "Working directory (default: current directory)")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
     .option("--json", "Output the mutation result as JSON")
     .action(async (options: StepRemoveOptions) => handlers.remove(options));
 
@@ -90,9 +96,10 @@ export function registerStepCommands(
       "--order <indices>",
       "Comma-separated absolute zero-based indices in desired execution order"
     )
-    .option("-d, --cwd <path>", "Working directory (default: current directory)")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
     .option("--json", "Output the mutation result as JSON")
-    .action(async (options: StepReorderOptions) =>
-      handlers.reorder(options)
-    );
+    .action(async (options: StepReorderOptions) => handlers.reorder(options));
 }

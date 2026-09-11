@@ -311,15 +311,15 @@ with the `edit_step`/`remove_step`/`reorder_steps` MCP names.
 ## Acceptance criteria
 
 - [x] A workflow step can edit, remove, or reorder any not-yet-executed step in its own run via MCP.
-  The three tools use the shared addressed transactions and remain pinned to the server's own run.
+      The three tools use the shared addressed transactions and remain pinned to the server's own run.
 - [x] An external caller can edit, remove, or reorder any not-yet-executed step of a named run via
-  the CLI, including while that run is actively executing (as long as the target step is not the one
-  in flight). `ctrlyoke step` resolves `--run` through `CliRunSelector`, validates with `action:
-  "edit"`, and writes without starting a harness.
+      the CLI, including while that run is actively executing (as long as the target step is not the one
+      in flight). `ctrlyoke step` resolves `--run` through `CliRunSelector`, validates with `action:
+"edit"`, and writes without starting a harness.
 - [x] Neither surface can touch a completed step or the step currently in flight. The shared
-  `RunContinuationService` methods enforce this once; CLI tests cover both rejection cases.
+      `RunContinuationService` methods enforce this once; CLI tests cover both rejection cases.
 - [x] No new lifecycle control (start/pause/cancel) is introduced on either surface. CLI step
-  mutations are registered outside `CLI_RUN_OPERATION_KINDS` and never call `runCommand`.
+      mutations are registered outside `CLI_RUN_OPERATION_KINDS` and never call `runCommand`.
 - [x] All 6 existing MCP tools are renamed per the table above, every reference site in the audited
-  blast radius is updated, and no harness's auto-approval/permission behavior regresses. The MCP
-  and harness test suites already cover this implemented scope.
+      blast radius is updated, and no harness's auto-approval/permission behavior regresses. The MCP
+      and harness test suites already cover this implemented scope.

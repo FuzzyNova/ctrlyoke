@@ -206,7 +206,10 @@ export class PromptFileParser {
         ],
       };
     } catch (error) {
-      Log.error(`[PromptFileParser] Failed to read markdown prompt file ${filePath}:`, error);
+      Log.error(
+        `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
+        error
+      );
       if (this.userFeedbackSink) {
         notifyUserFeedback(
           this.userFeedbackSink,

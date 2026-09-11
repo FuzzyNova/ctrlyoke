@@ -566,9 +566,7 @@ export const useEditorStore = create<
         scriptExecutionMode: pendingEdit
           ? pendingEdit.scriptExecutionMode
           : promptData.executionMode,
-        scriptShell: pendingEdit
-          ? pendingEdit.scriptShell
-          : promptData.shell,
+        scriptShell: pendingEdit ? pendingEdit.scriptShell : promptData.shell,
         properties: pendingEdit
           ? pendingEdit.properties
           : propertiesFromScriptData,

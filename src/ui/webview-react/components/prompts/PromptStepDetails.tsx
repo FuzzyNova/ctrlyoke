@@ -131,9 +131,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
               )}
               <span
                 className="truncate"
-                title={
-                  modelIsDefault ? `${modelLabel} (default)` : modelLabel
-                }
+                title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
               >
                 {modelLabel}
                 {modelIsDefault && (

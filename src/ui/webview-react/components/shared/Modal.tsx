@@ -108,7 +108,11 @@ export const Modal: React.FC<ModalProps> = ({
   const contentWrapperStyle: React.CSSProperties =
     isFullScreen || iosVisualViewportRootStyle.position !== "fixed"
       ? iosVisualViewportRootStyle
-      : { ...iosVisualViewportRootStyle, overflowY: "auto", overflowX: "hidden" };
+      : {
+          ...iosVisualViewportRootStyle,
+          overflowY: "auto",
+          overflowX: "hidden",
+        };
 
   return createPortal(
     <>

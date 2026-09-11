@@ -801,7 +801,10 @@ suite("ExecutionPreviewService", () => {
       pinned.steps[0].command?.displayShell,
       COMMAND_DISPLAY_SHELLS.CMD
     );
-    assert.strictEqual(pinned.steps[0].command?.requiresShellVerbatimArgs, true);
+    assert.strictEqual(
+      pinned.steps[0].command?.requiresShellVerbatimArgs,
+      true
+    );
 
     const configured = await withTerminalShell("bash", () =>
       createService(

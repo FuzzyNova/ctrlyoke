@@ -106,7 +106,9 @@ describe("NotificationsSection", () => {
     const toastLevelSelect = document.getElementById("notif-toast-level");
     expect(toastLevelSelect).not.toBeNull();
     await user.click(toastLevelSelect!);
-    await user.click(screen.getByRole("button", { name: "Warnings and errors" }));
+    await user.click(
+      screen.getByRole("button", { name: "Warnings and errors" })
+    );
 
     expect(onUpdate).toHaveBeenCalledWith(
       "notifications.toastLevel",

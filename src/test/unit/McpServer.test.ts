@@ -161,7 +161,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         1,
         EXECUTION_STATES.COMPLETED,
         1,
-        { workflowName: descriptor.workflowName, steps: workingFile.steps ?? [] }
+        {
+          workflowName: descriptor.workflowName,
+          steps: workingFile.steps ?? [],
+        }
       );
       await recorder.appendEvents(manifestPath, [
         {
@@ -632,7 +635,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       [draft.workflowKey, draft.runFilePath],
     ]);
     for (const workflow of all.workflows) {
-      const expectedWorkingFile = expectedWorkingFiles.get(workflow.workflowKey);
+      const expectedWorkingFile = expectedWorkingFiles.get(
+        workflow.workflowKey
+      );
       assert.ok(expectedWorkingFile);
       assert.strictEqual(workflow.workingFile, expectedWorkingFile);
       assert.strictEqual(

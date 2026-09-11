@@ -195,7 +195,10 @@ suite("TimelineRecorder", () => {
       events[0]?.eventType,
       TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
     );
-    if (events[0]?.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED) {
+    if (
+      events[0]?.eventType ===
+      TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    ) {
       assert.deepStrictEqual(events[0].payload.definition.parallelGroups, [
         {
           id: "grouped-revision",

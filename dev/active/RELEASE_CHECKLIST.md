@@ -66,7 +66,7 @@ Everything in [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md) §1�
 | Admin token                               | `admin-token` named **`fuzzynova-admin`**, id `54927c5d…`, created August 25, 2026                                                                 | Regenerated live this session, value saved in 1Password. This is the one integration credential — see 4.2 below.                                                                                                               |
 | Billing plan                              | **Dev 1** — $0/mo, 2,500 API requests/day, 100 licensed-user limit, 1 product limit, 10 policy limit                                               | Decision made — see 4.3 below.                                                                                                                                                                                                 |
 | Webhook endpoints                         | None configured                                                                                                                                    | Not required for the Phase 1 flow (Lemon Squeezy → Netlify Function → Keygen API is one-directional; Keygen doesn't need to call back out). Leave empty unless a future feature needs Keygen-initiated events.                 |
-| Enterprise policy (§1.7.1 self-serve SKU) | **`ctrlyoke Enterprise`**, id `1700d3bb-06b7-4087-96ce-e08aa6c6a817`                                                                                | Created September 8, 2026 — see 4.4 item 1 for full config. 1-year duration, 3000 max machines, otherwise mirrors `ctrlyoke Pro`.                                                                                              |
+| Enterprise policy (§1.7.1 self-serve SKU) | **`ctrlyoke Enterprise`**, id `1700d3bb-06b7-4087-96ce-e08aa6c6a817`                                                                               | Created September 8, 2026 — see 4.4 item 1 for full config. 1-year duration, 3000 max machines, otherwise mirrors `ctrlyoke Pro`.                                                                                              |
 
 ### 4.2 Admin token custody ✅ RESOLVED (August 25, 2026)
 
@@ -183,28 +183,25 @@ expecting a PO/procurement process, so it stays self-serve.
          set explicitly at issuance.
    - [x] Handle LS **subscription events**. Verified against LS's published event
          list (`docs.lemonsqueezy.com/help/webhooks/event-types`) rather than
-         assumed:
-         - `subscription_created` (Subscription object — has `product_id`/
-           `variant_id`/`order_id` directly, unlike Order) → looks up the license
-           already created by `order_created` via `metadata.lsOrderId ==
-           subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
-           so renewal events can find it later. LS doesn't guarantee this fires
-           after `order_created` completes (only "alongside" it) — a race throws
-           and lets LS's webhook retry catch it up, the same idempotent-retry
-           shape as everything else here.
-         - `subscription_payment_success` sends a **Subscription Invoice**
-           object, not the Subscription object — it has `subscription_id` and
-           `billing_reason` (`initial`/`renewal`/`updated`) but no product info.
-           It fires on every payment including the first, so only
-           `billing_reason: "renewal"` calls Keygen's `/actions/renew` (extends
-           expiry by the policy's duration from current expiry, honoring
-           `Renewal Basis: FROM_EXPIRY`); `initial` is a no-op since
-           `order_created` already created the license, and `updated` is a
-           plan-change proration, not a renewal cycle.
-         - `subscription_cancelled` / `subscription_expired` → explicit no-op
-           case (not just falling through to `default`), documenting that this
-           is deliberate: `Restrict Access` expiration already locks the license
-           out at term end.
+         assumed: - `subscription_created` (Subscription object — has `product_id`/
+         `variant_id`/`order_id` directly, unlike Order) → looks up the license
+         already created by `order_created` via `metadata.lsOrderId ==
+      subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
+         so renewal events can find it later. LS doesn't guarantee this fires
+         after `order_created` completes (only "alongside" it) — a race throws
+         and lets LS's webhook retry catch it up, the same idempotent-retry
+         shape as everything else here. - `subscription_payment_success` sends a **Subscription Invoice**
+         object, not the Subscription object — it has `subscription_id` and
+         `billing_reason` (`initial`/`renewal`/`updated`) but no product info.
+         It fires on every payment including the first, so only
+         `billing_reason: "renewal"` calls Keygen's `/actions/renew` (extends
+         expiry by the policy's duration from current expiry, honoring
+         `Renewal Basis: FROM_EXPIRY`); `initial` is a no-op since
+         `order_created` already created the license, and `updated` is a
+         plan-change proration, not a renewal cycle. - `subscription_cancelled` / `subscription_expired` → explicit no-op
+         case (not just falling through to `default`), documenting that this
+         is deliberate: `Restrict Access` expiration already locks the license
+         out at term end.
    - [x] Idempotency: license creation still keys off `metadata.lsOrderId`
          (unchanged). Renewals additionally key off `metadata.lastRenewedInvoiceId`
          (the subscription-invoice id) so a retried `subscription_payment_success`
@@ -231,13 +228,13 @@ expecting a PO/procurement process, so it stays self-serve.
    succeeded. The test-mode LS webhook (`129600`) now also subscribes to
    `subscription_created`, `subscription_payment_success`,
    `subscription_cancelled`, and `subscription_expired` (was `order_created`
-   + `order_refunded` only) — 6 events total, confirmed via LS's own "Webhook
-   settings saved!" confirmation. Item 7 below covers the actual test purchase
-   and renewal/cancellation verification this made possible.
+   - `order_refunded` only) — 6 events total, confirmed via LS's own "Webhook
+     settings saved!" confirmation. Item 7 below covers the actual test purchase
+     and renewal/cancellation verification this made possible.
 
 4. **Abuse detection — machine-count alerting**
    - [ ] Subscribe to Keygen's `machine.created` webhook (this is the first
-         *inbound* Keygen webhook — 4.1 confirms none exist today; direction is
+         _inbound_ Keygen webhook — 4.1 confirms none exist today; direction is
          Keygen → Netlify, the reverse of the LS → Netlify → Keygen purchase flow).
    - [ ] On receipt, compare the license's current activation count against an
          alert threshold well under the 2,000–5,000 policy cap (e.g. a few hundred)
@@ -329,24 +326,19 @@ expecting a PO/procurement process, so it stays self-serve.
          smoke test in 5.3, plus the subscription-specific paths Pro doesn't have.
          Product had to be flipped from Draft to Published first (same "no
          checkout link for a Draft product" constraint hit in 5.3). Full chain
-         confirmed on Keygen license `59561958-e0ca-4127-a658-c0bc9b9734ba`:
-         - `order_created` (order `9415949`) → 200 → license created under the
-           **Enterprise** policy (not Pro), confirming variant-based routing works
-           against a real purchase, not just code review.
-         - `subscription_created` (subscription `2511452`) → 200 → license
-           metadata gained `lsSubscriptionId: "2511452"` while `lsOrderId`,
-           `buyerEmail`, `buyerName` all survived the merge (proves
-           `updateLicenseMetadata`'s fetch-then-merge, not LS's simulator, since
-           this ran against the real purchase).
-         - `subscription_payment_success` (invoice `8404222`, `billing_reason:
-           "initial"`) → 200, correctly ignored (no renewal on the invoice that
-           accompanies the purchase itself).
-         - License: policy **ctrlyoke Enterprise**, product **ctrlyoke**, status
-           **ACTIVE**, expiry **2027-09-08 (1 year out)**, machine cap **0 of
-           3000** — matches the policy's own duration, no explicit expiry needed
-           at issuance as designed.
-         - Both emails arrived: LS's payment receipt and the Resend
-           license-key email (confirmed by Nathan directly).
+         confirmed on Keygen license `59561958-e0ca-4127-a658-c0bc9b9734ba`: - `order_created` (order `9415949`) → 200 → license created under the
+         **Enterprise** policy (not Pro), confirming variant-based routing works
+         against a real purchase, not just code review. - `subscription_created` (subscription `2511452`) → 200 → license
+         metadata gained `lsSubscriptionId: "2511452"` while `lsOrderId`,
+         `buyerEmail`, `buyerName` all survived the merge (proves
+         `updateLicenseMetadata`'s fetch-then-merge, not LS's simulator, since
+         this ran against the real purchase). - `subscription_payment_success` (invoice `8404222`, `billing_reason:
+      "initial"`) → 200, correctly ignored (no renewal on the invoice that
+         accompanies the purchase itself). - License: policy **ctrlyoke Enterprise**, product **ctrlyoke**, status
+         **ACTIVE**, expiry **2027-09-08 (1 year out)**, machine cap **0 of
+         3000** — matches the policy's own duration, no explicit expiry needed
+         at issuance as designed. - Both emails arrived: LS's payment receipt and the Resend
+         license-key email (confirmed by Nathan directly).
    - [x] Renewal and no-op-cancellation paths, tested **two different ways**
          because LS's dashboard "Simulate event" tool for `subscription_created`
          to `subscription_expired` (found live on a subscription's detail page —
@@ -359,25 +351,23 @@ expecting a PO/procurement process, so it stays self-serve.
          `subscription_payment_success` reliably replayed invoice `8404222`
          (`billing_reason: "initial"`) and got 200/"Ignored (not a renewal)"
          both times — a correct but redundant re-test of the same no-op path
-         above, not a renewal test.
-         - **Renewal**, tested by hand-crafting a real subscription-invoice
-           payload (`billing_reason: "renewal"`, real `subscription_id: 2511452`,
-           synthetic invoice id) and POSTing it directly to
-           `https://ctrlyoke.dev/.netlify/functions/ls-webhook` with a correct
-           `X-Signature` (HMAC-SHA256 over the raw body using the real webhook
-           signing secret from the LS dashboard) — the same mechanism LS itself
-           uses, just invoked directly since neither LS's UI nor its documented
-           simulate-event list can generate this specific payload shape on
-           demand. Result: 200, and the Keygen license's expiry moved from
-           **2027-09-08 to 2028-09-08** — exactly +1 year, honoring the policy's
-           `Renewal Basis: FROM_EXPIRY`. Re-posting the identical signed payload
-           a second time returned 200 but left expiry at 2028-09-08 unchanged,
-           confirming the `lastRenewedInvoiceId` idempotency guard.
-         - **Cancellation/expiry no-op**, tested via LS's real "Simulate event"
-           → `subscription_expired` against the live subscription. 200 response;
-           Keygen license confirmed unchanged (expiry still 2028-09-08, status
-           still `ACTIVE`, `Suspended: false`) — verifies the explicit no-op
-           branch actually does nothing, not just that it returns 200.
+         above, not a renewal test. - **Renewal**, tested by hand-crafting a real subscription-invoice
+         payload (`billing_reason: "renewal"`, real `subscription_id: 2511452`,
+         synthetic invoice id) and POSTing it directly to
+         `https://ctrlyoke.dev/.netlify/functions/ls-webhook` with a correct
+         `X-Signature` (HMAC-SHA256 over the raw body using the real webhook
+         signing secret from the LS dashboard) — the same mechanism LS itself
+         uses, just invoked directly since neither LS's UI nor its documented
+         simulate-event list can generate this specific payload shape on
+         demand. Result: 200, and the Keygen license's expiry moved from
+         **2027-09-08 to 2028-09-08** — exactly +1 year, honoring the policy's
+         `Renewal Basis: FROM_EXPIRY`. Re-posting the identical signed payload
+         a second time returned 200 but left expiry at 2028-09-08 unchanged,
+         confirming the `lastRenewedInvoiceId` idempotency guard. - **Cancellation/expiry no-op**, tested via LS's real "Simulate event"
+         → `subscription_expired` against the live subscription. 200 response;
+         Keygen license confirmed unchanged (expiry still 2028-09-08, status
+         still `ACTIVE`, `Suspended: false`) — verifies the explicit no-op
+         branch actually does nothing, not just that it returns 200.
    - [ ] Confirm the machine-count alert path works end-to-end against a scratch
          policy temporarily capped low (a handful of test activations), before
          relying on it at the real 2,000–5,000 threshold.
@@ -394,25 +384,25 @@ above gates the existing release-blocker chain.
 
 ### 5.1 Current state (verified/changed live, August 25, 2026)
 
-| Item                                      | Value                                                               | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Store name                                | **ctrlyoke**                                                        | Changed live this session from `Fuzzy Nova`. Settings → General → "Store name" — appears on every receipt/invoice.                                                                                                                                                                                                                                                                                                                                                                |
-| Store URL                                 | **ctrlyoke.lemonsqueezy.com**                                       | Changed live this session from `fuzzynova.lemonsqueezy.com`.                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Contact email                             | **support@ctrlyoke.dev**                                            | Changed live this session from `admin@fuzzno.com`. This is the address shown to customers on receipts/invoices for support.                                                                                                                                                                                                                                                                                                                                                       |
-| Store activation                          | **Approved** (September 7, 2026)                                    | Lemon Squeezy's identity-verification/KYC review cleared. Live payments can now process once Test mode is flipped off (5.3 step 6).                                                                                                                                                                                                                                                                                                                                              |
-| Test mode                                 | **ON**                                                              | Toggle top-right of every LS dashboard page. Real charges are impossible while this is on, regardless of store-activation status.                                                                                                                                                                                                                                                                                                                                                 |
-| Product                                   | **ctrlyoke Pro**, id `1317307`                                      | Created live this session. Status: **Published** (August 26, 2026 — see 5.3).                                                                                                                                                                                                                                                                                                                                                                                                     |
-| — Price                                   | **$59.00**, Single payment (one-time)                               | Matches [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.7.                                                                                                                                                                                                                                                                                                                                                                                                         |
-| — Tax category                            | **Software**                                                        | Chosen over the form's default "SaaS - personal use" — ctrlyoke Pro is a perpetual license unlocking local functionality, not a hosted service Fuzzy Nova operates on the buyer's behalf. Decided live this session.                                                                                                                                                                                                                                                              |
-| — Generate license keys                   | **OFF (unchecked)**                                                 | Correct per plan — Keygen issues the real license, not Lemon Squeezy's native key system.                                                                                                                                                                                                                                                                                                                                                                                         |
-| — Display on storefront                   | **ON**                                                              | Will show once published.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| — Confirmation modal / email receipt copy | Set to explain the Keygen key arrives by separate email             | See 5.2 — this is the resolution of the plan's previously-open "key delivery" question.                                                                                                                                                                                                                                                                                                                                                                                           |
+| Item                                      | Value                                                               | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Store name                                | **ctrlyoke**                                                        | Changed live this session from `Fuzzy Nova`. Settings → General → "Store name" — appears on every receipt/invoice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Store URL                                 | **ctrlyoke.lemonsqueezy.com**                                       | Changed live this session from `fuzzynova.lemonsqueezy.com`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Contact email                             | **support@ctrlyoke.dev**                                            | Changed live this session from `admin@fuzzno.com`. This is the address shown to customers on receipts/invoices for support.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Store activation                          | **Approved** (September 7, 2026)                                    | Lemon Squeezy's identity-verification/KYC review cleared. Live payments can now process once Test mode is flipped off (5.3 step 6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Test mode                                 | **ON**                                                              | Toggle top-right of every LS dashboard page. Real charges are impossible while this is on, regardless of store-activation status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Product                                   | **ctrlyoke Pro**, id `1317307`                                      | Created live this session. Status: **Published** (August 26, 2026 — see 5.3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| — Price                                   | **$59.00**, Single payment (one-time)                               | Matches [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| — Tax category                            | **Software**                                                        | Chosen over the form's default "SaaS - personal use" — ctrlyoke Pro is a perpetual license unlocking local functionality, not a hosted service Fuzzy Nova operates on the buyer's behalf. Decided live this session.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| — Generate license keys                   | **OFF (unchecked)**                                                 | Correct per plan — Keygen issues the real license, not Lemon Squeezy's native key system.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| — Display on storefront                   | **ON**                                                              | Will show once published.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| — Confirmation modal / email receipt copy | Set to explain the Keygen key arrives by separate email             | See 5.2 — this is the resolution of the plan's previously-open "key delivery" question.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Webhooks                                  | **One configured (test mode)**, id `129600`                         | Created live August 26, 2026: `https://ctrlyoke.dev/.netlify/functions/ls-webhook`, listening for `order_created` + `order_refunded` (+ `subscription_created`, `subscription_payment_success`, `subscription_cancelled`, `subscription_expired` added September 8, 2026 for the Enterprise SKU — see 4.4 item 3). Signing secret set by us (LS lets you choose your own, ≤40 chars — it does not auto-generate and reveal one). Smoke-tested successfully (see 5.3). **Note:** this webhook only fires for test-mode data — a second, live-mode webhook (same URL/events) will need to be created when Test mode is flipped off for real launch (5.3 step 6). |
-| API keys                                  | **None created**                                                    | Not needed for the Phase 1 flow — the Netlify function only _receives_ LS webhooks and _calls out_ to Keygen; it doesn't need to call back into the LS API for the MVP (order/refund payloads carry enough data). Skip unless a future feature needs it.                                                                                                                                                                                                                          |
-| Payouts                                   | Bank account connected (**•••• 0725, USD**)                         | Good — a payout method exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Payout tax info                           | ✅ Submitted (August 25, 2026), via Stripe Connect tax-details flow | Confirmed live: the "[Action Required]" banner is gone from Settings → Payouts.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Custom checkout domain                    | Not connected                                                       | Optional polish (e.g. `checkout.ctrlyoke.dev`) — Settings → Domains → currently empty. Not a blocker.                                                                                                                                                                                                                                                                                                                                                                             |
-| Store logo                                | Assets generated; not uploaded                                      | Cosmetic — upload [`images/ls-logo.png`](../../images/ls-logo.png) (160×160 opaque logo with 20px padding for Lemon Squeezy's circular crop) in Settings → General → Logo; use [`images/ls-favicon.png`](../../images/ls-favicon.png) for the 32×32 favicon if requested. Not a blocker.                                                                                                                                                                                          |
+| API keys                                  | **None created**                                                    | Not needed for the Phase 1 flow — the Netlify function only _receives_ LS webhooks and _calls out_ to Keygen; it doesn't need to call back into the LS API for the MVP (order/refund payloads carry enough data). Skip unless a future feature needs it.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Payouts                                   | Bank account connected (**•••• 0725, USD**)                         | Good — a payout method exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Payout tax info                           | ✅ Submitted (August 25, 2026), via Stripe Connect tax-details flow | Confirmed live: the "[Action Required]" banner is gone from Settings → Payouts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Custom checkout domain                    | Not connected                                                       | Optional polish (e.g. `checkout.ctrlyoke.dev`) — Settings → Domains → currently empty. Not a blocker.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Store logo                                | Assets generated; not uploaded                                      | Cosmetic — upload [`images/ls-logo.png`](../../images/ls-logo.png) (160×160 opaque logo with 20px padding for Lemon Squeezy's circular crop) in Settings → General → Logo; use [`images/ls-favicon.png`](../../images/ls-favicon.png) for the 32×32 favicon if requested. Not a blocker.                                                                                                                                                                                                                                                                                                                                                                       |
 
 ### 5.2 Resolved — key delivery mechanism
 
@@ -648,7 +638,7 @@ ships is what makes the bypassable one safe to have.
       should be confirmed on the first real `workflow_dispatch` run.
 - [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
       `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
-      package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
+    package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
       creates the GitHub Release via `softprops/action-gh-release@v2` with the
       matching `CHANGELOG.md` section (from the new
       `scripts/verify-release-tag.mjs`) as the body and the VSIX attached.
@@ -702,7 +692,7 @@ grows).
   complete the Marketplace-publish step on a real `vX.Y.Z` tag push; only
   Phase 8's screenshots/package-inspection blockers stand between here and an
   actual first release.
-- Branch protection rules on `main` and any other GitHub repo *settings* —
+- Branch protection rules on `main` and any other GitHub repo _settings_ —
   intentionally not decided or configured here; Phase 13's own model is trunk
   commits directly to `main` with CI as the safety net, so protection rules
   need a deliberate decision about what they'd restrict for a solo maintainer
@@ -772,21 +762,18 @@ run from there, per the "single binary, not a project dependency" note above):
 
 - [x] **`gitleaks git . --redact`** — 3,272 commits / 52.55 MB scanned, **19
       matches, all confirmed false positives** by reading each flagged line at
-      its commit:
-      - 4 hits are `KEYGEN_ACCOUNT_ID` / `KEYGEN_PRO_POLICY_ID` in
-        `src/license/LicenseService.ts` and `netlify/functions/ls-webhook.ts` —
-        the same Keygen account/policy identifiers from 4.1, already decided
-        safe-to-publish in 14.3 above (identifiers, not credentials).
-      - 14 hits are literal fake-token fixtures (`abcdefghijk123`, `sk-1234567890abcdef`,
-        `ghp_12345678901234567890`, `Bearer abcdefghijklmnopqrstuvwxyz123456`, …) inside
-        the test suites that exist specifically to test the secret-redaction logic
-        (`SecretRedactionMiddleware.test.ts`, `PreviewRedactor.test.ts`,
-        `McpServerForm.test.ts`, `KeyValueMapEditor.test.tsx`, `outputUtils.test.ts`) —
-        consistent with the PEM-fixture false positives already noted in 14.2.
-      - 1 hit is a SHA-256 file-content hash (high-entropy, no credential shape) in
-        `.bmad/_cfg/files-manifest.csv`, part of a since-removed third-party BMAD
-        tooling install (`git log` shows it added then fully removed by
-        `33105e4d7`; the path doesn't exist in `HEAD`).
+      its commit: - 4 hits are `KEYGEN_ACCOUNT_ID` / `KEYGEN_PRO_POLICY_ID` in
+      `src/license/LicenseService.ts` and `netlify/functions/ls-webhook.ts` —
+      the same Keygen account/policy identifiers from 4.1, already decided
+      safe-to-publish in 14.3 above (identifiers, not credentials). - 14 hits are literal fake-token fixtures (`abcdefghijk123`, `sk-1234567890abcdef`,
+      `ghp_12345678901234567890`, `Bearer abcdefghijklmnopqrstuvwxyz123456`, …) inside
+      the test suites that exist specifically to test the secret-redaction logic
+      (`SecretRedactionMiddleware.test.ts`, `PreviewRedactor.test.ts`,
+      `McpServerForm.test.ts`, `KeyValueMapEditor.test.tsx`, `outputUtils.test.ts`) —
+      consistent with the PEM-fixture false positives already noted in 14.2. - 1 hit is a SHA-256 file-content hash (high-entropy, no credential shape) in
+      `.bmad/_cfg/files-manifest.csv`, part of a since-removed third-party BMAD
+      tooling install (`git log` shows it added then fully removed by
+      `33105e4d7`; the path doesn't exist in `HEAD`).
 - [x] **`trufflehog git file://. --results=verified`** — 78,802 chunks / 54.25 MB
       scanned: **0 verified secrets, 0 unverified secrets.**
 - [x] **Skim closed Issues/PRs and tags** — done manually by Nathan (September 7,
@@ -823,8 +810,7 @@ exposure is targeted phishing and account recovery on the licensing/revenue
 accounts, so the effective control is account hardening, not redaction:
 
 - [x] MFA — passkey or TOTP, **not** SMS — on Keygen, Lemon Squeezy, Resend,
-      Netlify, Cloudflare, GitHub, and Google Workspace. **Done September 7,
-      2026.** Also extended, on Nathan's own initiative, to the Microsoft/Azure
+      Netlify, Cloudflare, GitHub, and Google Workspace. **Done September 7, 2026.** Also extended, on Nathan's own initiative, to the Microsoft/Azure
       DevOps account behind the Marketplace publish PAT (Phase 9) — not on the
       original list here, but it holds equivalent blast radius and got the same
       treatment. That account uses passwordless passkey sign-in (key held in
@@ -865,32 +851,32 @@ public**.
 
 ## Summary Table
 
-| Item                                                                       | Status               | Notes                                                                                                                          |
-| -------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Extension packaging/build readiness                                        | DONE                 | Phase 1                                                                                                                        |
-| Website + docs                                                             | DONE                 | Phase 2                                                                                                                        |
-| Business/domain cutover (DNS, email, GitHub, Marketplace item reservation) | DONE                 | Phase 3                                                                                                                        |
-| Keygen product + Pro policy                                                | DONE                 | Phase 4.1 — renamed live this session                                                                                          |
-| Keygen admin token custody confirmed                                       | DONE                 | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                     |
-| Keygen billing tier decision (Dev vs. paid)                                | DONE                 | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                             |
+| Item                                                                       | Status                | Notes                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension packaging/build readiness                                        | DONE                  | Phase 1                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Website + docs                                                             | DONE                  | Phase 2                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Business/domain cutover (DNS, email, GitHub, Marketplace item reservation) | DONE                  | Phase 3                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Keygen product + Pro policy                                                | DONE                  | Phase 4.1 — renamed live this session                                                                                                                                                                                                                                                                                                                                                                             |
+| Keygen admin token custody confirmed                                       | DONE                  | Phase 4.2 — `fuzzynova-admin` in 1Password                                                                                                                                                                                                                                                                                                                                                                        |
+| Keygen billing tier decision (Dev vs. paid)                                | DONE                  | Phase 4.3 — Dev 1 now, upgrade after first 2 sales                                                                                                                                                                                                                                                                                                                                                                |
 | Enterprise SKU (Keygen policy, LS product, webhook routing, legal docs)    | IN PROGRESS           | Phase 4.4 — Keygen policy, test-mode LS draft product, `ls-webhook.ts` routing/subscription-event code (deployed), and a full test-mode purchase + renewal + no-op-cancellation verification all done Sept 8, 2026; price $5,000/yr (revised down from $5,999 after an LS price cap); still open: machine-count abuse-detection webhook (item 4), legal docs (item 5), live-mode copy; independent of Phases 6–12 |
-| Lemon Squeezy store rebrand                                                | DONE                 | Phase 5.1 — done live this session                                                                                             |
-| Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                 | Phase 5.1/5.3 — published August 26, 2026                                                                                      |
-| Lemon Squeezy identity verification                                        | DONE                 | Phase 5.1 — approved September 7, 2026                                                                                          |
-| Lemon Squeezy payout tax info                                              | DONE                 | Phase 5.1 — submitted August 25, 2026                                                                                          |
-| Netlify webhook function (deployed + smoke-tested)                         | DONE                 | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered) |
-| Transactional email provider for key delivery                              | DONE                 | Phase 5.2 — Resend, verified working live                                                                                      |
-| Live-mode LS webhook (separate from test-mode one)                         | OPEN                 | Phase 5.3 step 6 — create once Nathan flips Test mode off in the LS dashboard                                                  |
-| **`LicenseService` implementation**                                        | **DONE**             | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred   |
-| Attorney sign-off on final EULA                                            | DONE                 | Phase 7 — approved September 7, 2026                                                                                            |
-| Screenshots + demo GIF                                                     | OPEN                 | Phase 8 — now unblocked, Phase 6 UI is final                                                                                    |
-| Final `vsce ls` package inspection                                         | OPEN                 | Phase 8 — run right before publish                                                                                             |
-| Marketplace publish                                                        | OPEN — unblocked     | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                               |
-| GitHub release                                                             | BLOCKED on Phase 9   | Phase 10                                                                                                                       |
-| npm CLI publish                                                            | DEFERRED             | Phase 11                                                                                                                       |
-| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; still needs a live-run verification (a real `workflow_dispatch` of `full-suite.yml`, and the first real `vX.Y.Z` tag push) |
-| Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here |
-| Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point   |
+| Lemon Squeezy store rebrand                                                | DONE                  | Phase 5.1 — done live this session                                                                                                                                                                                                                                                                                                                                                                                |
+| Lemon Squeezy product (ctrlyoke Pro, published)                            | DONE                  | Phase 5.1/5.3 — published August 26, 2026                                                                                                                                                                                                                                                                                                                                                                         |
+| Lemon Squeezy identity verification                                        | DONE                  | Phase 5.1 — approved September 7, 2026                                                                                                                                                                                                                                                                                                                                                                            |
+| Lemon Squeezy payout tax info                                              | DONE                  | Phase 5.1 — submitted August 25, 2026                                                                                                                                                                                                                                                                                                                                                                             |
+| Netlify webhook function (deployed + smoke-tested)                         | DONE                  | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered)                                                                                                                                                                                                                                                                                    |
+| Transactional email provider for key delivery                              | DONE                  | Phase 5.2 — Resend, verified working live                                                                                                                                                                                                                                                                                                                                                                         |
+| Live-mode LS webhook (separate from test-mode one)                         | OPEN                  | Phase 5.3 step 6 — create once Nathan flips Test mode off in the LS dashboard                                                                                                                                                                                                                                                                                                                                     |
+| **`LicenseService` implementation**                                        | **DONE**              | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred                                                                                                                                                                                                                                                                                      |
+| Attorney sign-off on final EULA                                            | DONE                  | Phase 7 — approved September 7, 2026                                                                                                                                                                                                                                                                                                                                                                              |
+| Screenshots + demo GIF                                                     | OPEN                  | Phase 8 — now unblocked, Phase 6 UI is final                                                                                                                                                                                                                                                                                                                                                                      |
+| Final `vsce ls` package inspection                                         | OPEN                  | Phase 8 — run right before publish                                                                                                                                                                                                                                                                                                                                                                                |
+| Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                                                                                                                                                                                                                                                                                                                  |
+| GitHub release                                                             | BLOCKED on Phase 9    | Phase 10                                                                                                                                                                                                                                                                                                                                                                                                          |
+| npm CLI publish                                                            | DEFERRED              | Phase 11                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Post-launch branching + tag-driven release workflow                        | MOSTLY DONE           | Phase 13 — pre-push hook, full-suite/release workflows, docs, and the `VSCE_PAT` secret all done; still needs a live-run verification (a real `workflow_dispatch` of `full-suite.yml`, and the first real `vX.Y.Z` tag push)                                                                                                                                                                                      |
+| Repo visibility flip to public                                             | READY — Nathan's call | Phase 14 — every pre-flip gate (EULA, scan, Issues/PRs skim, MFA hardening) cleared Sept 7, 2026; the actual visibility toggle (14.5) is a deliberate action, not automated here                                                                                                                                                                                                                                  |
+| Vendor-account MFA hardening                                               | DONE                  | Phase 14.4 — all 7 listed accounts plus Microsoft/Azure DevOps hardened; recovery-fallback chain confirmed to terminate in the 2FA-enforced Google Workspace, not a weak point                                                                                                                                                                                                                                    |
 
 ---
 

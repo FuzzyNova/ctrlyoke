@@ -2120,7 +2120,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         JSON.stringify({
           workflowName: "Completed run",
           definitionRevision: 4,
-          steps: [{ prompt: "Already persisted" }, { prompt: "Grouped member" }],
+          steps: [
+            { prompt: "Already persisted" },
+            { prompt: "Grouped member" },
+          ],
           parallelGroups: [
             {
               id: "historical-group",

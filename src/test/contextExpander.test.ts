@@ -1190,8 +1190,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const externalFile = path.join(externalRoot, "workflow.txt");
       fs.writeFileSync(externalFile, "workflow-only\n");
       const workflowFile = path.join(root, "workflow.ctrlyoke.json");
-      const workspaceIdentity =
-        ExternalRootsTrustStore.canonicalizeRoot(root);
+      const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(root);
       const workflowIdentity =
         ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
           root,

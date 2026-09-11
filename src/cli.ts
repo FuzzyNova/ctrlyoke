@@ -319,16 +319,12 @@ program
 
 program
   .command("trust-workflow-external-roots <file>")
-  .description(
-    "Review and approve a workflow's requested trustedExternalRoots"
-  )
+  .description("Review and approve a workflow's requested trustedExternalRoots")
   .option("-d, --cwd <path>", "Working directory (default: current directory)")
   .option("-y, --yes", "Approve all pending roots without prompting")
-  .action(
-    async (file: string, options: TrustWorkflowExternalRootsOptions) => {
-      await trustWorkflowExternalRootsCommand(file, options);
-    }
-  );
+  .action(async (file: string, options: TrustWorkflowExternalRootsOptions) => {
+    await trustWorkflowExternalRootsCommand(file, options);
+  });
 
 program
   .command("commit")
@@ -974,7 +970,9 @@ async function prepareStepCommand(
   configService.setCliOverlay({});
 
   if (!isRunHistoryLocationInitialized()) {
-    initializeRunHistoryLocation(configService.get("storage").runHistoryLocation);
+    initializeRunHistoryLocation(
+      configService.get("storage").runHistoryLocation
+    );
   }
 
   const gitToplevel = await repoToplevel(workspaceRoot);
@@ -1058,12 +1056,11 @@ function assertWorkflowExternalRootsApproved(
     workingDir,
     authoredSourcePath
   );
-  const pendingRoots =
-    ConfigurationUtils.getPendingWorkflowExternalFileRoots(
-      workspaceIdentity,
-      workflowIdentity,
-      workflow.trustedExternalRoots
-    );
+  const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+    workspaceIdentity,
+    workflowIdentity,
+    workflow.trustedExternalRoots
+  );
   if (pendingRoots.length === 0) {
     return;
   }
@@ -1945,12 +1942,11 @@ async function trustWorkflowExternalRootsCommand(
     workingDir,
     getAuthoredSourcePath(resolvedFile)
   );
-  const pendingRoots =
-    ConfigurationUtils.getPendingWorkflowExternalFileRoots(
-      ExternalRootsTrustStore.canonicalizeRoot(workingDir),
-      workflowIdentity,
-      workflow.trustedExternalRoots
-    );
+  const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir),
+    workflowIdentity,
+    workflow.trustedExternalRoots
+  );
 
   if (pendingRoots.length === 0) {
     console.log(

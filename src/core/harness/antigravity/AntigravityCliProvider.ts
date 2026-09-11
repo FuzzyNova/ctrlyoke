@@ -275,7 +275,9 @@ export class AntigravityCliProvider implements ICliProvider {
       args.push("--conversation", sessionId!);
       Log.info(`[AntigravityCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("[AntigravityCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[AntigravityCliProvider] Resume requested but no session ID available"
+      );
     } else {
       Log.info("[AntigravityCliProvider] Starting new session");
     }
@@ -820,7 +822,9 @@ export class AntigravityCliProvider implements ICliProvider {
         diagnostics: [],
       };
     } catch (error) {
-      Log.warn(`[AntigravityCliProvider] Failed to register Antigravity MCP servers: ${error}`);
+      Log.warn(
+        `[AntigravityCliProvider] Failed to register Antigravity MCP servers: ${error}`
+      );
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }
@@ -873,7 +877,9 @@ export class AntigravityCliProvider implements ICliProvider {
     } catch (error) {
       // agy treats a broken statusline as non-fatal. Match that behavior so a
       // settings-file problem never prevents the harness itself from running.
-      Log.warn(`[AntigravityCliProvider] Failed to register Antigravity statusline: ${error}`);
+      Log.warn(
+        `[AntigravityCliProvider] Failed to register Antigravity statusline: ${error}`
+      );
       return { kind: "no-op", captured: false };
     }
   }

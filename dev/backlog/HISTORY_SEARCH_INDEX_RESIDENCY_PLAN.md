@@ -19,13 +19,13 @@ Workspace: 1181 lineages, 1430 runs, 983,404 documents, **976 MB** of
 `documents/*.jsonl` shards under
 `~/.ctrlyoke/projects/ctrlyoke-81d730fe53ae/.search-index/`.
 
-| Measurement                                | Value                       |
-| ------------------------------------------ | --------------------------- |
-| Cold `loadIfPossible()` (first ever read)   | **31,257 ms**               |
-| Warm `loadIfPossible()` (OS page cache hot) | **5,544 ms**                |
-| Extension-host working set with index resident | **1,850 MB**             |
-| Freshness check (`isManifestFresh`)         | ~350 ms (2 stats x 1430 runs) |
-| In-memory match pass for `"codemirror"`     | 602 ms (983,404 documents)  |
+| Measurement                                    | Value                         |
+| ---------------------------------------------- | ----------------------------- |
+| Cold `loadIfPossible()` (first ever read)      | **31,257 ms**                 |
+| Warm `loadIfPossible()` (OS page cache hot)    | **5,544 ms**                  |
+| Extension-host working set with index resident | **1,850 MB**                  |
+| Freshness check (`isManifestFresh`)            | ~350 ms (2 stats x 1430 runs) |
+| In-memory match pass for `"codemirror"`        | 602 ms (983,404 documents)    |
 
 The 31 s figure is the one a user actually feels: it is the whole of the
 "search takes 20+ seconds to start" report, and it happens again on every

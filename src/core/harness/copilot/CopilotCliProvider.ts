@@ -342,7 +342,9 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`[CopilotCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(
+        `[CopilotCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+      );
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -382,7 +384,9 @@ export class CopilotCliProvider implements ICliProvider {
       args.push("--resume", sessionId!);
       Log.info(`[CopilotCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("[CopilotCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[CopilotCliProvider] Resume requested but no session ID available"
+      );
     } else {
       Log.info("[CopilotCliProvider] Starting new session");
     }
@@ -742,7 +746,9 @@ export class CopilotCliProvider implements ICliProvider {
       }
       return result;
     } catch (error) {
-      Log.warn(`[CopilotCliProvider] Failed to register Copilot statusline: ${error}`);
+      Log.warn(
+        `[CopilotCliProvider] Failed to register Copilot statusline: ${error}`
+      );
       return { kind: "no-op", captured: false };
     }
   }

@@ -24,13 +24,9 @@ function makeFakeTrustStore(decisions: Record<string, "allow" | "deny">) {
     decisions[`${scopeIdentity}::${root}`];
   return {
     getApprovedRoots: (scopeIdentity: string, roots: readonly string[]) =>
-      roots.filter(
-        (root) => getDecision(scopeIdentity, root) === "allow"
-      ),
+      roots.filter((root) => getDecision(scopeIdentity, root) === "allow"),
     getPendingRoots: (scopeIdentity: string, roots: readonly string[]) =>
-      roots.filter(
-        (root) => getDecision(scopeIdentity, root) === undefined
-      ),
+      roots.filter((root) => getDecision(scopeIdentity, root) === undefined),
   };
 }
 
@@ -231,12 +227,11 @@ suite("ConfigurationUtils — allowed external file roots", () => {
       1
     );
 
-    const inherited =
-      ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-        "workspace-id",
-        undefined,
-        fakeStore
-      );
+    const inherited = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
+      "workspace-id",
+      undefined,
+      fakeStore
+    );
     assert.strictEqual(inherited.length, 1);
 
     const workflowRoots =
@@ -269,13 +264,12 @@ suite("ConfigurationUtils — allowed external file roots", () => {
       })
     );
 
-    const pending =
-      ConfigurationUtils.getPendingWorkflowExternalFileRoots(
-        "workspace-id",
-        "workflow-id",
-        [equivalentRequested, workflowOnly],
-        fakeStore
-      );
+    const pending = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
+      "workspace-id",
+      "workflow-id",
+      [equivalentRequested, workflowOnly],
+      fakeStore
+    );
     assert.deepStrictEqual(pending, [workflowOnly]);
   });
 });

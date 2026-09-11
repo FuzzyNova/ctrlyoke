@@ -459,9 +459,7 @@ export function reorderParallelGroupPendingSteps(
     });
     if (
       requestedPending.length !== crossingGroup.endIndex - currentIndex + 1 ||
-      requestedPending.some(
-        (index, position) => index !== position
-      )
+      requestedPending.some((index, position) => index !== position)
     ) {
       throw new Error(
         "Cannot reorder a parallel group across the current execution boundary"
@@ -600,8 +598,7 @@ function validatePendingParallelGroupRanges(
 
 function sameNumberSet(left: number[], right: number[]): boolean {
   return (
-    left.length === right.length &&
-    left.every((value) => right.includes(value))
+    left.length === right.length && left.every((value) => right.includes(value))
   );
 }
 
@@ -635,11 +632,12 @@ function reorderPendingTopologyWithRanges(
   const immutableGroupIds = new Set<string>();
   for (const group of normalized.parallelGroups) {
     const hasSettledMember = group.startIndex < currentIndex;
-    const hasTerminalMember = group.startIndex <= group.endIndex
-      ? normalized.steps
-          .slice(group.startIndex, group.endIndex + 1)
-          .some((step) => step._runtime?.completedAt !== undefined)
-      : false;
+    const hasTerminalMember =
+      group.startIndex <= group.endIndex
+        ? normalized.steps
+            .slice(group.startIndex, group.endIndex + 1)
+            .some((step) => step._runtime?.completedAt !== undefined)
+        : false;
     const hasInFlightMember =
       hasInFlightStep &&
       currentIndex >= group.startIndex &&
@@ -707,10 +705,7 @@ function reorderPendingTopologyWithRanges(
     });
     const requestedGroup = pendingGroupAtPosition.get(position);
     if (requestedGroup) {
-      groupPolicies.set(
-        requestedGroup.id!,
-        requestedGroup.failFast
-      );
+      groupPolicies.set(requestedGroup.id!, requestedGroup.failFast);
     }
   }
 

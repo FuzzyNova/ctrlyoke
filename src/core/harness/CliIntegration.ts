@@ -1127,7 +1127,9 @@ export class CliIntegration extends HarnessIntegration {
         return injectResult.success;
       }
       // Fall through to restart mode if the PTY is no longer available.
-      Log.info("[CliIntegration] Inject mode unavailable — falling back to restart mode");
+      Log.info(
+        "[CliIntegration] Inject mode unavailable — falling back to restart mode"
+      );
       await this.retireInteractivePtyForRestartFallback();
     } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
       // Inject mode was preemptively skipped (settings changed, resumeSession: false,
@@ -1431,7 +1433,9 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
     await this.deleteTempFiles(tempFilePaths);
-    Log.debug(`[CliIntegration] Cleaned up ${tempFilePaths.length} temp file(s)`);
+    Log.debug(
+      `[CliIntegration] Cleaned up ${tempFilePaths.length} temp file(s)`
+    );
   }
 
   // ============================================================
@@ -1559,7 +1563,10 @@ export class CliIntegration extends HarnessIntegration {
     this.initializationStatus = HarnessStatus.Unavailable;
     this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
 
-    Log.error(`[CliIntegration] ${this.provider.config.displayName} not available`, error);
+    Log.error(
+      `[CliIntegration] ${this.provider.config.displayName} not available`,
+      error
+    );
     reportCliNotFound(this.getIntegrationMode());
   }
 

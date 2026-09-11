@@ -1066,20 +1066,20 @@ The requested docs, bundled template, fan-out enablement, and gate-specific test
 are also complete.
 
 [x] 1. Typed `TerminalStartedMessage`; `stepIndex`/`parallelGroupId` on PTY sessions and
-   all six producers.
+all six producers.
 [x] 2. Preserve same-harness parallel AI sessions and parallel script sessions as distinct
-   tabs; label with step number/name.
+tabs; label with step number/name.
 [x] 3. Exercise controller arbitration and reconnect replay with several simultaneous
-   sessions.
+sessions.
 [x] 4. Docs: `docs/workflows/yaml-format.md` (new "Parallel steps" section),
-   `docs/reference/workflow-schema.md` (also fix its stale `prompt-schema.json` reference),
-   `docs/workflows/json-format.md`, `docs/workflows/session-management.md`,
-   `docs/workflows/context-files.md`, `docs/workflows/dynamic-queue.md`,
-   `docs/guide/concepts.md`, `docs/reference/settings.md`, `README.md` if it shows step
-   syntax. Add a bundled "Parallel Research" template only if the every-template test from
-   Stage 1 exists.
+`docs/reference/workflow-schema.md` (also fix its stale `prompt-schema.json` reference),
+`docs/workflows/json-format.md`, `docs/workflows/session-management.md`,
+`docs/workflows/context-files.md`, `docs/workflows/dynamic-queue.md`,
+`docs/guide/concepts.md`, `docs/reference/settings.md`, `README.md` if it shows step
+syntax. Add a bundled "Parallel Research" template only if the every-template test from
+Stage 1 exists.
 [x] 5. Flip `PARALLEL_GROUP_FAN_OUT_ENABLED` to `true`, remove the sequential-fallback
-   label, and run the full manual checklist below.
+label, and run the full manual checklist below.
 
 ## Manual Test Checklist (after Stage 6)
 

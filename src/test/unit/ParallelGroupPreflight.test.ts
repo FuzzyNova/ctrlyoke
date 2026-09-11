@@ -42,12 +42,11 @@ async function run(
 ) {
   return preflightParallelGroup({
     workflow,
-    group:
-      workflow.parallelGroups?.[0] ?? {
-        ...group,
-        startIndex: 0,
-        endIndex: 1,
-      },
+    group: workflow.parallelGroups?.[0] ?? {
+      ...group,
+      startIndex: 0,
+      endIndex: 1,
+    },
     defaults: defaultsValue,
     hostCanProvidePty: true,
     supportsConcurrentInteractiveSessions,

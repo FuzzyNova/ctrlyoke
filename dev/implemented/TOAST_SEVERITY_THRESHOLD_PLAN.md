@@ -65,8 +65,8 @@ lands on the same `VsCodeUserFeedbackSink` instance. So the two chokepoints
 above are exhaustive — no per-call-site migration is needed.
 
 This meant `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`'s architecture goal
-(funnel everything through a small number of injected ports) is *already
-satisfied* for this specific purpose. The implementation did not depend on
+(funnel everything through a small number of injected ports) is _already
+satisfied_ for this specific purpose. The implementation did not depend on
 any stage of that plan.
 
 ---
@@ -211,17 +211,17 @@ existing sink tests keep passing unchanged.
 This covers every path identified in the earlier audit except the two that
 are correctly out of scope:
 
-| Surface | Covered? |
-|---|---|
-| `USER_FEEDBACK` in-app toast (`ToastViewport`) | ✅ via `enqueueToast` |
-| Direct webview `showToast()`/`notifyUser()` calls (former Group A/B) | ✅ via `showToast` / `VsCodeUserFeedbackSink` |
-| Native VS Code popups from backend `USER_FEEDBACK` | ✅ via `VsCodeUserFeedbackSink` |
-| Native VS Code popups from webview `SHOW_NATIVE_FEEDBACK` | ✅ same sink instance |
-| `NOTIFICATION_EVENT`→toast translation (standalone only) | ✅ incidentally, same `showToast()` call |
-| Boundary-only native popups (`extension.ts` commands, `DevCommands`, `ContextMenuReferenceCommands`, `ScmCommitCommand`, `ExternalFileTrustPrompt`) | ❌ out of scope — these are direct VS Code command/editor integrations, not operational feedback toast; see Non-Goals |
-| `NotificationManager` completion popups | ❌ out of scope — governed by `vscode.enabled`/`browser.mode`/event modes already; a separate, unrelated channel by design |
-| Browser push / OS notifications | ❌ out of scope — governed by `browser.mode` already |
-| CLI/headless `ConsoleUserFeedbackSink` | ❌ out of scope — see Non-Goals |
+| Surface                                                                                                                                             | Covered?                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `USER_FEEDBACK` in-app toast (`ToastViewport`)                                                                                                      | ✅ via `enqueueToast`                                                                                                      |
+| Direct webview `showToast()`/`notifyUser()` calls (former Group A/B)                                                                                | ✅ via `showToast` / `VsCodeUserFeedbackSink`                                                                              |
+| Native VS Code popups from backend `USER_FEEDBACK`                                                                                                  | ✅ via `VsCodeUserFeedbackSink`                                                                                            |
+| Native VS Code popups from webview `SHOW_NATIVE_FEEDBACK`                                                                                           | ✅ same sink instance                                                                                                      |
+| `NOTIFICATION_EVENT`→toast translation (standalone only)                                                                                            | ✅ incidentally, same `showToast()` call                                                                                   |
+| Boundary-only native popups (`extension.ts` commands, `DevCommands`, `ContextMenuReferenceCommands`, `ScmCommitCommand`, `ExternalFileTrustPrompt`) | ❌ out of scope — these are direct VS Code command/editor integrations, not operational feedback toast; see Non-Goals      |
+| `NotificationManager` completion popups                                                                                                             | ❌ out of scope — governed by `vscode.enabled`/`browser.mode`/event modes already; a separate, unrelated channel by design |
+| Browser push / OS notifications                                                                                                                     | ❌ out of scope — governed by `browser.mode` already                                                                       |
+| CLI/headless `ConsoleUserFeedbackSink`                                                                                                              | ❌ out of scope — see Non-Goals                                                                                            |
 
 ### Settings UI
 
@@ -234,7 +234,10 @@ one row, placed in the existing "Noise control" grouping
 
 ```tsx
 const TOAST_LEVEL_OPTIONS = [
-  { value: TOAST_LEVEL_MODES.ALL, label: "All (info, success, warnings, errors)" },
+  {
+    value: TOAST_LEVEL_MODES.ALL,
+    label: "All (info, success, warnings, errors)",
+  },
   { value: TOAST_LEVEL_MODES.WARNING_AND_ERROR, label: "Warnings and errors" },
   { value: TOAST_LEVEL_MODES.ERROR_ONLY, label: "Errors only" },
   { value: TOAST_LEVEL_MODES.OFF, label: "Off" },
@@ -343,7 +346,7 @@ changes.
   scoped-reply sites to carry a stable registered key, needs persisted
   per-key state, and needs its own settings UI. If pursued later, scope it
   to informational/noise-tier toasts only (reusing `ToastItem.dedupeKey` as
-  the candidate stable ID) — muting a specific *error* permanently is
+  the candidate stable ID) — muting a specific _error_ permanently is
   usually the wrong default, since it can hide a real recurring problem
   silently.
 - **Changing `notifications.vscode.enabled` to regain its old "silences
@@ -374,18 +377,18 @@ changes.
 
 ## Resolved Questions
 
-1. **Cross-store `getState()` in `uiStore.ts`** — *resolved: allowed.* It is
+1. **Cross-store `getState()` in `uiStore.ts`** — _resolved: allowed._ It is
    an established pattern in `src/ui/webview-react/store/` (four existing
    `useUiStore.getState()` call sites in `editorStore.ts` and
    `workflowStore.ts`), and `settingsStore.ts` does not import `uiStore.ts`,
    so there is no import cycle. The parameter-threading fallback is not
    needed.
 2. **`success` severity under `WARNING_AND_ERROR`/`ERROR_ONLY`** —
-   *resolved: below threshold under both,* as originally designed. A user
+   _resolved: below threshold under both,_ as originally designed. A user
    selecting "Warnings and errors" is asking to silence routine chatter, and
    success toast is the most routine chatter there is.
 3. **Naming (`toastLevel` vs. `feedbackLevel`/`operationalToastLevel`)** —
-   *resolved: keep `toastLevel`.* It sits as a direct sibling of
+   _resolved: keep `toastLevel`._ It sits as a direct sibling of
    `vscode`/`browser`/`events` inside `notifications`, and the settings-UI
    row carries an explicit description distinguishing it from the completion
    channel. A longer key buys nothing the description does not already.

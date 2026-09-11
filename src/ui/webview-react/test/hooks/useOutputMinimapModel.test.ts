@@ -67,7 +67,10 @@ describe("useOutputMinimapModel hidden activity", () => {
 
   describe("useOutputMinimapModel interleaved activity", () => {
     it("highlights the visible target when a filter selects one writer", () => {
-      const visibleTarget = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+      const visibleTarget = {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        index: 0,
+      } as const;
       const hiddenTarget = { kind: FINAL_STEP_PHASES.QUEUE, index: 1 } as const;
       const { result } = renderHook(() =>
         useOutputMinimapModel({

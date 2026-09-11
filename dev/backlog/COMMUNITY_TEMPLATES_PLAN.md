@@ -183,7 +183,7 @@ Responsibilities:
   index entry's `file` field, run it through `PromptFileParser`'s schema
   validation (never trust a network payload straight onto disk), then write
   it via a new `TemplateManager.installTemplateContent(name, scope, format,
-  content)` that shares `prepareCustomTemplatePath`'s existing name/collision
+content)` that shares `prepareCustomTemplatePath`'s existing name/collision
   checks (`src/core/TemplateManager.ts:592`) rather than duplicating them →
   emit success/failure the way `McpManagerService.handleSaveRegistryServer`
   does.

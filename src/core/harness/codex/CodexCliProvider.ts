@@ -333,7 +333,9 @@ export class CodexCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("[CodexCliProvider] MCP server config added for dynamic queue extension");
+      Log.debug(
+        "[CodexCliProvider] MCP server config added for dynamic queue extension"
+      );
     }
 
     // Headless mode: add exec command and --json flag
@@ -368,7 +370,9 @@ export class CodexCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`[CodexCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(
+        `[CodexCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+      );
     }
 
     // Hook setup (interactive notification hooks) is dispatched by
@@ -381,7 +385,9 @@ export class CodexCliProvider implements ICliProvider {
       sessionId
     );
     if (resolvedResumeSession && !sessionId) {
-      Log.warn("[CodexCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[CodexCliProvider] Resume requested but no session ID available"
+      );
     } else if (!shouldResume) {
       Log.info("[CodexCliProvider] Starting new session");
     }
@@ -522,7 +528,9 @@ export class CodexCliProvider implements ICliProvider {
       userHooks,
       enabledNotificationHookEvents
     );
-    Log.debug(`[CodexCliProvider] Configured user hooks for Codex headless mode`);
+    Log.debug(
+      `[CodexCliProvider] Configured user hooks for Codex headless mode`
+    );
     return {
       cliArgs: [...CODEX_HOOK_ARGS, ...hookArgs, ...trustArgs],
       mutations: [],
@@ -866,7 +874,10 @@ export class CodexCliProvider implements ICliProvider {
         diagnostics: [],
       };
     } catch (error) {
-      Log.error("[CodexCliProvider] Failed to generate MCP config for Codex CLI", error);
+      Log.error(
+        "[CodexCliProvider] Failed to generate MCP config for Codex CLI",
+        error
+      );
       return { cliArgs: [], mutations: [], diagnostics: [] };
     }
   }

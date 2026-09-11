@@ -583,7 +583,9 @@ export class WorkflowOrchestrator {
       context.subscriptions.push(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
-            Log.trace(`[WorkflowOrchestrator] Copilot status changed to: ${status}`);
+            Log.trace(
+              `[WorkflowOrchestrator] Copilot status changed to: ${status}`
+            );
             this.updateStatusBar();
           }
           if (
@@ -1236,12 +1238,13 @@ export class WorkflowOrchestrator {
       // setViewedWorkflowId is normally called inside replayWorkflowStateTo; call
       // it explicitly here so the viewer registry stays consistent when skipping.
       this.setViewedWorkflowId(clientId, workflowId);
-      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-        clientId,
-        undefined,
-        options?.interactionPort,
-        false
-      );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          undefined,
+          options?.interactionPort,
+          false
+        );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(workflowId, send, clientId);
       }
@@ -1260,12 +1263,13 @@ export class WorkflowOrchestrator {
     // converts an actively external RUNNING file to a VS Code instance.
     if (await this.ensureExternalRunWatchSession(filePath)) {
       this.setViewedWorkflowId(clientId, workflowId);
-      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-        clientId,
-        undefined,
-        options?.interactionPort,
-        false
-      );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          undefined,
+          options?.interactionPort,
+          false
+        );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(workflowId, send, clientId);
       }
@@ -1295,12 +1299,13 @@ export class WorkflowOrchestrator {
     );
     if (existing) {
       this.setViewedWorkflowId(clientId, existing.id);
-      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-        clientId,
-        undefined,
-        options?.interactionPort,
-        false
-      );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          undefined,
+          options?.interactionPort,
+          false
+        );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(existing.id, send, clientId);
       }
@@ -1320,12 +1325,13 @@ export class WorkflowOrchestrator {
     );
     if (existingRetired) {
       this.setViewedWorkflowId(clientId, existingRetired.id);
-      const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-        clientId,
-        undefined,
-        options?.interactionPort,
-        false
-      );
+      const pendingRoots =
+        await this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          undefined,
+          options?.interactionPort,
+          false
+        );
       if (!options?.skipReplay) {
         await this.replayWorkflowStateTo(existingRetired.id, send, clientId);
       }
@@ -1375,12 +1381,13 @@ export class WorkflowOrchestrator {
       this.setViewedWorkflowId(clientId, previousViewedId);
       throw error;
     }
-    const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-      clientId,
-      undefined,
-      options?.interactionPort,
-      false
-    );
+    const pendingRoots =
+      await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        options?.interactionPort,
+        false
+      );
     if (!options?.skipReplay) {
       await this.replayWorkflowStateTo(instance.id, send, clientId);
     }
@@ -1590,7 +1597,9 @@ export class WorkflowOrchestrator {
       }
 
       this.orchestratorInitialized = true;
-      Log.debug("[WorkflowOrchestrator] WorkflowOrchestrator: Initialization complete");
+      Log.debug(
+        "[WorkflowOrchestrator] WorkflowOrchestrator: Initialization complete"
+      );
 
       await this.restoreState(); // no-op
 
@@ -1602,7 +1611,10 @@ export class WorkflowOrchestrator {
       }
     } catch (error) {
       this.orchestratorInitialized = true;
-      Log.error("[WorkflowOrchestrator] Failed to initialize WorkflowOrchestrator:", error);
+      Log.error(
+        "[WorkflowOrchestrator] Failed to initialize WorkflowOrchestrator:",
+        error
+      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -1684,7 +1696,10 @@ export class WorkflowOrchestrator {
       // .ctrlyoke/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
     } catch (err) {
-      Log.warn("[WorkflowOrchestrator] ctrlyoke: Workspace initialization failed:", err);
+      Log.warn(
+        "[WorkflowOrchestrator] ctrlyoke: Workspace initialization failed:",
+        err
+      );
     }
 
     this.workspaceInitPending = false;
@@ -1963,14 +1978,20 @@ export class WorkflowOrchestrator {
     }
 
     if (!instance) {
-      Log.warn(`[WorkflowOrchestrator] executeWorkflow: workflow ${workflowId ?? "viewed"} not found`);
+      Log.warn(
+        `[WorkflowOrchestrator] executeWorkflow: workflow ${workflowId ?? "viewed"} not found`
+      );
       return;
     }
 
     try {
       await this.assertNoPendingWorkflowExternalRoots(this.PANEL_CLIENT_ID);
     } catch (error) {
-      notifyUserFeedback(this.userFeedbackSink, "warning", getErrorMessage(error));
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        "warning",
+        getErrorMessage(error)
+      );
       return;
     }
 
@@ -2103,7 +2124,9 @@ export class WorkflowOrchestrator {
       );
       return;
     }
-    Log.info(`[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(
+      `[WorkflowOrchestrator] pauseWorkflow: inst:${workflowId.slice(0, 8)}`
+    );
     return instance.pause();
   }
 
@@ -2120,7 +2143,9 @@ export class WorkflowOrchestrator {
       );
       return;
     }
-    Log.info(`[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(
+      `[WorkflowOrchestrator] cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`
+    );
     return instance.cancelPause();
   }
 
@@ -2173,7 +2198,9 @@ export class WorkflowOrchestrator {
     if (this.retiredInstances.has(instance.id)) {
       this.retiredInstances.delete(instance.id);
     }
-    Log.info(`[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(
+      `[WorkflowOrchestrator] resumeWorkflow: inst:${workflowId.slice(0, 8)}`
+    );
     return instance.resume();
   }
 
@@ -2375,12 +2402,13 @@ export class WorkflowOrchestrator {
   ): Promise<WorkflowInstance> {
     const instance = this.registerNewInstance(clientId);
     await instance.loadPromptFile(filePath);
-    const pendingRoots = await this.approvePendingWorkflowExternalRootsForClient(
-      clientId,
-      undefined,
-      interactionPort,
-      false
-    );
+    const pendingRoots =
+      await this.approvePendingWorkflowExternalRootsForClient(
+        clientId,
+        undefined,
+        interactionPort,
+        false
+      );
     await this.replayWorkflowStateTo(instance.id, send, clientId);
     this.emitWorkflowExternalRootsApprovalState(
       clientId,
@@ -2754,11 +2782,7 @@ export class WorkflowOrchestrator {
     const requestedRoots = workflow?.trustedExternalRoots;
     let pendingRoots: string[] = [];
 
-    if (
-      workspaceRoot &&
-      workflowSourcePath &&
-      Array.isArray(requestedRoots)
-    ) {
+    if (workspaceRoot && workflowSourcePath && Array.isArray(requestedRoots)) {
       const workflowIdentity =
         ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
           workspaceRoot,
@@ -2829,9 +2853,7 @@ export class WorkflowOrchestrator {
     });
   }
 
-  private getPendingWorkflowExternalRootsForClient(
-    clientId: string
-  ): string[] {
+  private getPendingWorkflowExternalRootsForClient(clientId: string): string[] {
     const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     // See approvePendingWorkflowExternalRootsForClient for why the panel
     // branch goes through getInstanceForClient rather than getActiveInstance().
@@ -2839,8 +2861,8 @@ export class WorkflowOrchestrator {
       clientId === this.PANEL_CLIENT_ID
         ? this.getInstanceForClient(clientId)
         : this.getBoundInstance(clientId);
-    const requestedRoots = instance?.promptQueue?.getWorkflowFile()
-      .trustedExternalRoots;
+    const requestedRoots =
+      instance?.promptQueue?.getWorkflowFile().trustedExternalRoots;
     const workflowSourcePath = instance?.getCurrentPromptFilePath();
     if (
       !workspaceRoot ||
@@ -2862,7 +2884,8 @@ export class WorkflowOrchestrator {
   private async assertNoPendingWorkflowExternalRoots(
     clientId: string
   ): Promise<void> {
-    const pendingRoots = this.getPendingWorkflowExternalRootsForClient(clientId);
+    const pendingRoots =
+      this.getPendingWorkflowExternalRootsForClient(clientId);
     if (pendingRoots.length > 0) {
       throw new Error(
         `Workflow external roots require approval before running: ${pendingRoots.join(", ")}. ` +
@@ -4680,7 +4703,9 @@ export class WorkflowOrchestrator {
         if (!prepared) {
           rejectPrepared(error);
         }
-        Log.error(`[WorkflowOrchestrator] Failed to execute seeded run: ${getErrorMessage(error)}`);
+        Log.error(
+          `[WorkflowOrchestrator] Failed to execute seeded run: ${getErrorMessage(error)}`
+        );
       });
     // The action is not complete until the initiating client is visibly bound
     // to the seeded run. Execution itself continues in the background.
@@ -4852,7 +4877,9 @@ export class WorkflowOrchestrator {
         if (!prepared) {
           rejectPrepared(error);
         }
-        Log.error(`[WorkflowOrchestrator] Failed to execute draft: ${getErrorMessage(error)}`);
+        Log.error(
+          `[WorkflowOrchestrator] Failed to execute draft: ${getErrorMessage(error)}`
+        );
       });
     await preparedPromise;
   }
@@ -5748,7 +5775,10 @@ export class WorkflowOrchestrator {
           await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
           Log.info(`[WorkflowOrchestrator] Resumed session: ${selected.label}`);
         } catch (loadError) {
-          Log.error("[WorkflowOrchestrator] Failed to load session:", loadError as Error);
+          Log.error(
+            "[WorkflowOrchestrator] Failed to load session:",
+            loadError as Error
+          );
           notifyUserFeedback(
             this.userFeedbackSink,
             USER_FEEDBACK_SEVERITY.ERROR,
@@ -5757,7 +5787,10 @@ export class WorkflowOrchestrator {
         }
       }
     } catch (error) {
-      Log.error("[WorkflowOrchestrator] Failed to resume session:", error as Error);
+      Log.error(
+        "[WorkflowOrchestrator] Failed to resume session:",
+        error as Error
+      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -5813,7 +5846,10 @@ export class WorkflowOrchestrator {
     );
     for (const result of results) {
       if (result.status === "rejected") {
-        Log.warn("[WorkflowOrchestrator] Workflow shutdown did not settle cleanly:", result.reason);
+        Log.warn(
+          "[WorkflowOrchestrator] Workflow shutdown did not settle cleanly:",
+          result.reason
+        );
       }
     }
   }
@@ -6121,7 +6157,9 @@ export class WorkflowOrchestrator {
       this.runnerHostIdentity
     );
 
-    Log.debug(`[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
+    Log.debug(
+      `[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`
+    );
 
     // Tracks the lineage identity this instance last reported, so the address
     // registry is refreshed on the transition rather than on every state change.

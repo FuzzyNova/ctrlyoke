@@ -90,6 +90,7 @@ The reporter automatically:
 
 > **Sanity-check pass (2026-09-08):** the schemas below were revised after reviewing actual
 > insertion points in the codebase, not just the original speculative draft. Key changes:
+>
 > - Outcome/failure fields now reuse existing enums (`FAILURE_KINDS`, `STEP_STATUS`,
 >   `WORKFLOW_RUNTIME_COMMANDS`) instead of inventing new string literals, per the project's
 >   "no hardcoded strings for flow control" rule.
@@ -119,7 +120,7 @@ The reporter automatically:
 >   process dies before anything flushes. That failure mode is already covered separately by
 >   VS Code/Electron's own crash reporter (see `copilot-instructions.md`'s crash-investigation
 >   section on `%APPDATA%\Code\Crashpad\reports\*.dmp`). This plan only adds telemetry for
->   *handled* errors/exceptions.
+>   _handled_ errors/exceptions.
 
 ### `workflow/started`
 

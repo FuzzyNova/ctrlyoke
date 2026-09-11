@@ -594,7 +594,9 @@ export class WorkingFileManager {
     // Write atomically (temp + rename)
     await this.writeWorkingFileAtomic(draftFilePath, workingFile);
 
-    Log.info(`[WorkingFileManager] Created draft working file: ${draftFilePath}`);
+    Log.info(
+      `[WorkingFileManager] Created draft working file: ${draftFilePath}`
+    );
     return { workingFilePath: draftFilePath, workflowKey };
   }
 

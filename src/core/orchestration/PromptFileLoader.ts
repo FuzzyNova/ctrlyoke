@@ -125,7 +125,10 @@ export class PromptFileLoader {
         undefined // no source file — Save As is the only export path
       );
     } catch (error) {
-      Log.error("[PromptFileLoader] Failed to load workflow from template:", error);
+      Log.error(
+        "[PromptFileLoader] Failed to load workflow from template:",
+        error
+      );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,

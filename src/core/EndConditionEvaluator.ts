@@ -205,7 +205,9 @@ export class EndConditionEvaluator {
       workingDirectory ?? this.executionWorkspace.executionRoot;
 
     try {
-      Log.info(`[EndConditionEvaluator] Evaluating end condition script: ${condition.script}`);
+      Log.info(
+        `[EndConditionEvaluator] Evaluating end condition script: ${condition.script}`
+      );
 
       const hasMeaningfulNewline =
         EndConditionEvaluator.isMultilineInlineScript(condition.script);
@@ -703,7 +705,10 @@ export class EndConditionEvaluator {
     }
 
     const shellKind = resolveShellKind(interpreter);
-    if (shellKind === SHELL_KINDS.PWSH || shellKind === SHELL_KINDS.POWERSHELL) {
+    if (
+      shellKind === SHELL_KINDS.PWSH ||
+      shellKind === SHELL_KINDS.POWERSHELL
+    ) {
       return {
         executable: this.resolvePowerShellExecutable(),
         args: [scriptPath],
@@ -889,7 +894,9 @@ export class EndConditionEvaluator {
     }
 
     pythonExecutables.set(platform, executable);
-    Log.debug(`[EndConditionEvaluator] Python executable resolved for ${platform}: ${executable}`);
+    Log.debug(
+      `[EndConditionEvaluator] Python executable resolved for ${platform}: ${executable}`
+    );
     return executable;
   }
 
@@ -1221,10 +1228,15 @@ export class EndConditionEvaluator {
         }
       }
 
-      Log.info(`[EndConditionEvaluator] Created sample script from template: ${destinationPath}`);
+      Log.info(
+        `[EndConditionEvaluator] Created sample script from template: ${destinationPath}`
+      );
       return destinationPath;
     } catch (error) {
-      Log.error("[EndConditionEvaluator] Failed to create sample script from template:", error);
+      Log.error(
+        "[EndConditionEvaluator] Failed to create sample script from template:",
+        error
+      );
       return null;
     }
   }
@@ -1264,7 +1276,9 @@ export class EndConditionEvaluator {
       runner.dispose();
     }
     this.processRunners.clear();
-    Log.info("[EndConditionEvaluator] Killed all running end condition processes");
+    Log.info(
+      "[EndConditionEvaluator] Killed all running end condition processes"
+    );
   }
 
   /**

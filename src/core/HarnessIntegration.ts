@@ -785,7 +785,9 @@ export abstract class HarnessIntegration {
     }
 
     if (/[\n\r\t]/.test(promptText)) {
-      Log.debug("[HarnessIntegration] Prompt contains newlines/tabs, using file-based passing");
+      Log.debug(
+        "[HarnessIntegration] Prompt contains newlines/tabs, using file-based passing"
+      );
       return false;
     }
 

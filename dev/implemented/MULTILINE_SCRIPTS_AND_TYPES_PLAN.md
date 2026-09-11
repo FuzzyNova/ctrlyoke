@@ -191,7 +191,7 @@ Worth recording because the symptom was mystifying: `path.extname(".sh")` is
 `""`, not `".sh"` — Node treats a leading-dot name as a dotfile with no
 extension. Under the old dispatcher, `.sh` therefore missed the `".sh"` case
 and fell into the default "execute the path directly" branch, so the step tried
-to *run* a file named `.sh` as a program. On Windows that surfaces as the OS
+to _run_ a file named `.sh` as a program. On Windows that surfaces as the OS
 "How do you want to open this file?" association dialog naming just `.sh`,
 which blocks a headless run until someone dismisses it. A template such as
 `{{name}}.sh` resolving to an empty `name` produces exactly this shape.

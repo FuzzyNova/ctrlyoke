@@ -62,7 +62,9 @@ export class ExternalRunWatchSession implements vscode.Disposable {
   /** stepIndex → last number of outputs sent to the dashboard for that step */
   private lastKnownOutputByStep: Record<number, number> = {};
   private readonly manifestPath: string;
-  private workingFileChangeThrottleTimer: ReturnType<typeof setTimeout> | undefined;
+  private workingFileChangeThrottleTimer:
+    | ReturnType<typeof setTimeout>
+    | undefined;
   private workingFileChangePendingDuringThrottle = false;
 
   constructor(

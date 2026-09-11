@@ -97,9 +97,8 @@ export function useOutputContextMenu({
       // Find the step with the largest scroll fraction at or above the click
       let hoveredStepKey: string | null = null;
       let bestFraction = -1;
-      for (const [key, fraction] of (
-        anchorScrollFractions ?? stepScrollFractions
-      )) {
+      for (const [key, fraction] of anchorScrollFractions ??
+        stepScrollFractions) {
         if (fraction <= clickFraction && fraction > bestFraction) {
           bestFraction = fraction;
           hoveredStepKey = key;

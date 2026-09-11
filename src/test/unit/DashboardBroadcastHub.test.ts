@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { DashboardBroadcastHub, type DashboardClient } from "../../ui/DashboardBroadcastHub";
+import {
+  DashboardBroadcastHub,
+  type DashboardClient,
+} from "../../ui/DashboardBroadcastHub";
 import type { WorkflowSummary } from "../../types/CtrlYokeTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { HarnessId } from "../../types/DashboardConstants";
@@ -47,7 +50,14 @@ suite("DashboardBroadcastHub", () => {
     const parallelGroups = [
       { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },
     ];
-    hub.updateStepsExtended([], null, undefined, 3, "workflow-1", parallelGroups);
+    hub.updateStepsExtended(
+      [],
+      null,
+      undefined,
+      3,
+      "workflow-1",
+      parallelGroups
+    );
 
     assert.deepStrictEqual(receivedParallelGroups, parallelGroups);
   });

@@ -149,7 +149,8 @@ export class OutputHistoryManager {
   private readonly lifetimeUsageStore: LifetimeUsageStore;
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
   private readonly streamingBuffer = new StreamingHistoryBuffer(
-    (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush),
+    (historyFilePath, flush) =>
+      this.writeStreamingFlush(historyFilePath, flush),
     {},
     (flush, result) => this.publishStreamingFlush(flush, result)
   );
@@ -312,7 +313,10 @@ export class OutputHistoryManager {
 
       return { filePath, runCount };
     } catch (error) {
-      Log.error("[OutputHistoryManager] Failed to initialize history run:", error);
+      Log.error(
+        "[OutputHistoryManager] Failed to initialize history run:",
+        error
+      );
       return { filePath: "", runCount: 0 };
     }
   }
@@ -349,7 +353,10 @@ export class OutputHistoryManager {
         phase
       );
     } catch (error) {
-      Log.warn("[OutputHistoryManager] Failed to save step output to history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to save step output to history:",
+        error
+      );
     }
   }
 
@@ -405,7 +412,10 @@ export class OutputHistoryManager {
       ]);
       await this.applyTokenEvents(historyFilePath, events);
     } catch (error) {
-      Log.warn("[OutputHistoryManager] Failed to start streaming output history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to start streaming output history:",
+        error
+      );
     }
   }
 
@@ -892,7 +902,10 @@ export class OutputHistoryManager {
       this.feedUsageStores(historyFilePath);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.error("[OutputHistoryManager] Failed to finalize history run:", error);
+      Log.error(
+        "[OutputHistoryManager] Failed to finalize history run:",
+        error
+      );
     }
   }
 
@@ -1372,7 +1385,10 @@ export class OutputHistoryManager {
           protectedRunRefs
         );
       } catch (error) {
-        Log.warn(`[OutputHistoryManager] Failed to delete old run ${runRef}:`, error);
+        Log.warn(
+          `[OutputHistoryManager] Failed to delete old run ${runRef}:`,
+          error
+        );
       }
     }
     if (toDelete.length > 0) {
@@ -1488,7 +1504,10 @@ export class OutputHistoryManager {
       ]);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("[OutputHistoryManager] Failed to save undo record to history:", error);
+      Log.warn(
+        "[OutputHistoryManager] Failed to save undo record to history:",
+        error
+      );
     }
   }
 
@@ -1746,7 +1765,10 @@ export class OutputHistoryManager {
         ]);
       })
       .catch((error) => {
-        Log.warn("[OutputHistoryManager] Failed to persist usage rollups:", error);
+        Log.warn(
+          "[OutputHistoryManager] Failed to persist usage rollups:",
+          error
+        );
       });
   }
 

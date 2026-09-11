@@ -223,7 +223,10 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateActiveStepIndices(activeStepIndices: number[], workflowId?: string): void {
+  updateActiveStepIndices(
+    activeStepIndices: number[],
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
       client.updateActiveStepIndices?.(activeStepIndices, workflowId);
     }

@@ -289,7 +289,9 @@ export class QwenCliProvider implements ICliProvider {
       args.push("--resume", sessionId!);
       Log.info(`[QwenCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("[QwenCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[QwenCliProvider] Resume requested but no session ID available"
+      );
     } else {
       Log.info("[QwenCliProvider] Starting new session");
     }
@@ -300,7 +302,9 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`[QwenCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(
+        `[QwenCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+      );
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -391,7 +395,9 @@ export class QwenCliProvider implements ICliProvider {
       }
       return result;
     } catch (error) {
-      Log.warn(`[QwenCliProvider] Failed to register Qwen statusline: ${error}`);
+      Log.warn(
+        `[QwenCliProvider] Failed to register Qwen statusline: ${error}`
+      );
       return { kind: "no-op", captured: false };
     }
   }
@@ -514,7 +520,9 @@ export class QwenCliProvider implements ICliProvider {
               userHooks,
               wrappedCtrlYokeEvents
             );
-            Log.debug(`[QwenCliProvider] Configured Stop hook for Qwen completion detection`);
+            Log.debug(
+              `[QwenCliProvider] Configured Stop hook for Qwen completion detection`
+            );
           },
         },
       ],
@@ -596,7 +604,9 @@ export class QwenCliProvider implements ICliProvider {
               userHooks,
               enabledNotificationHookEvents
             );
-            Log.debug(`[QwenCliProvider] Configured user hooks for Qwen headless mode`);
+            Log.debug(
+              `[QwenCliProvider] Configured user hooks for Qwen headless mode`
+            );
           },
         },
       ],

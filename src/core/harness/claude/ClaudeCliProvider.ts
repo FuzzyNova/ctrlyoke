@@ -375,7 +375,9 @@ export class ClaudeCliProvider implements ICliProvider {
       args.push("-r", sessionId!);
       Log.info(`[ClaudeCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("[ClaudeCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[ClaudeCliProvider] Resume requested but no session ID available"
+      );
     } else {
       Log.info("[ClaudeCliProvider] Starting new session");
     }
@@ -388,7 +390,9 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`[ClaudeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(
+        `[ClaudeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+      );
     }
 
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
@@ -976,7 +980,9 @@ export class ClaudeCliProvider implements ICliProvider {
       return result;
     } catch (error) {
       // A statusline failure must never prevent Claude itself from running.
-      Log.warn(`[ClaudeCliProvider] Failed to register Claude statusline: ${error}`);
+      Log.warn(
+        `[ClaudeCliProvider] Failed to register Claude statusline: ${error}`
+      );
       return { kind: "no-op", captured: false };
     }
   }

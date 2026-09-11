@@ -279,11 +279,7 @@ export class ExecutionPreviewService {
         supportsConcurrentInteractiveSessions:
           this.options.supportsConcurrentInteractiveSessions ?? true,
         configuredWidth: this.options.dynamicQueueConfig?.maxParallelSteps ?? 6,
-        normalizeProperties: async (
-          properties,
-          step,
-          effectivePromptText
-        ) =>
+        normalizeProperties: async (properties, step, effectivePromptText) =>
           isScriptStep(step)
             ? properties
             : (
@@ -340,8 +336,7 @@ export class ExecutionPreviewService {
         parallelDiagnostics.set(firstMember.stepIndex, [
           ...(parallelDiagnostics.get(firstMember.stepIndex) ?? []),
           {
-            code:
-              PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.EFFECTIVE_WIDTH,
+            code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.EFFECTIVE_WIDTH,
             severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO,
             harnessId: firstMember.resolvedProperties.harness,
             capability: "parallelGroup",
@@ -562,7 +557,9 @@ export class ExecutionPreviewService {
       return {
         stepIndex: target.stepIndex,
         ...(this.parallelGroupId(workflow, target.stepIndex)
-          ? { parallelGroupId: this.parallelGroupId(workflow, target.stepIndex) }
+          ? {
+              parallelGroupId: this.parallelGroupId(workflow, target.stepIndex),
+            }
           : {}),
         ...(step.name ? { stepName: step.name } : {}),
         type: PREVIEW_STEP_TYPES.SCRIPT,
@@ -733,8 +730,7 @@ export class ExecutionPreviewService {
     stepIndex: number
   ): string | undefined {
     return workflow.parallelGroups?.find(
-      (group) =>
-        stepIndex >= group.startIndex && stepIndex <= group.endIndex
+      (group) => stepIndex >= group.startIndex && stepIndex <= group.endIndex
     )?.id;
   }
 
@@ -744,8 +740,7 @@ export class ExecutionPreviewService {
   ): number {
     return (
       workflow.parallelGroups?.find(
-        (group) =>
-          stepIndex >= group.startIndex && stepIndex <= group.endIndex
+        (group) => stepIndex >= group.startIndex && stepIndex <= group.endIndex
       )?.startIndex ?? stepIndex
     );
   }
@@ -809,8 +804,7 @@ export class ExecutionPreviewService {
       ) {
         return undefined;
       }
-      const referenced =
-        allSteps[referencedIndex]?._runtime?.sessionId;
+      const referenced = allSteps[referencedIndex]?._runtime?.sessionId;
       return typeof referenced === "string" &&
         SessionValidator.validate(referenced, properties.harness)
         ? referenced

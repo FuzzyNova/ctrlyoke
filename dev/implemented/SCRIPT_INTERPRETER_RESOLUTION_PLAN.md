@@ -72,7 +72,7 @@ identity) and falls back to `"bash"` on Windows, mirroring the `.sh`
 extension dispatch immediately above it in the same file.
 
 **What it is.** A Unix script's first line may be `#!/usr/bin/env python3` (or
-`#!/bin/bash`, `#!/usr/bin/env node`). On Unix the *kernel* reads that line and
+`#!/bin/bash`, `#!/usr/bin/env node`). On Unix the _kernel_ reads that line and
 launches the named interpreter, so an executable file with no extension runs
 correctly with no help from us. Windows has no equivalent — nothing reads the
 shebang — so the same file is portable in exactly one direction.
@@ -84,7 +84,7 @@ handles the shebang); on Windows it checks against
 `DIRECT_EXECUTABLE_EXTENSIONS` (`.exe`/`.com`), fails, and returns `null`, which
 `evaluateCondition` reports as "Unsupported script type". That is an honest
 error rather than the old silent attempt to execute a data file, so the gap is
-now *reported* rather than *mysterious* — which is why it was safe to defer.
+now _reported_ rather than _mysterious_ — which is why it was safe to defer.
 
 **The work.** When a file has no mapped extension and is not host-executable,
 read its first line; if it starts with `#!`, parse the interpreter and dispatch
@@ -106,15 +106,15 @@ on it instead of returning `null`. Notes:
 ## Tests
 
 - [x] Interpreter probes: the underlying `execSync` runs once across repeated
-  `getScriptCommand` calls.
+      `getScriptCommand` calls.
 - [x] Interpreter probes: faking `process.platform` between cases still
-  yields that platform's answer (no stale cross-platform cache).
+      yields that platform's answer (no stale cross-platform cache).
 - [x] Shebang: table-driven over `#!/bin/sh`, `#!/bin/bash`,
-  `#!/usr/bin/env python3`, `#!/usr/bin/env node`, a shebang with extra
-  arguments, a file with no shebang, and an unreadable file — asserted on both
-  platforms.
+      `#!/usr/bin/env python3`, `#!/usr/bin/env node`, a shebang with extra
+      arguments, a file with no shebang, and an unreadable file — asserted on both
+      platforms.
 - [x] Regression: a mapped extension (`.py`, `.ps1`, `.sh`) never reads the file,
-  so extension dispatch stays a pure path-string decision.
+      so extension dispatch stays a pure path-string decision.
 
 ## Acceptance Criteria
 
@@ -128,7 +128,7 @@ on it instead of returning `null`. Notes:
 ## Non-goals
 
 - Broadening `DIRECT_EXECUTABLE_EXTENSIONS` to the full Windows `PATHEXT` set.
-  `.exe`/`.com` covers what a *script* step realistically points at, and
+  `.exe`/`.com` covers what a _script_ step realistically points at, and
   `.bat`/`.cmd`/`.ps1` are already handled by extension dispatch.
 - Honoring shebang arguments beyond the first (`#!/usr/bin/env -S node --flag`).
 - Applying shebang detection to inline script text. This is file dispatch only;

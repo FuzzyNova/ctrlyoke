@@ -419,9 +419,10 @@ export class HistorySearchService {
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchDocument[] {
-    const candidates = this.candidateExtractor.collectStructuredEventsCandidates(
-      event.payload.events
-    );
+    const candidates =
+      this.candidateExtractor.collectStructuredEventsCandidates(
+        event.payload.events
+      );
 
     return candidates.map((candidate, candidateIndex) =>
       this.buildDocument(

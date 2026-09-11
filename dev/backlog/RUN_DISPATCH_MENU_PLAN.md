@@ -624,7 +624,7 @@ belongs here.
 - Steering or parallel dispatch while editing an existing queued step. Both are
   new-prompt-mode only.
 - Any DAG/`dependsOn` scheduling, per-member worktrees, or cross-member
-  coordination — see `PARALLEL_STEP_COORDINATION_PLAN.md` for the latter.
+  coordination — see `EXECUTION_ROOT_COORDINATION_PLAN.md` for the latter.
 - A "Run in Parallel" entry point outside the editor (e.g. the steps panel
   context menu).
 

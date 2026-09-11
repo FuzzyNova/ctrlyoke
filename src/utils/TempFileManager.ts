@@ -190,7 +190,9 @@ export class TempFileManager {
       return filePaths;
     } catch (err) {
       // Clean up any files created before the error
-      Log.error(`[TempFileManager] Failed to create split prompt files: ${err}`);
+      Log.error(
+        `[TempFileManager] Failed to create split prompt files: ${err}`
+      );
       await this.deleteFiles(filePaths); // Clean up partial files
       throw new Error(
         `Cannot create split temp files: ${err instanceof Error ? err.message : String(err)}`
@@ -372,7 +374,9 @@ export class TempFileManager {
         await fs.promises.writeFile(filePath, data);
         return filePath;
       } catch (err) {
-        Log.error(`[TempFileManager] Failed to write pasted image file: ${err}`);
+        Log.error(
+          `[TempFileManager] Failed to write pasted image file: ${err}`
+        );
         throw new Error(`Cannot write pasted image file: ${filePath}`);
       }
     }
@@ -466,7 +470,9 @@ export class TempFileManager {
         return;
       }
       // Log but don't throw - cleanup is best-effort
-      Log.warn(`[TempFileManager] Failed to delete temp file ${filePath}: ${err}`);
+      Log.warn(
+        `[TempFileManager] Failed to delete temp file ${filePath}: ${err}`
+      );
     }
   }
 
@@ -537,14 +543,18 @@ export class TempFileManager {
             if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
               await fs.promises.unlink(filePath);
               cleanedCount++;
-              Log.trace(`[TempFileManager] Cleaned up orphaned temp file: ${file}`);
+              Log.trace(
+                `[TempFileManager] Cleaned up orphaned temp file: ${file}`
+              );
             }
           } catch (err) {
             // A sibling ctrlyoke instance (or the periodic sweep's own prior
             // pass) may have already deleted this stale file — benign race,
             // not a failure worth surfacing.
             if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
-              Log.warn(`[TempFileManager] Failed to process temp file ${file}: ${err}`);
+              Log.warn(
+                `[TempFileManager] Failed to process temp file ${file}: ${err}`
+              );
             }
           }
         }
@@ -594,7 +604,9 @@ export class TempFileManager {
         }
       }
     } catch (err) {
-      Log.warn(`[TempFileManager] Failed to clean notification dir ${dirPath}: ${err}`);
+      Log.warn(
+        `[TempFileManager] Failed to clean notification dir ${dirPath}: ${err}`
+      );
     }
     return cleanedCount;
   }

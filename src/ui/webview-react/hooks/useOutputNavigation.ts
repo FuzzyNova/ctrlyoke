@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
-import { getTargetKey, type OutputMessageTarget } from "@utils/outputProjection";
+import {
+  getTargetKey,
+  type OutputMessageTarget,
+} from "@utils/outputProjection";
 import type { OutputRowBase } from "@utils/outputRows";
 import {
   alignRowElementToViewport,

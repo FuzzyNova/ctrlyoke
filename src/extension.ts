@@ -540,7 +540,9 @@ export async function activate(context: vscode.ExtensionContext) {
         promptLinkProvider
       )
     );
-    Log.debug("[Extension] ctrlyoke: Registered link provider for prompt files");
+    Log.debug(
+      "[Extension] ctrlyoke: Registered link provider for prompt files"
+    );
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);

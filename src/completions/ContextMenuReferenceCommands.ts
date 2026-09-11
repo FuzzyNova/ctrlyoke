@@ -50,8 +50,8 @@ export class ContextMenuReferenceCommands {
     private readonly webviewProvider: ContextMenuPromptEditorInsertSink,
     private readonly getWorkspaceRoot: () => string,
     private readonly workspaceRelativeReferencePathResolver: WorkspaceRelativeReferencePathResolver = toWorkspaceRelativeReferencePath,
-    private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> =
-      async () => new NullUserInteractionPort()
+    private readonly prepareTrustPrompt: () => Promise<UserInteractionPort> = async () =>
+      new NullUserInteractionPort()
   ) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {

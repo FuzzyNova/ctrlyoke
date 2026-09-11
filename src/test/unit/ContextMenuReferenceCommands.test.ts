@@ -47,9 +47,7 @@ class FakeInteractionPort implements UserInteractionPort {
     return undefined;
   }
 
-  async requestChoice(
-    _request: ChoiceRequest
-  ): Promise<string | undefined> {
+  async requestChoice(_request: ChoiceRequest): Promise<string | undefined> {
     return this.choice;
   }
 }
@@ -266,8 +264,7 @@ suite("ContextMenuReferenceCommands", () => {
         ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks;
       const originalGetApproved =
         ConfigurationUtils.getEffectiveApprovedExternalFileRoots;
-      const originalAddUser =
-        ConfigurationUtils.addUserAllowedExternalFileRoot;
+      const originalAddUser = ConfigurationUtils.addUserAllowedExternalFileRoot;
 
       ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks = () => true;
       ConfigurationUtils.getEffectiveApprovedExternalFileRoots = () => [];
@@ -349,7 +346,9 @@ suite("ContextMenuReferenceCommands", () => {
         workspaceRoot,
         undefined,
         null
-      ).addDirectoryToPromptEditor(vscode.Uri.file(path.join(externalRoot, "declined")));
+      ).addDirectoryToPromptEditor(
+        vscode.Uri.file(path.join(externalRoot, "declined"))
+      );
 
       assert.strictEqual(sink.requests.length, 0);
     } finally {

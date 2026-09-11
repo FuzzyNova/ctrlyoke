@@ -677,13 +677,11 @@ suite("WorkflowSerializer", () => {
         const parsed = await new PromptFileParser().parsePromptFile(outputPath);
         assert.ok(parsed);
         assert.deepStrictEqual(
-          parsed.parallelGroups?.map(
-            ({ startIndex, endIndex, failFast }) => ({
-              startIndex,
-              endIndex,
-              failFast,
-            })
-          ),
+          parsed.parallelGroups?.map(({ startIndex, endIndex, failFast }) => ({
+            startIndex,
+            endIndex,
+            failFast,
+          })),
           parallelGroups.map(({ startIndex, endIndex, failFast }) => ({
             startIndex,
             endIndex,

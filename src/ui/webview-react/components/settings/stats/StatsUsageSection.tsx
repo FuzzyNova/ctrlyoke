@@ -124,7 +124,9 @@ export function StatsUsageSection({
   const copySummary = useCallback(() => {
     const exportData = getExport();
     if (!exportData || !navigator.clipboard) {
-      WebviewLog.warn("[StatsUsageSection] Workspace stats export is unavailable");
+      WebviewLog.warn(
+        "[StatsUsageSection] Workspace stats export is unavailable"
+      );
       return;
     }
 

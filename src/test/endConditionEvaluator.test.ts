@@ -369,7 +369,12 @@ suite("EndConditionEvaluator Tests", () => {
     };
 
     const shebangCases: ShebangCase[] = [
-      { name: "sh", line: "#!/bin/sh", expectedExecutable: "sh", win32Executable: "bash" },
+      {
+        name: "sh",
+        line: "#!/bin/sh",
+        expectedExecutable: "sh",
+        win32Executable: "bash",
+      },
       { name: "bash", line: "#!/bin/bash", expectedExecutable: "bash" },
       {
         name: "dash preserves interpreter identity",

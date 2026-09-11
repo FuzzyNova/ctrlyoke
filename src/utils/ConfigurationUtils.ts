@@ -547,8 +547,10 @@ export const ConfigurationUtils = {
       ),
       workspace: dedupeExternalRoots(
         toStringArray(
-          configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.WORKSPACE)
-            ?.allowedExternalFileRoots
+          configService.getScoped(
+            CONFIG_KEYS.PERMISSIONS,
+            CONFIG_SCOPE.WORKSPACE
+          )?.allowedExternalFileRoots
         )
       ),
     };
@@ -593,10 +595,7 @@ export const ConfigurationUtils = {
       workspaceIdentity,
       workspace
     );
-    const baseRoots = dedupeExternalRoots([
-      ...user,
-      ...approvedWorkspaceRoots,
-    ]);
+    const baseRoots = dedupeExternalRoots([...user, ...approvedWorkspaceRoots]);
 
     if (!workflow || workflow.declaredRoots === undefined) {
       return baseRoots;
@@ -610,9 +609,7 @@ export const ConfigurationUtils = {
       workflow.declaredRoots
     );
     const approvedRoots = new Set(
-      baseRoots.map((root) =>
-        ExternalRootsTrustStore.canonicalizeRoot(root)
-      )
+      baseRoots.map((root) => ExternalRootsTrustStore.canonicalizeRoot(root))
     );
     for (const root of approvedWorkflowRoots) {
       approvedRoots.add(ExternalRootsTrustStore.canonicalizeRoot(root));
@@ -660,9 +657,7 @@ export const ConfigurationUtils = {
     const candidates = dedupeExternalRoots(
       requestedRoots.filter(
         (root) =>
-          !approvedBaseRoots.has(
-            ExternalRootsTrustStore.canonicalizeRoot(root)
-          )
+          !approvedBaseRoots.has(ExternalRootsTrustStore.canonicalizeRoot(root))
       )
     );
     return trustStore.getPendingRoots(workflowIdentity, candidates);

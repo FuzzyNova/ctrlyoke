@@ -37,10 +37,7 @@ Initial release.
 
 test("extractChangelogSection returns the body between two headings", () => {
   const section = extractChangelogSection(CHANGELOG_FIXTURE, "0.2.0");
-  assert.equal(
-    section,
-    "### Added\n\n- New thing.\n- Another new thing.\n"
-  );
+  assert.equal(section, "### Added\n\n- New thing.\n- Another new thing.\n");
 });
 
 test("extractChangelogSection returns everything to end-of-file for the oldest entry", () => {

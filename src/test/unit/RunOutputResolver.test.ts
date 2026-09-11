@@ -468,14 +468,17 @@ suite("RunOutputResolver", () => {
       (resumedFinal?.definition?.step as { prompt?: string }).prompt,
       "revised final step"
     );
-    assert.deepStrictEqual(resumedFinal?.definition?.definition.parallelGroups, [
-      {
-        id: "revised-group",
-        startIndex: 0,
-        endIndex: 1,
-        failFast: true,
-      },
-    ]);
+    assert.deepStrictEqual(
+      resumedFinal?.definition?.definition.parallelGroups,
+      [
+        {
+          id: "revised-group",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ]
+    );
 
     const latest = await resolver.resolveLatestAttempts(manifestPath, [
       queueZero,

@@ -732,14 +732,16 @@ export class WorkflowExecutor {
     let groupBeforeState: RawWorkspaceState | undefined;
     if (preflight.effectiveWidth > 1 && snapshotStrategy) {
       try {
-        groupBeforeState =
-          await context.snapshotService?.captureWorkspaceState(
-            context.executionWorkspace.executionRoot,
-            snapshotStrategy,
-            context.executionWorkspace.namedWorkspaceRoots
-          );
+        groupBeforeState = await context.snapshotService?.captureWorkspaceState(
+          context.executionWorkspace.executionRoot,
+          snapshotStrategy,
+          context.executionWorkspace.namedWorkspaceRoots
+        );
       } catch (error) {
-        Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error);
+        Log.warn(
+          "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
+          error
+        );
       }
     }
     const pendingIndices: number[] = [];
@@ -768,7 +770,10 @@ export class WorkflowExecutor {
             context,
             group.id
           ).catch((error) =>
-            Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error)
+            Log.warn(
+              "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
+              error
+            )
           );
         }
       } else {
@@ -853,7 +858,10 @@ export class WorkflowExecutor {
           context,
           group.id
         ).catch((error) =>
-          Log.warn("[WorkflowExecutor] Failed to capture parallel group workspace snapshot:", error)
+          Log.warn(
+            "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
+            error
+          )
         );
       }
       await context.releaseTargetResources?.(target);
@@ -1149,7 +1157,9 @@ export class WorkflowExecutor {
       currentStatus === EXECUTION_STATES.STOPPED ||
       currentStatus === EXECUTION_STATES.CANCELLING
     ) {
-      Log.info("[WorkflowExecutor] Workflow stopped before executing next prompt");
+      Log.info(
+        "[WorkflowExecutor] Workflow stopped before executing next prompt"
+      );
       return false;
     }
 
@@ -1457,9 +1467,13 @@ export class WorkflowExecutor {
           resolvedProperties
         );
         integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
-        Log.info(`[WorkflowExecutor] Executing prompt ${target.stepIndex + 1}/${progress.total}`);
+        Log.info(
+          `[WorkflowExecutor] Executing prompt ${target.stepIndex + 1}/${progress.total}`
+        );
       } else {
-        Log.info(`[WorkflowExecutor] Executing finalStep loop ${target.loopIndex + 1}`);
+        Log.info(
+          `[WorkflowExecutor] Executing finalStep loop ${target.loopIndex + 1}`
+        );
       }
 
       const signedStepIndex = this.getSignedStepIndex(target);
@@ -1614,7 +1628,9 @@ export class WorkflowExecutor {
         }
 
         if (endDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
-          Log.info("[WorkflowExecutor] Workflow stopped due to end condition failure");
+          Log.info(
+            "[WorkflowExecutor] Workflow stopped due to end condition failure"
+          );
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
             await this.promptQueue.failStep(
               target.stepIndex,
@@ -2224,7 +2240,10 @@ export class WorkflowExecutor {
             context
           );
         } catch (e) {
-          Log.warn("[WorkflowExecutor] Failed to capture workspace snapshot:", e);
+          Log.warn(
+            "[WorkflowExecutor] Failed to capture workspace snapshot:",
+            e
+          );
         }
       }
       return outcome;
@@ -2314,7 +2333,10 @@ export class WorkflowExecutor {
         context.getDefinitionRevisionContext?.()
       )
       .catch((err) =>
-        Log.warn(`[WorkflowExecutor] Failed to save ${logContext} to history:`, err)
+        Log.warn(
+          `[WorkflowExecutor] Failed to save ${logContext} to history:`,
+          err
+        )
       );
   }
 

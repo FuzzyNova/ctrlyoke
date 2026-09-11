@@ -35,12 +35,12 @@ design difference (history search reports one result per matching event/field,
 instructions bullet). But truncation was not a semantics difference — it was
 real, measured data loss:
 
-| Measurement (one real run, `ACCESSIBILITY_AND_TESTABILITY_PLAN`)     | Value       |
-| ---------------------------------------------------------------------- | ----------- |
-| Longest single candidate text (one structured event's content)         | 171,222 chars |
-| Documents whose *capped* text matched the query                        | 85          |
-| Documents whose *uncapped* text matched the query                      | 200         |
-| Documents with a match that exists only past character 2000            | **115**     |
+| Measurement (one real run, `ACCESSIBILITY_AND_TESTABILITY_PLAN`) | Value         |
+| ---------------------------------------------------------------- | ------------- |
+| Longest single candidate text (one structured event's content)   | 171,222 chars |
+| Documents whose _capped_ text matched the query                  | 85            |
+| Documents whose _uncapped_ text matched the query                | 200           |
+| Documents with a match that exists only past character 2000      | **115**       |
 
 That's 115 otherwise-real matches — in one run, for one query — made
 unreachable by the cap. Long AI-generated planning/response text (the
@@ -85,7 +85,7 @@ typical index.
   `matchSnippet`, which is derived from match position. Windows from the same
   candidate naturally produce different snippets (different text), so they
   won't spuriously dedupe into one one result — but a query matching in the
-  overlap region of two adjacent windows *will* currently produce two
+  overlap region of two adjacent windows _will_ currently produce two
   near-identical results. Needs either a window-index-aware dedupe key or
   snippet-position collapsing for adjacent windows.
 

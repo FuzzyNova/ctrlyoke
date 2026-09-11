@@ -79,7 +79,10 @@ export function UxSnapshotButton() {
             png,
           });
         } catch (error) {
-          WebviewLog.error("[UxSnapshotButton] UX snapshot capture failed", error);
+          WebviewLog.error(
+            "[UxSnapshotButton] UX snapshot capture failed",
+            error
+          );
           notifyUser(
             "UX snapshot capture failed",
             USER_FEEDBACK_SEVERITY.ERROR

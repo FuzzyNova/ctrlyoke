@@ -334,7 +334,9 @@ suite("RunContinuationService addressed step mutations", () => {
   });
 
   test("refuses to clear internal step properties through clearProperties", async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-step-clear-"));
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-clear-")
+    );
     // Idle: the execution-head guard deliberately stands down, so this is the
     // state in which a completed step is reachable and `_runtime` is worth
     // something. `updates` is already sanitized; `clearProperties` is the only

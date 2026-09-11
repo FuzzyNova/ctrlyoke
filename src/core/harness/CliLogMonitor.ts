@@ -480,9 +480,10 @@ export class CliLogMonitor {
           });
 
           const winner = await Promise.race([
-            notificationResult.then(
-              (result) => ({ kind: "notification" as const, result })
-            ),
+            notificationResult.then((result) => ({
+              kind: "notification" as const,
+              result,
+            })),
             nextLogEvent.then(() => ({ kind: "log-event" as const })),
           ]);
           onHoldWake = undefined;
@@ -737,7 +738,9 @@ export class CliLogMonitor {
                 );
               }
             } catch (error) {
-              Log.trace(`[CliLogMonitor] Notification monitoring error: ${error}`);
+              Log.trace(
+                `[CliLogMonitor] Notification monitoring error: ${error}`
+              );
             }
           })();
         }
@@ -745,7 +748,9 @@ export class CliLogMonitor {
 
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
-          Log.warn(`[CliLogMonitor] Log monitoring timeout after ${timeoutMs}ms`);
+          Log.warn(
+            `[CliLogMonitor] Log monitoring timeout after ${timeoutMs}ms`
+          );
           void resolveFailure({
             failureKind: FAILURE_KINDS.TIMEOUT,
             failureMessage: "Log monitoring timeout",

@@ -89,7 +89,9 @@ export class CliInteractiveStartupCoordinator {
       return null;
     }
 
-    Log.info(`[CliInteractiveStartupCoordinator] Found log file for resumed session: ${discovery.logPath}`);
+    Log.info(
+      `[CliInteractiveStartupCoordinator] Found log file for resumed session: ${discovery.logPath}`
+    );
 
     this.deps.logParser.seekToEnd?.(discovery.logPath);
     return discovery;
@@ -100,11 +102,15 @@ export class CliInteractiveStartupCoordinator {
     startTime: Date;
     runId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info("[CliInteractiveStartupCoordinator] Waiting for SessionStart hook and log file creation...");
+    Log.info(
+      "[CliInteractiveStartupCoordinator] Waiting for SessionStart hook and log file creation..."
+    );
 
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
-      Log.error("[CliInteractiveStartupCoordinator] No workspace root for session start monitoring");
+      Log.error(
+        "[CliInteractiveStartupCoordinator] No workspace root for session start monitoring"
+      );
       return null;
     }
 
@@ -164,12 +170,16 @@ export class CliInteractiveStartupCoordinator {
     const hookSessionId = startResult.data?.sessionId || null;
 
     if (hookSessionId) {
-      Log.debug(`[CliInteractiveStartupCoordinator] SessionStart hook provided session ID: ${hookSessionId}`);
+      Log.debug(
+        `[CliInteractiveStartupCoordinator] SessionStart hook provided session ID: ${hookSessionId}`
+      );
     } else {
       Log.debug(
         "[CliInteractiveStartupCoordinator] SessionStart hook confirmed (session ID not provided by CLI)"
       );
-      Log.debug("[CliInteractiveStartupCoordinator] Discovering session log file via prompt text matching...");
+      Log.debug(
+        "[CliInteractiveStartupCoordinator] Discovering session log file via prompt text matching..."
+      );
     }
 
     const discovery = await this.discoverAndExtractSession(
@@ -180,7 +190,9 @@ export class CliInteractiveStartupCoordinator {
     );
 
     if (discovery) {
-      Log.info(`[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`);
+      Log.info(
+        `[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`
+      );
       return discovery;
     }
 
@@ -225,7 +237,9 @@ export class CliInteractiveStartupCoordinator {
     promptForDiscovery: string;
     startTime: Date;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info("[CliInteractiveStartupCoordinator] Discovering session log file (no SessionStart hook)...");
+    Log.info(
+      "[CliInteractiveStartupCoordinator] Discovering session log file (no SessionStart hook)..."
+    );
 
     const discovery = await this.discoverAndExtractSession(
       params.promptForDiscovery,
@@ -235,7 +249,9 @@ export class CliInteractiveStartupCoordinator {
     );
 
     if (discovery) {
-      Log.info(`[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`);
+      Log.info(
+        `[CliInteractiveStartupCoordinator] Found session log: ${discovery.logPath}`
+      );
       return discovery;
     }
 
@@ -303,7 +319,9 @@ export class CliInteractiveStartupCoordinator {
       const events = await this.deps.logParser.readNewLines(discoveredLogPath);
       const extractedId = this.deps.logParser.extractSessionId(events);
       if (extractedId) {
-        Log.debug(`[CliInteractiveStartupCoordinator] Extracted session ID from log: ${extractedId}`);
+        Log.debug(
+          `[CliInteractiveStartupCoordinator] Extracted session ID from log: ${extractedId}`
+        );
       }
       return { logPath: discoveredLogPath, sessionId: extractedId };
     }
@@ -318,7 +336,9 @@ export class CliInteractiveStartupCoordinator {
     }
 
     if (abortState.kind === INTERACTIVE_ABORT_KINDS.USER_CANCELLED) {
-      Log.info(`[CliInteractiveStartupCoordinator] Interactive execution cancelled while ${stage}`);
+      Log.info(
+        `[CliInteractiveStartupCoordinator] Interactive execution cancelled while ${stage}`
+      );
       return true;
     }
 

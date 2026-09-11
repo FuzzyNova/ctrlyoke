@@ -474,7 +474,9 @@ async function dumpVsCodeCssVariables(
 
       try {
         fs.writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
-        Log.info(`[DevCommands] Dumped ${message.count} CSS variables to ${outputPath}`);
+        Log.info(
+          `[DevCommands] Dumped ${message.count} CSS variables to ${outputPath}`
+        );
 
         const action = await vscode.window.showInformationMessage(
           `Dumped ${message.count} --vscode-* CSS variables to ${outputPath}`,

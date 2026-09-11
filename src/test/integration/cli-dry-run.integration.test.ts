@@ -170,9 +170,7 @@ suite("CLI dry-run process", () => {
     assert.strictEqual(blocked.code, 2, blocked.stderr);
     assert.match(
       blocked.stderr,
-      new RegExp(
-        externalRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      )
+      new RegExp(externalRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     );
     assert.match(
       blocked.stderr,

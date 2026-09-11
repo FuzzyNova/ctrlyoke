@@ -5,9 +5,7 @@ import {
   EXTERNAL_FILE_TRUST_SCOPES,
   MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
-import {
-  promptBatchApprovalForPendingRoots,
-} from "../../ui/ExternalFileTrustPrompt";
+import { promptBatchApprovalForPendingRoots } from "../../ui/ExternalFileTrustPrompt";
 import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
 
 suite("Core feedback migration", () => {

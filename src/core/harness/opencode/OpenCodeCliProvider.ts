@@ -291,7 +291,9 @@ export class OpenCodeCliProvider implements ICliProvider {
       mcpPreparation.mutations.length > 0
     ) {
       args.push(...mcpPreparation.cliArgs);
-      Log.debug("[OpenCodeCliProvider] ctrlyoke MCP config prepared for OpenCode inline delivery");
+      Log.debug(
+        "[OpenCodeCliProvider] ctrlyoke MCP config prepared for OpenCode inline delivery"
+      );
     }
 
     // Headless mode: add "run" subcommand and "--format json"
@@ -319,7 +321,9 @@ export class OpenCodeCliProvider implements ICliProvider {
       args.push("-s", sessionId!);
       Log.info(`[OpenCodeCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.warn("[OpenCodeCliProvider] Resume requested but no session ID available");
+      Log.warn(
+        "[OpenCodeCliProvider] Resume requested but no session ID available"
+      );
     } else {
       Log.info("[OpenCodeCliProvider] Starting new session");
     }
@@ -336,7 +340,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
-      Log.info(`[OpenCodeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`);
+      Log.info(
+        `[OpenCodeCliProvider] Extra CLI args applied (${appendTokens.length} tokens)`
+      );
     }
 
     return {
@@ -830,7 +836,9 @@ export class OpenCodeCliProvider implements ICliProvider {
           userHooks
         );
       } catch (fallbackError) {
-        Log.warn(`[OpenCodeCliProvider] OpenCode plugin fallback was unavailable: ${fallbackError}`);
+        Log.warn(
+          `[OpenCodeCliProvider] OpenCode plugin fallback was unavailable: ${fallbackError}`
+        );
       }
     }
   }

@@ -139,13 +139,9 @@ describe("ServerSection", () => {
       target: { value: "4750" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(onUpdate).toHaveBeenCalledWith("server.fallbackPorts", [
-      4749, 4750,
-    ]);
+    expect(onUpdate).toHaveBeenCalledWith("server.fallbackPorts", [4749, 4750]);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove port 4749" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove port 4749" }));
     expect(onUpdate).toHaveBeenCalledWith("server.fallbackPorts", []);
   });
 

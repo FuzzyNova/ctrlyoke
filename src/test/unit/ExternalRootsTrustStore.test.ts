@@ -79,10 +79,8 @@ suite("ExternalRootsTrustStore", () => {
 
   test("workflow identities do not collide with workspace identities", async () => {
     const root = rootDir();
-    const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
-      root,
-      root
-    );
+    const workflowIdentity =
+      ExternalRootsTrustStore.canonicalizeWorkflowIdentity(root, root);
     const workspaceIdentity = ExternalRootsTrustStore.canonicalizeRoot(root);
 
     await store.setDecisions(workspaceIdentity, [root], "allow");

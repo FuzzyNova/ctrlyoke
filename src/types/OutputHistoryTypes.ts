@@ -13,7 +13,11 @@ import type {
   WorkflowRuntimeState,
   WorktreeRunProjection,
 } from "./CtrlYokeTypes";
-import { CliEvent, CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
+import {
+  CliEvent,
+  CliOutput,
+  UndoFileInstruction,
+} from "./WebviewMessageTypes";
 import type { StatusMessage } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 

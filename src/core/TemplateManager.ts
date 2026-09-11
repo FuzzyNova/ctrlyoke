@@ -398,7 +398,10 @@ export class TemplateManager {
           isBuiltIn: true,
         });
       } catch (error) {
-        Log.warn(`[TemplateManager] Failed to load built-in template: ${id}`, error);
+        Log.warn(
+          `[TemplateManager] Failed to load built-in template: ${id}`,
+          error
+        );
       }
     }
 
@@ -801,12 +804,18 @@ export class TemplateManager {
             });
             seenNames.add(name);
           } catch (error) {
-            Log.warn(`[TemplateManager] Failed to read custom template: ${file}`, error);
+            Log.warn(
+              `[TemplateManager] Failed to read custom template: ${file}`,
+              error
+            );
           }
         }
       }
     } catch (error) {
-      Log.warn(`[TemplateManager] Failed to discover custom templates in ${dirPath}:`, error);
+      Log.warn(
+        `[TemplateManager] Failed to discover custom templates in ${dirPath}:`,
+        error
+      );
     }
 
     return templates;

@@ -50,17 +50,23 @@ export class AgentExpander {
     // Find the requested agent by name
     const agent = AgentDiscovery.findAgentByName(agents, agentName);
     if (!agent || !agent.path) {
-      Log.warn(`[AgentExpander] Agent "${agentName}" not found among discovered agents`);
+      Log.warn(
+        `[AgentExpander] Agent "${agentName}" not found among discovered agents`
+      );
       return null;
     }
 
     // Read agent file content
     try {
       const content = await fs.promises.readFile(agent.path, "utf-8");
-      Log.debug(`[AgentExpander] Agent "${agentName}" loaded from ${agent.path}`);
+      Log.debug(
+        `[AgentExpander] Agent "${agentName}" loaded from ${agent.path}`
+      );
       return AgentExpander.stripFrontmatter(content, agentName);
     } catch (error) {
-      Log.warn(`[AgentExpander] Failed to read agent file "${agent.path}": ${error}`);
+      Log.warn(
+        `[AgentExpander] Failed to read agent file "${agent.path}": ${error}`
+      );
       return null;
     }
   }

@@ -266,12 +266,7 @@ describe("useStepContextMenu", () => {
       fileName: "test.prompt.md",
       steps: [{ prompt: "one" }, { prompt: "two" }],
     });
-    render(
-      <TestHarness
-        step={{ prompt: "one" }}
-        totalSteps={2}
-      />
-    );
+    render(<TestHarness step={{ prompt: "one" }} totalSteps={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Group with next step" })
@@ -348,9 +343,9 @@ describe("useStepContextMenu", () => {
     const callsBefore = (window.vscodeApi?.postMessage as any).mock.calls
       .length;
     fireEvent.click(groupWithPrevious);
-    expect(
-      (window.vscodeApi?.postMessage as any).mock.calls.length
-    ).toBe(callsBefore);
+    expect((window.vscodeApi?.postMessage as any).mock.calls.length).toBe(
+      callsBefore
+    );
   });
 
   it("disables grouping the currently executing step with its next neighbor", () => {
@@ -378,8 +373,8 @@ describe("useStepContextMenu", () => {
     const callsBefore = (window.vscodeApi?.postMessage as any).mock.calls
       .length;
     fireEvent.click(groupWithNext);
-    expect(
-      (window.vscodeApi?.postMessage as any).mock.calls.length
-    ).toBe(callsBefore);
+    expect((window.vscodeApi?.postMessage as any).mock.calls.length).toBe(
+      callsBefore
+    );
   });
 });

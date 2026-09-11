@@ -412,7 +412,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           `[CliTransportCoordinator] Starting headless mode with ${tempFilePaths.length} file(s)`
         );
       } else {
-        Log.info("[CliTransportCoordinator] Starting headless mode with direct prompt (fast path)");
+        Log.info(
+          "[CliTransportCoordinator] Starting headless mode with direct prompt (fast path)"
+        );
       }
 
       const command =
@@ -479,7 +481,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       }
 
       if (this.deps.runtimeState.isCancelling()) {
-        Log.info("[CliTransportCoordinator] Prompt execution cancelled by user");
+        Log.info(
+          "[CliTransportCoordinator] Prompt execution cancelled by user"
+        );
         await executeCallback(
           source?.logTail
             ? { ...result, headlessLogTail: source.logTail }

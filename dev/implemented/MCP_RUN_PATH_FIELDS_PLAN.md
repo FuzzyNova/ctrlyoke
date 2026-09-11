@@ -18,12 +18,12 @@
 `src/mcp-server.ts` reports a run's working file in four places, all the same
 way — `path.relative(this.workspaceRoot, filePath)`:
 
-| Site                 | Field                      | Line | Tools served                             |
-| -------------------- | -------------------------- | ---- | ---------------------------------------- |
-| `handleQueueStatus`  | `metadata.workingFile`     | 367  | `workflow_status`                        |
-| `handleQueueAppend`  | `response.workingFile`     | 534  | `append_step`                            |
+| Site                 | Field                      | Line | Tools served                                |
+| -------------------- | -------------------------- | ---- | ------------------------------------------- |
+| `handleQueueStatus`  | `metadata.workingFile`     | 367  | `workflow_status`                           |
+| `handleQueueAppend`  | `response.workingFile`     | 534  | `append_step`                               |
 | `mutationResponse`   | `workingFile`              | 680  | `edit_step`, `remove_step`, `reorder_steps` |
-| `handleGlobalStatus` | per-workflow `workingFile` | 994  | `global_status`                          |
+| `handleGlobalStatus` | per-workflow `workingFile` | 994  | `global_status`                             |
 
 `mutationResponse` is a shared response builder, so six agent-facing tools emit
 the field across four code sites.

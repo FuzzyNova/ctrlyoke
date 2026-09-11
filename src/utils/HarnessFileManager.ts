@@ -539,7 +539,9 @@ export class HarnessFileManager {
         throw new Error(`File already exists: ${destFile}`);
       }
       await copyFile(sourcePath, destFile);
-      Log.info(`[HarnessFileManager] Exported agent "${internalName}" to ${destFile}`);
+      Log.info(
+        `[HarnessFileManager] Exported agent "${internalName}" to ${destFile}`
+      );
     } else {
       const sourceStat = await fs.promises.stat(sourcePath);
       const skillName = sourceStat.isDirectory()
@@ -551,7 +553,9 @@ export class HarnessFileManager {
         throw new Error(`Skill directory already exists: ${destDir}`);
       }
       await copySkill(sourcePath, destDir, skillName);
-      Log.info(`[HarnessFileManager] Exported skill "${skillName}" to ${destDir}`);
+      Log.info(
+        `[HarnessFileManager] Exported skill "${skillName}" to ${destDir}`
+      );
     }
   }
 

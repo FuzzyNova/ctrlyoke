@@ -96,7 +96,9 @@ export class WorkflowStateMachine {
   getActiveAttempts(): WorkflowAttemptState[] {
     return Array.from(this.activeAttemptKeys)
       .map((key) => this.cloneAttemptState(this.attempts.get(key)))
-      .filter((attempt): attempt is WorkflowAttemptState => attempt !== undefined);
+      .filter(
+        (attempt): attempt is WorkflowAttemptState => attempt !== undefined
+      );
   }
 
   private getAttemptKey(target: WorkflowAttemptTarget): string {

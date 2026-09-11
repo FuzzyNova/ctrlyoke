@@ -1121,7 +1121,9 @@ export class SettingsJsonMcpTracker {
       delete settings[key];
     }
     await this.writeOrRemoveManagedConfig(settingsPath, settings);
-    Log.debug(`[SettingsJsonMcpTracker] ${this.toolName} ${key} value restored in ${settingsPath}`);
+    Log.debug(
+      `[SettingsJsonMcpTracker] ${this.toolName} ${key} value restored in ${settingsPath}`
+    );
   }
 
   private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {

@@ -1,10 +1,7 @@
 import { execFile } from "child_process";
 import * as path from "path";
 import { promisify } from "util";
-import type {
-  McpServerConfig,
-  PromptFile,
-} from "../../../types/CtrlYokeTypes";
+import type { McpServerConfig, PromptFile } from "../../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../../../config/ExternalRootsTrustStore";
 import { Log } from "../../../utils/Log";
@@ -531,24 +528,26 @@ export class CliProviderUtils {
       : undefined;
     const additionalEnv: Record<string, string> | undefined =
       includesCtrlYokeServer
-      ? (() => {
-          const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-          const env = {
-            CTRLYOKE_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
-            CTRLYOKE_UNLIMITED_MODE:
-              dynamicQueueConfig.unlimitedMode.toString(),
-            CTRLYOKE_DIAGNOSTIC_LOGS:
-              ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
-          };
-          if (isRunHistoryLocationInitialized()) {
-            Object.assign(env, {
-              CTRLYOKE_HOME: ctrlyokeStateHome(),
-              CTRLYOKE_RUN_HISTORY_LOCATION: getFrozenRunHistoryLocation(),
-            });
-          }
-          return env;
-        })()
-      : undefined;
+        ? (() => {
+            const dynamicQueueConfig =
+              ConfigurationUtils.getDynamicQueueConfig();
+            const env = {
+              CTRLYOKE_MAX_QUEUE_SIZE:
+                dynamicQueueConfig.maxQueueSize.toString(),
+              CTRLYOKE_UNLIMITED_MODE:
+                dynamicQueueConfig.unlimitedMode.toString(),
+              CTRLYOKE_DIAGNOSTIC_LOGS:
+                ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
+            };
+            if (isRunHistoryLocationInitialized()) {
+              Object.assign(env, {
+                CTRLYOKE_HOME: ctrlyokeStateHome(),
+                CTRLYOKE_RUN_HISTORY_LOCATION: getFrozenRunHistoryLocation(),
+              });
+            }
+            return env;
+          })()
+        : undefined;
 
     return planMcpConfigArgs(
       mcpServerPath,

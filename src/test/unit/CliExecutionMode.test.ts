@@ -41,10 +41,7 @@ suite("CliExecutionMode", () => {
 
     assert.strictEqual(resolved.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(resolved.hostCanProvidePty, false);
-    assert.strictEqual(
-      resolved.supportsConcurrentInteractiveSessions,
-      false
-    );
+    assert.strictEqual(resolved.supportsConcurrentInteractiveSessions, false);
     assert.notStrictEqual(resolved.executionMode, EXECUTION_MODES.INTERACTIVE);
   });
 

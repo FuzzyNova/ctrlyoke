@@ -261,9 +261,7 @@ export class CliTerminalFormatter {
         );
       }
       for (const variable of step.variables) {
-        writeLine(
-          `${indent}  Variable: ${variable.name}=${variable.value}`
-        );
+        writeLine(`${indent}  Variable: ${variable.name}=${variable.value}`);
       }
       for (const section of step.prompt?.sections ?? []) {
         const includedBytes = section.body
@@ -321,10 +319,10 @@ export class CliTerminalFormatter {
   private static _streaming = new Map<
     string,
     {
-    type: typeof CLI_EVENT_TYPES.TEXT | typeof CLI_EVENT_TYPES.THINKING;
-    label?: string;
-    /** Whether the last character written ended with a newline (for TEXT blocks). */
-    endsWithNewline: boolean;
+      type: typeof CLI_EVENT_TYPES.TEXT | typeof CLI_EVENT_TYPES.THINKING;
+      label?: string;
+      /** Whether the last character written ended with a newline (for TEXT blocks). */
+      endsWithNewline: boolean;
     }
   >();
 
@@ -334,7 +332,9 @@ export class CliTerminalFormatter {
 
   private static writeTargetPrefix(target?: CliOutputTarget): void {
     if (!target) return;
-    process.stdout.write(chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `));
+    process.stdout.write(
+      chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `)
+    );
   }
 
   /**
@@ -343,7 +343,11 @@ export class CliTerminalFormatter {
    */
   static flushStreamingBuffer(target?: CliOutputTarget): void {
     if (target) {
-      if (!CliTerminalFormatter._streaming.has(CliTerminalFormatter.targetKey(target))) {
+      if (
+        !CliTerminalFormatter._streaming.has(
+          CliTerminalFormatter.targetKey(target)
+        )
+      ) {
         return;
       }
       CliTerminalFormatter._streaming.delete(

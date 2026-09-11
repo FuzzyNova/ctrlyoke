@@ -121,10 +121,12 @@ export class SessionResolver {
     prompt: PromptStep,
     promptIndex: number,
     allPrompts: WorkflowStep[],
-    resolved: Pick<
-      import("../types/ExecutionPropertyTypes").ResolvedProperties,
-      "resumeSession" | "sessionId" | "harness"
-    > | undefined,
+    resolved:
+      | Pick<
+          import("../types/ExecutionPropertyTypes").ResolvedProperties,
+          "resumeSession" | "sessionId" | "harness"
+        >
+      | undefined,
     finalStepSessionId?: string,
     groupStartBoundary: number = promptIndex,
     logWarnings: boolean = true
@@ -262,7 +264,9 @@ export class SessionResolver {
       return undefined;
     }
 
-    Log.debug(`[SessionResolver] Resolved sessionId from prompt ${refNumber}: ${sessionId}`);
+    Log.debug(
+      `[SessionResolver] Resolved sessionId from prompt ${refNumber}: ${sessionId}`
+    );
     return sessionId;
   }
 

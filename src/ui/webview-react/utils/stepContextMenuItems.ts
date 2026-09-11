@@ -194,8 +194,7 @@ function rangeForPendingPosition(
   groups: PendingGroupRange[]
 ): PendingGroupRange | undefined {
   return groups.find(
-    (group) =>
-      pendingPosition >= group.start && pendingPosition <= group.end
+    (group) => pendingPosition >= group.start && pendingPosition <= group.end
   );
 }
 
@@ -273,7 +272,10 @@ export function buildStepGroupingMenuItems({
         disabledTitle,
         onClick: () => {
           onReorder(
-            Array.from({ length: steps.length - currentStep }, (_, index) => index),
+            Array.from(
+              { length: steps.length - currentStep },
+              (_, index) => index
+            ),
             groups.filter((group) => group.id !== containing.id)
           );
         },
@@ -328,7 +330,10 @@ export function buildStepGroupingMenuItems({
           : undefined,
       onClick: () => {
         onReorder(
-          Array.from({ length: steps.length - currentStep }, (_, index) => index),
+          Array.from(
+            { length: steps.length - currentStep },
+            (_, index) => index
+          ),
           nextGroups
         );
       },

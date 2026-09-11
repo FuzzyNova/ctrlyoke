@@ -381,7 +381,13 @@ suite("HistorySearchIndexService", () => {
     ];
     await createRun(workflowId, 1, 3000, [
       createCliOutputEventsAppendedDraft(3050, 0, structuredEvents),
-      createCliOutputDraft(3100, HARNESS_IDS.CLAUDE_CLI, "", 0, structuredEvents),
+      createCliOutputDraft(
+        3100,
+        HARNESS_IDS.CLAUDE_CLI,
+        "",
+        0,
+        structuredEvents
+      ),
     ]);
 
     const index = new HistorySearchIndexService();

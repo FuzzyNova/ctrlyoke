@@ -233,10 +233,7 @@ export class ScriptExecutionReporter {
       }
       if (
         context.dashboardProvider &&
-        !(
-          context.historyFilePath &&
-          history?.hasOutputActivityHandler()
-        )
+        !(context.historyFilePath && history?.hasOutputActivityHandler())
       ) {
         if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex >= 0) {
           context.dashboardProvider.updateCliStreamingChunk(

@@ -259,15 +259,15 @@ implementing.
 
 ## Affected areas (sketch, Phase 1)
 
-| Area                                       | Change                                                        |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| `schemas/workflow-schema.json`             | `scriptStep.setVar` (string, `^\w+$`)                         |
-| `src/types/CtrlYokeTypes.ts`               | `ScriptStep.setVar`                                           |
-| `src/core/WorkflowExecutor.ts`             | Run-scoped captured-var overlay; write on script-step success |
-| `src/core/orchestration/ScriptProcessRunner.ts` | Nothing — stdout is already captured                     |
-| `src/core/ParallelGroupPreflight.ts`       | Reject `setVar` inside a parallel group                       |
-| `ScriptConditionEditor.tsx` (scriptStep variant) | "Set variable" field                                    |
-| Run history / `_runtime`                   | Record the captured value                                     |
+| Area                                             | Change                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| `schemas/workflow-schema.json`                   | `scriptStep.setVar` (string, `^\w+$`)                         |
+| `src/types/CtrlYokeTypes.ts`                     | `ScriptStep.setVar`                                           |
+| `src/core/WorkflowExecutor.ts`                   | Run-scoped captured-var overlay; write on script-step success |
+| `src/core/orchestration/ScriptProcessRunner.ts`  | Nothing — stdout is already captured                          |
+| `src/core/ParallelGroupPreflight.ts`             | Reject `setVar` inside a parallel group                       |
+| `ScriptConditionEditor.tsx` (scriptStep variant) | "Set variable" field                                          |
+| Run history / `_runtime`                         | Record the captured value                                     |
 
 ## Non-goals
 

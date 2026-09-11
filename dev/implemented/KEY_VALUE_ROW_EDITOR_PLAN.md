@@ -21,12 +21,12 @@ data loss_, which is worse than no validation.
 
 **2. The text projection is lossy in ways the `Record` is not.**
 
-| Authored text                | Stored value                                                                                                  | Feedback |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | -------- |
+| Authored text                | Stored value                                                                                                   | Feedback |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
 | `  KEY = value  `            | `{"KEY": " value"}` — key trimmed, value keeps its leading space, trailing space lost to the per-line `trim()` | none     |
-| `KEY=a` then `KEY=b`         | `{"KEY": "b"}` — the first entry vanishes                                                                     | none     |
-| a value containing a newline | impossible to author                                                                                          | n/a      |
-| `malformed`                  | dropped                                                                                                       | none     |
+| `KEY=a` then `KEY=b`         | `{"KEY": "b"}` — the first entry vanishes                                                                      | none     |
+| a value containing a newline | impossible to author                                                                                           | n/a      |
+| `malformed`                  | dropped                                                                                                        | none     |
 
 **3. The affordances bolted onto the textarea are field-scoped, not
 entry-scoped.** The credential heuristic renders one paragraph naming keys
@@ -316,46 +316,46 @@ field appends a row.
 
 ## Affected files
 
-| File                                                                | Action  | Purpose                                                                                                                                    |
-| ------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/utils/KeyValueKeyKinds.ts`                                     | Create  | Dependency-free key kinds, name patterns, and diagnostic rules                                                                             |
-| `src/utils/VarSubstitutor.ts`                                       | Modify  | Build `PLACEHOLDER_RE` from the shared variable-name pattern                                                                               |
-| `src/ui/webview-react/components/shared/KeyValueRowsEditor.tsx`     | Create  | The row editor, bulk-edit mode, per-row secret picker                                                                                      |
-| `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`      | Create  | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper) in a helpers-only module |
-| `src/ui/webview-react/components/shared/index.ts`                   | Modify  | Export the new component/types and helpers; drop `KeyValueMapEditor`                                                                       |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Modify | Variables field → `keyKind="variable"`                                                                                                     |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`  | Modify  | env field → `keyKind="env"`                                                                                                                 |
-| `src/ui/webview-react/components/editor/HooksEditor.tsx`            | Modify  | hook env → `keyKind="env"`                                                                                                                  |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx`          | Modify  | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact |
-| `src/ui/webview-react/components/shared/McpServersEditor.tsx`       | Modify  | Import path for the plural credential helper                                                                                               |
-| `src/ui/webview-react/test/components/shared/McpServerForm.test.ts` | Modify  | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case           |
-| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Delete  | Obsolete textarea assertions; equivalent row and bulk-mode coverage lives in `KeyValueRowsEditor.test.tsx`                              |
-| `src/test/unit/KeyValueKeyKinds.test.ts`                            | Create  | Pure validation-rule tests                                                                                                                 |
+| File                                                                     | Action | Purpose                                                                                                                                                         |
+| ------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/KeyValueKeyKinds.ts`                                          | Create | Dependency-free key kinds, name patterns, and diagnostic rules                                                                                                  |
+| `src/utils/VarSubstitutor.ts`                                            | Modify | Build `PLACEHOLDER_RE` from the shared variable-name pattern                                                                                                    |
+| `src/ui/webview-react/components/shared/KeyValueRowsEditor.tsx`          | Create | The row editor, bulk-edit mode, per-row secret picker                                                                                                           |
+| `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`           | Create | Retain `keyValueMapObjectToString`/`keyValueMapStringToObject` + the credential heuristic (now `looksLikeLiteralCredential` + wrapper) in a helpers-only module |
+| `src/ui/webview-react/components/shared/index.ts`                        | Modify | Export the new component/types and helpers; drop `KeyValueMapEditor`                                                                                            |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`     | Modify | Variables field → `keyKind="variable"`                                                                                                                          |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`       | Modify | env field → `keyKind="env"`                                                                                                                                     |
+| `src/ui/webview-react/components/editor/HooksEditor.tsx`                 | Modify | hook env → `keyKind="env"`                                                                                                                                      |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx`               | Modify | stdio env → `keyKind="env"`; remote headers → `keyKind="header"`; it also re-exports `findLiteralCredentialEnvKeys` (line 7) — keep that chain intact           |
+| `src/ui/webview-react/components/shared/McpServersEditor.tsx`            | Modify | Import path for the plural credential helper                                                                                                                    |
+| `src/ui/webview-react/test/components/shared/McpServerForm.test.ts`      | Modify | Covers `findLiteralCredentialEnvKeys` directly; must follow the helper and gain the `Bearer ${secret:TOKEN}` false-positive case                                |
+| `src/ui/webview-react/test/components/shared/KeyValueMapEditor.test.tsx` | Delete | Obsolete textarea assertions; equivalent row and bulk-mode coverage lives in `KeyValueRowsEditor.test.tsx`                                                      |
+| `src/test/unit/KeyValueKeyKinds.test.ts`                                 | Create | Pure validation-rule tests                                                                                                                                      |
 
 ## Implementation steps
 
 1. [x] `KeyValueKeyKinds.ts` + its unit tests; point `VarSubstitutor` at the shared
-   variable-name pattern and confirm the existing `VarSubstitutor` coverage
-   still passes unchanged. Exports: `KEY_VALUE_KEY_KINDS`, `KeyValueKeyKind`,
-   `VARIABLE_NAME_PATTERN_SOURCE`, `VARIABLE_NAME_PATTERN`, and
-   `validateKeyValueKey`.
+       variable-name pattern and confirm the existing `VarSubstitutor` coverage
+       still passes unchanged. Exports: `KEY_VALUE_KEY_KINDS`, `KeyValueKeyKind`,
+       `VARIABLE_NAME_PATTERN_SOURCE`, `VARIABLE_NAME_PATTERN`, and
+       `validateKeyValueKey`.
 2. [x] Refactor the credential heuristic to `looksLikeLiteralCredential(key, value)`,
-   fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
-   as a wrapper (`McpServersEditor` depends on it). Both helpers remain
-   exported from `KeyValueMapHelpers.ts`.
+       fix the anchored-pattern false positive, keep `findLiteralCredentialEnvKeys`
+       as a wrapper (`McpServersEditor` depends on it). Both helpers remain
+       exported from `KeyValueMapHelpers.ts`.
 3. [x] Build `KeyValueRowsEditor` — rows model, blur commit, validation display,
-   per-row secret picker, add/delete, stacked/wide layout. The component is
-   intentionally not exported from `shared/index.ts` and no call site is wired
-   yet; step 4 can add paste/bulk-edit behavior in the same component before
-   step 5 performs the all-at-once migration. Its value diagnostics reuse
-   `looksLikeLiteralCredential` from `KeyValueMapHelpers.ts`, whose helper
-   remains available after the component migration.
+       per-row secret picker, add/delete, stacked/wide layout. The component is
+       intentionally not exported from `shared/index.ts` and no call site is wired
+       yet; step 4 can add paste/bulk-edit behavior in the same component before
+       step 5 performs the all-at-once migration. Its value diagnostics reuse
+       `looksLikeLiteralCredential` from `KeyValueMapHelpers.ts`, whose helper
+       remains available after the component migration.
 4. [x] Add paste-expansion and the bulk-edit toggle.
 5. [x] Roll out all five call sites in one change (they share one component;
-   staging them means maintaining both editors against the same store shapes).
+       staging them means maintaining both editors against the same store shapes).
 6. [x] Tests (below).
 7. [x] Gate: `npm run typecheck`, `npm run lint`, `npm test`. Never
-   `npm run test:harness`.
+       `npm run test:harness`.
 
 The parsing and credential helpers live in
 `src/ui/webview-react/components/shared/KeyValueMapHelpers.ts`.
@@ -380,13 +380,13 @@ The former `KeyValueMapEditor.test.tsx` asserted textarea mechanics and is
 deleted, but each of its behaviors has a row-editor analogue that must be
 carried over, not dropped:
 
-| Existing assertion                                   | Row-editor analogue                                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| no commit per keystroke, commit on blur              | typing in a key/value input does not call `onChange`; blurring it does                    |
+| Existing assertion                                   | Row-editor analogue                                                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| no commit per keystroke, commit on blur              | typing in a key/value input does not call `onChange`; blurring it does                         |
 | `=` preserved inside values                          | a value containing `=` round-trips (now trivially true — kept as a bulk-mode regression guard) |
-| secret picker inserts a reference                    | the per-row picker sets _that_ row's value and leaves its key alone                       |
-| credential warning only when `allowSecretReferences` | unchanged, now rendered per row                                                           |
-| disabled state disables editing and the picker       | all inputs, the picker, add, and delete are disabled                                      |
+| secret picker inserts a reference                    | the per-row picker sets _that_ row's value and leaves its key alone                            |
+| credential warning only when `allowSecretReferences` | unchanged, now rendered per row                                                                |
+| disabled state disables editing and the picker       | all inputs, the picker, add, and delete are disabled                                           |
 
 New coverage:
 
@@ -424,14 +424,14 @@ All four open questions are settled. Nothing below is left to implementation.
      a copy, order-insensitive.
    - MCP env/headers are handed to the harness as objects; nothing iterates
      them positionally.
-   The only real effect of order is the key order written into the workflow
-   file, i.e. git-diff churn. That argues for *stability*, not for a reorder
-   affordance: rows render in `Object.entries` order, new rows append, and
-   nothing ever re-sorts. Drag handles would import the dnd-kit machinery
-   `webview-react-components.instructions.md` documents as a source of real
-   feedback-loop bugs, in exchange for a cosmetic win — and bulk-edit mode
-   already reorders by hand for the rare case someone wants to group keys.
-   **Remove the idea; do not carry it as a Future Extension.**
+     The only real effect of order is the key order written into the workflow
+     file, i.e. git-diff churn. That argues for _stability_, not for a reorder
+     affordance: rows render in `Object.entries` order, new rows append, and
+     nothing ever re-sorts. Drag handles would import the dnd-kit machinery
+     `webview-react-components.instructions.md` documents as a source of real
+     feedback-loop bugs, in exchange for a cosmetic win — and bulk-edit mode
+     already reorders by hand for the rare case someone wants to group keys.
+     **Remove the idea; do not carry it as a Future Extension.**
 4. **Multiline values are out of v1.** Note it becomes _possible_ for the first
    time under this design — the textarea grammar could never express a newline
    in a value. If a PEM-shaped value is ever wanted inline, it should arrive as

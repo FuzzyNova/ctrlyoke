@@ -664,7 +664,6 @@ Worth stating because this pane is unusually sensitive to it (see
    interleaved activity fraction, while the pill retains its undo/redo-status colour and the hidden
    activity pulse remains a filter affordance.
 
-
 ---
 
 ## Review pass (2026-09-05)
@@ -705,7 +704,7 @@ duplication.
 ### The tie-break palette length must stay a power of two
 
 `getTieBreakColor` seeds each member with `hashSeed(`${group.id}:${offsetInGroup}`) % length`.
-Distinct offsets are only *guaranteed* distinct starts when the modulus is a power of two —
+Distinct offsets are only _guaranteed_ distinct starts when the modulus is a power of two —
 FNV-1a's final multiply by an odd constant is a bijection mod 2^k, and consecutive offsets differ
 in exactly the low bits that multiply preserves. At the current 8 entries every member of a
 same-harness group provably gets its own colour, measured at 0 duplicates over 20k random group

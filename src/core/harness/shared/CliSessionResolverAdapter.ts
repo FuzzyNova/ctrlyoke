@@ -47,7 +47,9 @@ export class CliSessionResolverAdapter {
       const harness =
         resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
       if (!SessionValidator.validate(resolvedSessionId, harness)) {
-        Log.info("[CliSessionResolverAdapter] Starting new session due to invalid session ID format");
+        Log.info(
+          "[CliSessionResolverAdapter] Starting new session due to invalid session ID format"
+        );
         resolvedSessionId = undefined;
       }
     }

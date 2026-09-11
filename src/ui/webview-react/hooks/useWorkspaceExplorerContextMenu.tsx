@@ -101,7 +101,10 @@ export function useWorkspaceExplorerContextMenu({
         await workspaceDeleteEntry({ path });
         onRefresh(path);
       } catch (err) {
-        WebviewLog.error("[useWorkspaceExplorerContextMenu] Delete failed:", err);
+        WebviewLog.error(
+          "[useWorkspaceExplorerContextMenu] Delete failed:",
+          err
+        );
       }
     },
     [onRefresh]

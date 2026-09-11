@@ -97,8 +97,7 @@ suite("CliProviderUtils", () => {
     const inheritedRoot = path.join(os.tmpdir(), "ctrlyoke-inherited-root");
     const workflowRoot = path.join(os.tmpdir(), "ctrlyoke-workflow-root");
     const workflowFile = path.join(primaryRoot, "workflow.ctrlyoke.json");
-    const original =
-      ConfigurationUtils.getEffectiveApprovedExternalFileRoots;
+    const original = ConfigurationUtils.getEffectiveApprovedExternalFileRoots;
     let receivedWorkflow:
       | { identity: string; declaredRoots: string[] | null | undefined }
       | undefined;
@@ -110,7 +109,7 @@ suite("CliProviderUtils", () => {
       receivedWorkflow = workflow;
       return workflow?.declaredRoots === null
         ? []
-        : workflow?.declaredRoots ?? [inheritedRoot];
+        : (workflow?.declaredRoots ?? [inheritedRoot]);
     };
 
     try {

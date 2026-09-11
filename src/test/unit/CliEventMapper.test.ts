@@ -160,9 +160,7 @@ suite("CliEventMapper", () => {
       // tool="ctrlyoke__append_step" for this format — used both by
       // Claude Code's native MCP tool names and by Codex's exec-unwrapped
       // ctrlyoke MCP calls.
-      const result = CliEventMapper.classifyTool(
-        "mcp__ctrlyoke__append_step"
-      );
+      const result = CliEventMapper.classifyTool("mcp__ctrlyoke__append_step");
       assert.strictEqual(result.type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
       if (result.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
         assert.strictEqual(result.server, "ctrlyoke");

@@ -392,7 +392,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       captured.map(({ target }) => target),
       [0, 0, 0]
     );
-    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === "snapshots"));
+    assert.ok(
+      captured.every(({ snapshot }) => snapshot.parallelGroupId === "snapshots")
+    );
   });
 
   test("keeps ordinary per-step snapshots when effective width is one", async () => {
@@ -424,7 +426,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       captured.map(({ target }) => target),
       [0, 1, 2]
     );
-    assert.ok(captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined));
+    assert.ok(
+      captured.every(({ snapshot }) => snapshot.parallelGroupId === undefined)
+    );
   });
 
   test("joins parallel members completed in reverse order without advancing currentIndex early", async () => {

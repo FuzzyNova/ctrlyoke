@@ -993,7 +993,11 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         attemptIndex: 2,
         structured: {
           events: [
-            { type: CLI_EVENT_TYPES.TEXT, timestamp: 110, data: { text: "A1" } },
+            {
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: 110,
+              data: { text: "A1" },
+            },
           ],
           metadata: {},
         },

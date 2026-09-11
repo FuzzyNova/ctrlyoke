@@ -2242,7 +2242,10 @@ suite("WebviewSettingsSync external root decisions", () => {
       await sync.handleBrowseAndAddExternalRoot(
         "workspace",
         undefined,
-        { workspaceRoot, workflowSourcePath: `${workspaceRoot}\\workflow.json` },
+        {
+          workspaceRoot,
+          workflowSourcePath: `${workspaceRoot}\\workflow.json`,
+        },
         "panel"
       );
 
@@ -2298,7 +2301,8 @@ suite("WebviewSettingsSync external root decisions", () => {
         candidateRoots.filter(
           (root) => root === approvedWorkspaceRoot
         )) as typeof externalRootsTrustStore.getApprovedRoots;
-      externalRootsTrustStore.setDecisions = (async () => {}) as typeof externalRootsTrustStore.setDecisions;
+      externalRootsTrustStore.setDecisions =
+        (async () => {}) as typeof externalRootsTrustStore.setDecisions;
 
       const sync = new WebviewSettingsSync(
         () => {},
@@ -2320,7 +2324,10 @@ suite("WebviewSettingsSync external root decisions", () => {
       await sync.handleBrowseAndAddExternalRoot(
         "workspace",
         undefined,
-        { workspaceRoot, workflowSourcePath: `${workspaceRoot}\\workflow.json` },
+        {
+          workspaceRoot,
+          workflowSourcePath: `${workspaceRoot}\\workflow.json`,
+        },
         "panel"
       );
 

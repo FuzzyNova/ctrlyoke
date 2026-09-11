@@ -109,10 +109,7 @@ function targetIsLatestActivityAndStillVisible(
   if (target.kind !== OUTPUT_SCROLL_TARGET_KINDS.LATEST_ACTIVITY) {
     return false;
   }
-  const rowElement = findRenderedRowElementByKey(
-    scrollElement,
-    target.rowKey
-  );
+  const rowElement = findRenderedRowElementByKey(scrollElement, target.rowKey);
   if (!rowElement) return false;
   const scrollRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();

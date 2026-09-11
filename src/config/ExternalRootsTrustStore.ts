@@ -51,10 +51,7 @@ export class ExternalRootsTrustStore {
     }
   }
 
-  private static keyFor(
-    scopeIdentity: string,
-    canonicalRoot: string
-  ): string {
+  private static keyFor(scopeIdentity: string, canonicalRoot: string): string {
     return `${scopeIdentity}${DECISION_KEY_SEPARATOR}${canonicalRoot}`;
   }
 

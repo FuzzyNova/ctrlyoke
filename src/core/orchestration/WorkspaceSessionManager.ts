@@ -286,7 +286,10 @@ export class WorkspaceSessionManager {
 
       return sessions;
     } catch (error) {
-      Log.error("[WorkspaceSessionManager] Failed to discover sessions:", error);
+      Log.error(
+        "[WorkspaceSessionManager] Failed to discover sessions:",
+        error
+      );
       return [];
     }
   }

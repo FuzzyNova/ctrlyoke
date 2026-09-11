@@ -143,7 +143,9 @@ export class CliExecutionRunner {
       );
       if (logSessionId) {
         await this.persistResolvedSessionId(session, logSessionId);
-        Log.debug(`[CliExecutionRunner] Session ID from logs (interactive): ${logSessionId}`);
+        Log.debug(
+          `[CliExecutionRunner] Session ID from logs (interactive): ${logSessionId}`
+        );
       }
     }
 
@@ -555,12 +557,16 @@ export class CliExecutionRunner {
 
     try {
       if (!this.deps.provider.logParser) {
-        Log.error("[CliExecutionRunner] Harness does not support log file monitoring");
+        Log.error(
+          "[CliExecutionRunner] Harness does not support log file monitoring"
+        );
         return { success: false };
       }
 
       const startTime = new Date();
-      Log.trace(`[CliExecutionRunner] Recording start time: ${startTime.toISOString()}`);
+      Log.trace(
+        `[CliExecutionRunner] Recording start time: ${startTime.toISOString()}`
+      );
 
       if (session.resolvedSessionId && this.deps.provider.notificationMonitor) {
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -931,7 +937,9 @@ export class CliExecutionRunner {
     if (context && persistence?.persistSessionId) {
       try {
         await persistence.persistSessionId(context.promptIndex, sessionId);
-        Log.debug(`[CliExecutionRunner] Persisted live session ID: ${sessionId}`);
+        Log.debug(
+          `[CliExecutionRunner] Persisted live session ID: ${sessionId}`
+        );
       } catch (error) {
         Log.warn(
           `[CliExecutionRunner] Failed to persist live session ID ${sessionId}:`,

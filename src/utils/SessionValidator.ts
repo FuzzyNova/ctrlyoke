@@ -132,7 +132,9 @@ export class SessionValidator {
   private static validateCodexThreadId(sessionId: string): boolean {
     const trimmed = sessionId.trim();
     if (trimmed.length === 0) {
-      Log.warn(`[SessionValidator] Empty session ID for Codex. Starting new session instead.`);
+      Log.warn(
+        `[SessionValidator] Empty session ID for Codex. Starting new session instead.`
+      );
       return false;
     }
     return true;

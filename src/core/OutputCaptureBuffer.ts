@@ -477,15 +477,11 @@ export class OutputCaptureBuffer {
         // Belt-and-suspenders: ensure retryState was already sent above so
         // the webview store accepts attemptIndex > 0 outputs.
         if (buffer.attemptIndex > 0) {
-          const completedEntry = this.completedStepOutputs.get(
-            stepIndex
-          );
+          const completedEntry = this.completedStepOutputs.get(stepIndex);
           if (!completedEntry?.retryState) {
             // Edge case: retry streaming started but completedStepOutputs
             // doesn't have retryState yet (defend against timing gaps).
-            const promptStep = this.callbacks.getWorkflowStep(
-              stepIndex
-            );
+            const promptStep = this.callbacks.getWorkflowStep(stepIndex);
             const promptStepTyped =
               promptStep && !isScriptStep(promptStep)
                 ? (promptStep as PromptStep)

@@ -11,10 +11,7 @@ import {
   EXTERNAL_FILE_TRUST_SCOPES,
   TRUST_DECISIONS,
 } from "../types/DashboardConstants";
-import type {
-  ChoiceRequest,
-  UserInteractionPort,
-} from "./UserInteractionPort";
+import type { ChoiceRequest, UserInteractionPort } from "./UserInteractionPort";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import { Log } from "../utils/Log";
 
@@ -154,7 +151,9 @@ export async function confirmExternalFileTrust(
       return true;
     case EXTERNAL_FILE_TRUST_SCOPES.WORKSPACE: {
       if (!context.workspaceRoot) return false;
-      await ConfigurationUtils.addWorkspaceAllowedExternalFileRoot(parentFolder);
+      await ConfigurationUtils.addWorkspaceAllowedExternalFileRoot(
+        parentFolder
+      );
       await (context.trustStore ?? externalRootsTrustStore).setDecisions(
         ExternalRootsTrustStore.canonicalizeRoot(context.workspaceRoot),
         [parentFolder],
@@ -163,7 +162,11 @@ export async function confirmExternalFileTrust(
       return true;
     }
     case EXTERNAL_FILE_TRUST_SCOPES.WORKFLOW: {
-      if (!context.workspaceRoot || !context.workflowSourcePath || !workflowState) {
+      if (
+        !context.workspaceRoot ||
+        !context.workflowSourcePath ||
+        !workflowState
+      ) {
         return false;
       }
       const workflowIdentity =
@@ -208,8 +211,7 @@ export async function confirmExternalFileTrustAndOpen(
 ): Promise<void> {
   const approved = await confirmExternalFileTrust(target.path, {
     ...context,
-    workflowSourcePath:
-      context.workflowSourcePath ?? target.workflowSourcePath,
+    workflowSourcePath: context.workflowSourcePath ?? target.workflowSourcePath,
   });
   if (approved) {
     await openResolvedTarget(target);
@@ -273,11 +275,10 @@ export async function promptBatchApprovalForPendingWorkflowExternalRoots(
 ): Promise<void> {
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-  const workflowIdentity =
-    ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
-      workspaceRoot,
-      workflowSourcePath
-    );
+  const workflowIdentity = ExternalRootsTrustStore.canonicalizeWorkflowIdentity(
+    workspaceRoot,
+    workflowSourcePath
+  );
   const pendingRoots = ConfigurationUtils.getPendingWorkflowExternalFileRoots(
     workspaceIdentity,
     workflowIdentity,
@@ -385,8 +386,9 @@ async function writeWorkflowTrustState(
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("The active workflow file has an invalid root object.");
   }
-  (parsed as { trustedExternalRoots?: readonly string[] }).trustedExternalRoots =
-    roots;
+  (
+    parsed as { trustedExternalRoots?: readonly string[] }
+  ).trustedExternalRoots = roots;
   const serialized =
     extension === ".json"
       ? JSON.stringify(parsed, null, 2) + "\n"

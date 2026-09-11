@@ -43,7 +43,7 @@ cannot cover:
    `terminal.shellExecutable`) has no way to say "but this one condition
    script is POSIX-specific, run it with `sh` regardless."
 
-Script *files* with a known extension don't have this problem —
+Script _files_ with a known extension don't have this problem —
 `EndConditionEvaluator.getScriptCommand()` already dispatches `.ps1` to
 pwsh/powershell and `.sh` to bash/sh unambiguously by extension, independent of
 `resolveShellInvocation()`. The gap is specifically the inline/no-file-match
@@ -102,7 +102,7 @@ hooks, MCP — where ctrlyoke can translate or approximate one harness's
 behavior for another. Shell availability isn't a harness capability question
 at all (script steps aren't AI harness consumers — see "Script steps are not
 AI harness consumers" in that plan's Cross-Harness Resolution Model section),
-and it isn't a *ctrlyoke* capability question either — it's "does this
+and it isn't a _ctrlyoke_ capability question either — it's "does this
 executable exist on the machine that runs this," the same fact
 `terminal.shellExecutable` already lives with outside that registry. Standing
 up a new `CapabilityDomain`, adapter declarations, and diagnostics for it would
@@ -127,7 +127,7 @@ prompt/workflow/defaults resolution chain, since `shell` doesn't live in
 
 **Scope: inline text only, not extension-based file dispatch.** A `shell`
 override does not change `getScriptCommand()`'s extension-based dispatch for
-script *files*. `.ps1` → pwsh/powershell and `.sh` → bash/sh are already
+script _files_. `.ps1` → pwsh/powershell and `.sh` → bash/sh are already
 unambiguous and correct; forcing a mismatched interpreter onto a file whose
 extension already picked the right one (e.g. `shell: pwsh` on a `.sh` file)
 would break execution, not fix anything. The field only takes effect on the
@@ -251,10 +251,10 @@ export function resolveShellInvocation(
   `resolveShellInvocation(condition.script)` to
   `resolveShellInvocation(condition.script, condition.shell)`. `condition` is
   already typed `ScriptProperties`, so this is a one-line change.
-- **`ExecutionPreviewService.buildScriptCommand`** *(landed in the preview step)*
+- **`ExecutionPreviewService.buildScriptCommand`** _(landed in the preview step)_
   (`src/core/ExecutionPreviewService.ts:1312-1340`) — routes through
   `resolveShellInvocation(step.script, step.shell,
-  this.options.platform ?? process.platform)`, so preview both fixes its
+this.options.platform ?? process.platform)`, so preview both fixes its
   preexisting wrong-shell display and reflects the new override. It maps the
   returned `shellKind` to `CommandDisplayShell`: `pwsh`/`powershell` →
   `COMMAND_DISPLAY_SHELLS.POWERSHELL` (finally used), `cmd` →
@@ -275,6 +275,7 @@ export function resolveShellInvocation(
   `process.platform`, and preview passes its injected platform through — a
   small, honest seam rather than new indirection. Existing cross-platform
   preview coverage remains intact.
+
 - `{{vars}}` substitution stays untouched. `VarSubstitutor` deliberately
   substitutes only `script` and `env` (see its file header) — `shell` is a
   static interpreter selector like `timeout`/`compareSource`, not text meant
@@ -348,20 +349,20 @@ bug.
 ## Acceptance Criteria
 
 - [x] `scriptStep`, `preCondition`, and `endCondition` accept an optional `shell`
-  string field in the schema and `ScriptProperties` type.
+      string field in the schema and `ScriptProperties` type.
 - [x] A pinned `shell` takes effect only on the inline/no-file-match execution
-  path; extension-based script *file* dispatch (`.ps1`, `.sh`, etc.) is
-  unaffected.
+      path; extension-based script _file_ dispatch (`.ps1`, `.sh`, etc.) is
+      unaffected.
 - [x] Precedence is per-script `shell` → `terminal.shellExecutable` →
-  platform auto-detect, identical across interactive script-step PTYs and
-  headless script steps/preconditions/end-conditions.
+      platform auto-detect, identical across interactive script-step PTYs and
+      headless script steps/preconditions/end-conditions.
 - [x] Dry-run preview's script-step command reflects the same resolved shell
-  (including the override) that execution actually uses — no third,
-  independent shell guess remains in `ExecutionPreviewService`.
+      (including the override) that execution actually uses — no third,
+      independent shell guess remains in `ExecutionPreviewService`.
 - [x] No new `CapabilityDomain`, capability declaration, or portability-report row
-  is added for shell selection.
+      is added for shell selection.
 - [x] No workflow-root `shell` property or `executionProperties` inheritance is
-  added.
+      added.
 
 All acceptance criteria are met; there are no known exceptions.
 
@@ -377,5 +378,5 @@ All acceptance criteria are met; there are no known exceptions.
   An unresolvable pinned shell fails exactly like an unresolvable
   `terminal.shellExecutable` does today — a plain spawn error — and that's
   sufficient.
-- Letting `shell` affect extension-based script *file* dispatch.
+- Letting `shell` affect extension-based script _file_ dispatch.
 - `{{vars}}` substitution into `shell`.

@@ -579,7 +579,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           `_runtime: ${promptsWithRuntime}/${prompts.length} prompts`
       );
     } catch (error) {
-      Log.error("[PromptQueue] Failed to restore from working file:", error as Error);
+      Log.error(
+        "[PromptQueue] Failed to restore from working file:",
+        error as Error
+      );
       throw error;
     }
   }
@@ -640,7 +643,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.state.currentIndex = cap;
     this.emitStateChange();
-    Log.info(`[PromptQueue] Restored ${cap} completed step(s) for append continuation`);
+    Log.info(
+      `[PromptQueue] Restored ${cap} completed step(s) for append continuation`
+    );
   }
 
   /**

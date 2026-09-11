@@ -33,9 +33,9 @@ const outputHistoryManagers: OutputHistoryManager[] = [];
 
 teardown(async () => {
   await Promise.all(
-    outputHistoryManagers.splice(0).map((manager) =>
-      manager.flushPendingIndexRefresh()
-    )
+    outputHistoryManagers
+      .splice(0)
+      .map((manager) => manager.flushPendingIndexRefresh())
   );
   await Promise.all(
     temporaryDirectories

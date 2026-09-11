@@ -253,14 +253,7 @@ suite("SessionResolver Tests", () => {
       ];
 
       assert.strictEqual(
-        SessionResolver.resolve(
-          prompts[2],
-          2,
-          prompts,
-          workflow,
-          undefined,
-          1
-        ),
+        SessionResolver.resolve(prompts[2], 2, prompts, workflow, undefined, 1),
         undefined
       );
       assert.strictEqual(

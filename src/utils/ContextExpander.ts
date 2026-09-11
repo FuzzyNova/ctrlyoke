@@ -909,7 +909,9 @@ export class ContextExpander {
 
     // Skip if already attached
     if (this.attachmentIds.has(attachmentId)) {
-      Log.trace(`[ContextExpander] Skipping duplicate attachment: ${attachmentId}`);
+      Log.trace(
+        `[ContextExpander] Skipping duplicate attachment: ${attachmentId}`
+      );
       return ""; // Return empty string for duplicates
     }
 

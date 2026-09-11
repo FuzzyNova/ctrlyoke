@@ -267,7 +267,9 @@ export class EndConditionHandler {
       }
 
       if (onFail === CONDITION_ACTIONS.CONTINUE) {
-        Log.warn("[EndConditionHandler] End condition failed, continuing due to onFail: continue");
+        Log.warn(
+          "[EndConditionHandler] End condition failed, continuing due to onFail: continue"
+        );
         retryContext.runtime.completeAttempt(
           retryContext.attemptTarget,
           currentAttemptIndex

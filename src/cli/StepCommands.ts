@@ -62,7 +62,11 @@ export async function editStepCommand(
 ): Promise<void> {
   const index = parseStepIndex(options.index);
   const change = await parseStepChange(file, options.prompt, context);
-  const target = await resolveEditTarget(options.workflow, options.run, context);
+  const target = await resolveEditTarget(
+    options.workflow,
+    options.run,
+    context
+  );
   const edited = await RunContinuationService.editStepAtRun(
     context.workspaceRoot,
     target.workflowKey,
@@ -98,7 +102,11 @@ export async function removeStepCommand(
   io: StepCommandIo
 ): Promise<void> {
   const index = parseStepIndex(options.index);
-  const target = await resolveEditTarget(options.workflow, options.run, context);
+  const target = await resolveEditTarget(
+    options.workflow,
+    options.run,
+    context
+  );
   const removed = await RunContinuationService.removeStepAtRun(
     context.workspaceRoot,
     target.workflowKey,
@@ -133,7 +141,11 @@ export async function reorderStepsCommand(
   io: StepCommandIo
 ): Promise<void> {
   const order = parseStepOrder(options.order);
-  const target = await resolveEditTarget(options.workflow, options.run, context);
+  const target = await resolveEditTarget(
+    options.workflow,
+    options.run,
+    context
+  );
   const reordered = await RunContinuationService.reorderStepsAtRun(
     context.workspaceRoot,
     target.workflowKey,
@@ -218,7 +230,9 @@ async function parseStepChange(
 
 function parseStepIndex(value: string): number {
   if (!/^\d+$/.test(value)) {
-    throw new Error(`Invalid step index "${value}"; expected a non-negative integer`);
+    throw new Error(
+      `Invalid step index "${value}"; expected a non-negative integer`
+    );
   }
   const index = Number(value);
   if (!Number.isSafeInteger(index)) {

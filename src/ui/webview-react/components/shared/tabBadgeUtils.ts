@@ -74,7 +74,8 @@ const PERMISSION_MODE_VISUALS: Record<string, PermissionModeVisual> = {
  */
 export function getPermissionModeVisual(mode: string): PermissionModeVisual {
   return (
-    PERMISSION_MODE_VISUALS[mode] ?? PERMISSION_MODE_VISUALS[PERMISSION_MODES.NONE]
+    PERMISSION_MODE_VISUALS[mode] ??
+    PERMISSION_MODE_VISUALS[PERMISSION_MODES.NONE]
   );
 }
 
