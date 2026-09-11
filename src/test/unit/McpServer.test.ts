@@ -7,6 +7,7 @@ import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import {
   CtrlYokeMCPServer,
   getMaxQueueSize,
+  MAX_GLOBAL_STATUS_RESULTS,
   initializeMcpStorage,
 } from "../../mcp-server";
 import {
@@ -29,6 +30,7 @@ import {
   EXECUTION_STATES,
   RUNNER_IDS,
   RUN_HISTORY_LOCATIONS,
+  type ExecutionState,
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -108,6 +110,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       worktree?: WorkingFileWorktreeRuntime;
       stepCount?: number;
       draftOnly?: boolean;
+      executionState?: ExecutionState;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
@@ -127,6 +130,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       revision: 3,
     };
     const stepCount = options.stepCount ?? 1;
+    const executionState = options.executionState ?? EXECUTION_STATES.COMPLETED;
     const steps = Array.from({ length: stepCount }, (_, index) => ({
       prompt:
         index === 0
@@ -147,7 +151,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       steps,
       _runtime: {
         currentIndex: stepCount,
-        executionState: EXECUTION_STATES.COMPLETED,
+        executionState,
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
     };
@@ -165,7 +169,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         workflowKey,
         1,
         1,
-        EXECUTION_STATES.COMPLETED,
+        executionState,
         1,
         {
           workflowName: descriptor.workflowName,
@@ -635,8 +639,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("global_status reports sibling workflows and narrows on request", async () => {
     const server = await setup();
-    const own = await createRun("own", "2026-01-01T00-00-00-000Z");
+    const own = await createRun("own", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
     const other = await createRun("other", "2026-01-02T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.PAUSED,
       worktree: {
         schemaVersion: 1,
         mode: "managed",
@@ -659,17 +666,36 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const draft = await createRun("draft", "2026-01-03T00-00-00-000Z", {
       draftOnly: true,
     });
+    const completed = await createRun("completed", "2026-01-04T00-00-00-000Z");
+    const stopped = await createRun("stopped", "2026-01-05T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.STOPPED,
+    });
+    const errored = await createRun("errored", "2026-01-06T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.ERROR,
+    });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const all = responseJson(await server.invokeTool("global_status", {}));
     assert.deepStrictEqual(
       all.workflows.map((workflow: any) => workflow.workflowKey).sort(),
-      [draft.workflowKey, other.workflowKey, own.workflowKey].sort()
+      [other.workflowKey, own.workflowKey].sort()
+    );
+    assert.strictEqual(all.workflowCount, 2);
+    assert.strictEqual(all.truncated, false);
+    assert.strictEqual(all.omittedCount, 0);
+    assert.ok(
+      !all.workflows.some((workflow: any) =>
+        [
+          draft.workflowKey,
+          completed.workflowKey,
+          stopped.workflowKey,
+          errored.workflowKey,
+        ].includes(workflow.workflowKey)
+      )
     );
     const expectedWorkingFiles = new Map([
       [own.workflowKey, own.runFilePath],
       [other.workflowKey, other.runFilePath],
-      [draft.workflowKey, draft.runFilePath],
     ]);
     for (const workflow of all.workflows) {
       const expectedWorkingFile = expectedWorkingFiles.get(
@@ -706,10 +732,17 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
   });
 
-  test("refuses every workflow tool when no run is attached", async () => {
+  test("allows global_status without an attached run", async () => {
     const server = await setup();
     const run = await createRun("unattached", "2026-01-01T00-00-00-000Z");
     const notAttached = /no ctrlyoke workflow run is attached/i;
+
+    const globalStatus = responseJson(
+      await server.invokeTool("global_status", {})
+    );
+    assert.deepStrictEqual(globalStatus.workflows, []);
+    assert.strictEqual(globalStatus.truncated, false);
+    assert.strictEqual(globalStatus.omittedCount, 0);
 
     await assert.rejects(
       () => server.invokeTool("workflow_status", {}),
@@ -717,10 +750,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     await assert.rejects(
       () => server.invokeTool("read_output", {}),
-      notAttached
-    );
-    await assert.rejects(
-      () => server.invokeTool("global_status", {}),
       notAttached
     );
     await assert.rejects(
@@ -752,6 +781,26 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;
     assert.strictEqual(persisted.steps?.length, 1);
+  });
+
+  test("caps global_status results and reports omitted active lineages", async () => {
+    const server = await setup();
+    for (let index = 0; index < MAX_GLOBAL_STATUS_RESULTS + 1; index++) {
+      await createRun(
+        `cap-${index}`,
+        new Date(Date.UTC(2026, 1, 1, 0, 0, index))
+          .toISOString()
+          .replace(/[:.]/g, "-"),
+        { executionState: EXECUTION_STATES.RUNNING }
+      );
+    }
+
+    const result = responseJson(await server.invokeTool("global_status", {}));
+
+    assert.strictEqual(result.workflowCount, MAX_GLOBAL_STATUS_RESULTS);
+    assert.strictEqual(result.workflows.length, MAX_GLOBAL_STATUS_RESULTS);
+    assert.strictEqual(result.truncated, true);
+    assert.strictEqual(result.omittedCount, 1);
   });
 
   test("edits a pending step's prompt and configuration", async () => {

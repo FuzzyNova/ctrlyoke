@@ -38,6 +38,7 @@ import {
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
   DEFAULT_MAX_QUEUE_SIZE,
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   LOGS_DIR,
   QUEUE_POSITION,
@@ -149,6 +150,9 @@ export function getMaxQueueSize(): number {
   }
   return DEFAULT_MAX_QUEUE_SIZE;
 }
+
+/** Hard response cap for the workspace-wide live execution radar. */
+export const MAX_GLOBAL_STATUS_RESULTS = 100;
 
 function isUnlimitedMode(): boolean {
   return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
@@ -892,14 +896,11 @@ export class CtrlYokeMCPServer {
    * The only tool that reports on workflows other than this server's own, and
    * read-only by design: agents call it to learn what sibling workflows are
    * running so they can avoid file conflicts and attribute stray build errors.
-   * Still requires an attached run — a process serving no workflow has no
-   * business enumerating the workspace's workflows.
    */
   private async handleGlobalStatus(args: McpGlobalStatusArguments) {
     log("Scanning run storage for all workflow lineages:", this.workspaceRoot);
 
     try {
-      this.requireRunAddress(MCP_GLOBAL_STATUS_TOOL_NAME);
       const selector = this.parseOtherWorkflowSelector(
         args,
         MCP_GLOBAL_STATUS_TOOL_NAME
@@ -945,6 +946,9 @@ export class CtrlYokeMCPServer {
               currentIndex: 0,
               executionState: EXECUTION_STATES.IDLE,
             };
+            if (!ACTIVE_EXECUTION_STATES.has(runtime.executionState)) {
+              return null;
+            }
             const allSteps = (data.steps || []) as WorkflowStep[];
             const completedCount = allSteps.filter(
               (p) => p._runtime?.completedAt !== undefined
@@ -988,11 +992,21 @@ export class CtrlYokeMCPServer {
       const validWorkflows = workflows.filter(
         (w): w is NonNullable<typeof w> => w !== null
       );
+      const omittedCount = Math.max(
+        0,
+        validWorkflows.length - MAX_GLOBAL_STATUS_RESULTS
+      );
+      const limitedWorkflows = validWorkflows.slice(
+        0,
+        MAX_GLOBAL_STATUS_RESULTS
+      );
 
       const response = {
         workspaceRoot: this.workspaceRoot,
-        workflowCount: validWorkflows.length,
-        workflows: validWorkflows,
+        workflowCount: limitedWorkflows.length,
+        workflows: limitedWorkflows,
+        truncated: omittedCount > 0,
+        omittedCount,
       };
 
       return {
@@ -1019,6 +1033,8 @@ export class CtrlYokeMCPServer {
                   workspaceRoot: this.workspaceRoot,
                   workflowCount: 0,
                   workflows: [],
+                  truncated: false,
+                  omittedCount: 0,
                 },
                 null,
                 2

@@ -760,8 +760,13 @@ correctness fix on its own:
    `append_step` instructions today with no diagnostic.
 2. **Placeholder substitution in generated skills** (Decision 12) — the two shipped
    skills tell agents to pass flags without telling them the values.
-3. **`global_status` filtering and capping** — ships value with no dependency on
-   anything else here.
+3. **`global_status` filtering and capping** — landed 2026-09-11. It now uses
+   `ACTIVE_EXECUTION_STATES`, caps responses at 100 workflows, reports
+   truncation explicitly, and works for callers without an attached run.
+
+No decisions in this plan were changed. The implementation keeps the existing
+workspace-wide, cross-worktree scope and leaves path and note data to the
+coordination board.
 
 ## Edge cases
 
