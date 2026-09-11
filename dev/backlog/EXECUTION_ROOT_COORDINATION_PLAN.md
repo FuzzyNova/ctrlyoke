@@ -323,7 +323,9 @@ These join `MCP_TOOL_DEFINITIONS` in `src/utils/McpToolDefinitions.ts`. Handlers
 live in `CtrlYokeMCPServer` and route through `queueOperation()` for the write
 paths, same as every other mutating tool.
 
-They must **not** join `MCP_WORKFLOW_TOOL_NAMES`. That list does two jobs today:
+Adding them, however, exposes a conflation in `MCP_WORKFLOW_TOOL_NAMES` that has
+to be fixed first rather than worked around. That one hand-maintained list does
+two unrelated jobs:
 
 - it is the tool subset the built-in `ctrlyoke-mcp-tools` skill documents
   (`McpToolSkillGenerator.MCP_TOOL_SKILL_TOOL_NAMES` is literally
@@ -331,11 +333,35 @@ They must **not** join `MCP_WORKFLOW_TOOL_NAMES`. That list does two jobs today:
 - it is the deny-list `CommitMessageGenerator` hands the commit-message run
   (`deniedTools: [...MCP_WORKFLOW_TOOL_NAMES]`, `CommitMessageGenerator.ts:347`).
 
-Adding coordination tools to it would satisfy the second job while breaking the
-first — a parallel-group member, which must never see `append_step`, would get
-one skill document covering both sets. Instead: add `MCP_COORDINATION_TOOL_NAMES`
-alongside it, leave `MCP_TOOL_SKILL_TOOL_NAMES` pointing at
-`MCP_WORKFLOW_TOOL_NAMES` only, and make `deniedTools` the explicit union.
+Those jobs disagree the moment a tool exists that belongs in neither the queue
+skill nor a commit-message run — which is exactly what the coordination tools
+are. The list currently holds 8 of the 9 tool-name constants: every tool except
+`submit_commit_message`. So its second consumer does not want "workflow tools" at
+all, it wants _"everything except the commit tool"_, and it happens to be correct
+only because those two sets coincide today.
+
+Keeping a third parallel list and remembering to union it at the deny site would
+re-arm the same trap for the tenth tool. Since nothing is released, fix the
+structure instead:
+
+- **Derive the commit-run deny-list by exclusion** — every name in
+  `MCP_TOOL_DEFINITIONS` except `MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME`. The intent
+  is an allow-list of one; it is expressed as a denial only because
+  `McpServerConfig` offers `deniedTools` and no `allowedTools`
+  (`src/types/CtrlYokeTypes.ts:104-110`), matching what harnesses accept as deny
+  patterns. Derived, it stays correct for every tool added later without anyone
+  remembering anything.
+- **Rename the remaining list `MCP_QUEUE_TOOL_NAMES`** so it has exactly one job:
+  what the queue skill documents. Its current name invites precisely the
+  "everything workflow-ish" reading that caused the overload.
+- **Drop `MCP_TOOL_SKILL_TOOL_NAMES`**, which is now a pure alias of that list;
+  the generator can consume it directly.
+- Then add `MCP_COORDINATION_TOOL_NAMES` for the new tools, with no union
+  bookkeeping anywhere.
+
+The live consequence of _not_ doing this: follow the instruction to keep
+coordination tools out of `MCP_WORKFLOW_TOOL_NAMES`, forget the deny-site union,
+and a commit-message run silently gains the ability to post to the board.
 
 ### 5. Claims are advisory and never block
 
@@ -652,9 +678,14 @@ read consistently.
 - `MCP_SKILL_NAMES` (`src/types/DashboardConstants.ts:3678-3681`) gains
   `COORDINATION: "ctrlyoke-coordination-tools"`. The existing comment already warns
   these names are workflow-referenced and must stay stable.
-- `src/utils/McpToolDefinitions.ts` gains `MCP_COORDINATION_TOOL_NAMES`;
-  `McpToolSkillGenerator` gains `MCP_COORDINATION_SKILL_TOOL_NAMES` and a third
-  branch in `generateBuiltInSkillContent`.
+- `src/utils/McpToolDefinitions.ts`: rename `MCP_WORKFLOW_TOOL_NAMES` to
+  `MCP_QUEUE_TOOL_NAMES`, add `MCP_COORDINATION_TOOL_NAMES`, and add a derived
+  "everything except the commit tool" export for `CommitMessageGenerator`'s
+  `deniedTools` (Decision 4). `McpToolSkillGenerator` loses the
+  `MCP_TOOL_SKILL_TOOL_NAMES` alias, gains `MCP_COORDINATION_SKILL_TOOL_NAMES`,
+  and gains a third branch in `generateBuiltInSkillContent`. Worth a test that the
+  derived deny-list plus the commit tool covers `MCP_TOOL_DEFINITIONS` exactly, so
+  a future tool cannot slip through either side.
 - New bundled `src/templates/skills/ctrlyoke-coordination-tools/SKILL.md`.
   `esbuild.js`'s `copy-templates` plugin already globs the directory.
 - `parseMcpToolCliArgs` gains `--step-index` / `--parallel-group-id` (and
