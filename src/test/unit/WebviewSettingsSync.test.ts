@@ -7,7 +7,10 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
+import { CtrlYokeMCPServer } from "../../mcp-server";
 import {
+  CAPABILITIES_FILE,
+  CTRLYOKE_DIR,
   MESSAGE_TYPES,
   HARNESS_IDS,
   STATUS_LINE_TRACKING_PROVIDERS,
@@ -20,6 +23,8 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   TRUST_DECISIONS,
 } from "../../types/DashboardConstants";
+import { MCP_LIST_HARNESSES_TOOL_NAME } from "../../utils/McpToolDefinitions";
+import type { CapabilitiesFile } from "../../types/CapabilitiesTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
   ExternalRootsTrustStore,
@@ -645,6 +650,83 @@ suite("WebviewSettingsSync", () => {
           data: { snapshot },
         }
       );
+    });
+
+    test("writes a capabilities file readable by the MCP server", async () => {
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const workspaceRoot = tempDir("capabilities-contract");
+      const capabilitiesPath = path.join(
+        workspaceRoot,
+        CTRLYOKE_DIR,
+        CAPABILITIES_FILE
+      );
+
+      try {
+        await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [{ uri: vscode.Uri.file(workspaceRoot) }],
+          configurable: true,
+        });
+
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
+        sync.notifyHarnessAvailability(HARNESS_IDS.CODEX_CLI, true, "");
+
+        let writtenCapabilities: CapabilitiesFile | undefined;
+        for (let attempt = 0; attempt < 20; attempt++) {
+          try {
+            writtenCapabilities = JSON.parse(
+              await fs.readFile(capabilitiesPath, "utf8")
+            );
+            break;
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+          }
+        }
+
+        assert.ok(writtenCapabilities);
+        const codex = writtenCapabilities.harnesses.find(
+          (harness) => harness.id === HARNESS_IDS.CODEX_CLI
+        );
+        assert.ok(codex);
+        assert.strictEqual(codex.available, true);
+        assert.ok(codex.models.every((model) => model.value && model.label));
+
+        const result = await new CtrlYokeMCPServer({
+          workspaceRoot,
+        }).invokeTool(MCP_LIST_HARNESSES_TOOL_NAME, {});
+        const response = JSON.parse(
+          (result as { content: Array<{ text: string }> }).content[0].text
+        ) as {
+          generatedAt: number;
+          harnesses: Array<{
+            id: string;
+            displayName: string;
+            available: boolean;
+            models: string[];
+          }>;
+        };
+
+        assert.strictEqual(
+          response.generatedAt,
+          writtenCapabilities.generatedAt
+        );
+        assert.deepStrictEqual(response.harnesses, [
+          {
+            id: codex.id,
+            displayName: codex.displayName,
+            available: true,
+            models: codex.models.map((model) => model.value),
+          },
+        ]);
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+      }
     });
   });
 

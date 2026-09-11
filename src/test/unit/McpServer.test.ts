@@ -4,7 +4,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
-import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
+import {
+  CtrlYokeMCPServer,
+  getMaxQueueSize,
+  initializeMcpStorage,
+} from "../../mcp-server";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
@@ -21,6 +25,7 @@ import type {
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import {
+  DEFAULT_MAX_QUEUE_SIZE,
   EXECUTION_STATES,
   RUNNER_IDS,
   RUN_HISTORY_LOCATIONS,
@@ -261,6 +266,20 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         "workflow_status",
       ]
     );
+  });
+
+  test("uses the shared queue default when no max-size environment value is set", () => {
+    const priorMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+    try {
+      delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+      assert.strictEqual(getMaxQueueSize(), DEFAULT_MAX_QUEUE_SIZE);
+    } finally {
+      if (priorMaxQueueSize === undefined) {
+        delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+      } else {
+        process.env.CTRLYOKE_MAX_QUEUE_SIZE = priorMaxQueueSize;
+      }
+    }
   });
 
   function runMcpToolCli(args: string[], env?: NodeJS.ProcessEnv) {

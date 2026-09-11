@@ -22,6 +22,7 @@ import {
   type StatusLineTrackingProvider,
   type ToastLevelMode,
   WORKTREE_MODES,
+  DEFAULT_MAX_QUEUE_SIZE,
 } from "./DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -469,7 +470,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
   },
   queue: {
-    maxSize: 100,
+    maxSize: DEFAULT_MAX_QUEUE_SIZE,
     maxParallelSteps: 6,
     maxWorkflowExecutionTime: -1,
     unlimitedMode: false,

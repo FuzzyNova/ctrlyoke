@@ -122,6 +122,8 @@ logger and can stay.
 
 ## 4. Give `capabilities.json` a shared type
 
+**Status: done —** shared capabilities contract now types both the extension writer and MCP reader.
+
 **The smell.** The file is written by `WebviewSettingsSync.writeCapabilities`
 (`src/ui/WebviewSettingsSync.ts:339,355`) and read by
 `readCapabilities(): Promise<any | null>` (`src/mcp-server.ts:706`), whose consumer
@@ -138,6 +140,8 @@ the writing side fails at runtime in a different process.
 The writer already builds the object; the reader stops casting.
 
 ## 5. De-duplicate the path constants
+
+**Status: done —** shared path names now live in `DashboardConstants` and feed the existing `PATH_CONSTANTS` surface.
 
 `src/mcp-server.ts:72-75` reads:
 
@@ -167,6 +171,8 @@ than gone. Verified: neither `ConfigurationUtils.ts` nor `DashboardConstants.ts`
 imports `vscode`, so the move is safe in both directions.
 
 ## 6. Single-source the max-queue default
+
+**Status: done —** the queue setting and MCP fallback now consume the shared dashboard default.
 
 `getMaxQueueSize()` (`src/mcp-server.ts:134-144`) falls back to `100` with the
 comment _"Default, matches package.json default"_. That comment cites a surface the

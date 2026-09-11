@@ -35,9 +35,14 @@ import type {
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import {
   BOOLEAN_STRING_VALUES,
+  CAPABILITIES_FILE,
+  CTRLYOKE_DIR,
+  DEFAULT_MAX_QUEUE_SIZE,
   EXECUTION_STATES,
+  LOGS_DIR,
   QUEUE_POSITION,
 } from "./types/DashboardConstants";
+import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
@@ -75,11 +80,6 @@ import {
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
-
-// Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
-const CTRLYOKE_DIR = ".ctrlyoke";
-const LOGS_DIR = "logs";
-const CAPABILITIES_FILE = "capabilities.json";
 
 interface ReadOutputPaging {
   cursor?: string;
@@ -136,9 +136,10 @@ function log(...args: any[]) {
  */
 /**
  * Read queue size limit from environment (set by the extension via MCP config env vars).
- * Falls back to 100 if not set. A value of 0 or CTRLYOKE_UNLIMITED_MODE=true means no limit.
+ * Falls back to the shared queue setting default if not set. A value of 0 or
+ * CTRLYOKE_UNLIMITED_MODE=true means no limit.
  */
-function getMaxQueueSize(): number {
+export function getMaxQueueSize(): number {
   const envValue = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
   if (envValue) {
     const parsed = parseInt(envValue, 10);
@@ -146,7 +147,7 @@ function getMaxQueueSize(): number {
       return parsed;
     }
   }
-  return 100; // Default, matches package.json default
+  return DEFAULT_MAX_QUEUE_SIZE;
 }
 
 function isUnlimitedMode(): boolean {
@@ -181,7 +182,8 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_RUN_HISTORY_LOCATION:
         process.env.CTRLYOKE_RUN_HISTORY_LOCATION || "(default: user)",
       CTRLYOKE_MAX_QUEUE_SIZE:
-        process.env.CTRLYOKE_MAX_QUEUE_SIZE || "(not set — default 100)",
+        process.env.CTRLYOKE_MAX_QUEUE_SIZE ||
+        `(not set — default ${DEFAULT_MAX_QUEUE_SIZE})`,
       CTRLYOKE_UNLIMITED_MODE:
         process.env.CTRLYOKE_UNLIMITED_MODE || "(not set — default false)",
       NODE_ENV: process.env.NODE_ENV,
@@ -420,19 +422,19 @@ export class CtrlYokeMCPServer {
         const promptModel = p.model;
         if (promptHarness) {
           const harnessEntry = capabilities.harnesses.find(
-            (h: any) => h.id === promptHarness
+            (h) => h.id === promptHarness
           );
           if (!harnessEntry) {
             const available = capabilities.harnesses
-              .filter((h: any) => h.available)
-              .map((h: any) => h.id)
+              .filter((h) => h.available)
+              .map((h) => h.id)
               .join(", ");
             throw new Error(
               `Invalid harness '${promptHarness}'. Available harnesses: ${available || "(none)"}`
             );
           }
           if (promptModel && harnessEntry.models.length > 0) {
-            const modelValues = harnessEntry.models.map((m: any) => m.value);
+            const modelValues = harnessEntry.models.map((m) => m.value);
             if (!modelValues.includes(promptModel)) {
               throw new Error(
                 `Invalid model '${promptModel}' for harness '${promptHarness}'. Valid models: ${modelValues.join(", ")}`
@@ -671,7 +673,7 @@ export class CtrlYokeMCPServer {
    * Read and parse .ctrlyoke/capabilities.json.
    * Returns null if the file does not exist or cannot be parsed.
    */
-  private async readCapabilities(): Promise<any | null> {
+  private async readCapabilities(): Promise<CapabilitiesFile | null> {
     const capabilitiesPath = path.join(
       this.workspaceRoot,
       CTRLYOKE_DIR,
@@ -679,7 +681,7 @@ export class CtrlYokeMCPServer {
     );
     try {
       const content = await fs.readFile(capabilitiesPath, "utf8");
-      return JSON.parse(content);
+      return JSON.parse(content) as CapabilitiesFile;
     } catch {
       return null;
     }
@@ -699,13 +701,13 @@ export class CtrlYokeMCPServer {
     }
 
     // Filter to available harnesses only
-    const availableHarnesses = (capabilities.harnesses as any[])
+    const availableHarnesses = capabilities.harnesses
       .filter((h) => h.available)
       .map((h) => ({
         id: h.id,
         displayName: h.displayName,
         available: true,
-        models: (h.models as any[]).map((m) => m.value),
+        models: h.models.map((m) => m.value),
       }));
 
     const response = {
