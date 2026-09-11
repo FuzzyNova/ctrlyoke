@@ -56,7 +56,7 @@ import {
 } from "./utils/RunHistoryStoragePolicy";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
-  MCP_CAPABILITIES_TOOL_NAME,
+  MCP_LIST_HARNESSES_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
@@ -266,17 +266,17 @@ export class CtrlYokeMCPServer {
   public async invokeTool(name: string, args: unknown): Promise<unknown> {
     switch (name) {
       case MCP_WORKFLOW_STATUS_TOOL_NAME:
-        return this.handleQueueStatus();
+        return this.handleWorkflowStatus();
       case MCP_APPEND_STEP_TOOL_NAME:
-        return this.queueOperation(() => this.handleQueueAppend(args));
+        return this.queueOperation(() => this.handleAppendStep(args));
       case MCP_EDIT_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleStepEdit(args));
       case MCP_REMOVE_STEP_TOOL_NAME:
         return this.queueOperation(() => this.handleStepRemove(args));
       case MCP_REORDER_STEPS_TOOL_NAME:
         return this.queueOperation(() => this.handleStepsReorder(args));
-      case MCP_CAPABILITIES_TOOL_NAME:
-        return this.handleCapabilities();
+      case MCP_LIST_HARNESSES_TOOL_NAME:
+        return this.handleListHarnesses();
       case MCP_READ_OUTPUT_TOOL_NAME:
         return this.handleReadOutput(args);
       case MCP_GLOBAL_STATUS_TOOL_NAME:
@@ -322,7 +322,7 @@ export class CtrlYokeMCPServer {
    * Handle workflow_status tool invocation
    * Returns comprehensive queue state including metadata and all prompts
    */
-  private async handleQueueStatus() {
+  private async handleWorkflowStatus() {
     const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
     const workingFile = selected.filePath;
 
@@ -387,7 +387,7 @@ export class CtrlYokeMCPServer {
    * Adds prompts to this server's own run with position control. The target is
    * never taken from the arguments — see `resolveRun`.
    */
-  private async handleQueueAppend(args: any) {
+  private async handleAppendStep(args: any) {
     log(`Processing ${MCP_APPEND_STEP_TOOL_NAME} request...`);
     const {
       steps,
@@ -718,10 +718,10 @@ export class CtrlYokeMCPServer {
   }
 
   /**
-   * Handle capabilities tool invocation.
+   * Handle list_harnesses tool invocation.
    * Returns available harnesses and their supported models.
    */
-  private async handleCapabilities() {
+  private async handleListHarnesses() {
     const capabilities = await this.readCapabilities();
 
     if (!capabilities) {

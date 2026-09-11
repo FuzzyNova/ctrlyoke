@@ -19,6 +19,8 @@
 
 ## 1. Rename `capabilities` to `list_harnesses`
 
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
+
 The only change here that cannot be made later.
 
 The tool returns available harnesses and the models each supports
@@ -203,6 +205,8 @@ formats serialise the same object.
 
 ## 8. Rename handlers to match their tools
 
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
+
 `handleQueueStatus` (`:325`) serves `workflow_status`; `handleQueueAppend` (`:390`)
 serves `append_step`. The tools were renamed from `queue_status`/`append_queue` in an
 earlier pass and the handlers were not, so grepping a tool name does not find the
@@ -210,6 +214,8 @@ code that implements it. Mechanical, and worth doing in the same pass as item 1 
 the dispatch table reads uniformly.
 
 ## 9. Fill the two gaps in the public tool docs
+
+**Status: done —** refactor(mcp): rename capabilities tool and complete MCP surface docs
 
 `docs/reference/mcp-tools.md` lists 7 tools. `global_status` and
 `submit_commit_message` are missing. `global_status` matters most: agents are told it

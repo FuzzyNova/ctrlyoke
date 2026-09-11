@@ -40,7 +40,7 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 </writingGoodSteps>
 
 <harnessAndModel>
-Prefer the workflow's default harness and model — omit `harness`/`model` on queued steps unless the user asked you to optimize per step. If you do optimize, call `capabilities` first and use only harnesses and models it reports; never invent model names. Reserve the most capable models for planning, architecture, and review, and use cheaper, faster ones for mechanical implementation.
+Prefer the workflow's default harness and model — omit `harness`/`model` on queued steps unless the user asked you to optimize per step. If you do optimize, call `list_harnesses` first and use only harnesses and models it reports; never invent model names. Reserve the most capable models for planning, architecture, and review, and use cheaper, faster ones for mechanical implementation.
 </harnessAndModel>
 
 <reviewPass>

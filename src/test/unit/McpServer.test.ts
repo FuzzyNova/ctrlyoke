@@ -8,6 +8,7 @@ import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
+  MCP_TOOL_DEFINITIONS,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
 } from "../../utils/McpToolDefinitions";
@@ -244,6 +245,23 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
+
+  test("pins the complete built-in MCP tool-name set", () => {
+    assert.deepStrictEqual(
+      [...MCP_TOOL_DEFINITIONS.map((tool) => tool.name)].sort(),
+      [
+        "append_step",
+        "edit_step",
+        "global_status",
+        "list_harnesses",
+        "read_output",
+        "remove_step",
+        "reorder_steps",
+        "submit_commit_message",
+        "workflow_status",
+      ]
+    );
+  });
 
   function runMcpToolCli(args: string[], env?: NodeJS.ProcessEnv) {
     return spawnSync(
