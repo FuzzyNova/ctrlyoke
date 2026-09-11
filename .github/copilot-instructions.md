@@ -71,6 +71,8 @@ A headless agent with no `F5`/Stop button can launch and cleanly close that dev 
 
 NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow (30+ minutes). Never run this command unless explicitly told to do so. Use `npm test` which invokes all extension, integration, and UI tests, but does not run the harness tests.
 
+**Read the `npm test` summary — never run the suite twice to find out whether it passed.** `npm test` takes ~6 minutes and prints thousands of lines across three different reporters, so the verdict is not something to reconstruct by eye. Every run ends with a fixed block anchored on the line `TEST SUMMARY:`, giving each suite's PASS/FAIL, its counts, and the name of every failing test with the command to re-run just that suite. Pipe the run and keep the end of it — `npm test 2>&1 | tail -40` (PowerShell: `npm test 2>&1 | Select-Object -Last 40`) — or grep for `TEST SUMMARY:`. All three suites run even when an earlier one fails, so a single run is always the complete picture; add `npm test -- --bail` only when you would rather stop at the first failing suite than wait out the rest. If you find yourself about to re-run the whole suite to "check for failures", the summary you already have answers it.
+
 ### Code Quality
 
 | Command                | Purpose                               |
