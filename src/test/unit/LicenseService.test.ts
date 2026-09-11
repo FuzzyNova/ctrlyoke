@@ -7,6 +7,7 @@ import {
   KEYGEN_API_BASE_URL,
   KEYGEN_PRODUCT_ID,
   KEYGEN_PRO_POLICY_ID,
+  KEYGEN_ENTERPRISE_POLICY_ID,
   LICENSE_FILE_SECRET_KEY,
   LICENSE_ID_SECRET_KEY,
   LICENSE_KEY_SECRET_KEY,
@@ -356,6 +357,65 @@ suite("LicenseService", () => {
     assert.strictEqual(
       JSON.parse(calls[1].body ?? "{}").data.attributes.fingerprint,
       "fingerprint-123"
+    );
+  });
+
+  test("activates a key issued under the Enterprise policy", async () => {
+    const secrets = new InMemorySecretStore();
+    const file = await createLicenseFile();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NO_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_ENTERPRISE_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machine: new Response(JSON.stringify({ data: { id: "machine-123" } }), {
+        status: 201,
+      }),
+      checkout: new Response(file, { status: 200 }),
+    });
+
+    const service = createService(secrets, {
+      fetch,
+      machineFingerprint: "fingerprint-123",
+    });
+    const entitlement = await service.activateWithKey("enterprise-key");
+
+    assert.strictEqual(entitlement.tier, "pro");
+  });
+
+  test("rejects a key issued under an unrecognized policy", async () => {
+    const secrets = new InMemorySecretStore();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NO_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: "some-other-policy-id" } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+    });
+    const service = createService(secrets, { fetch });
+
+    await assert.rejects(
+      service.activateWithKey("wrong-policy-key"),
+      /different ctrlyoke product or policy/
     );
   });
 
