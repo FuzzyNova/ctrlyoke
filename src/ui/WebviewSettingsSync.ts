@@ -269,6 +269,7 @@ export class WebviewSettingsSync {
     );
 
     const workflowState = this.getCurrentState(clientId);
+    const coordinationScope = await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
     this.licenseAccess = await this.resolveLicenseAccess();
@@ -287,6 +288,7 @@ export class WebviewSettingsSync {
           availableSkills: this.availableSkills,
           licenseAccess: this.licenseAccess,
           ...(dev ? { dev } : {}),
+          ...(coordinationScope ? { coordinationScope } : {}),
         },
       },
       postMessage

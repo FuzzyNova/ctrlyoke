@@ -21,6 +21,7 @@ import type {
   ParallelGroupDefinition,
   WorktreeRunProjection,
   RunnerHostIdentity,
+  CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
@@ -327,6 +328,10 @@ export class CtrlYokeHostedServer
     // browser clients — each browser client's active workflow is driven exclusively
     // by replayWorkflowStateTo(), which sends directly via the client's scoped
     // postMessage.
+  }
+
+  notifyCoordinationScopeUpdated(scope: CoordinationScopeSnapshot): void {
+    this.broadcast({ type: MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED, scope });
   }
 
   notifyCliWatchOutput(

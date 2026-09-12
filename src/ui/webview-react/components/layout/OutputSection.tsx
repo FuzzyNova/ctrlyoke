@@ -93,6 +93,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { Icon } from "../shared/Icon";
+import { CoordinationActivityPanel } from "../coordination/CoordinationActivityPanel";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -223,6 +224,16 @@ const OutputSectionInner: React.FC = () => {
     s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
   );
   const executionRunRef = useUiStore((s) => s.executionRunRef);
+  const coordinationRunAddress = useMemo(() => {
+    if (!displayedAddress?.workflowKey) return undefined;
+    const runRef =
+      displayedAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        ? displayedAddress.runRef
+        : executionRunRef;
+    return runRef
+      ? { workflowKey: displayedAddress.workflowKey, runRef }
+      : undefined;
+  }, [displayedAddress, executionRunRef]);
   const historyRunMetadata = useWorkflowStore(
     (s) => s.historyOutputs?.runMetadata
   );
@@ -553,6 +564,7 @@ const OutputSectionInner: React.FC = () => {
     invalidateMeasuredRowForUserResize:
       invalidateMeasuredRowForUserResizeForRowModel,
     onDiffViewReset: handleDiffViewReset,
+    coordinationRunAddress,
   });
 
   const outputExport = useOutputExport({
@@ -1607,6 +1619,8 @@ const OutputSectionInner: React.FC = () => {
           outputFontSize={outputFontSize}
         />
       )}
+
+      {!outputCollapsed && <CoordinationActivityPanel />}
 
       {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output.
           Both panes are absolutely positioned to fill this wrapper so the inactive pane

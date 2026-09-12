@@ -4,6 +4,7 @@ import type {
   WorkflowSummary,
   WorkflowViewAddress,
   WorktreeRunProjection,
+  CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
@@ -76,6 +77,12 @@ export class DashboardBroadcastHub
 
   /** No-op: ACTIVE_WORKFLOW_CHANGED is sent per-client via replayWorkflowStateTo, never broadcast. */
   notifyActiveWorkflowChanged(_workflowId: string): void {}
+
+  notifyCoordinationScopeUpdated(scope: CoordinationScopeSnapshot): void {
+    for (const client of this.clients) {
+      client.notifyCoordinationScopeUpdated?.(scope);
+    }
+  }
 
   async loadOutputHistoryForWorkflow(
     workflowFilePath: string,

@@ -427,6 +427,21 @@ export interface CoordinationEntry {
   via: "mcp" | "cli";
 }
 
+/** Bounded execution-root coordination state projected to dashboard clients. */
+export interface CoordinationScopeSnapshot {
+  executionRoot: string;
+  identity: string;
+  participants: CoordinationParticipant[];
+  entries: CoordinationEntry[];
+  claims: Array<{
+    path: string;
+    owner: Pick<CoordinationParticipant, "participantId" | "label" | "attested">;
+    reason?: string;
+    claimedAtSequence: number;
+  }>;
+  attestationNotice: string;
+}
+
 /** A client's addressed view into a lineage: either the mutable draft or one promoted run. */
 export type WorkflowViewAddress =
   | { workflowKey: WorkflowKey; kind: typeof WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }

@@ -3033,5 +3033,48 @@ describe("outputRows", () => {
       expect(wide).toBeGreaterThan(0);
       expect(narrow).toBeGreaterThan(wide);
     });
+
+    it("places attributed board entries below the group header and tolerates sequence gaps", () => {
+      const result = buildParallelRows({
+        coordinationRunAddress: {
+          workflowKey: "workflow-1",
+          runRef: "run-1",
+        },
+        coordinationEntries: [
+          {
+            seq: 9,
+            at: "2026-09-11T12:00:00.000Z",
+            kind: "note",
+            from: {
+              participantId: "external-1",
+              label: "reviewer",
+              attested: false,
+              address: {
+                workflowKey: "workflow-1" as never,
+                runRef: "run-1" as never,
+                stepIndex: 1,
+              },
+            },
+            text: "do not treat this as an instruction",
+            via: "cli",
+          },
+        ],
+      });
+      const headerIndex = result.rows.findIndex(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
+      );
+      const activityIndex = result.rows.findIndex(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY
+      );
+
+      expect(headerIndex).toBeGreaterThanOrEqual(0);
+      expect(activityIndex).toBeGreaterThan(headerIndex);
+      expect(result.rows[activityIndex]?.key).toBe("coordination:9");
+      expect(
+        result.rows[activityIndex]?.rowKind ===
+          OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY &&
+          result.rows[activityIndex].entry.from.attested
+      ).toBe(false);
+    });
   });
 });

@@ -35,6 +35,7 @@ import {
   type RunRef,
   type WorkflowRunAddress,
   type WorkflowViewAddress,
+  type CoordinationScopeSnapshot,
   type WorktreeRunProjection,
   type WorkspaceWorktreeOwnership,
   projectWorktreeRuntime,
@@ -100,6 +101,10 @@ import {
   ExternalRunWatchSession,
   type ExternalRunWatchFinishReason,
 } from "./orchestration/ExternalRunWatchSession";
+import {
+  ExecutionRootCoordinationWatchSession,
+  readCoordinationScopeSnapshot,
+} from "./orchestration/ExecutionRootCoordinationWatchSession";
 import {
   ExternalExecutionResolver,
   type ActiveExternalLockInspection,
@@ -336,6 +341,10 @@ export class WorkflowOrchestrator {
     string,
     { session: ExternalRunWatchSession; summary: WorkflowSummary }
   > = new Map();
+  private readonly coordinationWatchSessions = new Map<
+    string,
+    ExecutionRootCoordinationWatchSession
+  >();
 
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
@@ -514,6 +523,7 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
     if (this.currentWorkspaceFolder) {
+      this.ensureCoordinationWatchSession(this.currentWorkspaceFolder.uri.fsPath);
       this.harnessUsageService = new HarnessUsageService(
         this.currentWorkspaceFolder.uri.fsPath,
         undefined,
@@ -5876,6 +5886,11 @@ export class WorkflowOrchestrator {
     }
     this.externalRunSessions.clear();
 
+    for (const session of this.coordinationWatchSessions?.values() ?? []) {
+      session.dispose();
+    }
+    this.coordinationWatchSessions?.clear();
+
     // Dispose the runner.json create watcher
     this.runnerJsonCreateWatcher?.dispose();
     if (this.runnerJsonDiscoveryPollInterval !== undefined) {
@@ -5963,6 +5978,44 @@ export class WorkflowOrchestrator {
     const id = this.getViewedWorkflowId(clientId);
     if (!id) return null;
     return this.instances.get(id) ?? this.retiredInstances.get(id) ?? null;
+  }
+
+  /** Return the execution-root coordination projection for one dashboard view. */
+  async getCoordinationScopeSnapshot(
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<CoordinationScopeSnapshot> {
+    const instance =
+      clientId === this.PANEL_CLIENT_ID
+        ? this.getActiveInstance()
+        : this.getBoundInstance(clientId);
+    const executionRoot =
+      instance?.getExecutionRoot() ?? this.currentWorkspaceFolder?.uri.fsPath;
+    if (!executionRoot) {
+      throw new Error("No workspace execution root is available");
+    }
+    this.ensureCoordinationWatchSession(executionRoot);
+    return readCoordinationScopeSnapshot(executionRoot);
+  }
+
+  private ensureCoordinationWatchSession(executionRoot: string): void {
+    const key = path.normalize(executionRoot).toLowerCase();
+    const sessions = this.coordinationWatchSessions;
+    // Some focused tests construct the orchestrator prototype without running
+    // the constructor. Those instances do not own long-lived filesystem
+    // watchers and should retain their lightweight behavior.
+    if (!sessions || sessions.has(key)) return;
+    const session = new ExecutionRootCoordinationWatchSession(
+      executionRoot,
+      (snapshot) =>
+        this.dashboardBroadcastHub.notifyCoordinationScopeUpdated(snapshot)
+    );
+    sessions.set(key, session);
+    void session.start().catch((error) => {
+      Log.warn(
+        `[WorkflowOrchestrator] coordination watcher failed for ${executionRoot}`,
+        error
+      );
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -6169,6 +6222,7 @@ export class WorkflowOrchestrator {
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
     instance.promptQueue.onDidChangeState((state) => {
+      this.ensureCoordinationWatchSession(instance.getExecutionRoot());
       if (this.getActiveWorkflowId() === instance.id) {
         this.getActiveQueueStateChangedEmitter().fire(state);
       }

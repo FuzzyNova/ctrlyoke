@@ -55,6 +55,7 @@ import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
+  CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
@@ -976,6 +977,15 @@ export class CtrlYokeWebviewProvider
   /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
   public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+  }
+
+  public notifyCoordinationScopeUpdated(
+    scope: CoordinationScopeSnapshot
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED,
+      scope,
+    });
   }
 
   /** Send workspace snapshot data for a completed prompt step to the webview. */

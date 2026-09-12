@@ -1271,6 +1271,11 @@ export class WorkflowInstance {
     return this.promptQueue.getState();
   }
 
+  /** Filesystem root whose coordination board belongs to this instance. */
+  getExecutionRoot(): string {
+    return this.executionWorkspace.executionRoot;
+  }
+
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
     const executionTimeUpdatedAt = Date.now();

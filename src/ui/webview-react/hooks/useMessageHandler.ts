@@ -516,6 +516,7 @@ export function createMessageHandlers(
     if (data.licenseAccess) {
       settingsStore.setLicenseAccess(data.licenseAccess);
     }
+    workflowStore.setCoordinationScope(data.coordinationScope ?? null);
 
     // Update workflow properties only if non-empty — sendInitialState() sends
     // workflowProperties: {} as a placeholder, which would wipe out properties
@@ -568,6 +569,10 @@ export function createMessageHandlers(
       editorStore.setHasActiveQueue(true);
       settingsStore.setWorkflowLoaded(true);
     }
+  };
+
+  handlers[MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED] = (message) => {
+    useWorkflowStore.getState().setCoordinationScope(message.scope);
   };
 
   // --------------------------------------------------------------------------

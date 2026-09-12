@@ -112,6 +112,7 @@ import type {
   StepHiddenRow,
   ScriptOutputRow,
   StructuredEventRow,
+  CoordinationActivityRow,
 } from "@utils/outputRows";
 import {
   getDisplayStructuredPatch,
@@ -131,6 +132,10 @@ import {
   formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
 import { Icon } from "../shared/Icon";
+import {
+  coordinationEntrySummary,
+  coordinationParticipantAttribution,
+} from "@utils/coordinationPresentation";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -1663,6 +1668,22 @@ const AtomicPromptReference: React.FC<{
   />
 );
 
+const CoordinationActivityRowView: React.FC<{
+  row: CoordinationActivityRow;
+}> = ({ row }) => (
+  <div
+    className="border-l-2 border-[var(--vscode-textLink-foreground)]/50 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
+    data-untrusted-content="true"
+  >
+    <div className="font-medium text-[var(--fg-secondary)]">
+      {coordinationParticipantAttribution(row.entry.from)}
+    </div>
+    <div className="whitespace-pre-wrap break-words">
+      {coordinationEntrySummary(row.entry)}
+    </div>
+  </div>
+);
+
 function OutputRowComponent({
   row,
   findDecorations,
@@ -1891,6 +1912,9 @@ function OutputRowComponent({
     case OUTPUT_ROW_KINDS.STATS:
       content = <StatsRowView row={row} />;
       break;
+    case OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY:
+      content = <CoordinationActivityRowView row={row} />;
+      break;
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY: {
       const totalLabel = formatTokenTotal(row.total, row.coverage);
       content = (
@@ -1922,6 +1946,7 @@ function OutputRowComponent({
     row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
     row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_VERDICT ||
     row.rowKind === OUTPUT_ROW_KINDS.STATS ||
+    row.rowKind === OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY ||
     row.rowKind === OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY;
   const stepColorBarStyle = row.stepColor
     ? getStepIdentityBarStyle(row.stepColor)

@@ -69,6 +69,7 @@ import type {
   ScriptVerdict,
   ParallelGroupDefinition,
   StepDisplayProperties,
+  CoordinationScopeSnapshot,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -528,6 +529,7 @@ export interface InitMessageData {
       installHint?: string;
     }
   >;
+  coordinationScope?: CoordinationScopeSnapshot;
   availableAgents: Array<{
     name: string;
     displayName?: string;
@@ -536,6 +538,12 @@ export interface InitMessageData {
   }>;
   licenseAccess?: LicenseAccessState;
   dev?: DevStatus;
+}
+
+/** Extension → Webview: refreshed execution-root coordination activity. */
+export interface CoordinationScopeUpdatedMessage {
+  type: typeof MESSAGE_TYPES.COORDINATION_SCOPE_UPDATED;
+  scope: CoordinationScopeSnapshot;
 }
 
 export interface DevStatus {
@@ -2659,6 +2667,7 @@ export interface OpenHarnessDirResultMessage {
  */
 export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.INIT; data: InitMessageData }
+  | CoordinationScopeUpdatedMessage
   | OpenGlobalSettingsTabMessage
   | FileSelectedMessage
   | SessionRestoredMessage

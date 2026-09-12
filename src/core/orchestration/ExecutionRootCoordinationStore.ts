@@ -60,6 +60,8 @@ export interface CoordinationReadOptions {
   kind?: CoordinationEntry["kind"];
   /** For notes, include broadcasts and notes addressed to this participant. */
   recipient?: string;
+  /** Return the newest page rather than the oldest page. */
+  latest?: boolean;
 }
 
 export interface CoordinationReadResult {
@@ -469,11 +471,13 @@ export class ExecutionRootCoordinationStore {
         options.limit,
         retentionOptions(this.options.retention).readNotesPageSize
       );
-      const page = filtered.slice(0, limit);
+      const page = options.latest
+        ? filtered.slice(Math.max(0, filtered.length - limit))
+        : filtered.slice(0, limit);
       return {
         entries: page,
         ...(filtered.length > page.length
-          ? { nextCursor: page.at(-1)?.seq }
+          ? { nextCursor: options.latest ? page[0]?.seq : page.at(-1)?.seq }
           : {}),
       };
     });

@@ -1,6 +1,7 @@
 import type {
   ParallelGroupDefinition,
   WorkflowSummary,
+  CoordinationScopeSnapshot,
 } from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import type { HarnessId } from "../types/DashboardConstants";
@@ -26,6 +27,9 @@ export interface IDashboardProvider {
 
   /** Notify that the active (displayed) workflow changed. */
   notifyActiveWorkflowChanged(workflowId: string): void;
+
+  /** Broadcast the current execution-root coordination projection. */
+  notifyCoordinationScopeUpdated?(scope: CoordinationScopeSnapshot): void;
 
   // ── CLI watch events ──────────────────────────────────────────────────────
 

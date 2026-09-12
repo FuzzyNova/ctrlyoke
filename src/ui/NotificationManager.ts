@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { configService } from "../config/CtrlYokeConfigService";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
+import type { WorkflowStep, WorkflowSummary, CoordinationScopeSnapshot } from "../types/CtrlYokeTypes";
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
@@ -58,6 +58,7 @@ export class NotificationManager implements DashboardClient {
   }
 
   notifyActiveWorkflowChanged(_workflowId: string): void {}
+  notifyCoordinationScopeUpdated(_scope: CoordinationScopeSnapshot): void {}
   notifyCliWatchOutput(): void {}
   notifyCliPromptsExtended(): void {}
   notifyHarnessAvailability(): void {}

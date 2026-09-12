@@ -21,7 +21,10 @@ import {
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
-import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
+import type {
+  WorktreeRunProjection,
+  CoordinationScopeSnapshot,
+} from "@root/types/CtrlYokeTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 
 /**
@@ -305,6 +308,7 @@ interface WorkflowState {
   runtimeUndoGeneration: number;
   /** Live context window usage per step index, updated during prompt execution */
   liveContextWindow: Record<number, { used: number; size: number }>;
+  coordinationScope: CoordinationScopeSnapshot | null;
 }
 
 /**
@@ -452,6 +456,7 @@ interface WorkflowActions {
     size: number
   ) => void;
   clearLiveContextWindow: (stepIndex: number) => void;
+  setCoordinationScope: (scope: CoordinationScopeSnapshot | null) => void;
 }
 
 /**
@@ -513,6 +518,7 @@ const initialState: WorkflowState = {
   undoWorkflowProperties: {},
   runtimeUndoGeneration: 0,
   liveContextWindow: {},
+  coordinationScope: null,
 };
 
 function targetsEqual(
@@ -924,6 +930,9 @@ export const useWorkflowStore = create<
       setFileName: (fileName) => withUndoPause(() => set({ fileName })),
 
       setWorkflowName: (workflowName) => set({ workflowName }),
+
+      setCoordinationScope: (coordinationScope) =>
+        set({ coordinationScope }),
 
       setPrompts: (steps) => {
         // Diagnostic logging for the "running badge/highlight never appear on

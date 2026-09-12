@@ -239,6 +239,7 @@ export const MESSAGE_TYPES = {
   FINAL_PROMPT_OUTPUT: "finalStepOutput", // CLI output for finalStep keyed by loop index
   FINAL_PROMPT_STREAMING_CHUNK: "finalStepStreamingChunk", // Incremental streaming text chunk for finalStep
   FINAL_PROMPT_STREAMING_EVENTS: "finalStepStreamingEvents", // Structured streaming events for finalStep
+  COORDINATION_SCOPE_UPDATED: "coordinationScopeUpdated",
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
   END_CONDITION_SCRIPT_CREATED: "endConditionScriptCreated",
@@ -3293,6 +3294,7 @@ export const OUTPUT_ROW_KINDS = {
   SCRIPT_OUTPUT: "script-output",
   SCRIPT_VERDICT: "script-verdict",
   STATS: "stats",
+  COORDINATION_ACTIVITY: "coordination-activity",
 } as const;
 
 export type OutputRowKind =

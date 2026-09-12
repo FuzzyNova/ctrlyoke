@@ -3,6 +3,13 @@
 > **Status:** Implemented. Retained as the design record for the shipped
 > execution-root coordination surface.
 >
+> **Decision 11 final state (2026-09-11):** Implemented. The extension watches
+> each execution root's `board.jsonl` with leading/trailing throttling, sends a
+> bounded scope snapshot through dashboard adapters, renders a mandatory
+> participant/recent-entry panel, and projects same-run entries into the
+> existing output-row timeline. Attribution includes attestation state at
+> every label; board notes remain plain, explicitly untrusted text.
+>
 > **Supersedes:** `PARALLEL_STEP_COORDINATION_PLAN.md`, which scoped a coordination
 > board to one workflow run and only made it reachable from inside a `parallel:`
 > group.
@@ -30,6 +37,10 @@
 > step-index plumbing already exists and the stale-index hazard is live today
 > (Decision 7), `global_status` currently refuses external callers outright
 > (Decision 8), and open questions 5 and 6 are resolved.
+>
+> **2026-09-11 (Decision 11):** shipped the cross-layer visibility surface;
+> remaining polling and claim-enforcement questions stay explicitly open below
+> rather than expanding the v1 scope.
 
 ## Problem
 
