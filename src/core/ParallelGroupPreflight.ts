@@ -5,6 +5,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
+  MCP_AVAILABILITY_MODES,
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   type HarnessId,
@@ -231,7 +232,11 @@ export async function preflightParallelGroup(
     };
     members.push(member);
 
-    if (!isScriptStep(step) && hasCtrlYokeQueueTools(resolvedProperties)) {
+    if (
+      !isScriptStep(step) &&
+      hasCtrlYokeQueueTools(resolvedProperties) &&
+      resolvedProperties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED
+    ) {
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
         memberIndices: [stepIndex],

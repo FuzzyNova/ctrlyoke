@@ -33,9 +33,12 @@ import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
+import { hasCtrlYokeQueueTools } from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
@@ -62,6 +65,30 @@ export type PriorContextItem = {
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
 };
+
+function skillsForPrompt(
+  resolvedSkills: string[] | undefined,
+  workflowContext: WorkflowContext | undefined
+): string[] | undefined {
+  if (!resolvedSkills?.length || !workflowContext) return resolvedSkills;
+
+  const isParallelMember = workflowContext.workflowFile?.parallelGroups?.some(
+    (group) =>
+      workflowContext.promptIndex >= group.startIndex &&
+      workflowContext.promptIndex <= group.endIndex
+  );
+  if (
+    !isParallelMember ||
+    workflowContext.resolvedProperties?.mcpAvailability !==
+      MCP_AVAILABILITY_MODES.DISABLED ||
+    !workflowContext.resolvedProperties ||
+    !hasCtrlYokeQueueTools(workflowContext.resolvedProperties)
+  ) {
+    return resolvedSkills;
+  }
+
+  return resolvedSkills.filter((skill) => skill !== MCP_SKILL_NAMES.TOOLS);
+}
 
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   switch (ref.kind) {
@@ -549,9 +576,10 @@ export abstract class HarnessIntegration {
       }
     }
 
-    const skillContent = resolvedSkills?.length
+    const promptSkills = skillsForPrompt(resolvedSkills, workflowContext);
+    const skillContent = promptSkills?.length
       ? await this.expandSkillBlock(
-          resolvedSkills,
+          promptSkills,
           workspaceRoot,
           this.getExecutionCheckoutRoot(),
           workflowContext?.mcpToolSkillContext

@@ -141,6 +141,16 @@ suite("Execution-root asset discovery", () => {
     }
   });
 
+  test("discovers the separate built-in coordination skill", async () => {
+    const builtIns = await SkillDiscovery.discoverBuiltInSkills();
+    const coordination = builtIns.find(
+      (candidate) => candidate.name === MCP_SKILL_NAMES.COORDINATION
+    );
+
+    assert.ok(coordination);
+    assert.strictEqual(coordination?.source, DISCOVERY_SOURCES.BUILT_IN);
+  });
+
   test("substitutes execution addresses in generated built-in skills", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ctrlyoke-built-in-context-")
@@ -184,8 +194,32 @@ suite("Execution-root asset discovery", () => {
           commitOutputPath,
         }
       );
-      assert.ok(commitSkills?.includes(`--commit-output "${commitOutputPath}"`));
+      assert.ok(
+        commitSkills?.includes(`--commit-output "${commitOutputPath}"`)
+      );
       assert.ok(!commitSkills?.includes("<commit output path>"));
+
+      const coordinationSkills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.COORDINATION],
+        workspaceRoot,
+        workspaceRoot,
+        {
+          mcpServerPath: path.join(workspaceRoot, "out", "mcp-server.js"),
+          workspaceRoot,
+          executionRoot: workspaceRoot,
+          workingFilePath: path.join(
+            workspaceRoot,
+            ".ctrlyoke",
+            "run.ctrlyoke.json"
+          ),
+          stepIndex: 1,
+          parallelGroupId: "group-1",
+        }
+      );
+      assert.ok(coordinationSkills?.includes("### post_note"));
+      assert.ok(coordinationSkills?.includes('--step-index "1"'));
+      assert.ok(coordinationSkills?.includes('--parallel-group-id "group-1"'));
+      assert.ok(!coordinationSkills?.includes("<step index>"));
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -204,6 +238,25 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("Pass the commit output path"));
       assert.ok(skills?.includes("### submit_commit_message"));
       assert.ok(!skills?.includes("### workflow_status"));
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the coordination skill export in placeholder form", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-coordination-export-")
+    );
+    try {
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.COORDINATION],
+        workspaceRoot
+      );
+
+      assert.ok(skills?.includes("### post_note"));
+      assert.ok(skills?.includes("<execution-root path>"));
+      assert.ok(skills?.includes("<step index>"));
+      assert.ok(skills?.includes("<parallel group id>"));
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
@@ -363,6 +416,11 @@ suite("SkillDiscovery helpers", () => {
     assert.ok(
       builtIns.some(
         (candidate) => candidate.name === MCP_SKILL_NAMES.COMMIT_MESSAGE
+      )
+    );
+    assert.ok(
+      builtIns.some(
+        (candidate) => candidate.name === MCP_SKILL_NAMES.COORDINATION
       )
     );
 

@@ -784,7 +784,10 @@ suite("PropertyResolver Tests", () => {
       );
 
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
-      assert.deepStrictEqual(resolved.skills, [MCP_SKILL_NAMES.TOOLS]);
+      assert.deepStrictEqual(resolved.skills, [
+        MCP_SKILL_NAMES.TOOLS,
+        MCP_SKILL_NAMES.COORDINATION,
+      ]);
       assert.strictEqual(
         resolved.mcpAvailability,
         MCP_AVAILABILITY_MODES.DISABLED

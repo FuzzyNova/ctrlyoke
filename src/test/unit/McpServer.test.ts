@@ -9,6 +9,7 @@ import {
   getMaxQueueSize,
   MAX_GLOBAL_STATUS_RESULTS,
   initializeMcpStorage,
+  parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
 import {
@@ -47,6 +48,7 @@ import {
 } from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
+import { resolveCoordinationBoardScope } from "../../core/orchestration/ExecutionRootCoordinationStore";
 
 interface RunFixture {
   workflowKey: WorkflowKey;
@@ -516,7 +518,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, { text: "stale" })
     );
 
-    assert.strictEqual(posted.scope.participants[0].address.stepIndex, undefined);
+    assert.strictEqual(
+      posted.scope.participants[0].address.stepIndex,
+      undefined
+    );
     assert.strictEqual(
       posted.scope.participants[0].address.parallelGroupId,
       undefined
@@ -576,13 +581,54 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
-  function runMcpToolCli(args: string[], env?: NodeJS.ProcessEnv) {
+  function runMcpToolCli(
+    args: string[],
+    env?: NodeJS.ProcessEnv,
+    cwd?: string
+  ) {
     return spawnSync(
       "node",
       [path.resolve(__dirname, "../../mcp-server.js"), ...args],
-      { encoding: "utf8", ...(env ? { env } : {}) }
+      { encoding: "utf8", ...(env ? { env } : {}), ...(cwd ? { cwd } : {}) }
     );
   }
+
+  test("pins the CLI flag set and rejects unknown options", () => {
+    assert.deepStrictEqual(
+      parseMcpToolCliArgs([
+        "--tool",
+        "post_note",
+        "--args",
+        "{}",
+        "--workspace",
+        "workspace",
+        "--working-file",
+        "run.json",
+        "--commit-output",
+        "commit.txt",
+        "--step-index",
+        "2",
+        "--parallel-group-id",
+        "group-1",
+        "--execution-root",
+        "checkout",
+      ]),
+      {
+        tool: "post_note",
+        argsJson: "{}",
+        workspace: "workspace",
+        workingFile: "run.json",
+        commitOutput: "commit.txt",
+        stepIndex: 2,
+        parallelGroupId: "group-1",
+        executionRoot: "checkout",
+      }
+    );
+    assert.throws(
+      () => parseMcpToolCliArgs(["--tool", "post_note", "--unknown", "x"]),
+      /Unknown option: --unknown/
+    );
+  });
 
   test("invokes a tool through the CLI entrypoint", async () => {
     await setup();
@@ -643,6 +689,78 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(
       await fs.readFile(outputPath, "utf8"),
       "feat: capture via flag"
+    );
+  });
+
+  test("invokes coordination through the CLI with a cli lease", async () => {
+    await setup();
+    await new ProjectStateRegistry().initialize(workspaceRoot);
+    const run = await createRun(
+      "cli-coordination",
+      "2026-01-01T00-00-00-000Z",
+      {
+        currentIndex: 0,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const result = runMcpToolCli(
+      [
+        "--tool",
+        MCP_POST_NOTE_TOOL_NAME,
+        "--args",
+        JSON.stringify({ text: "cli note" }),
+        "--workspace",
+        workspaceRoot,
+        "--working-file",
+        run.runFilePath,
+        "--execution-root",
+        workspaceRoot,
+      ],
+      undefined,
+      workspaceRoot
+    );
+
+    assert.strictEqual(
+      result.status,
+      0,
+      `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+    );
+    const board = await resolveCoordinationBoardScope(workspaceRoot);
+    const entries = (await fs.readFile(board.boardPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const note = entries.find(
+      (entry: { kind: string }) => entry.kind === "note"
+    );
+    assert.ok(note);
+    assert.strictEqual(note.via, "cli");
+    assert.strictEqual(note.from.attested, false);
+  });
+
+  test("rejects a CLI coordination call for a bad working-file address", async () => {
+    await setup();
+    const result = runMcpToolCli(
+      [
+        "--tool",
+        MCP_POST_NOTE_TOOL_NAME,
+        "--args",
+        JSON.stringify({ text: "should fail" }),
+        "--workspace",
+        workspaceRoot,
+        "--working-file",
+        path.join(workspaceRoot, "missing-run.ctrlyoke.json"),
+        "--execution-root",
+        workspaceRoot,
+      ],
+      undefined,
+      workspaceRoot
+    );
+
+    assert.strictEqual(result.status, 1);
+    assert.match(
+      result.stderr,
+      /CLI coordination address is not a valid live run/
     );
   });
 

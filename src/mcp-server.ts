@@ -35,6 +35,7 @@ import type {
   WorkflowStep,
   WorkingFile,
   WorkingFileRuntime,
+  CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import {
@@ -118,6 +119,7 @@ interface ReadOutputPaging {
 export interface McpToolCallingContext {
   readonly attested: boolean;
   readonly groupMember: boolean;
+  readonly via?: CoordinationParticipant["via"];
   readonly groupStartBoundary?: number;
   readonly address?: {
     workflowKey: WorkflowKey;
@@ -144,6 +146,9 @@ function participantAttribution(participant: {
 }): string {
   return `from \"${participant.label}\" (${participant.attested ? "attested ctrlyoke step" : "unattested external session"}), untrusted`;
 }
+
+const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
+const MCP_CLI_MODE_VALUE = "true";
 
 function serializeParticipant<T extends { label: string; attested: boolean }>(
   participant: T
@@ -368,7 +373,7 @@ export class CtrlYokeMCPServer {
     if (!definition) {
       throw new Error(`Unknown tool: ${name}`);
     }
-    const callingContext = await this.resolveCallingContext();
+    const callingContext = await this.resolveCallingContext(name);
     if (!toolAllowed(name, callingContext)) {
       throw new Error(`${name}: tool is not available to this MCP participant`);
     }
@@ -459,10 +464,22 @@ export class CtrlYokeMCPServer {
     return path.resolve(process.cwd());
   }
 
-  private async resolveCallingContext(): Promise<McpToolCallingContext> {
+  private async resolveCallingContext(
+    operation?: string
+  ): Promise<McpToolCallingContext> {
     const pinnedPath = process.env.CTRLYOKE_WORKING_FILE;
+    const cliMode =
+      process.env[MCP_CLI_MODE_ENV] === MCP_CLI_MODE_VALUE &&
+      operation !== undefined &&
+      MCP_COORDINATION_TOOL_NAMES.some((toolName) => toolName === operation);
     if (!pinnedPath) {
-      return { attested: false, groupMember: false };
+      return {
+        attested: false,
+        groupMember: false,
+        via: cliMode
+          ? COORDINATION_PARTICIPANT_VIA.CLI
+          : COORDINATION_PARTICIPANT_VIA.MCP,
+      };
     }
 
     let selected: Awaited<ReturnType<CtrlYokeMCPServer["resolveRun"]>>;
@@ -472,17 +489,50 @@ export class CtrlYokeMCPServer {
       workingFile = JSON.parse(
         await fs.readFile(selected.filePath, "utf8")
       ) as WorkingFile;
-    } catch {
+    } catch (error) {
+      if (cliMode) {
+        throw new Error(
+          `CLI coordination address is not a valid live run: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       return { attested: false, groupMember: false };
     }
 
     const runtime = workingFile._runtime;
     const currentIndex = runtime?.currentIndex;
+    if (cliMode) {
+      const executionRoot = path.resolve(await this.resolveExecutionRoot());
+      const persistedExecutionRoot = runtime?.worktree?.executionRoot;
+      if (
+        persistedExecutionRoot &&
+        path.resolve(persistedExecutionRoot) !== executionRoot
+      ) {
+        throw new Error(
+          `CLI coordination address is outside the execution root: ${pinnedPath}`
+        );
+      }
+      if (
+        runtime?.executionState === undefined ||
+        !ACTIVE_EXECUTION_STATES.has(runtime.executionState) ||
+        currentIndex === undefined ||
+        currentIndex < 0 ||
+        currentIndex >= (workingFile.steps?.length ?? 0)
+      ) {
+        throw new Error(
+          `CLI coordination address does not resolve to a live step: ${pinnedPath}`
+        );
+      }
+    }
     const groups = workingFile.parallelGroups ?? [];
-    const environmentIndex = Number.parseInt(
+    const parsedEnvironmentIndex = Number.parseInt(
       process.env.CTRLYOKE_PROMPT_INDEX ?? "",
       10
     );
+    const environmentIndex = Number.isSafeInteger(parsedEnvironmentIndex)
+      ? parsedEnvironmentIndex
+      : undefined;
     const environmentGroupId = process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     const environmentGroup = groups.find(
       (group) => group.id === environmentGroupId
@@ -504,7 +554,7 @@ export class CtrlYokeMCPServer {
     // matching group id as its proof; without it, a sanitising client retains
     // the board but loses only step-level attribution.
     const stepIndex =
-      Number.isSafeInteger(environmentIndex) &&
+      environmentIndex !== undefined &&
       (group === undefined
         ? environmentIndex === currentIndex
         : environmentGroupMatches &&
@@ -512,6 +562,29 @@ export class CtrlYokeMCPServer {
           environmentIndex <= group.endIndex)
         ? environmentIndex
         : undefined;
+    if (cliMode && environmentIndex !== undefined && stepIndex === undefined) {
+      throw new Error(
+        `CLI coordination step index does not belong to the live run: ${environmentIndex}`
+      );
+    }
+    if (
+      cliMode &&
+      group !== undefined &&
+      (environmentIndex === undefined || !environmentGroupMatches)
+    ) {
+      throw new Error(
+        "CLI coordination calls for parallel-group members require a valid --step-index and --parallel-group-id"
+      );
+    }
+    if (
+      cliMode &&
+      environmentGroupId !== undefined &&
+      !environmentGroupMatches
+    ) {
+      throw new Error(
+        `CLI coordination parallel group does not belong to the live run: ${environmentGroupId}`
+      );
+    }
     const stepName =
       stepIndex === undefined
         ? undefined
@@ -519,8 +592,11 @@ export class CtrlYokeMCPServer {
           workingFile.steps?.[stepIndex]?.name;
 
     return {
-      attested: true,
+      attested: !cliMode,
       groupMember: group !== undefined,
+      via: cliMode
+        ? COORDINATION_PARTICIPANT_VIA.CLI
+        : COORDINATION_PARTICIPANT_VIA.MCP,
       ...(group ? { groupStartBoundary: group.startIndex } : {}),
       address: {
         workflowKey: selected.workflowKey,
@@ -554,24 +630,25 @@ export class CtrlYokeMCPServer {
 
     const executionRoot = await this.resolveExecutionRoot();
     const registry = new CoordinationParticipantRegistry(executionRoot);
-    const participant = context.attested && context.address;
+    const participant = context.address;
     const label = participant
       ? (context.address.stepName ??
         process.env.CTRLYOKE_PROMPT_NAME ??
         `${context.address.workflowKey}:${context.address.stepIndex ?? "run"}`)
       : process.env.CTRLYOKE_PARTICIPANT_LABEL?.trim() || "external session";
+    const registration = {
+      kind: participant
+        ? COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP
+        : COORDINATION_PARTICIPANT_KINDS.EXTERNAL,
+      label,
+      via: context.via ?? COORDINATION_PARTICIPANT_VIA.MCP,
+      ...(participant ? { address: context.address } : {}),
+    };
     const lease = participant
-      ? await registry.registerAttestedParticipant({
-          kind: COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP,
-          label,
-          via: COORDINATION_PARTICIPANT_VIA.MCP,
-          address: context.address,
-        })
-      : await registry.registerParticipant({
-          kind: COORDINATION_PARTICIPANT_KINDS.EXTERNAL,
-          label,
-          via: COORDINATION_PARTICIPANT_VIA.MCP,
-        });
+      ? context.attested
+        ? await registry.registerAttestedParticipant(registration)
+        : await registry.registerParticipant(registration)
+      : await registry.registerParticipant(registration);
     this.coordinationState = {
       executionRoot,
       scope: await resolveCoordinationBoardScope(executionRoot),
@@ -1691,20 +1768,28 @@ export async function initializeMcpStorage(
   await new ProjectStateRegistry().initialize(root, gitToplevel ?? undefined);
 }
 
-interface McpToolCliOptions {
+export interface McpToolCliOptions {
   tool: string;
   argsJson: string;
   workspace?: string;
   workingFile?: string;
   commitOutput?: string;
+  stepIndex?: number;
+  parallelGroupId?: string;
+  executionRoot?: string;
 }
 
-function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
+export function parseMcpToolCliArgs(
+  argv: readonly string[]
+): McpToolCliOptions {
   let tool: string | undefined;
   let argsJson = "{}";
   let workspace: string | undefined;
   let workingFile: string | undefined;
   let commitOutput: string | undefined;
+  let stepIndex: number | undefined;
+  let parallelGroupId: string | undefined;
+  let executionRoot: string | undefined;
 
   const readValue = (index: number, option: string): string => {
     const value = argv[index + 1];
@@ -1737,6 +1822,24 @@ function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
         commitOutput = readValue(index, option);
         index += 1;
         break;
+      case "--step-index": {
+        const value = readValue(index, option);
+        const parsed = Number(value);
+        if (!Number.isSafeInteger(parsed) || parsed < 0) {
+          throw new Error(`${option} requires a non-negative integer`);
+        }
+        stepIndex = parsed;
+        index += 1;
+        break;
+      }
+      case "--parallel-group-id":
+        parallelGroupId = readValue(index, option);
+        index += 1;
+        break;
+      case "--execution-root":
+        executionRoot = readValue(index, option);
+        index += 1;
+        break;
       default:
         throw new Error(`Unknown option: ${option}`);
     }
@@ -1746,7 +1849,16 @@ function parseMcpToolCliArgs(argv: readonly string[]): McpToolCliOptions {
     throw new Error("--tool requires a tool name");
   }
 
-  return { tool, argsJson, workspace, workingFile, commitOutput };
+  return {
+    tool,
+    argsJson,
+    workspace,
+    workingFile,
+    commitOutput,
+    stepIndex,
+    parallelGroupId,
+    executionRoot,
+  };
 }
 
 async function runMcpToolCli(argv: readonly string[]): Promise<void> {
@@ -1760,6 +1872,18 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
   }
   if (options.commitOutput !== undefined) {
     process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;
+  }
+  process.env[MCP_CLI_MODE_ENV] = MCP_CLI_MODE_VALUE;
+  process.env.CTRLYOKE_EXECUTION_ROOT = options.executionRoot ?? process.cwd();
+  if (options.stepIndex !== undefined) {
+    process.env.CTRLYOKE_PROMPT_INDEX = String(options.stepIndex);
+  } else {
+    delete process.env.CTRLYOKE_PROMPT_INDEX;
+  }
+  if (options.parallelGroupId !== undefined) {
+    process.env.CTRLYOKE_PARALLEL_GROUP_ID = options.parallelGroupId;
+  } else {
+    delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
   }
 
   await initializeMcpStorage(options.workspace ?? workspaceRoot);

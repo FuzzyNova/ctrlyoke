@@ -1,6 +1,7 @@
 # Execution-Root Coordination Plan
 
-> **Status:** Backlog / design proposal. Nothing here is implemented.
+> **Status:** Implemented. Retained as the design record for the shipped
+> execution-root coordination surface.
 >
 > **Supersedes:** `PARALLEL_STEP_COORDINATION_PLAN.md`, which scoped a coordination
 > board to one workflow run and only made it reachable from inside a `parallel:`
@@ -688,6 +689,17 @@ so **no new identity flags are needed for the sequential case** — only group
 members need `--step-index`/`--parallel-group-id`. Entries written this way are
 stamped `via: "cli"`.
 
+**Decision 12 implementation (2026-09-11):** `MCP_SKILL_NAMES.COORDINATION`
+and the bundled `ctrlyoke-coordination-tools` skill document the four board
+tools separately from the queue skill. Disabled-mode ordinary steps receive
+both built-in skill references; disabled-mode parallel-group members receive
+only the coordination reference at prompt assembly, matching the filtered MCP
+tool surface. Generated coordination commands carry the execution root and,
+for group members, the step/group identity. CLI calls validate a live run
+address in the current execution scope, remain `attested: false`, and write
+`via: "cli"` entries with the existing TTL lease rule. Exported skill snapshots
+retain placeholders for every runtime address.
+
 The two prerequisite fixes below are correctness improvements independent of
 the coordination feature:
 
@@ -781,8 +793,9 @@ every queue tool, which genuinely act on one run.
   `CommitMessageGenerator`'s `deniedTools`. The
   `MCP_TOOL_SKILL_TOOL_NAMES` alias was removed, and coverage asserts that the
   derived deny-list plus the commit tool exactly covers
-  `MCP_TOOL_DEFINITIONS`. The separate coordination skill remains future work
-  for Decision 12.
+  `MCP_TOOL_DEFINITIONS`. The separate coordination skill is implemented by
+  Decision 12 and remains independently discoverable so group-member skill
+  attachment cannot expose queue-mutating tools.
 - New bundled `src/templates/skills/ctrlyoke-coordination-tools/SKILL.md`.
   `esbuild.js`'s `copy-templates` plugin already globs the directory.
 - `parseMcpToolCliArgs` gains `--step-index` / `--parallel-group-id` (and

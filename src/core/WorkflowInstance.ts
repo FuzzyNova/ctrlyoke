@@ -4056,6 +4056,7 @@ export class WorkflowInstance {
           "mcp-server.js"
         ),
         workspaceRoot: this.executionWorkspace.stateRoot,
+        executionRoot: this.executionWorkspace.executionRoot,
         workingFilePath: workingFilePath || undefined,
         ...this.mcpToolSkillContext,
       },

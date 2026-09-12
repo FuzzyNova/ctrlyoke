@@ -147,7 +147,7 @@ suite("ParallelGroupPreflight", () => {
     );
   });
 
-  test("rejects disabled-mode queue skill delivery for a requested ctrlyoke server", async () => {
+  test("delivers only coordination to disabled-mode group members", async () => {
     const result = await run(
       {
         mcpServers: ["ctrlyoke"],
@@ -159,17 +159,17 @@ suite("ParallelGroupPreflight", () => {
 
     assert.deepStrictEqual(
       result.members.map((member) => member.resolvedProperties.skills),
-      [[MCP_SKILL_NAMES.TOOLS], [MCP_SKILL_NAMES.TOOLS]]
+      [
+        [MCP_SKILL_NAMES.TOOLS, MCP_SKILL_NAMES.COORDINATION],
+        [MCP_SKILL_NAMES.TOOLS, MCP_SKILL_NAMES.COORDINATION],
+      ]
     );
-    assert.deepStrictEqual(
-      result.issues
-        .filter(
-          (issue) =>
-            issue.code ===
-            PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
-        )
-        .map((issue) => issue.memberIndices),
-      [[0], [1]]
+    assert.strictEqual(
+      result.issues.some(
+        (issue) =>
+          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
+      ),
+      false
     );
   });
 

@@ -179,7 +179,9 @@ export interface WorkflowExecutionContext {
   cancelTarget?: (target: ExecutionTarget) => Promise<void>;
   releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
   /** Close the attested coordination participant when a target settles. */
-  closeCoordinationParticipant?: (target: WorkflowAttemptTarget) => Promise<void>;
+  closeCoordinationParticipant?: (
+    target: WorkflowAttemptTarget
+  ) => Promise<void>;
   /** Release all claims held by members of a group at its join boundary. */
   releaseCoordinationGroupClaims?: (
     group: ParallelGroupDefinition
@@ -1544,7 +1546,11 @@ export class WorkflowExecutor {
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
-          mcpToolSkillContext: context.mcpToolSkillContext,
+          mcpToolSkillContext: this.getMcpToolSkillContext(
+            context,
+            sendPromptIndex,
+            workflowFile
+          ),
           resolvedProperties: attemptProperties,
           workflowFile,
           hostCanProvidePty: context.hostCanProvidePty,
@@ -3601,7 +3607,11 @@ export class WorkflowExecutor {
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
-          mcpToolSkillContext: context.mcpToolSkillContext,
+          mcpToolSkillContext: this.getMcpToolSkillContext(
+            context,
+            currentIndex,
+            workflowFile
+          ),
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,
@@ -3882,6 +3892,23 @@ export class WorkflowExecutor {
             stepIndex >= group.startIndex && stepIndex <= group.endIndex
         )?.startIndex ?? stepIndex
     );
+  }
+
+  private getMcpToolSkillContext(
+    context: WorkflowExecutionContext,
+    stepIndex: number,
+    workflowFile: WorkflowContext["workflowFile"]
+  ): WorkflowContext["mcpToolSkillContext"] {
+    if (!context.mcpToolSkillContext) return undefined;
+    const parallelGroup = workflowFile?.parallelGroups?.find(
+      (group) => stepIndex >= group.startIndex && stepIndex <= group.endIndex
+    );
+    return {
+      ...context.mcpToolSkillContext,
+      executionRoot: context.executionWorkspace.executionRoot,
+      stepIndex,
+      ...(parallelGroup ? { parallelGroupId: parallelGroup.id } : {}),
+    };
   }
 
   clearResponseWaitState(): void {

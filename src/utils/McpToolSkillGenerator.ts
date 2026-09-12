@@ -1,4 +1,5 @@
 import {
+  MCP_COORDINATION_TOOL_NAMES,
   MCP_QUEUE_TOOL_NAMES,
   MCP_TOOL_DEFINITIONS,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
@@ -18,13 +19,30 @@ const PATH_PLACEHOLDER = "<path>";
 const COMMIT_OUTPUT_PATH_PLACEHOLDER = "<commit output path>";
 const WORKSPACE_PATH_PLACEHOLDER = "<workspace path>";
 const WORKING_FILE_PATH_PLACEHOLDER = "<working-file path>";
+const EXECUTION_ROOT_PATH_PLACEHOLDER = "<execution-root path>";
+const STEP_INDEX_PLACEHOLDER = "<step index>";
+const PARALLEL_GROUP_ID_PLACEHOLDER = "<parallel group id>";
 
 function resolvePath(
   context: McpToolSkillRunContext | undefined,
   value: keyof McpToolSkillRunContext,
   placeholder: string
 ): string {
-  return context?.[value] ?? placeholder;
+  const resolved = context?.[value];
+  return resolved === undefined ? placeholder : String(resolved);
+}
+
+function resolveValue<T extends string | number>(
+  context: McpToolSkillRunContext | undefined,
+  value: keyof McpToolSkillRunContext,
+  placeholder: string,
+  fallback?: T
+): string {
+  const resolved = context?.[value];
+  if (resolved === undefined) {
+    return fallback === undefined ? placeholder : String(fallback);
+  }
+  return String(resolved);
 }
 
 function substituteStaticPathPlaceholders(
@@ -98,6 +116,11 @@ export class McpToolSkillGenerator {
       "commitOutputPath",
       COMMIT_OUTPUT_PATH_PLACEHOLDER
     );
+    const executionRoot = resolvePath(
+      context,
+      "executionRoot",
+      EXECUTION_ROOT_PATH_PLACEHOLDER
+    );
 
     return [
       "## Available ctrlyoke MCP tools",
@@ -106,7 +129,22 @@ export class McpToolSkillGenerator {
         const command =
           tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
             ? `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --commit-output \"${commitOutputPath}\"`
-            : `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --working-file \"${workingFilePath}\"`;
+            : `${
+                `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --working-file \"${workingFilePath}\"` +
+                (MCP_COORDINATION_TOOL_NAMES.includes(
+                  tool.name as (typeof MCP_COORDINATION_TOOL_NAMES)[number]
+                )
+                  ? ` --execution-root \"${executionRoot}\"${
+                      context?.parallelGroupId !== undefined || !context
+                        ? ` --step-index \"${resolveValue(context, "stepIndex", STEP_INDEX_PLACEHOLDER)}\"`
+                        : ""
+                    }${
+                      context?.parallelGroupId !== undefined || !context
+                        ? ` --parallel-group-id \"${resolveValue(context, "parallelGroupId", PARALLEL_GROUP_ID_PLACEHOLDER)}\"`
+                        : ""
+                    }`
+                  : "")
+              }`;
         return [
           `### ${tool.name}`,
           tool.description,
@@ -132,7 +170,9 @@ export class McpToolSkillGenerator {
         ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
         : skillName === MCP_SKILL_NAMES.TOOLS
           ? MCP_QUEUE_TOOL_NAMES
-          : undefined;
+          : skillName === MCP_SKILL_NAMES.COORDINATION
+            ? MCP_COORDINATION_TOOL_NAMES
+            : undefined;
 
     return toolNames
       ? `${substituteStaticPathPlaceholders(staticContent, context).trimEnd()}\n\n${this.generateToolReference([...toolNames], context)}`

@@ -82,14 +82,17 @@ export interface WorkflowWorkingFilePersistence {
  * Runtime addresses used by the built-in MCP-as-skill instructions.
  *
  * The server and workspace paths are always available during execution. The
- * working-file and commit-output paths are skill-specific: queue tools need
- * the former, while the commit-message tool needs the latter.
+ * Coordination-only flags are optional because sequential participants need
+ * only the run address; parallel-group participants add their step identity.
  */
 export interface McpToolSkillRunContext {
   readonly mcpServerPath: string;
   readonly workspaceRoot: string;
+  readonly executionRoot?: string;
   readonly workingFilePath?: string;
   readonly commitOutputPath?: string;
+  readonly stepIndex?: number;
+  readonly parallelGroupId?: string;
 }
 
 /**

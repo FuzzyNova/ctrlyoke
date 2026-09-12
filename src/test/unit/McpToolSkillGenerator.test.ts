@@ -6,6 +6,7 @@ import {
 } from "../../utils/McpToolSkillGenerator";
 import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
+  MCP_COORDINATION_TOOL_NAMES,
   MCP_QUEUE_TOOL_NAMES,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
@@ -114,6 +115,39 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes("### remove_step"));
     assert.ok(reference.includes("### reorder_steps"));
     assert.ok(reference.includes("zero-based step index"));
+  });
+
+  test("provides a separate coordination skill subset with CLI placeholders", () => {
+    const reference = McpToolSkillGenerator.generateToolReference([
+      ...MCP_COORDINATION_TOOL_NAMES,
+    ]);
+
+    assert.ok(reference.includes("### post_note"));
+    assert.ok(reference.includes("### claim_paths"));
+    assert.ok(reference.includes('--execution-root "<execution-root path>"'));
+    assert.ok(reference.includes('--step-index "<step index>"'));
+    assert.ok(reference.includes('--parallel-group-id "<parallel group id>"'));
+  });
+
+  test("substitutes coordination CLI identity on the execution path", () => {
+    const reference = McpToolSkillGenerator.generateToolReference(
+      [...MCP_COORDINATION_TOOL_NAMES],
+      {
+        mcpServerPath: "C:/extension/out/mcp-server.js",
+        workspaceRoot: "C:/state",
+        executionRoot: "C:/checkout",
+        workingFilePath: "C:/state/run.ctrlyoke.json",
+        stepIndex: 2,
+        parallelGroupId: "api-group",
+      }
+    );
+
+    assert.ok(reference.includes('--execution-root "C:/checkout"'));
+    assert.ok(reference.includes('--step-index "2"'));
+    assert.ok(reference.includes('--parallel-group-id "api-group"'));
+    assert.ok(!reference.includes("<execution-root path>"));
+    assert.ok(!reference.includes("<step index>"));
+    assert.ok(!reference.includes("<parallel group id>"));
   });
 
   test("keeps the commit-run denial list exhaustive", () => {

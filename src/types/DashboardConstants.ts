@@ -3708,6 +3708,7 @@ export const MCP_SERVER_IDS = {
 // to them by name before a future settings-driven registry exists.
 export const MCP_SKILL_NAMES = {
   TOOLS: "ctrlyoke-mcp-tools",
+  COORDINATION: "ctrlyoke-coordination-tools",
   COMMIT_MESSAGE: "ctrlyoke-commit-message-tool",
 } as const;
 

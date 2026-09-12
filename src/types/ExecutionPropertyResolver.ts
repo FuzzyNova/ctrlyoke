@@ -294,7 +294,11 @@ export function resolveExecutionProperties(
   });
   const resolvedSkills =
     mcpAvailabilityDisabled && hasRequestedCtrlYokeServer
-      ? [...(skills.value ?? []), MCP_SKILL_NAMES.TOOLS]
+      ? [
+          ...(skills.value ?? []),
+          MCP_SKILL_NAMES.TOOLS,
+          MCP_SKILL_NAMES.COORDINATION,
+        ]
       : skills.value;
   const hooks = resolveHooks(prompt, workflow, defaults);
   const sessionId = resolveSessionId(prompt, workflow, defaults);
