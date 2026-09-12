@@ -79,6 +79,20 @@ export interface WorkflowWorkingFilePersistence {
 }
 
 /**
+ * Runtime addresses used by the built-in MCP-as-skill instructions.
+ *
+ * The server and workspace paths are always available during execution. The
+ * working-file and commit-output paths are skill-specific: queue tools need
+ * the former, while the commit-message tool needs the latter.
+ */
+export interface McpToolSkillRunContext {
+  readonly mcpServerPath: string;
+  readonly workspaceRoot: string;
+  readonly workingFilePath?: string;
+  readonly commitOutputPath?: string;
+}
+
+/**
  * Workflow context passed to harness sendPrompt calls.
  * Single source of truth — replaces all per-file inline type duplicates.
  *
@@ -95,6 +109,8 @@ export interface WorkflowContext {
   instanceId?: string;
   /** Path to the .ctrlyoke.json working file (sets CTRLYOKE_WORKING_FILE for MCP). */
   workingFilePath?: string;
+  /** Concrete addresses for generated built-in MCP skill instructions. */
+  mcpToolSkillContext?: McpToolSkillRunContext;
   resolvedProperties?: ResolvedProperties;
   workflowFile?: PromptFile;
   /** Whether the current host can provide a PTY for this execution. */

@@ -112,6 +112,7 @@ import {
 import {
   getExecutionWorkspaceIdentity,
   type ExecutionWorkspace,
+  type McpToolSkillRunContext,
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
@@ -376,6 +377,8 @@ export class WorkflowInstance {
   private readonly promptFileWatcher: PromptFileWatcher;
   readonly outputHistoryManager: OutputHistoryManager;
   private activeHistoryFilePath: string = "";
+  /** Optional per-run override used by commit-message skill capture. */
+  private mcpToolSkillContext?: Partial<McpToolSkillRunContext>;
   private activeRunRedactor?: RunSecretRedactor;
   private releaseActiveRunRedactor?: () => void;
   private pendingRuntimeTransitionHistoryWrite: Promise<void> =
@@ -1441,6 +1444,11 @@ export class WorkflowInstance {
     this.currentPromptFile = { filePath: "<inline>", promptFile };
     this.promptQueue.loadPrompts(promptFile, workingFilePath);
     this.propagateWorkflowNameToIntegrations();
+  }
+
+  /** Set ephemeral addresses used while expanding a built-in MCP skill. */
+  setMcpToolSkillContext(context?: Partial<McpToolSkillRunContext>): void {
+    this.mcpToolSkillContext = context;
   }
 
   /**
@@ -3979,6 +3987,16 @@ export class WorkflowInstance {
       dynamicQueueConfig: this.getDynamicQueueConfig(),
       historyFilePath,
       workingFilePath: workingFilePath || undefined,
+      mcpToolSkillContext: {
+        mcpServerPath: path.join(
+          this.platform.getExtensionPath(),
+          "out",
+          "mcp-server.js"
+        ),
+        workspaceRoot: this.executionWorkspace.stateRoot,
+        workingFilePath: workingFilePath || undefined,
+        ...this.mcpToolSkillContext,
+      },
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       targetKeyedExecution,

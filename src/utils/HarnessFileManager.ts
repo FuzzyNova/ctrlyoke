@@ -138,6 +138,8 @@ async function copySkill(
     path.join(sourceDir, "SKILL.md"),
     "utf8"
   );
+  // Export is a click-time snapshot, so deliberately omit run context and keep
+  // placeholders rather than freezing a stale live run address into SKILL.md.
   const generatedContent = McpToolSkillGenerator.generateBuiltInSkillContent(
     skillName,
     staticContent

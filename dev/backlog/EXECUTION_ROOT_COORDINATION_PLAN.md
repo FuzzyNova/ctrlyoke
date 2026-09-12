@@ -638,20 +638,19 @@ so **no new identity flags are needed for the sequential case** — only group
 members need `--step-index`/`--parallel-group-id`. Entries written this way are
 stamped `via: "cli"`.
 
-Two things must be fixed for any of it to work:
+The two prerequisite fixes below are correctness improvements independent of
+the coordination feature:
 
-- **Generated skills emit placeholders, not values.** `McpToolSkillGenerator`
-  renders literal `<mcp-server.js path>` and `<path>` tokens
-  (`McpToolSkillGenerator.ts:15-17, 51-54`) because
-  `SkillExpander.expandSkills(skillNames, workspaceRoot, executionCheckoutRoot)`
-  and `generateBuiltInSkillContent(skillName, staticContent)` receive no run
-  context at all. `MCP_AS_SKILL_PLAN.md` §1.5 specified literal values; that part
-  did not land. Thread an optional context into both and substitute when present.
-  This improves the two existing skills independently.
-- **Export must stay placeholder-form.** Phase 5 of `MCP_AS_SKILL_PLAN.md` exports
-  a click-time snapshot; a snapshot containing a live run address is stale
-  immediately and its flags would hard-error against `parseMcpToolCliArgs`, which
-  throws on unknown options.
+- **Generated skills emit placeholders, not values** — landed 2026-09-11.
+  `McpToolSkillGenerator` now accepts the shared optional
+  `McpToolSkillRunContext`; execution passes the MCP server path, state root,
+  working-file path, and commit-output path where applicable, so the two
+  existing built-in skills contain usable literal CLI arguments.
+- **Export stays placeholder-form** — also landed 2026-09-11. The export call
+  intentionally passes no run context, because Phase 5 of
+  `MCP_AS_SKILL_PLAN.md` creates a click-time snapshot and a live run address
+  would be stale immediately (and its flags would hard-error against
+  `parseMcpToolCliArgs`, which rejects unknown options).
 
 Skill-mode callers are unattested even when ctrlyoke launched the step, since the
 address arrives as argv. Validate it — reject an address that does not resolve to
@@ -761,8 +760,9 @@ correctness fix on its own:
    shared `hasCtrlYokeQueueTools` predicate now gates the skill replacement and
    applies the group ban regardless of whether queue tools arrive through MCP
    or the built-in skill.
-2. **Placeholder substitution in generated skills** (Decision 12) — the two shipped
-   skills tell agents to pass flags without telling them the values.
+2. **Placeholder substitution in generated skills** (Decision 12) — landed
+   2026-09-11. Execution-time expansion substitutes the run's literal paths and
+   export-time snapshots retain placeholders.
 3. **`global_status` filtering and capping** — landed 2026-09-11. It now uses
    `ACTIVE_EXECUTION_STATES`, caps responses at 100 workflows, reports
    truncation explicitly, and works for callers without an attached run.

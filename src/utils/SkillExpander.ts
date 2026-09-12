@@ -6,6 +6,7 @@ import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { TtlCache } from "./TtlCache";
 import { DISCOVERY_SOURCES } from "../types/DashboardConstants";
 import { McpToolSkillGenerator } from "./McpToolSkillGenerator";
+import type { McpToolSkillRunContext } from "../types/WorkflowContextTypes";
 
 /**
  * SkillExpander
@@ -40,7 +41,8 @@ export class SkillExpander {
   static async expandSkills(
     skillNames: string[],
     workspaceRoot?: string,
-    executionCheckoutRoot = workspaceRoot
+    executionCheckoutRoot = workspaceRoot,
+    runContext?: McpToolSkillRunContext
   ): Promise<string | null> {
     if (skillNames.length === 0) {
       return null;
@@ -68,10 +70,11 @@ export class SkillExpander {
         continue;
       }
 
-      const block = await this.buildSkillBlock(skill, [
-        workspaceRoot,
-        executionCheckoutRoot,
-      ]);
+      const block = await this.buildSkillBlock(
+        skill,
+        [workspaceRoot, executionCheckoutRoot],
+        runContext
+      );
       if (!block) {
         continue;
       }
@@ -99,7 +102,8 @@ export class SkillExpander {
    */
   private static async buildSkillBlock(
     skill: SkillInfo,
-    trustedRoots: Array<string | undefined>
+    trustedRoots: Array<string | undefined>,
+    runContext?: McpToolSkillRunContext
   ): Promise<string | null> {
     const resolvedSkillPath = path.resolve(skill.path);
     const resolvedTrustedRoots = trustedRoots
@@ -116,7 +120,8 @@ export class SkillExpander {
           return (
             McpToolSkillGenerator.generateBuiltInSkillContent(
               skill.name,
-              staticContent
+              staticContent,
+              runContext
             ) ?? staticContent
           );
         }

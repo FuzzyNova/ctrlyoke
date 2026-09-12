@@ -134,6 +134,58 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("### workflow_status"));
       assert.ok(skills?.includes("### global_status"));
       assert.ok(!skills?.includes("submit_commit_message"));
+      assert.ok(skills?.includes("<mcp-server.js path>"));
+      assert.ok(skills?.includes("<path>"));
+    } finally {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("substitutes execution addresses in generated built-in skills", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-built-in-context-")
+    );
+    try {
+      const commitOutputPath = path.join(
+        workspaceRoot,
+        ".ctrlyoke",
+        "temp",
+        "commit-output.txt"
+      );
+      const skills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.TOOLS],
+        workspaceRoot,
+        workspaceRoot,
+        {
+          mcpServerPath: path.join(workspaceRoot, "out", "mcp-server.js"),
+          workspaceRoot,
+          workingFilePath: path.join(
+            workspaceRoot,
+            ".ctrlyoke",
+            "run.ctrlyoke.json"
+          ),
+        }
+      );
+
+      assert.ok(
+        skills?.includes(path.join(workspaceRoot, "out", "mcp-server.js"))
+      );
+      assert.ok(skills?.includes(`--workspace "${workspaceRoot}"`));
+      assert.ok(!skills?.includes("<mcp-server.js path>"));
+      assert.ok(!skills?.includes("<path>"));
+
+      const commitSkills = await SkillExpander.expandSkills(
+        [MCP_SKILL_NAMES.COMMIT_MESSAGE],
+        workspaceRoot,
+        workspaceRoot,
+        {
+          mcpServerPath: path.join(workspaceRoot, "out", "mcp-server.js"),
+          workspaceRoot,
+          commitOutputPath,
+        }
+      );
+      assert.ok(commitSkills?.includes(`--commit-output "${commitOutputPath}"`));
+      assert.ok(!commitSkills?.includes("<commit output path>"));
     } finally {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }

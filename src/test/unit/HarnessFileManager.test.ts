@@ -61,5 +61,7 @@ suite("HarnessFileManager", () => {
     assert.match(exported, /## Available ctrlyoke MCP tools/);
     assert.match(exported, /### append_step/);
     assert.match(exported, /--working-file/);
+    assert.match(exported, /<mcp-server\.js path>/);
+    assert.match(exported, /<path>/);
   });
 });

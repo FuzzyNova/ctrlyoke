@@ -10,6 +10,7 @@ import {
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
 } from "../../utils/McpToolDefinitions";
+import type { McpToolSkillRunContext } from "../../types/WorkflowContextTypes";
 
 suite("McpToolSkillGenerator", () => {
   test("renders descriptions, parameters, and executable examples", () => {
@@ -36,6 +37,53 @@ suite("McpToolSkillGenerator", () => {
         `node \"<mcp-server.js path>\" --tool workflow_status --args '{}' --workspace \"<path>\" --working-file \"<path>\"`
       )
     );
+  });
+
+  test("substitutes live run paths when context is provided", () => {
+    const context: McpToolSkillRunContext = {
+      mcpServerPath: "C:/extension/out/mcp-server.js",
+      workspaceRoot: "C:/workspace",
+      workingFilePath: "C:/state/run.ctrlyoke.json",
+    };
+    const reference = McpToolSkillGenerator.generateToolReference(
+      ["workflow_status"],
+      context
+    );
+
+    assert.ok(reference.includes('node "C:/extension/out/mcp-server.js"'));
+    assert.ok(reference.includes('--workspace "C:/workspace"'));
+    assert.ok(
+      reference.includes('--working-file "C:/state/run.ctrlyoke.json"')
+    );
+    assert.ok(!reference.includes("<mcp-server.js path>"));
+    assert.ok(!reference.includes("<path>"));
+  });
+
+  test("substitutes the commit output path on the commit skill path", () => {
+    const reference = McpToolSkillGenerator.generateToolReference(
+      [MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME],
+      {
+        mcpServerPath: "C:/extension/out/mcp-server.js",
+        workspaceRoot: "C:/workspace",
+        commitOutputPath: "C:/workspace/.ctrlyoke/temp/commit-output.txt",
+      }
+    );
+
+    assert.ok(
+      reference.includes(
+        '--commit-output "C:/workspace/.ctrlyoke/temp/commit-output.txt"'
+      )
+    );
+    assert.ok(!reference.includes("<"));
+  });
+
+  test("keeps placeholders when no run context is provided", () => {
+    const reference = McpToolSkillGenerator.generateToolReference([
+      "workflow_status",
+    ]);
+
+    assert.ok(reference.includes("<mcp-server.js path>"));
+    assert.ok(reference.includes("<path>"));
   });
 
   test("renders only the requested tools", () => {

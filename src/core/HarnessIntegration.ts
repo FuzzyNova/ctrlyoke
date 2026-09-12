@@ -553,7 +553,8 @@ export abstract class HarnessIntegration {
       ? await this.expandSkillBlock(
           resolvedSkills,
           workspaceRoot,
-          this.getExecutionCheckoutRoot()
+          this.getExecutionCheckoutRoot(),
+          workflowContext?.mcpToolSkillContext
         )
       : null;
 
@@ -667,14 +668,18 @@ export abstract class HarnessIntegration {
   protected async expandSkillBlock(
     resolvedSkills: string[],
     workspaceRoot: string | undefined,
-    executionCheckoutRoot: string | undefined
+    executionCheckoutRoot: string | undefined,
+    runContext?: WorkflowContext["mcpToolSkillContext"]
   ): Promise<string | null> {
     return this.expandBlockContent(
       () =>
+        // Live execution expands the run address into the generated skill.
+        // Export omits this argument so its snapshot intentionally keeps placeholders.
         SkillExpander.expandSkills(
           resolvedSkills,
           workspaceRoot,
-          executionCheckoutRoot
+          executionCheckoutRoot,
+          runContext
         ),
       `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`,
       `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`

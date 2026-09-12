@@ -181,6 +181,8 @@ export interface WorkflowExecutionContext {
   getScriptProcessRunner?: (target: ExecutionTarget) => ScriptProcessRunner;
   historyFilePath: string;
   workingFilePath?: string;
+  /** Runtime addresses for generated built-in MCP skill instructions. */
+  mcpToolSkillContext?: WorkflowContext["mcpToolSkillContext"];
   instanceTag?: string;
   /** Workflow instance UUID — used as the PTY workflowId so terminal sessions
    *  are keyed by the same ID the webview uses for activeWorkflowId. */
@@ -1509,6 +1511,7 @@ export class WorkflowExecutor {
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
+          mcpToolSkillContext: context.mcpToolSkillContext,
           resolvedProperties: attemptProperties,
           workflowFile,
           hostCanProvidePty: context.hostCanProvidePty,
@@ -3565,6 +3568,7 @@ export class WorkflowExecutor {
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
+          mcpToolSkillContext: context.mcpToolSkillContext,
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,

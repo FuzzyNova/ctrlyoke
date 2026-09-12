@@ -378,6 +378,11 @@ export class CommitMessageGenerator {
         undefined,
         this.runnerHostIdentity
       );
+    instance.setMcpToolSkillContext({
+      mcpServerPath,
+      workspaceRoot: stateRoot,
+      commitOutputPath,
+    });
 
     // Force headless execution at the workflow tier and suppress VS Code globals
     // that could bleed into this one-shot call. PropertyResolver materializes
@@ -572,6 +577,7 @@ export class CommitMessageGenerator {
         { cause: error }
       );
     } finally {
+      instance.setMcpToolSkillContext(undefined);
       responseCompleteDisposable?.dispose();
       streamingChunkDisposable?.dispose();
       streamingEventsDisposable?.dispose();

@@ -5,6 +5,7 @@ import {
   type McpToolInputSchema,
 } from "./McpToolDefinitions";
 import { MCP_SKILL_NAMES } from "../types/DashboardConstants";
+import type { McpToolSkillRunContext } from "../types/WorkflowContextTypes";
 import {
   getMcpSchemaExampleValue,
   getMcpSchemaProperties,
@@ -15,6 +16,37 @@ import {
 const MCP_SERVER_PATH_PLACEHOLDER = "<mcp-server.js path>";
 const PATH_PLACEHOLDER = "<path>";
 const COMMIT_OUTPUT_PATH_PLACEHOLDER = "<commit output path>";
+const WORKSPACE_PATH_PLACEHOLDER = "<workspace path>";
+const WORKING_FILE_PATH_PLACEHOLDER = "<working-file path>";
+
+function resolvePath(
+  context: McpToolSkillRunContext | undefined,
+  value: keyof McpToolSkillRunContext,
+  placeholder: string
+): string {
+  return context?.[value] ?? placeholder;
+}
+
+function substituteStaticPathPlaceholders(
+  staticContent: string,
+  context: McpToolSkillRunContext | undefined
+): string {
+  if (!context) {
+    return staticContent;
+  }
+
+  return staticContent
+    .replaceAll(MCP_SERVER_PATH_PLACEHOLDER, context.mcpServerPath)
+    .replaceAll(WORKSPACE_PATH_PLACEHOLDER, context.workspaceRoot)
+    .replaceAll(
+      WORKING_FILE_PATH_PLACEHOLDER,
+      context.workingFilePath ?? WORKING_FILE_PATH_PLACEHOLDER
+    )
+    .replaceAll(
+      COMMIT_OUTPUT_PATH_PLACEHOLDER,
+      context.commitOutputPath ?? COMMIT_OUTPUT_PATH_PLACEHOLDER
+    );
+}
 
 function renderParameters(schema: McpToolInputSchema): string {
   const required = getMcpSchemaRequiredProperties(schema);
@@ -38,10 +70,33 @@ function renderParameters(schema: McpToolInputSchema): string {
 
 /** Render live MCP tool definitions as instructions for the built-in skill. */
 export class McpToolSkillGenerator {
-  static generateToolReference(toolNames: string[]): string {
+  static generateToolReference(
+    toolNames: string[],
+    context?: McpToolSkillRunContext
+  ): string {
     const requestedNames = new Set(toolNames);
     const tools = MCP_TOOL_DEFINITIONS.filter((tool) =>
       requestedNames.has(tool.name)
+    );
+    const mcpServerPath = resolvePath(
+      context,
+      "mcpServerPath",
+      MCP_SERVER_PATH_PLACEHOLDER
+    );
+    const workspaceRoot = resolvePath(
+      context,
+      "workspaceRoot",
+      PATH_PLACEHOLDER
+    );
+    const workingFilePath = resolvePath(
+      context,
+      "workingFilePath",
+      PATH_PLACEHOLDER
+    );
+    const commitOutputPath = resolvePath(
+      context,
+      "commitOutputPath",
+      COMMIT_OUTPUT_PATH_PLACEHOLDER
     );
 
     return [
@@ -50,8 +105,8 @@ export class McpToolSkillGenerator {
         const args = JSON.stringify(getMcpSchemaExampleValue(tool.inputSchema));
         const command =
           tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
-            ? `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --commit-output \"${COMMIT_OUTPUT_PATH_PLACEHOLDER}\"`
-            : `node \"${MCP_SERVER_PATH_PLACEHOLDER}\" --tool ${tool.name} --args '${args}' --workspace \"${PATH_PLACEHOLDER}\" --working-file \"${PATH_PLACEHOLDER}\"`;
+            ? `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --commit-output \"${commitOutputPath}\"`
+            : `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --working-file \"${workingFilePath}\"`;
         return [
           `### ${tool.name}`,
           tool.description,
@@ -69,7 +124,8 @@ export class McpToolSkillGenerator {
    */
   static generateBuiltInSkillContent(
     skillName: string,
-    staticContent: string
+    staticContent: string,
+    context?: McpToolSkillRunContext
   ): string | undefined {
     const toolNames =
       skillName === MCP_SKILL_NAMES.COMMIT_MESSAGE
@@ -79,7 +135,7 @@ export class McpToolSkillGenerator {
           : undefined;
 
     return toolNames
-      ? `${staticContent.trimEnd()}\n\n${this.generateToolReference([...toolNames])}`
+      ? `${substituteStaticPathPlaceholders(staticContent, context).trimEnd()}\n\n${this.generateToolReference([...toolNames], context)}`
       : undefined;
   }
 }
