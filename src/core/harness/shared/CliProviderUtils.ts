@@ -12,6 +12,7 @@ import {
 import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import { hasCtrlYokeQueueTools } from "../../../types/ExecutionPropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
@@ -32,6 +33,10 @@ import {
   MCP_SECRET_CONFIG_MODES,
 } from "../../../types/DashboardConstants";
 
+// Re-export the pure predicate here so core consumers share this module's MCP
+// semantics without pulling provider infrastructure into the types/webview layer.
+export { hasCtrlYokeQueueTools };
+
 const execFileAsync = promisify(execFile);
 
 const WINDOWS_FILE_LOCK_ERROR = "being used by another process";
@@ -51,19 +56,13 @@ export interface CliProviderWorkflowContext {
   workflowFile?: Pick<PromptFile, "trustedExternalRoots">;
 }
 
-/** Pure effective-property check shared by execution planning and group preflight. */
+/** Pure effective-property check for a live ctrlyoke MCP server attachment. */
 export function hasCtrlYokeServer(
   properties: Pick<ResolvedProperties, "mcpAvailability" | "mcpServers">
 ): boolean {
-  if (properties.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED) {
-    return false;
-  }
-  return (properties.mcpServers ?? []).some(
-    (server) =>
-      server === MCP_SERVER_IDS.CTRLYOKE ||
-      (typeof server === "object" &&
-        server !== null &&
-        server.id === MCP_SERVER_IDS.CTRLYOKE)
+  return (
+    properties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED &&
+    hasCtrlYokeQueueTools(properties)
   );
 }
 

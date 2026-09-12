@@ -29,6 +29,7 @@ import {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
+import { hasCtrlYokeQueueTools } from "./CliProviderUtils";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 import { substituteConditionOutputRefs } from "../../ConditionOutputRefs";
 import {
@@ -142,7 +143,9 @@ export class CliPromptPreparer {
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
     const mcpAvailabilityDiagnostics =
-      resolvedProperties?.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED
+      resolvedProperties?.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED &&
+      resolvedProperties !== undefined &&
+      hasCtrlYokeQueueTools(resolvedProperties)
         ? [
             this.createDiagnostic(
               PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED,

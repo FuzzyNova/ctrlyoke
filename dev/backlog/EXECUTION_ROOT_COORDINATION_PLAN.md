@@ -534,9 +534,9 @@ document explaining how to call `append_step`/`edit_step`/`reorder_steps` throug
    `hasCtrlYokeServer` would have been true before the disable. Ungated attachment
    also wastes prompt budget on every step that never wanted queue tools.
 2. **Make the ban mode-independent** — check "does this member end up with
-   queue-mutating tools by _any_ delivery mechanism". A shared predicate next to
-   `hasCtrlYokeServer` keeps the preflight, the `ListTools` filter, and the skill
-   selector from drifting apart.
+   queue-mutating tools by _any_ delivery mechanism". The shared
+   `hasCtrlYokeQueueTools` predicate next to `hasCtrlYokeServer` keeps the
+   preflight, the `ListTools` filter, and the skill selector from drifting apart.
 
 ### 9. Notes are untrusted content, and attestation is part of the framing
 
@@ -757,8 +757,10 @@ family). **Both have landed** — that plan is fully implemented and now lives i
 The three below are specific to this plan's own subject matter, and each is a
 correctness fix on its own:
 
-1. **The disabled-mode preflight hole** (Decision 8) — a group member can be handed
-   `append_step` instructions today with no diagnostic.
+1. **The disabled-mode preflight hole** (Decision 8) — landed 2026-09-11. A
+   shared `hasCtrlYokeQueueTools` predicate now gates the skill replacement and
+   applies the group ban regardless of whether queue tools arrive through MCP
+   or the built-in skill.
 2. **Placeholder substitution in generated skills** (Decision 12) — the two shipped
    skills tell agents to pass flags without telling them the values.
 3. **`global_status` filtering and capping** — landed 2026-09-11. It now uses

@@ -64,7 +64,7 @@ suite("CliPromptPreparer", () => {
         model: "model",
         executionMode: EXECUTION_MODES.HEADLESS,
         resumeSession: false,
-        mcpServers: [],
+        mcpServers: ["ctrlyoke"],
         hooks: null,
         toolPermissions: null,
       } satisfies ResolvedProperties,
@@ -75,6 +75,40 @@ suite("CliPromptPreparer", () => {
       plan.diagnostics[0]?.code,
       PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED
     );
+  });
+
+  test("does not diagnose disabled MCP when ctrlyoke was not requested", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () => createSections(),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" | "),
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "No queue tools" },
+      undefined,
+      {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        skills: undefined,
+        model: "model",
+        executionMode: EXECUTION_MODES.HEADLESS,
+        resumeSession: false,
+        mcpServers: [],
+        hooks: null,
+        toolPermissions: null,
+      } satisfies ResolvedProperties,
+      undefined
+    );
+
+    assert.deepStrictEqual(plan.diagnostics, []);
   });
 
   test("should not take the direct-reference fast path when excerpt content exists", async () => {

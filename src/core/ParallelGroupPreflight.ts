@@ -23,7 +23,7 @@ import type {
 } from "../types/ExecutionPropertyResolver";
 import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
-import { hasCtrlYokeServer } from "./harness/shared/CliProviderUtils";
+import { hasCtrlYokeQueueTools } from "./harness/shared/CliProviderUtils";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 
@@ -231,7 +231,7 @@ export async function preflightParallelGroup(
     };
     members.push(member);
 
-    if (!isScriptStep(step) && hasCtrlYokeServer(resolvedProperties)) {
+    if (!isScriptStep(step) && hasCtrlYokeQueueTools(resolvedProperties)) {
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
         memberIndices: [stepIndex],

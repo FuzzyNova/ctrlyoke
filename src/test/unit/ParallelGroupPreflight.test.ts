@@ -2,6 +2,8 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   HARNESS_IDS,
+  MCP_AVAILABILITY_MODES,
+  MCP_SKILL_NAMES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
 } from "../../types/DashboardConstants";
 import type {
@@ -142,6 +144,54 @@ suite("ParallelGroupPreflight", () => {
         PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
         PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
       ])
+    );
+  });
+
+  test("rejects disabled-mode queue skill delivery for a requested ctrlyoke server", async () => {
+    const result = await run(
+      {
+        mcpServers: ["ctrlyoke"],
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      defaults({ mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED })
+    );
+
+    assert.deepStrictEqual(
+      result.members.map((member) => member.resolvedProperties.skills),
+      [[MCP_SKILL_NAMES.TOOLS], [MCP_SKILL_NAMES.TOOLS]]
+    );
+    assert.deepStrictEqual(
+      result.issues
+        .filter(
+          (issue) =>
+            issue.code ===
+            PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
+        )
+        .map((issue) => issue.memberIndices),
+      [[0], [1]]
+    );
+  });
+
+  test("allows disabled-mode members that did not request ctrlyoke", async () => {
+    const result = await run(
+      {
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      defaults({ mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED })
+    );
+
+    assert.deepStrictEqual(
+      result.members.map((member) => member.resolvedProperties.skills),
+      [undefined, undefined]
+    );
+    assert.strictEqual(
+      result.issues.some(
+        (issue) =>
+          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
+      ),
+      false
     );
   });
 });

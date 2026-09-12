@@ -773,7 +773,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.mcpAvailability, undefined);
     });
 
-    test("injects the MCP tools skill in disabled mode", () => {
+    test("injects the MCP tools skill in disabled mode when ctrlyoke is requested", () => {
       configService.setCliOverlay({
         mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
       });
@@ -785,6 +785,24 @@ suite("PropertyResolver Tests", () => {
 
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
       assert.deepStrictEqual(resolved.skills, [MCP_SKILL_NAMES.TOOLS]);
+      assert.strictEqual(
+        resolved.mcpAvailability,
+        MCP_AVAILABILITY_MODES.DISABLED
+      );
+    });
+
+    test("does not inject the MCP tools skill in disabled mode without ctrlyoke", () => {
+      configService.setCliOverlay({
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+      });
+
+      const resolved = PropertyResolver.resolve(
+        { prompt: "test" },
+        { steps: [] }
+      );
+
+      assert.deepStrictEqual(resolved.mcpServers, []);
+      assert.strictEqual(resolved.skills, undefined);
       assert.strictEqual(
         resolved.mcpAvailability,
         MCP_AVAILABILITY_MODES.DISABLED

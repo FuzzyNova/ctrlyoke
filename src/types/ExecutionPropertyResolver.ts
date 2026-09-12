@@ -1,6 +1,7 @@
 import {
   EXECUTION_MODES,
   MCP_AVAILABILITY_MODES,
+  MCP_SERVER_IDS,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
@@ -61,6 +62,23 @@ export interface ExecutionResolutionContext {
 export interface ResolvedExecutionTarget {
   properties: ResolvedProperties;
   sources: Partial<Record<keyof ResolvedProperties, ResolutionSource>>;
+}
+
+/**
+ * Whether effective properties deliver ctrlyoke's queue-mutating tools by any
+ * mechanism. Keep this pure so the resolver remains safe to use in the
+ * webview bundle; provider infrastructure re-exports it for core consumers.
+ */
+export function hasCtrlYokeQueueTools(
+  properties: Pick<ResolvedProperties, "mcpServers">
+): boolean {
+  return (properties.mcpServers ?? []).some(
+    (server) =>
+      server === MCP_SERVER_IDS.CTRLYOKE ||
+      (typeof server === "object" &&
+        server !== null &&
+        server.id === MCP_SERVER_IDS.CTRLYOKE)
+  );
 }
 
 function select<T>(
@@ -271,9 +289,13 @@ export function resolveExecutionProperties(
   );
   const mcpAvailabilityDisabled =
     defaults.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED;
-  const resolvedSkills = mcpAvailabilityDisabled
-    ? [...(skills.value ?? []), MCP_SKILL_NAMES.TOOLS]
-    : skills.value;
+  const hasRequestedCtrlYokeServer = hasCtrlYokeQueueTools({
+    mcpServers: mcpServers.value,
+  });
+  const resolvedSkills =
+    mcpAvailabilityDisabled && hasRequestedCtrlYokeServer
+      ? [...(skills.value ?? []), MCP_SKILL_NAMES.TOOLS]
+      : skills.value;
   const hooks = resolveHooks(prompt, workflow, defaults);
   const sessionId = resolveSessionId(prompt, workflow, defaults);
   const endCondition = resolveNullable(
