@@ -431,11 +431,16 @@ export interface CoordinationEntry {
 export interface CoordinationScopeSnapshot {
   executionRoot: string;
   identity: string;
+  /** Absolute path of this scope's `board.jsonl`, so the dashboard can offer to open the raw log. */
+  boardPath: string;
   participants: CoordinationParticipant[];
   entries: CoordinationEntry[];
   claims: Array<{
     path: string;
-    owner: Pick<CoordinationParticipant, "participantId" | "label" | "attested">;
+    owner: Pick<
+      CoordinationParticipant,
+      "participantId" | "label" | "attested"
+    >;
     reason?: string;
     claimedAtSequence: number;
   }>;

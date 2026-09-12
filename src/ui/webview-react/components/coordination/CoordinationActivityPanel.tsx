@@ -1,25 +1,54 @@
 import React from "react";
 import { useCoordinationActivity } from "@hooks/useCoordinationActivity";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
+import { openContextReference } from "@utils/contextReferenceActions";
 import {
   coordinationEntrySummary,
   coordinationParticipantAttribution,
 } from "@utils/coordinationPresentation";
+import { ActionButton } from "../shared/ActionButton";
 
+/**
+ * Scope-level view of the execution-root coordination board, rendered below the
+ * coordination settings rather than beside the output/terminal panes: it
+ * describes the execution root, not the open run, and most workflows never
+ * attach the coordination tools at all. Per-run coordination activity still
+ * appears inline in the output timeline as a `CoordinationActivityRow`.
+ */
 export const CoordinationActivityPanel: React.FC = () => {
   const { scope, participants, entries } = useCoordinationActivity();
   if (!scope) return null;
 
   return (
     <aside
-      className="mx-2 my-1 max-h-52 flex-shrink-0 overflow-y-auto rounded border border-panel-border bg-sidebar-bg/50 px-2 py-1.5 text-[length:var(--fp-output-font-size-xs)]"
+      className="rounded border border-panel-border bg-sidebar-bg/50 px-3 py-2 text-xs"
       aria-label="Execution-root coordination"
       data-coordination-panel="true"
     >
-      <div className="font-semibold text-[var(--fg-primary)]">
-        Execution-root coordination
-      </div>
-      <div className="truncate text-description-fg" title={scope.executionRoot}>
-        {scope.identity}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold text-[var(--fg-primary)]">
+            Execution-root coordination board
+          </div>
+          <div
+            className="truncate text-description-fg"
+            title={scope.executionRoot}
+          >
+            {scope.identity}
+          </div>
+        </div>
+        <ActionButton
+          label="Open board file"
+          icon="go-to-file"
+          title={scope.boardPath}
+          onClick={() =>
+            openContextReference(
+              { type: ATOMIC_REFERENCE_KINDS.FILE, path: scope.boardPath },
+              getVsCodeApi()
+            )
+          }
+        />
       </div>
       <div className="mt-1 text-description-fg" data-untrusted-content="true">
         {scope.attestationNotice}
@@ -47,9 +76,14 @@ export const CoordinationActivityPanel: React.FC = () => {
         Recent entries
       </div>
       {entries.length === 0 ? (
-        <div className="text-description-fg">No recent coordination entries</div>
+        <div className="text-description-fg">
+          No recent coordination entries
+        </div>
       ) : (
-        <ul className="m-0 list-none space-y-1 p-0" data-untrusted-content="true">
+        <ul
+          className="m-0 max-h-52 list-none space-y-1 overflow-y-auto p-0"
+          data-untrusted-content="true"
+        >
           {[...entries].reverse().map((entry) => (
             <li key={entry.seq} className="whitespace-pre-wrap break-words">
               <span className="font-medium">

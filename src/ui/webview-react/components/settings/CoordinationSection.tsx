@@ -3,6 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { CoordinationActivityPanel } from "../coordination/CoordinationActivityPanel";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -139,6 +140,7 @@ export function CoordinationSection({
         path="coordination.allowExternalParticipants"
         {...rowProps}
       />
+      <CoordinationActivityPanel />
     </div>
   );
 }

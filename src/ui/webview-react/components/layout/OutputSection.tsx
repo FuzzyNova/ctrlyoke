@@ -93,7 +93,6 @@ import {
 } from "@root/types/DashboardConstants";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { Icon } from "../shared/Icon";
-import { CoordinationActivityPanel } from "../coordination/CoordinationActivityPanel";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -1619,8 +1618,6 @@ const OutputSectionInner: React.FC = () => {
           outputFontSize={outputFontSize}
         />
       )}
-
-      {!outputCollapsed && <CoordinationActivityPanel />}
 
       {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output.
           Both panes are absolutely positioned to fill this wrapper so the inactive pane

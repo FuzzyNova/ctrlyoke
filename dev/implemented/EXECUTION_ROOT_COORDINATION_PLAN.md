@@ -3,10 +3,11 @@
 > **Status:** Implemented. Retained as the design record for the shipped
 > execution-root coordination surface.
 >
-> **Decision 11 final state (2026-09-11):** Implemented. The extension watches
+> **Decision 11 final state (2026-09-12):** Implemented. The extension watches
 > each execution root's `board.jsonl` with leading/trailing throttling, sends a
-> bounded scope snapshot through dashboard adapters, renders a mandatory
-> participant/recent-entry panel, and projects same-run entries into the
+> bounded scope snapshot through dashboard adapters, renders a
+> participant/recent-entry panel **in the Coordination settings section** (with
+> an action to open the raw board file), and projects same-run entries into the
 > existing output-row timeline. Attribution includes attestation state at
 > every label; board notes remain plain, explicitly untrusted text.
 >
@@ -680,6 +681,23 @@ Two surfaces, and the second is no longer optional:
   the scope. The previous revision deferred this; the participant model makes it
   mandatory, because an external participant has no run timeline to appear in and
   would otherwise be invisible while holding claims against the user's own files.
+
+**Where that panel lives — corrected 2026-09-12.** The first implementation
+mounted it as a sibling of `OutputPane`, so it sat above both the output and
+terminal tabs on every workflow. That was wrong on two counts. It contradicts the
+standing rule that anything decorating the output stream must be an
+`OutputRenderRow`, never a sibling of `OutputPane`; and it is not decorating the
+output stream in the first place — it describes the **execution root**, not the
+open run, so it was permanently on screen restating an empty board for the large
+majority of workflows that never attach the coordination tools. It now renders
+below the settings rows in `CoordinationSection`, alongside an **Open board
+file** action (`CoordinationScopeSnapshot.boardPath` → the shared
+`openContextReference` file path, so it opens natively in the panel and through
+the workspace viewer in the hosted browser) for inspecting the raw
+`board.jsonl`. The mandate in this decision is that the scope be _reachable and
+attributed_, not that it be permanently resident: per-run coordination activity
+is still always visible in the output timeline as a `CoordinationActivityRow`,
+which is where an agent's notes and claims belong.
 
 Read the board file directly rather than adding a `TIMELINE_EVENT_TYPES` entry:
 the writer is a separate process, so a `TimelineRecorder` call is unavailable to

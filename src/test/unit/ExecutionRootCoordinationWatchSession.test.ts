@@ -9,6 +9,7 @@ import type { CoordinationScopeSnapshot } from "../../types/CtrlYokeTypes";
 const snapshot: CoordinationScopeSnapshot = {
   executionRoot: "C:\\workspace",
   identity: "workspace-identity",
+  boardPath: "C:\\workspace\\.git\\ctrlyoke\\coordination\\board.jsonl",
   participants: [],
   entries: [],
   claims: [],

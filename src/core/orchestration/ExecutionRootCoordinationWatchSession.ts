@@ -1,9 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { configService } from "../../config/CtrlYokeConfigService";
-import type {
-  CoordinationScopeSnapshot,
-} from "../../types/CtrlYokeTypes";
+import type { CoordinationScopeSnapshot } from "../../types/CtrlYokeTypes";
 import { Log } from "../../utils/Log";
 import {
   CoordinationParticipantRegistry,
@@ -48,6 +46,7 @@ export async function readCoordinationScopeSnapshot(
   return {
     executionRoot: scope.executionRoot,
     identity: scope.identity,
+    boardPath: scope.boardPath,
     participants: folded.participants,
     entries: readResult.entries,
     claims: projectClaims(folded.claims),
@@ -56,7 +55,9 @@ export async function readCoordinationScopeSnapshot(
 }
 
 /** Watches board.jsonl and coalesces bursts into at most leading + trailing refreshes. */
-export class ExecutionRootCoordinationWatchSession implements vscode.Disposable {
+export class ExecutionRootCoordinationWatchSession
+  implements vscode.Disposable
+{
   private readonly disposables: vscode.Disposable[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
   private throttleStartedAt = 0;
@@ -66,8 +67,7 @@ export class ExecutionRootCoordinationWatchSession implements vscode.Disposable 
   constructor(
     private readonly executionRoot: string,
     private readonly onUpdate: (snapshot: CoordinationScopeSnapshot) => void,
-    private readonly readSnapshot: CoordinationScopeReader =
-      readCoordinationScopeSnapshot
+    private readonly readSnapshot: CoordinationScopeReader = readCoordinationScopeSnapshot
   ) {}
 
   async start(): Promise<void> {
@@ -114,7 +114,10 @@ export class ExecutionRootCoordinationWatchSession implements vscode.Disposable 
       this.onUpdate(await this.readSnapshot(this.executionRoot));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        Log.warn("[ExecutionRootCoordinationWatchSession] refresh failed", error);
+        Log.warn(
+          "[ExecutionRootCoordinationWatchSession] refresh failed",
+          error
+        );
       }
     }
   }
