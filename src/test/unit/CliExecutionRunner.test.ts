@@ -97,6 +97,7 @@ function createRunner(options?: {
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
+  let observedHeadlessEnv: Record<string, string> | undefined;
   const provider = createProvider(options);
 
   const runner = new CliExecutionRunner({
@@ -106,7 +107,8 @@ function createRunner(options?: {
       startInteractiveProcess: async () => {
         failureTracker.capturePtyExit(0, []);
       },
-      executeHeadless: async (_args, _prompt, _tempFiles, callback) => {
+      executeHeadless: async (_args, _prompt, _tempFiles, callback, env) => {
+        observedHeadlessEnv = env;
         return callback({
           stdout: "",
           stderr: options?.collectedHeadlessResponse?.error ?? "",
@@ -166,6 +168,7 @@ function createRunner(options?: {
     runner,
     failureTracker,
     getFailureReason: () => failureReason,
+    getHeadlessEnv: () => observedHeadlessEnv,
   };
 }
 
@@ -331,6 +334,30 @@ suite("CliExecutionRunner", () => {
     assert.deepStrictEqual(persisted, [
       { promptIndex: 0, sessionId: "session-live-123" },
     ]);
+  });
+
+  test("exports the parallel group identity on a spawned step", async () => {
+    const { runner, getHeadlessEnv } = createRunner();
+    const session = new CliExecutionSession({
+      prompt: { prompt: "group member" },
+      workflowContext: {
+        promptIndex: 1,
+        allPrompts: [{ prompt: "first" }, { prompt: "group member" }],
+        workflowFile: {
+          steps: [{ prompt: "first" }, { prompt: "group member" }],
+          parallelGroups: [
+            { id: "group-1", startIndex: 1, endIndex: 1, failFast: true },
+          ],
+        },
+      },
+    });
+
+    assert.strictEqual(await runner.executeHeadless(session, []), true);
+    assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PROMPT_INDEX, "1");
+    assert.strictEqual(
+      getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID,
+      "group-1"
+    );
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

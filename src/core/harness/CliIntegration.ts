@@ -573,7 +573,8 @@ export class CliIntegration extends HarnessIntegration {
     const reason = CliIntegration.getInjectIncompatibilityReason(
       ctx,
       session.resolvedProperties,
-      session.resolvedSessionId
+      session.resolvedSessionId,
+      this.getParallelGroupId(session.workflowContext)
     );
     if (reason) {
       Log.info(
@@ -594,7 +595,8 @@ export class CliIntegration extends HarnessIntegration {
   private static getInjectIncompatibilityReason(
     ctx: import("./shared/CliExecutionRunner").InteractiveInjectContext,
     curr: ResolvedProperties | undefined,
-    currSessionId: string | undefined
+    currSessionId: string | undefined,
+    parallelGroupId?: string
   ): string | null {
     const prev = ctx.spawnedWith;
 
@@ -612,6 +614,13 @@ export class CliIntegration extends HarnessIntegration {
     }
     if (!curr) {
       return "current resolved properties are missing — cannot verify spawn-time configuration";
+    }
+
+    // This is deliberately a presence test rather than a prev/curr comparison:
+    // coordination-enabled steps can have identical ResolvedProperties while
+    // still requiring distinct spawn-time group identities.
+    if (parallelGroupId !== undefined) {
+      return "parallel-group identity requires a fresh process";
     }
 
     // Inject mode keeps the TUI alive and continues the existing conversation,
@@ -645,6 +654,17 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return null;
+  }
+
+  private getParallelGroupId(
+    workflowContext: WorkflowContext | undefined
+  ): string | undefined {
+    if (!workflowContext) return undefined;
+    return workflowContext.workflowFile?.parallelGroups?.find(
+      (group) =>
+        workflowContext.promptIndex >= group.startIndex &&
+        workflowContext.promptIndex <= group.endIndex
+    )?.id;
   }
 
   private getInteractiveAbortState(): ReturnType<

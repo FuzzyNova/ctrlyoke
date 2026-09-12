@@ -500,14 +500,11 @@ export class CliExecutionRunner {
       .filter(([, enabled]) => enabled)
       .map(([event]) => event);
 
-    if (enabledEvents.length === 0) {
-      return {};
-    }
-
     const ctx = session.workflowContext;
-    const env: Record<string, string> = {
-      CTRLYOKE_NOTIFY_HOOK_EVENTS: enabledEvents.join(","),
-    };
+    const env: Record<string, string> = {};
+    if (enabledEvents.length > 0) {
+      env.CTRLYOKE_NOTIFY_HOOK_EVENTS = enabledEvents.join(",");
+    }
 
     if (ctx?.instanceId) {
       env.CTRLYOKE_WORKFLOW_ID = ctx.instanceId;
@@ -521,12 +518,23 @@ export class CliExecutionRunner {
       if (promptName) {
         env.CTRLYOKE_PROMPT_NAME = promptName;
       }
+      const parallelGroupId = ctx.workflowFile?.parallelGroups?.find(
+        (group) =>
+          ctx.promptIndex >= group.startIndex &&
+          ctx.promptIndex <= group.endIndex
+      )?.id;
+      if (parallelGroupId) {
+        env.CTRLYOKE_PARALLEL_GROUP_ID = parallelGroupId;
+      }
     }
     const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
     if (workspaceRoot) {
       env.CTRLYOKE_WORKSPACE_ROOT = workspaceRoot;
     }
-    env.CTRLYOKE_HARNESS_ID = this.deps.provider.config.harnessId;
+    const harnessId = this.deps.provider.config.harnessId;
+    if (harnessId) {
+      env.CTRLYOKE_HARNESS_ID = harnessId;
+    }
     return env;
   }
 

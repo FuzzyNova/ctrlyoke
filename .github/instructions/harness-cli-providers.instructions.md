@@ -20,6 +20,34 @@ Harness-specific adapters for CLI execution. Provider directories should contain
 - OpenCode is intentionally different: MCP, permissions, and the normal completion plugin are delivered through process-local inline configuration/environment. A near-empty CLI permission mapper is expected there; the provider's collision-aware mapper builds the inline permission block.
 </statefulProviders>
 
+<coordinationIdentity>
+- **MCP environment inheritance audit (2026-09-11):** all six supported harnesses
+  (`copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, and
+  `antigravity-cli`) receive `process.env` at the shared CLI spawn boundary,
+  including `CTRLYOKE_PROMPT_INDEX`, `CTRLYOKE_PROMPT_NAME`, and, for grouped
+  spawn-per-step launches, `CTRLYOKE_PARALLEL_GROUP_ID`. Their MCP configuration
+  also carries `CTRLYOKE_WORKING_FILE` and `CTRLYOKE_EXECUTION_ROOT`, so run
+  identity and board scope do not depend on child-process environment inheritance.
+  Claude, Copilot, and Codex use per-invocation config; OpenCode and Qwen use
+  process-local inline config; Antigravity uses the workspace-discovered
+  `.agents/mcp_config.json`. The final stdio-server environment is owned by each
+  vendor CLI, not ctrlyoke, and may be sanitised to `PATH`/`HOME` plus config
+  `env`: there is no provider-specific guarantee beyond the shared spawn
+  boundary. If a harness sanitises, only group-member step attribution is lost;
+  the board and run-level identity remain available. Treat that as a degraded
+  attribution result, not a coordination failure or a reason for a provider
+  workaround.
+
+  | Harness | MCP config channel | Spawn-environment finding |
+  | --- | --- | --- |
+  | `copilot-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+  | `claude-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+  | `codex-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+  | `opencode-cli` | Process-local inline config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+  | `qwen-cli` | Process-local inline config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+  | `antigravity-cli` | Workspace `.agents/mcp_config.json` | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+</coordinationIdentity>
+
 <parsingAndRecovery>
 - Headless and interactive paths must converge on the same `UniversalCliOutput` semantics through one mapping in the provider's `ILogParser`; `headlessSource` is a fidelity choice between stdout and session logs, not a latency choice.
 - OpenCode headless output is stdout-sourced JSONL. Never route it through `export`: export is a final snapshot and loses the live event stream.

@@ -149,6 +149,7 @@ suite("QwenCliProvider", () => {
               CTRLYOKE_MAX_QUEUE_SIZE: "10",
               CTRLYOKE_DIAGNOSTIC_LOGS: "true",
               CTRLYOKE_API_KEY: "dynamic-secret",
+              CTRLYOKE_EXECUTION_ROOT: "C:/workspace/project",
             },
             trust: true,
           },

@@ -7,7 +7,10 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { CtrlYokeMCPServer } from "../../mcp-server";
+import {
+  CtrlYokeMCPServer,
+  initializeMcpStorage,
+} from "../../mcp-server";
 import {
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
@@ -25,6 +28,8 @@ import {
 } from "../../types/DashboardConstants";
 import { MCP_LIST_HARNESSES_TOOL_NAME } from "../../utils/McpToolDefinitions";
 import type { CapabilitiesFile } from "../../types/CapabilitiesTypes";
+import type { WorkflowKey } from "../../types/CtrlYokeTypes";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
   ExternalRootsTrustStore,
@@ -654,7 +659,17 @@ suite("WebviewSettingsSync", () => {
 
     test("writes a capabilities file readable by the MCP server", async () => {
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
       const workspaceRoot = tempDir("capabilities-contract");
+      await initializeMcpStorage(workspaceRoot);
+      const workflowKey =
+        "capabilities-contract-2026-01-01T00-00-00" as WorkflowKey;
+      const runRef = WorkflowPaths.formatRunRef(Date.now());
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        runRef
+      );
       const capabilitiesPath = path.join(
         workspaceRoot,
         CTRLYOKE_DIR,
@@ -662,6 +677,33 @@ suite("WebviewSettingsSync", () => {
       );
 
       try {
+        await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+        await fs.writeFile(
+          WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
+          JSON.stringify({
+            schemaVersion: 1,
+            workflowKey,
+            workflowName: "Capabilities contract",
+            isFavorite: false,
+            createdAt: 1,
+            lastModifiedAt: 1,
+            latestRunRef: runRef,
+            nextRunId: 2,
+            revision: 1,
+          })
+        );
+        await fs.writeFile(
+          runFilePath,
+          JSON.stringify({
+            workflowName: "Capabilities contract",
+            startedAt: 1,
+            lastModifiedAt: 1,
+            definitionRevision: 1,
+            steps: [],
+            _runtime: { currentIndex: 0, executionState: "idle" },
+          })
+        );
+        process.env.CTRLYOKE_WORKING_FILE = runFilePath;
         await fs.mkdir(path.dirname(capabilitiesPath), { recursive: true });
         Object.defineProperty(vscode.workspace, "workspaceFolders", {
           value: [{ uri: vscode.Uri.file(workspaceRoot) }],
@@ -722,6 +764,11 @@ suite("WebviewSettingsSync", () => {
           },
         ]);
       } finally {
+        if (originalWorkingFile === undefined) {
+          delete process.env.CTRLYOKE_WORKING_FILE;
+        } else {
+          process.env.CTRLYOKE_WORKING_FILE = originalWorkingFile;
+        }
         Object.defineProperty(vscode.workspace, "workspaceFolders", {
           value: originalWorkspaceFolders,
           configurable: true,

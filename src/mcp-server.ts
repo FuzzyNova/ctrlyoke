@@ -494,19 +494,29 @@ export class CtrlYokeMCPServer {
             (group) =>
               currentIndex >= group.startIndex && currentIndex <= group.endIndex
           );
-    const group = environmentGroup ?? currentGroup;
+    // A group id from the environment is only valid when it describes the
+    // group currently active in the run file. A reused PTY can carry an old
+    // group id just as it can carry an old prompt index.
+    const group = currentGroup;
+    const environmentGroupMatches =
+      group !== undefined && environmentGroup?.id === group.id;
+    // Group membership comes from the run file. A grouped step index needs the
+    // matching group id as its proof; without it, a sanitising client retains
+    // the board but loses only step-level attribution.
     const stepIndex =
       Number.isSafeInteger(environmentIndex) &&
-      ((environmentGroup !== undefined &&
-        environmentIndex >= environmentGroup.startIndex &&
-        environmentIndex <= environmentGroup.endIndex) ||
-        environmentIndex === currentIndex)
+      (group === undefined
+        ? environmentIndex === currentIndex
+        : environmentGroupMatches &&
+          environmentIndex >= group.startIndex &&
+          environmentIndex <= group.endIndex)
         ? environmentIndex
         : undefined;
     const stepName =
       stepIndex === undefined
         ? undefined
-        : workingFile.steps?.[stepIndex]?.name;
+        : process.env.CTRLYOKE_PROMPT_NAME?.trim() ||
+          workingFile.steps?.[stepIndex]?.name;
 
     return {
       attested: true,
@@ -525,7 +535,22 @@ export class CtrlYokeMCPServer {
   private async getCoordinationState(
     context: McpToolCallingContext
   ): Promise<CoordinationState> {
-    if (this.coordinationState) return this.coordinationState;
+    if (this.coordinationState) {
+      // The orchestrator closes attested leases at settlement. A reused PTY
+      // can issue another sequential call later, so re-register after that
+      // external close instead of keeping a dead participant cached forever.
+      const live = await this.coordinationState.registry.fold();
+      if (
+        live.participants.some(
+          (participant) =>
+            participant.participantId ===
+            this.coordinationState!.lease.participantId
+        )
+      ) {
+        return this.coordinationState;
+      }
+      this.coordinationState = undefined;
+    }
 
     const executionRoot = await this.resolveExecutionRoot();
     const registry = new CoordinationParticipantRegistry(executionRoot);

@@ -208,12 +208,14 @@ function createInteractiveInjectContext(
 function getInjectIncompatibilityReason(
   ctx: InteractiveInjectContext,
   curr: ResolvedProperties | undefined,
-  currSessionId: string | undefined
+  currSessionId: string | undefined,
+  parallelGroupId?: string
 ): string | null {
   return (CliIntegration as any).getInjectIncompatibilityReason(
     ctx,
     curr,
-    currSessionId
+    currSessionId,
+    parallelGroupId
   );
 }
 
@@ -277,6 +279,20 @@ suite("CliIntegration", () => {
           "session-existing"
         ),
         null
+      );
+    });
+
+    test("forces a restart when the prompt needs parallel-group identity", () => {
+      const properties = createResolvedProperties();
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(properties),
+          properties,
+          "session-existing",
+          "group-1"
+        ),
+        "parallel-group identity requires a fresh process"
       );
     });
 

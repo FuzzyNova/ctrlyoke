@@ -121,6 +121,7 @@ import {
   ExecutionLeaseConflictError,
   type ExecutionLeaseHandle,
 } from "./orchestration/ExecutionRootLeaseManager";
+import { CoordinationParticipantRegistry } from "./orchestration/ExecutionRootCoordination";
 import {
   WorktreeManager,
   type WorktreeInfo,
@@ -827,6 +828,67 @@ export class WorkflowInstance {
     }
     this.targetScriptProcessRunners.delete(targetKey);
     this.activeTargetResources.delete(targetKey);
+  }
+
+  private getCoordinationAddress(
+    target: WorkflowAttemptTarget,
+    parallelGroupId?: string
+  ):
+    | {
+        workflowKey: WorkflowKey;
+        runRef: RunRef;
+        stepIndex?: number;
+        parallelGroupId?: string;
+      }
+    | undefined {
+    const state = this.promptQueue.getState();
+    if (!state.workflowKey || !state.runRef) return undefined;
+    const targetGroupId =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? state.parallelGroups.find(
+            (candidate) =>
+              target.stepIndex >= candidate.startIndex &&
+              target.stepIndex <= candidate.endIndex
+          )?.id
+        : undefined;
+    const resolvedParallelGroupId = parallelGroupId ?? targetGroupId;
+    return {
+      workflowKey: state.workflowKey,
+      runRef: state.runRef,
+      ...(target.kind === FINAL_STEP_PHASES.QUEUE
+        ? { stepIndex: target.stepIndex }
+        : {}),
+      ...(resolvedParallelGroupId
+        ? { parallelGroupId: resolvedParallelGroupId }
+        : {}),
+    };
+  }
+
+  private async closeCoordinationParticipant(
+    target: WorkflowAttemptTarget
+  ): Promise<void> {
+    const address = this.getCoordinationAddress(target);
+    if (!address) return;
+    await new CoordinationParticipantRegistry(
+      this.executionWorkspace.executionRoot
+    ).closeAttestedParticipants(address);
+  }
+
+  private async releaseCoordinationGroupClaims(
+    group: ParallelGroupDefinition
+  ): Promise<void> {
+    const address = this.getCoordinationAddress(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
+      group.id
+    );
+    if (!address) return;
+    const registry = new CoordinationParticipantRegistry(
+      this.executionWorkspace.executionRoot
+    );
+    await registry.releaseClaimsForGroup(address);
+    // A sanitising MCP client may omit the member step index. At the join all
+    // members are settled, so closing the whole group is then unambiguous.
+    await registry.closeAttestedGroupParticipants(address);
   }
 
   private async cancelTarget(target: WorkflowAttemptTarget): Promise<void> {
@@ -4008,6 +4070,10 @@ export class WorkflowInstance {
       clearTargetPtySession: (target) => this.clearTargetPtySession(target),
       cancelTarget: (target) => this.cancelTarget(target),
       releaseTargetResources: (target) => this.releaseTargetResources(target),
+      closeCoordinationParticipant: (target) =>
+        this.closeCoordinationParticipant(target),
+      releaseCoordinationGroupClaims: (group) =>
+        this.releaseCoordinationGroupClaims(group),
       outputHistoryManager: this.outputHistoryManager,
       secretRedactor: this.activeRunRedactor,
       resolvePriorContextItems: createPriorContextResolver({

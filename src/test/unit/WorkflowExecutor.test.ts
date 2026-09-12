@@ -431,6 +431,34 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("closes settled participants and releases group claims at the join", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+    ]);
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      parallelGroups: [
+        { id: "coordination", startIndex: 0, endIndex: 1, failFast: true },
+      ],
+    });
+    const context = makeParallelContext(integrations);
+    const settled: number[] = [];
+    const joined: string[] = [];
+    context.closeCoordinationParticipant = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) settled.push(target.stepIndex);
+    };
+    context.releaseCoordinationGroupClaims = async (group) => {
+      joined.push(group.id);
+    };
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    assert.deepStrictEqual(settled.sort(), [0, 1]);
+    assert.deepStrictEqual(joined, ["coordination"]);
+  });
+
   test("joins parallel members completed in reverse order without advancing currentIndex early", async () => {
     const queue = new PromptQueue();
     const observedCurrentIndices: number[] = [];

@@ -139,6 +139,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       responseText?: string;
       worktree?: WorkingFileWorktreeRuntime;
       stepCount?: number;
+      currentIndex?: number;
+      parallelGroups?: WorkingFile["parallelGroups"];
       draftOnly?: boolean;
       executionState?: ExecutionState;
     } = {}
@@ -179,8 +181,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       lastModifiedAt: 1,
       definitionRevision: 4,
       steps,
+      ...(options.parallelGroups
+        ? { parallelGroups: options.parallelGroups }
+        : {}),
       _runtime: {
         currentIndex: stepCount,
+        ...(options.currentIndex !== undefined
+          ? { currentIndex: options.currentIndex }
+          : {}),
         executionState,
         ...(options.worktree ? { worktree: options.worktree } : {}),
       },
@@ -492,6 +500,50 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await fs.rm(cwdRoot, { recursive: true, force: true });
       await fs.rm(runRoot, { recursive: true, force: true });
     }
+  });
+
+  test("discards a frozen prompt index that disagrees with the run runtime", async () => {
+    const server = await setup();
+    const run = await createRun("stale-index", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    process.env.CTRLYOKE_PROMPT_INDEX = "0";
+
+    const posted = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, { text: "stale" })
+    );
+
+    assert.strictEqual(posted.scope.participants[0].address.stepIndex, undefined);
+    assert.strictEqual(
+      posted.scope.participants[0].address.parallelGroupId,
+      undefined
+    );
+  });
+
+  test("attaches a group member's index and group id", async () => {
+    const server = await setup();
+    const run = await createRun("group-identity", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+      currentIndex: 1,
+      parallelGroups: [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    process.env.CTRLYOKE_PROMPT_INDEX = "2";
+    process.env.CTRLYOKE_PARALLEL_GROUP_ID = "group-1";
+
+    const posted = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, { text: "group" })
+    );
+    const address = posted.scope.participants[0].address;
+
+    assert.strictEqual(address.stepIndex, 2);
+    assert.strictEqual(address.parallelGroupId, "group-1");
   });
 
   test("rejects absolute and escaping coordination paths", async () => {

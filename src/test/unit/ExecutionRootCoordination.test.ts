@@ -231,6 +231,68 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
+  test("closes an attested participant for a settled sequential run", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+        processLivenessCheck: () => true,
+      });
+      const address = {
+        workflowKey: "workflow" as WorkflowKey,
+        runRef: "run-1" as RunRef,
+      };
+      const lease = await registry.registerAttestedParticipant({
+        kind: "ctrlyoke-step",
+        label: "step",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+        address: { ...address, stepIndex: 0 },
+      });
+      await lease.claim(["src/a.ts"]);
+
+      await registry.closeAttestedParticipants({
+        ...address,
+        stepIndex: 1,
+      });
+
+      const folded = await registry.fold();
+      assert.strictEqual(folded.participants.length, 0);
+      assert.strictEqual(folded.claims.length, 0);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("releases group claims at the join without closing participants", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+        processLivenessCheck: () => true,
+      });
+      const address = {
+        workflowKey: "workflow" as WorkflowKey,
+        runRef: "run-1" as RunRef,
+        parallelGroupId: "group-1",
+      };
+      const lease = await registry.registerAttestedParticipant({
+        kind: "ctrlyoke-step",
+        label: "group member",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+        address: { ...address, stepIndex: 1 },
+      });
+      await lease.claim(["src/a.ts"]);
+
+      await registry.releaseClaimsForGroup(address);
+
+      const folded = await registry.fold();
+      assert.strictEqual(folded.participants.length, 1);
+      assert.strictEqual(folded.claims.length, 0);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("folds a participant without stepIndex normally", () => {
     const value = participant("no-step-index", {
       address: {

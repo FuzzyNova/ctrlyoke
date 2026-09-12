@@ -178,6 +178,12 @@ export interface WorkflowExecutionContext {
   unregisterActiveTarget?: (target: ExecutionTarget) => void;
   cancelTarget?: (target: ExecutionTarget) => Promise<void>;
   releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
+  /** Close the attested coordination participant when a target settles. */
+  closeCoordinationParticipant?: (target: WorkflowAttemptTarget) => Promise<void>;
+  /** Release all claims held by members of a group at its join boundary. */
+  releaseCoordinationGroupClaims?: (
+    group: ParallelGroupDefinition
+  ) => Promise<void>;
   getScriptProcessRunner?: (target: ExecutionTarget) => ScriptProcessRunner;
   historyFilePath: string;
   workingFilePath?: string;
@@ -543,6 +549,7 @@ export class WorkflowExecutor {
         context,
         snapshotStrategy
       );
+      await this.settleCoordinationParticipant(finalOutcome.target, context);
       const shouldContinue =
         finalOutcome.status === PROMPT_TERMINAL_STATUS.COMPLETED;
 
@@ -959,6 +966,14 @@ export class WorkflowExecutor {
     }
 
     await this.promptQueue.commitParallelGroupJoin(group, orderedOutcomes);
+    try {
+      await context.releaseCoordinationGroupClaims?.(group);
+    } catch (error) {
+      Log.warn(
+        "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
+        error
+      );
+    }
     stopWatcher.dispose();
     this.broadcastSettledProgress(context);
 
@@ -992,7 +1007,24 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<void> {
     await this.promptQueue.persistStepOutcome(outcome);
+    await this.settleCoordinationParticipant(outcome.target, context);
     this.broadcastSettledProgress(context);
+  }
+
+  private async settleCoordinationParticipant(
+    target: WorkflowAttemptTarget,
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    try {
+      await context.closeCoordinationParticipant?.(target);
+    } catch (error) {
+      // Coordination is advisory. A board failure must not turn a settled
+      // workflow target into an execution failure.
+      Log.warn(
+        "[WorkflowExecutor] Failed to close coordination participant lease:",
+        error
+      );
+    }
   }
 
   private broadcastSettledProgress(context: WorkflowExecutionContext): void {
@@ -1007,6 +1039,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<boolean> {
     await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
+    await this.settleCoordinationParticipant(outcome.target, context);
     this.broadcastSettledProgress(context);
 
     if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {

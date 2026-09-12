@@ -513,6 +513,19 @@ hook env, `CliExecutionRunner.ts:524-527`), and any new `CTRLYOKE_EXECUTION_ROOT
 are three similar names for two different roots. Document them together in
 `src/mcp-server.ts`'s environment-variable comment block.
 
+**Decision 7 implementation (2026-09-11):** `CliExecutionRunner` now adds
+`CTRLYOKE_PARALLEL_GROUP_ID` only to spawn-per-step environments; the existing
+prompt index/name variables remain the source for attribution. `CtrlYokeMCPServer`
+accepts a prompt index only when it matches the run's current index, or when a
+matching current group id proves that the index belongs to that group, and drops
+stale values. Group members are inject-incompatible, so `CliIntegration` retires
+the PTY and respawns with the existing resume path. `WorkflowExecutor` settles
+coordination participants at target settlement and releases group claims at the
+join; `WorkflowInstance` performs those operations against the execution-root
+registry, with the stale-owner fold remaining the crash backstop. A reused MCP
+server re-registers after an orchestrator-issued close so ordinary sequential
+injection remains viable.
+
 ### 8. Tool availability: two server modes, filtered `ListTools`
 
 The server's mode is decided by whether ctrlyoke launched it, which is exactly

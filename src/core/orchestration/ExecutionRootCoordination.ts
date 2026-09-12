@@ -401,6 +401,97 @@ export class CoordinationParticipantRegistry {
     });
   }
 
+  /**
+   * Close attested ctrlyoke participants for a settled run target. Sequential
+   * participants are run-scoped because an injected PTY can retain an older
+   * step index; grouped participants are narrowed by their group and step.
+   */
+  async closeAttestedParticipants(
+    address: NonNullable<CoordinationParticipant["address"]>
+  ): Promise<void> {
+    await this.store.transaction(async (transaction) => {
+      const participants = foldCoordinationEntries(
+        transaction.entries,
+        this.foldOptions()
+      ).participants.filter(
+        (participant) =>
+          participant.attested &&
+          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
+          participant.address?.workflowKey === address.workflowKey &&
+          participant.address?.runRef === address.runRef &&
+          (address.parallelGroupId === undefined
+            ? participant.address.parallelGroupId === undefined
+            : participant.address.parallelGroupId === address.parallelGroupId &&
+              participant.address.stepIndex === address.stepIndex)
+      );
+      for (const participant of participants) {
+        await transaction.append(
+          participantEntry(participant, COORDINATION_ENTRY_KINDS.LEAVE)
+        );
+      }
+    });
+  }
+
+  /** Close every attested participant from a group after its join boundary. */
+  async closeAttestedGroupParticipants(
+    address: NonNullable<CoordinationParticipant["address"]>
+  ): Promise<void> {
+    if (!address.parallelGroupId) return;
+    await this.store.transaction(async (transaction) => {
+      const participants = foldCoordinationEntries(
+        transaction.entries,
+        this.foldOptions()
+      ).participants.filter(
+        (participant) =>
+          participant.attested &&
+          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
+          participant.address?.workflowKey === address.workflowKey &&
+          participant.address?.runRef === address.runRef &&
+          participant.address.parallelGroupId === address.parallelGroupId
+      );
+      for (const participant of participants) {
+        await transaction.append(
+          participantEntry(participant, COORDINATION_ENTRY_KINDS.LEAVE)
+        );
+      }
+    });
+  }
+
+  /** Release claims without closing the group participants themselves. */
+  async releaseClaimsForGroup(
+    address: NonNullable<CoordinationParticipant["address"]>
+  ): Promise<void> {
+    if (!address.parallelGroupId) return;
+    await this.store.transaction(async (transaction) => {
+      const fold = foldCoordinationEntries(
+        transaction.entries,
+        this.foldOptions()
+      );
+      for (const participant of fold.participants) {
+        if (
+          !participant.attested ||
+          participant.kind !== COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP ||
+          participant.address?.workflowKey !== address.workflowKey ||
+          participant.address?.runRef !== address.runRef ||
+          participant.address.parallelGroupId !== address.parallelGroupId
+        ) {
+          continue;
+        }
+        const paths = fold.claims
+          .filter(
+            (claim) => claim.owner.participantId === participant.participantId
+          )
+          .map((claim) => claim.path);
+        if (paths.length > 0) {
+          await transaction.append({
+            ...participantEntry(participant, COORDINATION_ENTRY_KINDS.RELEASE),
+            paths,
+          });
+        }
+      }
+    });
+  }
+
   async fold(): Promise<CoordinationParticipantFold> {
     return this.store.transaction(async (transaction) =>
       foldCoordinationEntries(transaction.entries, this.foldOptions())
