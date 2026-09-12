@@ -268,10 +268,50 @@ this scope record match, or is this a collision" guard (`verifyScopeRecord`'s
 pattern at `:229`), and a caller resolving "who else is here and what have they
 said" wants one lookup, not two independently-derived paths that could drift.
 
-A managed worktree's directory is removed at the end of a run but its Git
-**common directory** is not, so the board survives worktree removal exactly like
-a managed branch does and remains inspectable by later runs against the same
-repository.
+**Why not simply `<executionRoot>/.ctrlyoke/coordination/board.jsonl` — revised
+2026-09-12.** The original text justified the common directory only by worktree
+survival, which is the _weakest_ of the three reasons and, read alone,
+reasonably suggests the whole thing is unnecessary. It is not. In order of
+weight:
+
+1. **Nothing ctrlyoke writes can become an untracked — or committed — file in
+   the user's repository.** `.ctrlyoke/` is not wholesale-ignored: only the
+   entries in `WORKSPACE_RUNTIME_ENTRY_RULES` are, through a `.ctrlyoke/.gitignore`
+   that **only `WorkspaceInitializer.initializeIfNeeded` writes** — and
+   `initializeMcpStorage` does not call it. So a board under the working tree
+   would sit untracked in any checkout ctrlyoke had not initialized, which is
+   precisely the zero-configuration external-participant case Decision 6 exists
+   to protect; worse, creating `.ctrlyoke/` to hold it would permanently flip
+   `WorkspaceInitializer.isInitialized()` to true for that repository on the
+   strength of one posted note. Inside a managed worktree the outcome is
+   sharper still: `hasUncommittedChanges` runs `git status --untracked-files=all`,
+   so an unignored board makes the worktree dirty and managed landing's
+   `commitAll` lands it **in the user's branch**. Adding `coordination/` to the
+   runtime entries fixes neither case — not the uninitialized checkout, and not
+   a user who has taken ownership of their `.ctrlyoke/.gitignore`, after which
+   `ensureGitignore` leaves the file alone forever.
+2. **The Git common directory is guaranteed to sit on the same filesystem as the
+   execution root.** Claims are reaped by PID liveness (Decision 2), which is
+   only meaningful among processes that share that filesystem. This is what
+   rules out the otherwise-attractive third option of the user-mode state home:
+   it can live under OneDrive/Dropbox, where two machines' boards would merge
+   into one file describing PIDs from both — the same hazard already documented
+   for synced run history, but disqualifying here rather than merely awkward.
+3. **The board outlives a managed worktree's directory.** True, but of no real
+   value on its own: coordination in a removed worktree is pointless, and
+   in-run entries are already preserved in output history. This reason is
+   load-bearing for the worktree _ownership records_ next door, not for the
+   board.
+
+On the implied-ownership objection — Git does not treat `$GIT_DIR` as an
+exclusive namespace. `.git/hooks/` is explicitly tool territory, third-party
+tools store state there routinely (git-lfs keeps `.git/lfs/`), and
+`gitrepository-layout(5)` documents the paths Git itself uses rather than
+reserving the rest. The convention is to namespace under your own subdirectory,
+which is what `<common-dir>/ctrlyoke/` does — and what ctrlyoke has already
+done since the worktree feature shipped, for `managed-worktrees/` and
+`named-worktrees/` ownership records (`WorktreeManager.recordPath`) that
+genuinely cannot live anywhere else.
 
 One file, not a mailbox per participant and not a file per run, because:
 

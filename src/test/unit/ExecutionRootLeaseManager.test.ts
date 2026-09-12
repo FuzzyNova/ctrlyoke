@@ -196,7 +196,7 @@ suite("ExecutionRootLeaseManager", function () {
     }
   });
 
-  test("uses central Git storage that survives worktree removal", async () => {
+  test("keeps scope storage outside the worktree's working tree", async () => {
     const parent = await tempDirectory("git");
     const source = path.join(parent, "source");
     const worktree = path.join(parent, "worktree");
@@ -228,7 +228,20 @@ suite("ExecutionRootLeaseManager", function () {
         request(worktree, "exclusive-worktree", "worktree")
       );
       const scope = await ExecutionRootLeaseManager.getScopeInfo(worktree);
-      assert.ok(!scope.storageRoot.startsWith(path.join(worktree, ".git")));
+      // Not merely "outside the worktree's own .git": storage must be outside
+      // the working tree entirely, or it becomes an untracked file the managed
+      // landing path would commit into the user's branch. A move to
+      // `<worktree>/.ctrlyoke/` satisfies the narrower check and is exactly the
+      // regression this guards. See ExecutionRootScope.scopeStorageRoot.
+      // realpath both sides: scope storage is canonicalized, while `worktree`
+      // is the raw temp path (which is a symlink on macOS).
+      const canonicalWorktree = await fs.realpath(worktree);
+      assert.ok(
+        !path
+          .resolve(scope.storageRoot)
+          .startsWith(path.resolve(canonicalWorktree) + path.sep),
+        `scope storage ${scope.storageRoot} must not live inside ${worktree}`
+      );
 
       execFileSync("git", ["-C", source, "worktree", "remove", worktree]);
       await lease.release();

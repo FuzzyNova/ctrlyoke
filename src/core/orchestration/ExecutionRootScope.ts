@@ -74,8 +74,29 @@ export async function resolveExecutionRootScope(
 
 /**
  * Return a storage directory for a scope-owned category. Git-backed categories
- * are kept in the common directory so managed worktree removal cannot remove
- * the coordination or lease state.
+ * live in the Git common directory — never inside the execution root's working
+ * tree — for three reasons, in order of weight:
+ *
+ * 1. **Nothing we write can become an untracked or committed file in the
+ *    user's repository.** `.ctrlyoke/` is not wholesale-ignored; only the
+ *    entries `WorkspaceInitializer` generates are, and that file is written
+ *    solely by `initializeIfNeeded` — which the MCP server never calls. A
+ *    board under the working tree would therefore appear untracked in any
+ *    checkout ctrlyoke had not initialized (including an external agent's,
+ *    where the first note would also create `.ctrlyoke/` and flip
+ *    `WorkspaceInitializer.isInitialized` to true), and inside a managed
+ *    worktree `hasUncommittedChanges` + `commitAll` would land it in the
+ *    user's branch.
+ * 2. **The common directory is guaranteed to be on the same filesystem as the
+ *    execution root.** Both leases and coordination claims are reaped by PID
+ *    liveness, which is only meaningful among processes sharing that
+ *    filesystem — so a synced location (the user-mode state home under
+ *    OneDrive/Dropbox) would be wrong here even though run history tolerates it.
+ * 3. Records outlive a managed worktree's directory. Load-bearing for the
+ *    worktree ownership records next door, incidental for the board.
+ *
+ * The non-Git fallback accepts (1) and (2) being unavailable because there is
+ * no repository to dirty and nowhere else scoped to put it.
  */
 export function scopeStorageRoot(
   scope: ExecutionRootScope,
