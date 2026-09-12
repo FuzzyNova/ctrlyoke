@@ -604,4 +604,30 @@ suite("FileConfigBackend", () => {
       }
     );
   });
+
+  test("round-trips coordination settings through CtrlYokeConfigService", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const backend = new FileConfigBackend(configPath);
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend(backend);
+
+    await service.set("coordination.maxEntries", 12, "user");
+    await service.set("coordination.maxNoteLength", 3210, "user");
+    await service.set("coordination.allowExternalParticipants", false, "user");
+
+    assert.strictEqual(service.get("coordination").maxEntries, 12);
+    assert.strictEqual(service.get("coordination").maxNoteLength, 3210);
+    assert.strictEqual(
+      service.get("coordination").allowExternalParticipants,
+      false
+    );
+    assert.deepStrictEqual(
+      JSON.parse(fs.readFileSync(configPath, "utf-8")).coordination,
+      {
+        maxEntries: 12,
+        maxNoteLength: 3210,
+        allowExternalParticipants: false,
+      }
+    );
+  });
 });

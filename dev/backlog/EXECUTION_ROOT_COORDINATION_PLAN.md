@@ -584,13 +584,13 @@ the caps from "what can an agent consume in one call", not from storage.
 
 That makes the response cap the primary protection and the storage caps hygiene:
 
-| Cap                    | Recommended | Why                                                                                                                               |
-| ---------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `read_notes` page      | 50 entries  | Always paged with `nextCursor`, never unbounded. This is the cap that actually prevents the `global_status` failure.              |
-| `maxNoteLength`        | 2,000 chars | Enough for a paragraph plus a path list; small enough that a full page costs roughly 25K characters rather than an entire window. |
-| `maxEntries` per scope | 1,000       | Post-compaction. At realistic entry sizes this is well under a megabyte.                                                          |
-| `maxBoardBytes`        | 5 MB        | Hard ceiling, hygiene only — compaction should keep the file far below it.                                                        |
-| `maxEntryAgeDays`      | 7           | A coordination note older than a week has no value; claims are reaped by liveness long before this matters.                       |
+| Setting key                         | Final default | Why                                                                                                                               |
+| ----------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `coordination.readNotesPageSize`    | 50 entries    | Always paged with `nextCursor`, never unbounded. This is the cap that actually prevents the `global_status` failure.              |
+| `coordination.maxNoteLength`        | 2,000 chars   | Enough for a paragraph plus a path list; small enough that a full page costs roughly 25K characters rather than an entire window. |
+| `coordination.maxEntries` per scope | 1,000         | Post-compaction. At realistic entry sizes this is well under a megabyte.                                                          |
+| `coordination.maxBoardBytes`        | 5 MB          | Hard ceiling, hygiene only — compaction should keep the file far below it.                                                        |
+| `coordination.maxEntryAgeDays`      | 7             | A coordination note older than a week has no value; claims are reaped by liveness long before this matters.                       |
 
 Compact by folding: settled `claim`/`release` pairs cancel out and a long prefix
 of them can be replaced with nothing, and only then are remaining notes trimmed.
@@ -598,6 +598,9 @@ of them can be replaced with nothing, and only then are remaining notes trimmed.
 ownership fold would silently un-deny a held path. Over-cap appends fail with a
 clear message rather than truncating silently; reads keep working and the run does
 not fail. Readers must tolerate gaps in `seq`, since compaction is not contiguous.
+
+The remaining settings in the group are `coordination.cliParticipantTtlMinutes`
+(30 minutes) and `coordination.allowExternalParticipants` (true).
 
 **Evict by largest contributor, not strictly oldest.** External participants get
 the same per-entry caps as ctrlyoke steps — a separate, stricter budget would be

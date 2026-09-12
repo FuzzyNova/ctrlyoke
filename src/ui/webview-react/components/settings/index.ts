@@ -7,6 +7,7 @@ export { ExecutionSection } from "./ExecutionSection";
 export { WorktreesSection } from "./WorktreesSection";
 export { TerminalSection } from "./TerminalSection";
 export { QueueSection } from "./QueueSection";
+export { CoordinationSection } from "./CoordinationSection";
 export { ServerSection } from "./ServerSection";
 export { LicenseSection } from "./LicenseSection";
 export { DeveloperSection } from "./DeveloperSection";

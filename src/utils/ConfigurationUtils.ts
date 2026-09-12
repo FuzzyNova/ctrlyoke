@@ -68,6 +68,7 @@ export const CONFIG_KEYS = {
   GENERAL: "general",
   DEFAULTS: "defaults",
   WORKTREES: SETTING_PATHS.WORKTREES,
+  COORDINATION: SETTING_PATHS.COORDINATION,
   STORAGE: SETTING_PATHS.STORAGE,
   PERMISSIONS: "permissions",
   EXECUTION: "execution",
@@ -94,6 +95,15 @@ export const CONFIG_KEYS = {
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_WORKTREE: "defaults.worktree",
   WORKTREES_ROOT: "worktrees.root",
+  COORDINATION_READ_NOTES_PAGE_SIZE: "coordination.readNotesPageSize",
+  COORDINATION_MAX_NOTE_LENGTH: "coordination.maxNoteLength",
+  COORDINATION_MAX_ENTRIES: "coordination.maxEntries",
+  COORDINATION_MAX_BOARD_BYTES: "coordination.maxBoardBytes",
+  COORDINATION_MAX_ENTRY_AGE_DAYS: "coordination.maxEntryAgeDays",
+  COORDINATION_CLI_PARTICIPANT_TTL_MINUTES:
+    "coordination.cliParticipantTtlMinutes",
+  COORDINATION_ALLOW_EXTERNAL_PARTICIPANTS:
+    "coordination.allowExternalParticipants",
   STORAGE_RUN_HISTORY_LOCATION: SETTING_PATHS.STORAGE_RUN_HISTORY_LOCATION,
   DEFAULTS_ERROR_BEHAVIOR: "defaults.errorBehavior",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",

@@ -8,7 +8,9 @@ import { suite, test } from "mocha";
 import {
   ExecutionRootCoordinationStore,
   resolveCoordinationBoardScope,
+  trimmingPreservesUnresolvedClaims,
 } from "../../core/orchestration/ExecutionRootCoordinationStore";
+import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import {
   resolveExecutionRootScope,
   scopeStorageRoot,
@@ -43,6 +45,21 @@ suite("ExecutionRootCoordinationStore", function () {
       },
       text,
       via: "cli" as const,
+    };
+  }
+
+  function claim(
+    participantId: string,
+    claimPath: string,
+    seq: number
+  ): CoordinationEntry {
+    return {
+      seq,
+      at: new Date(seq).toISOString(),
+      kind: "claim",
+      from: { participantId, label: participantId, attested: false },
+      paths: [claimPath],
+      via: "cli",
     };
   }
 
@@ -244,6 +261,148 @@ suite("ExecutionRootCoordinationStore", function () {
         store.read(),
         /Coordination scope mismatch.*refusing to use it/
       );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("names and enforces the invariant that unresolved claims are not droppable", async () => {
+    const root = await tempDirectory("unresolved-claim");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { maxEntries: 2 },
+      });
+      await store.append(claim("holder", "src/held.ts", 1));
+      await store.append(note("chatty", "one"));
+      await store.append(note("chatty", "two"));
+
+      const result = await store.read({ limit: 10 });
+      assert.ok(
+        result.entries.some(
+          (entry) =>
+            entry.kind === "claim" && entry.paths?.includes("src/held.ts")
+        )
+      );
+      assert.strictEqual(
+        trimmingPreservesUnresolvedClaims(
+          result.entries,
+          result.entries.filter((entry) => entry.kind !== "note")
+        ),
+        true
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("evicts notes from the largest contributor and preserves a quiet participant", async () => {
+    const root = await tempDirectory("largest-contributor");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { maxEntries: 3 },
+      });
+      await store.append(note("chatty", "chatty-1"));
+      await store.append(note("quiet", "quiet-note"));
+      await store.append(note("chatty", "chatty-2"));
+      await store.append(note("chatty", "chatty-3"));
+
+      const result = await store.read({ limit: 10 });
+      assert.ok(
+        result.entries.some((entry) => entry.from.participantId === "quiet")
+      );
+      assert.strictEqual(result.entries.length, 3);
+      assert.ok(
+        result.entries.filter((entry) => entry.from.participantId === "chatty")
+          .length < 3
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("fails an over-cap append clearly while reads still succeed", async () => {
+    const root = await tempDirectory("over-cap");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { maxEntries: 1 },
+      });
+      await store.append(claim("holder", "src/held.ts", 1));
+
+      await assert.rejects(
+        store.append(claim("other", "src/other.ts", 2)),
+        /capacity exceeded.*unresolved claim/
+      );
+      const result = await store.read({ limit: 10 });
+      assert.strictEqual(result.entries.length, 1);
+      assert.deepStrictEqual(result.entries[0].paths, ["src/held.ts"]);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("trims notes by age during the next append", async () => {
+    const root = await tempDirectory("age");
+    const now = Date.parse("2026-09-11T12:00:00.000Z");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        now: () => now,
+        retention: { maxEntryAgeDays: 7 },
+      });
+      await store.append({
+        ...note("old", "expired"),
+        at: "2026-09-01T12:00:00.000Z",
+      });
+      await store.append({
+        ...note("new", "retained"),
+        at: "2026-09-11T12:00:00.000Z",
+      });
+
+      const result = await store.read({ limit: 10 });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.text),
+        ["retained"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("folds settled claim and release pairs out of the board", async () => {
+    const root = await tempDirectory("settled-pair");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(claim("holder", "src/settled.ts", 1));
+      await store.append({
+        kind: "release",
+        from: { participantId: "holder", label: "holder", attested: false },
+        paths: ["src/settled.ts"],
+        via: "cli",
+      });
+      await store.append(note("reader", "still readable"));
+
+      const result = await store.read({ limit: 10 });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.kind),
+        ["note"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("uses the configured page size even when a read omits its limit", async () => {
+    const root = await tempDirectory("configured-page");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { readNotesPageSize: 2 },
+      });
+      await store.append(note("one", "one"));
+      await store.append(note("two", "two"));
+      await store.append(note("three", "three"));
+
+      const result = await store.read();
+      assert.strictEqual(result.entries.length, 2);
+      assert.strictEqual(result.nextCursor, 2);
     } finally {
       await removeDirectory(root);
     }

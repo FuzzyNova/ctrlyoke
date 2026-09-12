@@ -1,6 +1,12 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { configService } from "../../config/CtrlYokeConfigService";
+import {
+  CTRLYOKE_SETTINGS_DEFAULTS,
+  type CoordinationSettings,
+} from "../../types/CtrlYokeSettings";
 import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
+import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import {
   resolveExecutionRootScope,
@@ -11,8 +17,24 @@ import {
 
 const BOARD_FILE_NAME = "board.jsonl";
 const SCOPE_RECORD_FILE_NAME = "scope.json";
-const DEFAULT_PAGE_SIZE = 100;
-const MAX_PAGE_SIZE = 1_000;
+
+export const DEFAULT_COORDINATION_SETTINGS: CoordinationSettings =
+  CTRLYOKE_SETTINGS_DEFAULTS.coordination;
+
+export type CoordinationRetentionOptions = Pick<
+  CoordinationSettings,
+  | "readNotesPageSize"
+  | "maxNoteLength"
+  | "maxEntries"
+  | "maxBoardBytes"
+  | "maxEntryAgeDays"
+>;
+
+export interface CoordinationStoreOptions {
+  retention?: Partial<CoordinationRetentionOptions>;
+  now?: () => number;
+  unresolvedClaims?: CoordinationUnresolvedClaimResolver;
+}
 
 export interface CoordinationBoardScope {
   identity: string;
@@ -91,16 +113,243 @@ async function verifyBoardScope(scope: CoordinationBoardScope): Promise<void> {
   });
 }
 
-function pageSize(limit: number | undefined): number {
-  if (limit === undefined) return DEFAULT_PAGE_SIZE;
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : fallback;
+}
+
+function positiveNumber(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function retentionOptions(
+  overrides: Partial<CoordinationRetentionOptions> = {}
+): CoordinationRetentionOptions {
+  const configured = configService.get("coordination");
+  return {
+    readNotesPageSize: positiveInteger(
+      overrides.readNotesPageSize ?? configured.readNotesPageSize,
+      DEFAULT_COORDINATION_SETTINGS.readNotesPageSize
+    ),
+    maxNoteLength: positiveInteger(
+      overrides.maxNoteLength ?? configured.maxNoteLength,
+      DEFAULT_COORDINATION_SETTINGS.maxNoteLength
+    ),
+    maxEntries: positiveInteger(
+      overrides.maxEntries ?? configured.maxEntries,
+      DEFAULT_COORDINATION_SETTINGS.maxEntries
+    ),
+    maxBoardBytes: positiveInteger(
+      overrides.maxBoardBytes ?? configured.maxBoardBytes,
+      DEFAULT_COORDINATION_SETTINGS.maxBoardBytes
+    ),
+    maxEntryAgeDays: positiveNumber(
+      overrides.maxEntryAgeDays ?? configured.maxEntryAgeDays,
+      DEFAULT_COORDINATION_SETTINGS.maxEntryAgeDays
+    ),
+  };
+}
+
+function pageSize(
+  limit: number | undefined,
+  configuredPageSize: number
+): number {
+  if (limit === undefined) return configuredPageSize;
   if (!Number.isFinite(limit) || limit < 1) {
     throw new Error("Coordination board page size must be a positive number");
   }
-  return Math.min(Math.floor(limit), MAX_PAGE_SIZE);
+  return Math.min(Math.floor(limit), configuredPageSize);
+}
+
+function serializedEntryBytes(entry: CoordinationEntry): number {
+  return Buffer.byteLength(`${JSON.stringify(entry)}\n`, "utf8");
+}
+
+export interface CoordinationActiveClaim {
+  entry: CoordinationEntry;
+  path: string;
+}
+
+export type CoordinationUnresolvedClaimResolver = (
+  entries: readonly CoordinationEntry[]
+) => readonly CoordinationActiveClaim[];
+
+/**
+ * Return explicit claims that have not been cancelled by a later release.
+ * This deliberately errs on the side of protecting a claim: liveness-aware
+ * ownership folding happens in ExecutionRootCoordination, while retention
+ * must never make an unresolved claim disappear from the board.
+ */
+function unresolvedClaims(
+  entries: readonly CoordinationEntry[]
+): CoordinationActiveClaim[] {
+  const active = new Map<string, CoordinationActiveClaim>();
+
+  for (const entry of entries) {
+    if (entry.kind === COORDINATION_ENTRY_KINDS.CLAIM) {
+      for (const claimPath of entry.paths ?? []) {
+        active.set(claimPath, { entry, path: claimPath });
+      }
+    } else if (entry.kind === COORDINATION_ENTRY_KINDS.RELEASE) {
+      if (entry.paths === undefined) {
+        for (const [claimPath, claim] of active) {
+          if (claim.entry.from.participantId === entry.from.participantId) {
+            active.delete(claimPath);
+          }
+        }
+      } else {
+        for (const claimPath of entry.paths) {
+          const claim = active.get(claimPath);
+          if (claim?.entry.from.participantId === entry.from.participantId) {
+            active.delete(claimPath);
+          }
+        }
+      }
+    } else if (entry.kind === COORDINATION_ENTRY_KINDS.LEAVE) {
+      for (const [claimPath, claim] of active) {
+        if (claim.entry.from.participantId === entry.from.participantId) {
+          active.delete(claimPath);
+        }
+      }
+    }
+  }
+
+  return [...active.values()];
+}
+
+/**
+ * Named safety property for retention: compaction may remove settled claim /
+ * release history, but it cannot remove an explicit unresolved claim.
+ */
+export function trimmingPreservesUnresolvedClaims(
+  before: readonly CoordinationEntry[],
+  after: readonly CoordinationEntry[],
+  resolveClaims: CoordinationUnresolvedClaimResolver = unresolvedClaims
+): boolean {
+  const beforeClaims = resolveClaims(before);
+  const afterClaims = resolveClaims(after);
+  return beforeClaims.every((claim) =>
+    afterClaims.some(
+      (candidate) =>
+        candidate.path === claim.path &&
+        candidate.entry.from.participantId === claim.entry.from.participantId
+    )
+  );
+}
+
+function compactSettledClaims(
+  entries: readonly CoordinationEntry[],
+  resolveClaims: CoordinationUnresolvedClaimResolver = unresolvedClaims
+): CoordinationEntry[] {
+  const activeClaims = resolveClaims(entries);
+  const activeByEntry = new Map<number, string[]>();
+  for (const claim of activeClaims) {
+    const paths = activeByEntry.get(claim.entry.seq) ?? [];
+    paths.push(claim.path);
+    activeByEntry.set(claim.entry.seq, paths);
+  }
+
+  return entries
+    .filter((entry) => entry.kind !== COORDINATION_ENTRY_KINDS.RELEASE)
+    .flatMap((entry) => {
+      if (entry.kind !== COORDINATION_ENTRY_KINDS.CLAIM) return [entry];
+      const paths = activeByEntry.get(entry.seq);
+      return paths && paths.length > 0 ? [{ ...entry, paths }] : [];
+    });
+}
+
+function removeOldNotes(
+  entries: readonly CoordinationEntry[],
+  now: number,
+  maxEntryAgeDays: number
+): CoordinationEntry[] {
+  const cutoff = now - maxEntryAgeDays * 24 * 60 * 60 * 1_000;
+  return entries.filter((entry) => {
+    if (entry.kind !== COORDINATION_ENTRY_KINDS.NOTE) return true;
+    const timestamp = Date.parse(entry.at);
+    return !Number.isFinite(timestamp) || timestamp >= cutoff;
+  });
+}
+
+function noteContributor(entry: CoordinationEntry): string {
+  return entry.from.participantId;
+}
+
+function trimNotesToCaps(
+  entries: CoordinationEntry[],
+  settings: CoordinationRetentionOptions,
+  protectedSequence?: number
+): CoordinationEntry[] {
+  const removable = () =>
+    entries.filter(
+      (entry) =>
+        entry.kind === COORDINATION_ENTRY_KINDS.NOTE &&
+        entry.seq !== protectedSequence
+    );
+
+  const exceedsCaps = () =>
+    entries.length > settings.maxEntries ||
+    entries.reduce((total, entry) => total + serializedEntryBytes(entry), 0) >
+      settings.maxBoardBytes;
+
+  while (exceedsCaps()) {
+    const candidates = removable();
+    if (candidates.length === 0) {
+      throw new Error(
+        "Coordination board capacity exceeded: cannot append without dropping an unresolved claim"
+      );
+    }
+
+    const contribution = new Map<string, { bytes: number; count: number }>();
+    for (const entry of candidates) {
+      const current = contribution.get(noteContributor(entry)) ?? {
+        bytes: 0,
+        count: 0,
+      };
+      current.bytes += serializedEntryBytes(entry);
+      current.count += 1;
+      contribution.set(noteContributor(entry), current);
+    }
+    const largestContributor = [...contribution.entries()].sort(
+      ([leftId, left], [rightId, right]) =>
+        right.bytes - left.bytes ||
+        right.count - left.count ||
+        leftId.localeCompare(rightId)
+    )[0][0];
+    const note = candidates.find(
+      (entry) => noteContributor(entry) === largestContributor
+    );
+    entries.splice(entries.indexOf(note!), 1);
+  }
+
+  return entries;
+}
+
+function sameEntries(
+  left: readonly CoordinationEntry[],
+  right: readonly CoordinationEntry[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        right[index] && JSON.stringify(entry) === JSON.stringify(right[index])
+    )
+  );
 }
 
 export class ExecutionRootCoordinationStore {
-  constructor(private readonly executionRoot: string) {}
+  private readonly options: CoordinationStoreOptions;
+
+  constructor(
+    private readonly executionRoot: string,
+    options: CoordinationStoreOptions = {}
+  ) {
+    this.options = options;
+  }
 
   async getScopeInfo(): Promise<CoordinationBoardScope> {
     return readScopeStorage(
@@ -120,21 +369,65 @@ export class ExecutionRootCoordinationStore {
     return withFileLock(scope.boardPath, async () => {
       await verifyBoardScope(scope);
       const entries = await readEntries(scope.boardPath);
-      let lastSequence = entries.at(-1)?.seq ?? 0;
+      let lastSequence = entries.reduce(
+        (maximum, entry) => Math.max(maximum, entry.seq),
+        0
+      );
       const transaction: CoordinationBoardTransaction = {
         entries,
         append: async (entry) => {
+          if (
+            entry.kind === COORDINATION_ENTRY_KINDS.NOTE &&
+            (entry.text?.length ?? 0) >
+              retentionOptions(this.options.retention).maxNoteLength
+          ) {
+            throw new Error(
+              `Coordination note exceeds maxNoteLength (${retentionOptions(this.options.retention).maxNoteLength} characters)`
+            );
+          }
+          const settings = retentionOptions(this.options.retention);
           const persisted: CoordinationEntry = {
             ...entry,
             seq: ++lastSequence,
             at: entry.at ?? new Date().toISOString(),
           };
-          await fs.appendFile(
-            scope.boardPath,
-            `${JSON.stringify(persisted)}\n`,
-            "utf8"
+          const now = this.options.now?.() ?? Date.now();
+          const compactedExisting = removeOldNotes(
+            compactSettledClaims(entries, this.options.unresolvedClaims),
+            now,
+            settings.maxEntryAgeDays
           );
-          entries.push(persisted);
+          if (
+            !trimmingPreservesUnresolvedClaims(
+              entries,
+              compactedExisting,
+              this.options.unresolvedClaims
+            )
+          ) {
+            throw new Error(
+              "Coordination board retention invariant violated: unresolved claim would be dropped"
+            );
+          }
+          const compacted = compactSettledClaims(
+            [...compactedExisting, persisted],
+            this.options.unresolvedClaims
+          );
+          const fitted = trimNotesToCaps(
+            compacted,
+            settings,
+            compacted.some((candidate) => candidate.seq === persisted.seq)
+              ? persisted.seq
+              : undefined
+          );
+          if (!sameEntries(entries, fitted)) {
+            await fs.writeFile(
+              scope.boardPath,
+              fitted.map((candidate) => JSON.stringify(candidate)).join("\n") +
+                (fitted.length > 0 ? "\n" : ""),
+              "utf8"
+            );
+          }
+          entries.splice(0, entries.length, ...fitted);
           return persisted;
         },
       };
@@ -164,7 +457,10 @@ export class ExecutionRootCoordinationStore {
           (options.since === undefined || entry.seq > options.since) &&
           (!from || from.size === 0 || from.has(entry.from.participantId))
       );
-      const limit = pageSize(options.limit);
+      const limit = pageSize(
+        options.limit,
+        retentionOptions(this.options.retention).readNotesPageSize
+      );
       const page = filtered.slice(0, limit);
       return {
         entries: page,

@@ -75,6 +75,16 @@ export interface HarnessColorSettings {
   script: string;
 }
 
+export interface CoordinationSettings {
+  readNotesPageSize: number;
+  maxNoteLength: number;
+  maxEntries: number;
+  maxBoardBytes: number;
+  maxEntryAgeDays: number;
+  cliParticipantTtlMinutes: number;
+  allowExternalParticipants: boolean;
+}
+
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
   general: {
@@ -117,6 +127,9 @@ export interface CtrlYokeGlobalSettings {
   worktrees: {
     root: string;
   };
+
+  /** Cross-workflow, execution-root coordination board settings. */
+  coordination: CoordinationSettings;
 
   /** User-only location for persisted workflow run history. */
   storage: {
@@ -413,6 +426,15 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   worktrees: {
     root: "",
+  },
+  coordination: {
+    readNotesPageSize: 50,
+    maxNoteLength: 2_000,
+    maxEntries: 1_000,
+    maxBoardBytes: 5 * 1024 * 1024,
+    maxEntryAgeDays: 7,
+    cliParticipantTtlMinutes: 30,
+    allowExternalParticipants: true,
   },
   storage: {
     runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,

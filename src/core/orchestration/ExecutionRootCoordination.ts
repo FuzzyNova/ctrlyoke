@@ -3,6 +3,7 @@ import {
   COORDINATION_PARTICIPANT_KINDS,
   COORDINATION_PARTICIPANT_VIA,
 } from "../../types/DashboardConstants";
+import { configService } from "../../config/CtrlYokeConfigService";
 import type {
   CoordinationEntry,
   CoordinationParticipant,
@@ -15,10 +16,17 @@ import {
 } from "../../utils/LockSafetyPrimitives";
 import {
   ExecutionRootCoordinationStore,
+  DEFAULT_COORDINATION_SETTINGS,
+  type CoordinationActiveClaim,
+  type CoordinationRetentionOptions,
   type CoordinationBoardTransaction,
+  type CoordinationUnresolvedClaimResolver,
 } from "./ExecutionRootCoordinationStore";
 
-export const COORDINATION_CLI_LEASE_TTL_MS = 30 * 60 * 1_000;
+export const COORDINATION_CLI_LEASE_TTL_MS =
+  DEFAULT_COORDINATION_SETTINGS.cliParticipantTtlMinutes * 60 * 1_000;
+export const DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES =
+  DEFAULT_COORDINATION_SETTINGS.cliParticipantTtlMinutes;
 
 export interface CoordinationParticipantRegistration {
   kind: CoordinationParticipant["kind"];
@@ -121,9 +129,7 @@ function pathsOverlap(left: string, right: string): boolean {
 }
 
 function hasMagic(value: string): boolean {
-  return (
-    value.includes("*") || value.includes("?") || value.includes("[")
-  );
+  return value.includes("*") || value.includes("?") || value.includes("[");
 }
 
 function globMatches(pattern: string, candidate: string): boolean {
@@ -322,11 +328,41 @@ export class CoordinationParticipantRegistry {
     options: {
       now?: () => number;
       processLivenessCheck?: ProcessLivenessCheck;
+      retention?: Partial<CoordinationRetentionOptions>;
+      cliParticipantTtlMinutes?: number;
     } = {}
   ) {
-    this.store = new ExecutionRootCoordinationStore(executionRoot);
+    this.store = new ExecutionRootCoordinationStore(executionRoot, {
+      ...(options.retention ? { retention: options.retention } : {}),
+      ...(options.now ? { now: options.now } : {}),
+      unresolvedClaims: ((entries) =>
+        this.resolveLiveClaims(
+          entries
+        )) satisfies CoordinationUnresolvedClaimResolver,
+    });
     this.now = options.now ?? Date.now;
     this.processLivenessCheck = options.processLivenessCheck;
+    this.cliParticipantTtlMinutes = options.cliParticipantTtlMinutes;
+  }
+
+  private readonly cliParticipantTtlMinutes?: number;
+
+  private resolveLiveClaims(
+    entries: readonly CoordinationEntry[]
+  ): CoordinationActiveClaim[] {
+    const liveClaims = foldCoordinationEntries(
+      entries,
+      this.foldOptions()
+    ).claims;
+    return liveClaims.flatMap((claim) => {
+      const entry = entries.find(
+        (candidate) =>
+          candidate.seq === claim.claimedAtSequence &&
+          candidate.kind === COORDINATION_ENTRY_KINDS.CLAIM &&
+          candidate.paths?.includes(claim.path)
+      );
+      return entry ? [{ entry, path: claim.path }] : [];
+    });
   }
 
   async registerParticipant(
@@ -377,7 +413,20 @@ export class CoordinationParticipantRegistry {
     if (!registration.label.trim()) {
       throw new Error("Coordination participant label is required");
     }
+    if (
+      registration.kind === COORDINATION_PARTICIPANT_KINDS.EXTERNAL &&
+      !configService.get("coordination").allowExternalParticipants
+    ) {
+      throw new Error("External coordination participants are disabled");
+    }
     const now = this.now();
+    const configuredTtlMinutes =
+      this.cliParticipantTtlMinutes ??
+      configService.get("coordination").cliParticipantTtlMinutes;
+    const ttlMinutes =
+      configuredTtlMinutes > 0 && Number.isFinite(configuredTtlMinutes)
+        ? configuredTtlMinutes
+        : DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES;
     const participant: CoordinationParticipant = {
       participantId: generateOwnerToken(),
       kind: registration.kind,
@@ -387,7 +436,7 @@ export class CoordinationParticipantRegistry {
       ...(registration.address ? { address: registration.address } : {}),
       ...(registration.via === COORDINATION_PARTICIPANT_VIA.MCP
         ? { pid: process.pid, lastHeartbeat: now }
-        : { leaseExpiresAt: now + COORDINATION_CLI_LEASE_TTL_MS }),
+        : { leaseExpiresAt: now + ttlMinutes * 60 * 1_000 }),
     };
     await this.store.append(
       participantEntry(participant, COORDINATION_ENTRY_KINDS.JOIN)
@@ -422,12 +471,22 @@ export class CoordinationParticipantRegistry {
         ? { ...participant, lastHeartbeat: now }
         : {
             ...participant,
-            leaseExpiresAt: now + COORDINATION_CLI_LEASE_TTL_MS,
+            leaseExpiresAt:
+              now + this.getCliParticipantTtlMinutes() * 60 * 1_000,
           };
     await transaction.append(
       participantEntry(refreshed, COORDINATION_ENTRY_KINDS.JOIN)
     );
     return refreshed;
+  }
+
+  private getCliParticipantTtlMinutes(): number {
+    const configuredTtlMinutes =
+      this.cliParticipantTtlMinutes ??
+      configService.get("coordination").cliParticipantTtlMinutes;
+    return configuredTtlMinutes > 0 && Number.isFinite(configuredTtlMinutes)
+      ? configuredTtlMinutes
+      : DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES;
   }
 
   private createLease(

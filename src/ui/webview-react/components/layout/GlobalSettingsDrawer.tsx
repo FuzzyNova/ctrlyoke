@@ -22,6 +22,7 @@ import {
   WorktreesSection,
   TerminalSection,
   QueueSection,
+  CoordinationSection,
   ServerSection,
   LicenseSection,
   NotificationsSection,
@@ -63,6 +64,11 @@ const ALL_TABS = [
     id: GLOBAL_SETTINGS_TABS.WORKTREES,
     label: "Worktrees",
     icon: "codicon-source-control",
+  },
+  {
+    id: GLOBAL_SETTINGS_TABS.COORDINATION,
+    label: "Coordination",
+    icon: "codicon-git-pull-request-go-to-changes",
   },
   // Output
   {
@@ -368,6 +374,13 @@ export function GlobalSettingsDrawer() {
               {fullSettings &&
                 effectiveActiveTab === GLOBAL_SETTINGS_TABS.QUEUE && (
                   <QueueSection settings={fullSettings} {...sectionProps} />
+                )}
+              {fullSettings &&
+                effectiveActiveTab === GLOBAL_SETTINGS_TABS.COORDINATION && (
+                  <CoordinationSection
+                    settings={fullSettings}
+                    {...sectionProps}
+                  />
                 )}
               {fullSettings &&
                 effectiveActiveTab === GLOBAL_SETTINGS_TABS.SERVER && (

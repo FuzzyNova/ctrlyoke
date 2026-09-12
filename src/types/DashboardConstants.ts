@@ -1593,6 +1593,7 @@ export type CliValidateStrictPolicy =
 export const SETTING_PATHS = {
   STORAGE: "storage",
   WORKTREES: "worktrees",
+  COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
   PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
   PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS:
@@ -2472,6 +2473,7 @@ export const GLOBAL_SETTINGS_TABS = {
   EXECUTION: "execution",
   QUEUE: "queue",
   WORKTREES: "worktrees",
+  COORDINATION: "coordination",
   TERMINAL: "terminal",
   STATUS_LINE: "statusline",
   COMMIT: "commit",

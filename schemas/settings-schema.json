@@ -389,6 +389,48 @@
         }
       }
     },
+    "coordination": {
+      "type": "object",
+      "description": "Retention and participant settings for the execution-root coordination board.",
+      "additionalProperties": false,
+      "properties": {
+        "readNotesPageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of coordination entries returned by one read_notes page. Reads are always paged."
+        },
+        "maxNoteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of characters in a coordination note."
+        },
+        "maxEntries": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of coordination entries retained after compaction."
+        },
+        "maxBoardBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Hard maximum size of the coordination board in bytes."
+        },
+        "maxEntryAgeDays": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Remove coordination notes older than this many days during compaction."
+        },
+        "cliParticipantTtlMinutes": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Lease lifetime for participants delivered through the CLI or built-in skill."
+        },
+        "allowExternalParticipants": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow participants not launched by ctrlyoke to join the coordination board."
+        }
+      }
+    },
     "storage": {
       "type": "object",
       "description": "User-only storage location configuration.",
