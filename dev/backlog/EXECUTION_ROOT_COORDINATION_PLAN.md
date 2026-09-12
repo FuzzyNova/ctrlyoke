@@ -302,6 +302,17 @@ mutations from the MCP server; `seq` is assigned inside the lock. Nothing here
 assumes a long-lived server process, which is what lets the skill-mode CLI path
 (Decision 12) use the identical storage with no variant.
 
+**Decision 3 implementation (2026-09-11):** `resolveExecutionRootScope` and
+`scopeStorageRoot` in `src/core/orchestration/ExecutionRootScope.ts` are the
+shared identity/path helpers; `verifyScopeRecord` in that module owns the
+scope-record guard. `ExecutionRootLeaseManager` consumes those helpers, and
+`ExecutionRootCoordinationStore` in
+`src/core/orchestration/ExecutionRootCoordinationStore.ts` owns board resolution,
+append, and paged reads (`appendCoordinationEntry` and
+`readCoordinationEntries` are its stateless convenience functions). The shared
+contracts are `CoordinationParticipant` and `CoordinationEntry` in
+`src/types/CtrlYokeTypes.ts`.
+
 ### 4. Four tools, each returning the scope snapshot
 
 | Tool            | Shape                                                                                    |

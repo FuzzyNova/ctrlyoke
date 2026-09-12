@@ -387,6 +387,44 @@ export type WorkflowKey = string & { readonly __workflowKey: unique symbol };
  */
 export type RunRef = string & { readonly __runRef: unique symbol };
 
+export interface CoordinationParticipant {
+  /** Server-assigned, stable for the lifetime of the lease. */
+  participantId: string;
+  kind: "ctrlyoke-step" | "external";
+  /** True when ctrlyoke derived this identity rather than accepting it from the caller. */
+  attested: boolean;
+  label: string;
+  via: "mcp" | "cli";
+  address?: {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+    stepIndex?: number;
+    stepName?: string;
+    parallelGroupId?: string;
+  };
+  pid?: number;
+  lastHeartbeat?: number;
+  leaseExpiresAt?: number;
+}
+
+export interface CoordinationEntry {
+  seq: number;
+  at: string;
+  kind: "note" | "claim" | "release" | "join" | "leave";
+  /** Denormalized so readers can attribute entries after a participant is compacted away. */
+  from: {
+    participantId: string;
+    label: string;
+    attested: boolean;
+    address?: CoordinationParticipant["address"];
+  };
+  to?: string[];
+  text?: string;
+  paths?: string[];
+  reason?: string;
+  via: "mcp" | "cli";
+}
+
 /** A client's addressed view into a lineage: either the mutable draft or one promoted run. */
 export type WorkflowViewAddress =
   | { workflowKey: WorkflowKey; kind: typeof WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }

@@ -1,7 +1,5 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as crypto from "crypto";
-import { absoluteGitDir, gitCommonDir } from "../../utils/GitUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import {
   generateOwnerToken,
@@ -9,7 +7,11 @@ import {
   isProcessAlive,
   STALE_HEARTBEAT_MS,
 } from "../../utils/LockSafetyPrimitives";
-import { foldPathForCompare } from "../../utils/PathCasing";
+import {
+  resolveExecutionRootScope,
+  scopeStorageRoot,
+  verifyScopeRecord as verifyExecutionRootScopeRecord,
+} from "./ExecutionRootScope";
 
 export const EXECUTION_LEASE_MODES = {
   SHARED_NATIVE: "shared-native",
@@ -92,24 +94,11 @@ interface LeaseScope {
   arbitrationPath: string;
 }
 
-interface LeaseScopeRecord {
-  scopeIdentity: string;
-}
-
 const ARBITRATION_TIMEOUT_MS = 5_000;
 const ARBITRATION_RETRY_DELAY_MS = 25;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function canonicalPath(value: string): Promise<string> {
-  const resolved = path.resolve(value);
-  try {
-    return path.normalize(await fs.realpath(resolved));
-  } catch {
-    return path.normalize(resolved);
-  }
 }
 
 async function withArbitrationLock<T>(
@@ -175,41 +164,10 @@ async function readJson<T>(filePath: string): Promise<T | null> {
 }
 
 async function resolveLeaseScope(executionRoot: string): Promise<LeaseScope> {
-  const canonicalExecutionRoot = await canonicalPath(executionRoot);
-  const worktreeGitDir = await absoluteGitDir(canonicalExecutionRoot);
-  if (worktreeGitDir) {
-    const identity = foldPathForCompare(await canonicalPath(worktreeGitDir));
-    const commonDir = await gitCommonDir(canonicalExecutionRoot);
-    if (!commonDir) {
-      throw new Error(
-        `Cannot resolve Git common directory for execution root: ${canonicalExecutionRoot}`
-      );
-    }
-    const scopeHash = crypto
-      .createHash("sha256")
-      .update(identity, "utf8")
-      .digest("hex");
-    const storageRoot = path.join(
-      await canonicalPath(commonDir),
-      "ctrlyoke",
-      "execution-leases",
-      scopeHash
-    );
-    return {
-      identity,
-      storageRoot,
-      leasesRoot: path.join(storageRoot, "leases"),
-      arbitrationPath: path.join(storageRoot, "arbitration.lock"),
-    };
-  }
-
-  const storageRoot = path.join(
-    canonicalExecutionRoot,
-    ".ctrlyoke",
-    "execution-leases"
-  );
+  const scope = await resolveExecutionRootScope(executionRoot);
+  const storageRoot = scopeStorageRoot(scope, "execution-leases");
   return {
-    identity: foldPathForCompare(canonicalExecutionRoot),
+    identity: scope.identity,
     storageRoot,
     leasesRoot: path.join(storageRoot, "leases"),
     arbitrationPath: path.join(storageRoot, "arbitration.lock"),
@@ -223,37 +181,6 @@ function isCompatible(
   return (
     requestedMode === EXECUTION_LEASE_MODES.SHARED_NATIVE &&
     existingMode === EXECUTION_LEASE_MODES.SHARED_NATIVE
-  );
-}
-
-async function verifyScopeRecord(scope: LeaseScope): Promise<void> {
-  const scopePath = path.join(scope.storageRoot, "scope.json");
-  const existing = await readJson<LeaseScopeRecord>(scopePath);
-  if (existing) {
-    if (existing.scopeIdentity !== scope.identity) {
-      throw new Error(
-        `Execution lease scope mismatch at ${scopePath}; refusing to use it`
-      );
-    }
-    return;
-  }
-
-  const entries = await fs.readdir(scope.leasesRoot).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  });
-  if (entries.some((entry) => entry.endsWith(".json"))) {
-    throw new Error(
-      `Execution lease scope metadata is missing at ${scopePath}; refusing to use it`
-    );
-  }
-  await writeFileAtomic(
-    scopePath,
-    JSON.stringify(
-      { scopeIdentity: scope.identity } satisfies LeaseScopeRecord,
-      null,
-      2
-    )
   );
 }
 
@@ -336,7 +263,21 @@ export class ExecutionRootLeaseManager {
 
     await fs.mkdir(scope.leasesRoot, { recursive: true });
     await withArbitrationLock(scope.arbitrationPath, async () => {
-      await verifyScopeRecord(scope);
+      await verifyExecutionRootScopeRecord({
+        storageRoot: scope.storageRoot,
+        scopeIdentity: scope.identity,
+        hasExistingData: async () => {
+          const entries = await fs
+            .readdir(scope.leasesRoot)
+            .catch((error: unknown) => {
+              if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+              throw error;
+            });
+          return entries.some((entry) => entry.endsWith(".json"));
+        },
+        mismatchMessage: "Execution lease scope mismatch",
+        missingMessage: "Execution lease scope metadata is missing",
+      });
       const liveLeases = await readLiveLeases(scope);
       const conflict = liveLeases.find(
         (existing) => !isCompatible(request.mode, existing.mode)
