@@ -390,6 +390,81 @@ suite("ExecutionRootCoordinationStore", function () {
     }
   });
 
+  function lifecycle(participantId: string, kind: "join" | "leave") {
+    return {
+      kind,
+      from: { participantId, label: participantId, attested: false },
+      via: "cli" as const,
+    };
+  }
+
+  test("folds a departed participant's join and leave pair out of the board", async () => {
+    const root = await tempDirectory("settled-lifecycle");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(lifecycle("gone", "join"));
+      // The registry re-emits `join` to refresh a lease, so one participant
+      // routinely has several open joins; every one must settle on leave.
+      await store.append(lifecycle("gone", "join"));
+      await store.append(lifecycle("gone", "leave"));
+      await store.append(lifecycle("here", "join"));
+      await store.append(note("gone", "attribution survives the lease"));
+
+      const result = await store.read({ limit: 10 });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.kind),
+        ["join", "note"],
+        "only the live participant's join should remain"
+      );
+      // `from` is denormalised, so the departed author is still attributable.
+      assert.strictEqual(result.entries[1].from.participantId, "gone");
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("keeps a departed participant's lifecycle entries while it still holds a claim", async () => {
+    const root = await tempDirectory("claim-holding-lifecycle");
+    try {
+      const store = new ExecutionRootCoordinationStore(root);
+      await store.append(lifecycle("holder", "join"));
+      await store.append(claim("holder", "src/held.ts", 2));
+      await store.append(note("other", "unrelated"));
+
+      const result = await store.read({ limit: 10 });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.kind),
+        ["join", "claim", "note"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("does not wedge the board once lifecycle entries alone reach the cap", async () => {
+    const root = await tempDirectory("lifecycle-cap");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { maxEntries: 6 },
+      });
+      // Without lifecycle folding these accumulate forever, and the first
+      // append past the cap fails permanently with no removable note.
+      for (let index = 0; index < 20; index += 1) {
+        await store.append(lifecycle(`participant-${index}`, "join"));
+        await store.append(lifecycle(`participant-${index}`, "leave"));
+      }
+      await store.append(note("late", "still writable"));
+
+      const result = await store.read({ limit: 10 });
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.text),
+        ["still writable"]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("uses the configured page size even when a read omits its limit", async () => {
     const root = await tempDirectory("configured-page");
     try {

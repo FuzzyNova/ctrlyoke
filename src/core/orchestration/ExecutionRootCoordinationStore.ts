@@ -246,6 +246,61 @@ export function trimmingPreservesUnresolvedClaims(
   );
 }
 
+/**
+ * Fold away the join/leave pairs of participants that have departed.
+ *
+ * A settled pair carries no remaining state: the ownership fold rebuilds
+ * participants from `join` entries and a `leave` removes them again, and every
+ * surviving entry denormalises `from` (Decision 3) precisely so attribution
+ * never has to resolve a lease that was compacted away.
+ *
+ * This is not hygiene, it is the same safety property as settled claims.
+ * `trimNotesToCaps` can only evict notes, so join/leave entries that are never
+ * folded accumulate without bound on a long-lived board — the main checkout's
+ * board spans months of unrelated workflows and external sessions. Once they
+ * alone reach `maxEntries`, every subsequent append fails permanently with no
+ * removable candidate, and the only recovery is deleting the board by hand.
+ *
+ * A lifecycle is every `join` since the participant's last `leave`, not just
+ * the most recent one: the registry re-emits `join` to refresh a lease, so one
+ * participant routinely has several open joins at once. Settling only the last
+ * would strand the earlier ones and leave the ownership fold still reporting a
+ * departed participant as live. Matching by sequence also folds each completed
+ * cycle of a participant that re-registers (a reused MCP server rejoining after
+ * an orchestrator-issued close) rather than only its last one.
+ *
+ * A participant still holding an unresolved claim is skipped entirely, so this
+ * can never strand a claim without the `leave` that would cancel it.
+ */
+function compactDepartedParticipants(
+  entries: readonly CoordinationEntry[],
+  resolveClaims: CoordinationUnresolvedClaimResolver = unresolvedClaims
+): CoordinationEntry[] {
+  const claimHolders = new Set(
+    resolveClaims(entries).map((claim) => claim.entry.from.participantId)
+  );
+  const settled = new Set<number>();
+  const openJoins = new Map<string, number[]>();
+
+  for (const entry of entries) {
+    const { participantId } = entry.from;
+    if (claimHolders.has(participantId)) continue;
+    if (entry.kind === COORDINATION_ENTRY_KINDS.JOIN) {
+      const open = openJoins.get(participantId) ?? [];
+      open.push(entry.seq);
+      openJoins.set(participantId, open);
+    } else if (entry.kind === COORDINATION_ENTRY_KINDS.LEAVE) {
+      for (const joinSequence of openJoins.get(participantId) ?? []) {
+        settled.add(joinSequence);
+      }
+      openJoins.delete(participantId);
+      settled.add(entry.seq);
+    }
+  }
+
+  return entries.filter((entry) => !settled.has(entry.seq));
+}
+
 function compactSettledClaims(
   entries: readonly CoordinationEntry[],
   resolveClaims: CoordinationUnresolvedClaimResolver = unresolvedClaims
@@ -399,7 +454,10 @@ export class ExecutionRootCoordinationStore {
           };
           const now = this.options.now?.() ?? Date.now();
           const compactedExisting = removeOldNotes(
-            compactSettledClaims(entries, this.options.unresolvedClaims),
+            compactDepartedParticipants(
+              compactSettledClaims(entries, this.options.unresolvedClaims),
+              this.options.unresolvedClaims
+            ),
             now,
             settings.maxEntryAgeDays
           );
@@ -414,8 +472,11 @@ export class ExecutionRootCoordinationStore {
               "Coordination board retention invariant violated: unresolved claim would be dropped"
             );
           }
-          const compacted = compactSettledClaims(
-            [...compactedExisting, persisted],
+          const compacted = compactDepartedParticipants(
+            compactSettledClaims(
+              [...compactedExisting, persisted],
+              this.options.unresolvedClaims
+            ),
             this.options.unresolvedClaims
           );
           const fitted = trimNotesToCaps(

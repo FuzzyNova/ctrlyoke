@@ -14,12 +14,12 @@
 > board to one workflow run and only made it reachable from inside a `parallel:`
 > group.
 >
-> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)
+> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](./PARALLEL_STEPS_PLAN.md)
 > (shipped, adds fork/join scheduling and topology — unchanged by this plan),
-> [`WORKTREE_SUPPORT_PLAN.md`](../implemented/WORKTREE_SUPPORT_PLAN.md) (shipped,
+> [`WORKTREE_SUPPORT_PLAN.md`](./WORKTREE_SUPPORT_PLAN.md) (shipped,
 > defines the execution-workspace model and execution-lease scope identity this
 > plan reuses directly), and
-> [`MCP_AS_SKILL_PLAN.md`](../implemented/MCP_AS_SKILL_PLAN.md) (shipped, defines
+> [`MCP_AS_SKILL_PLAN.md`](./MCP_AS_SKILL_PLAN.md) (shipped, defines
 > the `mcpAvailability: "disabled"` mode in which ctrlyoke's MCP tools are
 > delivered as a built-in skill instead of a live MCP server — every tool here
 > needs a working answer in that mode, see Decision 12).
@@ -642,6 +642,19 @@ not fail. Readers must tolerate gaps in `seq`, since compaction is not contiguou
 The remaining settings in the group are `coordination.cliParticipantTtlMinutes`
 (30 minutes) and `coordination.allowExternalParticipants` (true).
 
+**Settled `join`/`leave` pairs fold out too, for the same reason settled claims
+do.** This was missed in the first implementation and found in review. Only
+notes are evictable under the caps, so lifecycle entries that are never folded
+grow without bound on exactly the long-lived board this section is about — once
+they alone reach `maxEntries`, `trimNotesToCaps` has no removable candidate and
+every subsequent append fails permanently, with hand-deleting the board as the
+only recovery. A departed participant's pair carries no state: the fold rebuilds
+participants from `join` and a `leave` removes them, and `from` is denormalised
+precisely so attribution outlives the lease. The sharp edge is that the registry
+re-emits `join` to refresh a lease, so **a lifecycle is every join since the last
+leave, not just the most recent one** — settling only the last strands the
+earlier joins and the fold keeps reporting a departed participant as live.
+
 **Evict by largest contributor, not strictly oldest.** External participants get
 the same per-entry caps as ctrlyoke steps — a separate, stricter budget would be
 arbitrary, and an unattended ctrlyoke workflow in a retry loop is just as capable
@@ -818,7 +831,7 @@ every queue tool, which genuinely act on one run.
 
 ## Prerequisite fixes
 
-[`MCP_SURFACE_CLEANUP_PLAN.md`](../implemented/MCP_SURFACE_CLEANUP_PLAN.md) covers the rest of
+[`MCP_SURFACE_CLEANUP_PLAN.md`](./MCP_SURFACE_CLEANUP_PLAN.md) covers the rest of
 the prerequisite work — the `capabilities` → `list_harnesses` rename plus eight
 structural fixes to the existing MCP surface. Two of those matter directly to this
 plan: schema-driven argument validation (so the four new tools cannot drift from
@@ -918,7 +931,7 @@ coordination board.
    same caps can apply to every participant kind.
 3. Should a directed note _interrupt_ the recipient, or only appear on its next
    `read_notes`? Interrupt requires mid-turn steering (see
-   [`STEER_MESSAGE_PLAN.md`](./STEER_MESSAGE_PLAN.md)) and is a much bigger change.
+   [`STEER_MESSAGE_PLAN.md`](../backlog/STEER_MESSAGE_PLAN.md)) and is a much bigger change.
    Polling is the v1 assumption — but polling only happens if the preamble says to
    poll, and skill mode makes each poll a process spawn.
 4. Should claims ever be enforceable — a pre-edit hook rejecting a write to another

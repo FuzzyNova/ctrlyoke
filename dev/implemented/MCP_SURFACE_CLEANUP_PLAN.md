@@ -10,7 +10,7 @@
 > irreversible later, because tool names are the agent-facing contract that skill
 > documents, prompt preambles, and user-written prompts all reference. The rest are
 > internal and could be done any time, but are worth doing **before** the surface
-> grows: [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../backlog/EXECUTION_ROOT_COORDINATION_PLAN.md)
+> grows: [`EXECUTION_ROOT_COORDINATION_PLAN.md`](./EXECUTION_ROOT_COORDINATION_PLAN.md)
 > adds four more tools, and each smell below gets proportionally more expensive
 > with every tool added.
 >
