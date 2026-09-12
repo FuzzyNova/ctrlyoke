@@ -522,7 +522,7 @@ the question `requireRunAddress()` already answers.
 | ---------------------------------------------------------- | ----------------------- | ------------------------------------------ | -------- |
 | `post_note`, `read_notes`, `claim_paths`, `release_paths`  | yes                     | yes                                        | yes      |
 | `global_status`                                            | yes                     | yes                                        | yes      |
-| `workflow_status`, `capabilities`                          | yes                     | yes                                        | no       |
+| `workflow_status`, `list_harnesses`                        | yes                     | yes                                        | no       |
 | `read_output`                                              | yes                     | yes, bounded by the group's start boundary | no       |
 | `append_step`, `edit_step`, `remove_step`, `reorder_steps` | yes                     | **no** — they race the coordinator's join  | no       |
 
@@ -530,14 +530,29 @@ the question `requireRunAddress()` already answers.
 `PARALLEL_STEPS_PLAN.md`, so sibling output stays an explicit note and never an
 implicit read.
 
-**`ListTools` must be filtered, not just `CallTool` rejected.** `setupHandlers()`
-returns `this.getToolDefinitions()` unconditionally today. An agent that sees
+**Decisions 4, 6, 8, and 9 implementation (2026-09-11):** The four
+coordination tools are exposed by `CtrlYokeMCPServer` and all coordination
+responses include a live scope snapshot. Board writes are serialized through
+`queueOperation()`, paths are normalized and checked against the resolved
+execution root with `PathSecurity`, and board tools work for unattached external
+participants without a run address. Scope resolution is
+`CTRLYOKE_EXECUTION_ROOT` → the attached run's persisted worktree execution
+root → `process.cwd()`; `CTRLYOKE_WORKSPACE` remains the state root and is never
+used as the execution-root fallback. `ListTools` and `CallTool` share the same
+attested/group-member visibility predicate, including the group's read-output
+boundary. Notes and claim owners include explicit attribution and attestation
+state, with the response framing that attestation is an accuracy signal rather
+than a security boundary.
+
+**`ListTools` must be filtered, not just `CallTool` rejected.** Before this
+implementation, `setupHandlers()` returned `this.getToolDefinitions()`
+unconditionally. An agent that sees
 `append_step` in a group will call it, burn a turn on the refusal, and often
 derail. `getToolDefinitions()` takes the calling context and returns the permitted
 subset.
 
-**Live hole to close as a prerequisite: the group ban does not fire at all when
-MCP is disabled.** The preflight check is
+**Closed prerequisite: the group ban must fire when MCP is disabled too.** The
+preflight check is
 `!isScriptStep(step) && hasCtrlYokeServer(resolvedProperties)`
 (`src/core/ParallelGroupPreflight.ts:234`), and `hasCtrlYokeServer` returns `false`
 whenever `mcpAvailability === "disabled"` (`CliProviderUtils.ts:52-56`) — correct
@@ -745,15 +760,16 @@ every queue tool, which genuinely act on one run.
 - `MCP_SKILL_NAMES` (`src/types/DashboardConstants.ts:3686-3689`) gains
   `COORDINATION: "ctrlyoke-coordination-tools"`. The existing comment already warns
   these names are workflow-referenced and must stay stable.
-- `src/utils/McpToolDefinitions.ts`: **the Decision 4 structural fix landed** —
-  the queue skill/UI list is now `MCP_QUEUE_TOOL_NAMES`, coordination has an
-  empty reserved `MCP_COORDINATION_TOOL_NAMES` list, and
-  `MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES` derives every definition except the
-  commit tool for `CommitMessageGenerator`'s `deniedTools`. The
-  `MCP_TOOL_SKILL_TOOL_NAMES` alias was removed, and coverage now asserts that
-  the derived deny-list plus the commit tool exactly covers
-  `MCP_TOOL_DEFINITIONS`. The coordination skill and its generator branch remain
-  future work for the coordination-tool implementation.
+- `src/utils/McpToolDefinitions.ts`: **the Decision 4 structural fix and tool
+  definitions landed** — the queue skill/UI list is
+  `MCP_QUEUE_TOOL_NAMES`, the four board tools are
+  `MCP_COORDINATION_TOOL_NAMES`, and `MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES`
+  derives every definition except the commit tool for
+  `CommitMessageGenerator`'s `deniedTools`. The
+  `MCP_TOOL_SKILL_TOOL_NAMES` alias was removed, and coverage asserts that the
+  derived deny-list plus the commit tool exactly covers
+  `MCP_TOOL_DEFINITIONS`. The separate coordination skill remains future work
+  for Decision 12.
 - New bundled `src/templates/skills/ctrlyoke-coordination-tools/SKILL.md`.
   `esbuild.js`'s `copy-templates` plugin already globs the directory.
 - `parseMcpToolCliArgs` gains `--step-index` / `--parallel-group-id` (and

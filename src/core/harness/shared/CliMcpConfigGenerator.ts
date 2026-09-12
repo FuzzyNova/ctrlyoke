@@ -351,6 +351,7 @@ export class CliMcpConfigGenerator {
     );
     const env: Record<string, string> = {
       CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
+      CTRLYOKE_EXECUTION_ROOT: workspaceRoot.replace(/\\/g, "/"),
     };
     if (workingFilePath) {
       env.CTRLYOKE_WORKING_FILE = workingFilePath.replace(/\\/g, "/");

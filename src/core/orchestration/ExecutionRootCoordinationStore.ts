@@ -56,6 +56,10 @@ export interface CoordinationReadOptions {
   from?: readonly string[];
   /** Page size; bounded to prevent an untrusted board from causing huge reads. */
   limit?: number;
+  /** Restrict the page to one entry kind before applying pagination. */
+  kind?: CoordinationEntry["kind"];
+  /** For notes, include broadcasts and notes addressed to this participant. */
+  recipient?: string;
 }
 
 export interface CoordinationReadResult {
@@ -454,6 +458,10 @@ export class ExecutionRootCoordinationStore {
       const from = options.from && new Set(options.from);
       const filtered = entries.filter(
         (entry) =>
+          (options.kind === undefined || entry.kind === options.kind) &&
+          (options.recipient === undefined ||
+            entry.to === undefined ||
+            entry.to.includes(options.recipient)) &&
           (options.since === undefined || entry.seq > options.since) &&
           (!from || from.size === 0 || from.has(entry.from.participantId))
       );

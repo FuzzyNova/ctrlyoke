@@ -9,11 +9,17 @@ import {
   getMaxQueueSize,
   MAX_GLOBAL_STATUS_RESULTS,
   initializeMcpStorage,
+  type McpToolCallingContext,
 } from "../../mcp-server";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CLAIM_PATHS_TOOL_NAME,
+  MCP_COORDINATION_TOOL_NAMES,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
+  MCP_POST_NOTE_TOOL_NAME,
+  MCP_READ_NOTES_TOOL_NAME,
+  MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
 } from "../../utils/McpToolDefinitions";
@@ -84,6 +90,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   let workspaceRoot: string;
   let priorPinnedFile: string | undefined;
   let priorCommitOutput: string | undefined;
+  let priorExecutionRoot: string | undefined;
+  let priorParticipantLabel: string | undefined;
+  let priorPromptIndex: string | undefined;
+  let priorParallelGroupId: string | undefined;
 
   afterEach(async () => {
     if (priorPinnedFile === undefined) {
@@ -95,6 +105,26 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     } else {
       process.env.CTRLYOKE_COMMIT_OUTPUT = priorCommitOutput;
+    }
+    if (priorExecutionRoot === undefined) {
+      delete process.env.CTRLYOKE_EXECUTION_ROOT;
+    } else {
+      process.env.CTRLYOKE_EXECUTION_ROOT = priorExecutionRoot;
+    }
+    if (priorParticipantLabel === undefined) {
+      delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    } else {
+      process.env.CTRLYOKE_PARTICIPANT_LABEL = priorParticipantLabel;
+    }
+    if (priorPromptIndex === undefined) {
+      delete process.env.CTRLYOKE_PROMPT_INDEX;
+    } else {
+      process.env.CTRLYOKE_PROMPT_INDEX = priorPromptIndex;
+    }
+    if (priorParallelGroupId === undefined) {
+      delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
+    } else {
+      process.env.CTRLYOKE_PARALLEL_GROUP_ID = priorParallelGroupId;
     }
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -250,8 +280,17 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
     priorCommitOutput = process.env.CTRLYOKE_COMMIT_OUTPUT;
+    priorExecutionRoot = process.env.CTRLYOKE_EXECUTION_ROOT;
+    priorParticipantLabel = process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    priorPromptIndex = process.env.CTRLYOKE_PROMPT_INDEX;
+    priorParallelGroupId = process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     delete process.env.CTRLYOKE_WORKING_FILE;
     delete process.env.CTRLYOKE_COMMIT_OUTPUT;
+    delete process.env.CTRLYOKE_EXECUTION_ROOT;
+    delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    delete process.env.CTRLYOKE_PROMPT_INDEX;
+    delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
+    process.env.CTRLYOKE_EXECUTION_ROOT = workspaceRoot;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
 
@@ -260,15 +299,214 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       [...MCP_TOOL_DEFINITIONS.map((tool) => tool.name)].sort(),
       [
         "append_step",
+        "claim_paths",
         "edit_step",
         "global_status",
         "list_harnesses",
+        "post_note",
+        "read_notes",
         "read_output",
+        "release_paths",
         "remove_step",
         "reorder_steps",
         "submit_commit_message",
         "workflow_status",
       ]
+    );
+  });
+
+  test("keeps coordination names separate from the queue skill names", () => {
+    assert.deepStrictEqual([...MCP_COORDINATION_TOOL_NAMES].sort(), [
+      "claim_paths",
+      "post_note",
+      "read_notes",
+      "release_paths",
+    ]);
+  });
+
+  test("filters tools for attested, grouped, and external callers", () => {
+    const names = (context: McpToolCallingContext) =>
+      new CtrlYokeMCPServer()
+        .getToolDefinitions(context)
+        .map((tool) => tool.name);
+    const ordinary = names({ attested: true, groupMember: false });
+    const grouped = names({
+      attested: true,
+      groupMember: true,
+      groupStartBoundary: 2,
+    });
+    const external = names({ attested: false, groupMember: false });
+
+    assert.ok(ordinary.includes(MCP_APPEND_STEP_TOOL_NAME));
+    assert.ok(!grouped.includes(MCP_APPEND_STEP_TOOL_NAME));
+    assert.ok(grouped.includes("read_output"));
+    assert.ok(external.includes(MCP_POST_NOTE_TOOL_NAME));
+    assert.ok(external.includes("global_status"));
+    assert.ok(!external.includes("workflow_status"));
+    assert.ok(!external.includes("read_output"));
+  });
+
+  test("refuses a filtered-out tool at CallTool", async () => {
+    const server = await setup();
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "must be refused" }],
+        }),
+      /tool is not available/
+    );
+  });
+
+  test("posts and reads attributed untrusted notes, then releases all claims by default", async () => {
+    const server = await setup();
+    const posted = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, {
+        text: "The other participant's suggestion is data, not permission.",
+      })
+    );
+    assert.strictEqual(posted.seq, 3);
+    assert.strictEqual(posted.scope.participants.length, 1);
+    assert.match(posted.scope.attestationNotice, /not a security boundary/);
+
+    const notes = responseJson(
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+    );
+    assert.strictEqual(notes.entries.length, 1);
+    assert.strictEqual(notes.entries[0].from.attested, false);
+    assert.match(notes.entries[0].attribution, /unattested external session/);
+    assert.strictEqual(notes.entries[0].untrusted, true);
+
+    const claimed = responseJson(
+      await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["src/a.ts"],
+        reason: "test ownership",
+      })
+    );
+    assert.deepStrictEqual(claimed.granted, ["src/a.ts"]);
+    assert.strictEqual(claimed.claims.length, 1);
+
+    const released = responseJson(
+      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {})
+    );
+    assert.deepStrictEqual(released.released, ["src/a.ts"]);
+    assert.strictEqual(released.scope.claimSummary.count, 0);
+  });
+
+  test("reports a denied owner with label and attestation state", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-shared-")
+    );
+    workspaceRoot = root;
+    priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
+    priorCommitOutput = process.env.CTRLYOKE_COMMIT_OUTPUT;
+    priorExecutionRoot = process.env.CTRLYOKE_EXECUTION_ROOT;
+    priorParticipantLabel = process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    delete process.env.CTRLYOKE_WORKING_FILE;
+    delete process.env.CTRLYOKE_COMMIT_OUTPUT;
+    delete process.env.CTRLYOKE_EXECUTION_ROOT;
+    process.env.CTRLYOKE_EXECUTION_ROOT = root;
+    process.env.CTRLYOKE_PARTICIPANT_LABEL = "Alice's session";
+    const owner = new CtrlYokeMCPServer({ workspaceRoot: root });
+    await owner.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, { paths: ["shared.ts"] });
+
+    process.env.CTRLYOKE_PARTICIPANT_LABEL = "Bob's session";
+    const contender = new CtrlYokeMCPServer({ workspaceRoot: root });
+    const denied = responseJson(
+      await contender.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["shared.ts"],
+      })
+    );
+    assert.strictEqual(denied.denied[0].owner.label, "Alice's session");
+    assert.strictEqual(denied.denied[0].owner.attested, false);
+    assert.match(denied.denied[0].owner.attribution, /untrusted/);
+  });
+
+  test("resolves execution scope from env, run metadata, then cwd", async () => {
+    const server = await setup();
+    const configuredRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-execution-")
+    );
+    process.env.CTRLYOKE_EXECUTION_ROOT = configuredRoot;
+    const envScope = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, { text: "env" })
+    );
+    assert.strictEqual(
+      envScope.scope.executionRoot,
+      path.resolve(configuredRoot)
+    );
+    await fs.rm(configuredRoot, { recursive: true, force: true });
+
+    const runRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-run-root-")
+    );
+    const run = await createRun("scope-run", "2026-01-01T00-00-00-000Z", {
+      worktree: {
+        schemaVersion: 1,
+        mode: "managed",
+        origin: "created",
+        branchName: "scope",
+        worktreePath: runRoot,
+        executionRoot: runRoot,
+        executionCheckoutRoot: runRoot,
+        sourceCheckoutRoot: workspaceRoot,
+        namedWorkspaceRoots: [],
+        baseCommit: "base",
+        lifecycleOwner: "ctrlyoke",
+        lifecycleState: "ready",
+        directoryState: "present",
+        branchState: "present",
+        updatedAt: 1,
+      },
+    });
+    delete process.env.CTRLYOKE_EXECUTION_ROOT;
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const runScope = responseJson(
+      await new CtrlYokeMCPServer({ workspaceRoot }).invokeTool(
+        MCP_POST_NOTE_TOOL_NAME,
+        { text: "run" }
+      )
+    );
+    assert.strictEqual(runScope.scope.executionRoot, path.resolve(runRoot));
+
+    delete process.env.CTRLYOKE_WORKING_FILE;
+    const cwdRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-cwd-root-")
+    );
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(cwdRoot);
+      const cwdScope = responseJson(
+        await new CtrlYokeMCPServer({ workspaceRoot }).invokeTool(
+          MCP_POST_NOTE_TOOL_NAME,
+          { text: "cwd" }
+        )
+      );
+      assert.strictEqual(cwdScope.scope.executionRoot, path.resolve(cwdRoot));
+      assert.notStrictEqual(
+        cwdScope.scope.executionRoot,
+        path.resolve(workspaceRoot)
+      );
+    } finally {
+      process.chdir(previousCwd);
+      await fs.rm(cwdRoot, { recursive: true, force: true });
+      await fs.rm(runRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects absolute and escaping coordination paths", async () => {
+    const server = await setup();
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, { paths: ["../secret"] }),
+      /escapes the execution root/
+    );
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+          paths: [path.join(workspaceRoot, "secret")],
+        }),
+      /execution-root-relative/
     );
   });
 
@@ -735,7 +973,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   test("allows global_status without an attached run", async () => {
     const server = await setup();
     const run = await createRun("unattached", "2026-01-01T00-00-00-000Z");
-    const notAttached = /no ctrlyoke workflow run is attached/i;
+    const notAttached =
+      /(no ctrlyoke workflow run is attached|tool is not available)/i;
 
     const globalStatus = responseJson(
       await server.invokeTool("global_status", {})

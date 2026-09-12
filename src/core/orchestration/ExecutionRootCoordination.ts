@@ -18,6 +18,7 @@ import {
   ExecutionRootCoordinationStore,
   DEFAULT_COORDINATION_SETTINGS,
   type CoordinationActiveClaim,
+  type CoordinationReadResult,
   type CoordinationRetentionOptions,
   type CoordinationBoardTransaction,
   type CoordinationUnresolvedClaimResolver,
@@ -404,6 +405,40 @@ export class CoordinationParticipantRegistry {
     return this.store.transaction(async (transaction) =>
       foldCoordinationEntries(transaction.entries, this.foldOptions())
     );
+  }
+
+  async postNote(
+    participantId: string,
+    text: string,
+    to?: readonly string[]
+  ): Promise<CoordinationEntry> {
+    return this.store.transaction(async (transaction) => {
+      const participant = await this.refresh(participantId, transaction);
+      return transaction.append({
+        kind: COORDINATION_ENTRY_KINDS.NOTE,
+        from: {
+          participantId: participant.participantId,
+          label: participant.label,
+          attested: participant.attested,
+          ...(participant.address ? { address: participant.address } : {}),
+        },
+        ...(to && to.length > 0 ? { to: [...to] } : {}),
+        text,
+        via: participant.via,
+      });
+    });
+  }
+
+  async readNotes(
+    participantId: string,
+    options: { since?: number; from?: readonly string[] } = {}
+  ): Promise<CoordinationReadResult> {
+    await this.heartbeatParticipant(participantId);
+    return this.store.read({
+      ...options,
+      kind: COORDINATION_ENTRY_KINDS.NOTE,
+      recipient: participantId,
+    });
   }
 
   private async register(

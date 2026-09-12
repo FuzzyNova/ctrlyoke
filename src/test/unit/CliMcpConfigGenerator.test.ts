@@ -89,6 +89,26 @@ suite("CliMcpConfigGenerator", () => {
       );
     });
 
+    test("sets execution root separately from the state workspace root", () => {
+      const json = CliMcpConfigGenerator.generateJsonConfig(
+        "out/mcp-server.js",
+        "C:\\checkout\\root",
+        undefined,
+        undefined,
+        undefined,
+        "C:\\state\\root"
+      );
+      const config = JSON.parse(json);
+      assert.strictEqual(
+        config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKSPACE,
+        "C:/state/root"
+      );
+      assert.strictEqual(
+        config.mcpServers.ctrlyoke.env.CTRLYOKE_EXECUTION_ROOT,
+        "C:/checkout/root"
+      );
+    });
+
     test("normalizes Windows backslashes to forward slashes in serverPath", () => {
       const json = CliMcpConfigGenerator.generateJsonConfig(
         "out\\mcp-server.js",
