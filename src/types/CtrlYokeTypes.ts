@@ -418,6 +418,8 @@ export interface CoordinationEntry {
     attested: boolean;
     address?: CoordinationParticipant["address"];
   };
+  /** Full lease record carried by join entries; absent on other entry kinds. */
+  participant?: CoordinationParticipant;
   to?: string[];
   text?: string;
   paths?: string[];

@@ -313,6 +313,14 @@ append, and paged reads (`appendCoordinationEntry` and
 contracts are `CoordinationParticipant` and `CoordinationEntry` in
 `src/types/CtrlYokeTypes.ts`.
 
+**Decisions 1 and 2 implementation (2026-09-11):**
+`CoordinationParticipantRegistry` and `foldCoordinationEntries` in
+`src/core/orchestration/ExecutionRootCoordination.ts` own participant leases,
+join/leave/heartbeat entries, advisory claims, and the liveness-aware ownership
+fold. `COORDINATION_CLI_LEASE_TTL_MS` is the 30-minute CLI backstop. The store's
+`CoordinationBoardTransaction`/`transaction` API keeps fold-and-append claim
+decisions under the board lock.
+
 ### 4. Four tools, each returning the scope snapshot
 
 | Tool            | Shape                                                                                    |

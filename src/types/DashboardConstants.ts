@@ -88,6 +88,27 @@ export const PROMISE_SETTLED_STATUSES = {
   REJECTED: "rejected",
 } as const;
 
+/** Append-only coordination board entry discriminants. */
+export const COORDINATION_ENTRY_KINDS = {
+  NOTE: "note",
+  CLAIM: "claim",
+  RELEASE: "release",
+  JOIN: "join",
+  LEAVE: "leave",
+} as const;
+
+/** Delivery paths that determine coordination participant liveness. */
+export const COORDINATION_PARTICIPANT_VIA = {
+  MCP: "mcp",
+  CLI: "cli",
+} as const;
+
+/** Participant kinds represented on an execution-root coordination board. */
+export const COORDINATION_PARTICIPANT_KINDS = {
+  CTRL_YOKE_STEP: "ctrlyoke-step",
+  EXTERNAL: "external",
+} as const;
+
 /** Language IDs for workspace files identified by their full filename. */
 export const WORKSPACE_FILE_LANGUAGE_IDS = {
   DOCKERFILE: "dockerfile",

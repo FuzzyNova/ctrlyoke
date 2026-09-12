@@ -41,6 +41,11 @@ export interface CoordinationReadResult {
   nextCursor?: number;
 }
 
+export interface CoordinationBoardTransaction {
+  readonly entries: CoordinationEntry[];
+  append(entry: CoordinationEntryInput): Promise<CoordinationEntry>;
+}
+
 function readScopeStorage(scope: ExecutionRootScope): CoordinationBoardScope {
   const storageRoot = scopeStorageRoot(scope, "coordination");
   return {
@@ -104,23 +109,36 @@ export class ExecutionRootCoordinationStore {
   }
 
   async append(entry: CoordinationEntryInput): Promise<CoordinationEntry> {
+    return this.transaction(async (transaction) => transaction.append(entry));
+  }
+
+  async transaction<T>(
+    action: (transaction: CoordinationBoardTransaction) => Promise<T>
+  ): Promise<T> {
     const scope = await this.getScopeInfo();
     await fs.mkdir(scope.storageRoot, { recursive: true });
     return withFileLock(scope.boardPath, async () => {
       await verifyBoardScope(scope);
       const entries = await readEntries(scope.boardPath);
-      const lastSequence = entries.at(-1)?.seq ?? 0;
-      const persisted: CoordinationEntry = {
-        ...entry,
-        seq: lastSequence + 1,
-        at: entry.at ?? new Date().toISOString(),
+      let lastSequence = entries.at(-1)?.seq ?? 0;
+      const transaction: CoordinationBoardTransaction = {
+        entries,
+        append: async (entry) => {
+          const persisted: CoordinationEntry = {
+            ...entry,
+            seq: ++lastSequence,
+            at: entry.at ?? new Date().toISOString(),
+          };
+          await fs.appendFile(
+            scope.boardPath,
+            `${JSON.stringify(persisted)}\n`,
+            "utf8"
+          );
+          entries.push(persisted);
+          return persisted;
+        },
       };
-      await fs.appendFile(
-        scope.boardPath,
-        `${JSON.stringify(persisted)}\n`,
-        "utf8"
-      );
-      return persisted;
+      return action(transaction);
     });
   }
 
