@@ -16,7 +16,7 @@ import {
   MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
   MAX_PREVIEW_BODY_BYTES,
   HARNESS_IDS,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
@@ -40,7 +40,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
-  test("diagnoses the disabled MCP-to-skill replacement", async () => {
+  test("diagnoses the skill-mode MCP-to-skill replacement", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () => createSections(),
@@ -59,7 +59,7 @@ suite("CliPromptPreparer", () => {
       undefined,
       {
         harness: HARNESS_IDS.CLAUDE_CLI,
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
         skills: [MCP_SKILL_NAMES.TOOLS],
         model: "model",
         executionMode: EXECUTION_MODES.HEADLESS,
@@ -73,11 +73,11 @@ suite("CliPromptPreparer", () => {
 
     assert.strictEqual(
       plan.diagnostics[0]?.code,
-      PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED
+      PROMPT_DIAGNOSTIC_CODES.CTRLYOKE_MCP_MODE_SKILL
     );
   });
 
-  test("does not diagnose disabled MCP when ctrlyoke was not requested", async () => {
+  test("does not diagnose skill-mode MCP when ctrlyoke was not requested", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () => createSections(),
@@ -96,7 +96,7 @@ suite("CliPromptPreparer", () => {
       undefined,
       {
         harness: HARNESS_IDS.CLAUDE_CLI,
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
         skills: undefined,
         model: "model",
         executionMode: EXECUTION_MODES.HEADLESS,

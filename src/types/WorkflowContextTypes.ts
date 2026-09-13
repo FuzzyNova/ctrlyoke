@@ -95,8 +95,8 @@ export interface McpToolSkillRunContext {
   readonly parallelGroupId?: string;
   /**
    * ctrlyoke tools this step denied. The generated skills omit them, so a
-   * denied tool is never documented to the agent. In `mcpAvailability:
-   * "disabled"` mode the skill *is* the tool listing, which makes this the
+   * denied tool is never documented to the agent. In `ctrlyokeMcpMode:
+   * "skill"` mode the skill *is* the tool listing, which makes this the
    * only expression of a denial — the CLI entry point does not enforce it, the
    * same way attestation is an accuracy signal rather than a security boundary.
    */

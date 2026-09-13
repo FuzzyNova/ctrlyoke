@@ -12,7 +12,7 @@ import {
   HARNESS_IDS,
   EXECUTION_MODES,
   PROMPT_PROPERTIES,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
 } from "../../types/DashboardConstants";
 import {
@@ -766,7 +766,7 @@ suite("PropertyResolver Tests", () => {
   });
 
   suite("resolveMcpServers", () => {
-    test("preserves the existing resolved shape and skills in auto mode", () => {
+    test("preserves the existing resolved shape and skills in native mode", () => {
       const resolved = PropertyResolver.resolve(
         { prompt: "test", mcpServers: ["ctrlyoke"] },
         { steps: [] }
@@ -774,12 +774,12 @@ suite("PropertyResolver Tests", () => {
 
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
       assert.strictEqual(resolved.skills, undefined);
-      assert.strictEqual(resolved.mcpAvailability, undefined);
+      assert.strictEqual(resolved.ctrlyokeMcpMode, undefined);
     });
 
-    test("injects the MCP tools skill in disabled mode when ctrlyoke is requested", () => {
+    test("injects the MCP tools skill in skill mode when ctrlyoke is requested", () => {
       configService.setCliOverlay({
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
       });
 
       const resolved = PropertyResolver.resolve(
@@ -792,17 +792,14 @@ suite("PropertyResolver Tests", () => {
         MCP_SKILL_NAMES.TOOLS,
         MCP_SKILL_NAMES.COORDINATION,
       ]);
-      assert.strictEqual(
-        resolved.mcpAvailability,
-        MCP_AVAILABILITY_MODES.DISABLED
-      );
+      assert.strictEqual(resolved.ctrlyokeMcpMode, CTRLYOKE_MCP_MODES.SKILL);
     });
 
     test("injects only the skill whose family survived the step's denials", () => {
       // Each built-in skill is a whole document in the prompt. Attaching the
       // pair unconditionally spends that budget teaching tools the step denied.
       configService.setCliOverlay({
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
       });
 
       const coordinationOnly = PropertyResolver.resolve(
@@ -830,9 +827,29 @@ suite("PropertyResolver Tests", () => {
       assert.deepStrictEqual(workflowOnly.skills, [MCP_SKILL_NAMES.TOOLS]);
     });
 
+    test("does not duplicate a skill the step already attached manually", () => {
+      configService.setCliOverlay({
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+      });
+
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          mcpServers: ["ctrlyoke"],
+          skills: [MCP_SKILL_NAMES.TOOLS],
+        },
+        { steps: [] }
+      );
+
+      assert.deepStrictEqual(resolved.skills, [
+        MCP_SKILL_NAMES.TOOLS,
+        MCP_SKILL_NAMES.COORDINATION,
+      ]);
+    });
+
     test("injects no skill when every ctrlyoke tool is denied", () => {
       configService.setCliOverlay({
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
       });
 
       const resolved = PropertyResolver.resolve(
@@ -854,9 +871,9 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.skills, undefined);
     });
 
-    test("does not inject the MCP tools skill in disabled mode without ctrlyoke", () => {
+    test("does not inject the MCP tools skill in skill mode without ctrlyoke", () => {
       configService.setCliOverlay({
-        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
       });
 
       const resolved = PropertyResolver.resolve(
@@ -866,10 +883,7 @@ suite("PropertyResolver Tests", () => {
 
       assert.deepStrictEqual(resolved.mcpServers, []);
       assert.strictEqual(resolved.skills, undefined);
-      assert.strictEqual(
-        resolved.mcpAvailability,
-        MCP_AVAILABILITY_MODES.DISABLED
-      );
+      assert.strictEqual(resolved.ctrlyokeMcpMode, CTRLYOKE_MCP_MODES.SKILL);
     });
 
     test("should use prompt-level mcpServers when specified", () => {

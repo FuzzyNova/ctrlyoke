@@ -27,7 +27,7 @@ import {
   type HarnessId,
   type ContextResolutionFailureMode,
   type PermissionMode,
-  type McpAvailability,
+  type CtrlYokeMcpMode,
   type StepColorMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
@@ -79,7 +79,7 @@ export const CONFIG_KEYS = {
   SERVER: "server",
   NOTIFICATIONS: "notifications",
   ENABLE_DIAGNOSTIC_LOGS: "enableDiagnosticLogs",
-  MCP_AVAILABILITY: "mcpAvailability",
+  CTRLYOKE_MCP_MODE: "ctrlyokeMcpMode",
   COMMIT: "commit",
 
   // Dot-notation paths (used with configService.set())
@@ -1242,9 +1242,9 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.DEFAULTS).mcpServers;
   },
 
-  /** Get the MCP attachment mode for execution. */
-  getMcpAvailability(): McpAvailability {
-    return configService.get(CONFIG_KEYS.MCP_AVAILABILITY);
+  /** Get ctrlyoke's own MCP server attachment mode (native server vs. built-in skill). */
+  getCtrlYokeMcpMode(): CtrlYokeMcpMode {
+    return configService.get(CONFIG_KEYS.CTRLYOKE_MCP_MODE);
   },
 
   /**

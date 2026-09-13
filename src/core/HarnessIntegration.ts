@@ -33,7 +33,7 @@ import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   STEP_TYPES,
   PriorContextItemType,
@@ -82,8 +82,8 @@ function skillsForPrompt(
   );
   if (
     !isParallelMember ||
-    workflowContext.resolvedProperties?.mcpAvailability !==
-      MCP_AVAILABILITY_MODES.DISABLED ||
+    workflowContext.resolvedProperties?.ctrlyokeMcpMode !==
+      CTRLYOKE_MCP_MODES.SKILL ||
     !workflowContext.resolvedProperties ||
     !ctrlYokeToolFamilies(workflowContext.resolvedProperties).workflow
   ) {

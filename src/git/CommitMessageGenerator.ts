@@ -22,13 +22,13 @@ import {
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
 import {
   MCP_SKILL_NAMES,
   type HarnessId,
-  type McpAvailability,
+  type CtrlYokeMcpMode,
 } from "../types/DashboardConstants";
 import {
   isScriptStep,
@@ -123,7 +123,7 @@ export function buildCommitWorkflowOverrides(
   harness: HarnessId,
   model: string | undefined,
   mcpServerConfig: McpServerConfig | undefined,
-  mcpAvailability: McpAvailability = MCP_AVAILABILITY_MODES.AUTO
+  ctrlyokeMcpMode: CtrlYokeMcpMode = CTRLYOKE_MCP_MODES.NATIVE
 ): Partial<PromptFile> {
   return {
     harness,
@@ -140,7 +140,7 @@ export function buildCommitWorkflowOverrides(
     mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
     agent: null,
     skills:
-      mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED
+      ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL
         ? [MCP_SKILL_NAMES.COMMIT_MESSAGE]
         : null,
     additionalArgs: null,
@@ -293,7 +293,7 @@ export class CommitMessageGenerator {
       "out",
       "mcp-server.js"
     );
-    const mcpAvailability = ConfigurationUtils.getMcpAvailability();
+    const ctrlyokeMcpMode = ConfigurationUtils.getCtrlYokeMcpMode();
     const tempDir = path.join(
       cwd,
       PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -305,7 +305,7 @@ export class CommitMessageGenerator {
     );
 
     let useMcpCapture = false;
-    if (mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED) {
+    if (ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL) {
       try {
         await fs.access(mcpServerPath);
         useMcpCapture = true;
@@ -400,7 +400,7 @@ export class CommitMessageGenerator {
         harness,
         model,
         mcpServerConfig,
-        mcpAvailability
+        ctrlyokeMcpMode
       );
       await instance.loadPromptStringAsRun(
         fullPrompt,

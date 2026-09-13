@@ -5,6 +5,15 @@
 > one wrong-file citation (§1.5), resolved Open Questions 1/3/4 by decision, and
 > answered Open Question 2 with a traced insertion point (§5).
 
+> **Renamed 2026-09-13:** the Phase 3 setting is `ctrlyokeMcpMode: "native" | "skill"`,
+> not `mcpAvailability: "auto" | "disabled"` as described below — `"auto"` read as
+> "ctrlyoke detects whether MCP is blocked," which it never does (see §3 Non-goals);
+> it's a manual toggle the user sets once. The new name also scopes the setting
+> explicitly to ctrlyoke's own MCP server in the field name itself, not just in UI
+> copy. Every occurrence of `mcpAvailability`/`MCP_AVAILABILITY_MODES`/`auto`/`disabled`
+> below is the pre-rename name — left as-is as the historical record; the code no
+> longer matches it.
+
 > **Phase 0 status (2026-08-30):** Implemented. `SkillExpander` now keeps its
 > existing pointer block for skills inside the workspace or execution checkout and
 > embeds out-of-trust-root skill files verbatim, including frontmatter. The harness

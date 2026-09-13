@@ -13,7 +13,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   HARNESS_IDS,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
@@ -142,15 +142,15 @@ export class CliPromptPreparer {
     );
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
-    const mcpAvailabilityDiagnostics =
-      resolvedProperties?.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED &&
+    const ctrlyokeMcpModeDiagnostics =
+      resolvedProperties?.ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL &&
       resolvedProperties !== undefined &&
       ctrlYokeToolFamilies(resolvedProperties).workflow
         ? [
             this.createDiagnostic(
-              PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED,
+              PROMPT_DIAGNOSTIC_CODES.CTRLYOKE_MCP_MODE_SKILL,
               harnessId,
-              `MCP is disabled, so the ${MCP_SKILL_NAMES.TOOLS} skill was attached instead of the ctrlyoke MCP server.`
+              `ctrlyoke's MCP server is in skill mode, so the ${MCP_SKILL_NAMES.TOOLS} skill was attached instead of the native ctrlyoke MCP server.`
             ),
           ]
         : [];
@@ -180,7 +180,7 @@ export class CliPromptPreparer {
       );
       return this.createInlinePlan(originalPromptText, [
         ...conditionOutputDiagnostics,
-        ...mcpAvailabilityDiagnostics,
+        ...ctrlyokeMcpModeDiagnostics,
       ]);
     }
 
@@ -290,7 +290,7 @@ export class CliPromptPreparer {
     );
     const promptDiagnostics = [
       ...conditionOutputDiagnostics,
-      ...mcpAvailabilityDiagnostics,
+      ...ctrlyokeMcpModeDiagnostics,
       ...inlineSkillDiagnostics,
       ...unknownSecretNames.map((name) =>
         this.createDiagnostic(

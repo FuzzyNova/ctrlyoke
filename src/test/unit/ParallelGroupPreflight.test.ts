@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   HARNESS_IDS,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
 } from "../../types/DashboardConstants";
@@ -33,7 +33,7 @@ function defaults(
     additionalArgsByHarness: {},
     executionMode: "headless",
     resumeSession: false,
-    mcpAvailability: "auto",
+    ctrlyokeMcpMode: "native",
     mcpServers: [],
     hooks: null,
     ...overrides,
@@ -196,14 +196,14 @@ suite("ParallelGroupPreflight", () => {
     );
   });
 
-  test("delivers only coordination to disabled-mode group members", async () => {
+  test("delivers only coordination to skill-mode group members", async () => {
     const result = await run(
       {
         mcpServers: ["ctrlyoke"],
         steps: [{ prompt: "one" }, { prompt: "two" }],
         parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
       },
-      defaults({ mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED })
+      defaults({ ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL })
     );
 
     assert.deepStrictEqual(
@@ -222,13 +222,13 @@ suite("ParallelGroupPreflight", () => {
     );
   });
 
-  test("allows disabled-mode members that did not request ctrlyoke", async () => {
+  test("allows skill-mode members that did not request ctrlyoke", async () => {
     const result = await run(
       {
         steps: [{ prompt: "one" }, { prompt: "two" }],
         parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
       },
-      defaults({ mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED })
+      defaults({ ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL })
     );
 
     assert.deepStrictEqual(

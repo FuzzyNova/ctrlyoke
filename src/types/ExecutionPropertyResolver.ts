@@ -1,13 +1,13 @@
 import {
   EXECUTION_MODES,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SERVER_IDS,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
   type ExecutionMode,
   type HarnessId,
-  type McpAvailability,
+  type CtrlYokeMcpMode,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -44,7 +44,7 @@ export interface ExecutionPropertyDefaults {
   modelsByHarness: Partial<Record<HarnessId, string>>;
   additionalArgsByHarness: Partial<Record<HarnessId, string>>;
   executionMode: ExecutionMode;
-  mcpAvailability?: McpAvailability;
+  ctrlyokeMcpMode?: CtrlYokeMcpMode;
   agent?: string | null;
   skills?: string[] | null;
   secrets?: string[] | null;
@@ -116,7 +116,7 @@ function resolveCtrlYokeDenials(
 /**
  * The ctrlyoke tools this step has denied. Used to keep a denied tool out of
  * the generated built-in skills, which are the whole tool surface in
- * `mcpAvailability: "disabled"` mode.
+ * `ctrlyokeMcpMode: "skill"` mode.
  */
 export function ctrlYokeDeniedToolNames(
   properties: Pick<ResolvedProperties, "mcpServers">
@@ -354,22 +354,24 @@ export function resolveExecutionProperties(
     workflow.mcpServers,
     defaults.mcpServers ?? []
   );
-  const mcpAvailabilityDisabled =
-    defaults.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED;
-  // In disabled mode the built-in skills stand in for the server, so attach
+  const ctrlyokeMcpModeIsSkill =
+    defaults.ctrlyokeMcpMode === CTRLYOKE_MCP_MODES.SKILL;
+  // In skill mode the built-in skills stand in for the server, so attach
   // only the ones whose tools survived the step's denials — an unfiltered pair
   // spends prompt budget documenting tools the step cannot call.
   const ctrlyokeFamilies = ctrlYokeToolFamilies({
     mcpServers: mcpServers.value,
   });
   const resolvedSkills =
-    mcpAvailabilityDisabled && ctrlyokeFamilies.any
+    ctrlyokeMcpModeIsSkill && ctrlyokeFamilies.any
       ? [
-          ...(skills.value ?? []),
-          ...(ctrlyokeFamilies.workflow ? [MCP_SKILL_NAMES.TOOLS] : []),
-          ...(ctrlyokeFamilies.coordination
-            ? [MCP_SKILL_NAMES.COORDINATION]
-            : []),
+          ...new Set([
+            ...(skills.value ?? []),
+            ...(ctrlyokeFamilies.workflow ? [MCP_SKILL_NAMES.TOOLS] : []),
+            ...(ctrlyokeFamilies.coordination
+              ? [MCP_SKILL_NAMES.COORDINATION]
+              : []),
+          ]),
         ]
       : skills.value;
   const hooks = resolveHooks(prompt, workflow, defaults);
@@ -429,8 +431,8 @@ export function resolveExecutionProperties(
     toolPermissions: toolPermissions.value,
     errorBehavior: errorBehavior.value,
   };
-  if (mcpAvailabilityDisabled) {
-    properties.mcpAvailability = defaults.mcpAvailability;
+  if (ctrlyokeMcpModeIsSkill) {
+    properties.ctrlyokeMcpMode = defaults.ctrlyokeMcpMode;
   }
 
   return {

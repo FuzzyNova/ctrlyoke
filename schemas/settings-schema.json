@@ -1019,10 +1019,10 @@
         }
       }
     },
-    "mcpAvailability": {
+    "ctrlyokeMcpMode": {
       "type": "string",
-      "enum": ["auto", "disabled"],
-      "description": "Whether ctrlyoke's MCP server is attached natively or replaced with the built-in MCP tools skill."
+      "enum": ["native", "skill"],
+      "description": "Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow."
     },
     "enableDiagnosticLogs": {
       "type": "boolean",

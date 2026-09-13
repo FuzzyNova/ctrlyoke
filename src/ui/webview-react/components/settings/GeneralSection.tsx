@@ -11,7 +11,7 @@ import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 import { RunHistorySection } from "./RunHistorySection";
 import {
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -353,24 +353,24 @@ export function GeneralSection({
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          MCP integration
+          ctrlyoke MCP server
         </h3>
         <SettingInputRow
-          label="MCP availability"
-          description="Use ctrlyoke's native MCP server, or replace it with the built-in MCP tools skill when MCP configuration is unavailable."
-          id="settings-mcp-availability"
-          path="mcpAvailability"
+          label="Attachment mode"
+          description="Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy)."
+          id="settings-ctrlyoke-mcp-mode"
+          path="ctrlyokeMcpMode"
           {...rowProps}
         >
           <CustomSelect
-            id="settings-mcp-availability"
-            value={settings.settings.mcpAvailability}
-            onChange={(v) => onUpdate("mcpAvailability", v)}
+            id="settings-ctrlyoke-mcp-mode"
+            value={settings.settings.ctrlyokeMcpMode}
+            onChange={(v) => onUpdate("ctrlyokeMcpMode", v)}
             options={[
-              { value: MCP_AVAILABILITY_MODES.AUTO, label: "Auto" },
+              { value: CTRLYOKE_MCP_MODES.NATIVE, label: "Native" },
               {
-                value: MCP_AVAILABILITY_MODES.DISABLED,
-                label: "Disabled (use skill)",
+                value: CTRLYOKE_MCP_MODES.SKILL,
+                label: "Skill (MCP unavailable)",
               },
             ]}
           />

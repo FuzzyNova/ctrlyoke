@@ -27,7 +27,7 @@ import {
   type McpSecretConfigOptions,
 } from "./CliMcpConfigGenerator";
 import {
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SERVER_IDS,
   MCP_TRANSPORTS,
   MCP_SECRET_CONFIG_MODES,
@@ -58,10 +58,10 @@ export interface CliProviderWorkflowContext {
 
 /** Pure effective-property check for a live ctrlyoke MCP server attachment. */
 export function hasCtrlYokeServer(
-  properties: Pick<ResolvedProperties, "mcpAvailability" | "mcpServers">
+  properties: Pick<ResolvedProperties, "ctrlyokeMcpMode" | "mcpServers">
 ): boolean {
   return (
-    properties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED &&
+    properties.ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL &&
     ctrlYokeToolFamilies(properties).any
   );
 }

@@ -7,7 +7,7 @@ import {
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   MCP_SKILL_NAMES,
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
@@ -45,7 +45,7 @@ suite("CommitMessageGenerator", () => {
       HARNESS_IDS.OPENCODE_CLI,
       "test-model",
       mcpServer,
-      MCP_AVAILABILITY_MODES.AUTO
+      CTRLYOKE_MCP_MODES.NATIVE
     );
 
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
@@ -65,12 +65,12 @@ suite("CommitMessageGenerator", () => {
     assert.strictEqual(overrides.hooks, null);
   });
 
-  test("uses the commit-message skill when MCP is disabled", () => {
+  test("uses the commit-message skill in skill mode", () => {
     const overrides = buildCommitWorkflowOverrides(
       HARNESS_IDS.CLAUDE_CLI,
       undefined,
       undefined,
-      MCP_AVAILABILITY_MODES.DISABLED
+      CTRLYOKE_MCP_MODES.SKILL
     );
 
     assert.strictEqual(overrides.mcpServers, null);

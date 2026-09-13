@@ -9,7 +9,7 @@ import type {
 import type {
   ExecutionMode,
   HarnessId,
-  McpAvailability,
+  CtrlYokeMcpMode,
   PermissionMode,
 } from "./DashboardConstants";
 
@@ -28,8 +28,8 @@ export interface ResolvedProperties {
   harness: HarnessId;
   model: string;
   executionMode: ExecutionMode;
-  /** Internal marker for disabled-mode MCP replacement behavior. */
-  mcpAvailability?: McpAvailability;
+  /** Internal marker for skill-mode ctrlyoke-MCP replacement behavior. */
+  ctrlyokeMcpMode?: CtrlYokeMcpMode;
   agent?: string;
   skills?: string[];
   secrets?: string[];

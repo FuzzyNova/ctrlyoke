@@ -55,7 +55,7 @@ function createDefaults(): ExecutionPropertyDefaults {
     modelsByHarness: { [HARNESS_IDS.CLAUDE_CLI]: "default-model" },
     additionalArgsByHarness: {},
     executionMode: "headless",
-    mcpAvailability: "auto",
+    ctrlyokeMcpMode: "native",
     resumeSession: false,
     mcpServers: [],
     hooks: null,

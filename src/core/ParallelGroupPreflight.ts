@@ -5,7 +5,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  MCP_AVAILABILITY_MODES,
+  CTRLYOKE_MCP_MODES,
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   type HarnessId,
@@ -239,7 +239,7 @@ export async function preflightParallelGroup(
     if (
       !isScriptStep(step) &&
       ctrlYokeToolFamilies(resolvedProperties).mutation &&
-      resolvedProperties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED
+      resolvedProperties.ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL
     ) {
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
