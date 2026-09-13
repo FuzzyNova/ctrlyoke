@@ -818,3 +818,65 @@ export function snapParallelGroupIndex(
 export const snapParallelGroupStartPosition = snapParallelGroupIndex;
 export const validateParallelGroups = validateParallelGroupTopology;
 export const normalizeParallelGroups = normalizeParallelGroupTopology;
+
+export interface FlattenedParallelItems {
+  topology: ParallelGroupTopology;
+  itemCount: number;
+  stepCount: number;
+}
+
+/**
+ * Flattens resolved queue items into a relative, normalized topology.
+ *
+ * The input contains either one executable step or an authored-style parallel
+ * container whose members have already been resolved by its caller.
+ */
+export function flattenParallelItems(
+  items: readonly (
+    | WorkflowStep
+    | { parallel: WorkflowStep[]; failFast?: boolean }
+  )[]
+): FlattenedParallelItems {
+  const steps: WorkflowStep[] = [];
+  const parallelGroups: Array<{
+    startIndex: number;
+    endIndex: number;
+    failFast?: boolean;
+  }> = [];
+
+  for (const item of items) {
+    if (typeof item === "object" && item !== null && "parallel" in item) {
+      if (item.parallel.length < 2) {
+        throw new Error("A parallel group must contain at least two steps");
+      }
+
+      const startIndex = steps.length;
+      for (const member of item.parallel) {
+        if (
+          typeof member === "object" &&
+          member !== null &&
+          "parallel" in member
+        ) {
+          throw new Error(
+            "A parallel group cannot contain a nested parallel container"
+          );
+        }
+        steps.push(member);
+      }
+      parallelGroups.push({
+        startIndex,
+        endIndex: steps.length - 1,
+        failFast: item.failFast,
+      });
+      continue;
+    }
+
+    steps.push(item);
+  }
+
+  const topology = normalizeParallelGroupTopology({
+    steps,
+    parallelGroups,
+  });
+  return { topology, itemCount: items.length, stepCount: steps.length };
+}

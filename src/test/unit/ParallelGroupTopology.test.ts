@@ -15,6 +15,7 @@ import {
   validateParallelGroupTopology,
   deleteParallelGroupStep,
   PARALLEL_GROUP_INSERT_POSITIONS,
+  flattenParallelItems,
   type ParallelGroupTopology,
 } from "../../core/ParallelGroupTopology";
 import type { WorkflowStep } from "../../types/CtrlYokeTypes";
@@ -125,6 +126,93 @@ suite("ParallelGroupTopology", () => {
       });
       assert.match(result.parallelGroups[0].id, /^[0-9a-f-]{36}$/);
       assert.strictEqual(result.parallelGroups[0].failFast, true);
+    });
+  });
+
+  suite("flattening", () => {
+    test("flattens a flat-only batch", () => {
+      const result = flattenParallelItems([step("a"), step("b")]);
+
+      assert.deepStrictEqual(names(result.topology), ["a", "b"]);
+      assert.deepStrictEqual(result.topology.parallelGroups, []);
+      assert.strictEqual(result.itemCount, 2);
+      assert.strictEqual(result.stepCount, 2);
+    });
+
+    test("flattens one container and defaults fail-fast", () => {
+      const result = flattenParallelItems([
+        { parallel: [step("a"), step("b")] },
+      ]);
+
+      assert.deepStrictEqual(names(result.topology), ["a", "b"]);
+      assert.strictEqual(result.topology.parallelGroups.length, 1);
+      assert.strictEqual(result.topology.parallelGroups[0].startIndex, 0);
+      assert.strictEqual(result.topology.parallelGroups[0].endIndex, 1);
+      assert.strictEqual(result.topology.parallelGroups[0].failFast, true);
+    });
+
+    test("preserves mixed batch order and relative ranges", () => {
+      const result = flattenParallelItems([
+        step("before"),
+        {
+          parallel: [step("first"), step("second")],
+          failFast: false,
+        },
+        step("after"),
+      ]);
+
+      assert.deepStrictEqual(names(result.topology), [
+        "before",
+        "first",
+        "second",
+        "after",
+      ]);
+      assert.deepStrictEqual(result.topology.parallelGroups, [
+        {
+          id: result.topology.parallelGroups[0].id,
+          startIndex: 1,
+          endIndex: 2,
+          failFast: false,
+        },
+      ]);
+      assert.strictEqual(result.itemCount, 3);
+      assert.strictEqual(result.stepCount, 4);
+    });
+
+    test("generates unique ids for multiple containers", () => {
+      const result = flattenParallelItems([
+        { parallel: [step("a"), step("b")] },
+        { parallel: [step("c"), step("d")] },
+      ]);
+      const ids = result.topology.parallelGroups.map((group) => group.id);
+
+      assert.strictEqual(new Set(ids).size, ids.length);
+    });
+
+    for (const parallel of [[], [step("only")]]) {
+      test(`rejects a container with ${parallel.length} members`, () => {
+        assert.throws(
+          () => flattenParallelItems([{ parallel }]),
+          /at least two steps/
+        );
+      });
+    }
+
+    test("rejects nested containers", () => {
+      assert.throws(
+        () =>
+          flattenParallelItems([
+            {
+              parallel: [
+                step("outer"),
+                {
+                  parallel: [step("inner a"), step("inner b")],
+                } as unknown as WorkflowStep,
+              ],
+            },
+          ]),
+        /nested parallel container/
+      );
     });
   });
 

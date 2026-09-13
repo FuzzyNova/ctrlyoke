@@ -1,7 +1,7 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Track C / Phase 3A MCP contract surface landed. The queue-item
-> union remains unpublished until Phase 3B; later rollout work remains backlog.
+> **Status:** Track C / Phase 3A complete. The queue-item union remains
+> unpublished until Phase 3B; later rollout work remains backlog.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -205,15 +205,17 @@ loops in wave 1, this is the one to run alongside Track A.
 `src/utils/McpToolSkillGenerator.ts`, `src/core/PromptFileParser.ts`, and a
 **new, appended** flattener in `src/core/ParallelGroupTopology.ts`.
 
-**Phase 3A status:** MCP Stage 1's schema/type contract surface is landed:
-`minItems` and `additionalProperties: false` schema facets with recursive
-enforcement, exact-one `oneOf` validation, the
+**Phase 3A status:** MCP Stage 1 is complete. It includes the schema/type
+contract surface (`minItems` and `additionalProperties: false` schema facets
+with recursive enforcement, exact-one `oneOf` validation, the
 `McpAppendParallelGroupInput` / `McpAppendQueueItem` types, and the unpublished
-queue-item union schema. The shared item-to-relative-topology flattener and
-`PromptFileParser` move remain subsequent Stage 1 work; they will provide one
-implementation of group-range math when landed.
+queue-item union schema), the exported
+`flattenParallelItems(items: readonly (WorkflowStep | { parallel: WorkflowStep[]; failFast?: boolean })[]): FlattenedParallelItems`
+flattener, and the behavior-preserving `PromptFileParser` move. Phase 3B
+inherits the flattener and its relative topology contract; it must publish the
+union schema before accepting containers through `append_step`.
 
-**Exit criteria.** `src/test/unit/McpSchemaValidator.test.ts` accepts flat,
+**Exit criteria met.** `src/test/unit/McpSchemaValidator.test.ts` accepts flat,
 future-parallel, and mixed inputs and rejects empty / one-member / nested /
 hybrid / unknown-property inputs; `ParallelGroupTopology.test.ts` covers mixed
 batch flattening; `PromptFileParser` tests still pass unchanged, proving the
