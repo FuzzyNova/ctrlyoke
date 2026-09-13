@@ -1,7 +1,7 @@
 // Captured before the React bundle loads so the retained-panel reconnect path
 // can reuse the latest API object. No imports; compiled as a standalone IIFE.
-declare const __fpLogMessageType__: string;
-declare const __fpLogLevels__: {
+declare const __cyLogMessageType__: string;
+declare const __cyLogLevels__: {
   WARN: string;
   ERROR: string;
 };
@@ -51,7 +51,7 @@ function isResizeObserverDeliveryWarning(message: string): boolean {
 }
 
 function writeConsole(level: BootstrapLogLevel, message: string): void {
-  if (level === __fpLogLevels__.ERROR) {
+  if (level === __cyLogLevels__.ERROR) {
     console.error(message);
     return;
   }
@@ -64,7 +64,7 @@ function tryPostBootstrapLog(entry: BootstrapLogEntry): boolean {
     return false;
   }
   api.postMessage({
-    type: __fpLogMessageType__,
+    type: __cyLogMessageType__,
     level: entry.level,
     message: entry.message,
   });
@@ -83,7 +83,7 @@ function installBootstrapLogger(): void {
 
   const enqueueOrPost = (level: BootstrapLogLevel, message: string): void => {
     const prefixedMessage = `[bootstrap] ${message}`;
-    if (level !== __fpLogLevels__.WARN && level !== __fpLogLevels__.ERROR) {
+    if (level !== __cyLogLevels__.WARN && level !== __cyLogLevels__.ERROR) {
       console.debug(prefixedMessage);
       return;
     }
@@ -116,14 +116,14 @@ function installBootstrapLogger(): void {
     const message = event.message || "(no message)";
     const isDeliveryWarning = isResizeObserverDeliveryWarning(message);
     enqueueOrPost(
-      isDeliveryWarning ? __fpLogLevels__.WARN : __fpLogLevels__.ERROR,
+      isDeliveryWarning ? __cyLogLevels__.WARN : __cyLogLevels__.ERROR,
       `${isDeliveryWarning ? "browser warning" : "window error"}: ${message} at ${event.filename || "(unknown)"}:${event.lineno || 0}:${event.colno || 0}`
     );
   });
 
   window.addEventListener("unhandledrejection", (event) => {
     enqueueOrPost(
-      __fpLogLevels__.ERROR,
+      __cyLogLevels__.ERROR,
       `unhandled rejection: ${formatUnknownError(event.reason)}`
     );
   });
@@ -134,7 +134,7 @@ installBootstrapLogger();
 if (typeof ctrlyokeWindow.acquireVsCodeApi !== "function") {
   if (!ctrlyokeWindow.vscodeApi) {
     ctrlyokeWindow.__ctrlyokeBootstrapLog?.(
-      __fpLogLevels__.WARN,
+      __cyLogLevels__.WARN,
       "window.acquireVsCodeApi is unavailable before React bootstrap"
     );
   }
@@ -144,7 +144,7 @@ if (typeof ctrlyokeWindow.acquireVsCodeApi !== "function") {
     ctrlyokeWindow.__ctrlyokeFlushBootstrapLogs?.();
   } catch (error) {
     ctrlyokeWindow.__ctrlyokeBootstrapLog?.(
-      __fpLogLevels__.ERROR,
+      __cyLogLevels__.ERROR,
       `acquireVsCodeApi() threw: ${formatUnknownError(error)}`
     );
   }

@@ -741,7 +741,7 @@ export function createMessageHandlers(
       // Without this the shim exhausts its 5 consecutive-failure limit (~5 s)
       // and shows a permanent error banner before the server comes back.
       const expectFn = (window as unknown as Record<string, unknown>)[
-        "__fpExpectServerRestart"
+        "__cyExpectServerRestart"
       ];
       if (typeof expectFn === "function") {
         (expectFn as (ms: number) => void)(120000);

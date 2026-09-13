@@ -119,7 +119,7 @@
   const pendingInbound = [];
   // Millisecond timestamp until which an expected server restart is in progress.
   // While active, connection failures don't count toward the banner threshold.
-  // Set by window.__fpExpectServerRestart() called from DEV_RESTARTING handler.
+  // Set by window.__cyExpectServerRestart() called from DEV_RESTARTING handler.
   let serverRestartExpectedUntil = 0;
 
   function getWebSocketUrl() {
@@ -741,7 +741,7 @@
   // Called by React's DEV_RESTARTING handler when a full rebuild + window reload
   // is about to happen. Suppresses the consecutive-failure counter so the shim
   // keeps retrying for the full duration instead of showing the error banner.
-  window.__fpExpectServerRestart = function (durationMs) {
+  window.__cyExpectServerRestart = function (durationMs) {
     serverRestartExpectedUntil = Date.now() + durationMs;
     // If the banner is already visible from a previous failure burst, hide it
     // and resume retrying — the server may come back during this window.

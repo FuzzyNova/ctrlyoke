@@ -1,9 +1,9 @@
 // Dynamically imports the Vite bundle entry point with watchdog reload timers.
-// __fpModuleSrc__ is injected as a const in the wrapping <script type="module">
+// __cyModuleSrc__ is injected as a const in the wrapping <script type="module">
 // by CtrlYokeWebviewProvider._getHtmlForWebview before this IIFE runs.
 // No imports; compiled as a standalone IIFE.
-declare const __fpModuleSrc__: string;
-declare const __fpLogLevels__: {
+declare const __cyModuleSrc__: string;
+declare const __cyLogLevels__: {
   WARN: string;
   ERROR: string;
 };
@@ -33,7 +33,7 @@ function log(level: string, message: string): void {
     logger(level, fullMessage);
     return;
   }
-  if (level === __fpLogLevels__.ERROR) {
+  if (level === __cyLogLevels__.ERROR) {
     console.error(fullMessage);
     return;
   }
@@ -63,7 +63,7 @@ const timer = window.setTimeout(function () {
       now - lastRecoveryAt >= recoveryCooldownMs
     ) {
       log(
-        __fpLogLevels__.WARN,
+        __cyLogLevels__.WARN,
         "module-mount watchdog fired before React mount; reloading panel"
       );
       try {
@@ -93,7 +93,7 @@ if (!ctrlyokeWindow.__ctrlyokeStandalone) {
       }
       if (!Number.isFinite(lastAt) || now - lastAt >= recoveryCooldownMs) {
         log(
-          __fpLogLevels__.WARN,
+          __cyLogLevels__.WARN,
           "handshake watchdog fired after React mount without CLIENT_ID_ASSIGNED; reloading panel"
         );
         try {
@@ -107,7 +107,7 @@ if (!ctrlyokeWindow.__ctrlyokeStandalone) {
   }, handshakeTimeoutMs);
 }
 
-void import(__fpModuleSrc__)
+void import(__cyModuleSrc__)
   .then(function () {
     window.clearTimeout(timer);
     ctrlyokeWindow.__ctrlyokeFlushBootstrapLogs?.();
@@ -115,7 +115,7 @@ void import(__fpModuleSrc__)
   .catch(function (error: unknown) {
     window.clearTimeout(timer);
     log(
-      __fpLogLevels__.ERROR,
+      __cyLogLevels__.ERROR,
       `dynamic import failed: ${formatUnknownError(error)}`
     );
   });

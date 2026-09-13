@@ -473,7 +473,7 @@ export class CtrlYokeWebviewProvider
       vscode.Uri.joinPath(webviewScriptsUri, "bootstrapScript.js").fsPath,
       "utf-8"
     );
-    const bootstrapScript = `<script nonce="${nonce}">\nconst __fpLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __fpLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${bootstrapBody}</script>`;
+    const bootstrapScript = `<script nonce="${nonce}">\nconst __cyLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __cyLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${bootstrapBody}</script>`;
 
     const moduleScriptWithSrcMatch = html.match(moduleScriptWithSrcPattern);
     const moduleScriptSrc = moduleScriptWithSrcMatch?.[3];
@@ -483,7 +483,7 @@ export class CtrlYokeWebviewProvider
         vscode.Uri.joinPath(webviewScriptsUri, "moduleLoaderScript.js").fsPath,
         "utf-8"
       );
-      moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __fpModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\nconst __fpLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __fpLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${loaderBody}</script>`;
+      moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __cyModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\nconst __cyLogMessageType__ = ${JSON.stringify(MESSAGE_TYPES.LOG_MESSAGE)};\nconst __cyLogLevels__ = ${JSON.stringify(LOG_LEVELS)};\n${loaderBody}</script>`;
     }
 
     // Inject the bootstrap BEFORE the module scripts.
