@@ -1,6 +1,71 @@
 import { randomUUID } from "crypto";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 
+/** Shared mutation diagnostics so every workflow mutation path reports the same policy. */
+export const STEP_MUTATION_ERROR_MESSAGES = {
+  completed: (operation: string) =>
+    `Cannot ${operation} a completed step while the workflow is running`,
+  started: (operation: string) =>
+    `Cannot ${operation} the currently executing step: the step has already started`,
+  shiftedStartedStep: (operation: string, stepId: string) =>
+    `Cannot ${operation} the started step ${stepId}: started step positions must remain fixed`,
+} as const;
+
+/** A step is immutable once dispatch claimed it or it reached a terminal state. */
+export function hasStarted(step: WorkflowStep | undefined): boolean {
+  return (
+    step?._runtime?.startedAt !== undefined ||
+    step?._runtime?.completedAt !== undefined
+  );
+}
+
+/** Reject a direct mutation of a step that has already entered execution. */
+export function assertStepMutable(
+  step: WorkflowStep | undefined,
+  operation: string,
+  position?: "completedPrefix"
+): void {
+  if (!hasStarted(step)) {
+    return;
+  }
+  throw new Error(
+    position === "completedPrefix" || step?._runtime?.completedAt !== undefined
+      ? STEP_MUTATION_ERROR_MESSAGES.completed(operation)
+      : STEP_MUTATION_ERROR_MESSAGES.started(operation)
+  );
+}
+
+/**
+ * Started steps are absolute-index anchors. Definition edits may change the
+ * pending topology, but may never move, remove, or replace an anchor at a
+ * different position.
+ */
+export function assertStartedStepPositionsPreserved(
+  before: readonly WorkflowStep[],
+  after: readonly WorkflowStep[],
+  operation: string
+): void {
+  for (const [index, step] of before.entries()) {
+    if (!hasStarted(step)) {
+      continue;
+    }
+    const stepId = step._runtime?.stepId;
+    const preserved =
+      stepId !== undefined && stepId.length > 0
+        ? after[index]?._runtime?.stepId === stepId
+        : after[index] === step;
+    if (!preserved) {
+      throw new Error(
+        step._runtime?.completedAt !== undefined
+          ? STEP_MUTATION_ERROR_MESSAGES.completed(operation)
+          : stepId === undefined
+            ? STEP_MUTATION_ERROR_MESSAGES.started(operation)
+            : STEP_MUTATION_ERROR_MESSAGES.shiftedStartedStep(operation, stepId)
+      );
+    }
+  }
+}
+
 /** Generate a run-local step identity that is not already in the supplied set. */
 export function generateStepId(
   existingIds: ReadonlySet<string> = new Set()

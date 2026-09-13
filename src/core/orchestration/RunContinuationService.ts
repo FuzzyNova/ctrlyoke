@@ -36,7 +36,13 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "../WorkflowStepSanitizer";
-import { ensureStepIds, findStepIndexById } from "../StepIdentity";
+import {
+  assertStartedStepPositionsPreserved,
+  assertStepMutable,
+  ensureStepIds,
+  findStepIndexById,
+  hasStarted,
+} from "../StepIdentity";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -495,6 +501,11 @@ export class RunContinuationService {
             change.clearProperties
           )
         );
+        assertStartedStepPositionsPreserved(
+          topology.steps,
+          nextTopology.steps,
+          "edit"
+        );
         return {
           workingFile: {
             ...source,
@@ -553,6 +564,11 @@ export class RunContinuationService {
         const nextTopology = insertParallelGroupSteps(topology, index, [
           stripViewOnlyWorkflowStepFields(identifiedStep),
         ]);
+        assertStartedStepPositionsPreserved(
+          topology.steps,
+          nextTopology.steps,
+          "insert"
+        );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         return {
           workingFile: {
@@ -599,6 +615,13 @@ export class RunContinuationService {
         assertStepIndex(topology.steps, index, "remove");
         assertEditableDuringExecution(source, topology.steps, index, "remove");
         const nextTopology = deleteParallelGroupStep(topology, index);
+        if (isExecutionActiveState(source._runtime?.executionState)) {
+          assertStartedStepPositionsPreserved(
+            topology.steps,
+            nextTopology.steps,
+            "remove"
+          );
+        }
         const currentIndex = source._runtime?.currentIndex ?? 0;
         return {
           workingFile: {
@@ -709,12 +732,19 @@ export class RunContinuationService {
           currentIndex
         );
         assertPendingReorderIsSafe(source, topology.steps, newPendingOrder);
+        const effectivePendingGroups =
+          pendingGroups ?? buildPendingGroupRanges(topology, currentIndex);
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
           currentIndex,
           newPendingOrder,
-          pendingGroups,
+          effectivePendingGroups,
           isInFlightExecutionState(source._runtime?.executionState)
+        );
+        assertStartedStepPositionsPreserved(
+          topology.steps,
+          nextTopology.steps,
+          "reorder"
         );
         return {
           workingFile: {
@@ -856,16 +886,25 @@ function assertEditableDuringExecution(
 
   const currentIndex = source._runtime?.currentIndex ?? 0;
   const step = steps[index];
-  if (index < currentIndex || step?._runtime?.completedAt !== undefined) {
-    throw new Error(
-      `Cannot ${operation} a completed step while the workflow is running`
-    );
-  }
+  assertStepMutable(
+    step,
+    operation,
+    index < currentIndex ? "completedPrefix" : undefined
+  );
   if (
-    index === currentIndex &&
-    isInFlightExecutionState(source._runtime?.executionState)
+    index < currentIndex ||
+    (index === currentIndex &&
+      isInFlightExecutionState(source._runtime?.executionState))
   ) {
-    throw new Error(`Cannot ${operation} the currently executing step`);
+    // Legacy working files may predate per-step claim metadata. Keep the
+    // execution-head boundary as a compatibility backstop until they claim.
+    if (!hasStarted(step)) {
+      throw new Error(
+        index < currentIndex
+          ? `Cannot ${operation} a completed step while the workflow is running`
+          : `Cannot ${operation} the currently executing step`
+      );
+    }
   }
 }
 
@@ -915,23 +954,30 @@ function assertPendingReorderIsSafe(
   if (!isExecutionActiveState(source._runtime?.executionState)) return;
 
   const currentIndex = source._runtime?.currentIndex ?? 0;
-  if (
-    steps.some(
-      (step, index) =>
-        index >= currentIndex && step._runtime?.completedAt !== undefined
-    )
-  ) {
-    throw new Error(
-      "Cannot reorder a completed step while the workflow is running"
-    );
-  }
+  // The topology transform performs the actual structural validation against
+  // every started step. This preflight only retains the legacy current-index
+  // boundary for files that have not yet been claimed by ID.
   if (
     isInFlightExecutionState(source._runtime?.executionState) &&
     newPendingOrder.length > 0 &&
-    newPendingOrder[0] !== 0
+    !hasStarted(steps[currentIndex])
   ) {
     throw new Error("Cannot reorder the currently executing step");
   }
+}
+
+function buildPendingGroupRanges(
+  topology: ReturnType<typeof normalizeParallelGroupTopology>,
+  currentIndex: number
+): PendingParallelGroupRange[] {
+  return topology.parallelGroups
+    .filter((group) => group.endIndex >= currentIndex)
+    .map((group) => ({
+      id: group.id,
+      start: Math.max(group.startIndex, currentIndex) - currentIndex,
+      end: group.endIndex - currentIndex,
+      failFast: group.failFast,
+    }));
 }
 
 /**

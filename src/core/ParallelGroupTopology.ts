@@ -3,6 +3,10 @@ import type {
   ParallelGroupDefinition,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
+import {
+  assertStartedStepPositionsPreserved,
+  hasStarted,
+} from "./StepIdentity";
 
 export interface ParallelGroupTopology {
   steps: WorkflowStep[];
@@ -287,6 +291,17 @@ export function deleteParallelGroupStep(
         return { ...group };
       }),
   };
+  if (
+    containing &&
+    containing.endIndex - containing.startIndex + 1 === 2 &&
+    normalized.steps
+      .slice(containing.startIndex, containing.endIndex + 1)
+      .some(hasStarted)
+  ) {
+    throw new Error(
+      `Cannot shrink active parallel group ${containing.id} from two members to one`
+    );
+  }
   validateParallelGroupTopology(result);
   return result;
 }
@@ -405,6 +420,11 @@ export function reorderParallelGroupSteps(
     );
     group.failFast = original?.failFast ?? true;
   }
+  assertStartedStepPositionsPreserved(
+    normalized.steps,
+    result.steps,
+    "reorder"
+  );
   validateParallelGroupTopology(result);
   return result;
 }
@@ -545,6 +565,11 @@ export function reorderParallelGroupPendingSteps(
     );
     group.failFast = original?.failFast ?? true;
   }
+  assertStartedStepPositionsPreserved(
+    normalized.steps,
+    result.steps,
+    "reorder"
+  );
   validateParallelGroupTopology(result);
   return result;
 }
@@ -629,24 +654,6 @@ function reorderPendingTopologyWithRanges(
     }
   }
 
-  const immutableGroupIds = new Set<string>();
-  for (const group of normalized.parallelGroups) {
-    const hasSettledMember = group.startIndex < currentIndex;
-    const hasTerminalMember =
-      group.startIndex <= group.endIndex
-        ? normalized.steps
-            .slice(group.startIndex, group.endIndex + 1)
-            .some((step) => step._runtime?.completedAt !== undefined)
-        : false;
-    const hasInFlightMember =
-      hasInFlightStep &&
-      currentIndex >= group.startIndex &&
-      currentIndex <= group.endIndex;
-    if (hasSettledMember || hasTerminalMember || hasInFlightMember) {
-      immutableGroupIds.add(group.id);
-    }
-  }
-
   const groupIdBySourceIndex = new Map<number, string>();
   for (const [position, sourceIndex] of pendingSourceIndices.entries()) {
     const requestedGroup = pendingGroupAtPosition.get(position);
@@ -654,15 +661,18 @@ function reorderPendingTopologyWithRanges(
       (group) =>
         sourceIndex >= group.startIndex && sourceIndex <= group.endIndex
     );
-    if (oldGroup && immutableGroupIds.has(oldGroup.id)) {
-      if (
-        requestedGroup?.id !== oldGroup.id ||
-        (!requestedGroup &&
-          oldGroup.startIndex >= currentIndex &&
-          oldGroup.endIndex - oldGroup.startIndex + 1 >= 2)
-      ) {
+    const oldGroupIsActive =
+      oldGroup !== undefined &&
+      (normalized.steps
+        .slice(oldGroup.startIndex, oldGroup.endIndex + 1)
+        .some(hasStarted) ||
+        (hasInFlightStep &&
+          currentIndex >= oldGroup.startIndex &&
+          currentIndex <= oldGroup.endIndex));
+    if (oldGroup && oldGroupIsActive) {
+      if (requestedGroup?.id !== oldGroup.id) {
         throw new Error(
-          `Cannot change topology of settled or in-flight parallel group ${oldGroup.id}`
+          `Cannot change membership of active parallel group ${oldGroup.id} (settled or in-flight parallel group)`
         );
       }
       groupIdBySourceIndex.set(sourceIndex, oldGroup.id);
@@ -671,18 +681,25 @@ function reorderPendingTopologyWithRanges(
     }
   }
 
-  for (const groupId of immutableGroupIds) {
-    const oldGroup = oldGroupById.get(groupId)!;
+  for (const group of normalized.parallelGroups) {
+    const active =
+      normalized.steps
+        .slice(group.startIndex, group.endIndex + 1)
+        .some(hasStarted) ||
+      (hasInFlightStep &&
+        currentIndex >= group.startIndex &&
+        currentIndex <= group.endIndex);
+    if (!active) continue;
     const oldPendingMembers = Array.from(
-      { length: oldGroup.endIndex - oldGroup.startIndex + 1 },
-      (_, offset) => oldGroup.startIndex + offset
+      { length: group.endIndex - group.startIndex + 1 },
+      (_, offset) => group.startIndex + offset
     ).filter((index) => index >= currentIndex);
     const newMembers = [...groupIdBySourceIndex.entries()]
-      .filter(([, candidateGroupId]) => candidateGroupId === groupId)
+      .filter(([, candidateGroupId]) => candidateGroupId === group.id)
       .map(([sourceIndex]) => sourceIndex);
     if (!sameNumberSet(oldPendingMembers, newMembers)) {
       throw new Error(
-        `Cannot move members into or out of settled or in-flight parallel group ${groupId}`
+        `Cannot move members into or out of active parallel group ${group.id}`
       );
     }
   }
@@ -715,9 +732,23 @@ function reorderPendingTopologyWithRanges(
       (candidate) => candidate.id === group.id
     );
     if (original) {
-      group.failFast = groupPolicies.get(group.id) ?? original.failFast;
+      const originalIsActive =
+        normalized.steps
+          .slice(original.startIndex, original.endIndex + 1)
+          .some(hasStarted) ||
+        (hasInFlightStep &&
+          currentIndex >= original.startIndex &&
+          currentIndex <= original.endIndex);
+      group.failFast = originalIsActive
+        ? original.failFast
+        : (groupPolicies.get(group.id) ?? original.failFast);
     }
   }
+  assertStartedStepPositionsPreserved(
+    normalized.steps,
+    result.steps,
+    "reorder"
+  );
   validateParallelGroupTopology(result);
   return result;
 }
@@ -764,6 +795,15 @@ export function groupParallelGroupSteps(
   ) {
     throw new Error("Parallel group range overlaps an existing group");
   }
+  if (
+    normalized.steps
+      .slice(startIndex, endIndex + 1)
+      .some(hasStarted)
+  ) {
+    throw new Error(
+      "Cannot change membership of a started step while creating a parallel group"
+    );
+  }
   const groupId = id ?? randomUUID();
   const result = {
     steps: [...normalized.steps],
@@ -782,6 +822,16 @@ export function ungroupParallelGroup(
 ): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
   const index = groupIndex(normalized.parallelGroups, group);
+  const selected = normalized.parallelGroups[index];
+  if (
+    normalized.steps
+      .slice(selected.startIndex, selected.endIndex + 1)
+      .some(hasStarted)
+  ) {
+    throw new Error(
+      `Cannot remove active parallel group ${selected.id}`
+    );
+  }
   const result = cloneTopology(normalized);
   result.parallelGroups.splice(index, 1);
   return result;
@@ -794,6 +844,16 @@ export function unwrapParallelGroup(
 ): ParallelGroupTopology {
   const result = cloneTopology(topology);
   const index = groupIndex(result.parallelGroups, group);
+  const selected = result.parallelGroups[index];
+  if (
+    result.steps
+      .slice(selected.startIndex, selected.endIndex + 1)
+      .some(hasStarted)
+  ) {
+    throw new Error(
+      `Cannot remove active parallel group ${selected.id}`
+    );
+  }
   result.parallelGroups.splice(index, 1);
   validateParallelGroupTopology(result);
   return result;

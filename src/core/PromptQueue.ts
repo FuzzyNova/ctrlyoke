@@ -74,8 +74,11 @@ import {
   type RunStepClaimResult,
 } from "./orchestration/RunContinuationService";
 import {
+  assertStartedStepPositionsPreserved,
+  assertStepMutable,
   ensureStepIds,
   findStepIndexById,
+  hasStarted,
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
 
@@ -1720,6 +1723,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     // Serialize state mutations + file write through WorkingFileManager's operation queue
     await this.workingFileManager.runInQueue(async () => {
+      const previousSteps = this.state.steps;
       const requestedIndex = resolveQueueInsertIndex(
         position,
         this.state.currentIndex,
@@ -1746,6 +1750,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         },
         requestedIndex,
         { steps: identifiedSteps, parallelGroups }
+      );
+      assertStartedStepPositionsPreserved(
+        previousSteps,
+        identifiedTopology.steps,
+        "insert"
       );
       this.state.steps = identifiedTopology.steps;
       this.state.parallelGroups = identifiedTopology.parallelGroups;
@@ -1814,6 +1823,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.assertEditableDuringExecution(afterIndex + 1, "insert");
 
     await this.workingFileManager.runInQueue(async () => {
+      const previousSteps = this.state.steps;
       const topology = {
         steps: this.state.steps,
         parallelGroups: this.state.parallelGroups,
@@ -1828,6 +1838,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const nextTopology = insertParallelGroupSteps(topology, requestedIndex, [
         identifiedStep,
       ]);
+      assertStartedStepPositionsPreserved(
+        previousSteps,
+        nextTopology.steps,
+        "insert"
+      );
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
@@ -2238,6 +2253,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...updates,
       } as WorkflowStep
     );
+    assertStartedStepPositionsPreserved(
+      this.state.steps,
+      nextTopology.steps,
+      "edit"
+    );
     this.state.steps = nextTopology.steps;
     this.state.parallelGroups = nextTopology.parallelGroups;
     this.workflowFile = this.workflowFile
@@ -2286,6 +2306,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       index,
       replacement
     );
+    assertStartedStepPositionsPreserved(
+      this.state.steps,
+      nextTopology.steps,
+      "replace"
+    );
     this.state.steps = nextTopology.steps;
     this.state.parallelGroups = nextTopology.parallelGroups;
     this.workflowFile = this.workflowFile
@@ -2321,6 +2346,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.archiveStepRuntime(step, stepIndex, "deletePrompt");
     });
 
+    const previousSteps = this.state.steps;
     const nextTopology = deleteParallelGroupStep(
       {
         steps: this.state.steps,
@@ -2328,6 +2354,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       },
       index
     );
+    if (this.isExecutionActive) {
+      assertStartedStepPositionsPreserved(
+        previousSteps,
+        nextTopology.steps,
+        "delete"
+      );
+    }
     this.state.steps = nextTopology.steps;
     this.state.parallelGroups = nextTopology.parallelGroups;
     this.workflowFile = this.workflowFile
@@ -2406,24 +2439,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newPendingOrder: number[],
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<void> {
-    // While a step is in flight (and not in a pending rewind, where the whole
-    // suffix — including slice position 0 — is reorderable), the running step is
-    // pending-slice position 0 and must stay first so the executor's currentIndex
-    // keeps pointing at it. Only the tail after it may be reordered. PAUSED has
-    // no in-flight step, so its whole pending slice is reorderable.
     if (
       this.hasInFlightStep &&
       !this.state.pendingRewind &&
       newPendingOrder[0] !== 0
     ) {
-      throw new Error(
-        "Cannot move the currently executing step while the workflow is running"
-      );
+      const currentStep = this.state.steps[this.state.currentIndex];
+      assertStepMutable(currentStep, "reorder");
+      // Legacy in-memory tests/files may advance the execution head before
+      // the claim marker is reflected in the queue object.
+      if (!hasStarted(currentStep)) {
+        throw new Error(
+          "Cannot reorder the currently executing step while the workflow is running"
+        );
+      }
     }
     // Serialize with the executor's own working-file writes (parity with
     // insert/delete) so a mid-run reorder cannot race a step-completion write.
     await this.workingFileManager.runInQueue(async () => {
       const currentIndex = this.state.currentIndex;
+      const previousSteps = this.state.steps;
       const doneResults = this.state.results.slice(0, currentIndex);
       const pendingPrompts = this.state.steps.slice(currentIndex);
       const pendingResults = this.state.results.slice(currentIndex);
@@ -2436,6 +2471,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         newPendingOrder,
         pendingGroups,
         this.hasInFlightStep
+      );
+      assertStartedStepPositionsPreserved(
+        previousSteps,
+        nextTopology.steps,
+        "reorder"
       );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {
@@ -2636,13 +2676,25 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // it entirely rather than treating the boundary as a locked running step.
     if (this.state.pendingRewind) return;
     if (!this.isExecutionActive) return;
-    if (index < this.state.currentIndex) {
-      throw new Error(
-        `Cannot ${operation} a completed step while the workflow is running`
-      );
-    }
-    if (index === this.state.currentIndex && this.hasInFlightStep) {
-      throw new Error(`Cannot ${operation} the currently executing step`);
+    const step = this.state.steps[index];
+    assertStepMutable(
+      step,
+      operation,
+      index < this.state.currentIndex ? "completedPrefix" : undefined
+    );
+    if (
+      index < this.state.currentIndex ||
+      (index === this.state.currentIndex && this.hasInFlightStep)
+    ) {
+      // Legacy working files may predate per-step claim metadata. Keep the
+      // execution-head boundary as a compatibility backstop until they claim.
+      if (!hasStarted(step)) {
+        throw new Error(
+          index < this.state.currentIndex
+            ? `Cannot ${operation} a completed step while the workflow is running`
+            : `Cannot ${operation} the currently executing step`
+        );
+      }
     }
   }
 
