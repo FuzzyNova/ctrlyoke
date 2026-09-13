@@ -8,10 +8,10 @@ import {
   CtrlYokeMCPServer,
   getMaxQueueSize,
   MAX_GLOBAL_STATUS_RESULTS,
-  initializeMcpStorage,
   parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
+import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_CLAIM_PATHS_TOOL_NAME,
@@ -68,16 +68,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     mcpStateRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-mcp-test-state-")
     );
-    try {
-      await initializeMcpStorage(mcpStateRoot);
-    } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !error.message.includes('already frozen as "user"')
-      ) {
-        throw error;
-      }
-    }
+    await ensureMcpStorageInitialized(mcpStateRoot);
     if (!isRunHistoryLocationInitialized()) {
       initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
     }

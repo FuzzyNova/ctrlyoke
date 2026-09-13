@@ -7,7 +7,8 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
+import { CtrlYokeMCPServer } from "../../mcp-server";
+import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
@@ -658,7 +659,7 @@ suite("WebviewSettingsSync", () => {
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
       const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
       const workspaceRoot = tempDir("capabilities-contract");
-      await initializeMcpStorage(workspaceRoot);
+      await ensureMcpStorageInitialized(workspaceRoot);
       const workflowKey =
         "capabilities-contract-2026-01-01T00-00-00" as WorkflowKey;
       const runRef = WorkflowPaths.formatRunRef(Date.now());

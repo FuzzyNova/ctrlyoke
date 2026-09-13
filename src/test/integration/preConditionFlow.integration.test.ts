@@ -45,6 +45,24 @@ const SHARED_BUDGET_GATE_SCRIPT = "pre-shared-budget.js";
 const WRITE_MARKER = `require('fs').writeFileSync(require('path').join(__dirname, '${MARKER_FILE}'), 'ran');`;
 const APPEND_MARKER = `const fs = require('fs'); const p = require('path').join(__dirname, '${MARKER_FILE}'); const before = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').length : 0; fs.appendFileSync(p, 'x');`;
 
+/**
+ * Budget for a gate script that is supposed to *finish*, and the hang used by
+ * the one that is supposed to time out.
+ *
+ * Both tests below turn on a spawned `node` process starting and exiting inside
+ * the gate timeout. 500ms was comfortable while the suite ran on its own; it is
+ * not now that `npm test` runs three suites at once across six extension hosts
+ * and a pool of Vitest workers (`scripts/run-test-suites.mjs`), where process
+ * startup alone can eat most of it. The tell when it loses that race is not a
+ * timeout but a bare assertion failure — the retry budget goes on gate
+ * timeouts, the prompt never runs, and `sentPrompts` comes back empty.
+ *
+ * A generous timeout costs wall clock only on the attempts that are *meant* to
+ * time out, which is what makes the passing path affordable to over-fund.
+ */
+const GATE_TIMEOUT_MS = 2000;
+const GATE_HANG_MS = 15000;
+
 function createSimplePromptPreparer(): CliPromptPreparer {
   const createSections = (prompt: string): PromptSections => ({
     skillContent: null,
@@ -96,14 +114,15 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     await fs.writeFile(path.join(workspace, ERROR_SCRIPT), "not executable\n");
     await fs.writeFile(
       path.join(workspace, RETRY_GATE_SCRIPT),
-      // The hang must outlast the gate timeout by a wide margin: the retry
-      // attempt has to spawn a real `node` process and exit inside that same
-      // timeout, and process startup alone can cost >100ms on a loaded machine.
-      `${APPEND_MARKER}\nif (before === 0) setTimeout(() => {}, 3000);\n`
+      // The hang must outlast GATE_TIMEOUT_MS by a wide margin, because the
+      // attempt that is meant to *pass* has to spawn a real `node` process and
+      // exit inside that same budget. It is never actually waited out — the
+      // gate kills the child at the timeout — so a large value costs nothing.
+      `${APPEND_MARKER}\nif (before === 0) setTimeout(() => {}, ${GATE_HANG_MS});\n`
     );
     await fs.writeFile(
       path.join(workspace, SHARED_BUDGET_GATE_SCRIPT),
-      `${APPEND_MARKER}\nif (before === 1) setTimeout(() => {}, 2000);\n`
+      `${APPEND_MARKER}\nif (before === 1) setTimeout(() => {}, ${GATE_HANG_MS});\n`
     );
   });
 
@@ -360,7 +379,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       await writeWorkflow({
         preCondition: {
           script: RETRY_GATE_SCRIPT,
-          timeout: 500,
+          timeout: GATE_TIMEOUT_MS,
         },
         errorBehavior: { onError: "retry", maxRetries: 1 },
       })
@@ -411,7 +430,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       await writeWorkflow({
         preCondition: {
           script: SHARED_BUDGET_GATE_SCRIPT,
-          timeout: 500,
+          timeout: GATE_TIMEOUT_MS,
         },
         errorBehavior: { onError: "retry", maxRetries: 1 },
       })
