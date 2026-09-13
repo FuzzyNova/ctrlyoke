@@ -20,7 +20,27 @@ const {
 
 // Supported harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
-const FORWARD_TIMEOUT_MS = 200;
+const DEFAULT_FORWARD_TIMEOUT_MS = 200;
+
+/**
+ * The forward budget, overridable through the environment.
+ *
+ * 200 ms is the right production contract but it is not a safe assumption for a
+ * *test* whose "user command" is a cold `node -e` start: that alone can exceed
+ * 200 ms on a loaded Windows machine, which made the wrapper tests pass on an
+ * idle box and fail whenever the rest of the suite was running beside them.
+ * Tests raise this so they are asserting the forwarding behaviour rather than
+ * the host's process-spawn latency.
+ */
+const FORWARD_TIMEOUT_MS = (() => {
+  const override = Number.parseInt(
+    process.env.CTRLYOKE_STATUSLINE_FORWARD_TIMEOUT_MS ?? "",
+    10
+  );
+  return Number.isFinite(override) && override > 0
+    ? override
+    : DEFAULT_FORWARD_TIMEOUT_MS;
+})();
 const ANSI_RESET = "\u001b[0m";
 const DEFAULT_PERCENT_DIRECTION = "used";
 
@@ -272,7 +292,7 @@ function writeSnapshotAtomic(directory, filePrefix, token, payload, writtenAt) {
  * Forwarding is best-effort. Captured stdout is returned even when the command
  * exits unsuccessfully; spawn, write, and timeout failures resolve with
  * whatever stdout was available instead of rejecting. The wrappers pass the
- * shared FORWARD_TIMEOUT_MS (200 ms) by default.
+ * shared FORWARD_TIMEOUT_MS (200 ms unless overridden) by default.
  */
 function forwardToCommand(command, inputBytes, timeoutMs = FORWARD_TIMEOUT_MS) {
   if (typeof command !== "string" || command.trim().length === 0) {

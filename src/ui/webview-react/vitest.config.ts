@@ -17,6 +17,20 @@ const aliases = {
   "@icons": path.resolve(__dirname, "../icons"),
 };
 
+/**
+ * Vitest already runs test files in parallel; what it cannot know is that
+ * `npm test` runs this suite *alongside* the extension-host suite, which is
+ * itself several VS Code instances. Left at the default (a worker per core)
+ * both suites would claim the whole machine and then fight over it, so
+ * `scripts/run-test-suites.mjs` -- the one place that knows the whole core
+ * budget -- hands this suite its share. Unset means "run this suite alone",
+ * which is exactly right for `npm run test:ui`.
+ */
+const uiWorkers = Number.parseInt(
+  process.env.CTRLYOKE_UI_TEST_WORKERS ?? "",
+  10
+);
+
 export default defineConfig({
   plugins: [react()],
 
@@ -44,6 +58,10 @@ export default defineConfig({
     // survive load; a real hang still fails, just later.
     testTimeout: 20000,
     hookTimeout: 20000,
+
+    ...(Number.isFinite(uiWorkers) && uiWorkers > 0
+      ? { maxWorkers: uiWorkers }
+      : {}),
 
     include: ["./test/**/*.test.{ts,tsx}"],
     coverage: {

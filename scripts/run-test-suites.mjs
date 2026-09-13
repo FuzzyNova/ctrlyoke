@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runs every `npm test` suite and ends the run with one combined summary.
+ * Runs every `npm test` suite -- concurrently -- and ends with one summary.
  *
  * Two things used to make a single `npm test` run unreadable, and working
  * around either one cost a second full run of a ~6 minute suite. The suites
@@ -11,22 +11,40 @@
  * with no combined verdict -- so tailing the output only ever told you about
  * the *last* suite, and the usual next move was to re-run and grep.
  *
- * So: every suite runs (pass `--bail` to stop at the first failure), and the
- * run always ends with a fixed-width block anchored on `TEST SUMMARY:`, giving
- * each suite's verdict, its counts, and the name of every failing test. Tail
- * ~40 lines or grep that anchor and one run is enough.
+ * So: every suite runs, and the run always ends with a fixed-width block
+ * anchored on `TEST SUMMARY:`, giving each suite's verdict, its counts, and the
+ * name of every failing test. Tail ~40 lines or grep that anchor and one run is
+ * enough.
  *
- * Suite output is streamed through untouched as it arrives, so nothing is
- * hidden or buffered up to the end; the capture exists only to build the
- * summary. Counts and failing names are parsed best-effort -- the *verdict* is
- * always the child's exit code, so a reporter changing its wording can cost
- * detail in the summary but can never turn a failure into a pass.
+ * ## Parallelism
+ *
+ * The three suites are independent once the TypeScript is compiled, so they run
+ * at the same time instead of end to end, and each one is told how much of the
+ * machine it may use (`planParallelism`). Two things make that safe:
+ *
+ * - `compile-tests` runs *first*, on its own. Both the extension suite and the
+ *   packaging suite read `out/`, so compiling inside one of them while the
+ *   other reads it is a race. It is hoisted here and the suites below use the
+ *   already-compiled entry points.
+ * - Suite output is buffered and flushed as one labelled block when that suite
+ *   finishes. Nothing is hidden -- it just arrives per suite rather than live,
+ *   because three reporters writing to one terminal at once is unreadable.
+ *   `--serial` restores the old sequential, live-streamed behaviour.
+ *
+ * Counts and failing names are parsed best-effort -- the *verdict* is always
+ * the child's exit code, so a reporter changing its wording can cost detail in
+ * the summary but can never turn a failure into a pass.
  *
  * Usage:
- *   node scripts/run-test-suites.mjs [--bail]
+ *   node scripts/run-test-suites.mjs [--serial] [--bail]
+ *
+ *   --serial  one suite at a time, streamed live (what `--bail` needs, and the
+ *             mode to use when a suite's own output is what you are reading)
+ *   --bail    stop at the first failing suite; implies --serial, because a
+ *             suite that is already running cannot be "not run"
  */
-
 import { spawn } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,16 +81,33 @@ function lastMatch(lines, pattern) {
   return undefined;
 }
 
-/** Mocha's spec reporter epilogue: "4050 passing (5m)" / "2 failing". */
+/**
+ * Mocha's spec reporter epilogue: "4050 passing (5m)" / "2 failing".
+ *
+ * Summed across every epilogue in the output, not read off the last one: the
+ * extension suite splits itself across several extension hosts, so a sharded
+ * run prints one epilogue per shard and reading only the last would report a
+ * fraction of the tests -- and, worse, would miss an earlier shard's failures.
+ */
 export function describeMochaRun(lines) {
-  const passing = lastMatch(lines, /^\s*(\d+) passing\b/);
-  if (!passing) return undefined;
-  const failing = lastMatch(lines, /^\s*(\d+) failing\b/);
-  const pending = lastMatch(lines, /^\s*(\d+) pending\b/);
-  const parts = [`${passing[1]} passing`];
-  if (pending) parts.push(`${pending[1]} pending`);
-  parts.push(`${failing ? failing[1] : 0} failing`);
+  const passing = sumMatches(lines, /^\s*(\d+) passing\b/);
+  if (passing === undefined) return undefined;
+  const failing = sumMatches(lines, /^\s*(\d+) failing\b/);
+  const pending = sumMatches(lines, /^\s*(\d+) pending\b/);
+  const parts = [`${passing} passing`];
+  if (pending !== undefined) parts.push(`${pending} pending`);
+  parts.push(`${failing ?? 0} failing`);
   return parts.join(", ");
+}
+
+/** Total of every capture-group-1 match, or undefined if the pattern never hit. */
+function sumMatches(lines, pattern) {
+  let total;
+  for (const line of lines) {
+    const match = pattern.exec(line);
+    if (match) total = (total ?? 0) + Number(match[1]);
+  }
+  return total;
 }
 
 /** Vitest's epilogue: "Test Files  232 passed (232)" / "Tests  2649 passed (2649)". */
@@ -100,24 +135,60 @@ export function describeNodeTestRun(lines) {
  * Mocha numbers each failure and puts the test title on the next line, ending
  * in a colon: "  1) WorkflowExecutor" / "       resumes a run:".
  *
- * Only the epilogue list is read. The spec reporter names every failure twice
+ * Only the epilogue lists are read. The spec reporter names every failure twice
  * -- once inline as it walks the tree ("1) resumes a run", the bare title) and
  * once in the epilogue (suite and title, on separate lines) -- and the two
  * forms are different strings, so deduping cannot merge them. Reading both
  * would report one broken test as two.
+ *
+ * "lists" plural: a sharded extension run concatenates one whole spec report
+ * per shard, so each `N failing` line opens its own epilogue region that runs
+ * until the next shard's report begins.
  */
 export function mochaFailures(lines) {
-  const epilogue = lines.findLastIndex((line) =>
-    /^\s*\d+ failing\b/.test(line)
-  );
   const found = [];
-  // -1 (no epilogue, e.g. the run died early) scans everything, which is the
-  // right fallback: inline markers are all there is to go on.
-  for (let index = epilogue + 1; index < lines.length; index++) {
+  let sawEpilogue = false;
+
+  for (const [index, line] of lines.entries()) {
+    const failing = /^\s*(\d+) failing\b/.exec(line);
+    if (!failing) continue;
+    sawEpilogue = true;
+    // The count on the `N failing` line is what bounds the list: without it,
+    // scanning to the next epilogue would swallow the following shard's tree
+    // walk and report its inline markers as extra failures.
+    found.push(...readEpilogueEntries(lines, index + 1, Number(failing[1])));
+  }
+
+  // No epilogue at all (the run died before printing one) leaves the inline
+  // markers as the only thing to go on.
+  return sawEpilogue ? found : inlineMochaFailures(lines, 0, lines.length);
+}
+
+/** The `wanted` numbered entries Mocha lists after its `N failing` line. */
+function readEpilogueEntries(lines, from, wanted) {
+  const found = [];
+  for (
+    let index = from;
+    index < lines.length && found.length < wanted;
+    index++
+  ) {
+    // A `N passing` line means the next shard's report has begun, so this
+    // shard's list was shorter than it claimed -- stop rather than read on.
+    if (/^\s*\d+ passing\b/.test(lines[index])) break;
     if (!/^\s*\d+\)\s+\S/.test(lines[index])) continue;
     const head = lines[index].trim().replace(/^\d+\)\s*/, "");
     const next = (lines[index + 1] ?? "").trim();
     found.push(next.endsWith(":") ? `${head} > ${next.slice(0, -1)}` : head);
+  }
+  return found;
+}
+
+function inlineMochaFailures(lines, from, to) {
+  const found = [];
+  for (let index = from; index < to; index++) {
+    if (/^\s*\d+\)\s+\S/.test(lines[index])) {
+      found.push(lines[index].trim().replace(/^\d+\)\s*/, ""));
+    }
   }
   return found;
 }
@@ -154,22 +225,49 @@ export function nodeTestFailures(lines) {
 }
 
 /**
- * The suites `npm test` covers, in the order they run. Each one stays a plain
- * npm script so it can still be run on its own -- the summary names that
- * script for every failure, which is the whole point of keeping them separate.
+ * How much of the machine each suite may use.
+ *
+ * The three suites run at once, so their internal parallelism has to be
+ * budgeted together -- left to their own defaults, Vitest alone would claim
+ * every core and then contend with six extension hosts for them.
+ *
+ * A shard of the extension suite is one whole VS Code instance running its
+ * files in order, so it is worth about one core, and the cap is there because
+ * each one pays a few seconds of VS Code startup and extension activation
+ * before its first test -- past six shards that fixed cost outgrows the
+ * shrinking slice of test files it buys.
+ */
+export function planParallelism(cpus) {
+  const extensionShards = Math.min(6, Math.max(1, Math.floor(cpus / 4)));
+  // Whatever is left, holding back a core for this orchestrator and one for the
+  // short packaging suite.
+  const uiWorkers = Math.max(2, cpus - extensionShards - 2);
+  return { extensionShards, uiWorkers };
+}
+
+/**
+ * The suites `npm test` covers. Each one stays a plain npm script so it can
+ * still be run on its own -- `rerun` is the script the summary points a reader
+ * at, which for the extension suite is the compiling wrapper rather than the
+ * bare runner this file invokes once `compile-tests` has already run.
  */
 export const TEST_SUITES = [
   {
     key: "extension",
-    script: "test:extension",
+    script: "test:extension:run",
+    rerun: "test:extension",
     describe: describeMochaRun,
     failures: mochaFailures,
+    env: (plan) => ({
+      CTRLYOKE_TEST_SHARD_COUNT: String(plan.extensionShards),
+    }),
   },
   {
     key: "ui",
     script: "test:ui",
     describe: describeVitestRun,
     failures: vitestFailures,
+    env: (plan) => ({ CTRLYOKE_UI_TEST_WORKERS: String(plan.uiWorkers) }),
   },
   {
     key: "packaging",
@@ -178,6 +276,13 @@ export const TEST_SUITES = [
     failures: nodeTestFailures,
   },
 ];
+
+/**
+ * Compiled once, up front, instead of inside `test:extension`. Both the
+ * extension suite and the packaging suite read `out/`, so a compile running
+ * concurrently with either one is a race.
+ */
+export const PREPARE_SCRIPT = "compile-tests";
 
 export function formatDuration(ms) {
   if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -251,9 +356,11 @@ export function renderSummary(results) {
  */
 function createCapture() {
   const lines = [];
+  const chunks = [];
   let partial = "";
   return {
     push(text) {
+      chunks.push(text);
       partial += text;
       const parts = partial.split(/\r?\n/);
       partial = parts.pop() ?? "";
@@ -269,72 +376,175 @@ function createCapture() {
       }
       return lines;
     },
+    /** The bytes exactly as they arrived, for replaying a buffered suite. */
+    raw: () => chunks.join(""),
   };
 }
 
-function runSuite(suite) {
-  return new Promise((resolveSuite) => {
+/**
+ * Spawns one npm script, capturing its output for the summary.
+ *
+ * `live` decides where the bytes go on the way past: straight to the terminal
+ * when suites run one at a time, or held in the capture and flushed as one
+ * block by the caller when they run together. Either way nothing is discarded.
+ */
+function runScript({ script, env, live }) {
+  return new Promise((resolveScript) => {
     const startedAt = Date.now();
     const capture = createCapture();
-    const child = spawn("npm", ["run", suite.script], {
+    const child = spawn("npm", ["run", script], {
       cwd: ROOT_DIR,
-      // Reporters drop colour when they see a pipe. Since the pipe is ours and
-      // the raw bytes go straight back out, hand the colour back whenever the
-      // real terminal can show it -- parsing strips it either way.
-      env: process.stdout.isTTY
-        ? { ...process.env, FORCE_COLOR: "1" }
-        : process.env,
+      env: {
+        ...process.env,
+        // Reporters drop colour when they see a pipe. Since the pipe is ours
+        // and the raw bytes go straight back out, hand the colour back whenever
+        // the real terminal can show it -- parsing strips it either way.
+        ...(process.stdout.isTTY ? { FORCE_COLOR: "1" } : {}),
+        ...env,
+      },
       shell: IS_WINDOWS,
       stdio: ["inherit", "pipe", "pipe"],
     });
 
-    const tee = (chunk, stream) => {
-      stream.write(chunk);
-      capture.push(chunk.toString());
+    const consume = (chunk, stream) => {
+      const text = chunk.toString();
+      if (live) stream.write(chunk);
+      capture.push(text);
     };
-    child.stdout.on("data", (chunk) => tee(chunk, process.stdout));
-    child.stderr.on("data", (chunk) => tee(chunk, process.stderr));
+    child.stdout.on("data", (chunk) => consume(chunk, process.stdout));
+    child.stderr.on("data", (chunk) => consume(chunk, process.stderr));
 
-    const settle = (code) => {
-      const lines = capture.finish();
-      const ok = code === 0;
-      resolveSuite({
-        key: suite.key,
-        script: suite.script,
-        status: ok ? SUITE_STATUS.PASS : SUITE_STATUS.FAIL,
-        detail: suite.describe(lines),
-        failures: ok ? [] : suite.failures(lines),
+    const settle = (code) =>
+      resolveScript({
+        code,
+        lines: capture.finish(),
+        raw: capture.raw(),
         durationMs: Date.now() - startedAt,
       });
-    };
 
     child.on("error", (error) => {
-      process.stderr.write(`\nFailed to start ${suite.script}: ${error}\n`);
+      process.stderr.write(`\nFailed to start ${script}: ${error}\n`);
       settle(1);
     });
     child.on("close", (code) => settle(code ?? 1));
   });
 }
 
-async function main() {
-  const bail = process.argv.includes("--bail");
-  const results = [];
+async function runSuite(suite, plan, live) {
+  const run = await runScript({
+    script: suite.script,
+    env: suite.env?.(plan),
+    live,
+  });
+  const ok = run.code === 0;
+  return {
+    key: suite.key,
+    script: suite.rerun ?? suite.script,
+    status: ok ? SUITE_STATUS.PASS : SUITE_STATUS.FAIL,
+    detail: suite.describe(run.lines),
+    failures: ok ? [] : suite.failures(run.lines),
+    durationMs: run.durationMs,
+    output: live ? undefined : run.raw,
+  };
+}
 
+function skipped(suite) {
+  return {
+    key: suite.key,
+    script: suite.rerun ?? suite.script,
+    status: SUITE_STATUS.SKIP,
+    failures: [],
+    durationMs: 0,
+  };
+}
+
+function flushSuiteOutput(result) {
+  if (result.output === undefined) return;
+  const banner = `${RULE}\n ${result.key} suite output\n${RULE}\n`;
+  process.stdout.write(`\n${banner}${result.output}`);
+}
+
+/** A line every half minute, so a long silent parallel run still shows life. */
+function startProgressTicker(pending) {
+  const startedAt = Date.now();
+  const timer = setInterval(() => {
+    if (pending.size === 0) return;
+    process.stdout.write(
+      `  ... ${formatDuration(Date.now() - startedAt)} elapsed, ` +
+        `still running: ${[...pending].join(", ")}\n`
+    );
+  }, 30_000);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
+async function runSuitesSerially(bail, plan) {
+  const results = [];
   for (const suite of TEST_SUITES) {
-    const result = await runSuite(suite);
+    const result = await runSuite(suite, plan, true);
     results.push(result);
     if (bail && result.status === SUITE_STATUS.FAIL) break;
   }
+  return [...results, ...TEST_SUITES.slice(results.length).map(skipped)];
+}
 
-  for (const suite of TEST_SUITES.slice(results.length)) {
-    results.push({
-      key: suite.key,
-      script: suite.script,
-      status: SUITE_STATUS.SKIP,
-      failures: [],
-      durationMs: 0,
-    });
+async function runSuitesConcurrently(plan) {
+  const pending = new Set(TEST_SUITES.map((suite) => suite.key));
+  const stopTicker = startProgressTicker(pending);
+  try {
+    return await Promise.all(
+      TEST_SUITES.map(async (suite) => {
+        const result = await runSuite(suite, plan, false);
+        pending.delete(suite.key);
+        // Flush as each suite lands rather than all at the end, so the first
+        // finisher's output is readable while the others are still going.
+        flushSuiteOutput(result);
+        return result;
+      })
+    );
+  } finally {
+    stopTicker();
   }
+}
+
+async function main() {
+  const bail = process.argv.includes("--bail");
+  // `--bail` means "the later suites did not run", which concurrency cannot
+  // honour -- by the time one suite fails the others are already going.
+  const serial = bail || process.argv.includes("--serial");
+  const plan = planParallelism(availableParallelism());
+
+  process.stdout.write(`\n${RULE}\n ${PREPARE_SCRIPT}\n${RULE}\n`);
+  const prepared = await runScript({ script: PREPARE_SCRIPT, live: true });
+  if (prepared.code !== 0) {
+    process.stdout.write(
+      renderSummary([
+        {
+          key: PREPARE_SCRIPT,
+          script: PREPARE_SCRIPT,
+          status: SUITE_STATUS.FAIL,
+          detail: "compile failed -- no suite ran",
+          failures: [],
+          durationMs: prepared.durationMs,
+        },
+        ...TEST_SUITES.map(skipped),
+      ])
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  process.stdout.write(
+    serial
+      ? `\nRunning ${TEST_SUITES.length} suites one at a time.\n`
+      : `\nRunning ${TEST_SUITES.length} suites together ` +
+          `(${plan.extensionShards} extension shards, ` +
+          `${plan.uiWorkers} UI workers).\n`
+  );
+
+  const results = serial
+    ? await runSuitesSerially(bail, plan)
+    : await runSuitesConcurrently(plan);
 
   process.stdout.write(renderSummary(results));
   process.exitCode = results.every(

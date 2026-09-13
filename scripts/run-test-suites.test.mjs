@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  PREPARE_SCRIPT,
   SUITE_STATUS,
   SUMMARY_ANCHOR,
   TEST_SUITES,
@@ -11,6 +12,7 @@ import {
   formatDuration,
   mochaFailures,
   nodeTestFailures,
+  planParallelism,
   renderSummary,
   stripAnsi,
   vitestFailures,
@@ -153,6 +155,27 @@ describe("test suite failure extraction", () => {
     ]);
   });
 
+  // Each shard prints a full spec report, so a later shard's tree walk sits
+  // between one epilogue and the next. Scanning to the end of the output from
+  // the first epilogue would pick those inline markers up as extra failures.
+  it("reads each shard's Mocha epilogue without spilling into the next", () => {
+    assert.deepEqual(
+      mochaFailures([
+        ...MOCHA_RUN,
+        "  WorkflowExecutor",
+        "    1) resumes a run",
+        "",
+        "  5 passing (9ms)",
+        "  1 failing",
+        "",
+        "  1) WorkflowExecutor",
+        "       resumes a run:",
+        "     Error: boom",
+      ]),
+      ["PromptQueue > resumes a paused run", "WorkflowExecutor > resumes a run"]
+    );
+  });
+
   it("reads node:test's not-ok lines", () => {
     assert.deepEqual(
       nodeTestFailures(["ok 1 - fine", "not ok 2 - rejects a stale tag"]),
@@ -267,11 +290,61 @@ describe("test suite wiring", () => {
       with: { type: "json" },
     });
 
+    assert.ok(
+      packageJson.scripts[PREPARE_SCRIPT],
+      `package.json has no "${PREPARE_SCRIPT}" script`
+    );
     for (const suite of TEST_SUITES) {
-      assert.ok(
+      for (const script of [suite.script, suite.rerun ?? suite.script]) {
+        assert.ok(
+          packageJson.scripts[script],
+          `package.json has no "${script}" script`
+        );
+      }
+    }
+  });
+
+  // The suites run concurrently, so the script this file spawns must not
+  // compile -- the packaging suite reads `out/` at the same time. Compiling is
+  // hoisted into PREPARE_SCRIPT, and the standalone `rerun` script is what
+  // still chains a compile for someone running that suite by hand.
+  it("spawns suite scripts that do not compile, and reruns that do", async () => {
+    const { default: packageJson } = await import("../package.json", {
+      with: { type: "json" },
+    });
+
+    for (const suite of TEST_SUITES) {
+      assert.doesNotMatch(
         packageJson.scripts[suite.script],
-        `package.json has no "${suite.script}" script`
+        /compile/,
+        `${suite.script} compiles, which races the concurrently running suites`
       );
+    }
+    assert.match(
+      packageJson.scripts[
+        TEST_SUITES.find((suite) => suite.key === "extension").rerun
+      ],
+      new RegExp(PREPARE_SCRIPT)
+    );
+  });
+
+  it("gives every core to a suite without oversubscribing the machine", () => {
+    for (const cpus of [1, 2, 4, 8, 12, 16, 24, 64]) {
+      const { extensionShards, uiWorkers } = planParallelism(cpus);
+      assert.ok(
+        extensionShards >= 1 && extensionShards <= 6,
+        `${cpus} cores produced ${extensionShards} extension shards`
+      );
+      assert.ok(uiWorkers >= 2, `${cpus} cores produced ${uiWorkers} workers`);
+      // A small machine is allowed to oversubscribe -- both suites need at
+      // least a worker each -- but a real one must not hand out more than it
+      // has.
+      if (cpus >= 8) {
+        assert.ok(
+          extensionShards + uiWorkers <= cpus,
+          `${cpus} cores handed out ${extensionShards + uiWorkers}`
+        );
+      }
     }
   });
 

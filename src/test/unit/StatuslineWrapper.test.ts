@@ -69,6 +69,17 @@ function nodeCommand(code: string): string {
   return `"${process.execPath}" -e "${code}"`;
 }
 
+/**
+ * These cases hand the wrapper a `node -e` one-liner as the "user's" statusline
+ * command, and a cold Node start on a loaded Windows machine comfortably
+ * outruns the wrapper's 200 ms production forward budget. What is under test is
+ * the forwarding behaviour, not the host's process-spawn latency, so raise the
+ * budget well clear of it, but still under Mocha's 10s case timeout -- the 200 ms
+ * default itself is asserted separately by `forwardToCommand`'s own timeout
+ * cases, which pass the budget explicitly.
+ */
+const FORWARD_TIMEOUT_FOR_TESTS = "5000";
+
 async function runWrapper(
   script: string,
   input: string,
@@ -76,7 +87,11 @@ async function runWrapper(
 ): Promise<{ code: number | null; stdout: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [script], {
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        CTRLYOKE_STATUSLINE_FORWARD_TIMEOUT_MS: FORWARD_TIMEOUT_FOR_TESTS,
+        ...env,
+      },
       stdio: ["pipe", "pipe", "ignore"],
       windowsHide: true,
     });
@@ -179,15 +194,33 @@ suite("Shared statusline wrappers", () => {
   const originalUserProfile = process.env.USERPROFILE;
   const originalMarker = process.env.CTRLYOKE_STATUSLINE_TEST_MARKER;
 
+  /**
+   * Removes a temp directory without letting cleanup fail the run.
+   *
+   * These cases repoint `HOME`/`USERPROFILE` at a temp directory, and the
+   * extension probes installed harness CLIs in the background while they do --
+   * `opencode` creates and *holds open* `.local/share/opencode/opencode.db`
+   * under whatever home it is given, which on Windows makes `unlink` fail with
+   * EBUSY. Retry past the handle closing, then let it go: a leftover temp
+   * directory is not worth failing a passing test over.
+   */
+  async function discardDirectory(directory: string): Promise<void> {
+    try {
+      await fs.rm(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 250,
+      });
+    } catch (error) {
+      console.warn(`Could not remove ${directory}: ${String(error)}`);
+    }
+  }
+
   teardown(async () => {
-    if (tempDirectory) {
-      await fs.rm(tempDirectory, { recursive: true, force: true });
-      tempDirectory = "";
-    }
-    if (tempHome) {
-      await fs.rm(tempHome, { recursive: true, force: true });
-      tempHome = "";
-    }
+    // Restore the process-wide environment *first*. A throwing removal used to
+    // skip this, leaving every later test in the run with HOME pointed at a
+    // directory that no longer exists.
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
@@ -197,6 +230,11 @@ suite("Shared statusline wrappers", () => {
     } else {
       process.env.CTRLYOKE_STATUSLINE_TEST_MARKER = originalMarker;
     }
+
+    const stale = [tempDirectory, tempHome].filter(Boolean);
+    tempDirectory = "";
+    tempHome = "";
+    await Promise.all(stale.map(discardDirectory));
   });
 
   async function createHome(): Promise<string> {
