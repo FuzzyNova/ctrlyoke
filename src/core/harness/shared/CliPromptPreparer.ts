@@ -29,7 +29,7 @@ import {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
-import { hasCtrlYokeQueueTools } from "./CliProviderUtils";
+import { ctrlYokeToolFamilies } from "./CliProviderUtils";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 import { substituteConditionOutputRefs } from "../../ConditionOutputRefs";
 import {
@@ -145,7 +145,7 @@ export class CliPromptPreparer {
     const mcpAvailabilityDiagnostics =
       resolvedProperties?.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED &&
       resolvedProperties !== undefined &&
-      hasCtrlYokeQueueTools(resolvedProperties)
+      ctrlYokeToolFamilies(resolvedProperties).workflow
         ? [
             this.createDiagnostic(
               PROMPT_DIAGNOSTIC_CODES.MCP_AVAILABILITY_DISABLED,

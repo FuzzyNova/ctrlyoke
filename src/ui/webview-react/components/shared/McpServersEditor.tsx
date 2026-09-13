@@ -5,10 +5,14 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
+  MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_LIST_HARNESSES_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_POST_NOTE_TOOL_NAME,
+  MCP_READ_NOTES_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
@@ -38,55 +42,111 @@ interface ListedServer {
 }
 
 /**
+ * The two capability families the built-in ctrlyoke server delivers, tracking
+ * `MCP_WORKFLOW_TOOL_NAMES` and `MCP_COORDINATION_TOOL_NAMES`. Workflow tools
+ * read and mutate this workflow; coordination tools talk to the other agents
+ * sharing this execution root.
+ */
+export const CTRLYOKE_TOOL_GROUPS = {
+  WORKFLOW: "workflow",
+  COORDINATION: "coordination",
+} as const;
+
+export type CtrlYokeToolGroup =
+  (typeof CTRLYOKE_TOOL_GROUPS)[keyof typeof CTRLYOKE_TOOL_GROUPS];
+
+/** Rendered order and heading for each group's checkbox block. */
+const CTRLYOKE_TOOL_GROUP_LABELS: [CtrlYokeToolGroup, string][] = [
+  [CTRLYOKE_TOOL_GROUPS.WORKFLOW, "Workflow"],
+  [CTRLYOKE_TOOL_GROUPS.COORDINATION, "Coordination"],
+];
+
+/**
  * User-visible ctrlyoke MCP tools that can be selectively disabled. Must stay
- * exhaustive over `MCP_QUEUE_TOOL_NAMES` — a tool missing here has no off
- * switch in the UI, and the "N of M tools enabled" count silently under-reports.
- * `McpServersEditor.test.tsx` asserts the coverage.
+ * exhaustive over `MCP_WORKFLOW_TOOL_NAMES` and `MCP_COORDINATION_TOOL_NAMES` —
+ * a tool missing here has no off switch in the UI, and the "N of M tools
+ * enabled" count silently under-reports. `McpServersEditor.test.tsx` asserts
+ * the coverage. `submit_commit_message` is deliberately absent: it is attached
+ * only to ctrlyoke's own commit-message runs, never to an authored step.
  */
 export const CTRLYOKE_USER_TOOLS: {
   id: string;
   label: string;
   description: string;
+  group: CtrlYokeToolGroup;
 }[] = [
   {
     id: MCP_WORKFLOW_STATUS_TOOL_NAME,
     label: "Workflow status",
-    description: "Read this workflow's queue and execution state",
+    description: "Read this workflow's steps and execution state",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_APPEND_STEP_TOOL_NAME,
     label: "Append step",
     description: "Add prompts after the current step or at the end",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_LIST_HARNESSES_TOOL_NAME,
     label: "List harnesses",
     description: "List installed harnesses and their available models",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_READ_OUTPUT_TOOL_NAME,
     label: "Read output",
     description: "Read AI response text from completed steps",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_GLOBAL_STATUS_TOOL_NAME,
     label: "Global status",
     description: "List all workflows running in this workspace",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_EDIT_STEP_TOOL_NAME,
     label: "Edit step",
     description: "Change a not-yet-executed step's prompt or configuration",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_REMOVE_STEP_TOOL_NAME,
     label: "Remove step",
     description: "Delete a not-yet-executed step",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
   },
   {
     id: MCP_REORDER_STEPS_TOOL_NAME,
     label: "Reorder steps",
     description: "Change the order of the not-yet-executed steps",
+    group: CTRLYOKE_TOOL_GROUPS.WORKFLOW,
+  },
+  {
+    id: MCP_POST_NOTE_TOOL_NAME,
+    label: "Post note",
+    description:
+      "Post a note to the shared board for agents in this execution root",
+    group: CTRLYOKE_TOOL_GROUPS.COORDINATION,
+  },
+  {
+    id: MCP_READ_NOTES_TOOL_NAME,
+    label: "Read notes",
+    description: "Read notes other agents posted to the shared board",
+    group: CTRLYOKE_TOOL_GROUPS.COORDINATION,
+  },
+  {
+    id: MCP_CLAIM_PATHS_TOOL_NAME,
+    label: "Claim paths",
+    description: "Advisory claim on files this agent is about to edit",
+    group: CTRLYOKE_TOOL_GROUPS.COORDINATION,
+  },
+  {
+    id: MCP_RELEASE_PATHS_TOOL_NAME,
+    label: "Release paths",
+    description: "Release this agent's advisory file claims",
+    group: CTRLYOKE_TOOL_GROUPS.COORDINATION,
   },
 ];
 
@@ -379,46 +439,57 @@ function McpServersPanel({
               <span className="text-xxs text-description-fg">
                 {ctrlyokeEnabled && ctrlyokeDeniedTools.length > 0
                   ? `${CTRLYOKE_USER_TOOLS.length - ctrlyokeDeniedTools.length} of ${CTRLYOKE_USER_TOOLS.length} tools enabled`
-                  : "Dynamic queue extension"}
+                  : "Workflow control and agent coordination"}
               </span>
             </span>
           </button>
 
           {ctrlyokeEnabled && (
-            <div className="flex flex-col gap-0.5 border-t border-panel-border px-2 pb-1.5">
-              {CTRLYOKE_USER_TOOLS.map((tool) => {
-                const denied = ctrlyokeDeniedTools.includes(tool.id);
-                return (
-                  <button
-                    key={tool.id}
-                    type="button"
-                    onClick={
-                      readOnly
-                        ? undefined
-                        : () => onToggleCtrlYokeTool?.(tool.id)
-                    }
-                    disabled={readOnly}
-                    title={tool.description}
-                    className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors ${
-                      readOnly ? "cursor-default" : "hover:bg-toolbar-hover-bg"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!denied}
-                      readOnly
-                      className="h-3 w-3 flex-shrink-0 accent-focus-border pointer-events-none"
-                      tabIndex={-1}
-                    />
-                    <span className="text-xxs font-medium text-foreground">
-                      {tool.label}
-                    </span>
-                    <span className="ml-auto truncate font-mono text-xxs text-description-fg">
-                      {tool.id}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-1 border-t border-panel-border px-2 pb-1.5 pt-1">
+              {CTRLYOKE_TOOL_GROUP_LABELS.map(([group, groupLabel]) => (
+                <div key={group} className="flex flex-col gap-0.5">
+                  <div className="px-1 text-xxs font-semibold uppercase tracking-wide text-description-fg">
+                    {groupLabel}
+                  </div>
+                  {CTRLYOKE_USER_TOOLS.filter(
+                    (tool) => tool.group === group
+                  ).map((tool) => {
+                    const denied = ctrlyokeDeniedTools.includes(tool.id);
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={
+                          readOnly
+                            ? undefined
+                            : () => onToggleCtrlYokeTool?.(tool.id)
+                        }
+                        disabled={readOnly}
+                        title={tool.description}
+                        className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors ${
+                          readOnly
+                            ? "cursor-default"
+                            : "hover:bg-toolbar-hover-bg"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!denied}
+                          readOnly
+                          className="h-3 w-3 flex-shrink-0 accent-focus-border pointer-events-none"
+                          tabIndex={-1}
+                        />
+                        <span className="text-xxs font-medium text-foreground">
+                          {tool.label}
+                        </span>
+                        <span className="ml-auto truncate font-mono text-xxs text-description-fg">
+                          {tool.id}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </div>

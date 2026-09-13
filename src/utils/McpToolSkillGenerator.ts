@@ -1,6 +1,6 @@
 import {
   MCP_COORDINATION_TOOL_NAMES,
-  MCP_QUEUE_TOOL_NAMES,
+  MCP_WORKFLOW_TOOL_NAMES,
   MCP_TOOL_DEFINITIONS,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
@@ -169,14 +169,18 @@ export class McpToolSkillGenerator {
       skillName === MCP_SKILL_NAMES.COMMIT_MESSAGE
         ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
         : skillName === MCP_SKILL_NAMES.TOOLS
-          ? MCP_QUEUE_TOOL_NAMES
+          ? MCP_WORKFLOW_TOOL_NAMES
           : skillName === MCP_SKILL_NAMES.COORDINATION
             ? MCP_COORDINATION_TOOL_NAMES
             : undefined;
+    if (!toolNames) return undefined;
 
-    return toolNames
-      ? `${substituteStaticPathPlaceholders(staticContent, context).trimEnd()}\n\n${this.generateToolReference([...toolNames], context)}`
-      : undefined;
+    // A denied tool is never documented. Export passes no context, so a
+    // snapshot keeps the full listing alongside its placeholders.
+    const denied = new Set(context?.deniedTools ?? []);
+    const permitted = toolNames.filter((name) => !denied.has(name));
+
+    return `${substituteStaticPathPlaceholders(staticContent, context).trimEnd()}\n\n${this.generateToolReference(permitted, context)}`;
   }
 }
 

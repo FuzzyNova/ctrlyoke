@@ -429,8 +429,8 @@ structure instead:
   (`src/types/CtrlYokeTypes.ts:104-110`), matching what harnesses accept as deny
   patterns. Derived, it stays correct for every tool added later without anyone
   remembering anything.
-- **Rename the remaining list `MCP_QUEUE_TOOL_NAMES`** so it has exactly one job:
-  what the queue skill documents. Its current name invites precisely the
+- **Rename the remaining list `MCP_WORKFLOW_TOOL_NAMES`** so it has exactly one job:
+  what the workflow skill documents. Its current name invites precisely the
   "everything workflow-ish" reading that caused the overload.
 - **Drop `MCP_TOOL_SKILL_TOOL_NAMES`**, which is now a pure alias of that list;
   the generator can consume it directly.
@@ -634,9 +634,27 @@ document explaining how to call `append_step`/`edit_step`/`reorder_steps` throug
    `hasCtrlYokeServer` would have been true before the disable. Ungated attachment
    also wastes prompt budget on every step that never wanted queue tools.
 2. **Make the ban mode-independent** — check "does this member end up with
-   queue-mutating tools by _any_ delivery mechanism". The shared
-   `hasCtrlYokeQueueTools` predicate next to `hasCtrlYokeServer` keeps the
+   step-mutating tools by _any_ delivery mechanism". The shared
+   `ctrlYokeToolFamilies` predicate next to `hasCtrlYokeServer` keeps the
    preflight, the `ListTools` filter, and the skill selector from drifting apart.
+
+**Correction (2026-09-12): the ban was too broad to satisfy this decision's own
+table.** Both the preflight and the family predicate keyed on "does the ctrlyoke
+server appear in `mcpServers`" at all, and `throwIfParallelGroupPreflightFailed`
+makes any preflight issue fatal — so attaching the server to a group member
+aborted the group before `ListTools` could filter anything. Coordination tools
+ride on that same server, so the participant class this whole plan exists for
+(Decision 1's class 1, members of one `parallel:` group) could not reach the
+board at all under live MCP, while `mcpAvailability: "disabled"` mode delivered
+coordination correctly through the skill split. The ban now keys on
+`MCP_WORKFLOW_MUTATION_TOOL_NAMES` — the four step-mutating tools, shared with
+the server's `ListTools` filter so the two cannot drift — and
+`ctrlYokeToolFamilies` folds the ctrlyoke entry's `deniedTools`, so a member
+that denies those four passes preflight and keeps the board plus the read-only
+workflow tools. A member that keeps any of the four still fails exactly as
+before. See `PARALLEL_STEP_MUTABILITY_PLAN.md` for why the ban is still
+necessary at all: the mutation guards approximate "has started" as
+`index <= currentIndex`, which is wrong for every group member after the first.
 
 ### 9. Notes are untrusted content, and attestation is part of the framing
 
@@ -869,7 +887,7 @@ every queue tool, which genuinely act on one run.
   these names are workflow-referenced and must stay stable.
 - `src/utils/McpToolDefinitions.ts`: **the Decision 4 structural fix and tool
   definitions landed** — the queue skill/UI list is
-  `MCP_QUEUE_TOOL_NAMES`, the four board tools are
+  `MCP_WORKFLOW_TOOL_NAMES`, the four board tools are
   `MCP_COORDINATION_TOOL_NAMES`, and `MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES`
   derives every definition except the commit tool for
   `CommitMessageGenerator`'s `deniedTools`. The
@@ -902,10 +920,11 @@ family). **Both have landed** — that plan is fully implemented and now lives i
 The three below are specific to this plan's own subject matter, and each is a
 correctness fix on its own:
 
-1. **The disabled-mode preflight hole** (Decision 8) — landed 2026-09-11. A
-   shared `hasCtrlYokeQueueTools` predicate now gates the skill replacement and
-   applies the group ban regardless of whether queue tools arrive through MCP
-   or the built-in skill.
+1. **The disabled-mode preflight hole** (Decision 8) — landed 2026-09-11,
+   narrowed 2026-09-12. A shared `ctrlYokeToolFamilies` predicate gates the
+   skill replacement and applies the group ban regardless of whether the tools
+   arrive through MCP or the built-in skill, keying on the step-mutating subset
+   and folding the step's `deniedTools` (see the Decision 8 correction above).
 2. **Placeholder substitution in generated skills** (Decision 12) — landed
    2026-09-11. Execution-time expansion substitutes the run's literal paths and
    export-time snapshots retain placeholders.

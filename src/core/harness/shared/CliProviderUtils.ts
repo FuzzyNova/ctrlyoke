@@ -12,7 +12,7 @@ import {
 import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import { hasCtrlYokeQueueTools } from "../../../types/ExecutionPropertyResolver";
+import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
@@ -35,7 +35,7 @@ import {
 
 // Re-export the pure predicate here so core consumers share this module's MCP
 // semantics without pulling provider infrastructure into the types/webview layer.
-export { hasCtrlYokeQueueTools };
+export { ctrlYokeToolFamilies };
 
 const execFileAsync = promisify(execFile);
 
@@ -62,7 +62,7 @@ export function hasCtrlYokeServer(
 ): boolean {
   return (
     properties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED &&
-    hasCtrlYokeQueueTools(properties)
+    ctrlYokeToolFamilies(properties).any
   );
 }
 

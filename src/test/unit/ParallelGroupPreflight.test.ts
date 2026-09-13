@@ -11,6 +11,10 @@ import type {
   PromptFile,
 } from "../../types/CtrlYokeTypes";
 import type { ExecutionPropertyDefaults } from "../../types/ExecutionPropertyResolver";
+import {
+  MCP_APPEND_STEP_TOOL_NAME,
+  MCP_WORKFLOW_MUTATION_TOOL_NAMES,
+} from "../../utils/McpToolDefinitions";
 import { preflightParallelGroup } from "../../core/ParallelGroupPreflight";
 
 const group: ParallelGroupDefinition = {
@@ -144,6 +148,51 @@ suite("ParallelGroupPreflight", () => {
         PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
         PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
       ])
+    );
+  });
+
+  test("admits group members that deny only the step-mutating tools", async () => {
+    // Decision 8: a member keeps the board and the read-only workflow tools;
+    // only append/edit/remove/reorder race the coordinator's join. Banning on
+    // mere server presence took the coordination tools away from exactly the
+    // participants the coordination board exists for.
+    const result = await run({
+      mcpServers: [
+        { id: "ctrlyoke", deniedTools: [...MCP_WORKFLOW_MUTATION_TOOL_NAMES] },
+      ],
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    });
+
+    assert.strictEqual(
+      result.issues.some(
+        (issue) =>
+          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
+      ),
+      false
+    );
+  });
+
+  test("still rejects a group member that keeps one step-mutating tool", async () => {
+    const result = await run({
+      mcpServers: [
+        {
+          id: "ctrlyoke",
+          deniedTools: MCP_WORKFLOW_MUTATION_TOOL_NAMES.filter(
+            (tool) => tool !== MCP_APPEND_STEP_TOOL_NAME
+          ),
+        },
+      ],
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    });
+
+    assert.strictEqual(
+      result.issues.some(
+        (issue) =>
+          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
+      ),
+      true
     );
   });
 

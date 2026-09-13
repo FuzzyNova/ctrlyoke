@@ -38,7 +38,10 @@ import {
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
-import { hasCtrlYokeQueueTools } from "../types/ExecutionPropertyResolver";
+import {
+  ctrlYokeDeniedToolNames,
+  ctrlYokeToolFamilies,
+} from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
@@ -82,12 +85,28 @@ function skillsForPrompt(
     workflowContext.resolvedProperties?.mcpAvailability !==
       MCP_AVAILABILITY_MODES.DISABLED ||
     !workflowContext.resolvedProperties ||
-    !hasCtrlYokeQueueTools(workflowContext.resolvedProperties)
+    !ctrlYokeToolFamilies(workflowContext.resolvedProperties).workflow
   ) {
     return resolvedSkills;
   }
 
   return resolvedSkills.filter((skill) => skill !== MCP_SKILL_NAMES.TOOLS);
+}
+
+/**
+ * Carry the step's ctrlyoke denials into skill generation so a denied tool is
+ * never documented. The executor builds the address half of this context; the
+ * denial half is only known once properties are resolved for the step.
+ */
+function mcpToolSkillContextForPrompt(
+  workflowContext: WorkflowContext | undefined
+): WorkflowContext["mcpToolSkillContext"] {
+  const context = workflowContext?.mcpToolSkillContext;
+  if (!context || !workflowContext?.resolvedProperties) return context;
+  return {
+    ...context,
+    deniedTools: ctrlYokeDeniedToolNames(workflowContext.resolvedProperties),
+  };
 }
 
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
@@ -582,7 +601,7 @@ export abstract class HarnessIntegration {
           promptSkills,
           workspaceRoot,
           this.getExecutionCheckoutRoot(),
-          workflowContext?.mcpToolSkillContext
+          mcpToolSkillContextForPrompt(workflowContext)
         )
       : null;
 

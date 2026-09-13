@@ -15,6 +15,10 @@ import {
   MCP_AVAILABILITY_MODES,
   MCP_SKILL_NAMES,
 } from "../../types/DashboardConstants";
+import {
+  MCP_COORDINATION_TOOL_NAMES,
+  MCP_WORKFLOW_TOOL_NAMES,
+} from "../../utils/McpToolDefinitions";
 import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("PropertyResolver Tests", () => {
@@ -792,6 +796,62 @@ suite("PropertyResolver Tests", () => {
         resolved.mcpAvailability,
         MCP_AVAILABILITY_MODES.DISABLED
       );
+    });
+
+    test("injects only the skill whose family survived the step's denials", () => {
+      // Each built-in skill is a whole document in the prompt. Attaching the
+      // pair unconditionally spends that budget teaching tools the step denied.
+      configService.setCliOverlay({
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+      });
+
+      const coordinationOnly = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          mcpServers: [
+            { id: "ctrlyoke", deniedTools: [...MCP_WORKFLOW_TOOL_NAMES] },
+          ],
+        },
+        { steps: [] }
+      );
+      assert.deepStrictEqual(coordinationOnly.skills, [
+        MCP_SKILL_NAMES.COORDINATION,
+      ]);
+
+      const workflowOnly = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          mcpServers: [
+            { id: "ctrlyoke", deniedTools: [...MCP_COORDINATION_TOOL_NAMES] },
+          ],
+        },
+        { steps: [] }
+      );
+      assert.deepStrictEqual(workflowOnly.skills, [MCP_SKILL_NAMES.TOOLS]);
+    });
+
+    test("injects no skill when every ctrlyoke tool is denied", () => {
+      configService.setCliOverlay({
+        mcpAvailability: MCP_AVAILABILITY_MODES.DISABLED,
+      });
+
+      const resolved = PropertyResolver.resolve(
+        {
+          prompt: "test",
+          mcpServers: [
+            {
+              id: "ctrlyoke",
+              deniedTools: [
+                ...MCP_WORKFLOW_TOOL_NAMES,
+                ...MCP_COORDINATION_TOOL_NAMES,
+              ],
+            },
+          ],
+        },
+        { steps: [] }
+      );
+
+      assert.strictEqual(resolved.skills, undefined);
     });
 
     test("does not inject the MCP tools skill in disabled mode without ctrlyoke", () => {

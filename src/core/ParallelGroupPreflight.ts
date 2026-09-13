@@ -24,7 +24,8 @@ import type {
 } from "../types/ExecutionPropertyResolver";
 import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
-import { hasCtrlYokeQueueTools } from "./harness/shared/CliProviderUtils";
+import { ctrlYokeToolFamilies } from "./harness/shared/CliProviderUtils";
+import { MCP_WORKFLOW_MUTATION_TOOL_NAMES } from "../utils/McpToolDefinitions";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 
@@ -232,15 +233,18 @@ export async function preflightParallelGroup(
     };
     members.push(member);
 
+    // Only the step-mutating tools race the coordinator's join. A member that
+    // denies those keeps the rest of the ctrlyoke server — including the
+    // coordination board, which exists precisely for group members.
     if (
       !isScriptStep(step) &&
-      hasCtrlYokeQueueTools(resolvedProperties) &&
+      ctrlYokeToolFamilies(resolvedProperties).mutation &&
       resolvedProperties.mcpAvailability !== MCP_AVAILABILITY_MODES.DISABLED
     ) {
       issues.push({
         code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
         memberIndices: [stepIndex],
-        message: `${memberLabel(workflow, stepIndex)} enables the ctrlyoke dynamic-queue MCP server, which is unavailable inside a parallel group.`,
+        message: `${memberLabel(workflow, stepIndex)} enables ctrlyoke's workflow-modifying tools (${MCP_WORKFLOW_MUTATION_TOOL_NAMES.join(", ")}), which are unavailable inside a parallel group. Deny those tools on the ctrlyoke server to keep the rest of it.`,
       });
     }
   }

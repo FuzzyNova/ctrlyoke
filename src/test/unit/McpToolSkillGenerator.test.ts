@@ -7,10 +7,13 @@ import {
 import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
   MCP_COORDINATION_TOOL_NAMES,
-  MCP_QUEUE_TOOL_NAMES,
+  MCP_WORKFLOW_TOOL_NAMES,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
 } from "../../utils/McpToolDefinitions";
+import { MCP_SKILL_NAMES } from "../../types/DashboardConstants";
 import type { McpToolSkillRunContext } from "../../types/WorkflowContextTypes";
 
 suite("McpToolSkillGenerator", () => {
@@ -108,7 +111,7 @@ suite("McpToolSkillGenerator", () => {
 
   test("includes the step mutation tools in the workflow skill subset", () => {
     const reference = McpToolSkillGenerator.generateToolReference([
-      ...MCP_QUEUE_TOOL_NAMES,
+      ...MCP_WORKFLOW_TOOL_NAMES,
     ]);
 
     assert.ok(reference.includes("### edit_step"));
@@ -127,6 +130,42 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes('--execution-root "<execution-root path>"'));
     assert.ok(reference.includes('--step-index "<step index>"'));
     assert.ok(reference.includes('--parallel-group-id "<parallel group id>"'));
+  });
+
+  test("omits denied tools from a generated built-in skill", () => {
+    // In disabled mode the skill is the entire tool listing, so leaving a
+    // denied tool documented is the only thing a denial could have prevented.
+    const content = McpToolSkillGenerator.generateBuiltInSkillContent(
+      MCP_SKILL_NAMES.TOOLS,
+      "# Workflow tools",
+      {
+        mcpServerPath: "C:/extension/out/mcp-server.js",
+        workspaceRoot: "C:/state",
+        deniedTools: [MCP_REMOVE_STEP_TOOL_NAME, MCP_REORDER_STEPS_TOOL_NAME],
+      }
+    );
+
+    assert.ok(content !== undefined);
+    assert.ok(content.includes("### append_step"));
+    assert.ok(!content.includes("### remove_step"));
+    assert.ok(!content.includes("### reorder_steps"));
+  });
+
+  test("keeps the full listing when no denials are supplied", () => {
+    // The export path passes no run context at all, so a snapshot must still
+    // document every tool alongside its placeholders.
+    const content = McpToolSkillGenerator.generateBuiltInSkillContent(
+      MCP_SKILL_NAMES.TOOLS,
+      "# Workflow tools"
+    );
+
+    assert.ok(content !== undefined);
+    for (const toolName of MCP_WORKFLOW_TOOL_NAMES) {
+      assert.ok(
+        content.includes(`### ${toolName}`),
+        `expected ${toolName} in the un-denied listing`
+      );
+    }
   });
 
   test("substitutes coordination CLI identity on the execution path", () => {

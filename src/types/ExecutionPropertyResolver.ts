@@ -24,6 +24,11 @@ import type {
   ResolvedProperties,
   ToolPermissionConfig,
 } from "./ExecutionPropertyTypes";
+import {
+  MCP_COORDINATION_TOOL_NAMES,
+  MCP_WORKFLOW_MUTATION_TOOL_NAMES,
+  MCP_WORKFLOW_TOOL_NAMES,
+} from "../utils/McpToolDefinitions";
 
 export const RESOLUTION_SOURCES = {
   PROMPT: "prompt",
@@ -65,20 +70,82 @@ export interface ResolvedExecutionTarget {
 }
 
 /**
- * Whether effective properties deliver ctrlyoke's queue-mutating tools by any
- * mechanism. Keep this pure so the resolver remains safe to use in the
- * webview bundle; provider infrastructure re-exports it for core consumers.
+ * Which families of ctrlyoke tools effective properties actually deliver, by
+ * any mechanism. Every field folds the ctrlyoke entry's `deniedTools`, so a
+ * step that attaches the server but denies a whole family reads as not having
+ * that family — which is what lets a parallel-group member keep the board
+ * while giving up step mutation.
  */
-export function hasCtrlYokeQueueTools(
+export interface CtrlYokeToolFamilies {
+  /** At least one ctrlyoke tool survives, so the server/skill is worth attaching. */
+  any: boolean;
+  /** A step-list mutating tool survives. This is what a parallel group bans. */
+  mutation: boolean;
+  /** A workflow tool survives, so the workflow skill has something to document. */
+  workflow: boolean;
+  /** A coordination tool survives, so the coordination skill does too. */
+  coordination: boolean;
+}
+
+const NO_CTRLYOKE_TOOLS: CtrlYokeToolFamilies = {
+  any: false,
+  mutation: false,
+  workflow: false,
+  coordination: false,
+};
+
+/**
+ * The ctrlyoke entry's denied tool names, or `undefined` when the server is
+ * not attached at all — the two cases callers must keep apart, since "denies
+ * nothing" and "is not here" both produce an empty denial list.
+ */
+function resolveCtrlYokeDenials(
   properties: Pick<ResolvedProperties, "mcpServers">
-): boolean {
-  return (properties.mcpServers ?? []).some(
+): Set<string> | undefined {
+  const entry = (properties.mcpServers ?? []).find(
     (server) =>
       server === MCP_SERVER_IDS.CTRLYOKE ||
       (typeof server === "object" &&
         server !== null &&
         server.id === MCP_SERVER_IDS.CTRLYOKE)
   );
+  if (entry === undefined) return undefined;
+  return new Set(typeof entry === "object" ? (entry.deniedTools ?? []) : []);
+}
+
+/**
+ * The ctrlyoke tools this step has denied. Used to keep a denied tool out of
+ * the generated built-in skills, which are the whole tool surface in
+ * `mcpAvailability: "disabled"` mode.
+ */
+export function ctrlYokeDeniedToolNames(
+  properties: Pick<ResolvedProperties, "mcpServers">
+): readonly string[] {
+  return [...(resolveCtrlYokeDenials(properties) ?? [])];
+}
+
+/**
+ * Resolve the ctrlyoke tool families an effective `mcpServers` list delivers.
+ * Keep this pure so the resolver remains safe to use in the webview bundle;
+ * provider infrastructure re-exports it for core consumers.
+ */
+export function ctrlYokeToolFamilies(
+  properties: Pick<ResolvedProperties, "mcpServers">
+): CtrlYokeToolFamilies {
+  const denied = resolveCtrlYokeDenials(properties);
+  if (denied === undefined) return NO_CTRLYOKE_TOOLS;
+
+  const survives = (names: readonly string[]): boolean =>
+    names.some((name) => !denied.has(name));
+
+  const workflow = survives(MCP_WORKFLOW_TOOL_NAMES);
+  const coordination = survives(MCP_COORDINATION_TOOL_NAMES);
+  return {
+    any: workflow || coordination,
+    mutation: survives(MCP_WORKFLOW_MUTATION_TOOL_NAMES),
+    workflow,
+    coordination,
+  };
 }
 
 function select<T>(
@@ -289,15 +356,20 @@ export function resolveExecutionProperties(
   );
   const mcpAvailabilityDisabled =
     defaults.mcpAvailability === MCP_AVAILABILITY_MODES.DISABLED;
-  const hasRequestedCtrlYokeServer = hasCtrlYokeQueueTools({
+  // In disabled mode the built-in skills stand in for the server, so attach
+  // only the ones whose tools survived the step's denials — an unfiltered pair
+  // spends prompt budget documenting tools the step cannot call.
+  const ctrlyokeFamilies = ctrlYokeToolFamilies({
     mcpServers: mcpServers.value,
   });
   const resolvedSkills =
-    mcpAvailabilityDisabled && hasRequestedCtrlYokeServer
+    mcpAvailabilityDisabled && ctrlyokeFamilies.any
       ? [
           ...(skills.value ?? []),
-          MCP_SKILL_NAMES.TOOLS,
-          MCP_SKILL_NAMES.COORDINATION,
+          ...(ctrlyokeFamilies.workflow ? [MCP_SKILL_NAMES.TOOLS] : []),
+          ...(ctrlyokeFamilies.coordination
+            ? [MCP_SKILL_NAMES.COORDINATION]
+            : []),
         ]
       : skills.value;
   const hooks = resolveHooks(prompt, workflow, defaults);

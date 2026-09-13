@@ -93,6 +93,7 @@ import {
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_TOOL_DEFINITIONS,
+  MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   type McpAppendStepArguments,
   type McpClaimPathsArguments,
@@ -184,12 +185,11 @@ function toolAllowed(name: string, context: McpToolCallingContext): boolean {
   ) {
     return true;
   }
+  // The step-mutating tools race the coordinator's join, so a group member
+  // never sees them. Same list the parallel-group preflight bans on.
   return (
     !context.groupMember &&
-    (name === MCP_APPEND_STEP_TOOL_NAME ||
-      name === MCP_EDIT_STEP_TOOL_NAME ||
-      name === MCP_REMOVE_STEP_TOOL_NAME ||
-      name === MCP_REORDER_STEPS_TOOL_NAME)
+    MCP_WORKFLOW_MUTATION_TOOL_NAMES.some((toolName) => toolName === name)
   );
 }
 

@@ -467,13 +467,27 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
 ];
 
-/** Queue tools documented by the built-in MCP skill. */
-export const MCP_QUEUE_TOOL_NAMES = [
+/** Workflow tools documented by the built-in MCP skill. */
+export const MCP_WORKFLOW_TOOL_NAMES = [
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_LIST_HARNESSES_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
   MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+] as const;
+
+/**
+ * The subset of workflow tools that mutate the step list. A parallel-group
+ * member must never hold these — they race the coordinator's join — so the
+ * preflight ban and the server's `ListTools` filter both key on this one list
+ * rather than on "does the ctrlyoke server appear at all", which would also
+ * take the read-only and coordination tools away from group members.
+ */
+export const MCP_WORKFLOW_MUTATION_TOOL_NAMES = [
+  MCP_APPEND_STEP_TOOL_NAME,
   MCP_EDIT_STEP_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
