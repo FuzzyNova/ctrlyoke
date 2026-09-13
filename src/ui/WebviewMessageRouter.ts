@@ -798,6 +798,18 @@ export class WebviewMessageRouter {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW, (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      void orchestrator.runInNewWorkflowForClient(
+        message.text,
+        message.properties,
+        message.promptName,
+        ctx.postMessage,
+        ctx.clientId
+      );
+    });
+
     table.set(MESSAGE_TYPES.UPDATE_PROMPT, (message, ctx) => {
       void this.workflowStepHandlers.handleUpdatePrompt(ctx, message);
     });

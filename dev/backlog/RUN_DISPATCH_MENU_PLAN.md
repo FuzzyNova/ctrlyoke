@@ -631,9 +631,12 @@ New Workflow") plus disabled placeholders, and `hideMenuButton` wired to
 `isSmallWidth`. New `EditorFooter.test.tsx` (none exists today); the collapsed
 form itself is already covered by `SplitButton.test.tsx`.
 
-**Stage 2 — Run in New Workflow.** `RUN_IN_NEW_WORKFLOW` message,
-`runInNewWorkflowForClient`, pending-controller registration, view switch and
-toast, `forceNewWorkflow` removal.
+**Stage 2 — Run in New Workflow (landed).** Added the
+`RUN_IN_NEW_WORKFLOW` message and client-scoped backend route, with fresh
+instance seeding from explicit step properties, pending PTY-controller
+registration, state replay, view switching, and a scoped confirmation toast.
+The source instance remains untouched, and the obsolete `forceNewWorkflow` path
+is removed.
 
 **Stage 3 — Executor late join.** `ParallelGroupRun` extraction, growable
 worker pool, per-member preflight, `joinRunningParallelGroup`. Testable on its

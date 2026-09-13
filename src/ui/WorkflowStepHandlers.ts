@@ -43,7 +43,7 @@ export class WorkflowStepHandlers {
       return;
     }
 
-    const { text, properties, action, promptName, forceNewWorkflow } = message;
+    const { text, properties, action, promptName } = message;
 
     try {
       await orchestrator.executeEphemeralPrompt(
@@ -51,7 +51,6 @@ export class WorkflowStepHandlers {
         properties,
         action,
         promptName,
-        forceNewWorkflow,
         ctx.clientId,
         this.mutationCoordinator.asWorkflowDefinitionMutation(message)
       );

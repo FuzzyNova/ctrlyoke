@@ -3376,28 +3376,33 @@ export class WorkflowInstance {
   // Ephemeral / dashboard prompts
   // ─────────────────────────────────────────────────────────────────────────
 
-  async executeEphemeralPrompt(
+  /** Seed a fresh workflow with one dashboard prompt without starting it yet. */
+  async initializeEphemeralPrompt(
     text: string,
     properties: unknown,
-    action: ActionType,
-    promptName?: string,
-    forceNewWorkflow: boolean = false
-  ): Promise<void> {
-    const generatedWorkflowName = this.generateWorkflowNameFromPrompt(
-      text,
-      promptName
-    );
-
-    const step: WorkflowStep = buildEphemeralWorkflowStep(
+    promptName?: string
+  ): Promise<HarnessId | undefined> {
+    const { workflowName, step, stepHarness } = this.buildEphemeralPromptSeed(
       text,
       properties,
       promptName
     );
-    const stepHarness = isScriptStep(step) ? undefined : step.harness;
-    if (forceNewWorkflow) {
-      Log.info(`[inst:${this.id.slice(0, 8)}] Force new workflow requested...`);
-      this.clearWorkflow();
-    }
+
+    await this.initializeNewWorkflow([step], workflowName);
+    return stepHarness;
+  }
+
+  async executeEphemeralPrompt(
+    text: string,
+    properties: unknown,
+    action: ActionType,
+    promptName?: string
+  ): Promise<void> {
+    const {
+      workflowName: generatedWorkflowName,
+      step,
+      stepHarness,
+    } = this.buildEphemeralPromptSeed(text, properties, promptName);
 
     const currentState = this.promptQueue.getState();
     const hasWorkflow =
@@ -3503,6 +3508,24 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  private buildEphemeralPromptSeed(
+    text: string,
+    properties: unknown,
+    promptName?: string
+  ): {
+    workflowName: string;
+    step: WorkflowStep;
+    stepHarness: HarnessId | undefined;
+  } {
+    const workflowName = this.generateWorkflowNameFromPrompt(text, promptName);
+    const step = buildEphemeralWorkflowStep(text, properties, promptName);
+    return {
+      workflowName,
+      step,
+      stepHarness: isScriptStep(step) ? undefined : step.harness,
+    };
+  }
 
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
