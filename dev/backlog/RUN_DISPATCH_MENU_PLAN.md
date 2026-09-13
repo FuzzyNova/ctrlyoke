@@ -9,7 +9,12 @@
 > the Queue button.
 >
 > **Depends on:** [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)
-> (shipped) for the fork/join model that "Run in Parallel" extends.
+> (shipped) for the fork/join model that "Run in Parallel" extends, and on
+> [`PARALLEL_STEP_MUTABILITY_PLAN.md`](./PARALLEL_STEP_MUTABILITY_PLAN.md)
+> (backlog, **prerequisite**) for the execution guards. Stages 3 and 4 here
+> assume a live group can be mutated safely; today it cannot, for reasons that
+> plan documents. Its Stages 1–3 must land first, and the two plans share the
+> `ParallelGroupRun` extraction — whichever gets there first owns it.
 >
 > **Build order is not fixed.** Whichever of the two plans lands first owns the
 > split-button shell (Stage 1 below); the other one only contributes a menu
@@ -222,9 +227,21 @@ invalidate anything already computed for the existing members: their indices,
 their join-boundary reference snapshot, and their per-target attempt keys
 (`queue:<stepIndex>`) are all unchanged.
 
-Note that `PromptQueue.assertEditableDuringExecution` (`PromptQueue.ts:2453-2471`)
-already permits an insert at any index `> currentIndex`, so no execution-guard
-change is needed — only a new topology operation.
+**Corrected 2026-09-12 — an execution-guard change _is_ needed.** An earlier
+revision noted that `PromptQueue.assertEditableDuringExecution`
+(`PromptQueue.ts:2493-2512`) already permits an insert at any index
+`> currentIndex` and concluded that no guard work was required. The premise is
+right and the conclusion is backwards: during a parallel group `currentIndex`
+stays pinned at `group.startIndex` until the join
+(`PromptQueue.commitParallelGroupJoin`, `:917-942`; mid-group settlements go
+through `persistStepOutcome`, `:891`, which never advances it). So the guard
+permits an insert at any index `> startIndex` — including **on top of members a
+worker is currently executing**. The append this decision needs happens to be
+safe, but it is safe by luck of landing at `endIndex + 1`, not because anything
+checked. See [`PARALLEL_STEP_MUTABILITY_PLAN.md`](./PARALLEL_STEP_MUTABILITY_PLAN.md);
+its Stages 1–3 are the prerequisite, and its Decision 2 is why the relaxation
+below must stay append-only until step identity replaces positional indices in
+the worker plan.
 
 ### Topology operations to add
 
@@ -575,7 +592,9 @@ toast, `forceNewWorkflow` removal.
 
 **Stage 3 — Executor late join.** `ParallelGroupRun` extraction, growable
 worker pool, per-member preflight, `joinRunningParallelGroup`. Testable on its
-own against an authored group with no UI at all.
+own against an authored group with no UI at all. **Blocked on
+`PARALLEL_STEP_MUTABILITY_PLAN.md` Stages 1–3**, which share the
+`ParallelGroupRun` extraction and supply the guard this stage assumes.
 
 **Stage 4 — Topology + ad-hoc promotion.** `appendParallelGroupMember`,
 `promoteStepToParallelGroup`, snapshot re-attribution, `PromptQueue` wiring,
