@@ -30,6 +30,7 @@ export interface SplitButtonOption {
   shortcut?: string;
   disabled?: boolean;
   divider?: boolean;
+  title?: string;
 }
 
 export interface SplitButtonProps {
@@ -373,6 +374,7 @@ ${MENU_GESTURE_HINT}`
         aria-selected={focusedIndex === index}
         onClick={() => handleOptionClick(option)}
         disabled={option.disabled}
+        title={option.title}
         className={`cy-dropdown-row w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
           option.disabled
             ? "opacity-50 cursor-not-allowed text-disabled-fg"

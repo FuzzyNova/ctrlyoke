@@ -80,6 +80,8 @@ beforeEach(() => {
     displayedViewAddress: null,
     displayedDefinitionRevision: null,
     displayedDescriptorRevision: null,
+    activeWorkflowId: null,
+    toastQueue: [],
   });
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
@@ -90,6 +92,13 @@ beforeEach(() => {
 function findExecutePromptMessage(): Record<string, unknown> | undefined {
   return postMessageSpy.mock.calls.find(
     ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.EXECUTE_PROMPT
+  )?.[0] as Record<string, unknown> | undefined;
+}
+
+function findNewWorkflowMessage(): Record<string, unknown> | undefined {
+  return postMessageSpy.mock.calls.find(
+    ([msg]) =>
+      (msg as { type?: string }).type === MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW
   )?.[0] as Record<string, unknown> | undefined;
 }
 
@@ -304,6 +313,124 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     const message = findExecutePromptMessage();
     expect(message).toBeDefined();
     expect(message).not.toHaveProperty("mutation");
+  });
+});
+
+describe("PromptEditor — Run in New Workflow", () => {
+  it("posts the composed prompt payload and clears the draft", async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({
+      promptText: "start an isolated workflow",
+      promptName: "Isolated workflow",
+      properties: {
+        ...useEditorStore.getState().properties,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "model-from-draft",
+      },
+    });
+
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(
+      screen.getByRole("option", { name: "Run in New Workflow" })
+    );
+
+    expect(findNewWorkflowMessage()).toMatchObject({
+      type: MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW,
+      text: "start an isolated workflow",
+      promptName: "Isolated workflow",
+      properties: {
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "model-from-draft",
+      },
+    });
+    expect(useEditorStore.getState().promptText).toBe("");
+    expect(useEditorStore.getState().promptName).toBe("");
+    expect(
+      (
+        window.vscodeApi as unknown as {
+          setState: ReturnType<typeof vi.fn>;
+        }
+      ).setState
+    ).toHaveBeenCalledWith(null);
+  });
+
+  it("posts script drafts with the same script properties as Run", async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm run isolated",
+      promptName: "Isolated script",
+      scriptEnv: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+      properties: {
+        ...useEditorStore.getState().properties,
+        secrets: ["DEPLOY_TOKEN"],
+      },
+    });
+
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(
+      screen.getByRole("option", { name: "Run in New Workflow" })
+    );
+
+    expect(findNewWorkflowMessage()).toMatchObject({
+      type: MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW,
+      text: "npm run isolated",
+      promptName: "Isolated script",
+      properties: {
+        type: STEP_TYPES.SCRIPT,
+        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+        secrets: ["DEPLOY_TOKEN"],
+      },
+    });
+    expect(useEditorStore.getState().scriptCommand).toBe("");
+  });
+
+  it("shows a switch-back toast only after the new workflow becomes active", async () => {
+    const user = userEvent.setup();
+    useEditorStore.getState().setPromptText("spin off this prompt");
+    useUiStore.setState({ activeWorkflowId: "source-instance" });
+    useWorkflowStore.setState({
+      fileName: "source.ctrlyoke.json",
+      workflowName: "Source workflow",
+    });
+
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(
+      screen.getByRole("option", { name: "Run in New Workflow" })
+    );
+
+    expect(useUiStore.getState().toastQueue).toHaveLength(0);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+          workflowId: "new-instance",
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(useUiStore.getState().toastQueue[0]).toMatchObject({
+        message:
+          "Started 'spin off this prompt' — 'Source workflow' is still running",
+        action: { label: "Switch back" },
+      });
+    });
+
+    useUiStore.getState().toastQueue[0].action?.onClick();
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+      workflowId: "source-instance",
+    });
   });
 });
 

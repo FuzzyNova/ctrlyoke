@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { randomUUID } from "crypto";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
@@ -524,7 +523,9 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
     if (this.currentWorkspaceFolder) {
-      this.ensureCoordinationWatchSession(this.currentWorkspaceFolder.uri.fsPath);
+      this.ensureCoordinationWatchSession(
+        this.currentWorkspaceFolder.uri.fsPath
+      );
       this.harnessUsageService = new HarnessUsageService(
         this.currentWorkspaceFolder.uri.fsPath,
         undefined,
@@ -5631,14 +5632,6 @@ export class WorkflowOrchestrator {
       promptName
     );
     await this.replayWorkflowStateTo(instance.id, send, clientId);
-    const newWorkflowName =
-      instance.getSummary().workflowName || "new workflow";
-    send({
-      type: MESSAGE_TYPES.USER_FEEDBACK,
-      id: randomUUID(),
-      severity: USER_FEEDBACK_SEVERITY.INFO,
-      message: `Started '${newWorkflowName}' in a new workflow`,
-    });
     await instance.executeLoadedPromptFile(stepHarness);
   }
 

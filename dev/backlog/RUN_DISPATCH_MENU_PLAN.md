@@ -621,7 +621,8 @@ ordinary `parallel:` container, which the schema already accepts.
 
 ## Implementation stages
 
-**Stage 1 — Split-button shell (shared with `STEER_MESSAGE_PLAN.md`).**
+**Stage 1 — Split-button shell (shared with `STEER_MESSAGE_PLAN.md`) —
+complete.**
 `src/ui/webview-react/hooks/useAnchoredPopupPosition.ts` is now extracted and
 consumed by `FooterQuickPicker`; `SplitButton` now exposes `menuPlacement`,
 `size="compact"`, `portal`, `mainAriaLabel`, `mainClassName`, and
@@ -631,7 +632,7 @@ New Workflow") plus disabled placeholders, and `hideMenuButton` wired to
 `isSmallWidth`. New `EditorFooter.test.tsx` (none exists today); the collapsed
 form itself is already covered by `SplitButton.test.tsx`.
 
-**Stage 2 — Run in New Workflow (landed).** Added the
+**Stage 2 — Run in New Workflow — complete.** Added the
 `RUN_IN_NEW_WORKFLOW` message and client-scoped backend route, with fresh
 instance seeding from explicit step properties, pending PTY-controller
 registration, state replay, view switching, and a scoped confirmation toast.

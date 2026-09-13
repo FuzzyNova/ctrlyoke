@@ -57,6 +57,7 @@ import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import { notifyUser } from "@utils/notifyUser";
+import { showWebviewToast } from "@utils/notifyUser";
 import {
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
@@ -93,6 +94,19 @@ function isOnlyColorChange(
     originalWithoutColor as WorkflowStep,
     submittedWithoutColor as WorkflowStep
   );
+}
+
+function ephemeralWorkflowName(text: string, promptName: string): string {
+  if (promptName.trim()) return promptName.trim();
+
+  const cleanWords = text
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5)
+    .map((word) => word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
+    .filter((word) => word.length > 0);
+
+  return cleanWords.length > 0 ? cleanWords.join(" ") : "Ephemeral Prompt";
 }
 
 /**
@@ -150,6 +164,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   const {
     steps: prompts,
+    fileName,
+    workflowName,
     executionState,
     currentStep,
     finalStepStatus,
@@ -866,11 +882,17 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Ref to hold the last submitted text so we can restore it on failure
   const lastSubmittedTextRef = useRef<string>("");
+  const pendingNewWorkflowToastRef = useRef<{
+    previousWorkflowId: string;
+    previousWorkflowName: string;
+    newWorkflowName: string;
+  } | null>(null);
 
   // Listen for EXECUTE_PROMPT_ERROR and restore the editor if the submission failed
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === MESSAGE_TYPES.EXECUTE_PROMPT_ERROR) {
+        pendingNewWorkflowToastRef.current = null;
         const restored =
           (event.data.text as string) || lastSubmittedTextRef.current;
         if (restored) {
@@ -881,6 +903,42 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [setPromptText]);
+
+  // The new-workflow route changes the calling client's view only after the
+  // new instance has been seeded successfully. Use that announcement as the
+  // success signal so rejected dispatches never produce a confirmation toast.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const pending = pendingNewWorkflowToastRef.current;
+      const message = event.data;
+      if (
+        !pending ||
+        message?.type !== MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED ||
+        message.workflowId === pending.previousWorkflowId
+      ) {
+        return;
+      }
+
+      pendingNewWorkflowToastRef.current = null;
+      showWebviewToast(
+        `Started '${pending.newWorkflowName}' — '${pending.previousWorkflowName}' is still running`,
+        USER_FEEDBACK_SEVERITY.INFO,
+        {
+          action: {
+            label: "Switch back",
+            onClick: () =>
+              vscode.postMessage({
+                type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+                workflowId: pending.previousWorkflowId,
+              }),
+          },
+        }
+      );
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [vscode]);
 
   // Compute the final action based on execution state (shared by prompt and script paths)
   const resolveFinalAction = useCallback(
@@ -999,6 +1057,92 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       markClean,
     ]
   );
+
+  const runInNewWorkflow = useCallback(() => {
+    const currentWorkflowId = useUiStore.getState().activeWorkflowId;
+    const currentWorkflowName = workflowName || fileName || "current workflow";
+
+    let text: string;
+    let propertyValues: Record<string, unknown>;
+    if (isScriptMode) {
+      text = scriptCommand.trim();
+      if (!text) return;
+
+      propertyValues = {
+        type: STEP_TYPES.SCRIPT,
+        ...(scriptEnv &&
+          Object.keys(scriptEnv).length > 0 && { env: scriptEnv }),
+        ...(properties.secrets === null
+          ? { secrets: null }
+          : Array.isArray(properties.secrets) && properties.secrets.length > 0
+            ? { secrets: properties.secrets }
+            : {}),
+        ...(properties.errorBehavior !== undefined && {
+          errorBehavior: properties.errorBehavior,
+        }),
+        ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+        ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+          onPass: scriptOnPass,
+        }),
+        ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
+          onFail: scriptOnFail,
+        }),
+        ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+          compareSource: scriptCompareSource,
+        }),
+        ...(scriptReturns && { returns: scriptReturns }),
+        ...(scriptExecutionMode !== undefined && {
+          executionMode: scriptExecutionMode,
+        }),
+        ...(scriptShell?.trim() && { shell: scriptShell }),
+        ...(properties.color !== undefined && { color: properties.color }),
+        ...(!stepEnabled && { enabled: false }),
+      };
+    } else {
+      text = promptText.trim();
+      if (!text) return;
+      propertyValues = getPropertyValues().properties;
+    }
+
+    if (currentWorkflowId) {
+      pendingNewWorkflowToastRef.current = {
+        previousWorkflowId: currentWorkflowId,
+        previousWorkflowName: currentWorkflowName,
+        newWorkflowName: ephemeralWorkflowName(text, promptName),
+      };
+    }
+    lastSubmittedTextRef.current = text;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW,
+      text,
+      properties: propertyValues,
+      promptName: promptName.trim(),
+    });
+    resetEditor();
+    markClean();
+    vscode.setState(null);
+  }, [
+    fileName,
+    getPropertyValues,
+    isScriptMode,
+    markClean,
+    properties,
+    promptName,
+    promptText,
+    resetEditor,
+    scriptCommand,
+    scriptCompareSource,
+    scriptEnv,
+    scriptExecutionMode,
+    scriptOnFail,
+    scriptOnPass,
+    scriptReturns,
+    scriptShell,
+    scriptTimeout,
+    stepEnabled,
+    vscode,
+    workflowName,
+  ]);
 
   // Update existing prompt
   const handleUpdate = useCallback(() => {
@@ -1487,6 +1631,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         runButtonTooltip={getRunButtonTooltip()}
         queueButtonTooltip={getQueueButtonTooltip()}
         onRun={() => executePrompt(ACTION_TYPES.RUN)}
+        onRunInNewWorkflow={runInNewWorkflow}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

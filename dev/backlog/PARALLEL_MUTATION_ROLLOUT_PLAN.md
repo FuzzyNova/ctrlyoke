@@ -167,7 +167,7 @@ _live_ hole underneath it, it does not remove it.
 generated from it by `npm run generate-schema` during `precompile`. Edit the
 JSON.
 
-### Track B — Dashboard shell (Phase 4)
+### Track B — Dashboard shell (Phase 4) — complete
 
 **Owns:** `src/ui/webview-react/components/shared/SplitButton.tsx`,
 `components/editor/EditorFooter.tsx`, `components/editor/PromptEditor.tsx`,
@@ -184,7 +184,7 @@ under Phase 7 below. Phase 4 must not add it: the width gate has no consumer
 until `ACTION_TYPES.RUN_PARALLEL` exists, and shipping an unused settings field
 in wave 1 puts a dead payload in front of every client.
 
-**Phase 4.** Disp Stages 1–2: extract `useAnchoredPopupPosition` shared between
+**Phase 4 — complete.** Disp Stages 1–2: extract `useAnchoredPopupPosition` shared between
 `FooterQuickPicker` and `SplitButton`; add `menuPlacement` / compact size /
 `portal` to `SplitButton`; wire the footer split button with "Run in New
 Workflow" enabled and the other two items present-but-disabled; implement

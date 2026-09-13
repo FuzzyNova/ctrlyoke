@@ -4667,11 +4667,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         "Spin-off",
       ]);
       assert.strictEqual(startedWith, "claude-cli");
-      assert.strictEqual(
-        (sent[0] as { type: string }).type,
-        MESSAGE_TYPES.USER_FEEDBACK
-      );
-      assert.match((sent[0] as { message: string }).message, /Spin-off/);
+      assert.strictEqual(sent.length, 0);
       assert.strictEqual(
         ptyManager.getExpectedController(newInstance.id),
         clientId
