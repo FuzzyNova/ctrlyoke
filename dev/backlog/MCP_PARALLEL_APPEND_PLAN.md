@@ -1,6 +1,8 @@
 # MCP Parallel Append Plan
 
-> **Status:** Backlog / design proposal. Nothing here is implemented.
+> **Status:** Phase 3A MCP schema/type contract surface landed. The queue-item
+> union remains unpublished; shared normalization and later stages remain
+> backlog.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -452,8 +454,9 @@ parallel-specific quota is added.
 
 ## Implementation stages
 
-**Stage 1 — MCP item union and shared normalization.** Add the schema facets,
-types, examples, and shared flattener; move `PromptFileParser` to it. Unit-test
+**Stage 1 — MCP item union and shared normalization.** The schema facets, types,
+examples, unpublished union, and their validator tests are landed. The shared
+flattener and `PromptFileParser` move remain outstanding. Unit-test
 mixed batches, cardinality, exact discrimination, default `failFast`, and nested
 rejection.
 

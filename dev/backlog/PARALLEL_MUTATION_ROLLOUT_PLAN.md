@@ -1,6 +1,7 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Backlog / staging document. Nothing here is implemented.
+> **Status:** Track C / Phase 3A MCP contract surface landed. The queue-item
+> union remains unpublished until Phase 3B; later rollout work remains backlog.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -204,11 +205,13 @@ loops in wave 1, this is the one to run alongside Track A.
 `src/utils/McpToolSkillGenerator.ts`, `src/core/PromptFileParser.ts`, and a
 **new, appended** flattener in `src/core/ParallelGroupTopology.ts`.
 
-**Phase 3A.** MCP Stage 1: add `minItems` and `additionalProperties: false`
-schema facets with recursive enforcement, make `oneOf` require exactly one
-successful branch, add `McpAppendParallelGroupInput` / `McpAppendQueueItem`, and
-add the shared item-to-relative-topology flattener. Move `PromptFileParser` onto
-that flattener so there is one implementation of group-range math.
+**Phase 3A status:** MCP Stage 1's schema/type contract surface is landed:
+`minItems` and `additionalProperties: false` schema facets with recursive
+enforcement, exact-one `oneOf` validation, the
+`McpAppendParallelGroupInput` / `McpAppendQueueItem` types, and the unpublished
+queue-item union schema. The shared item-to-relative-topology flattener and
+`PromptFileParser` move remain subsequent Stage 1 work; they will provide one
+implementation of group-range math when landed.
 
 **Exit criteria.** `src/test/unit/McpSchemaValidator.test.ts` accepts flat,
 future-parallel, and mixed inputs and rejects empty / one-member / nested /

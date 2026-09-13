@@ -19,6 +19,8 @@ export interface McpToolInputSchema {
   enum?: readonly string[];
   oneOf?: readonly McpToolInputSchema[];
   minimum?: number;
+  minItems?: number;
+  additionalProperties?: false;
 }
 
 export type McpAppendStepInput = Pick<
@@ -27,6 +29,15 @@ export type McpAppendStepInput = Pick<
 > & {
   sessionId?: number;
 };
+
+export interface McpAppendParallelGroupInput {
+  parallel: McpAppendStepInput[];
+  failFast?: boolean;
+}
+
+export type McpAppendQueueItem =
+  | McpAppendStepInput
+  | McpAppendParallelGroupInput;
 
 export interface McpAppendStepArguments {
   steps: McpAppendStepInput[];
@@ -149,6 +160,73 @@ export const MCP_CLAIM_PATHS_TOOL_NAME = "claim_paths";
 /** Release execution-root-relative path claims. */
 export const MCP_RELEASE_PATHS_TOOL_NAME = "release_paths";
 
+const MCP_APPEND_STEP_INPUT_SCHEMA: McpToolInputSchema = {
+  type: "object",
+  properties: {
+    prompt: {
+      type: "string",
+      description: "What the step should do.",
+    },
+    name: {
+      type: "string",
+      description:
+        "Short display label for this step (e.g. 'Implement security'). The UI already shows the step's position (e.g. '2 of 6'), so don't repeat that here.",
+    },
+    model: {
+      type: "string",
+      description:
+        "Model to run this step with. Defaults to the workflow's model.",
+    },
+    harness: {
+      type: "string",
+      description:
+        "Harness to run this step with. Defaults to the workflow's harness.",
+    },
+    resumeSession: {
+      type: "boolean",
+      description:
+        "Continue an earlier step's conversation instead of starting fresh.",
+    },
+    sessionId: {
+      type: "number",
+      description:
+        "1-based step number whose conversation to continue. Requires resumeSession.",
+    },
+  },
+  required: ["prompt"],
+};
+
+const MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA: McpToolInputSchema = {
+  ...MCP_APPEND_STEP_INPUT_SCHEMA,
+  additionalProperties: false,
+};
+
+/** Unpublished queue-item union for the Phase 3B append_step contract. */
+export const MCP_APPEND_QUEUE_ITEM_SCHEMA: McpToolInputSchema = {
+  oneOf: [
+    MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA,
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        parallel: {
+          type: "array",
+          minItems: 2,
+          items: MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA,
+          description:
+            "Steps in this group run concurrently. A group must contain at least two steps.",
+        },
+        failFast: {
+          type: "boolean",
+          description:
+            "Whether the group stops starting or settles remaining members after a failure. Defaults to true.",
+        },
+      },
+      required: ["parallel"],
+    },
+  ],
+};
+
 const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
   type: "object",
   description:
@@ -199,41 +277,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
       properties: {
         steps: {
           type: "array",
-          items: {
-            type: "object",
-            properties: {
-              prompt: {
-                type: "string",
-                description: "What the step should do.",
-              },
-              name: {
-                type: "string",
-                description:
-                  "Short display label for this step (e.g. 'Implement security'). The UI already shows the step's position (e.g. '2 of 6'), so don't repeat that here.",
-              },
-              model: {
-                type: "string",
-                description:
-                  "Model to run this step with. Defaults to the workflow's model.",
-              },
-              harness: {
-                type: "string",
-                description:
-                  "Harness to run this step with. Defaults to the workflow's harness.",
-              },
-              resumeSession: {
-                type: "boolean",
-                description:
-                  "Continue an earlier step's conversation instead of starting fresh.",
-              },
-              sessionId: {
-                type: "number",
-                description:
-                  "1-based step number whose conversation to continue. Requires resumeSession.",
-              },
-            },
-            required: ["prompt"],
-          },
+          items: MCP_APPEND_STEP_INPUT_SCHEMA,
           description: "One or more steps to add, in the order to run them.",
         },
         position: {

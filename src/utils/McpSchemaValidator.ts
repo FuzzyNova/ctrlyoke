@@ -99,15 +99,24 @@ function validateSchema(
 ): void {
   const variants = getMcpSchemaVariants(schema);
   if (variants.length > 0) {
+    let successfulVariants = 0;
     for (const variant of variants) {
       try {
         validateSchema(variant, value, fieldPath);
-        return;
+        successfulVariants += 1;
       } catch {
         // Try the next oneOf branch before reporting the combined expectation.
       }
     }
-    throw new Error(`${fieldPath} must be ${expectedDescription(schema)}`);
+    if (successfulVariants === 0) {
+      throw new Error(`${fieldPath} must be ${expectedDescription(schema)}`);
+    }
+    if (successfulVariants > 1) {
+      throw new Error(
+        `${fieldPath} matched more than one accepted shape; provide exactly one accepted shape`
+      );
+    }
+    return;
   }
 
   if (schema.enum && !schema.enum.includes(value as string)) {
@@ -120,6 +129,16 @@ function validateSchema(
         throw new Error(`${fieldPath} must be an object`);
       }
       const record = value as Record<string, unknown>;
+      if (schema.additionalProperties === false) {
+        const propertyNames = new Set(
+          getMcpSchemaProperties(schema).map(([name]) => name)
+        );
+        for (const name of Object.keys(record)) {
+          if (!propertyNames.has(name)) {
+            throw new Error(`${fieldPath}.${name} is not allowed`);
+          }
+        }
+      }
       for (const required of getMcpSchemaRequiredProperties(schema)) {
         if (record[required] === undefined) {
           throw new Error(`${fieldPath}.${required} is required`);
@@ -135,6 +154,11 @@ function validateSchema(
     case MCP_SCHEMA_TYPES.ARRAY:
       if (!Array.isArray(value)) {
         throw new Error(`${fieldPath} must be an array`);
+      }
+      if (schema.minItems !== undefined && value.length < schema.minItems) {
+        throw new Error(
+          `${fieldPath} must contain at least ${schema.minItems} items`
+        );
       }
       if (schema.items) {
         value.forEach((item, index) =>

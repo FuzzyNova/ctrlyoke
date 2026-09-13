@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  MCP_APPEND_QUEUE_ITEM_SCHEMA,
   MCP_TOOL_DEFINITIONS,
   type McpToolInputSchema,
 } from "../../utils/McpToolDefinitions";
@@ -9,6 +10,7 @@ import {
   getMcpSchemaProperties,
   getMcpSchemaRequiredProperties,
   getMcpSchemaVariants,
+  validateMcpInputSchema,
   validateMcpToolCall,
 } from "../../utils/McpSchemaValidator";
 
@@ -75,4 +77,177 @@ suite("MCP tool schema validation", () => {
       });
     }
   }
+
+  test("accepts a flat append queue item", () => {
+    assert.doesNotThrow(() =>
+      validateMcpInputSchema(
+        MCP_APPEND_QUEUE_ITEM_SCHEMA,
+        { prompt: "Implement the feature." },
+        "queueItem"
+      )
+    );
+  });
+
+  test("accepts a valid parallel append queue item", () => {
+    assert.doesNotThrow(() =>
+      validateMcpInputSchema(
+        MCP_APPEND_QUEUE_ITEM_SCHEMA,
+        {
+          parallel: [{ prompt: "Implement it." }, { prompt: "Test it." }],
+          failFast: false,
+        },
+        "queueItem"
+      )
+    );
+  });
+
+  test("accepts a mixed array of flat and parallel queue items", () => {
+    assert.doesNotThrow(() =>
+      validateMcpInputSchema(
+        { type: "array", items: MCP_APPEND_QUEUE_ITEM_SCHEMA },
+        [
+          { prompt: "Prepare it." },
+          { parallel: [{ prompt: "Build it." }, { prompt: "Verify it." }] },
+          { prompt: "Document it." },
+        ],
+        "queue"
+      )
+    );
+  });
+
+  test("rejects an empty parallel queue item", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          MCP_APPEND_QUEUE_ITEM_SCHEMA,
+          { parallel: [] },
+          "queueItem"
+        ),
+      /queueItem must be object or object/
+    );
+  });
+
+  test("rejects a one-member parallel queue item", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          MCP_APPEND_QUEUE_ITEM_SCHEMA,
+          { parallel: [{ prompt: "Only one." }] },
+          "queueItem"
+        ),
+      /queueItem must be object or object/
+    );
+  });
+
+  test("rejects a nested parallel queue item", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          MCP_APPEND_QUEUE_ITEM_SCHEMA,
+          {
+            parallel: [
+              { parallel: [{ prompt: "Nested." }, { prompt: "Group." }] },
+              { prompt: "Flat." },
+            ],
+          },
+          "queueItem"
+        ),
+      /queueItem must be object or object/
+    );
+  });
+
+  test("rejects a hybrid item carrying prompt and parallel", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          MCP_APPEND_QUEUE_ITEM_SCHEMA,
+          {
+            prompt: "Hybrid.",
+            parallel: [{ prompt: "First." }, { prompt: "Second." }],
+          },
+          "queueItem"
+        ),
+      /queueItem must be object or object/
+    );
+  });
+
+  test("rejects an unknown property on the flat branch", () => {
+    assert.throws(() =>
+      validateMcpInputSchema(
+        MCP_APPEND_QUEUE_ITEM_SCHEMA,
+        { prompt: "Known.", extra: true },
+        "queueItem"
+      )
+    );
+  });
+
+  test("rejects an unknown property on the parallel branch", () => {
+    assert.throws(() =>
+      validateMcpInputSchema(
+        MCP_APPEND_QUEUE_ITEM_SCHEMA,
+        {
+          parallel: [{ prompt: "First." }, { prompt: "Second." }],
+          extra: true,
+        },
+        "queueItem"
+      )
+    );
+  });
+
+  test("enforces minItems on hand-built schemas", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          { type: "array", minItems: 2 },
+          ["only one"],
+          "values"
+        ),
+      /values must contain at least 2 items/
+    );
+  });
+
+  test("enforces additionalProperties false on hand-built schemas", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          {
+            type: "object",
+            properties: { known: { type: "string" } },
+            additionalProperties: false,
+          },
+          { known: "value", unknown: true },
+          "input"
+        ),
+      /input\.unknown is not allowed/
+    );
+  });
+
+  test("tolerates extra keys when additionalProperties is not declared", () => {
+    assert.doesNotThrow(() =>
+      validateMcpInputSchema(
+        { type: "object", properties: { known: { type: "string" } } },
+        { known: "value", extra: true },
+        "input"
+      )
+    );
+  });
+
+  test("requires oneOf to match exactly one branch", () => {
+    assert.throws(
+      () =>
+        validateMcpInputSchema(
+          { oneOf: [{ type: "string" }, { type: "string" }] },
+          "matches both",
+          "value"
+        ),
+      /value matched more than one accepted shape/
+    );
+  });
+
+  test("uses the flat queue item as the union example", () => {
+    assert.deepStrictEqual(
+      getMcpSchemaExampleValue(MCP_APPEND_QUEUE_ITEM_SCHEMA),
+      { prompt: "example" }
+    );
+  });
 });
