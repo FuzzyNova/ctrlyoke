@@ -172,9 +172,17 @@ JSON.
 **Owns:** `src/ui/webview-react/components/shared/SplitButton.tsx`,
 `components/editor/EditorFooter.tsx`, `components/editor/PromptEditor.tsx`,
 `hooks/`, `utils/dropdownUtils`, `src/ui/WebviewMessageRouter.ts`,
-`src/ui/WebviewSettingsSync.ts`, `store/settingsStore.ts`, plus
-`runInNewWorkflowForClient` in `src/core/WorkflowOrchestrator.ts` and the
-`forceNewWorkflow` removal in `src/core/WorkflowInstance.ts`.
+`src/ui/WorkflowStepHandlers.ts`, plus `runInNewWorkflowForClient` in
+`src/core/WorkflowOrchestrator.ts` and the `forceNewWorkflow` removal in
+`src/core/WorkflowInstance.ts`.
+
+**Not in this track:** `src/ui/WebviewSettingsSync.ts` and
+`store/settingsStore.ts`. The only reason those files appear in this plan is the
+effective-parallel-width field in the lightweight `GlobalSettings` payload, and
+that field exists solely to gate **Run in Parallel** — Phase 7 work, listed
+under Phase 7 below. Phase 4 must not add it: the width gate has no consumer
+until `ACTION_TYPES.RUN_PARALLEL` exists, and shipping an unused settings field
+in wave 1 puts a dead payload in front of every client.
 
 **Phase 4.** Disp Stages 1–2: extract `useAnchoredPopupPosition` shared between
 `FooterQuickPicker` and `SplitButton`; add `menuPlacement` / compact size /

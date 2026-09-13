@@ -500,9 +500,24 @@ placement math is exactly the kind of thing this repo single-sources.
 
 Add to `SplitButton`: `menuPlacement?: "top" | "bottom"`, a `size` variant
 (or explicit class overrides) for the compact footer form, and `portal?:
-boolean`. Keep `.btn-editor-run` on the **primary** button — three existing
-tests select on it (`PromptEditor.test.tsx:112`, `:298`, `:694`) — and give the
-chevron trigger `.btn-editor-run-menu`.
+boolean`. Keep `.btn-editor-run` on the **primary** button and give the chevron
+trigger `.btn-editor-run-menu`.
+
+**The real compatibility constraint is the primary button's accessible name,
+not its class.** No test anywhere selects on `.btn-editor-run` (verified: the
+class appears only in `EditorFooter.tsx`). Four existing assertions resolve the
+Run button by accessible name — `getByRole("button", { name: /^Run$/ })` and
+`{ name: "Run" }` (`PromptEditor.test.tsx:107`, `:126`, `:301`, `:685`) — and
+today that name comes from the explicit `aria-label="Run"` on the footer
+button, because `runButtonText` is hidden at `isMediumWidth`. `SplitButton`
+has no way to set an aria-label on its **main** button: it puts `aria-label` on
+the wrapping `role="group"` and lets the main button's name fall out of its
+content. So the shell work must add a `mainAriaLabel` prop (or equivalent) and
+`EditorFooter` must pass the same string it passes today, or the Run button
+silently loses its name at medium width and those four assertions break.
+`role="group"` on the wrapper and `role="option"` on the menu items keep
+`getByRole("button", …)` from matching either, so no other disambiguation is
+needed.
 
 ---
 
