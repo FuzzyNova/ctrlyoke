@@ -13,7 +13,7 @@ type BranchNameEditorProps = Omit<
 >;
 
 // Matches the control-surface typography (Tailwind `text-xs`, as used by
-// fp-select-trigger/CustomSelect and the other form inputs this editor sits
+// cy-select-trigger/CustomSelect and the other form inputs this editor sits
 // beside) instead of the VS Code *editor* font size the CodeMirror theme
 // defaults to. Callers can still override via props.fontSize.
 const CONTROL_FONT_SIZE = "0.75rem";

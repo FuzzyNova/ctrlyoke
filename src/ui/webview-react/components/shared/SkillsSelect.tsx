@@ -164,8 +164,8 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             onClick={() => handleKeywordSelect(keyword)}
             className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
               isSelected
-                ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
-                : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
+                ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
+                : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
             }`}
           >
             <Icon
@@ -201,8 +201,8 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 title={skill.description}
                 className={`group w-full flex items-start focus:outline-none border-none ${
                   isChecked
-                    ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
-                    : "hover:bg-list-hover-bg fp-dropdown-row"
+                    ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
+                    : "hover:bg-list-hover-bg cy-dropdown-row"
                 }`}
               >
                 <button
@@ -254,7 +254,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                   <div
                     key={skill.name}
                     title={skill.description}
-                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg fp-dropdown-row"
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cy-dropdown-row"
                   >
                     <button
                       type="button"
@@ -322,7 +322,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         aria-haspopup="listbox"
         aria-controls={listboxId}
         aria-label={triggerAriaLabel}
-        className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
+        className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>
         <Icon

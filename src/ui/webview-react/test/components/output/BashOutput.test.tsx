@@ -40,7 +40,7 @@ describe("BashOutput", () => {
 
     expect(screen.getByText("Show full command")).toHaveClass(
       "uppercase",
-      "text-[length:var(--fp-output-font-size-xs)]"
+      "text-[length:var(--cy-output-font-size-xs)]"
     );
 
     await user.click(

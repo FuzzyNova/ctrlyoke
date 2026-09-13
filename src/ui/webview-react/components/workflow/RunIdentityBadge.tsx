@@ -33,9 +33,9 @@ export const RunIdentityBadge: React.FC<RunIdentityBadgeProps> = ({
     title={accessibleLabel}
     aria-haspopup="listbox"
     aria-expanded={isActive}
-    className={`workflow-button-run-badge fp-dropdown-row flex-shrink-0 truncate text-xs font-medium transition-colors bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg ${sizeClassName} ${
+    className={`workflow-button-run-badge cy-dropdown-row flex-shrink-0 truncate text-xs font-medium transition-colors bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg ${sizeClassName} ${
       isActive
-        ? "bg-cmd-active-bg text-cmd-active-fg fp-dropdown-row-selected"
+        ? "bg-cmd-active-bg text-cmd-active-fg cy-dropdown-row-selected"
         : ""
     }`}
   >

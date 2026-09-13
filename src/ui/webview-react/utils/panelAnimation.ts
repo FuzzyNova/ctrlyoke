@@ -7,8 +7,8 @@
  * to get smooth 200ms animation for that specific interaction only.
  */
 export function triggerPanelAnimation(): void {
-  document.documentElement.classList.add("fp-panels-animating");
+  document.documentElement.classList.add("cy-panels-animating");
   setTimeout(() => {
-    document.documentElement.classList.remove("fp-panels-animating");
+    document.documentElement.classList.remove("cy-panels-animating");
   }, 250); // slightly longer than the 200ms transition
 }

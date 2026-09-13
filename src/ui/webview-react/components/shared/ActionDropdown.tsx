@@ -52,7 +52,7 @@ export function ActionDropdownItemContent({
  *
  * The popup is rendered via a React portal at document.body with
  * position:fixed so it escapes any overflow:hidden ancestors (e.g. file-list
- * containers). Uses the shared fp-dropdown-popup class for elevation / shadow.
+ * containers). Uses the shared cy-dropdown-popup class for elevation / shadow.
  */
 export function ActionDropdown({
   label,
@@ -138,7 +138,7 @@ export function ActionDropdown({
                 setOpen(false);
                 onSelect(item.value);
               }}
-              className={`fp-dropdown-row block w-full text-left px-3 py-1.5 text-xs transition-colors
+              className={`cy-dropdown-row block w-full text-left px-3 py-1.5 text-xs transition-colors
                     ${
                       item.disabled
                         ? "text-disabled-fg cursor-default"

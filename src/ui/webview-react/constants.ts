@@ -75,7 +75,7 @@ export const SEPARATOR_VERTICAL =
 
 /**
  * Header button sizing — single source of truth for button/icon size in the Header.
- * To tune the touch target HEIGHT, change --fp-touch-target in globals.css (one place).
+ * To tune the touch target HEIGHT, change --cy-touch-target in globals.css (one place).
  * To tune the icon size, change the `icon` value in the `touch` block below.
  */
 export const HEADER_BUTTON_SIZES = {
@@ -96,16 +96,16 @@ export const HEADER_BUTTON_SIZES = {
     /** Vertical padding for separator dividers inside button groups */
     separatorPy: "py-1",
   },
-  /** Mobile / touch: height controlled by --fp-touch-target in globals.css */
+  /** Mobile / touch: height controlled by --cy-touch-target in globals.css */
   touch: {
     iconButton:
-      "h-[var(--fp-touch-target)] min-w-[var(--fp-touch-target)] px-2 text-sm",
-    groupContainer: "h-[var(--fp-touch-target)]",
+      "h-[var(--cy-touch-target)] min-w-[var(--cy-touch-target)] px-2 text-sm",
+    groupContainer: "h-[var(--cy-touch-target)]",
     splitButtonMain: "h-full px-2 sm:px-3 text-sm",
     splitButtonDropdown:
-      "h-full min-w-[calc(var(--fp-touch-target)-2px)] px-2 text-sm",
+      "h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm",
     icon: "codicon-lg",
-    mobileToggleButton: "h-[var(--fp-touch-target)]",
+    mobileToggleButton: "h-[var(--cy-touch-target)]",
     separatorPy: "h-full py-0",
   },
 } as const;
@@ -221,7 +221,7 @@ export function formatWorkflowCountBadge(count: number): string {
 /**
  * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.
  * Does not affect the expanded dropdown list items.
- * Touch target height controlled by --fp-touch-target in globals.css.
+ * Touch target height controlled by --cy-touch-target in globals.css.
  */
 export const WORKFLOW_STATUS_BUTTON_SIZES = {
   /** Desktop / VS Code: compact */
@@ -231,9 +231,9 @@ export const WORKFLOW_STATUS_BUTTON_SIZES = {
     triggerButton: "px-2 py-1",
     separatorPy: "py-1",
   },
-  /** Mobile / touch: height controlled by --fp-touch-target in globals.css */
+  /** Mobile / touch: height controlled by --cy-touch-target in globals.css */
   touch: {
-    container: "h-[var(--fp-touch-target)]",
+    container: "h-[var(--cy-touch-target)]",
     mainButton: "h-full px-3",
     triggerButton: "h-full px-3",
     separatorPy: "h-full py-0",

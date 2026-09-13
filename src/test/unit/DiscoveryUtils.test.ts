@@ -71,7 +71,7 @@ suite("DiscoveryUtils", () => {
     });
 
     test("returns true for an existing directory", async () => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-discovery-"));
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-discovery-"));
       created.push(tmpDir);
       const result = await isAccessibleDirectory(tmpDir);
       assert.strictEqual(result, true);
@@ -79,13 +79,13 @@ suite("DiscoveryUtils", () => {
 
     test("returns false for a non-existent path", async () => {
       const result = await isAccessibleDirectory(
-        path.join(os.tmpdir(), `fp-no-such-dir-${Date.now()}`)
+        path.join(os.tmpdir(), `cy-no-such-dir-${Date.now()}`)
       );
       assert.strictEqual(result, false);
     });
 
     test("returns false for a file (not a directory)", async () => {
-      tmpFile = path.join(os.tmpdir(), `fp-file-${Date.now()}.txt`);
+      tmpFile = path.join(os.tmpdir(), `cy-file-${Date.now()}.txt`);
       created.push(tmpFile);
       fs.writeFileSync(tmpFile, "hello");
       const result = await isAccessibleDirectory(tmpFile);

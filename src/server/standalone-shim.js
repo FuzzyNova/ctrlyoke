@@ -245,7 +245,7 @@
     for (const [k, v] of Object.entries(vars)) style.setProperty(k, v);
     // Replicate VS Code's body class so dark-mode detection works in the browser
     // (e.g. CodeMirror reads document.body.classList.contains("vscode-dark")).
-    const kind = vars["--fp-color-theme-kind"];
+    const kind = vars["--cy-color-theme-kind"];
     if (!kind) return;
 
     const applyBodyClass = () => {
@@ -621,12 +621,12 @@
       ", then: (1) install via <em>Settings → General → VPN &amp; Device Management</em>" +
       ", (2) go to <em>Settings → General → About → Certificate Trust Settings</em>" +
       " and toggle on <em>Enable Full Trust For Root Certificates</em>." +
-      ' &nbsp;<a href="#" id="fp-conn-retry" style="color:#fca5a5;text-decoration:underline">Retry</a>';
+      ' &nbsp;<a href="#" id="cy-conn-retry" style="color:#fca5a5;text-decoration:underline">Retry</a>';
 
     function appendBanner() {
-      if (document.getElementById("fp-conn-error")) return;
+      if (document.getElementById("cy-conn-error")) return;
       const div = document.createElement("div");
-      div.id = "fp-conn-error";
+      div.id = "cy-conn-error";
       div.setAttribute(
         "style",
         "position:fixed;top:0;left:0;right:0;z-index:99999;" +
@@ -635,14 +635,14 @@
           "font-family:system-ui,-apple-system,sans-serif;"
       );
       div.innerHTML = html;
-      const retryLink = div.querySelector("#fp-conn-retry");
+      const retryLink = div.querySelector("#cy-conn-retry");
       if (retryLink) {
         retryLink.addEventListener("click", function (e) {
           e.preventDefault();
           connectionBannerShown = false;
           consecutiveConnectFailures = 0;
           reconnectAttempt = 0;
-          var el = document.getElementById("fp-conn-error");
+          var el = document.getElementById("cy-conn-error");
           if (el) el.remove();
           connect();
         });
@@ -660,7 +660,7 @@
   }
 
   function hideConnectionErrorBanner() {
-    var el = document.getElementById("fp-conn-error");
+    var el = document.getElementById("cy-conn-error");
     if (el) el.remove();
     connectionBannerShown = false;
   }

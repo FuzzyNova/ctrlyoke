@@ -25,7 +25,7 @@ suite("McpDiscoveryUtils", () => {
   let originalOpenCodeConfigDir: string | undefined;
 
   setup(async () => {
-    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-mcp-discovery-"));
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-mcp-discovery-"));
     workspaceRoot = path.join(tempRoot, "workspace");
     userHome = path.join(tempRoot, "user-home");
     appDataRoot = path.join(userHome, "AppData", "Roaming");

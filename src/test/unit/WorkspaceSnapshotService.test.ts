@@ -49,7 +49,7 @@ suite("WorkspaceSnapshotService", function () {
   }
 
   setup(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-snapshot-"));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-snapshot-"));
     snapshotService = new WorkspaceSnapshotService();
     await initializeRepo();
   });
@@ -259,7 +259,7 @@ suite("WorkspaceSnapshotService — multi-root", function () {
   }
 
   async function createRepo(): Promise<string> {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "fp-snap-mr-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cy-snap-mr-"));
     tempDirs.push(dir);
     git(dir, "init");
     git(dir, "config", "user.name", "ctrlyoke Tests");

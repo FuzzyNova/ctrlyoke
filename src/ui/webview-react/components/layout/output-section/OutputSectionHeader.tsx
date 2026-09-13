@@ -119,7 +119,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           >
             <button
               type="button"
-              className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+              className={`cy-tab cy-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
               onClick={onSelectOutputTab}
               aria-label="Output"
               aria-selected={activeOutputTab === OUTPUT_TABS.OUTPUT}
@@ -133,7 +133,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             </button>
             <button
               type="button"
-              className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.TERMINAL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+              className={`cy-tab cy-tab-hc ${activeOutputTab === OUTPUT_TABS.TERMINAL ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
               onClick={onSelectTerminalTab}
               aria-label={
                 terminalExecutionRunLabel

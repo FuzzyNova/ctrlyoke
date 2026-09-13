@@ -144,7 +144,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   let recorder: TimelineRecorder;
 
   setup(async () => {
-    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-history-"));
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-history-"));
     manager = new OutputHistoryManager(tempWorkspace);
     recorder = new TimelineRecorder();
   });
@@ -158,7 +158,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   test("shares one history search index service per workspace", async () => {
     const equivalentWorkspacePath = path.join(tempWorkspace, ".");
     const otherWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-history-other-")
+      path.join(os.tmpdir(), "cy-history-other-")
     );
     const secondManager = new OutputHistoryManager(equivalentWorkspacePath);
     const otherManager = new OutputHistoryManager(otherWorkspace);
@@ -2068,7 +2068,7 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   let manager: OutputHistoryManager;
 
   setup(async () => {
-    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-enrich-"));
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-enrich-"));
     manager = new OutputHistoryManager(tempWorkspace);
   });
 
@@ -2257,7 +2257,7 @@ suite("OutputHistoryManager usage store feed", () => {
   let manager: OutputHistoryManager;
 
   setup(async () => {
-    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-usage-feed-"));
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-usage-feed-"));
     manager = new OutputHistoryManager(tempWorkspace);
   });
 
@@ -2382,7 +2382,7 @@ suite("OutputHistoryManager narrow bookkeeping reads", () => {
   let recorder: TimelineRecorder;
 
   setup(async () => {
-    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-bookkeeping-"));
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-bookkeeping-"));
     manager = new OutputHistoryManager(tempWorkspace);
     recorder = new TimelineRecorder();
   });

@@ -155,7 +155,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
           {sectionPlan.canToggle && (
             <button
               type="button"
-              className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
               onClick={(event) => {
                 event.preventDefault();
                 updateExpansion(type, !sectionPlan.isExpanded);
@@ -202,7 +202,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       }
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="text-[length:var(--cy-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
           {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}
@@ -388,7 +388,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           {sectionPlan.canToggle && (
             <button
               type="button"
-              className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
               onClick={(event) => {
                 event.preventDefault();
                 updateExpansion(type, !sectionPlan.isExpanded);
@@ -442,7 +442,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       }
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <div className="text-[length:var(--cy-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
           {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}

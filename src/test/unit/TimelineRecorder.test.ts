@@ -43,7 +43,7 @@ suite("TimelineRecorder", () => {
   let recorder: TimelineRecorder;
 
   setup(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "fp-timeline-"));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cy-timeline-"));
     recorder = new TimelineRecorder();
     manifestPath = await recorder.initializeRunAt(
       tempDir,

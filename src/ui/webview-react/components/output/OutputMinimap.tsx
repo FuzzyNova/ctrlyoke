@@ -556,7 +556,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={railRef}
-      className="relative flex-shrink-0 flex flex-row w-[var(--fp-output-minimap-width)] [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
+      className="relative flex-shrink-0 flex flex-row w-[var(--cy-output-minimap-width)] [--cy-minimap-diff-added:theme(colors.minimap-diff-added)] [--cy-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
       style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
@@ -567,14 +567,14 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           markers below are absolutely positioned on top of it. */}
       <div
         ref={pillsColumnRef}
-        className="flex-shrink-0 w-[var(--fp-output-minimap-pills-width)] border-l border-panel-border"
+        className="flex-shrink-0 w-[var(--cy-output-minimap-pills-width)] border-l border-panel-border"
       />
 
       {/* Diff track — opaque, flush with the panel edge; holds the diff
           overlays and the scroll thumb. */}
       <div
         ref={diffColumnRef}
-        className="relative flex-shrink-0 w-[var(--fp-output-minimap-diff-width)] bg-sidebar-bg"
+        className="relative flex-shrink-0 w-[var(--cy-output-minimap-diff-width)] bg-sidebar-bg"
       >
         {/* Diff overlays — one bar per occupied rail pixel, below thumb and
             markers. Only a genuinely paired split-view row (or a collapsed
@@ -588,15 +588,15 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             ? (() => {
                 const removedFraction = bar.removedCoverage / coverage;
                 return `linear-gradient(to right,
-                  var(--fp-minimap-diff-removed) 0%,
-                  var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
-                  var(--fp-minimap-diff-added) ${removedFraction * 100}%,
-                  var(--fp-minimap-diff-added) 100%
+                  var(--cy-minimap-diff-removed) 0%,
+                  var(--cy-minimap-diff-removed) ${removedFraction * 100}%,
+                  var(--cy-minimap-diff-added) ${removedFraction * 100}%,
+                  var(--cy-minimap-diff-added) 100%
                 )`;
               })()
             : bar.removedCoverage >= bar.addedCoverage
-              ? "var(--fp-minimap-diff-removed)"
-              : "var(--fp-minimap-diff-added)";
+              ? "var(--cy-minimap-diff-removed)"
+              : "var(--cy-minimap-diff-added)";
           return (
             <div
               key={bar.row}
@@ -633,8 +633,8 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           height: `${viewportPct.height}%`,
           width:
             isDragging || isTrackExpanded
-              ? "var(--fp-output-minimap-width)"
-              : "var(--fp-output-minimap-diff-width)",
+              ? "var(--cy-output-minimap-width)"
+              : "var(--cy-output-minimap-diff-width)",
           boxShadow:
             "inset 0 0 0 1px var(--vscode-panel-border, rgba(128,128,128,0.45))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
@@ -701,7 +701,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             <div
               role="group"
               aria-label={`Step ${step.label}`}
-              className={`group absolute right-[var(--fp-output-minimap-diff-width)] flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
+              className={`group absolute right-[var(--cy-output-minimap-diff-width)] flex flex-row items-center z-header ${step.hidden ? "opacity-60" : ""}`}
               style={{
                 top: topStyle,
                 transform: "translateY(-50%)",
@@ -820,7 +820,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 title={step.label}
                 aria-label={step.label}
                 tabIndex={0}
-                className={`h-1 w-[var(--fp-output-minimap-pills-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
+                className={`h-1 w-[var(--cy-output-minimap-pills-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current group-hover:h-1.5 group-focus-within:h-1.5 ${dotColorClass}`}
               />
               {step.hasHiddenActivity && (
                 <span

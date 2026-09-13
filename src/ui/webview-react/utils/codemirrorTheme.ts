@@ -224,7 +224,7 @@ export function createThemeExtension(
         document.body.classList.contains("vscode-dark") ||
         window
           .getComputedStyle(document.documentElement)
-          .getPropertyValue("--fp-color-theme-kind")
+          .getPropertyValue("--cy-color-theme-kind")
           .trim() !== THEME_KINDS.LIGHT,
     }
   );

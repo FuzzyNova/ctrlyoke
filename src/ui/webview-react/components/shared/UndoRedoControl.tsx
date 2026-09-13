@@ -515,7 +515,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const btnSizes = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
-  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--fp-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-none focus-visible:ring-1`;
+  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--cy-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-none focus-visible:ring-1`;
   const btnBaseDesktop =
     "inline-flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
   const resolvedBtnBase = isMobile ? btnBase : btnBaseDesktop;
@@ -526,7 +526,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} flex-shrink-0`;
   const containerClass = embedded
     ? `relative inline-flex h-full self-stretch overflow-hidden flex-shrink-0 ${btnSizes.groupContainer}`
-    : `fp-button-group ${btnSizes.groupContainer}`;
+    : `cy-button-group ${btnSizes.groupContainer}`;
 
   const undoDisabled = !canUndo || editingDisabled;
   const redoDisabled = !canRedo || editingDisabled;
@@ -673,7 +673,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                   );
                   handleJumpTo(stepCount, direction);
                 }}
-                className={`fp-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
+                className={`cy-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
                   direction === UNDO_REDO_DIRECTIONS.REDO
                     ? "text-dropdown-fg opacity-80"
                     : "text-dropdown-fg"

@@ -459,7 +459,7 @@ suite("WorkflowInstance session activity forwarding", () => {
 
   test("merges follow-up activity into the persisted history entry with a one-time divider and refreshed tokens/elapsed", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-session-activity-history-")
+      path.join(os.tmpdir(), "cy-session-activity-history-")
     );
     let instance: WorkflowInstance | undefined;
 
@@ -1173,7 +1173,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
   test("persists authoritative runtime transitions through OutputHistoryManager when a run history is active", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-instance-runtime-")
+      path.join(os.tmpdir(), "cy-instance-runtime-")
     );
     let instance: WorkflowInstance | undefined;
 
@@ -1408,7 +1408,7 @@ suite("WorkflowInstance eager working file creation", () => {
 suite("WorkflowInstance append-and-continue", () => {
   test("appendFromFile preserves the active workflow properties and appends only source steps", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-append-props-")
+      path.join(os.tmpdir(), "cy-append-props-")
     );
 
     try {
@@ -2939,7 +2939,7 @@ suite("WorkflowInstance execution-lease conflict messaging", () => {
 suite("WorkflowInstance executeSeededRun", () => {
   test("executes an already-seeded run without re-promoting or restarting, and initializes its own timeline", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-seeded-run-")
+      path.join(os.tmpdir(), "cy-seeded-run-")
     );
     let instance: WorkflowInstance | undefined;
 
@@ -3116,7 +3116,7 @@ suite("WorkflowInstance executeSeededRun", () => {
 suite("WorkflowInstance run-metadata bookkeeping", () => {
   test("getNextWorktreeSetupAttemptIndex scans the timeline for the phase's max attempt index", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-worktree-attempt-")
+      path.join(os.tmpdir(), "cy-worktree-attempt-")
     );
     let instance: WorkflowInstance | undefined;
 
@@ -3209,7 +3209,7 @@ suite("WorkflowInstance run-metadata bookkeeping", () => {
 
   test("computeTargetRunIndices resolves each rerun target's next run index from the timeline", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-rerun-index-")
+      path.join(os.tmpdir(), "cy-rerun-index-")
     );
     let instance: WorkflowInstance | undefined;
 
@@ -3300,7 +3300,7 @@ suite("WorkflowInstance run-metadata bookkeeping", () => {
 
   test("computeTargetRunIndices returns an empty map when the run is not a continuation", async () => {
     const tempWorkspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-rerun-index-noncontinuation-")
+      path.join(os.tmpdir(), "cy-rerun-index-noncontinuation-")
     );
     let instance: WorkflowInstance | undefined;
 

@@ -162,7 +162,7 @@ export interface RunSummaryBannerProps extends RunBannerData {
 export const WorkspaceWorktreeOwnershipBanner: React.FC<{
   ownership: WorkspaceWorktreeOwnership;
 }> = ({ ownership }) => (
-  <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
+  <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
     <Icon name="source-control" />
     <span>
       This is branch <code className="font-mono">{ownership.branchName}</code>,
@@ -226,7 +226,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
 
   return (
     <div
-      className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
+      className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
         isPinned ? "sticky top-0 z-header" : ""
       }`}
     >

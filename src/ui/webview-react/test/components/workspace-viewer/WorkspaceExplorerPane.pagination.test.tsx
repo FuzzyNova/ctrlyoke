@@ -282,7 +282,7 @@ describe("WorkspaceExplorerPane pagination", () => {
       },
     });
     const selectedRow = screen.getByRole("button", { name: /selected\.ts/ });
-    expect(selectedRow).toHaveClass("fp-list-row-selected");
+    expect(selectedRow).toHaveClass("cy-list-row-selected");
     expect(selectedRow).toHaveStyle({ opacity: "0.5" });
     expect(selectedRow?.querySelector("span")).toHaveClass(
       SCM_KIND_COLOR_CLASS.modified

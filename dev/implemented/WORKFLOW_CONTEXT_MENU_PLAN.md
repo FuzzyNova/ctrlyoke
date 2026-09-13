@@ -438,7 +438,7 @@ scrollers.
 ### One interaction bug to fix while wiring this
 
 `WorkflowStatus`'s outside-click handler closes the dropdown on any document
-`mousedown` outside `containerRef` that is not inside `.fp-dropdown-popup`.
+`mousedown` outside `containerRef` that is not inside `.cy-dropdown-popup`.
 `StepContextMenu` portals to `document.body`, and its
 `onPointerDown={stopPropagation}` does **not** stop the separate `mousedown`
 event — so clicking a menu item would close the dropdown out from under the row

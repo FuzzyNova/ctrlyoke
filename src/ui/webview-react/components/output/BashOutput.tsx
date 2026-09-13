@@ -185,7 +185,7 @@ export const BashOutput = memo<BashOutputProps>(
             {canToggle && (
               <button
                 type="button"
-                className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+                className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
                 onClick={(event) => {
                   event.preventDefault();
                   updateExpansion(type, !isExpanded);
@@ -204,7 +204,7 @@ export const BashOutput = memo<BashOutputProps>(
       if (isRunning) {
         return (
           <span
-            className={`inline ml-2 text-[length:var(--fp-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES.running}`}
+            className={`inline ml-2 text-[length:var(--cy-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES.running}`}
           >
             running
           </span>
@@ -217,7 +217,7 @@ export const BashOutput = memo<BashOutputProps>(
           : TOOL_RESULT_STATUSES.ERROR;
         return (
           <span
-            className={`inline ml-2 text-[length:var(--fp-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES[variant]}`}
+            className={`inline ml-2 text-[length:var(--cy-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES[variant]}`}
           >
             (exit: {exitCode})
           </span>

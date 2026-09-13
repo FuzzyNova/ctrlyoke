@@ -91,7 +91,7 @@ export const CreateScriptModal: React.FC<CreateScriptModalProps> = ({
         <div className="flex w-full items-center justify-end gap-2">
           <button
             type="button"
-            className="fp-select-trigger w-auto shrink-0 px-3 text-xs hover:bg-list-hover-bg hover:text-foreground disabled:opacity-50"
+            className="cy-select-trigger w-auto shrink-0 px-3 text-xs hover:bg-list-hover-bg hover:text-foreground disabled:opacity-50"
             onClick={onClose}
             disabled={pending}
           >

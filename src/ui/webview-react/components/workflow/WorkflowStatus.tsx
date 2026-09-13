@@ -721,7 +721,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       const target = event.target;
       const isDropdownPortalClick =
         target instanceof Element &&
-        target.closest(".fp-dropdown-popup, .step-context-menu");
+        target.closest(".cy-dropdown-popup, .step-context-menu");
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node) &&
@@ -1643,7 +1643,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             ref={narrowRef}
             type="button"
             onClick={startEditing}
-            className={`workflow-button-main fp-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
+            className={`workflow-button-main cy-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
             title="Click to edit workflow name"
             aria-label="Edit workflow name"
           >
@@ -1735,7 +1735,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
             title={workflowCountTooltip}
-            className={`workflow-button-dropdown fp-dropdown-row ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg fp-dropdown-row-selected" : ""}`}
+            className={`workflow-button-dropdown cy-dropdown-row ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg cy-dropdown-row-selected" : ""}`}
           >
             {/* Pulsing dot: another loaded workflow is running */}
             {effectiveLoadedWorkflows.some(

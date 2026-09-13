@@ -795,7 +795,7 @@ function MermaidBlock({ code }: { code: string }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
   // Unique DOM ID required by mermaid.render(); counter is simpler than crypto.
-  const idRef = useRef(`fp-mermaid-${++mermaidIdCounter}`);
+  const idRef = useRef(`cy-mermaid-${++mermaidIdCounter}`);
   const copyResetRef = useRef(0);
 
   // Auto-render on mount / when the source changes, unless already cached.
@@ -1212,7 +1212,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         const rawText = getNodeText(codeChildren).replace(/\n$/, "");
 
         return (
-          <code className={`fp-syntax ${langClass ?? ""} font-mono block`}>
+          <code className={`cy-syntax ${langClass ?? ""} font-mono block`}>
             {renderHighlightedCode(rawText, language, codeFindHighlight)}
           </code>
         );

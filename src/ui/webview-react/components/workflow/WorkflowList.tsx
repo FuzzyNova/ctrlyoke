@@ -206,8 +206,8 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
       title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
         isCurrent
-          ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
-          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
+          ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
+          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
       }`}
     >
       <WorkflowRowLayout
@@ -545,7 +545,7 @@ export const WorkflowList = React.forwardRef<
           <button
             type="button"
             onClick={() => onNewWorkflow?.()}
-            className="fp-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
+            className="cy-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
           >
             <Icon name="add" className="text-xs" />
             New Workflow
@@ -560,7 +560,7 @@ export const WorkflowList = React.forwardRef<
           <button
             type="button"
             onClick={onClearHistory}
-            className="workflow-menu-action fp-dropdown-row w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
+            className="workflow-menu-action cy-dropdown-row w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
           >
             Clear History
           </button>

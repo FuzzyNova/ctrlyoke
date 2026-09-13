@@ -471,7 +471,7 @@ export const Header: React.FC<{
   // chevron hidden below sm (handled inside UndoRedoControl).
   const actionControls = (
     <div
-      className={`fp-button-group ${btnSize.groupContainer}`}
+      className={`cy-button-group ${btnSize.groupContainer}`}
       role="group"
       aria-label="Workflow action controls"
     >
@@ -490,7 +490,7 @@ export const Header: React.FC<{
         <Icon name="save" className={`${btnSize.icon}`} />
       </button>
 
-      <div className="fp-button-group-divider" />
+      <div className="cy-button-group-divider" />
 
       <DryRunButton
         btnSize={btnSize}
@@ -498,7 +498,7 @@ export const Header: React.FC<{
         disabled={dryRunDisabled}
       />
 
-      <div className="fp-button-group-divider" />
+      <div className="cy-button-group-divider" />
 
       {/* Undo / Redo / History */}
       <UndoRedoControl
@@ -535,12 +535,12 @@ export const Header: React.FC<{
     slot1Enabled || (!slot2NarrowVisible && !slot3Enabled);
   const HIDDEN_UNTIL_XS = "hidden xs:flex";
   const dividerClass = (bothVisible: boolean) =>
-    `fp-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
+    `cy-button-group-divider${bothVisible ? "" : " hidden xs:block"}`;
 
   const runControls = (
     <div className="header-run-controls flex items-center flex-shrink-0">
       <div
-        className={`fp-button-group ${btnSize.groupContainer}`}
+        className={`cy-button-group ${btnSize.groupContainer}`}
         role="group"
         aria-label="Workflow execution controls"
       >
@@ -671,7 +671,7 @@ export const Header: React.FC<{
           <div className="flex items-center">
             <button
               className={`control-button flex items-center justify-center gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
-                mobileStepsOpen ? "fp-contrast-active " : ""
+                mobileStepsOpen ? "cy-contrast-active " : ""
               }${
                 mobileStepsOpen
                   ? "bg-btn-bg text-btn-fg"
@@ -688,7 +688,7 @@ export const Header: React.FC<{
 
           {/* Center (auto): All controls in one group — Save, Undo/Redo, Search, Explorer, Settings */}
           <div
-            className={`fp-button-group ${btnSize.groupContainer}`}
+            className={`cy-button-group ${btnSize.groupContainer}`}
             role="group"
             aria-label="Workflow controls"
           >
@@ -706,13 +706,13 @@ export const Header: React.FC<{
             >
               <Icon name="save" className={`${btnSize.icon}`} />
             </button>
-            <div className="fp-button-group-divider" />
+            <div className="cy-button-group-divider" />
             <DryRunButton
               btnSize={btnSize}
               onClick={openDryRunWorkflow}
               disabled={dryRunDisabled}
             />
-            <div className="fp-button-group-divider" />
+            <div className="cy-button-group-divider" />
             {/* Undo / Redo / History */}
             <UndoRedoControl
               isRunning={isRunning}
@@ -722,11 +722,11 @@ export const Header: React.FC<{
               showHistoryChevronOnDesktopOnly="lg"
               onAction={handleUndoRedoAction}
             />
-            <div className="fp-button-group-divider" />
+            <div className="cy-button-group-divider" />
             {/* Search */}
             <button
               className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                isHistorySearchOpen ? "fp-contrast-active " : ""
+                isHistorySearchOpen ? "cy-contrast-active " : ""
               }${
                 isHistorySearchOpen
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
@@ -741,7 +741,7 @@ export const Header: React.FC<{
             </button>
             {isStandalone && (
               <>
-                <div className="fp-button-group-divider" />
+                <div className="cy-button-group-divider" />
                 <button
                   className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
                   onClick={openWorkspaceViewer}
@@ -752,11 +752,11 @@ export const Header: React.FC<{
                 </button>
               </>
             )}
-            <div className="fp-button-group-divider" />
+            <div className="cy-button-group-divider" />
             {/* Settings */}
             <button
               className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                globalSettingsOpen ? "fp-contrast-active " : ""
+                globalSettingsOpen ? "cy-contrast-active " : ""
               }${
                 globalSettingsOpen
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
@@ -775,7 +775,7 @@ export const Header: React.FC<{
           <div className="flex items-center justify-end">
             <button
               className={`control-button flex items-center justify-center gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
-                mobileWorkflowPropsOpen ? "fp-contrast-active " : ""
+                mobileWorkflowPropsOpen ? "cy-contrast-active " : ""
               }${
                 mobileWorkflowPropsOpen
                   ? "bg-btn-bg text-btn-fg"
@@ -875,14 +875,14 @@ export const Header: React.FC<{
             Desktop only (sm+); on mobile these buttons live in the row-2 combined center group. */}
         <div className="header-nav hidden sm:flex sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 min-w-0 items-center justify-end">
           <div
-            className={`fp-button-group ${btnSize.groupContainer}`}
+            className={`cy-button-group ${btnSize.groupContainer}`}
             role="group"
             aria-label="App navigation controls"
           >
             {/* Search */}
             <button
               className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                isHistorySearchOpen ? "fp-contrast-active " : ""
+                isHistorySearchOpen ? "cy-contrast-active " : ""
               }${
                 isHistorySearchOpen
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
@@ -899,7 +899,7 @@ export const Header: React.FC<{
             {/* Workspace Explorer — standalone (browser) mode only */}
             {isStandalone && (
               <>
-                <div className="fp-button-group-divider" />
+                <div className="cy-button-group-divider" />
                 <button
                   className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
                   onClick={openWorkspaceViewer}
@@ -911,12 +911,12 @@ export const Header: React.FC<{
               </>
             )}
 
-            <div className="fp-button-group-divider" />
+            <div className="cy-button-group-divider" />
 
             {/* Settings button */}
             <button
               className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                globalSettingsOpen ? "fp-contrast-active " : ""
+                globalSettingsOpen ? "cy-contrast-active " : ""
               }${
                 globalSettingsOpen
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"

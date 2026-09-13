@@ -54,7 +54,7 @@ function wrapUniquePaletteIndex(index: number): number {
 /** Return the theme-aware CSS value for a step's unique identity color. */
 export function getUniqueStepColor(stepIndex: number): string {
   const paletteIndex = wrapUniquePaletteIndex(stepIndex);
-  return `var(--fp-step-hue-${paletteIndex}, ${UNIQUE_PALETTE.dark[paletteIndex]})`;
+  return `var(--cy-step-hue-${paletteIndex}, ${UNIQUE_PALETTE.dark[paletteIndex]})`;
 }
 
 function getDocumentThemeKind(): ThemeKind {
@@ -74,7 +74,7 @@ function getDocumentThemeKind(): ThemeKind {
         ? ""
         : window
             .getComputedStyle(document.documentElement)
-            .getPropertyValue("--fp-color-theme-kind")
+            .getPropertyValue("--cy-color-theme-kind")
             .trim();
     if (
       forwardedThemeKind === THEME_KINDS.LIGHT ||

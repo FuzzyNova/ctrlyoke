@@ -81,7 +81,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Tab buttons — fixed left, never shrink */}
       <div className="flex items-center flex-shrink-0" role="tablist">
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          className={`cy-tab cy-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.EXPLORER)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.EXPLORER}
           aria-label="Explorer"
@@ -92,7 +92,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          className={`cy-tab cy-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL}
           aria-label="Source Control"
@@ -103,7 +103,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <span className="hidden sm:inline">Source Control</span>
         </button>
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SEARCH ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          className={`cy-tab cy-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SEARCH ? "cy-tab-active cy-tab-hc-selected" : "cy-tab-inactive"}`}
           onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SEARCH)}
           aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SEARCH}
           aria-label="Search"

@@ -631,9 +631,9 @@ const CommitRow: React.FC<CommitRowProps> = ({
   return (
     <button
       data-testid={`commit-row-${commit.hash}`}
-      className={`fp-list-row flex items-center gap-2 px-2 text-left transition-colors w-full min-w-0 h-6 overflow-hidden ${
+      className={`cy-list-row flex items-center gap-2 px-2 text-left transition-colors w-full min-w-0 h-6 overflow-hidden ${
         isSelected
-          ? "fp-list-row-selected bg-list-active-bg"
+          ? "cy-list-row-selected bg-list-active-bg"
           : `hover:bg-list-hover-bg${commit.isHead ? " bg-list-active-bg/40" : ""}`
       }`}
       onClick={(e) => {

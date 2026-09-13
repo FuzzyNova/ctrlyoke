@@ -668,26 +668,26 @@ export function AgentSkillsManagerSection({
       {/* Type switcher + Open Folder */}
       <div className="flex items-center gap-2">
         <div
-          className="fp-mode-switch"
+          className="cy-mode-switch"
           role="group"
           aria-label="Agent or skill type"
         >
           <button
             type="button"
             onClick={() => setActiveType(HARNESS_FILE_TYPES.AGENT)}
-            className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.AGENT ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            className={`cy-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.AGENT ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
             title="Manage agent files"
           >
             <Icon name="agent" className="codicon-sm" />
             Agents
           </button>
-          <div className="fp-mode-switch-divider">
+          <div className="cy-mode-switch-divider">
             <div className="w-px h-full bg-current opacity-40" />
           </div>
           <button
             type="button"
             onClick={() => setActiveType(HARNESS_FILE_TYPES.SKILL)}
-            className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.SKILL ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            className={`cy-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.SKILL ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
             title="Manage skill files"
           >
             <Icon name="tools" className="codicon-sm" />

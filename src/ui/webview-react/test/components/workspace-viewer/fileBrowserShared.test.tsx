@@ -157,7 +157,7 @@ describe("EntryRow", () => {
     );
 
     const selectedRow = screen.getByRole("button", { name: /index\.ts/ });
-    expect(selectedRow).toHaveClass("fp-list-row-selected");
+    expect(selectedRow).toHaveClass("cy-list-row-selected");
     expect(selectedRow).toHaveStyle({ opacity: 0.5 });
     expect(selectedRow).toHaveClass("min-h-[44px]");
     fireEvent.click(selectedRow);

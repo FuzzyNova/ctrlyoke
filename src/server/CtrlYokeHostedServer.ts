@@ -1789,7 +1789,7 @@ export class CtrlYokeHostedServer
   }
 
   private resolveThemeBodyClass(): string {
-    const themeKind = this.cachedThemeVars["--fp-color-theme-kind"];
+    const themeKind = this.cachedThemeVars["--cy-color-theme-kind"];
     return themeKind === THEME_KINDS.LIGHT
       ? "vscode-light"
       : themeKind === THEME_KINDS.HIGH_CONTRAST

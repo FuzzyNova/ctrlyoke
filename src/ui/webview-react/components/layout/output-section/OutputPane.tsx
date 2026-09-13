@@ -269,7 +269,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       <div
         ref={outputRef}
         id="output-content"
-        className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
+        className="font-mono text-[length:var(--cy-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
         style={{ overflowAnchor: "none" }}
         onScroll={onScroll}
         onWheel={onWheel}
@@ -386,7 +386,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       </div>
 
       {showVirtualizationOverlay && (
-        <div className="pointer-events-none absolute inset-y-0 left-0 right-[var(--fp-output-minimap-width)] flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-y-0 left-0 right-[var(--cy-output-minimap-width)] flex items-center justify-center">
           <div className="flex items-center gap-2 rounded border border-widget-border bg-editor-bg/90 px-3 py-1.5 text-xs text-description-fg shadow-sm backdrop-blur-[1px]">
             <Icon name="loading" className="codicon-modifier-spin" />
             <span>Rendering output…</span>

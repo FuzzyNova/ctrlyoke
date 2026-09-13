@@ -402,7 +402,7 @@ const ScriptOutputSegment: React.FC<{
     className={[
       "px-[var(--spacing-sm)] border-l-[3px] border-l-transparent",
       "whitespace-pre-wrap [overflow-wrap:anywhere] font-mono",
-      "text-[length:var(--fp-output-font-size-sm)] bg-transparent",
+      "text-[length:var(--cy-output-font-size-sm)] bg-transparent",
       row.isFirstSegment ? "pt-[var(--spacing-sm)] mt-[var(--spacing-sm)]" : "",
       row.isLastSegment ? "pb-[var(--spacing-sm)] mb-[var(--spacing-sm)]" : "",
     ]
@@ -414,7 +414,7 @@ const ScriptOutputSegment: React.FC<{
       <div>
         <button
           type="button"
-          className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+          className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
           onClick={(event) => {
             event.preventDefault();
             onTailToggle?.(!row.tailToggle?.expanded);
@@ -453,7 +453,7 @@ const ThinkingOutput: React.FC<{
       : OUTPUT_DEFAULT_LABELS.THINKING;
   return (
     <div className="my-2">
-      <div className="text-[length:var(--fp-output-font-size-xs)] text-description-fg mb-1">
+      <div className="text-[length:var(--cy-output-font-size-xs)] text-description-fg mb-1">
         ● {displayLabel}
       </div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
@@ -487,7 +487,7 @@ const UserSteerOutput: React.FC<{
   atomicContextReferences = false,
 }) => (
   <div className="my-2">
-    <div className="text-[length:var(--fp-output-font-size-xs)] text-indicator-info mb-1">
+    <div className="text-[length:var(--cy-output-font-size-xs)] text-indicator-info mb-1">
       ● User message
     </div>
     <div className="text-editor-fg pl-3 border-l border-indicator-info/50 whitespace-pre-wrap [overflow-wrap:anywhere]">
@@ -520,7 +520,7 @@ const ToolResultOutput: React.FC<{
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error text-[length:var(--fp-output-font-size-sm)]"} ${TOOL_RESULT_STANDALONE_INDENT} flex items-start gap-1`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error text-[length:var(--cy-output-font-size-sm)]"} ${TOOL_RESULT_STANDALONE_INDENT} flex items-start gap-1`}
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">
@@ -1058,7 +1058,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               ? ` — ${data.preTokens.toLocaleString()} tokens compacted`
               : "";
         return (
-          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
+          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--cy-output-font-size-sm)]">
             <div className="flex-1 h-px bg-panel-border" />
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
               <Icon name="fold" className="text-xxs" />
@@ -1074,7 +1074,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         const data = event.data as FollowUpResumedData;
         const resumedAtLabel = data.resumedAt ? formatTime(data.resumedAt) : "";
         return (
-          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]">
+          <div className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--cy-output-font-size-sm)]">
             <div className="flex-1 h-px bg-panel-border" />
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
               <Icon name="debug-continue" className="text-xxs" />
@@ -1180,7 +1180,7 @@ const CliHeaderRowView: React.FC<{
           ? "codicon-tools"
           : "codicon-checklist";
     return (
-      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--cy-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
         <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
           <span className="inline-flex min-w-0 items-center gap-1">
@@ -1217,7 +1217,7 @@ const CliHeaderRowView: React.FC<{
   }
 
   return (
-    <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+    <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--cy-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
       <span className="inline-flex min-w-0 flex-1 items-center flex-wrap gap-x-1 gap-y-[2px]">
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
         <span className="inline-flex min-w-0 items-center gap-1">
@@ -1233,7 +1233,7 @@ const CliHeaderRowView: React.FC<{
           </span>
         )}
         {(harnessShortName || modelLabel) && (
-          <span className="min-w-0 break-words text-description-fg font-normal text-[length:var(--fp-output-font-size-xs)] [overflow-wrap:anywhere]">
+          <span className="min-w-0 break-words text-description-fg font-normal text-[length:var(--cy-output-font-size-xs)] [overflow-wrap:anywhere]">
             {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
           </span>
         )}
@@ -1483,7 +1483,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   if (parts.length === 0) return null;
 
   return (
-    <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
+    <div className="mt-[var(--spacing-xs)] text-[length:var(--cy-output-font-size-xs)] text-[var(--fg-secondary)]">
       {parts.map((part, index) => (
         <React.Fragment key={`stats-${index}`}>
           {index > 0 && <span aria-hidden="true"> | </span>}
@@ -1672,7 +1672,7 @@ const CoordinationActivityRowView: React.FC<{
   row: CoordinationActivityRow;
 }> = ({ row }) => (
   <div
-    className="border-l-2 border-[var(--vscode-textLink-foreground)]/50 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
+    className="border-l-2 border-[var(--vscode-textLink-foreground)]/50 py-1 text-[length:var(--cy-output-font-size-xs)] text-description-fg"
     data-untrusted-content="true"
   >
     <div className="font-medium text-[var(--fg-secondary)]">
@@ -1736,7 +1736,7 @@ function OutputRowComponent({
       break;
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (
-        <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+        <div className="px-3 pt-2 text-[length:var(--cy-output-font-size-xs)] uppercase tracking-wide text-description-fg">
           {row.label}
         </div>
       );
@@ -1920,7 +1920,7 @@ function OutputRowComponent({
       content = (
         <button
           type="button"
-          className="fp-dropdown-row inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-description-fg hover:text-foreground"
+          className="cy-dropdown-row inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-description-fg hover:text-foreground"
           aria-label={`Expand ${row.attemptCount} attempts${totalLabel ? `, ${totalLabel} total` : ""}`}
           onClick={() => onAttemptGroupToggle?.(row.groupKey)}
         >

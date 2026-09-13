@@ -868,13 +868,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         viewRef.current?.requestMeasure();
       });
     };
-    window.addEventListener("fp-request-editor-remeasure", handleRemeasure);
+    window.addEventListener("cy-request-editor-remeasure", handleRemeasure);
     return () => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId);
       }
       window.removeEventListener(
-        "fp-request-editor-remeasure",
+        "cy-request-editor-remeasure",
         handleRemeasure
       );
     };
@@ -1583,7 +1583,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
                 if (changed) {
                   lastOverflowRef.current = signedOverflow;
                   window.dispatchEvent(
-                    new CustomEvent("fp-editor-overflow-change", {
+                    new CustomEvent("cy-editor-overflow-change", {
                       detail: { signedOverflow, cause },
                     })
                   );
@@ -1614,7 +1614,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (Math.abs(signedOverflow - (lastOverflowRef.current ?? 0)) >= 1) {
             lastOverflowRef.current = signedOverflow;
             window.dispatchEvent(
-              new CustomEvent("fp-editor-overflow-change", {
+              new CustomEvent("cy-editor-overflow-change", {
                 detail: { signedOverflow, cause: "doc" },
               })
             );

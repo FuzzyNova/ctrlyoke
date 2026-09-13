@@ -300,10 +300,10 @@ describe("resolveStepColor", () => {
   it("uses the light palette when the theme is forwarded through the DOM", () => {
     const originalBodyClass = document.body.className;
     const originalThemeKind = document.documentElement.style.getPropertyValue(
-      "--fp-color-theme-kind"
+      "--cy-color-theme-kind"
     );
     document.body.className = "vscode-light";
-    document.documentElement.style.setProperty("--fp-color-theme-kind", "dark");
+    document.documentElement.style.setProperty("--cy-color-theme-kind", "dark");
 
     try {
       expect(getStepPaletteHex(0)).toBe(getStepPaletteHex(0, "light"));
@@ -311,11 +311,11 @@ describe("resolveStepColor", () => {
       document.body.className = originalBodyClass;
       if (originalThemeKind) {
         document.documentElement.style.setProperty(
-          "--fp-color-theme-kind",
+          "--cy-color-theme-kind",
           originalThemeKind
         );
       } else {
-        document.documentElement.style.removeProperty("--fp-color-theme-kind");
+        document.documentElement.style.removeProperty("--cy-color-theme-kind");
       }
     }
   });

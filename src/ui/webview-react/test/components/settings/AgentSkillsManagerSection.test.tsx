@@ -175,7 +175,7 @@ describe("AgentSkillsManagerSection", () => {
     await user.click(
       screen
         .getAllByRole("button", { name: /Claude Code/ })
-        .find((button) => button.className.includes("fp-dropdown-row"))!
+        .find((button) => button.className.includes("cy-dropdown-row"))!
     );
 
     const backdrop = screen.getByRole("button", {

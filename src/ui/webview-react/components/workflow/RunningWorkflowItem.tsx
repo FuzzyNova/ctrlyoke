@@ -217,8 +217,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       // every column between them.
       className={`running-workflow-item group flex items-center gap-2 px-2 py-2 text-sm transition-colors ${
         isCurrent
-          ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
-          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
+          ? "bg-list-active-bg text-list-active-fg font-semibold cy-dropdown-row-selected"
+          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cy-dropdown-row"
       }`}
       title={workflow.filePath}
     >

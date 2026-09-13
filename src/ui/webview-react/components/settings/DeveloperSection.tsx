@@ -227,7 +227,7 @@ export function DeveloperSection() {
         <p className="text-xs text-description-fg">
           Logs gated performance measurements through the webview logger.
           Reproduce the slowdown, then filter logs for{" "}
-          <span className="font-mono">[FP-perf]</span>.
+          <span className="font-mono">[cy-perf]</span>.
         </p>
         <SettingToggleRow
           label="Enable performance profiling"

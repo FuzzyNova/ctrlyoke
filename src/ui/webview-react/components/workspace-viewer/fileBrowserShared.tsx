@@ -264,9 +264,9 @@ export function EntryRow({
         openContextMenu(e.clientX, e.clientY, entry);
       }}
       {...longPressHandlers}
-      className={`fp-list-row grid w-full min-w-0 items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
+      className={`cy-list-row grid w-full min-w-0 items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
         isSelected
-          ? "fp-list-row-selected bg-list-active-bg text-editor-fg"
+          ? "cy-list-row-selected bg-list-active-bg text-editor-fg"
           : disabled
             ? "text-editor-fg"
             : "text-editor-fg hover:bg-list-hover-bg"

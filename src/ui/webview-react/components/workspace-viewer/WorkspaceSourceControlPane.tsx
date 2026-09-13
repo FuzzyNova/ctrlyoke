@@ -426,9 +426,9 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     return (
       <div
         key={`${isStaged ? "staged" : "changed"}-${file.path}`}
-        className={`fp-list-row flex items-center gap-1 px-2 py-1 transition-colors ${
+        className={`cy-list-row flex items-center gap-1 px-2 py-1 transition-colors ${
           isSelected
-            ? "fp-list-row-selected bg-list-active-bg"
+            ? "cy-list-row-selected bg-list-active-bg"
             : "hover:bg-list-hover-bg"
         }`}
       >

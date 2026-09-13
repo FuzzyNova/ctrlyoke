@@ -1138,7 +1138,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     expect(screen.getByRole("listitem", { name: /My Workflow/ })).toHaveClass(
-      "fp-dropdown-row-selected"
+      "cy-dropdown-row-selected"
     );
   });
 

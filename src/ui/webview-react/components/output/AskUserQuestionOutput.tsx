@@ -148,7 +148,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                     return (
                       <div
                         key={optionIndex}
-                        className="flex items-start gap-1.5 text-[length:var(--fp-output-font-size-sm)]"
+                        className="flex items-start gap-1.5 text-[length:var(--cy-output-font-size-sm)]"
                       >
                         <span
                           className={`shrink-0 mt-px ${
@@ -194,7 +194,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
                             </span>
                           )}
                           {isSelected && option.preview && (
-                            <pre className="mt-1 whitespace-pre-wrap rounded bg-editor-bg/50 px-2 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg [overflow-wrap:anywhere]">
+                            <pre className="mt-1 whitespace-pre-wrap rounded bg-editor-bg/50 px-2 py-1 text-[length:var(--cy-output-font-size-xs)] text-description-fg [overflow-wrap:anywhere]">
                               {option.preview}
                             </pre>
                           )}

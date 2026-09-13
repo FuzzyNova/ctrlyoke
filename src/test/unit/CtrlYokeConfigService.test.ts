@@ -443,7 +443,7 @@ suite("FileConfigBackend", () => {
   let tmpDir: string;
 
   setup(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-config-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-config-test-"));
   });
 
   teardown(() => {

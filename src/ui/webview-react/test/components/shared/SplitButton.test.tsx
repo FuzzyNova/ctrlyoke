@@ -45,7 +45,7 @@ function renderSplitButton(
 
 /** The main button, addressed by its visible label rather than its role name. */
 const mainButton = () => screen.getByRole("button", { name: /^Run/ });
-const buttonGroup = () => document.querySelector(".fp-button-group")!;
+const buttonGroup = () => document.querySelector(".cy-button-group")!;
 const queryChevron = () =>
   screen.queryByRole("button", { name: DROPDOWN_LABEL });
 

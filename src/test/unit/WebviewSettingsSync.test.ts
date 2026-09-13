@@ -7,10 +7,7 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import {
-  CtrlYokeMCPServer,
-  initializeMcpStorage,
-} from "../../mcp-server";
+import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
 import {
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
@@ -71,7 +68,7 @@ suite("WebviewSettingsSync", () => {
   function tempFile(name?: string): string {
     const p = path.join(
       os.tmpdir(),
-      `fp-wss-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
+      `cy-wss-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
     );
     tempPaths.push(p);
     return p;
@@ -97,7 +94,7 @@ suite("WebviewSettingsSync", () => {
   function tempDir(name?: string): string {
     const p = path.join(
       os.tmpdir(),
-      `fp-wss-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}`
+      `cy-wss-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}`
     );
     tempPaths.push(p);
     return p;
@@ -2581,7 +2578,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 function externalRootTestPath(name: string): string {
   return path.join(
     os.tmpdir(),
-    `fp-wss-external-root-${name}-${Date.now()}-${Math.random()
+    `cy-wss-external-root-${name}-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`
   );

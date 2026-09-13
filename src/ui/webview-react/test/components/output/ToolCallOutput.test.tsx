@@ -294,7 +294,7 @@ describe("McpToolCallOutput", () => {
 
     expect(screen.getByText("Show parameters")).toHaveClass(
       "uppercase",
-      "text-[length:var(--fp-output-font-size-xs)]"
+      "text-[length:var(--cy-output-font-size-xs)]"
     );
     expect(
       screen.queryByText("prompt: queue the next step")

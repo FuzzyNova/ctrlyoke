@@ -40,7 +40,7 @@ suite("HarnessFileMessageService", () => {
 
   setup(async () => {
     workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-harnessfiles-")
+      path.join(os.tmpdir(), "cy-harnessfiles-")
     );
     posted = [];
     service = new HarnessFileMessageService(() => workspaceRoot);

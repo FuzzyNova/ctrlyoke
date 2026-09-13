@@ -86,7 +86,7 @@ on a phone), with these sections:
 1. **Header / context** — timestamp, `isStandalone` vs webview, `isMobile`, viewport size
    (`window.innerWidth/Height` + `visualViewport` height/offset, which matters for the iOS
    keyboard work in `App.tsx`), `devicePixelRatio`, `navigator.userAgent`, active theme
-   (`document.body` class list + `--fp-color-theme-kind`), and which top-level layout branch
+   (`document.body` class list + `--cy-color-theme-kind`), and which top-level layout branch
    rendered (mobile vs desktop, collapsed panel state from `useUiStore`).
 2. **Serialized DOM** — `document.getElementById("root")?.outerHTML` (or the App root
    container), pretty-printed/indented. Optionally strip known-noisy attributes.

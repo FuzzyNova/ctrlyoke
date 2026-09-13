@@ -13,7 +13,7 @@ suite("TempFileManager", () => {
 
   // Use a fresh temp workspace dir for each test to keep things isolated
   function freshManager(): TempFileManager {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-tmp-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-tmp-"));
     return new TempFileManager(workspaceRoot);
   }
 

@@ -16,7 +16,7 @@ interface DropdownPortalProps {
 /**
  * Portaled dropdown container that renders into document.body with position:fixed.
  *
- * Applies the shared `fp-dropdown-popup` class (rounded corners + themed shadow)
+ * Applies the shared `cy-dropdown-popup` class (rounded corners + themed shadow)
  * plus standard background, border, and z-index. Returns null when closed or
  * when the position has not yet been computed.
  *
@@ -31,7 +31,7 @@ export const DropdownPortal = forwardRef<HTMLDivElement, DropdownPortalProps>(
         ref={ref}
         id={id}
         role={role}
-        className={`fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col${className ? ` ${className}` : ""}`}
+        className={`cy-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col${className ? ` ${className}` : ""}`}
         style={{
           top: popupPos.top,
           bottom: popupPos.bottom,

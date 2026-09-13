@@ -23,7 +23,7 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
   });
 
   test("builds a directory tree for an in-workspace @dir/ reference", async () => {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-"));
     fs.mkdirSync(path.join(workspaceRoot, "sub"));
     fs.writeFileSync(path.join(workspaceRoot, "sub", "a.ts"), "// a\n");
 
@@ -34,8 +34,8 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
   });
 
   test("blocks a @dir/ reference that escapes the workspace via '..'", async () => {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
-    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-outside-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-"));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-outside-"));
     fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
     const traversal = path.relative(workspaceRoot, outsideDir);
 
@@ -53,8 +53,8 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
   });
 
   test("blocks an absolute directory path outside the workspace", async () => {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
-    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-outside-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-"));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-outside-"));
     fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
 
     const xml = await buildDirectoryAttachmentXml(
@@ -67,8 +67,8 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
   });
 
   test("allows a directory reference into a second trusted root (multi-root workspace)", async () => {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
-    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-second-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-"));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-second-"));
     fs.mkdirSync(path.join(outsideDir, "sub"));
     fs.writeFileSync(path.join(outsideDir, "sub", "b.ts"), "// b\n");
     const relativeDir = path.relative(
@@ -100,7 +100,7 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
   });
 
   test("resolves a workflow-relative directory reference against the workflow file", async () => {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-attach-"));
     const workflowDir = path.join(workspaceRoot, "bundles");
     const assetsDir = path.join(workflowDir, "workflow.assets");
     fs.mkdirSync(assetsDir, { recursive: true });

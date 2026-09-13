@@ -142,7 +142,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
       return (
         <button
           type="button"
-          className="block min-h-8 w-full min-w-0 whitespace-normal rounded px-1 py-1 text-left text-[length:var(--fp-output-font-size-sm)] [overflow-wrap:anywhere]"
+          className="block min-h-8 w-full min-w-0 whitespace-normal rounded px-1 py-1 text-left text-[length:var(--cy-output-font-size-sm)] [overflow-wrap:anywhere]"
           aria-expanded={false}
           aria-label={`${presentation.label} · ${getCompareLabel(verdict)} · ${actualLabel} · ${action} · ${formatDuration(verdict.durationMs)}`}
           onClick={() => onExpansionChange?.(true)}
@@ -202,7 +202,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     }
 
     return (
-      <div className="min-w-0 rounded border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-[length:var(--fp-output-font-size-sm)] [overflow-wrap:anywhere]">
+      <div className="min-w-0 rounded border border-panel-border bg-sidebar-bg/30 px-2 py-2 text-[length:var(--cy-output-font-size-sm)] [overflow-wrap:anywhere]">
         <button
           type="button"
           className="mb-2 flex w-full min-w-0 flex-wrap items-center gap-1 text-left"

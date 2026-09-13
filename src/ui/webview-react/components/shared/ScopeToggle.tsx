@@ -21,7 +21,7 @@ interface ScopeToggleProps<T extends string> {
 
 /**
  * Two-option segmented control (e.g. User/Workspace) built on the shared
- * `fp-mode-switch` CSS classes (globals.css) — single-sourced so every scope
+ * `cy-mode-switch` CSS classes (globals.css) — single-sourced so every scope
  * picker in the app looks and behaves identically.
  */
 export function ScopeToggle<T extends string>({
@@ -36,14 +36,14 @@ export function ScopeToggle<T extends string>({
 
   return (
     <div
-      className={`fp-mode-switch${className ? ` ${className}` : ""}`}
+      className={`cy-mode-switch${className ? ` ${className}` : ""}`}
       role="group"
       aria-label={ariaLabel}
     >
       <button
         type="button"
         onClick={() => onChange(first.value)}
-        className={`fp-mode-switch-btn ${value === first.value ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+        className={`cy-mode-switch-btn ${value === first.value ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
         title={first.title ?? first.label}
         aria-label={first.label}
         aria-pressed={value === first.value}
@@ -51,13 +51,13 @@ export function ScopeToggle<T extends string>({
         <Icon name={first.icon} />
         {!iconOnly && first.label}
       </button>
-      <div className="fp-mode-switch-divider">
+      <div className="cy-mode-switch-divider">
         <div className="w-px h-full bg-current opacity-40" />
       </div>
       <button
         type="button"
         onClick={() => onChange(second.value)}
-        className={`fp-mode-switch-btn ${value === second.value ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+        className={`cy-mode-switch-btn ${value === second.value ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
         title={second.title ?? second.label}
         aria-label={second.label}
         aria-pressed={value === second.value}

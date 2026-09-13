@@ -219,14 +219,14 @@ const EditorSectionInner: React.FC = () => {
         </button>
 
         <div
-          className="fp-mode-switch mx-2 cy-no-select"
+          className="cy-mode-switch mx-2 cy-no-select"
           role="group"
           aria-label="Step type"
         >
           <button
             type="button"
             disabled={isExternallyManaged}
-            className={`fp-mode-switch-btn ${!isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            className={`cy-mode-switch-btn ${!isScriptMode ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
             onClick={() => setStepType(STEP_TYPES.PROMPT)}
             title="Prompt step — sends text to an AI harness"
             aria-label="Prompt step"
@@ -238,13 +238,13 @@ const EditorSectionInner: React.FC = () => {
             />
             {!isNarrow && <span>Prompt</span>}
           </button>
-          <div className="fp-mode-switch-divider">
+          <div className="cy-mode-switch-divider">
             <div className="w-px h-full bg-current opacity-40" />
           </div>
           <button
             type="button"
             disabled={isExternallyManaged}
-            className={`fp-mode-switch-btn ${isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            className={`cy-mode-switch-btn ${isScriptMode ? "cy-mode-switch-btn-active" : "cy-mode-switch-btn-inactive"}`}
             onClick={() => setStepType(STEP_TYPES.SCRIPT)}
             title="Script step — runs a shell command with no AI interaction"
             aria-label="Script step"

@@ -123,14 +123,14 @@ describe("WorkspaceCommitHistoryPane", () => {
     useWorkspaceViewerStore.setState({ diffRef: `~${commit.hash}` });
     renderPane();
 
-    expect(commitRow().className).toContain("fp-list-row-selected");
+    expect(commitRow().className).toContain("cy-list-row-selected");
   });
 
   it("does not outline any commit when a non-commit ref is viewed", () => {
     useWorkspaceViewerStore.setState({ diffRef: "~diff" });
     renderPane();
 
-    expect(commitRow().className).not.toContain("fp-list-row-selected");
+    expect(commitRow().className).not.toContain("cy-list-row-selected");
   });
 
   it("opens the context menu on long press without also opening the diff", () => {

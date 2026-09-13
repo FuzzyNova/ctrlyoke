@@ -18,7 +18,7 @@ suite("McpRegistryFileManager", () => {
   let originalUserProfile: string | undefined;
 
   setup(async () => {
-    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-mcp-registry-"));
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-mcp-registry-"));
     workspaceRoot = path.join(tempRoot, "workspace");
     userHome = path.join(tempRoot, "user-home");
     await fs.mkdir(workspaceRoot, { recursive: true });

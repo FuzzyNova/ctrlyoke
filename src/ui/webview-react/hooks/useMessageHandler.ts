@@ -287,7 +287,7 @@ export function captureAndSendThemeVars(
     : bodyClasses.contains("vscode-dark")
       ? THEME_KINDS.DARK
       : THEME_KINDS.LIGHT;
-  vars["--fp-color-theme-kind"] = themeKind;
+  vars["--cy-color-theme-kind"] = themeKind;
 
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }

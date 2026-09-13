@@ -309,7 +309,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           <button
             type="button"
             onClick={handleDeleteAllRuns}
-            className="fp-dropdown-row w-full cursor-pointer rounded border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
+            className="cy-dropdown-row w-full cursor-pointer rounded border-none bg-transparent px-3 py-1.5 text-center text-xs text-link-fg transition-colors hover:bg-list-hover-bg"
           >
             Delete all runs
           </button>

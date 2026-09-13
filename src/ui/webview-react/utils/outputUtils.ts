@@ -94,7 +94,7 @@ export function buildDiffAnchorPrefix(
   runIndex: number,
   attemptIndex: number
 ): string {
-  return `fp-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
+  return `cy-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
 }
 
 /**

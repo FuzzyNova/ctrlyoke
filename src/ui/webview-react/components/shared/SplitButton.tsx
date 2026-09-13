@@ -336,7 +336,7 @@ ${MENU_GESTURE_HINT}`
           an already-open menu to close normally rather than re-opening. */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- gesture augmentation of the native buttons inside; keyboard parity is the group's onKeyDown plus the platform context-menu key, which arrives as contextmenu */}
       <div
-        className={`fp-button-group cy-no-select ${btnSizes.groupContainer}`}
+        className={`cy-button-group cy-no-select ${btnSizes.groupContainer}`}
         onContextMenu={handleContextMenu}
         onTouchStart={handleTouchStart}
         onTouchMove={longPressHandlers.onTouchMove}
@@ -423,11 +423,11 @@ ${MENU_GESTURE_HINT}`
               aria-selected={focusedIndex === index}
               onClick={() => handleOptionClick(option)}
               disabled={option.disabled}
-              className={`fp-dropdown-row w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
+              className={`cy-dropdown-row w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
                 option.disabled
                   ? "opacity-50 cursor-not-allowed text-disabled-fg"
                   : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-              } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected" : ""}`}
+              } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected" : ""}`}
             >
               {option.icon && (
                 <span className="flex-shrink-0">{option.icon}</span>

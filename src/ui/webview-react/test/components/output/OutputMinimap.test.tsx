@@ -241,11 +241,11 @@ describe("OutputMinimap diff bars", () => {
       expect(bars).toHaveLength(5);
       expect(bars[0]).toHaveStyle({
         top: "2px",
-        background: "var(--fp-minimap-diff-added)",
+        background: "var(--cy-minimap-diff-added)",
       });
       expect(bars[4]).toHaveStyle({
         top: "6px",
-        background: "var(--fp-minimap-diff-added)",
+        background: "var(--cy-minimap-diff-added)",
       });
     } finally {
       clientHeight.mockRestore();
@@ -284,7 +284,7 @@ describe("OutputMinimap diff bars", () => {
       const soloBar = document.querySelector("[data-minimap-diff-bar]");
       expect(soloBar).not.toBeNull();
       expect(soloBar).toHaveStyle({
-        background: "var(--fp-minimap-diff-removed)",
+        background: "var(--cy-minimap-diff-removed)",
       });
       unmount();
 

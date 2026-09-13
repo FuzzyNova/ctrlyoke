@@ -109,7 +109,7 @@ export const OutputScrollSeekPlaceholder: React.FC<{
   height: number;
 }> = ({ row, height }) => (
   <div
-    className="px-2 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
+    className="px-2 py-1 text-[length:var(--cy-output-font-size-xs)] text-description-fg"
     data-step-color-bar={row.stepColor ? "true" : undefined}
     style={{
       height: `${Math.max(1, height)}px`,

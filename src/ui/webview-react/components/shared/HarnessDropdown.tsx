@@ -138,7 +138,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     return (
       <div
         title={rowTooltip}
-        className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
+        className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
       >
         <button
           type="button"
@@ -170,10 +170,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
       title={rowTooltip}
       className={`group flex items-center pr-2 gap-1 ${
         isSelected
-          ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+          ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
           : !isAvailable && !isChecking
             ? "opacity-50 cursor-not-allowed"
-            : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
+            : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
       }`}
     >
       <button
@@ -394,8 +394,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         <div
           className={`flex items-center ${
             value === INHERIT_DEFAULT_OPTION
-              ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
-              : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
+              ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
+              : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
           }`}
         >
           <button
@@ -466,7 +466,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
               ? (triggerStatus?.installHint ?? "Harness is not available")
               : undefined)
           }
-          className="fp-select-trigger fp-dropdown-row flex-1 min-w-0"
+          className="cy-select-trigger cy-dropdown-row flex-1 min-w-0"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             {value === INHERIT_DEFAULT_OPTION ? (

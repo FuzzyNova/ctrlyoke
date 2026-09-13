@@ -108,7 +108,7 @@ export function toolCallLineHeight(outputFontSize: number): number {
 
 /**
  * Height of one ⎿ body line (`TOOL_RESULT_LINE` / `TOOL_ERROR_LINE`), which
- * render at `--fp-output-font-size-sm` = base − 1px.
+ * render at `--cy-output-font-size-sm` = base − 1px.
  */
 export function toolResultLineHeight(outputFontSize: number): number {
   return (outputFontSize - 1) * OUTPUT_RELAXED_LINE_HEIGHT;
@@ -124,7 +124,7 @@ export const DIFF_LINE_HEIGHT = 1.5;
 
 /**
  * Height of one rendered diff row, derived rather than calibrated: globals.css
- * sets `.diff { font-size: var(--fp-output-font-size-sm) }` (base − 1) and the
+ * sets `.diff { font-size: var(--cy-output-font-size-sm) }` (base − 1) and the
  * vendored `.diff-line { line-height: 1.5 }` is never overridden, so at the
  * default 13px base a diff row is exactly 18px. The 2026-08-13 profiler log
  * corroborates it — the diff bodies large enough to swamp their chrome measured
@@ -143,7 +143,7 @@ export const DIFF_GAP_DECORATION_VERTICAL_PADDING = 4;
 /**
  * Height of one "Show N hidden lines" gap decoration bar between hunks.
  * Renders outside `.diff-line` (it is DiffView's own markup, not react-diff-view's
- * vendored row CSS), at the same `text-[length:var(--fp-output-font-size-xs)]`
+ * vendored row CSS), at the same `text-[length:var(--cy-output-font-size-xs)]`
  * class as the diff's own header line — so it shares that line's already-measured
  * `leading-relaxed` line height, plus its own `py-0.5` the header line doesn't have.
  */
@@ -156,7 +156,7 @@ export function diffGapDecorationHeight(outputFontSize: number): number {
 
 /**
  * Advance width of one glyph in the diff table's monospace font, which is what
- * `ch` resolves to inside it. `.diff` renders at `--fp-output-font-size-sm`
+ * `ch` resolves to inside it. `.diff` renders at `--cy-output-font-size-sm`
  * (base − 1) in `--vscode-editor-font-family`; 0.55em is Consolas, the Windows
  * VS Code default, and the other common editor faces sit within a few percent
  * of it.

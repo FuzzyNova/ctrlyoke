@@ -45,7 +45,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   let tmpDir: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-mcp-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-mcp-test-"));
   });
 
   teardown(function () {
@@ -63,11 +63,11 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   // Workflow:
   //   Step 1   — AI writes an initial marker file (proves regular step ran).
   //   finalStep pass 1 — AI calls workflow_status, finds no
-  //              "fp-appended-step" in completed steps, calls
+  //              "cy-appended-step" in completed steps, calls
   //              append_step to add one.
   //   Step 2   — (dynamically appended) AI writes the appended marker file.
   //   finalStep pass 2 — AI calls workflow_status, finds
-  //              "fp-appended-step" in completed steps, writes the
+  //              "cy-appended-step" in completed steps, writes the
   //              final-pass-2 marker file.
   //
   // Assertions:
@@ -80,9 +80,9 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   test("copilot-cli: finalStep appends via MCP, appended step runs, finalStep executes again", function () {
     this.timeout(HARNESS_TIMEOUT_MS);
 
-    const initialFile = path.join(tmpDir, "fp-initial.txt");
-    const appendedFile = path.join(tmpDir, "fp-appended.txt");
-    const finalPass2File = path.join(tmpDir, "fp-final-pass2.txt");
+    const initialFile = path.join(tmpDir, "cy-initial.txt");
+    const appendedFile = path.join(tmpDir, "cy-appended.txt");
+    const finalPass2File = path.join(tmpDir, "cy-final-pass2.txt");
 
     const appendedPath = appendedFile.replace(/\\/g, "/");
     const finalPass2Path = finalPass2File.replace(/\\/g, "/");
@@ -98,22 +98,22 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
         },
       ],
       finalStep: {
-        name: "fp-final-step",
+        name: "cy-final-step",
         mcpServers: ["ctrlyoke"],
         prompt: [
           "Call the tool 'workflow_status' (no parameters).",
-          "Examine the JSON response. Look for a completed step named 'fp-appended-step'.",
+          "Examine the JSON response. Look for a completed step named 'cy-appended-step'.",
           "",
-          `IF 'fp-appended-step' IS in the completed steps: run exactly \`echo FP_FINAL_PASS2 > "${finalPass2Path}"\` and say: "Second finalStep pass."`,
+          `IF 'cy-appended-step' IS in the completed steps: run exactly \`echo FP_FINAL_PASS2 > "${finalPass2Path}"\` and say: "Second finalStep pass."`,
           "",
-          `IF 'fp-appended-step' is NOT in the completed steps: call 'append_step' with one step — name "fp-appended-step", prompt "Run exactly: echo FP_APPENDED > \\"${appendedPath}\\". Do not explain — just run it." Then say: "First finalStep pass: appended fp-appended-step."`,
+          `IF 'cy-appended-step' is NOT in the completed steps: call 'append_step' with one step — name "cy-appended-step", prompt "Run exactly: echo FP_APPENDED > \\"${appendedPath}\\". Do not explain — just run it." Then say: "First finalStep pass: appended cy-appended-step."`,
           "",
           "Do nothing else.",
         ].join("\n"),
       } as any,
     };
 
-    const result = runWorkflowFile(workflow, tmpDir, "fp-final-step");
+    const result = runWorkflowFile(workflow, tmpDir, "cy-final-step");
 
     if (logAndMaybeSkip("copilot-cli (finalStep+mcp)", result)) return;
 
@@ -167,7 +167,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   test("copilot-cli: AI appends a step via MCP and appended step runs", function () {
     this.timeout(HARNESS_TIMEOUT_MS);
 
-    const mcpMarkerFile = path.join(tmpDir, "fp-mcp-result.txt");
+    const mcpMarkerFile = path.join(tmpDir, "cy-mcp-result.txt");
 
     // Escape the path for safe embedding in the prompt string.
     const escapedPath = mcpMarkerFile.replace(/\\/g, "/");

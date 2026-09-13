@@ -46,7 +46,7 @@ describe("MarkdownText", () => {
       <MarkdownText>{"```ts\nconst value = 1;\n```"}</MarkdownText>
     );
 
-    const code = container.querySelector("code.fp-syntax.language-ts");
+    const code = container.querySelector("code.cy-syntax.language-ts");
     expect(code).toBeTruthy();
     expect(code?.querySelector(".token.keyword")?.textContent).toBe("const");
     expect(code?.querySelector(".token.number")?.textContent).toBe("1");
@@ -57,7 +57,7 @@ describe("MarkdownText", () => {
       <MarkdownText>{"```unknownlang\nconst value = 1;\n```"}</MarkdownText>
     );
 
-    const code = container.querySelector("code.fp-syntax.language-unknownlang");
+    const code = container.querySelector("code.cy-syntax.language-unknownlang");
     expect(code).toBeTruthy();
     expect(code).toHaveTextContent("const value = 1;");
     expect(code?.querySelector(".token")).toBeNull();
@@ -202,7 +202,7 @@ describe("MarkdownText", () => {
       <MarkdownText highlightQuery="alpha">alpha beta alpha</MarkdownText>
     );
 
-    const style = document.getElementById("fp-find-highlight");
+    const style = document.getElementById("cy-find-highlight");
     expect(style?.textContent).toContain("--vscode-editor-findMatchBackground");
     expect(style?.textContent).toContain(
       "--vscode-editor-findMatchHighlightBackground"
@@ -254,11 +254,11 @@ describe("MarkdownText", () => {
       </MarkdownText>
     );
 
-    const mark = container.querySelector("code.fp-syntax mark");
+    const mark = container.querySelector("code.cy-syntax mark");
     expect(mark?.textContent).toBe("value");
     // Syntax tokens are preserved alongside the find highlight.
     expect(
-      container.querySelector("code.fp-syntax .token.keyword")?.textContent
+      container.querySelector("code.cy-syntax .token.keyword")?.textContent
     ).toBe("const");
   });
 

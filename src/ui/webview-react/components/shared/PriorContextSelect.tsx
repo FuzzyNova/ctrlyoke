@@ -248,7 +248,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
-          className="fp-select-trigger fp-dropdown-row"
+          className="cy-select-trigger cy-dropdown-row"
         >
           <span className="truncate">{buttonLabel}</span>
           <Icon
@@ -278,8 +278,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                   onClick={() => selectKeyword(k)}
                   className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
                     isSelected
-                      ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
-                      : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
+                      ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
+                      : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
                   }`}
                 >
                   <Icon

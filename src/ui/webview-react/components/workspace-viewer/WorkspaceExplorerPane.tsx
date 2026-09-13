@@ -739,7 +739,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 </button>
                 {/* Undo / Redo merged control */}
                 <div
-                  className="fp-button-group"
+                  className="cy-button-group"
                   role="group"
                   aria-label="Undo / Redo"
                 >

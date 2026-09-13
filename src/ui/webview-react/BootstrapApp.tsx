@@ -47,7 +47,7 @@ export default function BootstrapApp() {
     // SESSION_RESTORED to load the most-recent workflow; losing it leaves the UI
     // stuck in "new workflow" state.
     // In standalone mode the server is also the authoritative source of theme
-    // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
+    // vars. Sending THEME_VARS_CAPTURED from the browser strips --cy-color-theme-kind
     // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {

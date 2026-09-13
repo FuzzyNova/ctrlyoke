@@ -213,12 +213,12 @@ Add to the bottom of `src/ui/webview-react/styles/globals.css`:
   );
 
   /* Font size — react-diff-view has no variable for this; set it on the container */
-  font-size: var(--fp-output-font-size-sm);
+  font-size: var(--cy-output-font-size-sm);
 }
 
 /* Gutter column (line numbers) — smaller than code text, muted foreground */
 .diff .diff-gutter {
-  font-size: var(--fp-output-font-size-xs);
+  font-size: var(--cy-output-font-size-xs);
   color: var(--vscode-editorLineNumber-foreground, #858889);
 }
 

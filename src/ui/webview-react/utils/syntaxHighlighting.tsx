@@ -169,40 +169,40 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
 
 const SYNTAX_TOKEN_STYLES = `
 /* ctrlyoke - VS Code themed refractor tokens */
-.fp-syntax {
+.cy-syntax {
   color: var(--vscode-editor-foreground, #d4d4d4);
 }
 
-.fp-syntax .token,
+.cy-syntax .token,
 .diff .token {
   color: inherit;
 }
 
-.fp-syntax .token.keyword,
-.fp-syntax .token.atrule,
+.cy-syntax .token.keyword,
+.cy-syntax .token.atrule,
 .diff .token.keyword,
 .diff .token.atrule {
   color: var(--vscode-symbolIcon-functionForeground, #569cd6);
 }
 
-.fp-syntax .token.string,
-.fp-syntax .token.char,
-.fp-syntax .token.attr-value,
+.cy-syntax .token.string,
+.cy-syntax .token.char,
+.cy-syntax .token.attr-value,
 .diff .token.string,
 .diff .token.char,
 .diff .token.attr-value {
   color: var(--vscode-debugTokenExpression-string, #ce9178);
 }
 
-.fp-syntax .token.number,
+.cy-syntax .token.number,
 .diff .token.number {
   color: var(--vscode-debugTokenExpression-number, #b5cea8);
 }
 
-.fp-syntax .token.comment,
-.fp-syntax .token.prolog,
-.fp-syntax .token.doctype,
-.fp-syntax .token.cdata,
+.cy-syntax .token.comment,
+.cy-syntax .token.prolog,
+.cy-syntax .token.doctype,
+.cy-syntax .token.cdata,
 .diff .token.comment,
 .diff .token.prolog,
 .diff .token.doctype,
@@ -211,22 +211,22 @@ const SYNTAX_TOKEN_STYLES = `
   font-style: italic;
 }
 
-.fp-syntax .token.function,
+.cy-syntax .token.function,
 .diff .token.function {
   color: var(--vscode-debugTokenExpression-string, #dcdcaa);
 }
 
-.fp-syntax .token.class-name,
-.fp-syntax .token.maybe-class-name,
+.cy-syntax .token.class-name,
+.cy-syntax .token.maybe-class-name,
 .diff .token.class-name,
 .diff .token.maybe-class-name {
   color: var(--vscode-chat-editedFileForeground, #4ec9b0);
 }
 
-.fp-syntax .token.variable,
-.fp-syntax .token.parameter,
-.fp-syntax .token.property,
-.fp-syntax .token.attr-name,
+.cy-syntax .token.variable,
+.cy-syntax .token.parameter,
+.cy-syntax .token.property,
+.cy-syntax .token.attr-name,
 .diff .token.variable,
 .diff .token.parameter,
 .diff .token.property,
@@ -234,48 +234,48 @@ const SYNTAX_TOKEN_STYLES = `
   color: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
 }
 
-.fp-syntax .token.builtin,
-.fp-syntax .token.constant,
-.fp-syntax .token.namespace,
+.cy-syntax .token.builtin,
+.cy-syntax .token.constant,
+.cy-syntax .token.namespace,
 .diff .token.builtin,
 .diff .token.constant,
 .diff .token.namespace {
   color: var(--vscode-scmGraph-foreground4, #4ec9b0);
 }
 
-.fp-syntax .token.boolean,
-.fp-syntax .token.null,
-.fp-syntax .token.symbol,
+.cy-syntax .token.boolean,
+.cy-syntax .token.null,
+.cy-syntax .token.symbol,
 .diff .token.boolean,
 .diff .token.null,
 .diff .token.symbol {
   color: var(--vscode-debugTokenExpression-boolean, #4e94ce);
 }
 
-.fp-syntax .token.regex,
+.cy-syntax .token.regex,
 .diff .token.regex {
   color: var(--vscode-charts-red, #d16969);
 }
 
-.fp-syntax .token.annotation,
-.fp-syntax .token.decorator,
-.fp-syntax .token.important,
+.cy-syntax .token.annotation,
+.cy-syntax .token.decorator,
+.cy-syntax .token.important,
 .diff .token.annotation,
 .diff .token.decorator,
 .diff .token.important {
   color: var(--vscode-editorCodeLens-foreground, #c9b299);
 }
 
-.fp-syntax .token.tag,
+.cy-syntax .token.tag,
 .diff .token.tag {
   color: var(--vscode-symbolIcon-constructorForeground, #4ec9b0);
 }
 
-.fp-syntax .token.selector,
-.fp-syntax .token.selector-class,
-.fp-syntax .token.selector-id,
-.fp-syntax .token.selector-pseudo-class,
-.fp-syntax .token.selector-pseudo-element,
+.cy-syntax .token.selector,
+.cy-syntax .token.selector-class,
+.cy-syntax .token.selector-id,
+.cy-syntax .token.selector-pseudo-class,
+.cy-syntax .token.selector-pseudo-element,
 .diff .token.selector,
 .diff .token.selector-class,
 .diff .token.selector-id,
@@ -284,8 +284,8 @@ const SYNTAX_TOKEN_STYLES = `
   color: var(--vscode-chat-editedFileForeground, #d7ba7d);
 }
 
-.fp-syntax .token.entity,
-.fp-syntax .token.url,
+.cy-syntax .token.entity,
+.cy-syntax .token.url,
 .diff .token.entity,
 .diff .token.url {
   color: var(--vscode-textLink-foreground, #4e94ce);
@@ -323,11 +323,11 @@ function injectStyle(id: string, cssText: string): void {
 }
 
 export function injectSyntaxHighlightStyles(): void {
-  injectStyle("fp-syntax-theme", SYNTAX_TOKEN_STYLES);
+  injectStyle("cy-syntax-theme", SYNTAX_TOKEN_STYLES);
 }
 
 export function injectFindHighlightStyles(): void {
-  injectStyle("fp-find-highlight", FIND_HIGHLIGHT_STYLES);
+  injectStyle("cy-find-highlight", FIND_HIGHLIGHT_STYLES);
 }
 
 export function normalizeSyntaxLanguage(

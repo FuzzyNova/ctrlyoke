@@ -314,7 +314,7 @@ export function LicenseSection() {
         {!isStandalone && (
           <button
             type="button"
-            className="fp-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
+            className="cy-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
             onClick={() =>
               vscode.postMessage({
                 type: MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND,
@@ -377,7 +377,7 @@ export function LicenseSection() {
             </div>
             <button
               type="button"
-              className="fp-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
+              className="cy-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
               onClick={requestMachines}
               disabled={machineListPending}
             >

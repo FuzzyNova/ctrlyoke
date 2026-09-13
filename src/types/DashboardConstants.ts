@@ -2576,7 +2576,7 @@ export type FileOperationKind =
   (typeof FILE_OPERATION_KINDS)[keyof typeof FILE_OPERATION_KINDS];
 
 // ============================================================================
-// THEME KINDS - Values of the ctrlyoke-forwarded --fp-color-theme-kind CSS var
+// THEME KINDS - Values of the ctrlyoke-forwarded --cy-color-theme-kind CSS var
 // ============================================================================
 export const THEME_KINDS = {
   LIGHT: "light",

@@ -190,7 +190,7 @@ _why_ each fix takes the shape it does.
 ### 1. Trim the profiler logging (do this first — it is cheap)
 
 The diagnostics added in `cb7f3850` and `a2874be5` did their job and are now the bulk of
-the log. In `ctrlyoke-1786628379977.log`: **6,202 of 6,712 lines (92%) are `[FP-perf]`
+the log. In `ctrlyoke-1786628379977.log`: **6,202 of 6,712 lines (92%) are `[cy-perf]`
 lines, 1.79 MB for 27 minutes.** `scrollAttribution` alone is 4,248 of them (68%) — one
 line per scroll event, by design, because settle windows used to be invisible.
 

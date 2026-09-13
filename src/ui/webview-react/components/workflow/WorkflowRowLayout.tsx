@@ -103,7 +103,7 @@ export const RunIndicatorCell: React.FC<RunIndicatorCellProps> = ({
             event.stopPropagation();
             drill.onDrill();
           }}
-          className="fp-dropdown-row flex h-8 items-center gap-0.5 rounded px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
+          className="cy-dropdown-row flex h-8 items-center gap-0.5 rounded px-1 py-0 text-xs leading-none text-description-fg hover:bg-list-hover-bg hover:text-foreground"
         >
           <span className="truncate">{drill.label}</span>
           <Icon name="chevron-right" className="block text-xxs leading-none" />

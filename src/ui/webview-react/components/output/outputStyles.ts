@@ -4,7 +4,7 @@ export const TOOL_CALL_TERMINAL =
 
 /** Tool call header line (bullet + command text) */
 export const TOOL_CALL_LINE =
-  "text-editor-fg text-[length:var(--fp-output-font-size)] flex flex-wrap items-center gap-1";
+  "text-editor-fg text-[length:var(--cy-output-font-size)] flex flex-wrap items-center gap-1";
 
 /**
  * Tool result line (⎿ output).
@@ -14,18 +14,18 @@ export const TOOL_CALL_LINE =
  * A bare TOOL_RESULT event rendered outside a block adds its own indent.
  */
 export const TOOL_RESULT_LINE =
-  "text-description-fg text-[length:var(--fp-output-font-size-sm)] whitespace-pre-wrap [overflow-wrap:anywhere]";
+  "text-description-fg text-[length:var(--cy-output-font-size-sm)] whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 /** Tool error line (⎿ error). Same no-padding contract as TOOL_RESULT_LINE. */
 export const TOOL_ERROR_LINE =
-  "text-error-fg text-[length:var(--fp-output-font-size-sm)] whitespace-pre-wrap [overflow-wrap:anywhere]";
+  "text-error-fg text-[length:var(--cy-output-font-size-sm)] whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 /** Indent for a ⎿ line rendered standalone, outside a ToolCallBlock. */
 export const TOOL_RESULT_STANDALONE_INDENT = "pl-4 ml-2";
 
 /** Shared output block base (prompt/response/command containers) */
 export const OUTPUT_BLOCK_BASE =
-  "py-[var(--spacing-sm)] px-[var(--spacing-sm)] my-[var(--spacing-sm)] border-l-[3px] whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[length:var(--fp-output-font-size-sm)] bg-transparent";
+  "py-[var(--spacing-sm)] px-[var(--spacing-sm)] my-[var(--spacing-sm)] border-l-[3px] whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[length:var(--cy-output-font-size-sm)] bg-transparent";
 
 /** Width of the per-row step identity bar painted by `getStepIdentityBarStyle`. */
 export const STEP_IDENTITY_BAR_WIDTH_PX = 2;

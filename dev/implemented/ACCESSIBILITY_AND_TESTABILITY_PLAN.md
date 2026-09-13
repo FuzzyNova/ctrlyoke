@@ -33,7 +33,7 @@ Taken from a live hosted dashboard (dev host + Playwright MCP `browser_snapshot`
 | Codicon `<i>` elements in the live DOM                           | 171                         |
 | …of those carrying `aria-hidden="true"`                          | **5**                       |
 | Visible buttons whose Playwright accessible name is a bare glyph | **21**                      |
-| `.fp-tab-hc` pseudo-tabs with no `role`/`aria-selected`          | **14** (2 duplicate sets)   |
+| `.cy-tab-hc` pseudo-tabs with no `role`/`aria-selected`          | **14** (2 duplicate sets)   |
 | Raw codicon elements in source (excl. tests)                     | **355** in 103 files        |
 | Shared `<Icon>`/`<Codicon>` component                            | **none — all hand-written** |
 
@@ -210,7 +210,7 @@ content and carries meaning — keep an `aria-label` on the **parent control**, 
 
 **Highest-leverage single files** (each fixes many live controls at once):
 
-- `components/shared/SegmentedTabBar.tsx` — the sole source of all 14 `.fp-tab-hc` pseudo-tabs
+- `components/shared/SegmentedTabBar.tsx` — the sole source of all 14 `.cy-tab-hc` pseudo-tabs
   (`DrawerTabBar` delegates to it). Its badge `<i>` is already `aria-hidden`; the main tab icon
   is not.
 - `components/editor/FooterQuickPicker.tsx` — the shared trigger shell behind the Model/Agent/
@@ -300,11 +300,11 @@ carried only by a class name cannot be asserted by any test or read by any user.
 
 - **`components/shared/SegmentedTabBar.tsx`** — 14 live pseudo-tabs, all `role: null`,
   `aria-selected: null`, none inside a `tablist`; the active tab is marked _only_ by the
-  `fp-tab-hc-selected` class. Add `role="tablist"` on the container and `role="tab"` +
+  `cy-tab-hc-selected` class. Add `role="tablist"` on the container and `role="tab"` +
   `aria-selected={isActive}` on each button. One file, and it fixes both drawers plus
   `OutputSectionHeader`. `WorkspaceViewerHeader.tsx` (`:81-102`) already does exactly this — copy
   that pattern.
-- **Dropdown triggers (`.fp-select-trigger`)** — mostly good: `aria-haspopup="listbox"` and
+- **Dropdown triggers (`.cy-select-trigger`)** — mostly good: `aria-haspopup="listbox"` and
   `aria-expanded` are present. Gaps: no `aria-controls` linking the trigger to its listbox, and
   `SkillsSelect` is missing `aria-haspopup`/`aria-expanded` entirely. More importantly several
   triggers are named by their _current value_ ("Inherit (None)" ×3, "None" ×2) rather than by

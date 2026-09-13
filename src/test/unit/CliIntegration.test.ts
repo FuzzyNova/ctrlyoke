@@ -1753,8 +1753,8 @@ suite("CliIntegration", () => {
     }
 
     test("rewrites a folder-prefixed @ref to its absolute path so the simple-prompt fast path sends a resolvable reference", async () => {
-      const root = mkTempDir("fp-cli-");
-      const secondRoot = mkTempDir("fp-cli-second-");
+      const root = mkTempDir("cy-cli-");
+      const secondRoot = mkTempDir("cy-cli-second-");
       const secondFile = path.join(secondRoot, "b.ts");
       fs.writeFileSync(secondFile, "export const b = true;\n");
 
@@ -1775,8 +1775,8 @@ suite("CliIntegration", () => {
     });
 
     test("rewrites a folder-prefixed #sym: ref to its absolute path", async () => {
-      const root = mkTempDir("fp-cli-");
-      const secondRoot = mkTempDir("fp-cli-second-");
+      const root = mkTempDir("cy-cli-");
+      const secondRoot = mkTempDir("cy-cli-second-");
       const secondFile = path.join(secondRoot, "b.ts");
       fs.writeFileSync(secondFile, "export function foo() {}\n");
 
@@ -1799,7 +1799,7 @@ suite("CliIntegration", () => {
     });
 
     test("strips the @ prefix for a Codex-like provider even in single-root", async () => {
-      const root = mkTempDir("fp-cli-");
+      const root = mkTempDir("cy-cli-");
       fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
 
       const integration = new TestCliIntegration(
@@ -1821,7 +1821,7 @@ suite("CliIntegration", () => {
     });
 
     test("single-root, non-Codex provider: leaves an unprefixed @ref textually unchanged", async () => {
-      const root = mkTempDir("fp-cli-");
+      const root = mkTempDir("cy-cli-");
       fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
 
       const integration = new TestCliIntegration(

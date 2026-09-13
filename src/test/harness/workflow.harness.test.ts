@@ -67,7 +67,7 @@ suite("Workflow Feature Harness Tests", function () {
   let counterScript: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-workflow-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-workflow-test-"));
 
     // Write helper scripts to tmpDir once; each test references them by path.
     fileCheckScript = path.join(tmpDir, "file-check.js");

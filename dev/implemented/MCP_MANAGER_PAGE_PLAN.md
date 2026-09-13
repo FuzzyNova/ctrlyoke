@@ -274,7 +274,7 @@ Modeled after `AgentSkillsManagerSection` in structure and styling conventions. 
 ### Scope switcher
 
 ```
-[Workspace]  [User]    ← fp-mode-switch, same as AgentSkillsManagerSection's type switcher
+[Workspace]  [User]    ← cy-mode-switch, same as AgentSkillsManagerSection's type switcher
 ```
 
 The active scope drives where new servers are saved and which registry file is shown (though both scopes' servers always appear in the merged list, differentiated by scope badge).

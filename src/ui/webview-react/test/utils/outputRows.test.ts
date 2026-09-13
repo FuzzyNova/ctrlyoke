@@ -1474,7 +1474,7 @@ describe("outputRows", () => {
       { length: 42 },
       (_, index) => `line ${index + 1}`
     ).join("\n");
-    const diffKey = "fp-diff-q-0-r0-a0-e0";
+    const diffKey = "cy-diff-q-0-r0-a0-e0";
     const toolRowKey = "queue:1:run0:attempt0:event:0";
     const expandedGaps = new Map<number, number>([[1, 27]]);
     const steps = [

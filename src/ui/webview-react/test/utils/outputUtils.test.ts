@@ -147,7 +147,7 @@ describe("run and retry labels", () => {
   });
 
   it("builds diff anchor prefixes with runIndex and attemptIndex", () => {
-    expect(buildDiffAnchorPrefix("q", 3, 2, 1)).toBe("fp-diff-q-3-r2-a1");
+    expect(buildDiffAnchorPrefix("q", 3, 2, 1)).toBe("cy-diff-q-3-r2-a1");
   });
 });
 

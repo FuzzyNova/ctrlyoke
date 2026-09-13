@@ -90,7 +90,7 @@ type OutputScrollTarget =
    `{ kind: "bottom" }` if they land within some threshold of the bottom.
 2. **New output arrives while already at the bottom** — target stays/becomes
    `{ kind: "bottom" }` (this is today's `autoscrollEnabled`/`autoScroll FIRING` path
-   — see `[FP-SCROLL-DEBUG] autoScroll FIRING` log entries).
+   — see `[cy-SCROLL-DEBUG] autoScroll FIRING` log entries).
 3. **Programmatic navigation** — clicking a step in the minimap
    (`handleMinimapStepClick` → `onStepClick`, line ~3629/4152) or any other
    "jump to X" action sets `{ kind: "row", rowKey: <first row of step X>,

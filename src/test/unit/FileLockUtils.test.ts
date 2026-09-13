@@ -11,7 +11,7 @@ suite("FileLockUtils", () => {
   function tempTarget(name?: string): string {
     const p = path.join(
       os.tmpdir(),
-      `fp-lock-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
+      `cy-lock-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
     );
     tempPaths.push(p);
     tempPaths.push(`${p}.lock`);

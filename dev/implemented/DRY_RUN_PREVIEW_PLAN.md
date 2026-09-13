@@ -131,7 +131,7 @@ remains the discoverable entry point.
 Implementation note: `Header.tsx` renders the Save button and `UndoRedoControl`
 at two JSX sites — the `actionControls` group and the mobile row-2 group, which
 inlines them rather than reusing `actionControls` because on mobile the whole
-toolbar is one `fp-button-group`. Only one mounts at a time, but the new button
+toolbar is one `cy-button-group`. Only one mounts at a time, but the new button
 must be added to both. Prefer extracting the shared button into a small component
 over a third copy.
 

@@ -66,9 +66,9 @@ actually execute back-to-back, producing independent side effects from each.
 
 **Approach:**
 
-- Step 1 prompt: `"Run the bash command: echo step1 > fp-seq-test.txt"`
-- Step 2 prompt: `"Run the bash command: echo step2 >> fp-seq-test.txt"`
-- End condition script (step 2): reads `fp-seq-test.txt`, asserts both `step1` and `step2`
+- Step 1 prompt: `"Run the bash command: echo step1 > cy-seq-test.txt"`
+- Step 2 prompt: `"Run the bash command: echo step2 >> cy-seq-test.txt"`
+- End condition script (step 2): reads `cy-seq-test.txt`, asserts both `step1` and `step2`
   appear in that order.
 - Assert: exit code 0, both lines present in the output file.
 
@@ -82,8 +82,8 @@ exercised with a live harness.
 
 **Approach:**
 
-- Step prompt: `"Run the bash command: echo SUCCESS > fp-end-cond.txt"`
-- End condition script: reads `fp-end-cond.txt`, returns `true` if content is `SUCCESS`,
+- Step prompt: `"Run the bash command: echo SUCCESS > cy-end-cond.txt"`
+- End condition script: reads `cy-end-cond.txt`, returns `true` if content is `SUCCESS`,
   else `false`.
 - Assert: exit code 0, the file exists with the right content.
 
@@ -98,9 +98,9 @@ exercised with a live harness.
 
 - End condition script: reads a counter file, increments it, returns `true` only when
   counter >= 2. First call always returns `false` even if the AI did the right thing.
-- `retryPrompt`: `"The validation is not satisfied yet. Run: echo RETRY_DONE > fp-retry.txt"`
-- Step prompt: `"Run: echo FIRST > fp-retry.txt"`
-- Assert: exit code 0, counter file shows value 2, `fp-retry.txt` exists.
+- `retryPrompt`: `"The validation is not satisfied yet. Run: echo RETRY_DONE > cy-retry.txt"`
+- Step prompt: `"Run: echo FIRST > cy-retry.txt"`
+- Assert: exit code 0, counter file shows value 2, `cy-retry.txt` exists.
 
 **Harnesses:** `copilot-cli` only (retry tests are slow; no need to run all harnesses)
 
@@ -121,8 +121,8 @@ from AI tool call → new step executing have no harness-level test.
 
 - Single-step workflow with `mcpServers: ["flightpath"]`
 - Step prompt: `"Use the flightpath_append_queue MCP tool to add one more step with the
-prompt: 'Run the bash command: echo MCP_STEP_DONE > fp-mcp-test.txt'. Then stop."`
-- Assert: exit code 0, `fp-mcp-test.txt` exists with content `MCP_STEP_DONE`, proving the
+prompt: 'Run the bash command: echo MCP_STEP_DONE > cy-mcp-test.txt'. Then stop."`
+- Assert: exit code 0, `cy-mcp-test.txt` exists with content `MCP_STEP_DONE`, proving the
   MCP-appended step actually ran.
 
 **Harnesses:** `copilot-cli` only (gpt-5-mini; free, capable of MCP tool calls)

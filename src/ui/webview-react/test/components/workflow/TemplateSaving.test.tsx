@@ -48,7 +48,7 @@ describe("template saving", () => {
     const formatGroup = screen.getByRole("group", { name: "Template format" });
     expect(
       within(formatGroup).getByRole("button", { name: "YAML" })
-    ).toHaveClass("fp-mode-switch-btn-active");
+    ).toHaveClass("cy-mode-switch-btn-active");
 
     fireEvent.change(screen.getByLabelText("Template Name"), {
       target: { value: "feature-copy" },

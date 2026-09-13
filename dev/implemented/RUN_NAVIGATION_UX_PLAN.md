@@ -601,8 +601,8 @@ dashboard selection state.
   (or the viewed run's row); back focuses the row/affordance that initiated
   the drill, or the workflow list when entered via the badge.
 - Escape closes the dropdown and restores focus to the opening trigger.
-- High-contrast selection/hover uses `fp-dropdown-row` and
-  `fp-dropdown-row-selected`.
+- High-contrast selection/hover uses `cy-dropdown-row` and
+  `cy-dropdown-row-selected`.
 
 The dropdown remains single-column and full-width/bottom-bounded on mobile.
 Drill-in is inherently mobile-friendly — a full-panel view swap with a back

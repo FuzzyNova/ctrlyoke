@@ -32,7 +32,7 @@ This feature adds a **Harness File Manager** UI to the settings panel that lets 
 | `.gemini/agents/`     | ✅                       | Gemini only           |
 | `.opencode/agents/`   | ✅                       | OpenCode only         |
 | `.qwen/agents/`       | ✅                       | Qwen only             |
-| `.flightpath/agents/` | ✅                       | None (FP-exclusive)   |
+| `.flightpath/agents/` | ✅                       | None (cy-exclusive)   |
 
 When a user switches harnesses (e.g., Claude → Codex), their agent files stay in `.claude/agents/`.
 FlightPath still injects them into every prompt via `<agentInstructions>`, but:

@@ -23,12 +23,12 @@ suite("ContextExpander.expandContextSplit", () => {
   const temporaryRoots: string[] = [];
 
   function freshWorkspace(): string {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-"));
     return workspaceRoot;
   }
 
   function freshTemporaryRoot(label: string): string {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), `fp-ctx-${label}-`));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `cy-ctx-${label}-`));
     temporaryRoots.push(root);
     return root;
   }
@@ -852,7 +852,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("blocks a full-file @path ref that escapes the workspace via '..'", async () => {
       const root = freshWorkspace();
-      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-outside-"));
       fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
       const traversal = path.relative(
         root,
@@ -868,7 +868,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("blocks an absolute-path @path ref outside the workspace", async () => {
       const root = freshWorkspace();
-      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-outside-"));
       const absPath = path.join(outsideDir, "secret.txt");
       fs.writeFileSync(absPath, "TOP SECRET\n");
 
@@ -881,7 +881,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("blocks a #selection: range ref that escapes the workspace via '..'", async () => {
       const root = freshWorkspace();
-      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-outside-"));
       fs.writeFileSync(
         path.join(outsideDir, "secret.txt"),
         "TOP\nSECRET\nDATA\n"
@@ -902,7 +902,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("still allows a legitimate in-workspace reference alongside a blocked one", async () => {
       const root = freshWorkspace();
-      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-outside-"));
       fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
       const traversal = path.relative(
         root,
@@ -1014,7 +1014,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("allows a full-file ref into a second trusted root that is not a descendant of the primary root", async () => {
       const root = freshWorkspace();
-      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
       const secondFile = path.join(secondRoot, "b.ts");
       fs.writeFileSync(secondFile, "export const b = true;\n");
       const relativeFromPrimary = path.relative(root, secondFile);
@@ -1041,7 +1041,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("allows a @dir/ reference into a second trusted root", async () => {
       const root = freshWorkspace();
-      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
       fs.mkdirSync(path.join(secondRoot, "sub"));
       fs.writeFileSync(path.join(secondRoot, "sub", "c.ts"), "// c\n");
       const relativeDir = path.relative(root, path.join(secondRoot, "sub"));
@@ -1060,9 +1060,9 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("still blocks a reference outside every trusted root", async () => {
       const root = freshWorkspace();
-      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
       const untrustedDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "fp-ctx-untrusted-")
+        path.join(os.tmpdir(), "cy-ctx-untrusted-")
       );
       fs.writeFileSync(path.join(untrustedDir, "secret.txt"), "TOP SECRET\n");
       const traversal = path.relative(
@@ -1107,7 +1107,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("attaches a trusted external full-file reference", async () => {
       const root = freshWorkspace();
-      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-ext-"));
       const externalFile = path.join(externalRoot, "session.jsonl");
       fs.writeFileSync(externalFile, '{"event":"start"}\n');
 
@@ -1122,7 +1122,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("attaches a trusted external selection excerpt", async () => {
       const root = freshWorkspace();
-      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-ext-"));
       const externalFile = path.join(externalRoot, "debug.log");
       fs.writeFileSync(externalFile, "line1\nline2\nline3\n");
 
@@ -1140,7 +1140,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("attaches a trusted external directory listing", async () => {
       const root = freshWorkspace();
-      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-ext-"));
       fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
 
       const expander = new ContextExpander({
@@ -1155,7 +1155,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("blocks an unapproved external full-file reference", async () => {
       const root = freshWorkspace();
-      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-ext-"));
       const externalFile = path.join(externalRoot, "session.jsonl");
       fs.writeFileSync(externalFile, '{"event":"start"}\n');
 
@@ -1172,7 +1172,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("blocks an unapproved external directory listing", async () => {
       const root = freshWorkspace();
-      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
+      externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-ext-"));
       fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
 
       const expander = new ContextExpander({
@@ -1308,7 +1308,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("resolves a folder-name-prefixed ref against the matching named root", async () => {
       const root = freshWorkspace();
-      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
       const secondFile = path.join(secondRoot, "b.ts");
       fs.writeFileSync(secondFile, "export const b = true;\n");
 
@@ -1327,7 +1327,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("unprefixed ref still resolves against the primary root", async () => {
       const root = freshWorkspace();
-      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
       const primaryFile = path.join(root, "a.ts");
       fs.writeFileSync(primaryFile, "export const a = true;\n");
 
@@ -1403,7 +1403,7 @@ suite("ContextExpander.expandContext", () => {
   let workspaceRoot: string;
 
   function freshWorkspace(): string {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-"));
     return workspaceRoot;
   }
 
@@ -1445,7 +1445,7 @@ suite("ContextExpander.sanitizeReferences", () => {
   let secondRoot: string;
 
   function freshWorkspace(): string {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-"));
     return workspaceRoot;
   }
 
@@ -1518,7 +1518,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed @ref to its absolute path", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 
@@ -1540,7 +1540,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #sym: ref to its absolute path", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export function foo() {}\n");
 
@@ -1572,7 +1572,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("preserves the embedded kind when rewriting a multi-root #sym: ref", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export class Foo {}\n");
 
@@ -1605,7 +1605,7 @@ suite("ContextExpander.sanitizeReferences", () => {
   });
 
   test("rewrites a source-store #sym: ref while preserving kind, symbol, and range", async () => {
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-source-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-source-"));
     const sourceRoot = secondRoot;
     const executionRoot = freshWorkspace();
     fs.mkdirSync(path.join(sourceRoot, "runtime"), { recursive: true });
@@ -1651,7 +1651,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #selection: ref to its absolute path", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "line1\nline2\n");
 
@@ -1739,7 +1739,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("leaves references inside fenced code blocks untouched", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 
@@ -1759,7 +1759,7 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("preserves surrounding prose and trailing punctuation", async () => {
     const root = freshWorkspace();
-    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 

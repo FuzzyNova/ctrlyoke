@@ -149,7 +149,7 @@ function buildResultSectionRenderPlan(
 
   // Count visual lines (with wrapping) when content width is known.
   // Raw countLines() misses wrap-induced lines — output text uses whitespace-pre-wrap
-  // with a smaller font (fp-output-font-size-sm = fontSize-1), causing severe underestimates
+  // with a smaller font (cy-output-font-size-sm = fontSize-1), causing severe underestimates
   // on long-output tool calls (observed: 10 raw lines → 72 visual lines, 1468px delta).
   let visualLineCount = preview.visibleLineCount;
   if (outputContentWidth != null && outputContentWidth > 0) {

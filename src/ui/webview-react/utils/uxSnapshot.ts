@@ -96,7 +96,7 @@ export function captureUxSnapshot(root?: HTMLElement): UxSnapshotResult {
 
 export function buildHeaderSection(rootEl: HTMLElement): string {
   const vv = typeof visualViewport !== "undefined" ? visualViewport : undefined;
-  const themeKind = getCssVar("--fp-color-theme-kind") || "(unset)";
+  const themeKind = getCssVar("--cy-color-theme-kind") || "(unset)";
   const bodyClasses = document.body.className || "(none)";
   const standalone = Boolean(
     (window as unknown as Record<string, unknown>).__ctrlyokeStandalone
@@ -115,7 +115,7 @@ export function buildHeaderSection(rootEl: HTMLElement): string {
           `(${Math.round(vv.offsetLeft)}, ${Math.round(vv.offsetTop)}), scale ${vv.scale}`
         : "(unavailable)"
     }`,
-    `- **Theme kind (--fp-color-theme-kind):** ${themeKind}`,
+    `- **Theme kind (--cy-color-theme-kind):** ${themeKind}`,
     `- **Body classes:** \`${bodyClasses}\``,
     `- **User agent:** ${navigator.userAgent}`,
   ];

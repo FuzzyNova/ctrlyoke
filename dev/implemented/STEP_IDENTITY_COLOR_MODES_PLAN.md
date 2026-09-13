@@ -270,16 +270,16 @@ light tier-1 band and the near-`indicator-error` light tier-0 red from the illus
 
 ### Delivery: CSS custom properties, with a hex helper for the picker
 
-Emit the tables as `--fp-step-hue-0 … --fp-step-hue-47` in `globals.css`, defined on `:root` with the
+Emit the tables as `--cy-step-hue-0 … --cy-step-hue-47` in `globals.css`, defined on `:root` with the
 dark values and overridden under `body.vscode-light, body.vscode-high-contrast-light` — matching the
 existing `color-scheme` block at `globals.css:145-153`, which already treats
 `vscode-high-contrast` as dark and `vscode-high-contrast-light` as light. The resolver then returns
-`var(--fp-step-hue-N, #<dark hex>)`, **the exact shape `HARNESS_CHART_COLORS` already returns**, so
+`var(--cy-step-hue-N, #<dark hex>)`, **the exact shape `HARNESS_CHART_COLORS` already returns**, so
 all five painting surfaces need no change at all and theme switches repaint with zero React work.
 
 The picker is the one consumer that needs a literal, and it must not silently take the dark fallback
 on a light theme. Add a small `getStepPaletteHex(index, themeKind)` reading theme kind the way
-`codemirrorTheme.ts:222-229` already does — body class first, `--fp-color-theme-kind` second (the
+`codemirrorTheme.ts:222-229` already does — body class first, `--cy-color-theme-kind` second (the
 synthetic var set at `useMessageHandler.ts:283-289` and mirrored to the hosted client by
 `standalone-shim.js:248`, which is what makes this work in the browser).
 

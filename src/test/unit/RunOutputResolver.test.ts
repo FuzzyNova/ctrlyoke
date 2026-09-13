@@ -60,9 +60,9 @@ suite("RunOutputResolver", () => {
   };
 
   setup(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-resolver-"));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-resolver-"));
     approvedExternalRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-resolver-external-")
+      path.join(os.tmpdir(), "cy-resolver-external-")
     );
     runDirectory = path.join(workspaceRoot, "run-2026-07-20T00-00-00-000Z");
     recorder = new TimelineRecorder();

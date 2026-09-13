@@ -787,7 +787,7 @@ function WorktreeRow({
             />
             <button
               type="button"
-              className="fp-select-trigger text-xs"
+              className="cy-select-trigger text-xs"
               onClick={() =>
                 vscode.postMessage({
                   type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,

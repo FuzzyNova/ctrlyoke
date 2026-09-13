@@ -36,7 +36,7 @@ suite("HostedWorkspaceViewerService", function () {
 
   function createWorkspace(): string {
     const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "fp-ws-viewer-")
+      path.join(os.tmpdir(), "cy-ws-viewer-")
     );
     tempRoots.push(workspaceRoot);
     return workspaceRoot;

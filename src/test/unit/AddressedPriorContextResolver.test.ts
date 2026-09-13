@@ -15,7 +15,7 @@ suite("AddressedPriorContextResolver", () => {
   const runRef = "run-2026-07-20T00-00-00-000Z" as RunRef;
 
   setup(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-context-"));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-context-"));
     await fs.mkdir(WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef), {
       recursive: true,
     });

@@ -24,7 +24,7 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
   return (
     <button
       type="button"
-      className="self-start inline-flex h-[1.625em] shrink-0 items-center gap-1 whitespace-nowrap rounded bg-btn-secondary-bg px-1.5 text-[length:var(--fp-output-font-size-sm)] leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover cursor-pointer font-inherit"
+      className="self-start inline-flex h-[1.625em] shrink-0 items-center gap-1 whitespace-nowrap rounded bg-btn-secondary-bg px-1.5 text-[length:var(--cy-output-font-size-sm)] leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover cursor-pointer font-inherit"
       onClick={(event) => {
         event.preventDefault();
         onToggle();
@@ -35,10 +35,10 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
     >
       <Icon
         name={expanded ? "codicon-fold" : "codicon-unfold"}
-        className="text-[length:var(--fp-output-font-size-sm)]"
+        className="text-[length:var(--cy-output-font-size-sm)]"
       />
       {showLabel && resolvedLabel && (
-        <span className="text-[length:var(--fp-output-font-size-xs)] uppercase">
+        <span className="text-[length:var(--cy-output-font-size-xs)] uppercase">
           {resolvedLabel}
         </span>
       )}

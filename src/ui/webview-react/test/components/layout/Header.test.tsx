@@ -315,7 +315,7 @@ describe("Header execution controls", () => {
       );
     }
     // Neither divider separates two visible slots here.
-    const dividers = controls.querySelectorAll(".fp-button-group-divider");
+    const dividers = controls.querySelectorAll(".cy-button-group-divider");
     expect(dividers).toHaveLength(2);
     for (const divider of dividers) {
       expect(divider.className).toContain("hidden xs:block");
@@ -486,7 +486,7 @@ describe("Header execution controls", () => {
     );
     const dividers = screen
       .getByRole("group", { name: "Workflow execution controls" })
-      .querySelectorAll(".fp-button-group-divider");
+      .querySelectorAll(".cy-button-group-divider");
     expect(dividers[1].className).not.toContain("hidden");
   });
 

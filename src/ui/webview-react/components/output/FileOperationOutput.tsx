@@ -218,7 +218,7 @@ const FileUndoButton: React.FC<{
         ? "Redo file operation"
         : "Undo file operation"
     }
-    className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
+    className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--cy-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
     title={
       fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
         ? `Redo ${actionNoun} ${path}`

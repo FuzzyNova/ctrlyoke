@@ -63,7 +63,7 @@ export function ActionButton({
       : label;
   const iconName = pending ? "loading" : flashing ? successIcon : icon;
 
-  const className = `fp-select-trigger text-xs inline-flex items-center gap-1 w-auto transition-colors ${
+  const className = `cy-select-trigger text-xs inline-flex items-center gap-1 w-auto transition-colors ${
     flashing
       ? "text-indicator-success border-indicator-success cursor-default"
       : "hover:bg-list-hover-bg hover:text-foreground disabled:hover:bg-dropdown-bg disabled:hover:text-dropdown-fg"

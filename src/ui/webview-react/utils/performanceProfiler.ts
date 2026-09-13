@@ -28,7 +28,7 @@ declare global {
   }
 }
 
-const LOG_PREFIX = "[FP-perf]";
+const LOG_PREFIX = "[cy-perf]";
 const STORAGE_KEY = "ctrlyoke.profiler.enabled";
 const DEFAULT_STATE: PerformanceProfilerState = {
   enabled: false,

@@ -193,7 +193,7 @@ function App() {
           "mobile-output-panel": outputPct,
           "mobile-editor-panel": editorPct,
         });
-        window.dispatchEvent(new CustomEvent("fp-request-editor-remeasure"));
+        window.dispatchEvent(new CustomEvent("cy-request-editor-remeasure"));
       } catch {
         // ignore setLayout errors during unstable states
       }
@@ -246,7 +246,7 @@ function App() {
           "output-panel": outputPct,
           "editor-panel": editorPct,
         });
-        window.dispatchEvent(new CustomEvent("fp-request-editor-remeasure"));
+        window.dispatchEvent(new CustomEvent("cy-request-editor-remeasure"));
       } catch {
         editorAutoExpandPxRef.current = A; // revert on error
       }
@@ -256,9 +256,9 @@ function App() {
   // Register the stable event listener once
   useEffect(() => {
     const listener = (e: Event) => overflowHandlerRef.current(e);
-    window.addEventListener("fp-editor-overflow-change", listener);
+    window.addEventListener("cy-editor-overflow-change", listener);
     return () =>
-      window.removeEventListener("fp-editor-overflow-change", listener);
+      window.removeEventListener("cy-editor-overflow-change", listener);
   }, []);
 
   // Mobile overlay closing animation state.
@@ -342,7 +342,7 @@ function App() {
       pageLoadId: panelPageLoadId,
     });
     // In standalone (browser) mode the server is the authoritative source of theme
-    // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
+    // vars. Sending THEME_VARS_CAPTURED from the browser strips --cy-color-theme-kind
     // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {
@@ -366,7 +366,7 @@ function App() {
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   useEffect(() => {
     document.documentElement.style.setProperty(
-      "--fp-output-font-size",
+      "--cy-output-font-size",
       `${outputFontSize}px`
     );
   }, [outputFontSize]);

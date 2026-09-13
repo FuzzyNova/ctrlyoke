@@ -65,7 +65,7 @@ export function SegmentedTabBar<Id extends string>({
             aria-label={tab.label}
             role="tab"
             aria-selected={isActive}
-            className={`fp-tab-hc${isActive ? " fp-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
+            className={`cy-tab-hc${isActive ? " cy-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`
                 : `border-b-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`

@@ -110,7 +110,7 @@ suite("WorkingFileManager", () => {
   function tempFile(name?: string): string {
     const p = path.join(
       os.tmpdir(),
-      `fp-wfm-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
+      `cy-wfm-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}.json`
     );
     tempPaths.push(p);
     return p;
@@ -192,7 +192,7 @@ suite("WorkingFileManager", () => {
 
     test("rejects for a non-existent file path", async () => {
       const manager = new WorkingFileManager(makeMockAccess());
-      const missing = path.join(os.tmpdir(), `fp-no-such-${Date.now()}.json`);
+      const missing = path.join(os.tmpdir(), `cy-no-such-${Date.now()}.json`);
       await assert.rejects(
         () => manager.readWorkingFile(missing),
         /failed to read working file/i
@@ -332,7 +332,7 @@ suite("WorkingFileManager", () => {
     let tmpWorkspace: string;
 
     async function makeTmpWorkspace(): Promise<string> {
-      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-"));
+      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-"));
       tempPaths.push(ws);
       return ws;
     }
@@ -735,7 +735,7 @@ suite("WorkingFileManager", () => {
     // fails anywhere before that rename must leave the draft exactly as it was
     // — there is nowhere else the definition exists yet.
     test("keeps the draft intact when publishing the run fails", async () => {
-      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-promote-"));
       tempPaths.push(tmpWorkspace);
 
       const creator = new WorkingFileManager(makeMockAccess());
@@ -781,7 +781,7 @@ suite("WorkingFileManager", () => {
     });
 
     test("carries the draft's workflow settings into the first run", async () => {
-      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-promote-"));
       tempPaths.push(tmpWorkspace);
 
       const creator = new WorkingFileManager(makeMockAccess());
@@ -824,7 +824,7 @@ suite("WorkingFileManager", () => {
     });
 
     test("preserves the authored worktree definition but starts without old runtime metadata", async () => {
-      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-promote-"));
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-promote-"));
       tempPaths.push(tmpWorkspace);
 
       const creator = new WorkingFileManager(makeMockAccess());
@@ -858,7 +858,7 @@ suite("WorkingFileManager", () => {
     let tmpWorkspace: string;
 
     async function makeTmpWorkspace(): Promise<string> {
-      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-seed-"));
+      const ws = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-seed-"));
       tempPaths.push(ws);
       return ws;
     }
@@ -1174,7 +1174,7 @@ suite("WorkingFileManager", () => {
       runRef: import("../../types/CtrlYokeTypes").RunRef;
       runFilePath: string;
     }> {
-      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-rewind-"));
+      tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-rewind-"));
       const manager = new WorkingFileManager(makeMockAccess());
       const { workflowKey } = await manager.createWorkingFile(
         "rewind-source",
@@ -1419,7 +1419,7 @@ suite("WorkingFileManager", () => {
     });
 
     test("preserves the exact executed prefix and appends only a runtime-free tail", async () => {
-      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-append-"));
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-append-"));
       const draft = new WorkingFileManager(makeMockAccess());
       const { workflowKey } = await draft.createWorkingFile(
         "append-source",
@@ -1511,7 +1511,7 @@ suite("WorkingFileManager", () => {
       runRef: import("../../types/CtrlYokeTypes").RunRef;
       runFilePath: string;
     }> {
-      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-addressed-"));
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-addressed-"));
       const draft = new WorkingFileManager(makeMockAccess());
       const { workflowKey } = await draft.createWorkingFile(
         "addressed-source",
@@ -1546,7 +1546,7 @@ suite("WorkingFileManager", () => {
       runRef: RunRef;
       runFilePath: string;
     }> {
-      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-grouped-"));
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-grouped-"));
       const steps: WorkingFile["steps"] = [
         { prompt: "before" },
         { prompt: "member-a" },
@@ -1832,7 +1832,7 @@ suite("WorkingFileManager", () => {
     });
 
     test("reorderStepsAtRun reorders only the pending suffix", async () => {
-      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-addressed-"));
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-addressed-"));
       const draft = new WorkingFileManager(makeMockAccess());
       const { workflowKey } = await draft.createWorkingFile(
         "reorder-source",
@@ -2073,7 +2073,7 @@ suite("WorkingFileManager one-shot definition revision expectation", () => {
   });
 
   test("does not carry a rejected expectation into the next write", async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-expectation-"));
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-expectation-"));
     const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
     await writeTempJson(workingFilePath, makeMinimalWorkingFile());
     const manager = new WorkingFileManager(makeMockAccess(workingFilePath));
@@ -2093,7 +2093,7 @@ suite("WorkingFileManager one-shot definition revision expectation", () => {
   });
 
   test("does not carry an expectation past a write that changed nothing", async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-ws-expectation-"));
+    workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-expectation-"));
     const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
     await writeTempJson(workingFilePath, {
       ...makeMinimalWorkingFile(),

@@ -5,13 +5,13 @@ import { sanitizeThemeVars } from "../../server/CtrlYokeHostedServer";
 suite("sanitizeThemeVars", () => {
   test("keeps well-formed CSS custom-property vars", () => {
     const result = sanitizeThemeVars({
-      "--fp-color-bg": "#1e1e1e",
-      "--fp-color-accent": "rgba(0, 122, 204, 0.5)",
+      "--cy-color-bg": "#1e1e1e",
+      "--cy-color-accent": "rgba(0, 122, 204, 0.5)",
     });
 
     assert.deepStrictEqual(result, {
-      "--fp-color-bg": "#1e1e1e",
-      "--fp-color-accent": "rgba(0, 122, 204, 0.5)",
+      "--cy-color-bg": "#1e1e1e",
+      "--cy-color-accent": "rgba(0, 122, 204, 0.5)",
     });
   });
 

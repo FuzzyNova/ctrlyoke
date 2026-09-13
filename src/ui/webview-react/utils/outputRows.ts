@@ -1092,7 +1092,7 @@ function estimateCliHeaderHeight(
 ): number {
   // Include timestamp so flex-wrap behavior matches actual rendering.
   // Use sm font size (FS-1) with body line-height (1.4) to match the header's
-  // text-[fp-output-font-size-sm] class and inherited body line-height.
+  // text-[cy-output-font-size-sm] class and inherited body line-height.
   const timestamp = row.output.timestampMs
     ? `[${new Date(row.output.timestampMs).toLocaleTimeString()}]`
     : "";
@@ -2977,7 +2977,8 @@ export function buildOutputRows(
     }
     const insertAt =
       nextCoordinationInsertByTarget.get(targetKey) ??
-      firstRowIndexByTarget.get(targetKey) ?? rows.length;
+      firstRowIndexByTarget.get(targetKey) ??
+      rows.length;
     const row: CoordinationActivityRow = {
       key: `coordination:${entry.seq}`,
       rowKind: OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY,

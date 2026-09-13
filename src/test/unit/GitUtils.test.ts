@@ -57,7 +57,7 @@ suite("GitUtils.gitRefExists", function () {
   }
 
   setup(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fp-gitutils-"));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cy-gitutils-"));
     runGit(["init"]);
     runGit(["config", "user.name", "ctrlyoke Tests"]);
     runGit(["config", "user.email", "ctrlyoke-tests@example.com"]);
@@ -246,7 +246,7 @@ suite("GitUtils worktree plumbing", function () {
 
   setup(async () => {
     workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "fp-worktree-git-")
+      path.join(os.tmpdir(), "cy-worktree-git-")
     );
     runGit(["init"]);
     runGit(["config", "user.name", "ctrlyoke Tests"]);
@@ -387,7 +387,7 @@ suite("GitUtils.getGitIgnoredFiles", function () {
   const temporaryRoots: string[] = [];
 
   async function createRepo(): Promise<string> {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "fp-gitignored-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "cy-gitignored-"));
     temporaryRoots.push(root);
     execFileSync("git", ["init"], {
       cwd: root,

@@ -1352,7 +1352,7 @@ export class HostedWorkspaceViewerService {
       content = content.replace(/\n/g, "\r\n");
     }
 
-    const tmpPath = `${resolved}.fp-tmp`;
+    const tmpPath = `${resolved}.cy-tmp`;
     await fs.promises.writeFile(tmpPath, content, "utf8");
     await fs.promises.rename(tmpPath, resolved);
   }

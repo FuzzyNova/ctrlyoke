@@ -176,10 +176,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             key={option.value}
             className={`group w-full flex items-center focus:outline-none border-none ${
               isSelected
-                ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+                ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
                 : option.disabled
                   ? "opacity-50 cursor-not-allowed"
-                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
+                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer cy-dropdown-row"
             }`}
           >
             <button
@@ -228,7 +228,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           {hiddenOptions.map((option) => (
             <div
               key={option.value}
-              className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
+              className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
             >
               {/* Eye icon at far left — primary unhide action */}
               <button
@@ -304,7 +304,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-label={triggerAriaLabel}
         aria-describedby={warning ? warningId : undefined}
         title={triggerTitle}
-        className={`fp-select-trigger fp-dropdown-row ${dropdownBorderClass(warning)}`}
+        className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <Icon

@@ -309,7 +309,7 @@ suite("Harness Hook Tests", function () {
   let recorderScript: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-hook-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-hook-test-"));
     recorderScript = path.join(tmpDir, "record-hook.js");
     fs.writeFileSync(recorderScript, buildRecorderScript());
   });

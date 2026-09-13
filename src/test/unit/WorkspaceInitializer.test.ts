@@ -10,7 +10,7 @@ suite("WorkspaceInitializer", () => {
   const tempRoots: string[] = [];
 
   function createWorkspace(): string {
-    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-init-"));
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-init-"));
     tempRoots.push(workspaceRoot);
     return workspaceRoot;
   }

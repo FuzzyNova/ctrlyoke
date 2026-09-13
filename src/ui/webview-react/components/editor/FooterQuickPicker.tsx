@@ -123,8 +123,8 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         aria-label={title}
         className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen
-            ? "bg-btn-secondary-bg text-btn-secondary-fg fp-dropdown-row-selected"
-            : "hover:bg-list-hover-bg text-foreground fp-dropdown-row"
+            ? "bg-btn-secondary-bg text-btn-secondary-fg cy-dropdown-row-selected"
+            : "hover:bg-list-hover-bg text-foreground cy-dropdown-row"
         }`}
       >
         {icon}
@@ -152,7 +152,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         createPortal(
           <div
             ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col"
+            className="cy-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col"
             style={{
               bottom: popupPos.bottom,
               left: popupPos.left,
