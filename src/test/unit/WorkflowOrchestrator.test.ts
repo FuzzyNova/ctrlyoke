@@ -2992,7 +2992,10 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
           await fs.readFile(promoted.workingFilePath, "utf8")
         );
         assert.strictEqual(written.steps[index].color, color);
-        assert.deepStrictEqual(written.steps[index]._runtime, expectedRuntime);
+        assert.deepStrictEqual(written.steps[index]._runtime, {
+          ...expectedRuntime,
+          stepId: written.steps[index]._runtime.stepId,
+        });
         assert.strictEqual(written._runtime?.pendingRewind, undefined);
         const pendingRewindExists = await fs
           .access(
@@ -4116,7 +4119,11 @@ suite("WorkflowOrchestrator addressed start position", () => {
         await fs.readFile(historical.workingFilePath, "utf8")
       );
       assert.strictEqual(rewound._runtime.pendingRewind.fromStepIndex, 1);
-      assert.strictEqual(rewound.steps[1]._runtime, undefined);
+      assert.ok(rewound.steps[1]._runtime?.stepId);
+      assert.strictEqual(
+        Object.keys(rewound.steps[1]._runtime ?? {}).length,
+        1
+      );
       const events = (
         await fs.readFile(path.join(historical.runDir, "events.jsonl"), "utf8")
       )
@@ -4245,7 +4252,8 @@ suite("WorkflowOrchestrator addressed start position", () => {
       assert.strictEqual(edited._runtime.currentIndex, 1);
       assert.ok(edited.steps[0]._runtime?.completedAt);
       assert.strictEqual(edited.steps[1].prompt, "edited suffix");
-      assert.strictEqual(edited.steps[1]._runtime, undefined);
+      assert.ok(edited.steps[1]._runtime?.stepId);
+      assert.strictEqual(Object.keys(edited.steps[1]._runtime ?? {}).length, 1);
       assert.deepStrictEqual(
         await fs.readFile(
           WorkflowPaths.pendingRewindBaseFilePath(

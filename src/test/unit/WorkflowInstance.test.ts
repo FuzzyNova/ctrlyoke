@@ -643,8 +643,9 @@ suite("WorkflowInstance session activity forwarding", () => {
       (instance.promptQueue as any).runtimeOutputCache.get(0).responseText,
       "before. and after."
     );
-    assert.deepStrictEqual(
-      (instance.promptQueue as any).state.steps[0]._runtime,
+    assert.ok((instance.promptQueue as any).state.steps[0]._runtime?.stepId);
+    assert.strictEqual(
+      (instance.promptQueue as any).state.steps[0]._runtime?.startedAt,
       undefined
     );
   });
@@ -1583,7 +1584,8 @@ suite("WorkflowInstance append-and-continue", () => {
       );
       assertBaseWorkflowProperties(workflowFile);
       assertBaseWorkflowProperties(workingFile);
-      assert.deepStrictEqual(appendedStep, {
+      const { _runtime: appendedRuntime, ...appendedDefinition } = appendedStep;
+      assert.deepStrictEqual(appendedDefinition, {
         name: "appended step",
         prompt: "appended prompt",
         harness: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -1595,6 +1597,7 @@ suite("WorkflowInstance append-and-continue", () => {
           deniedTools: ["append_step_write"],
         },
       });
+      assert.ok(appendedRuntime?.stepId);
       assert.deepStrictEqual(persistedAppendedStep, appendedStep);
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });

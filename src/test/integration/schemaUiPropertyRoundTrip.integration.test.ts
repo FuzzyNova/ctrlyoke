@@ -665,12 +665,14 @@ suite("Schema -> dashboard property round trip", () => {
       assert.deepStrictEqual(definition.preCondition, workflowPreCondition);
       assert.deepStrictEqual(definition.endCondition, workflowEndCondition);
       assert.deepStrictEqual(definition.hooks, workflowHooks);
-      assert.deepStrictEqual(definition.steps?.[0], {
+      const { _runtime: stepRuntime, ...definitionStep } = definition.steps![0];
+      assert.deepStrictEqual(definitionStep, {
         prompt: "updated prompt text",
         preCondition: stepPreCondition,
         endCondition: stepEndCondition,
         hooks: stepHooks,
       });
+      assert.ok((stepRuntime as { stepId?: string } | undefined)?.stepId);
     });
 
     test("saving a hand-authored script step preserves unenumerated properties", async () => {

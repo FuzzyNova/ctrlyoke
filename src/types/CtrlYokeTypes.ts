@@ -917,8 +917,14 @@ export interface ConditionEvaluationSummary {
  * Tracks execution state for individual prompts within a workflow.
  */
 export interface PromptRuntimeMetadata extends ExecutionProperties {
-  /** Timestamp when prompt started */
-  startedAt: number;
+  /**
+   * Timestamp when the executor claimed this step for dispatch. This is not
+   * the timestamp when runtime metadata was written.
+   */
+  startedAt?: number;
+
+  /** Stable identity for this queue step within its run. */
+  stepId?: string;
 
   /** Timestamp when prompt completed (set for all terminal states, not just successful completion) */
   completedAt?: number;

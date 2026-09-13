@@ -173,6 +173,83 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.steps[1].enabled, undefined);
     });
 
+    test("assigns stable IDs to every loaded queue step", () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      const ids = queue.getState().steps.map((step) => step._runtime?.stepId);
+      assert.ok(ids.every((id): id is string => id !== undefined));
+      assert.strictEqual(new Set(ids).size, ids.length);
+    });
+
+    test("does not invent startedAt when persisting unrelated runtime metadata", async () => {
+      queue.loadPrompts(createPromptFile([{ prompt: "pending" }]));
+
+      await queue.persistRuntimeMetadata(0, { sessionId: "session" });
+
+      assert.strictEqual(
+        queue.getState().steps[0]._runtime?.startedAt,
+        undefined
+      );
+    });
+
+    test("backfills missing IDs during recovery and preserves existing runtime facts", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-recovery-")
+      );
+
+      try {
+        const workingFilePath = await queue.createWorkingFile(
+          "recovery-workflow",
+          [{ prompt: "first" }, { prompt: "started sibling" }],
+          workspace
+        );
+        const workingFile = JSON.parse(
+          await fs.readFile(workingFilePath, "utf8")
+        ) as PromptFile;
+        const originalId = workingFile.steps![0]._runtime?.stepId;
+        workingFile.steps![1]._runtime = { startedAt: 42 };
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2)
+        );
+
+        const recovered = new PromptQueue();
+        await recovered.restoreFromWorkingFile(workingFilePath);
+        const recoveredSteps = recovered.getState().steps;
+        const recoveredIds = recoveredSteps.map(
+          (step) => step._runtime?.stepId
+        );
+
+        assert.strictEqual(recoveredIds[0], originalId);
+        assert.ok(recoveredIds[1]);
+        assert.strictEqual(recoveredSteps[1]._runtime?.startedAt, 42);
+        assert.strictEqual(new Set(recoveredIds).size, recoveredIds.length);
+
+        const persisted = JSON.parse(
+          await fs.readFile(workingFilePath, "utf8")
+        ) as PromptFile;
+        assert.ok(persisted.steps![1]._runtime?.stepId);
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("preserves IDs through edit, replacement, and reorder", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      const before = queue
+        .getState()
+        .steps.map((step) => step._runtime?.stepId);
+
+      await queue.updatePrompt(0, { prompt: "edited" });
+      await queue.replaceStep(1, { prompt: "replaced" });
+      await queue.reorderPendingPrompts([2, 0, 1]);
+
+      const after = queue.getState().steps.map((step) => step._runtime?.stepId);
+      assert.deepStrictEqual(new Set(after), new Set(before));
+      assert.strictEqual(after[0], before[2]);
+      assert.strictEqual(after[1], before[0]);
+      assert.strictEqual(after[2], before[1]);
+    });
+
     test("should preserve workflowKey/runRef already on the queue (createWorkingFile always runs immediately before this in production)", () => {
       (queue as any).state.workflowKey = "some-workflow-key";
       (queue as any).state.runRef = "run-2026-07-20T00-00-00-000Z";
@@ -1196,6 +1273,19 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("insertStepAfterIndex", () => {
+    test("assigns fresh IDs to inserted and appended steps", async () => {
+      queue.loadPrompts(createPromptFile([{ prompt: "original" }]));
+      const originalId = queue.getState().steps[0]._runtime?.stepId;
+
+      await queue.insertStepAfterIndex(0, { prompt: "inserted" });
+      await queue.appendSteps([{ prompt: "appended" }], "test");
+
+      const ids = queue.getState().steps.map((step) => step._runtime?.stepId);
+      assert.ok(ids.every((id): id is string => id !== undefined));
+      assert.strictEqual(new Set(ids).size, ids.length);
+      assert.strictEqual(ids[0], originalId);
+    });
+
     test("should shift currentIndex and completedIndices when inserting before the current prompt", async () => {
       const steps: PromptStep[] = [
         { prompt: "p0" },
@@ -1221,12 +1311,14 @@ suite("PromptQueue State Machine Tests", () => {
         state.steps.map((step) => (step as PromptStep).prompt),
         ["p0", "inserted prompt", "p1", "p2", "p3"]
       );
-      assert.deepStrictEqual(state.steps[1], {
+      const { _runtime: insertedRuntime, ...insertedStep } = state.steps[1];
+      assert.deepStrictEqual(insertedStep, {
         name: "inserted",
         prompt: "inserted prompt",
         enabled: false,
         model: "gpt-5.4",
       });
+      assert.ok(insertedRuntime?.stepId);
       assert.strictEqual(state.currentIndex, 3);
       assert.deepStrictEqual([...state.completedIndices].sort(), ["0", "2"]);
       assert.strictEqual(state.results[1].prompt, "inserted prompt");
@@ -1256,7 +1348,8 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.currentIndex, 1);
-      assert.deepStrictEqual(state.steps[3], {
+      const { _runtime: insertedRuntime, ...insertedStep } = state.steps[3];
+      assert.deepStrictEqual(insertedStep, {
         type: STEP_TYPES.SCRIPT,
         name: "inserted script",
         script: "npm test",
@@ -1265,6 +1358,7 @@ suite("PromptQueue State Machine Tests", () => {
         onPass: CONDITION_ACTIONS.CONTINUE,
         onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       });
+      assert.ok(insertedRuntime?.stepId);
       assert.strictEqual(state.results[3].prompt, "npm test");
       assert.strictEqual(state.results[3].status, STEP_STATUS.PENDING);
     });
@@ -1307,7 +1401,12 @@ suite("PromptQueue State Machine Tests", () => {
         queue.getState().steps[0]._runtime?.sessionId,
         "prefix-session"
       );
-      assert.strictEqual(queue.getState().steps[1]._runtime, undefined);
+      assert.ok(queue.getState().steps[1]._runtime?.stepId);
+      assert.strictEqual(
+        Object.keys(queue.getState().steps[1]._runtime ?? {}).length,
+        1,
+        "rewound suffix runtime must retain only step identity"
+      );
       assert.strictEqual(
         queue.getState().results[1].status,
         STEP_STATUS.PENDING
@@ -1617,11 +1716,9 @@ suite("PromptQueue State Machine Tests", () => {
         "b52bceab-9c03-49b3-8324-4220292e9acb",
         "session ID must be preserved from memory, not lost to disk replacement"
       );
-      assert.strictEqual(
-        state.steps[1]._runtime,
-        undefined,
-        "new MCP prompt should have no _runtime"
-      );
+      assert.deepStrictEqual(Object.keys(state.steps[1]._runtime ?? {}), [
+        "stepId",
+      ]);
     });
 
     test("should adopt persisted enabled changes while preserving in-memory runtime", () => {
@@ -1688,7 +1785,9 @@ suite("PromptQueue State Machine Tests", () => {
         "identical prompts must not share a session ID"
       );
       assert.strictEqual(state.steps[1]._runtime?.completedAt, 4000);
-      assert.strictEqual(state.steps[2]._runtime, undefined);
+      assert.deepStrictEqual(Object.keys(state.steps[2]._runtime ?? {}), [
+        "stepId",
+      ]);
       assert.strictEqual(state.results.length, 3);
     });
 
@@ -1719,10 +1818,14 @@ suite("PromptQueue State Machine Tests", () => {
         state.steps[0]._runtime?.sessionId,
         "completed-session"
       );
+      assert.ok(
+        state.steps[2]._runtime?.stepId,
+        "a disk-spliced step receives its own identity"
+      );
       assert.strictEqual(
-        state.steps[2]._runtime,
-        undefined,
-        "a disk-spliced step must not inherit runtime from a shifted index"
+        Object.keys(state.steps[2]._runtime ?? {}).length,
+        1,
+        "a disk-spliced step must not inherit execution runtime from a shifted index"
       );
     });
 
@@ -1904,7 +2007,8 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.steps[0]._runtime?.completedAt, 1);
-      assert.strictEqual(state.steps[1]._runtime, undefined);
+      assert.ok(state.steps[1]._runtime?.stepId);
+      assert.strictEqual(Object.keys(state.steps[1]._runtime ?? {}).length, 1);
       assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
     });
 

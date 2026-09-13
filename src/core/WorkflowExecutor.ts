@@ -1482,7 +1482,9 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
           : state.steps.length;
+      const dispatchStartedAt = Date.now();
       await this.promptQueue.persistRuntimeMetadata(runtimeStepIndex, {
+        startedAt: dispatchStartedAt,
         harness: resolvedProperties.harness,
         model: resolvedProperties.model,
         executionMode: resolvedProperties.executionMode,

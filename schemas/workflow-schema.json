@@ -1089,7 +1089,11 @@
           "properties": {
             "startedAt": {
               "type": "number",
-              "description": "Timestamp when this prompt started execution"
+              "description": "Timestamp when the executor claimed this step for dispatch"
+            },
+            "stepId": {
+              "type": "string",
+              "description": "Stable internal identity for this queue step within its run"
             },
             "completedAt": {
               "type": "number",
@@ -1123,8 +1127,7 @@
               "type": "boolean",
               "description": "Whether a failed member remains terminal for its parallel group. False when a per-step continue policy resolved the failure."
             }
-          },
-          "required": ["startedAt"]
+          }
         }
       ]
     },

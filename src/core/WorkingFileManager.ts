@@ -44,6 +44,7 @@ import {
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
+import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
 import {
   deleteParallelGroupStep,
   insertParallelGroupSteps,
@@ -567,6 +568,7 @@ export class WorkingFileManager {
       steps,
       parallelGroups,
     });
+    const identifiedSteps = ensureStepIds(topology.steps);
     const { workflowKey, draftFilePath } =
       await this.lineageRepository.createLineage(
         workspaceFolderPath,
@@ -583,7 +585,7 @@ export class WorkingFileManager {
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
       definitionRevision: 1,
-      steps: topology.steps.map(stripViewOnlyWorkflowStepFields),
+      steps: identifiedSteps.map(stripViewOnlyWorkflowStepFields),
       parallelGroups: topology.parallelGroups,
       _runtime: {
         currentIndex: 0,
@@ -669,7 +671,9 @@ export class WorkingFileManager {
       lastModifiedAt: startedAt,
       isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
-      steps: this.queueAccess.getSteps().map(stripViewOnlyWorkflowStepFields),
+      steps: ensureStepIds(this.queueAccess.getSteps()).map(
+        stripViewOnlyWorkflowStepFields
+      ),
       parallelGroups: normalizeParallelGroupTopology({
         steps: this.queueAccess.getSteps(),
         parallelGroups:
@@ -815,6 +819,11 @@ export class WorkingFileManager {
       steps: source.steps ?? [],
       parallelGroups: source.parallelGroups,
     });
+    const identifiedSteps = ensureStepIds(
+      stripStepRuntime(sourceTopology.steps).map(
+        stripViewOnlyWorkflowStepFields
+      )
+    );
     const finalStep = source.finalStep
       ? stripViewOnlyWorkflowStepFields(stripStepRuntime([source.finalStep])[0])
       : undefined;
@@ -828,9 +837,7 @@ export class WorkingFileManager {
       lastModifiedAt: startedAt,
       isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
-      steps: stripStepRuntime(sourceTopology.steps).map(
-        stripViewOnlyWorkflowStepFields
-      ),
+      steps: identifiedSteps,
       parallelGroups: sourceTopology.parallelGroups,
       ...(finalStep ? { finalStep } : {}),
       ...(overrides.harness ? { harness: overrides.harness } : {}),
@@ -959,9 +966,18 @@ export class WorkingFileManager {
             );
           }
           const topology = normalizeParallelGroupTopology({
-            steps: source.steps ?? [],
+            steps: ensureStepIds(source.steps ?? []),
             parallelGroups: source.parallelGroups,
           });
+          const sourceHasBackfilledIds = topology.steps.some(
+            (step, index) => step !== source.steps?.[index]
+          );
+          const sourceForRewind = sourceHasBackfilledIds
+            ? { ...source, steps: topology.steps }
+            : source;
+          const snapshotBytes = sourceHasBackfilledIds
+            ? Buffer.from(JSON.stringify(sourceForRewind, null, 2))
+            : sourceBytes;
           if (fromStepIndex >= topology.steps.length) {
             throw new Error(
               `Invalid rewind index ${fromStepIndex}; expected a suffix within ${topology.steps.length} step(s)`
@@ -982,27 +998,30 @@ export class WorkingFileManager {
             ),
             { recursive: true }
           );
-          await writeSnapshotAtomic(snapshotPath, sourceBytes);
+          await writeSnapshotAtomic(snapshotPath, snapshotBytes);
           const now = Date.now();
           const pendingRewind = {
             fromStepIndex: boundary,
             baseDefinitionRevision: sourceRevision,
           };
           const workingFile: WorkingFile = {
-            ...source,
+            ...sourceForRewind,
             lastModifiedAt: now,
             definitionRevision: sourceRevision + 1,
             steps: topology.steps.map((step, index) =>
               index < boundary
                 ? stripViewOnlyWorkflowStepFields(step)
-                : stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+                : stripViewOnlyWorkflowStepFields(
+                    resetStepRuntimeForRewind(step)
+                  )
             ),
             parallelGroups: topology.parallelGroups,
             _runtime: {
-              ...source._runtime,
+              ...sourceForRewind._runtime,
               currentIndex: boundary,
               executionState:
-                source._runtime?.executionState === EXECUTION_STATES.PAUSED
+                sourceForRewind._runtime?.executionState ===
+                EXECUTION_STATES.PAUSED
                   ? EXECUTION_STATES.PAUSED
                   : EXECUTION_STATES.IDLE,
               pendingRewind,
@@ -1282,7 +1301,7 @@ export class WorkingFileManager {
       expectedDefinitionRevision,
       (source) => {
         const topology = normalizeParallelGroupTopology({
-          steps: source.steps ?? [],
+          steps: ensureStepIds(source.steps ?? []),
           parallelGroups: source.parallelGroups,
         });
         const steps = topology.steps;
@@ -1301,7 +1320,7 @@ export class WorkingFileManager {
         const nextTopology = insertParallelGroupSteps(
           topology,
           requestedIndex,
-          [step]
+          [ensureStepIds([...topology.steps, step]).at(-1)!]
         );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
@@ -1586,9 +1605,16 @@ export class WorkingFileManager {
           steps: newSteps,
           parallelGroups: parallelGroups ?? existingTopology.parallelGroups,
         });
-        const nextSteps = incomingTopology.steps.map((newStep, index) => {
+        const identifiedSteps = ensureStepIds(
+          incomingTopology.steps,
+          existingTopology.steps
+        );
+        const nextSteps = identifiedSteps.map((newStep, index) => {
           const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
-          if (persistableStep._runtime) {
+          const hasExecutionRuntime = Object.keys(
+            persistableStep._runtime ?? {}
+          ).some((key) => key !== "stepId");
+          if (hasExecutionRuntime) {
             return persistableStep;
           }
           const existing = existingTopology.steps[index];

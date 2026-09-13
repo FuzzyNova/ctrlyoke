@@ -68,6 +68,7 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { immutablePrefixLength } from "./orchestration/RunContinuationService";
+import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -337,7 +338,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: promptFile.steps || [],
       parallelGroups: promptFile.parallelGroups,
     });
-    const prompts = topology.steps;
+    const prompts = ensureStepIds(topology.steps);
 
     this.state = {
       currentIndex: 0,
@@ -404,7 +405,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         steps: workingFile.steps ?? [],
         parallelGroups: workingFile.parallelGroups,
       });
-      const prompts = topology.steps;
+      const prompts = ensureStepIds(topology.steps);
+      const recoveredIdsAdded = prompts.some(
+        (prompt, index) => prompt !== topology.steps[index]
+      );
       const pendingRewind = runtime?.pendingRewind
         ? {
             ...runtime.pendingRewind,
@@ -415,10 +419,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           }
         : undefined;
 
-      // Build completedIndices from per-prompt _runtime.completedAt (source of truth).
-      // Fall back to currentIndex boundary for old working files that lack per-prompt _runtime.
+      // Build completedIndices from per-prompt runtime (source of truth).
+      // A startedAt-only member is still tracked per-step; in particular, a
+      // parallel member may be started beyond currentIndex. Fall back to the
+      // currentIndex boundary only for genuinely old files with no step runtime.
       const hasPerPromptTracking = prompts.some(
-        (p) => p._runtime?.completedAt !== undefined
+        (p) =>
+          p._runtime?.startedAt !== undefined ||
+          p._runtime?.completedAt !== undefined
       );
 
       const completedIndices = new Set<string>();
@@ -436,13 +444,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         );
         for (let i = 0; i < runtime.currentIndex; i++) {
           completedIndices.add(String(i));
-          // Self-heal: write completedAt back so next save uses new format
+          // Self-heal old files with a terminal marker. Do not invent
+          // startedAt here: it means the executor claimed the step, not that
+          // runtime metadata was first upgraded.
           if (prompts[i]) {
             prompts[i]._runtime = {
               ...prompts[i]._runtime,
-              startedAt:
-                prompts[i]._runtime?.startedAt ??
-                (workingFile.startedAt || Date.now()),
               completedAt: workingFile.startedAt
                 ? workingFile.startedAt + 1
                 : Date.now(),
@@ -558,8 +565,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Persist forced STOPPED state to disk immediately so subsequent
       // handleGetRecentWorkflows reads see the correct state, not "running".
-      if (forcedToStopped) {
-        await this.updateWorkingFile().catch((err) =>
+      if (recoveredIdsAdded || forcedToStopped) {
+        await this.updateWorkingFile(recoveredIdsAdded).catch((err) =>
           Log.warn(
             "[PromptQueue] Working file load: failed to persist STOPPED state to disk:",
             err
@@ -612,11 +619,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
     // Stale session IDs from a previous run would cause log discovery and session
     // resumption to find the wrong session when re-running the same workflow.
-    this.state.steps = this.state.steps.map((step) => {
-      // Destructure to remove _runtime, preserving all other step fields
-      const { _runtime, ...rest } = step;
-      return rest as WorkflowStep;
-    });
+    this.state.steps = this.state.steps.map(resetStepRuntimeForRewind);
 
     this.emitStateChange();
     Log.info("[PromptQueue] Queue restarted from beginning");
@@ -1341,11 +1344,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       return;
     }
 
-    step._runtime = {
-      startedAt: Date.now(),
-      ...step._runtime,
-      ...updates,
-    };
+    step._runtime = { ...step._runtime, ...updates };
 
     await this.updateWorkingFile();
   }
@@ -1518,12 +1517,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       };
     });
 
-    this.state.steps = mergedSteps;
+    const identifiedSteps = ensureStepIds(mergedSteps, memorySteps);
+    this.state.steps = identifiedSteps;
     this.state.parallelGroups = diskTopology.parallelGroups;
     if (this.workflowFile) {
       this.workflowFile = {
         ...this.workflowFile,
-        steps: [...mergedSteps],
+        steps: [...identifiedSteps],
         parallelGroups: diskTopology.parallelGroups,
       };
     }
@@ -1612,14 +1612,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         this.state.currentIndex,
         this.state.steps.length
       );
-      const topology = insertParallelGroupTopology(
-        {
-          steps: this.state.steps,
-          parallelGroups: this.state.parallelGroups,
-        },
-        requestedIndex,
-        { steps, parallelGroups }
-      );
+      const identifiedSteps = ensureStepIds([
+        ...this.state.steps,
+        ...steps,
+      ]).slice(this.state.steps.length);
       const insertIndex = resolveParallelGroupInsertIndex(
         {
           steps: this.state.steps,
@@ -1630,8 +1626,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
 
       // Insert steps at the specified position
-      this.state.steps = topology.steps;
-      this.state.parallelGroups = topology.parallelGroups;
+      const identifiedTopology = insertParallelGroupTopology(
+        {
+          steps: this.state.steps,
+          parallelGroups: this.state.parallelGroups,
+        },
+        requestedIndex,
+        { steps: identifiedSteps, parallelGroups }
+      );
+      this.state.steps = identifiedTopology.steps;
+      this.state.parallelGroups = identifiedTopology.parallelGroups;
 
       // Create new results for the inserted steps
       const newResults: PromptResult[] = steps.map((step) => ({
@@ -1707,13 +1711,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         requestedIndex,
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
+      const identifiedStep = ensureStepIds([...this.state.steps, step]).at(-1)!;
       const nextTopology = insertParallelGroupSteps(topology, requestedIndex, [
-        step,
+        identifiedStep,
       ]);
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
-        prompt: isScriptStep(step) ? step.script : step.prompt,
+        prompt: isScriptStep(identifiedStep)
+          ? identifiedStep.script
+          : identifiedStep.prompt,
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       });
@@ -1787,6 +1794,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const computedWorkflowName =
       this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile);
     this.state.workflowName = computedWorkflowName;
+    const identifiedPrompts = ensureStepIds(prompts);
+    prompts.splice(0, prompts.length, ...identifiedPrompts);
 
     const { workingFilePath, workflowKey } =
       await this.workingFileManager.createWorkingFile(
@@ -1830,6 +1839,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const workflowKey = this.state.workflowKey;
     if (!workflowKey) {
       return null;
+    }
+
+    const identifiedSteps = ensureStepIds(this.state.steps);
+    this.state.steps = identifiedSteps;
+    if (this.workflowFile) {
+      this.workflowFile = { ...this.workflowFile, steps: [...identifiedSteps] };
     }
 
     const result = await this.workingFileManager.promoteToNewRun(
@@ -1941,7 +1956,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state.steps = topology.steps.map((step, index) =>
       index < boundary
         ? stripViewOnlyWorkflowStepFields(step)
-        : stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+        : stripViewOnlyWorkflowStepFields(resetStepRuntimeForRewind(step))
     );
     this.state.results = this.state.results.map((result, index) =>
       index < boundary ? result : { ...result, status: STEP_STATUS.PENDING }
@@ -2143,13 +2158,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.assertPendingRewindSuffixIndex(index, "replace");
     this.assertEditableDuringExecution(index, "replace");
+    const existingStepId = this.state.steps[index]._runtime?.stepId;
+    const replacement: WorkflowStep =
+      existingStepId === undefined
+        ? step
+        : { ...step, _runtime: { stepId: existingStepId } };
     const nextTopology = replaceParallelGroupStep(
       {
         steps: this.state.steps,
         parallelGroups: this.state.parallelGroups,
       },
       index,
-      step
+      replacement
     );
     this.state.steps = nextTopology.steps;
     this.state.parallelGroups = nextTopology.parallelGroups;
@@ -2359,13 +2379,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: newSteps,
       parallelGroups: nextParallelGroups,
     });
-    this.state.steps = nextTopology.steps.map((newStep, i) => {
+    const identifiedSteps = ensureStepIds(nextTopology.steps, this.state.steps);
+    this.state.steps = identifiedSteps.map((newStep, i) => {
       const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
       const suppressSuffixRuntime =
         this.state.pendingRewind !== undefined &&
         i >= this.state.pendingRewind.fromStepIndex;
       const runtimeSafeStep = suppressSuffixRuntime
-        ? stripStepRuntime([persistableStep])[0]
+        ? resetStepRuntimeForRewind(persistableStep)
         : persistableStep;
       const existing = this.state.steps[i];
       const existingRuntime =

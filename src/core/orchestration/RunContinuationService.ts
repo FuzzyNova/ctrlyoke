@@ -35,6 +35,7 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "../WorkflowStepSanitizer";
+import { ensureStepIds } from "../StepIdentity";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -270,9 +271,13 @@ export class RunContinuationService {
         // the executing run advance in between and land `next` on the wrong
         // step.
         const sourceTopology = normalizeParallelGroupTopology({
-          steps: source.steps ?? [],
+          steps: ensureStepIds(source.steps ?? []),
           parallelGroups: source.parallelGroups,
         });
+        const identifiedTail = ensureStepIds([
+          ...sourceTopology.steps,
+          ...tail.map((step) => stripStepRuntime([step])[0]),
+        ]).slice(sourceTopology.steps.length);
         const requestedIndex =
           typeof position === "number"
             ? position
@@ -308,9 +313,7 @@ export class RunContinuationService {
         const nextTopology = insertParallelGroupSteps(
           sourceTopology,
           requestedIndex,
-          tail.map((step) =>
-            stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
-          )
+          identifiedTail.map(stripViewOnlyWorkflowStepFields)
         );
         const workingFile: WorkingFile = {
           ...source,
@@ -426,8 +429,12 @@ export class RunContinuationService {
           index,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
+        const identifiedStep = ensureStepIds([
+          ...topology.steps,
+          stripStepRuntime([step])[0],
+        ]).at(-1)!;
         const nextTopology = insertParallelGroupSteps(topology, index, [
-          stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0]),
+          stripViewOnlyWorkflowStepFields(identifiedStep),
         ]);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         return {

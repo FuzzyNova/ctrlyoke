@@ -1405,7 +1405,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       persisted.steps?.[0]._runtime?.sessionId,
       "session-append"
     );
-    assert.strictEqual(persisted.steps?.[1]._runtime, undefined);
+    assert.ok(persisted.steps?.[1]._runtime?.stepId);
   });
 
   test("accepts an append whose prompt matches a completed step", async () => {
@@ -1558,8 +1558,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         ["prompt-next-append", "running", "steered", "pending"]
       );
       // The executed prefix keeps its index and its session/runtime metadata.
-      assert.deepStrictEqual(persisted.steps?.[0], workingFile.steps![0]);
-      assert.strictEqual(persisted.steps?.[2]._runtime, undefined);
+      const { _runtime: persistedRuntime, ...persistedDefinition } =
+        persisted.steps![0];
+      const { stepId: _stepId, ...persistedExecutionRuntime } =
+        persistedRuntime!;
+      assert.deepStrictEqual(
+        { ...persistedDefinition, _runtime: persistedExecutionRuntime },
+        workingFile.steps![0]
+      );
+      assert.ok(_stepId);
+      assert.ok(persisted.steps?.[2]._runtime?.stepId);
     } finally {
       await WorkflowLockManager.releaseLock(
         workspaceRoot,

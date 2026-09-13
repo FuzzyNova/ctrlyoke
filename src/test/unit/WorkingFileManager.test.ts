@@ -297,10 +297,7 @@ suite("WorkingFileManager", () => {
       persisted.finalStep?._runtime?.sessionId,
       "final-session-id"
     );
-    assert.strictEqual(
-      typeof persisted.finalStep?._runtime?.startedAt,
-      "number"
-    );
+    assert.strictEqual(persisted.finalStep?._runtime?.startedAt, undefined);
   });
 
   test("projects token totals through a later PromptQueue runtime write", async () => {
@@ -956,7 +953,11 @@ suite("WorkingFileManager", () => {
         content._runtime!.executionState,
         EXECUTION_STATES.IDLE
       );
-      assert.strictEqual((content.steps![0] as PromptStep)._runtime, undefined);
+      assert.ok((content.steps![0] as PromptStep)._runtime?.stepId);
+      assert.strictEqual(
+        Object.keys((content.steps![0] as PromptStep)._runtime ?? {}).length,
+        1
+      );
     });
 
     test("keeps the authored worktree definition but strips worktree runtime on re-run", async () => {
@@ -1242,8 +1243,10 @@ suite("WorkingFileManager", () => {
       );
       assert.strictEqual(after.definitionRevision, 2);
       assert.ok(after.steps![0]._runtime?.completedAt);
-      assert.strictEqual(after.steps![1]._runtime, undefined);
-      assert.strictEqual(after.steps![2]._runtime, undefined);
+      assert.ok(after.steps![1]._runtime?.stepId);
+      assert.ok(after.steps![2]._runtime?.stepId);
+      assert.strictEqual(Object.keys(after.steps![1]._runtime ?? {}).length, 1);
+      assert.strictEqual(Object.keys(after.steps![2]._runtime ?? {}).length, 1);
       assert.deepStrictEqual(after._runtime?.pendingRewind, {
         fromStepIndex: 1,
         baseDefinitionRevision: 1,
@@ -1321,9 +1324,10 @@ suite("WorkingFileManager", () => {
       });
       assert.strictEqual(restartedQueue.getState().currentIndex, 1);
       assert.ok(restartedQueue.getState().steps[0]._runtime?.completedAt);
+      assert.ok(restartedQueue.getState().steps[1]._runtime?.stepId);
       assert.strictEqual(
-        restartedQueue.getState().steps[1]._runtime,
-        undefined
+        Object.keys(restartedQueue.getState().steps[1]._runtime ?? {}).length,
+        1
       );
     });
 
@@ -1477,7 +1481,11 @@ suite("WorkingFileManager", () => {
       assert.deepStrictEqual(after.steps![0], before.steps![0]);
       assert.strictEqual(after.steps!.length, 2);
       assert.strictEqual((after.steps![1]! as PromptStep).prompt, "new tail");
-      assert.strictEqual(after.steps![1]!._runtime, undefined);
+      assert.ok(after.steps![1]!._runtime?.stepId);
+      assert.strictEqual(
+        Object.keys(after.steps![1]!._runtime ?? {}).length,
+        1
+      );
       assert.strictEqual(appended.definitionRevision, 2);
       await assert.rejects(
         () =>
