@@ -96,7 +96,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   return (
     <div
       ref={refCallback}
-      className="relative z-header select-none [-webkit-touch-callout:none] flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
+      className="relative z-header cy-no-select flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
     >
       <div className="flex items-center gap-1">
         <button

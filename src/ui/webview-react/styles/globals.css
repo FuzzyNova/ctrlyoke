@@ -846,6 +846,25 @@ button .codicon {
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
+  /* ── Non-selectable chrome ─────────────────────────────────────────────────
+     Toolbars, headers, footers, button groups, and row lists: surfaces built
+     entirely from controls, where a click-drag has nothing worth selecting and
+     a highlighted button label only reads as broken.
+
+     The `-webkit-touch-callout` half is not decoration — press-and-hold is a
+     real gesture here (SplitButton's menu, every context menu wired through
+     `useLongPress`), and without it iOS answers that press with its own
+     selection callout instead. The two must therefore travel together, which
+     is why this is one class rather than two utilities at each call site.
+
+     Note the first `cy-` (ctrlyoke) class: the `fp-` prefix throughout this
+     file predates the FlightPath → ctrlyoke rename and is being migrated. New
+     classes take `cy-`. */
+  .cy-no-select {
+    @apply select-none;
+    -webkit-touch-callout: none;
+  }
+
   /* Generic full-height segmented button group used in header actions. */
   .fp-button-group {
     /* The outer group owns the corner radius. Inner buttons stay square so

@@ -219,7 +219,7 @@ const EditorSectionInner: React.FC = () => {
         </button>
 
         <div
-          className="fp-mode-switch mx-2 select-none [-webkit-touch-callout:none]"
+          className="fp-mode-switch mx-2 cy-no-select"
           role="group"
           aria-label="Step type"
         >

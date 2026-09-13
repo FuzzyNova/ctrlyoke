@@ -854,7 +854,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col select-none [-webkit-touch-callout:none]">
+    <div className="flex h-full min-h-0 flex-col cy-no-select">
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">

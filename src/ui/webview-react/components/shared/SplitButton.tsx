@@ -1,7 +1,14 @@
 import { BUTTON_VARIANTS, KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useLongPress } from "@hooks/useLongPress";
 import { HEADER_BUTTON_SIZES } from "@/constants";
+
+/**
+ * Appended to the main button's tooltip when the chevron trigger is collapsed
+ * away, so the only remaining way into the menu is still discoverable.
+ */
+const MENU_GESTURE_HINT = "Right-click or press and hold for more options";
 
 export interface SplitButtonOption {
   label: string;
@@ -41,6 +48,20 @@ export interface SplitButtonProps {
   badge?: React.ReactNode;
   /** Aria label for dropdown button */
   dropdownAriaLabel?: string;
+  /**
+   * Collapse the control to its main button alone: the separator and chevron
+   * trigger are not rendered, and the menu is reached by right-click, press
+   * and hold, `ArrowDown`, or the platform context-menu key. Use it where the
+   * ~26px the chevron costs matters more than its click affordance — a narrow
+   * header row or editor footer. Those gestures work at *every* width, so the
+   * chevron teaches the menu exists where there is room and the same gesture
+   * keeps working where there is not.
+   *
+   * The caller decides, because a split button is content-sized and so cannot
+   * measure the space it is competing for; measure the row that holds it
+   * (`useElementNarrow`) or the viewport (`useIsMobile`) instead.
+   */
+  hideMenuButton?: boolean;
 }
 
 export const SplitButton: React.FC<SplitButtonProps> = ({
@@ -57,6 +78,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   dropdownIcon,
   badge,
   dropdownAriaLabel = "More options",
+  hideMenuButton = false,
 }) => {
   const isMobile = useIsMobile();
   const btnSizes = isMobile
@@ -66,10 +88,31 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // Track whether the dropdown was opened via keyboard so we only
   // auto-focus the first item for keyboard navigation (not mouse clicks).
   const openedWithKeyboardRef = useRef(false);
+  // A long press fires while the finger is still down; the browser then
+  // synthesises a click on lift, which would run the main action on top of the
+  // menu that same press just opened.
+  const suppressNextClickRef = useRef(false);
+
+  const menuDisabled = disabled || dropdownDisabled;
+  // Whichever button currently opens the menu: the focus-restoration opener
+  // handed to option callbacks, and where focus returns on Escape.
+  const getMenuAnchor = useCallback(
+    () => (hideMenuButton ? mainRef.current : triggerRef.current),
+    [hideMenuButton]
+  );
+
+  // Browsers dispatch no pointer events on a disabled control, so in collapsed
+  // mode a disabled main action would take its own menu down with it. Keep the
+  // button enabled and refuse the action instead.
+  const collapsedMainOnlyDisabled =
+    hideMenuButton && mainDisabled && !disabled && !dropdownDisabled;
+  const mainActionDisabled = disabled || mainDisabled;
+  const mainButtonDisabled = mainActionDisabled && !collapsedMainOnlyDisabled;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -104,15 +147,20 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!isOpen) {
-        if (
+        if (menuDisabled) return;
+        // Enter/Space belong to whichever button has focus — intercepting them
+        // group-wide swallowed the main button's own activation, since
+        // preventDefault on keydown cancels the synthesised click. ArrowDown is
+        // the group-wide "open the menu" key, and is the only way in from the
+        // main button once the chevron is collapsed away.
+        const fromTrigger = e.target === triggerRef.current;
+        const opensMenu =
           e.key === KEYBOARD_KEYS.ARROW_DOWN ||
-          e.key === KEYBOARD_KEYS.ENTER ||
-          e.key === " "
-        ) {
-          e.preventDefault();
-          openedWithKeyboardRef.current = true;
-          setIsOpen(true);
-        }
+          (fromTrigger && (e.key === KEYBOARD_KEYS.ENTER || e.key === " "));
+        if (!opensMenu) return;
+        e.preventDefault();
+        openedWithKeyboardRef.current = true;
+        setIsOpen(true);
         return;
       }
 
@@ -148,10 +196,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         case " ":
           e.preventDefault();
           if (focusedIndex >= 0 && !options[focusedIndex]?.disabled) {
-            options[focusedIndex].onClick(triggerRef.current);
+            options[focusedIndex].onClick(getMenuAnchor());
             setIsOpen(false);
             setFocusedIndex(-1);
-            triggerRef.current?.focus();
+            getMenuAnchor()?.focus();
           }
           break;
 
@@ -159,7 +207,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           e.preventDefault();
           setIsOpen(false);
           setFocusedIndex(-1);
-          triggerRef.current?.focus();
+          getMenuAnchor()?.focus();
           break;
 
         case KEYBOARD_KEYS.TAB:
@@ -168,12 +216,12 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           break;
       }
     },
-    [isOpen, options, focusedIndex]
+    [isOpen, options, focusedIndex, menuDisabled, getMenuAnchor]
   );
 
   const handleOptionClick = (option: SplitButtonOption) => {
     if (option.disabled) return;
-    option.onClick(triggerRef.current);
+    option.onClick(getMenuAnchor());
     setIsOpen(false);
     setFocusedIndex(-1);
   };
@@ -185,6 +233,48 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       setFocusedIndex(-1);
     }
     setIsOpen(!isOpen);
+  };
+
+  /** Right-click / press-and-hold entry point — always opens, never toggles. */
+  const openMenuFromGesture = useCallback(() => {
+    if (menuDisabled) return;
+    openedWithKeyboardRef.current = false;
+    setFocusedIndex(-1);
+    setIsOpen(true);
+  }, [menuDisabled]);
+
+  const handleLongPress = useCallback(() => {
+    suppressNextClickRef.current = true;
+    openMenuFromGesture();
+  }, [openMenuFromGesture]);
+
+  const longPressHandlers = useLongPress(menuDisabled ? null : handleLongPress);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (menuDisabled) return;
+    // Also covers the keyboard context-menu gesture (Menu key / Shift+F10),
+    // which browsers deliver as a contextmenu event.
+    e.preventDefault();
+    e.stopPropagation();
+    openMenuFromGesture();
+  };
+
+  const handleMainClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+    // A deliberate click on the main button while its own menu is open should
+    // dismiss the menu rather than leave it hanging over the result.
+    setIsOpen(false);
+    if (mainActionDisabled) return;
+    mainAction();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // A fresh gesture: whatever the previous one suppressed is spent.
+    suppressNextClickRef.current = false;
+    longPressHandlers.onTouchStart(e);
   };
 
   // Button classes based on variant
@@ -202,6 +292,17 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       ? "bg-btn-bg text-btn-fg"
       : "bg-btn-secondary-bg text-btn-secondary-fg";
   const disabledClass = "opacity-50 cursor-not-allowed";
+
+  const badgeElement = badge ? (
+    <span className="text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
+      {badge}
+    </span>
+  ) : null;
+
+  const collapsedTitle = mainTitle
+    ? `${mainTitle}
+${MENU_GESTURE_HINT}`
+    : MENU_GESTURE_HINT;
 
   const defaultChevron = (
     <svg
@@ -230,51 +331,76 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     >
       {/* Keep the button surface clipped by the shared border. The popup is a
           sibling so it can escape that clip without making the corner radius
-          depend on the buttons' own backgrounds. */}
-      <div className={`fp-button-group ${btnSizes.groupContainer}`}>
+          depend on the buttons' own backgrounds — and so the right-click and
+          press-and-hold handlers below cover the button surface only, leaving
+          an already-open menu to close normally rather than re-opening. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- gesture augmentation of the native buttons inside; keyboard parity is the group's onKeyDown plus the platform context-menu key, which arrives as contextmenu */}
+      <div
+        className={`fp-button-group cy-no-select ${btnSizes.groupContainer}`}
+        onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchMove={longPressHandlers.onTouchMove}
+        onTouchEnd={longPressHandlers.onTouchEnd}
+        onTouchCancel={longPressHandlers.onTouchCancel}
+      >
         {/* Main Button */}
         <button
+          ref={mainRef}
           type="button"
-          onClick={mainAction}
-          disabled={disabled || mainDisabled}
-          title={mainTitle}
+          onClick={handleMainClick}
+          disabled={mainButtonDisabled}
+          aria-disabled={mainActionDisabled || undefined}
+          title={hideMenuButton ? collapsedTitle : mainTitle}
+          aria-haspopup={hideMenuButton ? "listbox" : undefined}
+          aria-expanded={hideMenuButton ? isOpen : undefined}
           className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none ${
-            disabled || mainDisabled ? disabledClass : ""
-          }`}
+            hideMenuButton ? "relative gap-1" : ""
+          } ${mainActionDisabled ? disabledClass : ""}`}
         >
           {mainLabel}
-        </button>
-
-        {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
-            outer div fills with button background (padding creates the inset),
-            inner 1px div is the visible hairline using --vscode-button-separator */}
-        <div
-          className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
-        >
-          <div className="w-px h-full bg-current opacity-40" />
-        </div>
-
-        {/* Dropdown Trigger */}
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={toggleDropdown}
-          disabled={disabled || dropdownDisabled}
-          title={dropdownTitle}
-          aria-label={dropdownAriaLabel}
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-none ${
-            disabled || dropdownDisabled ? disabledClass : ""
-          } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
-        >
-          {badge && (
-            <span className="text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
-              {badge}
-            </span>
+          {hideMenuButton && badgeElement}
+          {/* Flyout marker: the standard toolbar hint that a hidden menu is
+              attached. Absolutely positioned so it costs no layout width —
+              which is the entire point of collapsing the chevron away. */}
+          {hideMenuButton && (
+            <span
+              aria-hidden="true"
+              data-testid="split-button-flyout-marker"
+              className="pointer-events-none absolute bottom-[2px] right-[2px] h-0 w-0 border-b-4 border-l-4 border-b-current border-l-transparent opacity-70"
+            />
           )}
-          {dropdownIcon || defaultChevron}
         </button>
+
+        {!hideMenuButton && (
+          <>
+            {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
+                outer div fills with button background (padding creates the inset),
+                inner 1px div is the visible hairline using --vscode-button-separator */}
+            <div
+              className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
+            >
+              <div className="w-px h-full bg-current opacity-40" />
+            </div>
+
+            {/* Dropdown Trigger */}
+            <button
+              ref={triggerRef}
+              type="button"
+              onClick={toggleDropdown}
+              disabled={menuDisabled}
+              title={dropdownTitle}
+              aria-label={dropdownAriaLabel}
+              aria-haspopup="listbox"
+              aria-expanded={isOpen}
+              className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-none ${
+                menuDisabled ? disabledClass : ""
+              } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
+            >
+              {badgeElement}
+              {dropdownIcon || defaultChevron}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Dropdown Menu */}

@@ -1773,7 +1773,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       <div
         ref={mergedDropdownRef}
         onTransitionEnd={handleDropdownTransitionEnd}
-        className={`workflow-dropdown-menu select-none [-webkit-touch-callout:none] fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-[250ms] ease-out opacity-100 visible" : "duration-[220ms] ease-in opacity-0 invisible pointer-events-none"}`}
+        className={`workflow-dropdown-menu cy-no-select fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-[opacity,clip-path,visibility] ${dropdownRevealed ? "duration-[250ms] ease-out opacity-100 visible" : "duration-[220ms] ease-in opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,
           left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,

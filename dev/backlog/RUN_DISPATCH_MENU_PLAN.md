@@ -465,12 +465,30 @@ starts a run the user cannot see.
 right API (`SplitButtonOption` supports `icon`, `disabled`, `divider`,
 `shortcut`) and full keyboard navigation, but it was built for the header:
 
-- its menu is hard-coded to `absolute top-full` (`SplitButton.tsx:277`) — it
-  must be able to drop **up**;
+- its menu is hard-coded to `absolute top-full` — it must be able to drop
+  **up**;
 - it is sized from `HEADER_BUTTON_SIZES`, not the footer's `px-3 py-1 text-xs`;
 - it renders in-flow, so it will be clipped by the editor's `overflow-clip` /
   `overflow-hidden` ancestors (`PromptEditor.tsx:1334`,
   `EditorFooter.tsx:128`).
+
+**Already shipped: the narrow-width form.** `SplitButton` now takes
+`hideMenuButton`, which drops the separator and chevron trigger and leaves the
+menu reachable by right-click, press-and-hold, `ArrowDown`, and the platform
+context-menu key — all of which are live at _every_ width, so the chevron
+teaches the menu exists where there is room and the same gesture keeps working
+where there is not. The collapsed main button carries a corner flyout marker,
+`aria-haspopup`/`aria-expanded`, and the gesture hint in its `title`.
+`WorkflowControls` opts in below `sm`. Two consequences for this plan:
+
+- Stage 1 does not have to invent a narrow-width story for the footer. It
+  passes `hideMenuButton` from `EditorFooter`'s existing `isSmallWidth`
+  (`useElementNarrow(400)`) — the same measurement that already collapses the
+  Properties label — and the Run button keeps its footprint at the widths
+  where the quick pickers are already fighting for room.
+- The prop is caller-driven on purpose: a split button is content-sized and so
+  cannot measure the space it competes for. Do not add self-measurement to the
+  component.
 
 The footer already solved the last problem: `FooterQuickPicker` portals its
 popup to `document.body` with fixed positioning and
@@ -591,8 +609,9 @@ ordinary `parallel:` container, which the schema already accepts.
 **Stage 1 — Split-button shell (shared with `STEER_MESSAGE_PLAN.md`).**
 `useAnchoredPopupPosition` extraction, `SplitButton` placement/size/portal
 props, `EditorFooter` split button with a single always-enabled item ("Run in
-New Workflow") plus disabled placeholders. New `EditorFooter.test.tsx` (none
-exists today).
+New Workflow") plus disabled placeholders, and `hideMenuButton` wired to
+`isSmallWidth`. New `EditorFooter.test.tsx` (none exists today); the collapsed
+form itself is already covered by `SplitButton.test.tsx`.
 
 **Stage 2 — Run in New Workflow.** `RUN_IN_NEW_WORKFLOW` message,
 `runInNewWorkflowForClient`, pending-controller registration, view switch and

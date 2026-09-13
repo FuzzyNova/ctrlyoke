@@ -499,7 +499,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const directoryListColumn = (
     <div
       ref={narrowColumnRef}
-      className="flex flex-col h-full w-full overflow-hidden select-none [-webkit-touch-callout:none]"
+      className="flex flex-col h-full w-full overflow-hidden cy-no-select"
     >
       {/* Navigation toolbar */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">

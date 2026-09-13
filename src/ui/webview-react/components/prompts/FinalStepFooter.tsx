@@ -103,7 +103,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "Final Step — Disabled";
 
   return (
-    <div className="relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 select-none [-webkit-touch-callout:none]">
+    <div className="relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 cy-no-select">
       <div
         data-final-step-identity-bar
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : "bg-transparent"}`}

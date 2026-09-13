@@ -191,6 +191,12 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainTitle="Create new workflow"
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"
+        // Below `sm` the header is already two rows and the label has dropped
+        // to icon-only, so the chevron is the next ~26px to give back. The
+        // menu stays reachable by right-click / press-and-hold, which are
+        // live at every width — so the gesture is learnable at desktop widths
+        // where the chevron is still there to advertise the menu.
+        hideMenuButton={isMobile}
       />
       <WorkflowFilePickerModal
         isOpen={filePickerMode !== null}

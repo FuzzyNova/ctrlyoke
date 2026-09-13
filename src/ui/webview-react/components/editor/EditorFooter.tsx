@@ -100,7 +100,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   return (
     <div
       ref={mergedFooterRef}
-      className="editor-footer shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
+      /* cy-no-select: all controls, same as `Header`. The quick pickers portal
+         their popups to document.body, so popup content sits outside this
+         subtree and stays selectable. */
+      className="editor-footer cy-no-select shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
       style={{ height: `${EDITOR_FOOTER_HEIGHT_REM}rem` }}
     >
       {/* Properties toggle button — hidden in script mode */}
