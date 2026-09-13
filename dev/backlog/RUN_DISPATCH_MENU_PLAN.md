@@ -19,6 +19,10 @@
 > **Build order is not fixed.** Whichever of the two plans lands first owns the
 > split-button shell (Stage 1 below); the other one only contributes a menu
 > item. Neither plan blocks the other.
+>
+> **Follow-up:** [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md)
+> exposes the same late-join operation through `append_step` after Stages 3–4
+> here exist. Its future-group enqueue stage does not depend on this UI plan.
 
 ---
 
@@ -645,7 +649,9 @@ belongs here.
 - Any DAG/`dependsOn` scheduling, per-member worktrees, or cross-member
   coordination — see `EXECUTION_ROOT_COORDINATION_PLAN.md` for the latter.
 - A "Run in Parallel" entry point outside the editor (e.g. the steps panel
-  context menu).
+  context menu). The MCP equivalent is follow-up work owned by
+  [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md), which reuses
+  this plan's late-join operation rather than creating another one.
 
 ---
 

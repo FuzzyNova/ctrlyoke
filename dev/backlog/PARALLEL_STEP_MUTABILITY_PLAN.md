@@ -4,32 +4,44 @@
 >
 > **Prerequisite for:** [`RUN_DISPATCH_MENU_PLAN.md`](./RUN_DISPATCH_MENU_PLAN.md).
 > That plan's Decision 1 ("Run in Parallel") appends a member to a group that is
-> already executing, and states that _"`PromptQueue.assertEditableDuringExecution`
-> already permits an insert at any index `> currentIndex`, so no execution-guard
-> change is needed."_ **That claim is true and is exactly the problem** — the
-> guard permits far more than it should, because during a parallel group
-> `currentIndex` never moves. Stages 1–3 below are the minimum that must land
-> before a late join is safe; Stage 4 is what the broader mutability rule needs.
+> already executing. Stages 1–3 below are the safety boundary that must land
+> before a late join or general mutation from a parallel member is enabled.
 >
 > **Depends on:** [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)
 > (shipped) for the fork/join model this plan hardens.
 >
 > **Related:** [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)
-> (shipped) — its Decision 8 group ban is currently the _only_ thing keeping the
-> step-mutating MCP tools away from the guards described here. Stage 1 is what
-> would let that ban be justified by the guard rather than by the ban.
+> (shipped). Its Decision 8 currently withholds step-mutating tools from
+> parallel-group members because the mutation guards and executor cannot safely
+> observe a changing live group. Stage 5 deliberately removes that ban after the
+> underlying invariants are real.
+>
+> **Follow-up:** [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md)
+> owns the `append_step` contract for enqueueing future `parallel:` containers
+> and joining the active group through MCP. This plan supplies its safety model.
 
 ---
 
 ## The rule this plan implements
 
-> **If a step has started, it is immutable — it cannot be edited, removed, or
-> reordered. If it has not started, it is mutable, wherever it sits in the
-> queue.**
+> **Permission follows the target, not the caller. A step that has started is
+> immutable. A step that has not started may be edited or removed, including
+> when the caller is itself a parallel-group member, provided the mutation does
+> not move a started step or invalidate a live group's topology.**
 
-Every mutation guard in the codebase is trying to say this. None of them says
-it. They all say something else that happens to be equivalent under sequential
-execution:
+This separates three questions that the current index checks conflate:
+
+1. **May this caller use workflow-mutation tools?** Yes for an attached,
+   run-addressed parallel member once Stages 1–3 have landed.
+2. **May this particular step change?** Only before the executor claims it for
+   dispatch.
+3. **May this structural mutation change a live group?** Only within the narrow
+   rules in Decision 3; the controlled late-join path in
+   `RUN_DISPATCH_MENU_PLAN.md` remains the only way to add a member to the active
+   group.
+
+Every mutation guard is currently trying to approximate the second question
+with an index comparison:
 
 ```ts
 index < currentIndex; // "already started"
@@ -37,355 +49,464 @@ index === currentIndex && hasInFlightStep; // "currently executing"
 ```
 
 That substitution is exact for a sequential queue, where exactly one step runs
-and `currentIndex` advances past each one as it settles. It is **wrong for
-every parallel-group member after the first**.
+and `currentIndex` advances past each one as it settles. It is wrong for every
+parallel-group member after the first.
 
 ## Why it is wrong: `currentIndex` is frozen for the whole group
 
-Mid-group settlements go through `PromptQueue.persistStepOutcome`
-(`PromptQueue.ts:891`), which applies the outcome and writes the working file
-but never touches `currentIndex` — deliberately, and in contrast to
-`commitStepOutcomeAndAdvance` (`:901`), which does. `currentIndex` moves exactly
-once per group, in `commitParallelGroupJoin` (`:917`):
+Mid-group settlements go through `PromptQueue.persistStepOutcome`, which
+applies the outcome and writes the working file but never touches
+`currentIndex`. `currentIndex` moves exactly once per group, in
+`commitParallelGroupJoin`:
 
 ```ts
 this.state.currentIndex = Math.max(this.state.currentIndex, group.endIndex + 1);
 ```
 
-So for the entire lifetime of a running group, `currentIndex === group.startIndex`.
-Members at `startIndex + 1 … endIndex` are all `> currentIndex`, which every
-guard reads as **"pending, freely mutable"** — while their workers are actively
-running them.
-
-This is not a deliberate policy that parallel groups are immutable. It is a set
-of guards that cannot see parallel execution at all.
+For the entire lifetime of a running group,
+`currentIndex === group.startIndex`. Members at
+`startIndex + 1 ... endIndex` are all `> currentIndex`, which the current guards
+read as "pending, freely mutable" even while workers are executing them.
 
 ### What the guards actually check
 
-| Guard                                                                 | Location                            | Predicate                                                                                                        | Group-aware?                                        |
-| --------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `PromptQueue.assertEditableDuringExecution`                           | `PromptQueue.ts:2493-2512`          | `index < currentIndex`; `index === currentIndex && hasInFlightStep`                                              | No — no `parallelGroups` reference                  |
-| `RunContinuationService.assertEditableDuringExecution` (the MCP path) | `RunContinuationService.ts:724-745` | same, **plus** `step?._runtime?.completedAt !== undefined`                                                       | No                                                  |
-| `PromptQueue.reorderPendingPrompts`                                   | `:2270`                             | `hasInFlightStep && newPendingOrder[0] !== 0`                                                                    | No — assumes one in-flight step at slice position 0 |
-| `reorderPendingTopologyWithRanges`                                    | `ParallelGroupTopology.ts:632-647`  | `startIndex < currentIndex \|\| any member has completedAt \|\| (hasInFlightStep && currentIndex ∈ [start,end])` | Yes, but see below                                  |
+| Guard                                                             | Location                                           | Predicate                                                               | Group-aware?                                       |
+| ----------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------- |
+| `PromptQueue.assertEditableDuringExecution`                       | `src/core/PromptQueue.ts`                          | `index < currentIndex`; `index === currentIndex && hasInFlightStep`     | No                                                 |
+| `RunContinuationService.assertEditableDuringExecution` (MCP path) | `src/core/orchestration/RunContinuationService.ts` | Same, plus `completedAt`                                                | No                                                 |
+| `PromptQueue.reorderPendingPrompts`                               | `src/core/PromptQueue.ts`                          | `hasInFlightStep && newPendingOrder[0] !== 0`                           | No; assumes one in-flight step at slice position 0 |
+| `reorderPendingTopologyWithRanges`                                | `src/core/ParallelGroupTopology.ts`                | freezes a group from `currentIndex`, `completedAt`, and in-flight state | Partly; it cannot identify every running sibling   |
 
-`assertEditableDuringExecution` is called from insert (`:1697`), edit (`:2097`),
-replace (`:2145`) and delete (`:2183`). Reorder has its own guard and does not
-call it.
-
-Two further gaps behind that table:
-
-- **The one group-aware predicate is unreachable from MCP.** `reorderPendingTopologyWithRanges`
-  only runs when `pendingGroups !== undefined`, and `handleReorderSteps` passes
-  `undefined` (`mcp-server.ts:1166`). So the two errors it can raise — `"Cannot
-change topology of settled or in-flight parallel group …"` (`:657-668`) and
-  `"Cannot move members into or out of settled or in-flight parallel group …"`
-  (`:674-688`) — never fire for an MCP caller.
-- **The remaining topology mutators have no execution guard at all.**
-  `insertParallelGroupSteps` (`:195`), `deleteParallelGroupStep` (`:256`),
-  `replaceParallelGroupStep`, and `reorderParallelGroupSteps` are pure
-  transforms. `deleteParallelGroupStep` will silently **dissolve** a group that
-  drops below two members (`:267-271`).
+`PromptQueue.assertEditableDuringExecution` is used by insert, edit, replace,
+and delete. Reorder has separate guards. The MCP reorder route also omits its
+`pendingGroups` argument, so the range-aware branch is not the protection it
+appears to be.
 
 ### The blast radius today
 
-Concretely, for a member at `startIndex + 1` that is mid-flight, via MCP:
+For a member at `startIndex + 1` that is mid-flight, an MCP mutation would
+currently pass the target guard. If the existing caller-level ban were removed:
 
-- `edit_step` passes both checks (`index > currentIndex`, no `completedAt`) and
-  edits a step a worker is executing.
-- `remove_step` passes and deletes it; if the group drops to one member it also
-  dissolves the group out from under the coordinator.
-- `reorder_steps` passes, with the group-aware predicate unreachable.
+- `edit_step` could replace properties while a worker is executing the old
+  definition.
+- `remove_step` could delete it and possibly dissolve its group.
+- `reorder_steps` could renumber it while targets, outcomes, terminal sessions,
+  events, and coordination identity still refer to the old absolute index.
 
-Three downstream facts turn that from untidy into corrupting:
+The executor compounds that risk:
 
-1. `executeParallelGroup` builds `pendingIndices` **once at entry** as fixed
-   absolute integers (`WorkflowExecutor.ts:758-793`), and `runMember` re-reads
-   `this.promptQueue.getState().steps[stepIndex]` at dispatch (`:835`). A splice
-   that shifts indices hands a live worker **the wrong step object under the
-   right index**.
-2. `workerCount` is fixed at fork (`:908-914`) from `preflight.effectiveWidth`,
-   so nothing appended later is ever picked up.
-3. The join passes the **fork-time** `group` object (`:970`), so
-   `commitParallelGroupJoin` writes a stale `endIndex + 1` into `currentIndex`
-   and its range filter (`PromptQueue.ts:926-931`) drops or mis-attributes
-   settlements for anything outside the old bounds.
+1. `executeParallelGroup` builds `pendingIndices` once at entry and resolves a
+   step again by absolute index at dispatch.
+2. `preflightMembers` is also built once at entry. Editing an unstarted member
+   would not affect the resolved harness, session, execution mode, variables,
+   or prompt that the worker later uses.
+3. `workerCount` is fixed at fork, so a late member is not discovered.
+4. The join receives the fork-time `group` object, so a changed `endIndex`
+   produces a stale advance and range filter.
+5. `PromptQueue.mergeDiskSteps` preserves memory runtime/results only through
+   an index-derived execution head. It cannot reconcile multiple running
+   siblings after an external reorder or removal.
 
-**Why nothing has broken yet.** The `EXECUTION_ROOT_COORDINATION_PLAN.md`
-Decision 8 group ban refuses the ctrlyoke server to parallel-group members, and
-`toolAllowed` (`mcp-server.ts:171-193`) requires an attested run address for the
-mutating tools — so no attested caller with those tools can currently exist
-alongside a live group. The safety is entirely in the ban, not in the guards.
-
-One hole in that: in `mcpAvailability: "disabled"` mode the ban does not fire,
-and `skillsForPrompt` (`HarnessIntegration.ts:69-91`) only _omits the skill
-document_ from a group member's prompt. Nothing stops an agent that knows the
-CLI shape from calling `node out/mcp-server.js --tool edit_step` anyway. Narrow —
-it needs a group member ignoring its instructions — but it is a real path from a
-prompt to a corrupted group, and Stage 1 is what closes it properly.
+The current safety comes from the caller-level ban in
+`ParallelGroupPreflight`, `mcp-server.ts`, and the skill projection in
+`HarnessIntegration`, not from the mutation paths themselves.
 
 ---
 
-## Decision 1 — "Started" becomes a real per-step signal, not an index comparison
+## Decision 1 — Started state and queue identity become explicit runtime facts
 
-The fix is not to teach each guard about parallel groups. It is to replace the
-proxy with the fact, after which no guard needs group awareness at all: a
-sequential step and a group member are both just steps that have or have not
-started.
+The guards need the fact "a worker claimed this logical step", while the
+executor needs an identity that survives edits and reorder. Neither is
+available cleanly today.
 
-### The data is nearly there, but is not usable as-is
+### Started state
 
-`PromptRuntimeMetadata.startedAt` already exists (`CtrlYokeTypes.ts:921`) and is
-already persisted. **It cannot be used for this without a change**, for two
-reasons:
+`PromptRuntimeMetadata.startedAt` already exists and is persisted, but it is
+typed required and `PromptQueue.persistRuntimeMetadata` invents it on every
+metadata write:
 
-- It is typed **required** (`startedAt: number`), so "is it present" is not a
-  meaningful question to the type system.
-- `PromptQueue.persistRuntimeMetadata` (`:1335-1351`) defaults it on _any_
-  metadata write: `{ startedAt: Date.now(), ...step._runtime, ...updates }`. It
-  therefore records "some runtime metadata was written", not "this step began
-  executing". In practice today every such write happens during execution, so
-  the values are right by accident rather than by construction — which is
-  exactly the kind of thing that stops being true the first time someone
-  persists resolved properties at queue time.
+```ts
+{ startedAt: Date.now(), ...step._runtime, ...updates }
+```
 
-So: **add an explicit marker** rather than reinterpreting `startedAt`. The
-recommended shape is a dedicated optional `_runtime.dispatchedAt`, written once
-at member dispatch and never defaulted. An alternative is to make `startedAt`
-optional and strip the default, which is tidier but touches every existing
-reader (`PromptQueue.ts:1142-1143`, `:1174`); a new field can land without
-auditing those. Either way the requirement is the same: **one field, written at
-exactly one place, meaning exactly "a worker has picked this step up."**
-
-The write belongs in `runMember` beside `running.set(stepIndex, target)`
-(`WorkflowExecutor.ts:831`) and on the equivalent sequential dispatch path, so
-that the in-memory `running` map — currently a closure variable no guard can
-reach (`:800`) — gains a persisted, queryable twin.
-
-### The guards then collapse
+That makes it mean "some runtime metadata was written", not "the executor
+claimed this step". Make `startedAt` optional, remove the default, and write it
+only through the dispatch claim described below. The shared predicate is then:
 
 ```ts
 function hasStarted(step: WorkflowStep): boolean {
   return (
-    step?._runtime?.dispatchedAt !== undefined ||
-    step?._runtime?.completedAt !== undefined
+    step._runtime?.startedAt !== undefined ||
+    step._runtime?.completedAt !== undefined
   );
 }
 ```
 
-Both `assertEditableDuringExecution` implementations become `hasStarted(steps[index])`,
-and the `index < currentIndex` / `index === currentIndex` arithmetic goes away.
-`completedAt` stays in the predicate as a belt-and-braces term for steps
-recovered from an older working file that has no `dispatchedAt`.
+`completedAt` remains a compatibility and corruption backstop. Do not add a
+separate `dispatchedAt`: it would represent the same transition and create two
+nearly identical timestamps after the runtime type has already been audited for
+pre-dispatch identity.
 
-This is strictly **more** permissive in one direction and **more** restrictive
-in the other, and both changes are correct:
+### Stable run-scoped step identity
 
-- A pending member of a running group at `startIndex + 3` becomes editable —
-  it genuinely has not started, and the user's rule says it should be.
-- A running member at `startIndex + 1` becomes immutable — it genuinely has
-  started, and today it is not protected at all.
+The previous draft assumed `WorkflowStep` already had a stable `id`. It does
+not: the `id` on `ParallelGroupDefinition` identifies the group, not its
+members. Add an internal `_runtime.stepId` generated once per queue step for a
+promoted run. It is:
 
-### Working-file compatibility
+- assigned to all queue steps when a working run is created;
+- assigned to every step inserted by the UI, file append, MCP, or late join;
+- preserved by edit, replace, reorder, rewind, and recovery;
+- unique within the run and never reused after deletion; and
+- stripped with the rest of `_runtime` from authored Save As/export output, so
+  it requires no workflow-schema property.
 
-A working file written before this ships has no `dispatchedAt` on any step, so
-recovery must not treat every step as un-started. `getCurrentIndexFromRuntime`
-(`PromptQueue.ts:2438-2443`) already reconstructs the execution head from the
-first step lacking `completedAt`; the same pass should backfill `dispatchedAt`
-for every step at or before that head. Pre-release means no persisted-format
-compatibility obligation, but a recovered _in-progress_ run is a live scenario
-and must not become mutable on reload.
+Centralize generation, backfill, uniqueness validation, and lookup in one
+helper rather than teaching each append path to mint IDs independently.
+`PromptRuntimeMetadata.startedAt` must be optional because a legitimate
+`_runtime` object containing `stepId` exists before the step starts.
 
----
+### Dispatch is an atomic claim
 
-## Decision 2 — The group's worker plan is addressed by identity, not position
+Writing the marker after `running.set(...)` still leaves a time-of-check /
+time-of-use window: an external mutation can acquire the working-file lock,
+observe no marker, and remove the step before the executor flushes it.
 
-Decision 1 makes it safe to _forbid_ mutating a started member. It does not make
-it safe to _allow_ mutating an un-started one, because `pendingIndices` holds
-absolute integers and `runMember` resolves them positionally at dispatch. Remove
-a pending member at `startIndex + 2` and every later member's integer now points
-at a different step.
+Add one queue/working-file operation that, under the same file lock used by
+`RunContinuationService`:
 
-This is why `RUN_DISPATCH_MENU_PLAN.md` restricts its relaxation to **appends at
-`endIndex + 1`** and keeps rejecting reorder/remove/move: an append is the one
-mutation that shifts nothing already planned. That restriction is correct and
-should stay until this decision lands.
+1. merges the latest disk definition;
+2. resolves `stepId` to its current index;
+3. refuses a missing, terminal, or already-claimed step;
+4. writes the started marker without bumping `definitionRevision`; and
+5. returns the claimed step, current index, and definition revision to the
+   executor.
 
-The fix is to key the group's pending set by step identity. `WorkflowStep`
-already carries a stable `id`, so:
+Both sequential dispatch and `ParallelGroupRun` use this operation. The step is
+not placed in the executor's running map and no process is launched until the
+claim succeeds. A mutation that wins the lock first is honored and the missing
+ID is skipped; a claim that wins first makes every later mutation reject it.
 
-- `ParallelGroupRun` (the extraction `RUN_DISPATCH_MENU_PLAN.md` Stage 3 calls
-  for) holds `pendingIds: string[]` rather than `pendingIndices: number[]`.
-- `runMember` resolves `id → current index` at dispatch and skips an id that no
-  longer resolves — which is exactly the correct behaviour for a member removed
-  while pending.
-- The group's bounds are re-read at the join rather than captured at fork
-  (`WorkflowExecutor.ts:970`), which `RUN_DISPATCH_MENU_PLAN.md` Stage 3 already
-  requires for late join and which this plan needs for the same reason.
+### Recovery
 
-Only after this is the user's full rule expressible: a pending member anywhere
-in a live group can be removed or reordered, and the running members are
-unaffected.
+On recovery, assign missing `stepId`s to all surviving queue steps. Existing
+`startedAt` values already identify old-file dispatches, including group members
+after `currentIndex`; do not infer started membership merely from
+`index <= currentIndex`, because that recreates the original bug. A terminal
+`completedAt` without `startedAt` is still treated as started. A step with
+neither is pending and can be scheduled again.
 
----
-
-## Decision 3 — Every mutation path routes through one predicate
-
-There are currently three partly-overlapping implementations of "may I change
-this step": `PromptQueue.assertEditableDuringExecution`,
-`RunContinuationService.assertEditableDuringExecution`, and the
-`immutableGroupIds` fold in `ParallelGroupTopology`. They disagree —
-`RunContinuationService` checks `completedAt` and `PromptQueue` does not; the
-topology fold checks group-level settledness that neither of the others sees;
-`reorderPendingPrompts` has a fourth rule of its own.
-
-Once Decision 1 lands, they should all consume one exported predicate
-(`hasStarted`, plus a `assertStepMutable(step, operation)` wrapper carrying the
-message). The topology fold keeps its group-level role — a group is
-topology-frozen if _any_ member has started, which is a different and still
-correct question — but it should derive "has started" from the same function
-rather than from `startIndex < currentIndex`.
-
-The guard is then also the right place to give the MCP tools a real error. Today
-`append_step` is the only tool with any parallel-aware message
-(`mcp-server.ts:933-937`, and it only rejects _creating_ a group). After this,
-`edit_step` / `remove_step` / `reorder_steps` against a running member fail with
-`"Cannot edit a step that is already running"` instead of silently succeeding.
+Rewind preserves `stepId` but clears the started marker and all terminal runtime
+for the rewound suffix. The same helper must be used by every rewind path.
 
 ---
 
-## Decision 4 — `resolveQueueInsertIndex` should say what it did
+## Decision 2 — The group run is keyed by step identity and resolves at dispatch
 
-Adjacent, cheap, and worth folding in because it is the same class of bug:
-silent relocation.
+`ParallelGroupRun` (the extraction shared with
+`RUN_DISPATCH_MENU_PLAN.md` Stage 3) owns the mutable lifetime of one active
+group. Its collections are keyed by `_runtime.stepId`, not absolute indices:
 
-During a group, `position: "next"` resolves to `currentIndex + 1`
-(`DashboardConstants.ts:2132-2145`), which lands inside the group, and
-`resolveParallelGroupInsertIndex` (`ParallelGroupTopology.ts:136-162`) then
-pushes it out to `endIndex + 1`. So "next" silently means "after the entire
-group". The relocation itself is correct and should stay — it is what keeps
-`RUN_NEXT` from corrupting a running group — but the caller is never told. The
-`append_step` response reports the final index (`mcp-server.ts:1046`) with no
-explanation, and an agent that asked for "next" has no way to learn its step
-will run several members later.
+- `pendingIds: string[]` replaces `pendingIndices`.
+- running membership and outcomes are keyed by ID; the current absolute index
+  is retained only as the dispatch/event projection.
+- a worker resolves and atomically claims an ID immediately before dispatch;
+  an ID removed while pending simply no longer resolves.
+- the join re-reads the group by group ID and its current bounds rather than
+  retaining the fork-time object.
 
-Add a relocation note to the append response (`"requested next; placed after
-parallel group <id>"`). No behaviour change, and it turns a silent surprise into
-something an agent can reason about.
+Started steps remain **index anchors** for this plan. Before committing any
+structural mutation, a shared validator compares the before/after topology and
+requires every started/terminal `stepId` to remain at the same absolute index.
+That keeps existing manifest, timeline, PTY, snapshot, and coordination
+attribution correct without widening this plan into a repository-wide event
+format migration. Identity makes pending work mutable; it does not authorize
+renumbering already-started work.
+
+### Preflight must follow the mutable definition
+
+The current `preflightMembers` map freezes resolved properties for all members
+at group entry. A pending member edited after that point would execute the old
+resolution. Split preflight into:
+
+- group admission checks that are invariant for the group run; and
+- per-member preflight performed after the atomic claim, using the current step
+  definition and current running-member reservations.
+
+The per-member path owns variable substitution, resolved harness/model/mode,
+session collision checks, interactive capacity, integration isolation, and any
+late-join checks from `RUN_DISPATCH_MENU_PLAN.md`. A rejected member receives a
+normal failed settlement and does not poison healthy siblings unless the
+group's `failFast` policy says it should.
+
+This is required for edits as well as late joins. Merely invalidating a cached
+entry on an in-process mutation is insufficient because MCP mutations arrive
+from another process.
+
+---
+
+## Decision 3 — One target predicate and explicit live-topology rules
+
+There are currently several overlapping meanings of "may I change this step":
+the two `assertEditableDuringExecution` implementations, the reorder head
+check, and the `immutableGroupIds` fold in `ParallelGroupTopology`. Replace
+them with shared primitives:
+
+- `hasStarted(step)` — one runtime fact;
+- `assertStepMutable(step, operation)` — target-level error policy; and
+- `assertStartedStepPositionsPreserved(before, after, operation)` — structural
+  index-anchor validation.
+
+The in-process queue and `RunContinuationService` must call the same exported
+helpers. A parallel caller receives the same error as any other caller, for
+example `Cannot edit a step that has already started`.
+
+The active group's topology follows these rules:
+
+- Editing/replacing an unstarted member in place is allowed.
+- Reordering unstarted members within the active group's existing member slots
+  is allowed when all started positions stay fixed.
+- Removing an unstarted member is allowed when no started position shifts and
+  at least two group members remain.
+- Generic insert/reorder cannot move a step into or out of the active group.
+  `resolveParallelGroupInsertIndex` continues to push ordinary inserts after
+  the group.
+- Adding a member to the active group is reserved for the explicit late-join
+  operation, which updates `ParallelGroupRun` before returning success.
+- `failFast`, group ID, and the before-snapshot identity are frozen once any
+  member starts.
+- Future, wholly unstarted groups remain ordinary editable topology.
+
+This replaces the current all-or-nothing `immutableGroupIds` fold. A group with
+one started member is not wholly immutable, but its identity, policy, started
+anchors, and minimum cardinality are.
+
+`reorder_steps` does not need to accept a second topology description merely to
+preserve current membership. The reorder transform can carry each existing
+member's group ID with its `stepId`, reject membership changes for the active
+group, and continue treating future groups as blocks unless a topology-aware UI
+request explicitly supplies ranges.
+
+---
+
+## Decision 4 — Queue insertion reports relocation
+
+During a group, `position: "next"` resolves to `currentIndex + 1`, which lands
+inside the group, and `resolveParallelGroupInsertIndex` pushes it to
+`endIndex + 1`. The relocation is correct but currently silent.
+
+Return structured placement information from the single insert resolver, for
+example:
+
+```ts
+{
+  requestedIndex,
+  insertedIndex,
+  relocation: { kind: "afterParallelGroup", groupId }
+}
+```
+
+The MCP response can then say `requested next; placed after parallel group
+<id>`. The same result is reusable by UI toasts and the late-join path; callers
+must not reverse-engineer relocation by comparing integers.
+
+---
+
+## Decision 5 — Parallel members may mutate their attached workflow
+
+Yes: once Stages 1–3 make target guards, identity, dispatch, merge, and join
+safe, remove the blanket caller-level ban. This is the intended policy, not an
+optional follow-up.
+
+The motivating pattern is a parallel orchestrator: one group member implements
+the current phase while another inspects the repository and adjusts future work.
+It is the concurrent form of
+[`spec-driven-loop.ctrlyoke.yaml`](../../src/templates/workflows/spec-driven-loop.ctrlyoke.yaml),
+whose plan/review agent already uses `append_step`, `edit_step`, `remove_step`,
+and `reorder_steps` to steer a sequential queue. The orchestrator's own started
+step and its running sibling remain protected; future work does not become
+immutable merely because the caller happens to be in a group.
+
+### Permission changes
+
+After the safety stages land:
+
+- remove the dynamic-queue rejection from `ParallelGroupPreflight`;
+- allow `MCP_WORKFLOW_MUTATION_TOOL_NAMES` for an attached group member in both
+  filtered `ListTools` and `CallTool` authorization;
+- stop removing `MCP_SKILL_NAMES.TOOLS` from skill-mode parallel prompts in
+  `HarnessIntegration.skillsForPrompt`; and
+- update the now-stale "parallel groups ban mutation" comments around
+  `ctrlYokeToolFamilies` while retaining `deniedTools` as the user's explicit
+  way to remove any tool family.
+
+This does **not** grant workflow mutation to unattached external participants,
+does not bypass run-address validation or optimistic revision checks, and does
+not make coordination attestation a security boundary. It only removes
+`groupMember` as a reason to reject an otherwise valid attached workflow tool.
+
+Every call still runs through `RunContinuationService` under the working-file
+lock and definition revision protocol. Concurrent siblings may race; one
+serialized mutation wins, and the other evaluates against the resulting latest
+definition rather than overwriting it.
+
+Permission alone does not realize the complete example because `append_step`
+currently rejects `parallel:` input. The MCP input and live-join protocol are
+specified separately in `MCP_PARALLEL_APPEND_PLAN.md`; keeping that adapter
+contract there avoids mixing it into the executor safety stages here.
 
 ---
 
 ## Implementation stages
 
-Stages 1–3 are the prerequisite for `RUN_DISPATCH_MENU_PLAN.md` Stage 3/4.
-Stage 4 is independent and can land any time after Stage 1.
+Stages 1–3 are the prerequisite milestone for
+`RUN_DISPATCH_MENU_PLAN.md` Stages 3–5 and for the permission relaxation here.
 
-**Stage 1 — The started marker.** `_runtime.dispatchedAt`, written at
-`runMember` dispatch and the sequential equivalent; `hasStarted` predicate;
-recovery backfill. No guard changes yet — land the signal and assert it is
-written for every dispatch path first.
+**Stage 1 — Honest runtime identity and atomic dispatch claim.** Make
+`PromptRuntimeMetadata.startedAt` optional, remove the implicit default, add
+`_runtime.stepId`, centralize ID assignment/backfill/lookup, and add the locked
+claim-by-ID operation. Use it for sequential and parallel dispatch. Rewind
+preserves IDs and clears execution state. Land tests proving every dispatch
+path claims before launch.
 
-**Stage 2 — Repoint the guards.** Both `assertEditableDuringExecution`
-implementations, `reorderPendingPrompts`, and the `immutableGroupIds` fold
-consume `hasStarted`. MCP tools gain real errors for started members. This is
-the stage that closes the live hole: after it, a group member cannot mutate its
-own running siblings even in disabled mode.
+**Stage 2 — Repoint every guard and disk merge.** Introduce the shared target
+and structural validators; use them from `PromptQueue`,
+`RunContinuationService`, reorder, and topology transforms. Reconcile external
+working-file changes by `stepId`, preserving in-memory runtime/results for every
+matching started member rather than only an index prefix. This stage closes the
+current live safety hole even while the caller-level group ban remains.
 
-**Stage 3 — Identity-keyed worker plan.** `pendingIds` in `ParallelGroupRun`,
-id-resolving dispatch, join reads current bounds. Shares the `ParallelGroupRun`
-extraction with `RUN_DISPATCH_MENU_PLAN.md` Stage 3 — whichever lands first owns
-it.
+**Stage 3 — Identity-keyed mutable group run.** Extract `ParallelGroupRun` with
+`pendingIds`, ID-keyed running/outcomes, current-bound join, and per-member
+dispatch-time preflight. Implement the active-group edit/remove/reorder rules,
+including the two-to-one deletion rejection. This is the executor foundation
+shared with late join.
 
-**Stage 4 — Relocation transparency.** The `resolveQueueInsertIndex` note in the
-append response.
+**Stage 4 — Placement transparency.** Return structured placement/relocation
+from the insert resolver and include it in MCP mutation responses.
 
-**Stage 5 (optional, gated on Stages 2–3) — Revisit the coordination ban.**
-With the guards real, `EXECUTION_ROOT_COORDINATION_PLAN.md`'s reason for denying
-step-mutating tools to group members weakens considerably: the coordinator's
-join is protected by the guard rather than by the absence of the tools. Whether
-to relax it is a separate judgement — a group member appending steps to its own
-workflow is still a design smell even when it is safe — but it should be decided
-on those merits rather than inherited from a guard that could not see parallel
-execution.
+**Stage 5 — Permit parallel callers.** Remove all three caller-level mutation
+bans and update generated tool documentation and diagnostics. Do not enable any
+one delivery mode before the others: native MCP and MCP-as-skill must expose the
+same effective tools. `MCP_PARALLEL_APPEND_PLAN.md` then builds the richer
+append contract on this permission boundary.
 
 ---
 
 ## Edge cases
 
-- **A member that crashed before writing `dispatchedAt`.** Recovery sees an
-  un-started step and reschedules it. Correct — that is precisely what should
-  happen to a member the worker never picked up.
-- **Recovered run from a pre-`dispatchedAt` working file.** Backfilled at load
-  from the `completedAt` boundary (Decision 1). Steps after the head are treated
-  as un-started, which matches what `getCurrentIndexFromRuntime` already
-  concludes.
-- **`maxParallelSteps: 1`.** Members run strictly in sequence inside the group,
-  so exactly one has `dispatchedAt` without `completedAt` at a time — the guards
-  behave identically to the sequential case with no special handling.
-- **A disabled step inside a group.** Never dispatched, so never marked, so
-  stays mutable. Matches `pendingIndices`'s existing skip (`WorkflowExecutor.ts:758-793`).
-- **Retries.** A retried step already has `dispatchedAt` from its first attempt
-  and stays immutable across the retry, which is correct — the user cannot edit
-  a step between attempts today either.
-- **`pendingRewind`.** Both guards short-circuit on it before any other check
-  (`PromptQueue.ts:2494`, `RunContinuationService.ts:731`). Rewind deliberately
-  un-runs steps, so it must clear `dispatchedAt` for everything it rewinds or
-  the rewound steps stay permanently frozen.
-- **Removing the last pending member of a two-member group.** Still dissolves
-  the group (`ParallelGroupTopology.ts:267-271`), but now only when that member
-  has not started. Whether dissolution or rejection is right for a _running_
-  group with one pending member is an open question below.
-- **`replaceStep` on a started step.** Currently guarded by the same
-  `assertEditableDuringExecution` call (`PromptQueue.ts:2145`), so it inherits
-  the fix with no separate work.
+- **A member disappears before its claim.** Claim-by-ID returns no target and
+  the worker skips it. It is not reported as a cancelled execution because it
+  was intentionally removed from the definition.
+- **A claim wins before a competing mutation.** The started marker is durable
+  under the same lock; edit/remove/reorder rejects the target.
+- **Recovered old working file.** Missing `stepId`s are backfilled. Existing
+  `startedAt` or `completedAt` values preserve immutability for all group
+  members, not just the execution head.
+- **`maxParallelSteps: 1`.** Exactly one member is claimed at a time. Later
+  members remain mutable until a worker slot claims them.
+- **Disabled member.** Before group admission it is mutable. Once the executor
+  records its skipped terminal outcome, `completedAt` makes it an immutable
+  attribution anchor even though no harness process launched.
+- **Retries.** A retried step keeps its first claim timestamp and stays
+  immutable across attempts.
+- **Pending rewind.** IDs survive; started/terminal fields in the rewound suffix
+  are cleared. Prefix guards remain in force.
+- **Deleting a pending member from an active group.** Allowed only if no started
+  index shifts and at least two members remain. The group run drops the ID from
+  its pending set after the definition revision is observed.
+- **Deleting from two members to one.** Rejected while the group is active or
+  has any terminal member. Dissolving it would orphan the live group's snapshot,
+  coordination identity, fail-fast policy, output projection, and join contract.
+- **Editing a pending member's harness/session/mode.** Dispatch-time preflight
+  uses the new definition and current reservations; no fork-time resolution is
+  reused.
+- **Two orchestrators mutate concurrently.** The file lock serializes writes.
+  Each operation validates the definition it actually read; neither performs a
+  blind last-write-wins overwrite.
+- **Ordinary `next` append during a group.** Lands after the group and reports
+  why. It does not join.
+- **Late join.** Uses the dedicated group operation from
+  `RUN_DISPATCH_MENU_PLAN.md`, updates the live `ParallelGroupRun`, and is not
+  expressible accidentally through an ordinary queue append. MCP exposure is
+  specified in `MCP_PARALLEL_APPEND_PLAN.md`.
+- **Stop/fail-fast with pending IDs.** Resolve remaining IDs before recording
+  cancellation. Removed IDs receive no fabricated settlement; surviving
+  unclaimed members follow the existing stop/fail-fast policy.
+- **Join after shrink or growth.** Re-read the group by ID. A missing group is a
+  corruption error, never an instruction to use fork-time bounds.
+- **Save As.** Runtime IDs and timestamps are stripped. A topology mutation that
+  really changed authored grouping remains visible as ordinary `parallel:` YAML.
 
 ---
 
 ## Test strategy
 
-- `src/test/unit/PromptQueue.test.ts`: a pending member of a running group is
-  editable; a dispatched member is not; the error names the operation. Assert
-  specifically at `startIndex + 1`, the index the old guard got wrong.
-- `src/test/unit/RunContinuationService.test.ts`: the MCP path rejects
-  `edit_step` / `remove_step` / `reorder_steps` against a dispatched member, and
-  permits them against a pending one.
-- `src/test/unit/ParallelGroupTopology.test.ts`: the `immutableGroupIds` fold
-  derives from `hasStarted`; a group with one dispatched member is
-  topology-frozen even when `currentIndex` still equals its `startIndex`.
-- `src/test/unit/WorkflowExecutor.*`: removing a pending member mid-fan-out
-  drops it from the plan without disturbing running members; the join reads
-  current bounds.
-- `src/test/integration/`: a recovered pre-`dispatchedAt` working file does not
-  become mutable on reload; a rewind restores mutability.
+- `src/test/unit/PromptQueue.test.ts`
+  - every sequential/parallel claim writes the marker before launch;
+  - a pending sibling is editable and a claimed sibling after `startIndex` is
+    not;
+  - a structural mutation cannot shift any started `stepId`;
+  - rewind keeps IDs and restores suffix mutability.
+- `src/test/unit/RunContinuationService.test.ts`
+  - MCP edit/remove/reorder uses the same shared errors;
+  - two locked mutations serialize without lost updates;
+  - old-file ID backfill and definition revision remain atomic;
+  - ordinary `next` append returns its group relocation.
+- `src/test/unit/ParallelGroupTopology.test.ts`
+  - unstarted members can reorder within live-group slots;
+  - safe shrink works, two-to-one shrink rejects, started anchors never move;
+  - generic inserts cannot acquire active-group membership.
+- `src/test/unit/WorkflowExecutor.*`
+  - removal drops a pending ID without disturbing running members;
+  - an edited pending member is freshly preflighted and executes the edit;
+  - session/interactive conflicts introduced by an edit fail at dispatch;
+  - join reads current bounds; stop, pause, retry, and fail-fast settle by ID;
+  - a mutation/claim race has deterministic lock-order outcomes.
+- `src/test/unit/ParallelGroupPreflight.test.ts`
+  - workflow mutation tools no longer produce the dynamic-queue diagnostic
+    after Stage 5; explicit `deniedTools` still removes them.
+- `src/test/unit/McpServer.test.ts` and `McpToolSkillGenerator.test.ts`
+  - attached group members list and invoke mutation tools in native and skill
+    modes;
+  - unattached external callers remain denied.
+- `src/test/integration/`
+  - a two-member implementation/orchestrator group appends, edits, and removes
+    flat future work and joins without stale indices;
+  - output, snapshot, PTY, and coordination attribution stay attached to the
+    started members after pending mutations;
+  - recovery schedules only surviving unclaimed IDs.
 
 ---
 
 ## Not in scope (YAGNI)
 
-- Making `startedAt` optional and auditing its existing readers. A new field
-  avoids the churn; revisit only if the two fields prove confusing.
-- Any change to what `currentIndex` means or when it advances. It remains the
-  execution head and the join's business; this plan only stops guards from
-  treating it as a per-step started marker.
-- DAG scheduling, `dependsOn`, partial joins, nested groups — unchanged from
-  `PARALLEL_STEPS_PLAN.md`.
-- Surfacing per-member started state in the dashboard. `activeStepIndices`
-  already carries it for presentation (`IDashboardSink.ts:43`) and is
-  deliberately not a guard input.
+- Changing the persisted meaning of `currentIndex`; it remains the execution
+  head and advances once at group join.
+- Migrating manifest/events/PTY messages from index attribution to step IDs.
+  Started-index anchors are the boundary that avoids that expansion.
+- Defining how MCP requests enqueue a future group or invoke the explicit
+  Run-in-Parallel operation; that belongs to `MCP_PARALLEL_APPEND_PLAN.md`.
+- Editing `failFast`, group identity, or snapshot policy after a member starts.
+- Nested groups, DAG scheduling, `dependsOn`, partial joins, per-member
+  worktrees, or implicit sibling-output reads.
+- Shipping the parallel variant of `spec-driven-loop.ctrlyoke.yaml`; implement
+  and dogfood it after the mutation engine lands.
 
 ---
 
-## Open questions
+## Settled decisions
 
-1. **Dedicated `dispatchedAt` or optional `startedAt`?** Recommended:
-   `dispatchedAt`, because it can land without auditing existing readers and
-   because the two concepts genuinely differ (one metadata write vs. a worker
-   pickup). Revisit if carrying both proves confusing in the working file.
-2. **Removing the last pending member of a running two-member group.** Dissolve
-   the group (current behaviour, extended), or reject the removal? Dissolution
-   mid-run means the remaining member's outcome is attributed to an ungrouped
-   step whose group snapshot was taken as a group. Leaning reject, but no usage
-   data yet.
-3. **Does Stage 5 actually want to happen?** Making the guards real removes the
-   _correctness_ argument for the coordination ban, not the _design_ argument.
-   Deliberately left open.
+1. **`startedAt` is the dispatch-claim marker.** Make it optional and honest,
+   remove its implicit default, and do not add `dispatchedAt`. This yields one
+   timestamp with one meaning while allowing `_runtime.stepId` to exist before
+   dispatch.
+2. **A live or historically started parallel group never shrinks below two
+   members.** Reject removal of the last pending member from a two-member group
+   once any member has started or settled. A later draft cloned without runtime
+   metadata can dissolve the authored group normally; the historical run cannot.
+3. **Parallel members may call workflow-mutation tools after Stages 1–3.** The
+   guard evaluates the target step and resulting topology rather than
+   distrusting the caller class. Stage 5 removes the current preflight,
+   native-MCP, and skill-mode bans together. `MCP_PARALLEL_APPEND_PLAN.md`
+   expands `append_step` without weakening those target guards.
