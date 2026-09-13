@@ -622,7 +622,8 @@ ordinary `parallel:` container, which the schema already accepts.
 ## Implementation stages
 
 **Stage 1 — Split-button shell (shared with `STEER_MESSAGE_PLAN.md`).**
-`useAnchoredPopupPosition` extraction, `SplitButton` placement/size/portal
+`src/ui/webview-react/hooks/useAnchoredPopupPosition.ts` is now extracted and
+consumed by `FooterQuickPicker`; continue with `SplitButton` placement/size/portal
 props, `EditorFooter` split button with a single always-enabled item ("Run in
 New Workflow") plus disabled placeholders, and `hideMenuButton` wired to
 `isSmallWidth`. New `EditorFooter.test.tsx` (none exists today); the collapsed
