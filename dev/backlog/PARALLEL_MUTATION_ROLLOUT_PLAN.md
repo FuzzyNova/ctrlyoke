@@ -127,6 +127,8 @@ Three tracks, no dependency between them. Launch all three at once.
 **Owns:** `src/core/PromptQueue.ts`, `src/core/WorkflowExecutor.ts`,
 `src/core/ParallelGroupTopology.ts` (existing transforms),
 `src/core/orchestration/RunContinuationService.ts`,
+`src/core/ParallelGroupPreflight.ts` (the per-member preflight split only —
+the caller-level mutation ban at `:247` stays untouched until Phase 8),
 `src/types/CtrlYokeTypes.ts` (`PromptRuntimeMetadata`),
 `schemas/workflow-schema.json`.
 
@@ -154,7 +156,8 @@ must not re-extract it. That is the single most important cross-track rule here.
 surface it in MCP mutation responses. Small, but it must land in wave 1 because
 Phase 3B consumes the contract.
 
-**Exit criteria.** `src/test/unit/PromptQueue.test.ts`,
+**Exit criteria.** `src/test/promptQueue.test.ts` (note the path — there is
+no `src/test/unit/PromptQueue.test.ts`),
 `RunContinuationService.test.ts`, `ParallelGroupTopology.test.ts`, and
 `WorkflowExecutor.*` cover the cases in Mut's test strategy. The caller-level
 group ban is still in place and still passing its tests — Phase 1 closes the
@@ -166,6 +169,29 @@ _live_ hole underneath it, it does not remove it.
 **Schema note:** `schemas/workflow-schema.json` is the source; the `.yaml` is
 generated from it by `npm run generate-schema` during `precompile`. Edit the
 JSON.
+
+Concretely, `promptRuntimeMetadata` in that file carries
+`"required": ["startedAt"]`. Phase 1 must drop it and add an optional `stepId`
+property, or every pre-dispatch `_runtime` block fails validation.
+
+#### Track A session split
+
+Track A is staged as six sessions. Stage boundaries from
+`PARALLEL_STEP_MUTABILITY_PLAN.md` are preserved; Stages 1 and 2 are each split
+in two because their halves are independently testable and too large together.
+
+| #   | Mut stage | Deliverable                                                        |
+| --- | --------- | ------------------------------------------------------------------ |
+| 1   | 1a        | `_runtime.stepId` identity helper; `startedAt` optional and honest |
+| 2   | 1b        | Locked claim-by-ID; every dispatch path claims before launch       |
+| 3   | 2a        | Shared `hasStarted` / target / structural validators, all callers  |
+| 4   | 2b        | `mergeDiskSteps` reconciles by `stepId`                            |
+| 5   | 3         | `ParallelGroupRun` extraction + per-member dispatch-time preflight |
+| 6   | 4         | Structured insert placement/relocation (Phase 2)                   |
+
+Session 5 is the one Track D extends. Session 5 also performs the
+`preflightParallelGroupMember` split, because Decision 2 needs per-member
+resolution for _edits_, not only for the Phase 5 late join.
 
 ### Track B — Dashboard shell (Phase 4)
 
@@ -258,8 +284,10 @@ Gate: `npm test` green on merged `main`, plus `npm run lint` and
 **Phase 5 — Growable executor.** Disp Stage 3, **extending the Track A
 `ParallelGroupRun`, not re-extracting it**: replace the one-shot
 `Promise.allSettled` with a drain loop that spawns an extra worker on join while
-`activeWorkers < effectiveWidth`; factor `preflightParallelGroupMember` out of
-`preflightParallelGroup`; add `joinRunningParallelGroup(stepIndex)`; make a
+`activeWorkers < effectiveWidth`; **call** the `preflightParallelGroupMember`
+that Track A already factored out of `preflightParallelGroup` for the late-join
+admission checks rather than factoring it again; add
+`joinRunningParallelGroup(stepIndex)`; make a
 rejected join leave the group healthy rather than failing it. Testable against
 an authored group with no UI.
 

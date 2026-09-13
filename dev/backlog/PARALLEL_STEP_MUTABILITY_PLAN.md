@@ -446,7 +446,8 @@ append contract on this permission boundary.
 
 ## Test strategy
 
-- `src/test/unit/PromptQueue.test.ts`
+- `src/test/promptQueue.test.ts` (the PromptQueue suite is at the `src/test/`
+  root, not under `src/test/unit/`)
   - every sequential/parallel claim writes the marker before launch;
   - a pending sibling is editable and a claimed sibling after `startIndex` is
     not;
