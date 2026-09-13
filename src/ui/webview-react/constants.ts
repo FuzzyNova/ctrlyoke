@@ -111,6 +111,19 @@ export const HEADER_BUTTON_SIZES = {
 } as const;
 
 /**
+ * Editor footer button sizing — the compact split-button form used beside the
+ * prompt editor controls.
+ */
+export const EDITOR_BUTTON_SIZES = {
+  compact: {
+    groupContainer: "",
+    splitButtonMain: "px-3 py-1 text-xs",
+    splitButtonDropdown: "px-2 py-1 text-xs",
+    separatorPy: "py-1",
+  },
+} as const;
+
+/**
  * Fixed track widths (px) for the workflow row layout's stacked first line
  * (harness icon, name, state badge) — every row in the dropdown (workflow
  * list, running region, run panel) uses this single two-line layout
