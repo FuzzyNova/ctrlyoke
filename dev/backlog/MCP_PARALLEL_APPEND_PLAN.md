@@ -455,7 +455,9 @@ parallel-specific quota is added.
 
 **Stage 1 — MCP item union and shared normalization — complete.** The schema
 facets, types, examples, unpublished union, validator tests, and the exported
-`flattenParallelItems(items: readonly (WorkflowStep | { parallel: WorkflowStep[]; failFast?: boolean })[]): FlattenedParallelItems`
+`flattenParallelItems(items: readonly ResolvedParallelItem[]): FlattenedParallelItems`
+(where `ResolvedParallelItem` is `WorkflowStep | ResolvedParallelContainer`, both
+exported beside it)
 flattener are landed. `PromptFileParser` consumes the same flattener for
 authored `parallel:` items, keeping relative range math single-sourced. Stage 2
 inherits this helper and its normalized topology result. The queue-item union

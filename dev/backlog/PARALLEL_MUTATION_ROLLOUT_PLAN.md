@@ -210,7 +210,9 @@ contract surface (`minItems` and `additionalProperties: false` schema facets
 with recursive enforcement, exact-one `oneOf` validation, the
 `McpAppendParallelGroupInput` / `McpAppendQueueItem` types, and the unpublished
 queue-item union schema), the exported
-`flattenParallelItems(items: readonly (WorkflowStep | { parallel: WorkflowStep[]; failFast?: boolean })[]): FlattenedParallelItems`
+`flattenParallelItems(items: readonly ResolvedParallelItem[]): FlattenedParallelItems`
+(where `ResolvedParallelItem` is `WorkflowStep | ResolvedParallelContainer`, both
+exported beside it)
 flattener, and the behavior-preserving `PromptFileParser` move. Phase 3B
 inherits the flattener and its relative topology contract; it must publish the
 union schema before accepting containers through `append_step`.

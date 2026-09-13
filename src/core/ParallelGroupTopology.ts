@@ -826,16 +826,26 @@ export interface FlattenedParallelItems {
 }
 
 /**
+ * An authored-style parallel container whose members are already resolved.
+ * Named rather than inlined so every caller that builds one — the parser today,
+ * the MCP append path in Phase 3B — refers to the same contract.
+ */
+export interface ResolvedParallelContainer {
+  parallel: WorkflowStep[];
+  failFast?: boolean;
+}
+
+/** One queue item: an executable step or a container of them. */
+export type ResolvedParallelItem = WorkflowStep | ResolvedParallelContainer;
+
+/**
  * Flattens resolved queue items into a relative, normalized topology.
  *
  * The input contains either one executable step or an authored-style parallel
  * container whose members have already been resolved by its caller.
  */
 export function flattenParallelItems(
-  items: readonly (
-    | WorkflowStep
-    | { parallel: WorkflowStep[]; failFast?: boolean }
-  )[]
+  items: readonly ResolvedParallelItem[]
 ): FlattenedParallelItems {
   const steps: WorkflowStep[] = [];
   const parallelGroups: Array<{

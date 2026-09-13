@@ -27,6 +27,7 @@ import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
   normalizeParallelGroupTopology,
+  type ResolvedParallelItem,
 } from "./ParallelGroupTopology";
 
 type ParallelValidationProperties = Pick<
@@ -337,9 +338,7 @@ export class PromptFileParser {
 
     // Handle multiple prompts format
     if (parsed.steps && Array.isArray(parsed.steps)) {
-      const resolvedItems: Array<
-        WorkflowStep | { parallel: WorkflowStep[]; failFast?: boolean }
-      > = [];
+      const resolvedItems: ResolvedParallelItem[] = [];
       let resolvedStepCount = 0;
       let hasAuthoredParallelGroups = false;
 
@@ -387,13 +386,18 @@ export class PromptFileParser {
 
       const hasParallelGroups =
         hasAuthoredParallelGroups || parsed.parallelGroups !== undefined;
+      // Flatten first so both branches agree on step order. Root
+      // `parallelGroups` and authored `parallel:` items are mutually exclusive
+      // (`validateAuthoredParallelStructure` rejects a file carrying both), so
+      // in the root branch flattening is the identity over a flat array.
+      const flattened = flattenParallelItems(resolvedItems);
       const normalizedTopology =
         parsed.parallelGroups !== undefined
           ? normalizeParallelGroupTopology({
-              steps: resolvedItems as WorkflowStep[],
+              steps: flattened.topology.steps,
               parallelGroups: parsed.parallelGroups,
             })
-          : flattenParallelItems(resolvedItems).topology;
+          : flattened.topology;
       const resolvedPrompts = normalizedTopology.steps;
       if (hasParallelGroups) {
         this.throwOnParallelReferenceErrors(
