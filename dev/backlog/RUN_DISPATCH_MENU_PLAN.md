@@ -23,6 +23,10 @@
 > **Follow-up:** [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md)
 > exposes the same late-join operation through `append_step` after Stages 3–4
 > here exist. Its future-group enqueue stage does not depend on this UI plan.
+>
+> **Build order:** [`PARALLEL_MUTATION_ROLLOUT_PLAN.md`](./PARALLEL_MUTATION_ROLLOUT_PLAN.md)
+> stages this plan against the other two — Stages 1–2 are its Phase 4, Stage 3 its
+> Phase 5, Stage 4 its Phase 6, and Stage 5 its Phase 7.
 
 ---
 

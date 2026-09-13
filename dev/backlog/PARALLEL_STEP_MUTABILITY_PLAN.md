@@ -19,6 +19,10 @@
 > **Follow-up:** [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md)
 > owns the `append_step` contract for enqueueing future `parallel:` containers
 > and joining the active group through MCP. This plan supplies its safety model.
+>
+> **Build order:** [`PARALLEL_MUTATION_ROLLOUT_PLAN.md`](./PARALLEL_MUTATION_ROLLOUT_PLAN.md)
+> stages this plan against the other two — Stages 1–3 are its Phase 1, Stage 4 its
+> Phase 2, and Stage 5 its Phase 8.
 
 ---
 

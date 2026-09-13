@@ -16,6 +16,10 @@
 > **Related shipped design:**
 > [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md) defines the
 > fork/join and authored `parallel:` semantics this API exposes.
+>
+> **Build order:** [`PARALLEL_MUTATION_ROLLOUT_PLAN.md`](./PARALLEL_MUTATION_ROLLOUT_PLAN.md)
+> stages this plan against the other two — Stage 1 is its Phase 3A, Stage 2 its
+> Phase 3B, Stage 3 its Phase 7, and Stage 4 its Phase 9.
 
 ---
 
