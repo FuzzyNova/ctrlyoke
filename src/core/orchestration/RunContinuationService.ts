@@ -9,6 +9,7 @@ import type {
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
+  STEP_CLAIM_OUTCOMES,
   resolveQueueInsertIndex,
   WORKFLOW_LOCK_LIVENESS,
   WORKFLOW_LOCK_LOCALITIES,
@@ -35,7 +36,7 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "../WorkflowStepSanitizer";
-import { ensureStepIds } from "../StepIdentity";
+import { ensureStepIds, findStepIndexById } from "../StepIdentity";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -61,6 +62,25 @@ export interface RunContinuationMutationResult {
   definitionRevision: number;
   descriptorRevision: number;
 }
+
+export type RunStepClaimResult =
+  | {
+      status: typeof STEP_CLAIM_OUTCOMES.CLAIMED;
+      workingFile?: WorkingFile;
+      step: WorkflowStep;
+      stepIndex: number;
+      definitionRevision: number;
+    }
+  | {
+      status:
+        | typeof STEP_CLAIM_OUTCOMES.MISSING
+        | typeof STEP_CLAIM_OUTCOMES.ALREADY_CLAIMED
+        | typeof STEP_CLAIM_OUTCOMES.TERMINAL;
+      workingFile?: WorkingFile;
+      step?: WorkflowStep;
+      stepIndex?: number;
+      definitionRevision: number;
+    };
 
 export interface RunContinuationTarget {
   definitionRevision: number;
@@ -328,6 +348,103 @@ export class RunContinuationService {
           definitionRevision: workingFile.definitionRevision,
           descriptorRevision: descriptor.revision,
           insertIndex,
+        };
+      });
+    });
+  }
+
+  /**
+   * Atomically claim one run step for dispatch. The descriptor and run-file
+   * locks use the same order as the MCP mutation transactions, so a claim and
+   * an external edit/remove have one deterministic winner.
+   */
+  static async claimStepAtRun(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    stepId: string,
+    startedAt: number = Date.now(),
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<RunStepClaimResult> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+
+    return withFileLock(descriptorPath, async () => {
+      // Read the descriptor under the same lock as the mutation paths. The
+      // claim does not alter it, but taking this lock is what serializes the
+      // claim with append/edit/remove/reorder transactions.
+      await lineageRepository.readDescriptor(workspaceRoot, workflowKey);
+      return withFileLock(runFilePath, async () => {
+        const source = await this.readRun(workspaceRoot, workflowKey, runRef);
+        const definitionRevision = source.definitionRevision ?? 1;
+        const topology = normalizeParallelGroupTopology({
+          steps: source.steps ?? [],
+          parallelGroups: source.parallelGroups,
+        });
+        const stepIndex = findStepIndexById(topology.steps, stepId);
+        if (stepIndex < 0) {
+          return {
+            status: STEP_CLAIM_OUTCOMES.MISSING,
+            workingFile: source,
+            definitionRevision,
+          };
+        }
+
+        const step = topology.steps[stepIndex];
+        if (step._runtime?.completedAt !== undefined) {
+          return {
+            status: STEP_CLAIM_OUTCOMES.TERMINAL,
+            workingFile: source,
+            step,
+            stepIndex,
+            definitionRevision,
+          };
+        }
+        if (step._runtime?.startedAt !== undefined) {
+          return {
+            status: STEP_CLAIM_OUTCOMES.ALREADY_CLAIMED,
+            workingFile: source,
+            step,
+            stepIndex,
+            definitionRevision,
+          };
+        }
+
+        const claimedStep: WorkflowStep = {
+          ...step,
+          _runtime: {
+            ...step._runtime,
+            startedAt,
+          },
+        };
+        const workingFile: WorkingFile = {
+          ...source,
+          lastModifiedAt: Math.max(
+            Date.now(),
+            (source.lastModifiedAt ?? 0) + 1
+          ),
+          // Claiming is runtime persistence. It must never create a new
+          // definition revision or invalidate the definition snapshot.
+          definitionRevision,
+          steps: topology.steps.map((candidate, index) =>
+            index === stepIndex ? claimedStep : candidate
+          ),
+          parallelGroups: topology.parallelGroups,
+        };
+        await writeWorkingFileAtomic(runFilePath, workingFile);
+        return {
+          status: STEP_CLAIM_OUTCOMES.CLAIMED,
+          workingFile,
+          step: claimedStep,
+          stepIndex,
+          definitionRevision,
         };
       });
     });

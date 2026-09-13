@@ -10,14 +10,19 @@ import {
   STEP_TYPES,
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
+  STEP_CLAIM_OUTCOMES,
 } from "../types/DashboardConstants";
 import {
   ParallelGroupDefinition,
   PromptStep,
   PromptFile,
   StepExecutionOutcome,
+  WorkingFile,
 } from "../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { RunContinuationService } from "../core/orchestration/RunContinuationService";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { withFileLock } from "../utils/FileLockUtils";
 
 /**
  * Helper to wrap prompts array into PromptFile for tests
@@ -189,6 +194,163 @@ suite("PromptQueue State Machine Tests", () => {
         queue.getState().steps[0]._runtime?.startedAt,
         undefined
       );
+    });
+
+    test("claims by ID without bumping the definition revision and refuses a second claim", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-claim-")
+      );
+
+      try {
+        const steps: PromptStep[] = [{ prompt: "claim me" }];
+        const draftPath = await queue.createWorkingFile(
+          "claim-workflow",
+          steps,
+          workspace
+        );
+        queue.loadPrompts({ steps }, draftPath);
+        const promotion = await queue.promoteToNewRun(workspace, 100);
+        assert.ok(promotion);
+
+        const stepId = queue.getState().steps[0]._runtime?.stepId;
+        assert.ok(stepId);
+        const revision = queue.getState().definitionRevision;
+
+        const claim = await queue.claimStepById(stepId, 123, workspace);
+        assert.strictEqual(claim.status, STEP_CLAIM_OUTCOMES.CLAIMED);
+        assert.strictEqual(claim.stepIndex, 0);
+        assert.strictEqual(claim.step._runtime?.startedAt, 123);
+        assert.strictEqual(claim.definitionRevision, revision);
+        assert.strictEqual(queue.getState().definitionRevision, revision);
+
+        const persisted = JSON.parse(
+          await fs.readFile(promotion.workingFilePath, "utf8")
+        ) as WorkingFile;
+        assert.strictEqual(persisted.definitionRevision, revision);
+        assert.strictEqual(persisted.steps?.[0]._runtime?.startedAt, 123);
+
+        const secondClaim = await queue.claimStepById(stepId, 456, workspace);
+        assert.strictEqual(
+          secondClaim.status,
+          STEP_CLAIM_OUTCOMES.ALREADY_CLAIMED
+        );
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("skips a step removed before its claim without fabricating settlement", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-claim-missing-")
+      );
+
+      try {
+        const steps: PromptStep[] = [
+          { prompt: "removed" },
+          { prompt: "survivor" },
+        ];
+        const draftPath = await queue.createWorkingFile(
+          "claim-missing-workflow",
+          steps,
+          workspace
+        );
+        queue.loadPrompts({ steps }, draftPath);
+        const promotion = await queue.promoteToNewRun(workspace, 100);
+        assert.ok(promotion);
+        const removedId = queue.getState().steps[0]._runtime?.stepId;
+        assert.ok(removedId);
+
+        await RunContinuationService.removeStepAtRun(
+          workspace,
+          queue.getState().workflowKey!,
+          promotion.runRef,
+          0,
+          queue.getState().definitionRevision
+        );
+
+        const claim = await queue.claimStepById(removedId, 123, workspace);
+        assert.strictEqual(claim.status, STEP_CLAIM_OUTCOMES.MISSING);
+        assert.strictEqual(queue.getState().steps.length, 1);
+        assert.strictEqual(queue.getSettledCount(), 0);
+        assert.strictEqual(
+          queue.getState().steps[0]._runtime?.startedAt,
+          undefined
+        );
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("makes claim-versus-mutation ordering deterministic through the shared lock", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-claim-race-")
+      );
+
+      try {
+        const steps: PromptStep[] = [{ prompt: "race" }];
+        const draftPath = await queue.createWorkingFile(
+          "claim-race-workflow",
+          steps,
+          workspace
+        );
+        queue.loadPrompts({ steps }, draftPath);
+        const promotion = await queue.promoteToNewRun(workspace, 100);
+        assert.ok(promotion);
+        const workflowKey = queue.getState().workflowKey!;
+        const stepId = queue.getState().steps[0]._runtime?.stepId;
+        assert.ok(stepId);
+
+        const descriptorLockPath = `${WorkflowPaths.descriptorPath(
+          workspace,
+          workflowKey
+        )}.lock`;
+        // The claim must acquire the descriptor lock first and then wait on
+        // the run lock. Holding the run lock makes the subsequent mutation
+        // wait behind that descriptor lock, fixing the winner by lock order.
+        const pending = await withFileLock(
+          promotion.workingFilePath,
+          async () => {
+            const claimPromise = RunContinuationService.claimStepAtRun(
+              workspace,
+              workflowKey,
+              promotion.runRef,
+              stepId,
+              123
+            );
+            let sawDescriptorLock = false;
+            for (let attempt = 0; attempt < 100; attempt += 1) {
+              try {
+                await fs.access(descriptorLockPath);
+                sawDescriptorLock = true;
+                break;
+              } catch {
+                await new Promise((resolve) => setTimeout(resolve, 1));
+              }
+            }
+            assert.ok(sawDescriptorLock);
+            const mutationPromise = RunContinuationService.removeStepAtRun(
+              workspace,
+              workflowKey,
+              promotion.runRef,
+              0,
+              1
+            );
+            return { claimPromise, mutationPromise };
+          }
+        );
+        const [claim, mutation] = await Promise.all([
+          pending.claimPromise,
+          pending.mutationPromise,
+        ]);
+        assert.strictEqual(claim.status, STEP_CLAIM_OUTCOMES.CLAIMED);
+        assert.strictEqual(mutation.definitionRevision, 2);
+        const persisted = JSON.parse(
+          await fs.readFile(promotion.workingFilePath, "utf8")
+        ) as WorkingFile;
+        assert.strictEqual(persisted.steps?.length, 0);
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
     });
 
     test("backfills missing IDs during recovery and preserves existing runtime facts", async () => {

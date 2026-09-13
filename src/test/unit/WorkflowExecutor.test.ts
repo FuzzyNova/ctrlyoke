@@ -352,6 +352,52 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("claims each sequential step before sending it to the harness", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    integration.onSend = async (prompt) => {
+      assert.ok(prompt._runtime?.startedAt);
+      return { responseText: "sent after claim" };
+    };
+    queue.loadPrompts({ steps: [{ prompt: "sequential" }] });
+
+    await makeExecutor(queue).execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, ["sequential"]);
+  });
+
+  test("claims every parallel member before sending it to the harness", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (let stepIndex = 0; stepIndex < 2; stepIndex += 1) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async (prompt) => {
+        assert.ok(prompt._runtime?.startedAt);
+        return { responseText: `sent-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "parallel-one" }, { prompt: "parallel-two" }],
+      parallelGroups: [
+        {
+          id: "claim-before-launch",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.deepStrictEqual(integrations.get(0)?.sentPrompts, ["parallel-one"]);
+    assert.deepStrictEqual(integrations.get(1)?.sentPrompts, ["parallel-two"]);
+  });
+
   test("captures cumulative group snapshots at the group target", async () => {
     const queue = new PromptQueue();
     const integrations = new Map<number, MockHarnessIntegration>();
@@ -447,7 +493,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     const settled: number[] = [];
     const joined: string[] = [];
     context.closeCoordinationParticipant = async (target) => {
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) settled.push(target.stepIndex);
+      if (target.kind === FINAL_STEP_PHASES.QUEUE)
+        settled.push(target.stepIndex);
     };
     context.releaseCoordinationGroupClaims = async (group) => {
       joined.push(group.id);

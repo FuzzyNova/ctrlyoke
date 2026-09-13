@@ -2309,6 +2309,17 @@ export const PROMPT_TERMINAL_STATUS = {
 export type PromptTerminalStatus =
   (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
 
+/** Outcomes returned by the lock-held run-step dispatch claim. */
+export const STEP_CLAIM_OUTCOMES = {
+  CLAIMED: "claimed",
+  MISSING: "missing",
+  ALREADY_CLAIMED: "alreadyClaimed",
+  TERMINAL: "terminal",
+} as const;
+
+export type StepClaimOutcome =
+  (typeof STEP_CLAIM_OUTCOMES)[keyof typeof STEP_CLAIM_OUTCOMES];
+
 // ============================================================================
 // INTERACTIVE ABORT KINDS - Discriminant values for InteractiveAbortState
 // Classifies why an interactive CLI execution was aborted.

@@ -26,6 +26,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
+  STEP_CLAIM_OUTCOMES,
   type PromptTerminalStatus,
   STEP_STATUS,
 } from "../types/DashboardConstants";
@@ -67,8 +68,16 @@ import {
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
-import { immutablePrefixLength } from "./orchestration/RunContinuationService";
-import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
+import {
+  immutablePrefixLength,
+  RunContinuationService,
+  type RunStepClaimResult,
+} from "./orchestration/RunContinuationService";
+import {
+  ensureStepIds,
+  findStepIndexById,
+  resetStepRuntimeForRewind,
+} from "./StepIdentity";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -126,6 +135,7 @@ function resolveRetrySettings(
 export class PromptQueue implements WorkflowWorkingFilePersistence {
   private state: InternalQueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
+  private workingFileWorkspaceRoot?: string;
   private finalStepRuntime?: FinalStepRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
   private readonly workingFileManager: WorkingFileManager;
@@ -1350,6 +1360,109 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Claim a queue step by its stable identity immediately before dispatch.
+   * Promoted runs use the same lock-held transaction as external mutations;
+   * draft/unit-test queues use the equivalent in-memory transition.
+   */
+  public async claimStepById(
+    stepId: string,
+    startedAt: number = Date.now(),
+    workspaceRoot: string | undefined = this.workingFileWorkspaceRoot
+  ): Promise<RunStepClaimResult> {
+    let result: RunStepClaimResult | undefined;
+
+    await this.workingFileManager.runInQueue(async () => {
+      const state = this.state;
+      if (
+        !workspaceRoot ||
+        !state.workflowKey ||
+        !state.runRef ||
+        !state.workingFilePath
+      ) {
+        const stepIndex = findStepIndexById(state.steps, stepId);
+        if (stepIndex < 0) {
+          result = {
+            status: STEP_CLAIM_OUTCOMES.MISSING,
+            definitionRevision: state.definitionRevision,
+          };
+          return;
+        }
+
+        const step = state.steps[stepIndex];
+        if (step._runtime?.completedAt !== undefined) {
+          result = {
+            status: STEP_CLAIM_OUTCOMES.TERMINAL,
+            definitionRevision: state.definitionRevision,
+            step,
+            stepIndex,
+          };
+          return;
+        }
+        if (step._runtime?.startedAt !== undefined) {
+          result = {
+            status: STEP_CLAIM_OUTCOMES.ALREADY_CLAIMED,
+            definitionRevision: state.definitionRevision,
+            step,
+            stepIndex,
+          };
+          return;
+        }
+
+        const claimedStep: WorkflowStep = {
+          ...step,
+          _runtime: { ...step._runtime, startedAt },
+        };
+        state.steps[stepIndex] = claimedStep;
+        if (this.workflowFile?.steps) {
+          this.workflowFile.steps[stepIndex] = claimedStep;
+        }
+        result = {
+          status: STEP_CLAIM_OUTCOMES.CLAIMED,
+          definitionRevision: state.definitionRevision,
+          step: claimedStep,
+          stepIndex,
+        };
+        this.emitStateChange();
+        return;
+      }
+
+      result = await RunContinuationService.claimStepAtRun(
+        workspaceRoot,
+        state.workflowKey,
+        state.runRef,
+        stepId,
+        startedAt
+      );
+
+      // The transaction read the current disk definition under the mutation
+      // lock. Reuse the queue's existing merge contract to adopt that order,
+      // then apply the claimed runtime object returned by the transaction.
+      const workingFile = result.workingFile;
+      if (!workingFile) {
+        throw new Error("Persisted step claim did not return its working file");
+      }
+      this.mergeDiskSteps(workingFile.steps ?? [], workingFile.parallelGroups);
+      state.definitionRevision = result.definitionRevision;
+      if (
+        result.status === STEP_CLAIM_OUTCOMES.CLAIMED &&
+        result.stepIndex !== undefined &&
+        result.step !== undefined
+      ) {
+        state.steps[result.stepIndex] = result.step;
+        if (this.workflowFile?.steps) {
+          this.workflowFile.steps[result.stepIndex] = result.step;
+        }
+      }
+      this.emitStateChange();
+    });
+
+    if (!result) {
+      throw new Error("Step claim did not produce an outcome");
+    }
+    return result;
+  }
+
+  /**
    * Persist a harness session ID as soon as startup/log discovery resolves it.
    * `promptIndex === steps.length` addresses the workflow finalStep.
    */
@@ -1790,6 +1903,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     options?: WorkflowLineageCreationOptions,
     parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = []
   ): Promise<string> {
+    this.workingFileWorkspaceRoot = workspaceFolderPath;
     // Compute workflow name and store back into state so loadPrompts preserves it
     const computedWorkflowName =
       this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile);
@@ -1836,6 +1950,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     stagingWorkingFilePath: string;
     allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
   } | null> {
+    this.workingFileWorkspaceRoot = workspaceFolderPath;
     const workflowKey = this.state.workflowKey;
     if (!workflowKey) {
       return null;

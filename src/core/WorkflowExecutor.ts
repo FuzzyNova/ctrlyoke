@@ -47,6 +47,7 @@ import {
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
+  STEP_CLAIM_OUTCOMES,
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
@@ -476,9 +477,28 @@ export class WorkflowExecutor {
             stepIndex: state.currentIndex,
           };
           const prompt = state.steps[state.currentIndex];
+          const stepId = prompt?._runtime?.stepId;
+          if (!stepId) {
+            throw new Error(
+              `Cannot dispatch queue step ${state.currentIndex}: missing stepId`
+            );
+          }
+          const claim = await this.promptQueue.claimStepById(
+            stepId,
+            Date.now(),
+            context.executionWorkspace.stateRoot
+          );
+          if (claim.status === STEP_CLAIM_OUTCOMES.MISSING) {
+            continue;
+          }
+          if (claim.status !== STEP_CLAIM_OUTCOMES.CLAIMED) {
+            throw new Error(
+              `Cannot dispatch step ${stepId}: claim ${claim.status}`
+            );
+          }
           const outcome = await this.executeWithSnapshot(
-            target,
-            prompt,
+            { ...target, stepIndex: claim.stepIndex },
+            claim.step,
             context,
             snapshotStrategy
           );
@@ -824,16 +844,40 @@ export class WorkflowExecutor {
     });
 
     const runMember = async (stepIndex: number): Promise<void> => {
+      const pendingStep = this.promptQueue.getState().steps[stepIndex];
+      const stepId = pendingStep?._runtime?.stepId;
+      if (!stepId) {
+        throw new Error(
+          `Cannot dispatch parallel step ${stepIndex}: missing stepId`
+        );
+      }
+      const claim = await this.promptQueue.claimStepById(
+        stepId,
+        Date.now(),
+        groupContext.executionWorkspace.stateRoot
+      );
+      if (claim.status === STEP_CLAIM_OUTCOMES.MISSING) {
+        await context.releaseTargetResources?.({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex,
+        });
+        return;
+      }
+      if (claim.status !== STEP_CLAIM_OUTCOMES.CLAIMED) {
+        throw new Error(
+          `Cannot dispatch parallel step ${stepId}: claim ${claim.status}`
+        );
+      }
       const target: ExecutionTarget = {
         kind: FINAL_STEP_PHASES.QUEUE,
-        stepIndex,
+        stepIndex: claim.stepIndex,
       };
-      running.set(stepIndex, target);
+      running.set(claim.stepIndex, target);
       let outcome: StepExecutionOutcome;
       try {
         outcome = await this.executeWithSnapshot(
           target,
-          this.promptQueue.getState().steps[stepIndex],
+          claim.step,
           groupContext,
           preflight.effectiveWidth === 1 ? snapshotStrategy : undefined,
           preflightMembers.get(stepIndex)
@@ -858,8 +902,8 @@ export class WorkflowExecutor {
         };
       }
       this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
-      running.delete(stepIndex);
-      outcomes.set(stepIndex, outcome);
+      running.delete(claim.stepIndex);
+      outcomes.set(claim.stepIndex, outcome);
       await this.persistGroupSettlement(outcome, context);
       if (groupBeforeState && snapshotStrategy) {
         await this.captureAndEmitSnapshot(
@@ -967,9 +1011,25 @@ export class WorkflowExecutor {
       };
     }
 
-    await this.promptQueue.commitParallelGroupJoin(group, orderedOutcomes);
+    const liveGroup = this.promptQueue
+      .getState()
+      .parallelGroups.find((candidate) => candidate.id === group.id);
+    const joinGroup =
+      liveGroup ??
+      ({
+        ...group,
+        endIndex: Math.max(
+          this.promptQueue.getState().currentIndex - 1,
+          ...orderedOutcomes.map((outcome) =>
+            outcome.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? outcome.target.stepIndex
+              : -1
+          )
+        ),
+      } as ParallelGroupDefinition);
+    await this.promptQueue.commitParallelGroupJoin(joinGroup, orderedOutcomes);
     try {
-      await context.releaseCoordinationGroupClaims?.(group);
+      await context.releaseCoordinationGroupClaims?.(joinGroup);
     } catch (error) {
       Log.warn(
         "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
@@ -1482,9 +1542,7 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
           : state.steps.length;
-      const dispatchStartedAt = Date.now();
       await this.promptQueue.persistRuntimeMetadata(runtimeStepIndex, {
-        startedAt: dispatchStartedAt,
         harness: resolvedProperties.harness,
         model: resolvedProperties.model,
         executionMode: resolvedProperties.executionMode,
@@ -1832,12 +1890,12 @@ export class WorkflowExecutor {
       });
     }
 
-    // Record startedAt on the step's _runtime
+    // Persist resolved script metadata after the dispatch claim.
     await this.promptQueue.persistRuntimeMetadata(
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? stepIndex
         : this.promptQueue.getState().steps.length,
-      { startedAt: Date.now(), secrets: secretNames }
+      { secrets: secretNames }
     );
 
     // Begin each whole-step attempt before the script executes. An evaluator
