@@ -16,6 +16,7 @@ import {
   ScriptRuntimeOutput,
   isScriptStep,
   PromptRuntimeMetadata,
+  ActiveParallelGroupRuntime,
   ParallelGroupDefinition,
   WorkflowTokenTotals,
   type WorkingFileWorktreeRuntimePatch,
@@ -26,7 +27,9 @@ import {
   ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
+  PARALLEL_GROUP_ADMISSION,
   STEP_CLAIM_OUTCOMES,
+  type ParallelGroupAdmission,
   type PromptTerminalStatus,
   STEP_STATUS,
 } from "../types/DashboardConstants";
@@ -146,6 +149,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private readonly workingFileManager: WorkingFileManager;
   private readonly stateMachine: WorkflowStateMachine;
   private readonly runtimeArchive = new Map<string, PromptRuntimeMetadata>();
+  private activeParallelGroupRuntime?: ActiveParallelGroupRuntime;
   /**
    * Resolver-derived active-execution output cache. These values deliberately
    * never live on WorkflowStep._runtime or in workflow.ctrlyoke.json.
@@ -182,6 +186,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       getTokenTotals: () => this.state.tokenTotals,
       getWorkflowName: () => this.state.workflowName,
       getParallelGroups: () => this.state.parallelGroups,
+      getActiveParallelGroupRuntime: () =>
+        this.activeParallelGroupRuntime
+          ? { ...this.activeParallelGroupRuntime }
+          : undefined,
       mergeDiskSteps: (
         diskSteps: WorkflowStep[],
         parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
@@ -250,6 +258,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     this.workflowFile = undefined; // Clear workflow file reference
     this.finalStepRuntime = undefined;
+    this.activeParallelGroupRuntime = undefined;
     this.stateMachine.restore({
       status: EXECUTION_STATES.IDLE,
       stopped: false,
@@ -284,6 +293,49 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     if (persist) {
       await this.updateWorkingFile(skipMerge);
     }
+  }
+
+  /** Return the durable projection for the currently executing parallel group. */
+  public getActiveParallelGroupRuntime(): ActiveParallelGroupRuntime | undefined {
+    return this.activeParallelGroupRuntime
+      ? { ...this.activeParallelGroupRuntime }
+      : undefined;
+  }
+
+  /**
+   * Persist a parallel group's admission state through the working-file
+   * operation queue. Runtime coordination must not mutate queue state outside
+   * this serialized read-modify-write path.
+   */
+  public async setActiveParallelGroupAdmission(
+    groupId: string,
+    admission: ParallelGroupAdmission
+  ): Promise<void> {
+    await this.workingFileManager.runInQueue(async () => {
+      const next = { groupId, admission };
+      if (isDeepStrictEqual(this.activeParallelGroupRuntime, next)) {
+        return;
+      }
+      this.activeParallelGroupRuntime = next;
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect();
+    });
+  }
+
+  /** Clear a joined group's durable admission projection. */
+  public async clearActiveParallelGroup(groupId?: string): Promise<void> {
+    await this.workingFileManager.runInQueue(async () => {
+      if (
+        !this.activeParallelGroupRuntime ||
+        (groupId !== undefined &&
+          this.activeParallelGroupRuntime.groupId !== groupId)
+      ) {
+        return;
+      }
+      this.activeParallelGroupRuntime = undefined;
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect();
+    });
   }
 
   public markInFlightPromptCancelled(): void {
@@ -380,6 +432,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       pendingRewind: this.state.pendingRewind,
       tokenTotals: undefined,
     };
+    this.activeParallelGroupRuntime = undefined;
 
     // Store complete workflow file for property resolution
     this.workflowFile = {
@@ -498,12 +551,45 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const lineageAddress =
         WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
 
+      const currentIndex =
+        pendingRewind?.fromStepIndex ?? runtime?.currentIndex ?? 0;
+      const persistedActiveParallelGroup = runtime?.activeParallelGroup;
+      const recoveredActiveParallelGroup =
+        !preventRunningAutoStart &&
+        executionState === EXECUTION_STATES.RUNNING &&
+        persistedActiveParallelGroup
+          ? (() => {
+              const group = topology.parallelGroups.find(
+                (candidate) =>
+                  candidate.id === persistedActiveParallelGroup.groupId
+              );
+              const hasUnsettledMember = group
+                ? prompts
+                    .slice(group.startIndex, group.endIndex + 1)
+                    .some((step) => step._runtime?.completedAt === undefined)
+                : false;
+              return group &&
+                currentIndex >= group.startIndex &&
+                currentIndex <= group.endIndex &&
+                hasUnsettledMember
+                ? {
+                    groupId: group.id,
+                    admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+                  }
+                : undefined;
+            })()
+          : undefined;
+      const activeParallelGroupChanged = !isDeepStrictEqual(
+        persistedActiveParallelGroup,
+        recoveredActiveParallelGroup
+      );
+      this.activeParallelGroupRuntime = recoveredActiveParallelGroup;
+
       // Restore prompts and basic state
       // CRITICAL: Preserve _runtime metadata during load (Phase 4: Per-Prompt Session Management)
       // Each prompt's _runtime contains: harness, model, agent, sessionId, startedAt, completedAt
       this.state = {
-        currentIndex:
-          pendingRewind?.fromStepIndex ?? runtime?.currentIndex ?? 0,
+        currentIndex,
         steps: prompts.map((prompt) => ({
           ...prompt,
           // Backward compatibility: _runtime is optional, old files won't have it
@@ -580,7 +666,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Persist forced STOPPED state to disk immediately so subsequent
       // handleGetRecentWorkflows reads see the correct state, not "running".
-      if (recoveredIdsAdded || forcedToStopped) {
+      if (recoveredIdsAdded || forcedToStopped || activeParallelGroupChanged) {
         await this.updateWorkingFile(recoveredIdsAdded).catch((err) =>
           Log.warn(
             "[PromptQueue] Working file load: failed to persist STOPPED state to disk:",
@@ -630,6 +716,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state.totalExecutionTime = 0;
     this.state.queueExtensions = 0;
     this.finalStepRuntime = undefined;
+    this.activeParallelGroupRuntime = undefined;
 
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
     // Stale session IDs from a previous run would cause log discovery and session
@@ -675,6 +762,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.state.steps = [];
     this.state.parallelGroups = [];
     this.state.results = [];
+    this.activeParallelGroupRuntime = undefined;
     if (this.workflowFile) {
       this.workflowFile = {
         ...this.workflowFile,
@@ -936,27 +1024,32 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     group: ParallelGroupDefinition,
     outcomes: readonly StepExecutionOutcome[]
   ): Promise<void> {
-    for (const outcome of outcomes) {
-      if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
-        continue;
+    await this.workingFileManager.runInQueue(async () => {
+      for (const outcome of outcomes) {
+        if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+          continue;
+        }
+
+        if (
+          outcome.target.stepIndex < group.startIndex ||
+          outcome.target.stepIndex > group.endIndex
+        ) {
+          continue;
+        }
+
+        this.applyStepOutcome(outcome);
       }
 
-      if (
-        outcome.target.stepIndex < group.startIndex ||
-        outcome.target.stepIndex > group.endIndex
-      ) {
-        continue;
+      this.state.currentIndex = Math.max(
+        this.state.currentIndex,
+        group.endIndex + 1
+      );
+      if (this.activeParallelGroupRuntime?.groupId === group.id) {
+        this.activeParallelGroupRuntime = undefined;
       }
-
-      this.applyStepOutcome(outcome);
-    }
-
-    this.state.currentIndex = Math.max(
-      this.state.currentIndex,
-      group.endIndex + 1
-    );
-    this.emitStateChange();
-    await this.updateWorkingFile();
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect();
+    });
   }
 
   getSettledCount(): number {
@@ -1810,7 +1903,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       step,
       (topology) => topology.steps.length,
       (topology, identifiedStep) =>
-        appendParallelGroupMember(topology, group, identifiedStep)
+        appendParallelGroupMember(topology, group, identifiedStep),
+      undefined
     );
   }
 
@@ -1828,7 +1922,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       step,
       () => stepIndex + 1,
       (topology, identifiedStep) =>
-        promoteStepToParallelGroup(topology, stepIndex, identifiedStep, options)
+        promoteStepToParallelGroup(topology, stepIndex, identifiedStep, options),
+      (topology) =>
+        topology.parallelGroups.find(
+          (candidate) =>
+            stepIndex >= candidate.startIndex &&
+            stepIndex <= candidate.endIndex
+        )?.id
     );
   }
 
@@ -1848,7 +1948,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     transform: (
       topology: ParallelGroupTopology,
       identifiedStep: WorkflowStep
-    ) => ParallelGroupTopology
+    ) => ParallelGroupTopology,
+    getActiveGroupId?: (topology: ParallelGroupTopology) => string | undefined
   ): Promise<void> {
     if (!this.canAppend()) {
       throw new Error(
@@ -1877,6 +1978,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const insertIndex = nextTopology.steps.indexOf(identifiedStep);
       if (insertIndex < 0) {
         throw new Error(`Parallel group member was not inserted (${operation})`);
+      }
+
+      const activeGroupId = getActiveGroupId?.(nextTopology);
+      if (
+        activeGroupId &&
+        this.state.currentIndex === guardIndex - 1 &&
+        this.stateMachine.status === EXECUTION_STATES.RUNNING
+      ) {
+        this.activeParallelGroupRuntime = {
+          groupId: activeGroupId,
+          admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+        };
       }
 
       this.state.steps = nextTopology.steps;

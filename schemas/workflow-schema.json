@@ -1168,6 +1168,21 @@
           "type": "number",
           "description": "Wall-clock timestamp when workflow execution reached a terminal state"
         },
+        "activeParallelGroup": {
+          "type": "object",
+          "description": "Durable admission state for the currently executing parallel group",
+          "properties": {
+            "groupId": {
+              "type": "string"
+            },
+            "admission": {
+              "type": "string",
+              "enum": ["accepting", "closing"]
+            }
+          },
+          "required": ["groupId", "admission"],
+          "additionalProperties": false
+        },
         "tokenTotals": {
           "$ref": "#/definitions/workflowTokenTotals",
           "description": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)"

@@ -251,6 +251,42 @@ suite("ParallelGroupRun", () => {
     assert.deepStrictEqual(harness.run.pendingIds, ["only"]);
   });
 
+  test("reconciles surviving members idempotently", async () => {
+    const firstStarted = deferred();
+    const firstRelease = deferred();
+    const harness = makeRun({
+      ids: ["first", "late"],
+      pendingIds: ["first"],
+      width: 1,
+      execute: async (stepId, target) => {
+        if (stepId === "first") {
+          firstStarted.resolve();
+          await firstRelease.promise;
+        }
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+    });
+
+    const completion = harness.run.run();
+    await firstStarted.promise;
+
+    assert.deepStrictEqual(
+      harness.run.reconcileMembers(["first", "late", "late"]),
+      ["late"]
+    );
+    assert.deepStrictEqual(harness.run.reconcileMembers(["late"]), []);
+
+    firstRelease.resolve();
+    await completion;
+  });
+
+  test("refuses reconciliation after admission closes", async () => {
+    const harness = makeRun({ ids: ["only", "late"], width: 1 });
+    await harness.run.run();
+
+    assert.deepStrictEqual(harness.run.reconcileMembers(["late"]), []);
+  });
+
   test("rejects admission during stop and settles the group", async () => {
     const started = deferred();
     const release = deferred();

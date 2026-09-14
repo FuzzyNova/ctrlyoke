@@ -916,6 +916,15 @@ export const EXECUTION_STATES = {
 /** Parallel groups may fan out up to the configured global queue width. */
 export const PARALLEL_GROUP_FAN_OUT_ENABLED = true;
 
+/** Durable admission states for the currently executing parallel group. */
+export const PARALLEL_GROUP_ADMISSION = {
+  ACCEPTING: "accepting",
+  CLOSING: "closing",
+} as const;
+
+export type ParallelGroupAdmission =
+  (typeof PARALLEL_GROUP_ADMISSION)[keyof typeof PARALLEL_GROUP_ADMISSION];
+
 /** Resolve the active width, retaining an explicit closed-gate override for tests. */
 export function getEffectiveParallelGroupWidth(
   configuredWidth: number,

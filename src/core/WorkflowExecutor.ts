@@ -35,6 +35,7 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
+  PARALLEL_GROUP_ADMISSION,
   CONDITION_ACTIONS,
   STEP_TYPES,
   SCRIPT_VERDICT_OUTCOMES,
@@ -898,6 +899,10 @@ export class WorkflowExecutor {
         admissionTargets.set(stepId, stepIndex);
       }
     }
+    await this.promptQueue.setActiveParallelGroupAdmission(
+      group.id,
+      PARALLEL_GROUP_ADMISSION.ACCEPTING
+    );
     const groupRun = new ParallelGroupRun<WorkflowExecutionContext>({
       group,
       pendingIds,
@@ -1010,6 +1015,8 @@ export class WorkflowExecutor {
           .parallelGroups.find((candidate) => candidate.id === groupId),
       commitJoin: (joinGroup, outcomes) =>
         this.promptQueue.commitParallelGroupJoin(joinGroup, outcomes),
+      persistAdmission: (admission) =>
+        this.promptQueue.setActiveParallelGroupAdmission(group.id, admission),
       confirmPause: () =>
         this.confirmPauseAndStop(
           "[WorkflowExecutor] Workflow paused after parallel group members settled"

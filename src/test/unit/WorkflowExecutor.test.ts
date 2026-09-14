@@ -25,6 +25,7 @@ import {
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  PARALLEL_GROUP_ADMISSION,
   PROMPT_DIAGNOSTIC_CODES,
   isContextResolutionDiagnostic,
   STEP_STATUS,
@@ -411,6 +412,52 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(integrations.get(1)?.sentPrompts, ["parallel-two"]);
   });
 
+  test("persists accepting, closing, and cleared admission across a join", async () => {
+    const queue = new PromptQueue();
+    const admissions: Array<
+      ReturnType<PromptQueue["getActiveParallelGroupRuntime"]>
+    > = [];
+    queue.onDidChangeState(() => {
+      admissions.push(queue.getActiveParallelGroupRuntime());
+    });
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, new MockHarnessIntegration(undefined, false)],
+      [1, new MockHarnessIntegration(undefined, false)],
+    ]);
+    queue.loadPrompts({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+      parallelGroups: [
+        {
+          id: "admission-lifecycle",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
+      ],
+    });
+
+    await makeExecutor(queue).execute(
+      integrations.get(0)!,
+      makeParallelContext(integrations)
+    );
+
+    assert.ok(
+      admissions.some(
+        (admission) =>
+          admission?.groupId === "admission-lifecycle" &&
+          admission.admission === PARALLEL_GROUP_ADMISSION.ACCEPTING
+      )
+    );
+    assert.ok(
+      admissions.some(
+        (admission) =>
+          admission?.groupId === "admission-lifecycle" &&
+          admission.admission === PARALLEL_GROUP_ADMISSION.CLOSING
+      )
+    );
+    assert.strictEqual(queue.getActiveParallelGroupRuntime(), undefined);
+  });
+
   test("preflights a pending member from its edited definition after claiming", async () => {
     const queue = new PromptQueue();
     const first = new MockHarnessIntegration(undefined, false);
@@ -647,6 +694,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
   test("settles cleanly when stopping or pausing during a late join", async () => {
     for (const mode of ["stop", "pause"] as const) {
       const queue = new PromptQueue();
+      const admissions: Array<
+        ReturnType<PromptQueue["getActiveParallelGroupRuntime"]>
+      > = [];
+      queue.onDidChangeState(() => {
+        admissions.push(queue.getActiveParallelGroupRuntime());
+      });
       const first = new MockHarnessIntegration(undefined, false);
       const sibling = new MockHarnessIntegration(undefined, false);
       const late = new MockHarnessIntegration(undefined, false);
@@ -689,7 +742,14 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         queue.getState().status ===
           (mode === "stop"
             ? EXECUTION_STATES.STOPPED
-            : EXECUTION_STATES.PAUSED)
+          : EXECUTION_STATES.PAUSED)
+      );
+      assert.ok(
+        admissions.some(
+          (admission) =>
+            admission?.groupId === `stop-pause-${mode}` &&
+            admission.admission === PARALLEL_GROUP_ADMISSION.CLOSING
+        )
       );
     }
   });
@@ -877,6 +937,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
   test("failFast cancels running siblings and never launches waiting members", async () => {
     const queue = new PromptQueue();
+    const admissions: Array<
+      ReturnType<PromptQueue["getActiveParallelGroupRuntime"]>
+    > = [];
+    queue.onDidChangeState(() => {
+      admissions.push(queue.getActiveParallelGroupRuntime());
+    });
     let releaseSibling: (() => void) | undefined;
     const integrations = new Map<number, MockHarnessIntegration>();
     const failing = new MockHarnessIntegration(undefined, false);
@@ -920,6 +986,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       [STEP_STATUS.FAILED, STEP_STATUS.CANCELLED, STEP_STATUS.CANCELLED]
     );
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    assert.ok(
+      admissions.some(
+        (admission) =>
+          admission?.groupId === "fail-fast" &&
+          admission.admission === PARALLEL_GROUP_ADMISSION.CLOSING
+      )
+    );
   });
 
   test("fail-after-settle drains waiting members before failing the workflow", async () => {

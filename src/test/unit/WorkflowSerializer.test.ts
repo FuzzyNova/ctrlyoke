@@ -351,7 +351,14 @@ suite("WorkflowSerializer", () => {
                   _runtime: { startedAt: 1 },
                 },
               ],
-              _runtime: { currentIndex: 0, executionState: "idle" },
+              _runtime: {
+                currentIndex: 0,
+                executionState: "idle",
+                activeParallelGroup: {
+                  groupId: "live-group",
+                  admission: "accepting",
+                },
+              },
             },
             null,
             2
@@ -388,6 +395,7 @@ suite("WorkflowSerializer", () => {
           onError: "continue",
         });
         assert.strictEqual(saved.steps[0]._runtime, undefined);
+        assert.strictEqual(saved._runtime, undefined);
         assert.ok(
           messages.some(
             (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED

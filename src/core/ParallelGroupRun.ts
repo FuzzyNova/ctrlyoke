@@ -1,9 +1,11 @@
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  PARALLEL_GROUP_ADMISSION,
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
   type StepClaimOutcome,
+  type ParallelGroupAdmission,
 } from "../types/DashboardConstants";
 import type {
   ParallelGroupDefinition,
@@ -92,6 +94,9 @@ export interface ParallelGroupRunOptions<TContext extends object> {
     group: ParallelGroupDefinition,
     outcomes: readonly StepExecutionOutcome[]
   ) => Promise<void>;
+  readonly persistAdmission?: (
+    admission: ParallelGroupAdmission
+  ) => Promise<void>;
   readonly confirmPause?: () => Promise<void>;
 }
 
@@ -116,6 +121,7 @@ export class ParallelGroupRun<TContext extends object> {
   private preflightQueue = Promise.resolve();
   private runStarted = false;
   private admissionOpen = true;
+  private admissionClosePromise?: Promise<void>;
 
   constructor(private readonly options: ParallelGroupRunOptions<TContext>) {
     this.pendingIds = [...options.pendingIds];
@@ -168,17 +174,33 @@ export class ParallelGroupRun<TContext extends object> {
     return true;
   }
 
+  /**
+   * Reconcile persisted members into this run. Both the working-file watcher
+   * and an in-process dispatcher may call this, so duplicate IDs are harmless.
+   */
+  public reconcileMembers(surviving: readonly string[]): string[] {
+    const admitted: string[] = [];
+    for (const stepId of surviving) {
+      if (this.admit(stepId)) {
+        admitted.push(stepId);
+      }
+    }
+    return admitted;
+  }
+
   public async run(): Promise<ParallelGroupOutcome> {
     const stopWatcher = this.options.subscribeToStop?.(() => {
-      this.closeAdmission();
-      void this.cancelRunning();
+      void this.closeAdmission().then(
+        () => this.cancelRunning(),
+        () => this.cancelRunning()
+      );
     });
 
     try {
       this.runStarted = true;
       await this.drainWorkers();
       if (this.workerError !== undefined) {
-        this.closeAdmission();
+        await this.closeAdmission();
         await this.cancelRunning();
         throw this.workerError;
       }
@@ -186,14 +208,14 @@ export class ParallelGroupRun<TContext extends object> {
       const stopped = this.isStopped();
       const paused = this.isPaused();
       if (stopped || this.failFastTriggered) {
-        this.closeAdmission();
+        await this.closeAdmission();
         await this.cancelRunning();
         await this.cancelRemainingPending();
       }
 
       // Close before reading the current group or committing the join. A
       // concurrent admission must be rejected once the drain is complete.
-      this.closeAdmission();
+      await this.closeAdmission();
       const orderedOutcomes = this.getOrderedOutcomes();
       if (paused) {
         await this.options.confirmPause?.();
@@ -258,10 +280,10 @@ export class ParallelGroupRun<TContext extends object> {
       this.nextPending < this.pendingIds.length
     ) {
       if (this.isPaused()) {
-        this.closeAdmission();
+        await this.closeAdmission();
         if (this.activeWorkers === 0) return;
       } else if (this.shouldStopDispatching()) {
-        this.closeAdmission();
+        await this.closeAdmission();
         await this.cancelRunning();
         await this.cancelRemainingPending();
       } else if (this.activeWorkers === 0) {
@@ -303,8 +325,15 @@ export class ParallelGroupRun<TContext extends object> {
     return Math.max(1, this.options.effectiveWidth);
   }
 
-  private closeAdmission(): void {
+  private closeAdmission(): Promise<void> {
+    if (this.admissionClosePromise) {
+      return this.admissionClosePromise;
+    }
     this.admissionOpen = false;
+    this.admissionClosePromise =
+      this.options.persistAdmission?.(PARALLEL_GROUP_ADMISSION.CLOSING) ??
+      Promise.resolve();
+    return this.admissionClosePromise;
   }
 
   private async runMember(stepId: string): Promise<void> {
@@ -463,7 +492,7 @@ export class ParallelGroupRun<TContext extends object> {
       !this.failFastTriggered
     ) {
       this.failFastTriggered = true;
-      this.closeAdmission();
+      await this.closeAdmission();
       await this.cancelRunning(
         outcome.target.kind === FINAL_STEP_PHASES.QUEUE
           ? this.findStepIdForTarget(outcome.target)

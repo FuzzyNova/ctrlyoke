@@ -37,6 +37,7 @@ import {
   type WorktreeConfigOrigin,
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type ParallelGroupAdmission,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -49,6 +50,7 @@ export type {
   AttemptCostSource,
   AttemptCostUnavailableReason,
   WorkflowTokenCoverage,
+  ParallelGroupAdmission,
 };
 import type { ToolPermissionMode } from "./ExecutionPropertyTypes";
 export type { ToolPermissionMode };
@@ -658,6 +660,8 @@ export interface WorkingFileRuntime {
   totalPausedDuration?: number;
   /** Wall-clock timestamp when execution reached a terminal state. */
   executionEndTime?: number;
+  /** Durable admission state for the currently executing parallel group. */
+  activeParallelGroup?: ActiveParallelGroupRuntime;
   finalStep?: FinalStepRuntimeState;
   /**
    * Durable marker for an in-place, nonzero rewind. The full pre-rewind file is
@@ -671,6 +675,11 @@ export interface WorkingFileRuntime {
   worktree?: WorkingFileWorktreeRuntime;
   /** Durable notice when an inherited worktree default degraded to none. */
   worktreeNotice?: string;
+}
+
+export interface ActiveParallelGroupRuntime {
+  groupId: string;
+  admission: ParallelGroupAdmission;
 }
 
 /**

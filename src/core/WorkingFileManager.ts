@@ -8,6 +8,7 @@ import type {
   PromptRuntimeMetadata,
   WorkingFile,
   WorkingFileRuntime,
+  ActiveParallelGroupRuntime,
   WorkingFileWorktreeRuntimePatch,
   WorkflowTokenTotals,
   WorkflowLineageCreationOptions,
@@ -430,6 +431,9 @@ export interface IWorkingFileQueueAccess {
 
   /** Current normalized parallel-group topology. */
   getParallelGroups?(): ParallelGroupDefinition[];
+
+  /** Durable admission state for the currently executing parallel group. */
+  getActiveParallelGroupRuntime?(): ActiveParallelGroupRuntime | undefined;
 
   /** Merge disk steps into memory, returning newly added steps */
   mergeDiskSteps(
@@ -2003,12 +2007,15 @@ export class WorkingFileManager {
       // Update workflow-level runtime state
       // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
       const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
+      const activeParallelGroup =
+        this.queueAccess.getActiveParallelGroupRuntime?.();
       workingFile._runtime = {
         currentIndex: this.queueAccess.getCurrentIndex(),
         executionState: this.queueAccess.getStatus(),
         ...(tokenTotals ? { tokenTotals } : {}),
         ...this.getPersistedExecutionTiming(),
         ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
+        ...(activeParallelGroup ? { activeParallelGroup } : {}),
         ...(this.queueAccess.getPendingRewind?.()
           ? { pendingRewind: this.queueAccess.getPendingRewind() }
           : {}),

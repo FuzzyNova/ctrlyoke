@@ -7,6 +7,7 @@ import { PromptQueue } from "../core/PromptQueue";
 import {
   CONDITION_ACTIONS,
   EXECUTION_STATES,
+  PARALLEL_GROUP_ADMISSION,
   STEP_TYPES,
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
@@ -393,6 +394,58 @@ suite("PromptQueue State Machine Tests", () => {
           await fs.readFile(workingFilePath, "utf8")
         ) as PromptFile;
         assert.ok(persisted.steps![1]._runtime?.stepId);
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("rebuilds admission only for a resumed unsettled group", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-admission-")
+      );
+
+      try {
+        const workingFilePath = await queue.createWorkingFile(
+          "admission-recovery",
+          [{ prompt: "one" }, { prompt: "two" }],
+          workspace
+        );
+        const workingFile = await queue.readWorkingFile(workingFilePath);
+        workingFile.parallelGroups = [
+          { id: "recover-group", startIndex: 0, endIndex: 1, failFast: true },
+        ];
+        workingFile._runtime = {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.RUNNING,
+          activeParallelGroup: {
+            groupId: "recover-group",
+            admission: PARALLEL_GROUP_ADMISSION.CLOSING,
+          },
+        };
+        await fs.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2));
+
+        const resumed = new PromptQueue();
+        await resumed.restoreFromWorkingFile(workingFilePath);
+        assert.deepStrictEqual(resumed.getActiveParallelGroupRuntime(), {
+          groupId: "recover-group",
+          admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+        });
+
+        resumed.getRuntimeStateMachine().restore({
+          status: EXECUTION_STATES.STOPPED,
+          stopped: true,
+          totalPausedDuration: 0,
+        });
+        workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
+        await fs.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2));
+        const stopped = new PromptQueue();
+        await stopped.restoreFromWorkingFile(workingFilePath);
+        assert.strictEqual(stopped.getActiveParallelGroupRuntime(), undefined);
+        assert.strictEqual(
+          (await stopped.readWorkingFile(workingFilePath))._runtime
+            ?.activeParallelGroup,
+          undefined
+        );
       } finally {
         await fs.rm(workspace, { recursive: true, force: true });
       }
