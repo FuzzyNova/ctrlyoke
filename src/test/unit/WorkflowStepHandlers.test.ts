@@ -5,7 +5,11 @@ import { WorkflowStepHandlers } from "../../ui/WorkflowStepHandlers";
 import { WorkflowMutationCoordinator } from "../../ui/WorkflowMutationCoordinator";
 import type { WebviewClientContext } from "../../ui/WebviewClientContext";
 import type { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../../types/DashboardConstants";
 
 /**
  * Regression coverage for the "step edit doesn't stay undoable" bug: a
@@ -47,13 +51,83 @@ function makeOrchestrator(overrides: Record<string, unknown>) {
   return orchestrator;
 }
 
-function makeCtx(): WebviewClientContext {
+function makeCtx(
+  emit: (message: unknown) => void = () => {}
+): WebviewClientContext {
   return {
     clientId: "panel",
     postMessage: () => undefined,
-    emit: () => undefined,
+    emit,
   };
 }
+
+suite("WorkflowStepHandlers — steer messages", () => {
+  test("dispatches the workflow, session, and raw draft without publishing an identity", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const calls: unknown[] = [];
+    const orchestrator = makeOrchestrator({
+      sendSteerMessage: async (...args: unknown[]) => {
+        calls.push(args);
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleSendSteerMessage(makeCtx(), {
+      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+      workflowId: "workflow-1",
+      sessionId: "session-1",
+      text: "raw steer draft",
+    });
+
+    assert.deepStrictEqual(calls, [
+      ["workflow-1", "session-1", "raw steer draft"],
+    ]);
+    assert.deepStrictEqual(coordinator.calls, []);
+  });
+
+  test("restores the raw draft and warns when dispatch is rejected", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const emitted: unknown[] = [];
+    const orchestrator = makeOrchestrator({
+      sendSteerMessage: async () => {
+        throw new Error("That harness session has ended.");
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+
+    await handlers.handleSendSteerMessage(
+      makeCtx((message) => emitted.push(message)),
+      {
+        type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        text: "restore this draft",
+      }
+    );
+
+    assert.deepStrictEqual(emitted, [
+      {
+        type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+        text: "restore this draft",
+      },
+      {
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: emitted[1] && (emitted[1] as { id: string }).id,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: "That harness session has ended.",
+      },
+    ]);
+    assert.deepStrictEqual(coordinator.calls, []);
+  });
+});
 
 suite("WorkflowStepHandlers — success-path client echo", () => {
   test("handleUpdatePrompt uses publishViewIdentity, not refreshDefinitionMutationView", async () => {

@@ -13,6 +13,7 @@ import type {
   RunExecutionControlMessage,
   ReorderPromptsMessage,
   SeedNewRunMessage,
+  SendSteerMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
   UpdatePromptMessage,
@@ -78,6 +79,38 @@ export class WorkflowStepHandlers {
       // A rejection is usually a superseded revision; hand the authoritative
       // revisions back so the next submission isn't rejected identically.
       await this.mutationCoordinator.publishViewIdentity(ctx);
+    }
+  }
+
+  async handleSendSteerMessage(
+    ctx: WebviewClientContext,
+    message: SendSteerMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    try {
+      await orchestrator.sendSteerMessage(
+        message.workflowId,
+        message.sessionId,
+        message.text
+      );
+    } catch (error) {
+      const diagnostic = getErrorMessage(error);
+      Log.error("[WorkflowStepHandlers] Failed to send steer message:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+        text: message.text,
+      });
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `steer-message-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: diagnostic,
+      });
     }
   }
 

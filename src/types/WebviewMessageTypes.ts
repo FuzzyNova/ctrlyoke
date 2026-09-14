@@ -2043,6 +2043,14 @@ export interface AppendFileMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
+/** Webview → Extension: inject a prompt into a live interactive PTY session. */
+export interface SendSteerMessage {
+  type: typeof MESSAGE_TYPES.SEND_STEER_MESSAGE;
+  workflowId: string;
+  sessionId: string;
+  text: string;
+}
+
 /**
  * Update an existing queue step. When a completed nonzero step is edited,
  * `rewindCompletedStep` asks the backend to begin the same durable pending

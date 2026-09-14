@@ -510,6 +510,14 @@ registration) and `WorkflowInstance.sendSteerMessage` plus
 `findIntegrationForPtySession`, with host-side liveness re-checks and
 human-readable rejection errors. Testable with no UI.
 
+**Stage 3 status — landed:** `MESSAGE_TYPES.SEND_STEER_MESSAGE` carries the
+`{ workflowId, sessionId, text }` payload from the webview to the extension.
+The router delegates it to `WorkflowStepHandlers`, which calls the host-side
+dispatch and restores the raw `text` through `EXECUTE_PROMPT_ERROR` plus a
+warning toast on rejection. `RUN_IN_NEW_WORKFLOW` now emits the same warning
+toast on failure. Stage 4 must post exactly:
+`{ type: MESSAGE_TYPES.SEND_STEER_MESSAGE, workflowId, sessionId, text }`.
+
 **Stage 3 — message and route.** `MESSAGE_TYPES.SEND_STEER_MESSAGE`, the router
 case, `WorkflowStepHandlers.handleSendSteerMessage` with the
 `EXECUTE_PROMPT_ERROR` + `USER_FEEDBACK` contract, and the aligned

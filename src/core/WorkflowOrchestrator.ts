@@ -5635,6 +5635,18 @@ export class WorkflowOrchestrator {
     await instance.executeLoadedPromptFile(stepHarness);
   }
 
+  async sendSteerMessage(
+    workflowId: string,
+    sessionId: string,
+    text: string
+  ): Promise<void> {
+    const instance = this.findInstance(workflowId);
+    if (!instance) {
+      throw new Error(`Workflow "${workflowId}" was not found.`);
+    }
+    await instance.sendSteerMessage(sessionId, text);
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,
