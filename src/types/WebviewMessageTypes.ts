@@ -499,6 +499,7 @@ export interface InitMessageData {
     model: string;
     agent: string;
     executionMode: ExecutionMode;
+    effectiveParallelGroupWidth?: number;
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
@@ -849,6 +850,8 @@ export interface StepsExtendedMessage {
   /** The definition head that produced `steps`. Lets a following edit target
    *  the append immediately, without waiting for long-running execution to end. */
   definitionRevision?: number;
+  /** Runtime promotion echoes must not create a webview undo entry. */
+  runtimePromotionUndoSuppressed?: boolean;
 }
 
 /** A narrow addressed update for the only currently cosmetic step field. */
@@ -1555,6 +1558,7 @@ export interface GlobalSettingsUpdatedMessage {
     agent: string;
     skills?: string[];
     executionMode: ExecutionMode;
+    effectiveParallelGroupWidth?: number;
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];

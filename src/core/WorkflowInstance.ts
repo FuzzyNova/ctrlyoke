@@ -60,6 +60,8 @@ import {
   MESSAGE_TYPES,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
+  PARALLEL_GROUP_ADMISSION,
+  getEffectiveParallelGroupWidth,
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
@@ -287,6 +289,8 @@ export class WorkflowInstance {
   private lastKnownStepCount: number = 0;
   /** Tracks workflow name to detect changes and push them to the dashboard */
   private lastKnownWorkflowName: string = "";
+  /** One-shot marker for the automatic topology echo caused by promotion. */
+  private runtimePromotionUndoSuppressed = false;
   /**
    * When a prompt is sent with Run intent while the workflow is still cancelling,
    * we can't execute immediately. This stores the harness override so that once
@@ -3411,6 +3415,11 @@ export class WorkflowInstance {
     const isCompleted =
       this.getAuthoritativeExecutionState() === EXECUTION_STATES.COMPLETED;
 
+    if (action === ACTION_TYPES.RUN_PARALLEL) {
+      await this.executeEphemeralParallelPrompt(step);
+      return;
+    }
+
     let position: QueuePosition = QUEUE_POSITION.END;
     let shouldRun = false;
 
@@ -3505,6 +3514,123 @@ export class WorkflowInstance {
           await this.executeLoadedPromptFile(stepHarness, isStopped || isError);
         }
       }
+    }
+  }
+
+  /**
+   * Dispatch a new editor step beside the queue target that is executing now.
+   * The topology mutation and the executor admission deliberately use the
+   * shared PromptQueue/WorkflowExecutor paths used by other late joiners.
+   */
+  private async executeEphemeralParallelPrompt(step: WorkflowStep): Promise<void> {
+    const state = this.promptQueue.getState();
+    const executionState = this.getAuthoritativeExecutionState();
+    if (executionState !== EXECUTION_STATES.RUNNING) {
+      throw new Error(
+        executionState === EXECUTION_STATES.PAUSING
+          ? "Workflow is pausing. Run in Parallel was rejected."
+          : "No step is running. Run in Parallel was rejected."
+      );
+    }
+
+    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+    if (finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP) {
+      throw new Error(
+        "The final step cannot run in parallel. Run in Parallel was rejected."
+      );
+    }
+
+    const currentStep = state.steps[state.currentIndex];
+    if (
+      !currentStep ||
+      currentStep._runtime?.startedAt === undefined ||
+      currentStep._runtime.completedAt !== undefined
+    ) {
+      throw new Error("No step is running. Run in Parallel was rejected.");
+    }
+
+    const effectiveWidth = getEffectiveParallelGroupWidth(
+      ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps
+    );
+    if (effectiveWidth <= 1) {
+      throw new Error(
+        "Parallel width is 1. Raise queue.maxParallelSteps to run in parallel."
+      );
+    }
+
+    const currentGroup = this.promptQueue.getCurrentParallelGroup();
+    const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
+    const previousParallelGroups = state.parallelGroups.map((group) => ({
+      ...group,
+    }));
+    const previousActiveRuntime = activeRuntime
+      ? { ...activeRuntime }
+      : undefined;
+    let insertion: { stepIndex: number; stepId?: string };
+    let runtimePromotionUndoSuppressed = false;
+    // The queue emits its topology echo before executor admission completes.
+    // Suppress that provisional echo; the explicit success echo below is the
+    // only history decision for this mutation.
+    this.runtimePromotionUndoSuppressed = true;
+
+    if (currentGroup) {
+      if (
+        !activeRuntime ||
+        activeRuntime.groupId !== currentGroup.id ||
+        activeRuntime.admission !== PARALLEL_GROUP_ADMISSION.ACCEPTING
+      ) {
+        throw new Error(
+          "The running parallel group is no longer accepting members."
+        );
+      }
+      try {
+        insertion = await this.promptQueue.appendParallelGroupMember(
+          currentGroup.id,
+          step
+        );
+      } catch (error) {
+        this.runtimePromotionUndoSuppressed = false;
+        throw error;
+      }
+    } else {
+      runtimePromotionUndoSuppressed = true;
+      try {
+        insertion = await this.promptQueue.promoteStepToParallelGroup(
+          state.currentIndex,
+          step,
+          { failFast: false }
+        );
+      } catch (error) {
+        this.runtimePromotionUndoSuppressed = false;
+        throw error;
+      }
+    }
+
+    const join = await this.workflowExecutor.joinRunningParallelGroup(
+      insertion.stepIndex
+    );
+    if (!join.accepted) {
+      await this.promptQueue.rollbackParallelGroupMemberInsertion(
+        insertion,
+        previousParallelGroups,
+        previousActiveRuntime
+      );
+      this.runtimePromotionUndoSuppressed = false;
+      throw new Error(join.diagnostic);
+    }
+
+    this.syncCurrentPromptFileFromQueue();
+    if (this.dashboardSink) {
+      const updatedState = this.promptQueue.getState();
+      this.dashboardSink.updateStepsExtended(
+        updatedState.steps,
+        this.promptQueue.getWorkflowFile().finalStep ?? null,
+        updatedState.status,
+        updatedState.definitionRevision,
+        this.id,
+        updatedState.parallelGroups,
+        runtimePromotionUndoSuppressed
+      );
     }
   }
 
@@ -5946,6 +6072,9 @@ export class WorkflowInstance {
     );
     this.onStatusBarUpdate();
 
+    const suppressRuntimePromotionUndo = this.runtimePromotionUndoSuppressed;
+    this.runtimePromotionUndoSuppressed = false;
+
     if (this.dashboardSink) {
       // Detect workflow name changes and push them to the dashboard immediately.
       const newWorkflowName = state.workflowName ?? "";
@@ -5972,7 +6101,8 @@ export class WorkflowInstance {
           executionState,
           state.definitionRevision,
           undefined,
-          state.parallelGroups
+          state.parallelGroups,
+          suppressRuntimePromotionUndo
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,

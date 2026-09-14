@@ -285,7 +285,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     executionState?: string,
     definitionRevision?: number,
     _workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    runtimePromotionUndoSuppressed?: boolean
   ): void {
     this.inner.updateStepsExtended(
       steps,
@@ -293,7 +294,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       executionState,
       definitionRevision,
       this.workflowId,
-      parallelGroups
+      parallelGroups,
+      runtimePromotionUndoSuppressed
     );
   }
 

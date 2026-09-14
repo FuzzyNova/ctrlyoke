@@ -1126,6 +1126,39 @@ export class WorkflowExecutor {
   ): Promise<ParallelGroupJoinResult> {
     const groupRun = this.activeParallelGroupRun;
     if (!groupRun) {
+      // An ad-hoc promotion happens while the anchor is still in the
+      // sequential execution path, so there is no ParallelGroupRun object to
+      // admit into yet. The persisted accepting projection is the handoff;
+      // the normal loop starts the just-created group after the anchor settles.
+      const state = this.promptQueue.getState();
+      const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
+      const promotedGroup = state.parallelGroups.find(
+        (candidate) =>
+          candidate.id === activeRuntime?.groupId &&
+          candidate.startIndex === state.currentIndex &&
+          stepIndex === candidate.endIndex
+      );
+      const anchor = state.steps[state.currentIndex];
+      if (
+        activeRuntime &&
+        promotedGroup?.id === activeRuntime.groupId &&
+        activeRuntime.admission === PARALLEL_GROUP_ADMISSION.ACCEPTING &&
+        anchor?._runtime?.startedAt !== undefined &&
+        anchor._runtime.completedAt === undefined &&
+        state.steps[stepIndex]?._runtime?.startedAt === undefined
+      ) {
+        return { accepted: true };
+      }
+      if (
+        activeRuntime &&
+        activeRuntime.admission !== PARALLEL_GROUP_ADMISSION.ACCEPTING
+      ) {
+        return {
+          accepted: false,
+          diagnostic:
+            "The promoted parallel group is no longer accepting members.",
+        };
+      }
       return {
         accepted: false,
         diagnostic: "No parallel group is currently running.",

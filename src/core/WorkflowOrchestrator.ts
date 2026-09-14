@@ -5661,6 +5661,11 @@ export class WorkflowOrchestrator {
         queueState.workflowKey === runAddress.workflowKey &&
         queueState.runRef === runAddress.runRef;
       if (!instanceOwnsAddressedRun) {
+        if (action === ACTION_TYPES.RUN_PARALLEL) {
+          throw new Error(
+            "Run in Parallel must target the executing workflow run."
+          );
+        }
         return this.executeEphemeralPromptAtRun(
           runAddress,
           mutation,

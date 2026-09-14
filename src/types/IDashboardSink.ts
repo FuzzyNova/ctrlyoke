@@ -163,7 +163,8 @@ export interface IDashboardSink {
     executionState?: string,
     definitionRevision?: number,
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    runtimePromotionUndoSuppressed?: boolean
   ): void;
 
   updateStepColor(

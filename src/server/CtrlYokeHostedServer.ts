@@ -628,7 +628,8 @@ export class CtrlYokeHostedServer
     executionState?: string,
     definitionRevision?: number,
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    runtimePromotionUndoSuppressed?: boolean
   ): void {
     this.sink.updateStepsExtended(
       steps,
@@ -636,7 +637,8 @@ export class CtrlYokeHostedServer
       executionState,
       definitionRevision,
       workflowId,
-      parallelGroups
+      parallelGroups,
+      runtimePromotionUndoSuppressed
     );
   }
   updateStepColor(

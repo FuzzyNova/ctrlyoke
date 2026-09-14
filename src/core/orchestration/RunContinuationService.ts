@@ -343,7 +343,8 @@ export class RunContinuationService {
                 resolveQueueInsertIndex(
                   position,
                   source._runtime?.currentIndex ?? sourceTopology.steps.length,
-                  sourceTopology.steps.length
+                  sourceTopology.steps.length,
+                  sourceTopology.parallelGroups
                 ),
                 immutablePrefixLength(sourceTopology.steps)
               );

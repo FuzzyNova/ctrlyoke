@@ -1947,7 +1947,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const requestedIndex = resolveQueueInsertIndex(
         position,
         this.state.currentIndex,
-        this.state.steps.length
+        this.state.steps.length,
+        this.state.parallelGroups
       );
       const identifiedSteps = ensureStepIds([
         ...this.state.steps,
@@ -2018,8 +2019,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   public async appendParallelGroupMember(
     group: string | number,
     step: WorkflowStep
-  ): Promise<void> {
-    await this.applyParallelGroupMemberInsertion(
+  ): Promise<{ stepIndex: number; stepId?: string }> {
+    return this.applyParallelGroupMemberInsertion(
       "append parallel group member",
       step,
       (topology) => topology.steps.length,
@@ -2034,11 +2035,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     stepIndex: number,
     step: WorkflowStep,
     options?: { failFast?: boolean }
-  ): Promise<void> {
+  ): Promise<{ stepIndex: number; stepId?: string }> {
     if (stepIndex < 0 || stepIndex >= this.state.steps.length) {
       throw new Error(`Invalid prompt index: ${stepIndex}`);
     }
-    await this.applyParallelGroupMemberInsertion(
+    return this.applyParallelGroupMemberInsertion(
       "promote step to parallel group",
       step,
       () => stepIndex + 1,
@@ -2075,13 +2076,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       identifiedStep: WorkflowStep
     ) => ParallelGroupTopology,
     getActiveGroupId?: (topology: ParallelGroupTopology) => string | undefined
-  ): Promise<void> {
+  ): Promise<{ stepIndex: number; stepId?: string }> {
     if (!this.canAppend()) {
       throw new Error(
         `Cannot ${operation}: Queue is in cancelled or error state`
       );
     }
 
+    let insertion: { stepIndex: number; stepId?: string } | undefined;
     await this.workingFileManager.runInQueue(async () => {
       const previousSteps = this.state.steps;
       const topology = normalizeParallelGroupTopology({
@@ -2152,7 +2154,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       Log.info(
         `[PromptQueue] ${operation} at index ${insertIndex} (definitionRevision=${this.state.definitionRevision})`
       );
+      insertion = {
+        stepIndex: insertIndex,
+        stepId: identifiedStep._runtime?.stepId,
+      };
     });
+    return insertion!;
   }
 
   /**
@@ -2868,6 +2875,53 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // group the reorder created).
       await this.workingFileManager.updateWorkingFileDirect(true);
     });
+  }
+
+  /**
+   * Undo a topology insertion when executor admission loses a race after the
+   * queue mutation. The identity check prevents this rollback from removing a
+   * later operation that reused the same array slot.
+   */
+  public async rollbackParallelGroupMemberInsertion(
+    insertion: { stepIndex: number; stepId?: string },
+    previousParallelGroups: readonly ParallelGroupDefinition[],
+    previousActiveRuntime?: ActiveParallelGroupRuntime
+  ): Promise<boolean> {
+    let rolledBack = false;
+    await this.workingFileManager.runInQueue(async () => {
+      const insertedStep = this.state.steps[insertion.stepIndex];
+      if (
+        !insertedStep ||
+        insertedStep._runtime?.stepId !== insertion.stepId ||
+        insertion.stepIndex < this.state.currentIndex
+      ) {
+        return;
+      }
+
+      this.state.steps = [
+        ...this.state.steps.slice(0, insertion.stepIndex),
+        ...this.state.steps.slice(insertion.stepIndex + 1),
+      ];
+      this.state.results.splice(insertion.stepIndex, 1);
+      this.state.parallelGroups = previousParallelGroups.map((group) => ({
+        ...group,
+      }));
+      this.activeParallelGroupRuntime = previousActiveRuntime
+        ? { ...previousActiveRuntime }
+        : undefined;
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
+      this.bumpDefinitionRevision();
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect(true);
+      rolledBack = true;
+    });
+    return rolledBack;
   }
 
   /**

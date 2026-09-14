@@ -321,7 +321,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     executionState?: string,
     definitionRevision?: number,
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    runtimePromotionUndoSuppressed?: boolean
   ): void {
     this.send({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
@@ -331,6 +332,9 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(runtimePromotionUndoSuppressed
+        ? { runtimePromotionUndoSuppressed: true }
+        : {}),
     });
   }
 

@@ -27,6 +27,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
   NETWORK_INTERFACE_FAMILIES,
   TRUST_DECISIONS,
+  getEffectiveParallelGroupWidth,
 } from "../types/DashboardConstants";
 import type {
   CapabilitiesFile,
@@ -942,6 +943,9 @@ export class WebviewSettingsSync {
       toastLevel: configService.getAll().notifications.toastLevel,
       settingSources: configService.getLeafSources(),
       runHistoryPath: this.getResolvedRunHistoryPath(),
+      effectiveParallelGroupWidth: getEffectiveParallelGroupWidth(
+        ConfigurationUtils.getDynamicQueueConfig().maxParallelSteps
+      ),
     };
   }
 

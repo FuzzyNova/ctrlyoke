@@ -977,9 +977,10 @@ export function createMessageHandlers(
     const isInitialAutoLoad = currentSteps.length === 0;
     const shouldRecord =
       !isInitialAutoLoad &&
+      !message.runtimePromotionUndoSuppressed &&
       (stepCountChanged || stepContentChanged || parallelGroupsChanged);
     WebviewLog.debug(
-      `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
+      `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad} runtimePromotionUndoSuppressed=${message.runtimePromotionUndoSuppressed === true}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
     );
     // If executionState is piggybacked (sent alongside prompts to avoid a
     // separate render), apply it first — same synchronous call, same render.

@@ -114,6 +114,8 @@ export interface GlobalSettings {
   skills: string[];
   secrets?: string[];
   executionMode: ExecutionMode;
+  /** Effective queue fan-out width, available before the settings drawer opens. */
+  effectiveParallelGroupWidth: number;
   resumeSession: boolean;
   mcpServers: (string | object)[];
   hooks: UserHookConfig[];
@@ -408,6 +410,7 @@ const initialGlobalSettings: GlobalSettings = {
   skills: [],
   secrets: [],
   executionMode: EXECUTION_MODES.INTERACTIVE,
+  effectiveParallelGroupWidth: CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
   resumeSession: false,
   mcpServers: [],
   hooks: [],

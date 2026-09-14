@@ -20,6 +20,7 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  PARALLEL_GROUP_ADMISSION,
   STEP_STATUS,
   HARNESS_IDS,
   STATUS_MESSAGE_SEVERITY,
@@ -1663,6 +1664,267 @@ suite("WorkflowInstance append-and-continue", () => {
         ephemeralEcho[5],
         instance.promptQueue.getState().parallelGroups
       );
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("runParallel promotes the running sequential step with failFast disabled", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-parallel-promote-")
+    );
+    try {
+      const updateCalls: unknown[][] = [];
+      const dashboardSink = new Proxy(
+        {
+          updateStepsExtended: (...args: unknown[]) => updateCalls.push(args),
+          updateProgress: () => {},
+          updateWorkflowName: () => {},
+        },
+        { get: (target, property: string | symbol) => target[property as keyof typeof target] ?? (() => {}) }
+      );
+      const instance = new WorkflowInstance(
+        new MockPlatform(),
+        dashboardSink as any,
+        new MockIntegrationFactory(new MockPlatform()),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [{ prompt: "anchor" }];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "parallel-promote",
+        steps,
+        tempWorkspace
+      );
+      instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+      await startQueueExecution(instance);
+      instance.promptQueue.getState().steps[0]._runtime = {
+        stepId: "anchor-id",
+        startedAt: Date.now(),
+      };
+      const joined: number[] = [];
+      (instance as any).workflowExecutor.joinRunningParallelGroup = async (
+        stepIndex: number
+      ) => {
+        joined.push(stepIndex);
+        return { accepted: true };
+      };
+
+      await instance.executeEphemeralPrompt(
+        "parallel member",
+        {},
+        ACTION_TYPES.RUN_PARALLEL
+      );
+
+      const state = instance.promptQueue.getState();
+      assert.deepStrictEqual(joined, [1]);
+      assert.strictEqual(state.parallelGroups.length, 1);
+      assert.strictEqual(state.parallelGroups[0]?.startIndex, 0);
+      assert.strictEqual(state.parallelGroups[0]?.endIndex, 1);
+      assert.strictEqual(state.parallelGroups[0]?.failFast, false);
+      assert.strictEqual(
+        updateCalls.some((args) => args[6] === true),
+        true
+      );
+
+      (instance as any).workflowExecutor.joinRunningParallelGroup = async (
+        stepIndex: number
+      ) => {
+        joined.push(stepIndex);
+        return {
+          accepted: false,
+          diagnostic: "admission closed during join",
+        };
+      };
+      await assert.rejects(
+        instance.executeEphemeralPrompt(
+          "rejected parallel member",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
+        /admission closed during join/
+      );
+      assert.strictEqual(state.steps.length, 2);
+      assert.strictEqual(state.parallelGroups[0]?.endIndex, 1);
+      assert.deepStrictEqual(instance.promptQueue.getActiveParallelGroupRuntime(), {
+        groupId: state.parallelGroups[0]?.id,
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      });
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("runParallel appends to an accepting live group", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-parallel-append-")
+    );
+    try {
+      const instance = new WorkflowInstance(
+        new MockPlatform(),
+        undefined,
+        new MockIntegrationFactory(new MockPlatform()),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [
+        { prompt: "anchor" },
+        { prompt: "existing member" },
+      ];
+      const parallelGroups = [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "parallel-append",
+        steps,
+        tempWorkspace,
+        undefined,
+        undefined,
+        parallelGroups
+      );
+      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      await startQueueExecution(instance);
+      await instance.promptQueue.setActiveParallelGroupAdmission(
+        "group-1",
+        PARALLEL_GROUP_ADMISSION.ACCEPTING
+      );
+      instance.promptQueue.getState().steps[0]._runtime = {
+        stepId: "anchor-id",
+        startedAt: Date.now(),
+      };
+      const joined: number[] = [];
+      (instance as any).workflowExecutor.joinRunningParallelGroup = async (
+        stepIndex: number
+      ) => {
+        joined.push(stepIndex);
+        return { accepted: true };
+      };
+
+      await instance.executeEphemeralPrompt(
+        "parallel member",
+        {},
+        ACTION_TYPES.RUN_PARALLEL
+      );
+
+      const state = instance.promptQueue.getState();
+      assert.deepStrictEqual(joined, [2]);
+      assert.strictEqual(state.steps.length, 3);
+      assert.deepStrictEqual(state.parallelGroups, [
+        { id: "group-1", startIndex: 0, endIndex: 2, failFast: false },
+      ]);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("runParallel rejects without mutating an idle queue", async () => {
+    const instance = new WorkflowInstance(
+      new MockPlatform(),
+      undefined,
+      new MockIntegrationFactory(new MockPlatform()),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    try {
+      instance.promptQueue.loadPrompts({ steps: [{ prompt: "queued" }] });
+      await assert.rejects(
+        instance.executeEphemeralPrompt(
+          "must reject",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
+        /No step is running/
+      );
+      assert.strictEqual(instance.promptQueue.getState().steps.length, 1);
+      assert.deepStrictEqual(instance.promptQueue.getState().parallelGroups, []);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("runParallel rejects final-step, pausing, stopping, and closed admission states", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-parallel-reject-")
+    );
+    try {
+      const instance = new WorkflowInstance(
+        new MockPlatform(),
+        undefined,
+        new MockIntegrationFactory(new MockPlatform()),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [
+        { prompt: "anchor" },
+        { prompt: "member" },
+      ];
+      const parallelGroups = [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "parallel-reject",
+        steps,
+        tempWorkspace,
+        undefined,
+        undefined,
+        parallelGroups
+      );
+      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      await startQueueExecution(instance);
+
+      await instance.promptQueue.setFinalStepRuntime({
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+        startedAt: Date.now(),
+      });
+      await assert.rejects(
+        instance.executeEphemeralPrompt("reject final", {}, ACTION_TYPES.RUN_PARALLEL),
+        /final step cannot run in parallel/
+      );
+      assert.strictEqual(instance.promptQueue.getState().steps.length, 2);
+      await instance.promptQueue.setFinalStepRuntime(undefined);
+
+      const stateMachine = instance.promptQueue.getRuntimeStateMachine();
+      assert.strictEqual(stateMachine.pause(), true);
+      await assert.rejects(
+        instance.executeEphemeralPrompt("reject pause", {}, ACTION_TYPES.RUN_PARALLEL),
+        /pausing/
+      );
+      assert.strictEqual(stateMachine.cancelPause(), true);
+
+      assert.strictEqual(stateMachine.requestStop(), true);
+      await assert.rejects(
+        instance.executeEphemeralPrompt("reject stopping", {}, ACTION_TYPES.RUN_PARALLEL),
+        /No step is running/
+      );
+      assert.strictEqual(stateMachine.confirmStopped(), true);
+      await assert.rejects(
+        instance.executeEphemeralPrompt("reject stopped", {}, ACTION_TYPES.RUN_PARALLEL),
+        /No step is running/
+      );
+
+      assert.strictEqual(stateMachine.resume(), true);
+      await instance.promptQueue.setActiveParallelGroupAdmission(
+        "group-1",
+        PARALLEL_GROUP_ADMISSION.CLOSING
+      );
+      instance.promptQueue.getState().steps[0]._runtime = {
+        stepId: "anchor-id",
+        startedAt: Date.now(),
+      };
+      await assert.rejects(
+        instance.executeEphemeralPrompt("reject closed", {}, ACTION_TYPES.RUN_PARALLEL),
+        /no longer accepting members/
+      );
+      assert.strictEqual(instance.promptQueue.getState().steps.length, 2);
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }

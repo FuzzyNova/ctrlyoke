@@ -370,7 +370,8 @@ export class DashboardBroadcastHub
     executionState?: string,
     definitionRevision?: number,
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    runtimePromotionUndoSuppressed?: boolean
   ): void {
     for (const client of this.clients) {
       client.updateStepsExtended?.(
@@ -379,7 +380,8 @@ export class DashboardBroadcastHub
         executionState,
         definitionRevision,
         workflowId,
-        parallelGroups
+        parallelGroups,
+        runtimePromotionUndoSuppressed
       );
     }
   }

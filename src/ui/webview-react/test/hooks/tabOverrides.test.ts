@@ -19,6 +19,7 @@ const globalSettings: GlobalSettings = {
   agent: "",
   skills: [],
   executionMode: "headless",
+  effectiveParallelGroupWidth: 6,
   resumeSession: false,
   mcpServers: [],
   hooks: [],

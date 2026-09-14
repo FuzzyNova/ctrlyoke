@@ -1,6 +1,7 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import {
   MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import type {
@@ -18,6 +19,7 @@ import type {
   UpdateStepColorMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { WebviewSettingsSync } from "./WebviewSettingsSync";
 import type { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
@@ -58,6 +60,7 @@ export class WorkflowStepHandlers {
       // without this the following property edit would carry a stale revision.
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
+      const diagnostic = getErrorMessage(error);
       Log.error(
         "[WorkflowStepHandlers] Failed to execute ephemeral prompt:",
         error
@@ -65,6 +68,12 @@ export class WorkflowStepHandlers {
       ctx.emit({
         type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
         text,
+      });
+      ctx.emit({
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: `execute-prompt-error-${Date.now()}`,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: diagnostic,
       });
       // A rejection is usually a superseded revision; hand the authoritative
       // revisions back so the next submission isn't rejected identically.

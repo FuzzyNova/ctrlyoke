@@ -13,6 +13,7 @@ import {
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { formatUsageWindowLabel as formatSharedUsageWindowLabel } from "../utils/StatuslineFormat";
+import type { ParallelGroupDefinition } from "./CtrlYokeTypes";
 
 /** File formats supported when authoring workflows and templates. */
 export const WORKFLOW_FILE_FORMATS = {
@@ -1022,6 +1023,7 @@ export const ACTION_TYPES = {
   RUN_NEXT: "runNext", // Append next (after current) + ensure workflow runs
   QUEUE_NEXT: "queueNext", // Append next (after current), preserve current state
   RUN_BEFORE_CURRENT: "runBeforeCurrent", // Insert before current + ensure workflow runs (stopped/idle with prompts)
+  RUN_PARALLEL: "runParallel", // Append to the live group or promote the current step
 } as const;
 
 // ============================================================================
@@ -2140,24 +2142,42 @@ export const QUEUE_POSITION = {
   NEXT: "next", // Insert after current prompt (paused/running with remaining prompts)
   END: "end", // Insert at end of queue (normal priority)
   BEFORE_CURRENT: "beforeCurrent", // Insert before current prompt (stopped/idle with prompts)
+  PARALLEL_WITH_CURRENT: "parallelWithCurrent", // Append to the live group containing current
 } as const;
 
 /**
  * Resolve the array index a queue position splices at, given the execution head
  * and the current step count. Single source for every append path — the
  * in-memory queue, the dashboard queue operation, and the cross-process run
- * continuation transaction — so `next`/`beforeCurrent`/`end` cannot drift apart.
+ * continuation transaction — so
+ * `next`/`beforeCurrent`/`end`/`parallelWithCurrent` cannot drift apart.
+ * `next` remains an ordinary insertion even when it falls inside a live group;
+ * only `parallelWithCurrent` resolves to that group's end.
  */
 export function resolveQueueInsertIndex(
   position: QueuePosition,
   currentIndex: number,
-  stepCount: number
+  stepCount: number,
+  parallelGroups?: readonly ParallelGroupDefinition[]
 ): number {
   switch (position) {
     case QUEUE_POSITION.NEXT:
       return Math.min(Math.max(currentIndex + 1, 0), stepCount);
     case QUEUE_POSITION.BEFORE_CURRENT:
       return Math.min(Math.max(currentIndex, 0), stepCount);
+    case QUEUE_POSITION.PARALLEL_WITH_CURRENT: {
+      const currentGroup = parallelGroups?.find(
+        (group) =>
+          currentIndex >= group.startIndex && currentIndex <= group.endIndex
+      );
+      return Math.min(
+        Math.max(
+          currentGroup ? currentGroup.endIndex + 1 : currentIndex + 1,
+          0
+        ),
+        stepCount
+      );
+    }
     default:
       return stepCount;
   }
