@@ -7,8 +7,12 @@ import type {
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  getEffectiveParallelGroupWidth,
+  PARALLEL_GROUP_ADMISSION,
   QUEUE_POSITION,
   STEP_CLAIM_OUTCOMES,
   resolveQueueInsertIndex,
@@ -24,6 +28,7 @@ import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockIns
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
+  appendParallelGroupMembers,
   deleteParallelGroupStep,
   insertParallelGroupSteps,
   insertParallelGroupTopology,
@@ -31,6 +36,7 @@ import {
   reorderParallelGroupPendingSteps,
   type PendingParallelGroupRange,
   replaceParallelGroupStep,
+  promoteStepToParallelGroup,
   resolveParallelGroupInsertIndex,
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
@@ -72,6 +78,22 @@ export interface RunContinuationMutationResult {
   workingFile: WorkingFile;
   definitionRevision: number;
   descriptorRevision: number;
+}
+
+export interface RunParallelJoinMutationResult {
+  workingFile: WorkingFile;
+  definitionRevision: number;
+  descriptorRevision: number;
+  placement: ParallelGroupInsertPlacement;
+  insertIndex: number;
+  parallelGroupsAdded: ParallelGroupDefinition[];
+  stepsAdded: number;
+  joinedParallelGroup: {
+    id: string;
+    startIndex: number;
+    endIndex: number;
+    promoted: boolean;
+  };
 }
 
 export type RunStepClaimResult =
@@ -263,6 +285,11 @@ export class RunContinuationService {
     parallelGroupsAdded: ParallelGroupDefinition[];
     stepsAdded: number;
   }> {
+    if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
+      throw new Error(
+        "parallelWithCurrent requires the active parallel-group join transaction"
+      );
+    }
     const incomingTopology = Array.isArray(tail)
       ? normalizeParallelGroupTopology({ steps: tail })
       : normalizeParallelGroupTopology(tail);
@@ -396,6 +423,239 @@ export class RunContinuationService {
           insertIndex: placement.insertedIndex,
           parallelGroupsAdded,
           stepsAdded: stepsToAdd,
+        };
+      });
+    });
+  }
+
+  /**
+   * Atomically admit flat MCP members into the currently executing group.
+   *
+   * The run-file lock is the cross-process handoff with the executor: a group
+   * that has already changed admission to closing wins the race and rejects,
+   * while an accepting group is extended before the watcher can reconcile it.
+   * The topology transforms are the same pure operations used by PromptQueue;
+   * the in-process executor discovers the durable result by step ID.
+   */
+  static async appendStepsToActiveParallelGroup(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    steps: WorkflowStep[],
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+    queueLimit?: QueueLimitPolicy,
+    configuredParallelWidth =
+      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
+  ): Promise<RunParallelJoinMutationResult> {
+    if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
+      throw new Error(
+        "Active parallel-group admission requires position 'parallelWithCurrent'"
+      );
+    }
+    if (steps.length === 0) {
+      throw new Error("Parallel-group join requires at least one flat step");
+    }
+
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await lineageRepository.readDescriptor(
+        workspaceRoot,
+        workflowKey
+      );
+      if (descriptor.pendingEdit) {
+        throw new Error(
+          "Cannot join while this workflow has a draft or pending continuation"
+        );
+      }
+
+      return withFileLock(runFilePath, async () => {
+        const source = await this.readRun(workspaceRoot, workflowKey, runRef);
+        const sourceRevision = source.definitionRevision ?? 1;
+        if (sourceRevision !== expectedDefinitionRevision) {
+          throw new Error(
+            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+          );
+        }
+
+        const sourceState = source._runtime?.executionState;
+        if (sourceState !== EXECUTION_STATES.RUNNING) {
+          throw new Error(
+            `parallelWithCurrent requires a running queue step; run is in state ${sourceState ?? EXECUTION_STATES.IDLE}`
+          );
+        }
+        if (
+          source._runtime?.finalStep?.phase === FINAL_STEP_PHASES.FINAL_STEP
+        ) {
+          throw new Error(
+            "The final step cannot run in parallel. parallelWithCurrent was rejected."
+          );
+        }
+        const effectiveWidth = getEffectiveParallelGroupWidth(
+          configuredParallelWidth
+        );
+        if (effectiveWidth <= 1) {
+          throw new Error(
+            "Parallel width is 1. Raise queue.maxParallelSteps to run in parallel."
+          );
+        }
+
+        const sourceTopology = normalizeParallelGroupTopology({
+          steps: ensureStepIds(source.steps ?? []),
+          parallelGroups: source.parallelGroups,
+        });
+        const currentIndex = source._runtime?.currentIndex ?? 0;
+        const currentStep = sourceTopology.steps[currentIndex];
+        const activeRuntime = source._runtime?.activeParallelGroup;
+        const containingGroup = sourceTopology.parallelGroups.find(
+          (group) =>
+            currentIndex >= group.startIndex && currentIndex <= group.endIndex
+        );
+        const runningGroupMember = containingGroup
+          ? sourceTopology.steps
+              .slice(containingGroup.startIndex, containingGroup.endIndex + 1)
+              .some(
+                (step) =>
+                  hasStarted(step) && step._runtime?.completedAt === undefined
+              )
+          : false;
+        if (
+          (!containingGroup &&
+            (!currentStep ||
+              !hasStarted(currentStep) ||
+              currentStep._runtime?.completedAt !== undefined)) ||
+          (containingGroup && !runningGroupMember)
+        ) {
+          throw new Error(
+            "No queue step is currently running. parallelWithCurrent was rejected."
+          );
+        }
+        if (activeRuntime) {
+          if (activeRuntime.admission !== PARALLEL_GROUP_ADMISSION.ACCEPTING) {
+            throw new Error(
+              "No parallel group is accepting members. parallelWithCurrent was rejected."
+            );
+          }
+          if (
+            !containingGroup ||
+            containingGroup.id !== activeRuntime.groupId
+          ) {
+            throw new Error(
+              "The active parallel group is missing from the current definition. parallelWithCurrent was rejected."
+            );
+          }
+        } else if (containingGroup) {
+          throw new Error(
+            "No parallel group is accepting members. parallelWithCurrent was rejected."
+          );
+        }
+
+        const currentQueueSize = sourceTopology.steps.length;
+        if (
+          queueLimit &&
+          !queueLimit.unlimited &&
+          currentQueueSize + steps.length > queueLimit.maxQueueSize
+        ) {
+          throw new Error(
+            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${steps.length}, Max: ${queueLimit.maxQueueSize}`
+          );
+        }
+
+        const identifiedSteps = ensureStepIds([
+          ...sourceTopology.steps,
+          ...stripStepRuntime(steps).map(stripViewOnlyWorkflowStepFields),
+        ]).slice(sourceTopology.steps.length);
+
+        let nextTopology: ParallelGroupTopology;
+        let joinedGroupId: string;
+        let promoted = false;
+        const insertionIndex = containingGroup
+          ? containingGroup.endIndex + 1
+          : currentIndex + 1;
+        if (containingGroup) {
+          nextTopology = appendParallelGroupMembers(
+            sourceTopology,
+            containingGroup.id,
+            identifiedSteps
+          );
+          joinedGroupId = containingGroup.id;
+        } else {
+          nextTopology = promoteStepToParallelGroup(
+            sourceTopology,
+            currentIndex,
+            identifiedSteps[0],
+            { failFast: false }
+          );
+          const promotedGroup = nextTopology.parallelGroups.find(
+            (group) =>
+              currentIndex >= group.startIndex &&
+              currentIndex <= group.endIndex
+          );
+          if (!promotedGroup) {
+            throw new Error("Failed to create the ad-hoc parallel group");
+          }
+          joinedGroupId = promotedGroup.id;
+          promoted = true;
+          if (identifiedSteps.length > 1) {
+            nextTopology = appendParallelGroupMembers(
+              nextTopology,
+              joinedGroupId,
+              identifiedSteps.slice(1)
+            );
+          }
+        }
+
+        const joinedGroup = nextTopology.parallelGroups.find(
+          (group) => group.id === joinedGroupId
+        );
+        if (!joinedGroup) {
+          throw new Error(
+            `Cannot join parallel group ${joinedGroupId}: group is missing after insertion`
+          );
+        }
+        const placement: ParallelGroupInsertPlacement = {
+          requestedIndex: insertionIndex,
+          insertedIndex: insertionIndex,
+        };
+        const workingFile: WorkingFile = {
+          ...source,
+          lastModifiedAt: Date.now(),
+          definitionRevision: sourceRevision + 1,
+          steps: nextTopology.steps,
+          parallelGroups: nextTopology.parallelGroups,
+          _runtime: {
+            ...source._runtime!,
+            activeParallelGroup: {
+              groupId: joinedGroup.id,
+              admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+            },
+          },
+        };
+        await writeWorkingFileAtomic(runFilePath, workingFile);
+        const parallelGroupsAdded = promoted ? [joinedGroup] : [];
+        return {
+          workingFile,
+          definitionRevision: workingFile.definitionRevision,
+          descriptorRevision: descriptor.revision,
+          placement,
+          insertIndex: placement.insertedIndex,
+          parallelGroupsAdded,
+          stepsAdded: steps.length,
+          joinedParallelGroup: {
+            id: joinedGroup.id,
+            startIndex: joinedGroup.startIndex,
+            endIndex: joinedGroup.endIndex,
+            promoted,
+          },
         };
       });
     });

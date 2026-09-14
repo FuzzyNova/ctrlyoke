@@ -1,10 +1,8 @@
 # MCP Parallel Append Plan
 
-> **Status:** Phase 3B / Stage 2 complete. The queue-item union, atomic future
-> parallel-group enqueue, structured response, and generated MCP documentation
-> are shipped. Barrier 2 inherits the complete future-enqueue contract; Phase 7
-> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
-> live join, and durable admission remain unbuilt.
+> **Status:** Phase 3B / Stage 2 and Phase 7 / Stage 3 complete. The queue-item
+> union, atomic future parallel-group enqueue, durable live-join admission,
+> structured responses, and generated MCP documentation are shipped.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -480,20 +478,22 @@ for absolute groups and added steps. Session 2 landed publication of the
 queue-item union and MCP-side flattened validation/structured response. Session
 3 landed generated MCP docs covering both append forms. This stage ships before
 manual late join and is already useful to sequential orchestrators. Barrier 2
-inherits the complete future-enqueue contract; Phase 7 inherits the unbuilt
+inherits the complete future-enqueue contract; Stage 3 now adds the shipped
 `parallelWithCurrent` live-join path and durable admission state.
 
-**Stage 3 — Durable live-join admission.** After the mutability and dispatch
-prerequisites, persist admission state, add queue-definition reconciliation,
-make sequential settlement promotion-aware, and implement locked
-reconcile-and-close. Then expose `parallelWithCurrent` in the MCP schema.
+**Stage 3 — Durable live-join admission — complete.** The mutability and
+dispatch prerequisites are in place. Durable admission state, queue-definition
+reconciliation, promotion-aware sequential settlement, and locked
+reconcile-and-close are shipped. `parallelWithCurrent` is exposed in the MCP
+schema and generated documentation; live joins are locked, flat-step-only, and
+return destination plus joined-group metadata.
 
 **Stage 4 — Parallel-caller end-to-end enablement.** Land with or after the
 mutability plan's Stage 5. Verify native MCP and MCP-as-skill expose identical
 contracts to a group member and dogfood the implementation/orchestrator workflow
 pattern.
 
-Do not expose `parallelWithCurrent` in tool discovery before Stage 3 is complete.
+`parallelWithCurrent` is exposed in tool discovery now that Stage 3 is complete.
 Future container enqueue and live join are independently releasable because the
 position enum is the explicit capability boundary.
 

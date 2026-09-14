@@ -31,7 +31,7 @@ suite("McpToolSkillGenerator", () => {
     );
     assert.ok(
       reference.includes(
-        "Position 'next' queues after an active parallel group; joining that group is not available through this position enum."
+        "Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group"
       )
     );
     assert.ok(
@@ -45,13 +45,14 @@ suite("McpToolSkillGenerator", () => {
     );
     assert.ok(reference.includes("Example (flat step):"));
     assert.ok(reference.includes("Example (future parallel group):"));
+    assert.ok(reference.includes("Example (join live parallel group):"));
     assert.ok(
       reference.includes(
         `--args '{\"steps\":[{\"parallel\":[{\"prompt\":\"implement the API\"},{\"prompt\":\"write the API tests\"}],\"failFast\":true}],\"position\":\"end\"}'`
       )
     );
-    assert.strictEqual((reference.match(/Example \(/g) ?? []).length, 2);
-    assert.ok(!reference.includes("parallelWithCurrent"));
+    assert.strictEqual((reference.match(/Example \(/g) ?? []).length, 3);
+    assert.ok(reference.includes('"position":"parallelWithCurrent"'));
     assert.ok(
       reference.includes(
         `node \"<mcp-server.js path>\" --tool workflow_status --args '{}' --workspace \"<path>\" --working-file \"<path>\"`

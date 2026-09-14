@@ -52,6 +52,7 @@ import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import {
   getMaxQueueSize,
+  getMaxParallelSteps,
   isUnlimitedMode,
   resolveQueueLimitPolicy,
 } from "./utils/QueueLimitUtils";
@@ -923,11 +924,12 @@ export class CtrlYokeMCPServer {
     if (
       position !== QUEUE_POSITION.NEXT &&
       position !== QUEUE_POSITION.END &&
+      position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT &&
       !Number.isInteger(position)
     ) {
       log("ERROR: Invalid position:", position);
       throw new Error(
-        `position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', or a non-negative integer index`
+        `position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', '${QUEUE_POSITION.PARALLEL_WITH_CURRENT}', or a non-negative integer index`
       );
     }
 
@@ -949,6 +951,14 @@ export class CtrlYokeMCPServer {
           }
         : { ...item }
     );
+    if (
+      position === QUEUE_POSITION.PARALLEL_WITH_CURRENT &&
+      resolvedItems.some((item) => "parallel" in item)
+    ) {
+      throw new Error(
+        "parallelWithCurrent accepts flat steps only; use next, end, or a numeric position for a future parallel group"
+      );
+    }
     const flattened = flattenParallelItems(resolvedItems);
 
     // Validate harness/model against capabilities.json (best-effort: skip if file absent)
@@ -987,7 +997,42 @@ export class CtrlYokeMCPServer {
 
     let response: McpAppendStepResult | null = null;
 
-    {
+    const queueLimit = resolveQueueLimitPolicy();
+    if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
+      const joined =
+        await RunContinuationService.appendStepsToActiveParallelGroup(
+          this.workspaceRoot,
+          selected.workflowKey,
+          selected.runRef,
+          flattened.topology.steps,
+          target.definitionRevision,
+          lineageRepository,
+          position,
+          queueLimit,
+          getMaxParallelSteps()
+        );
+      response = {
+        success: true,
+        destination: "activeParallelGroup",
+        queueItemsAdded: steps.length,
+        stepsAdded: joined.stepsAdded,
+        newQueueSize: joined.workingFile.steps?.length ?? 0,
+        insertIndex: joined.placement.insertedIndex,
+        insertedEndIndex:
+          joined.placement.insertedIndex + joined.stepsAdded - 1,
+        placement: joined.placement,
+        parallelGroupsAdded: joined.parallelGroupsAdded,
+        joinedParallelGroup: joined.joinedParallelGroup,
+        workingFile: selected.filePath,
+        runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
+          selected.filePath
+        ),
+        workflowKey: selected.workflowKey,
+        runRef: selected.runRef,
+        definitionRevision: joined.definitionRevision,
+        descriptorRevision: joined.descriptorRevision,
+      };
+    } else {
       const appended = await RunContinuationService.appendStepsToRun(
         this.workspaceRoot,
         selected.workflowKey,
@@ -997,7 +1042,7 @@ export class CtrlYokeMCPServer {
         lineageRepository,
         target.allowInterruptedRun,
         position,
-        resolveQueueLimitPolicy()
+        queueLimit
       );
 
       response = {

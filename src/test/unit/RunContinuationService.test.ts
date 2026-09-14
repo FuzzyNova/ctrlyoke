@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, suite, test } from "mocha";
 import {
   EXECUTION_STATES,
+  PARALLEL_GROUP_ADMISSION,
   QUEUE_POSITION,
   RUNNER_IDS,
   type ExecutionState,
@@ -456,6 +457,134 @@ suite("RunContinuationService topology append transaction", () => {
         JSON.stringify(prompts) ===
           JSON.stringify(["batch-b-0", "batch-b-1", "batch-a-0", "batch-a-1"])
     );
+  });
+
+  test("linearizes a live append against closing and preserves the active policy", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-live-join-transaction-")
+    );
+    await seedRun(
+      [
+        { prompt: "completed", _runtime: { completedAt: 1 } },
+        { prompt: "running", _runtime: { startedAt: 2 } },
+        { prompt: "group-pending" },
+        { prompt: "later-a" },
+        { prompt: "later-b" },
+      ],
+      [
+        { id: "active", startIndex: 1, endIndex: 2, failFast: true },
+        { id: "later", startIndex: 3, endIndex: 4, failFast: false },
+      ]
+    );
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    source._runtime = {
+      ...source._runtime,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active",
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      },
+    };
+    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+
+    const joined =
+      await RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "late-a" }, { prompt: "late-b" }],
+        1,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        undefined,
+        6
+      );
+    assert.deepStrictEqual(joined.joinedParallelGroup, {
+      id: "active",
+      startIndex: 1,
+      endIndex: 4,
+      promoted: false,
+    });
+    assert.deepStrictEqual(joined.parallelGroupsAdded, []);
+    assert.deepStrictEqual(joined.workingFile.parallelGroups, [
+      { id: "active", startIndex: 1, endIndex: 4, failFast: true },
+      { id: "later", startIndex: 5, endIndex: 6, failFast: false },
+    ]);
+    assert.strictEqual(joined.definitionRevision, 2);
+
+    const closing = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    closing._runtime = {
+      ...closing._runtime,
+      currentIndex: closing._runtime?.currentIndex ?? 0,
+      executionState:
+        closing._runtime?.executionState ?? EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active",
+        admission: PARALLEL_GROUP_ADMISSION.CLOSING,
+      },
+    };
+    await fs.writeFile(runPath, JSON.stringify(closing), "utf8");
+    const before = await fs.readFile(runPath, "utf8");
+    await assert.rejects(
+      RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "too late" }],
+        2,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        undefined,
+        6
+      ),
+      /accepting/i
+    );
+    assert.strictEqual(await fs.readFile(runPath, "utf8"), before);
+  });
+
+  test("promotes a running sequential step and hands settlement to the group", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-live-promotion-transaction-")
+    );
+    await seedRun(
+      [
+        { prompt: "completed", _runtime: { completedAt: 1 } },
+        { prompt: "running", _runtime: { startedAt: 2 } },
+        { prompt: "pending" },
+      ]
+    );
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    source._runtime = {
+      ...source._runtime,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.RUNNING,
+    };
+    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+
+    const joined =
+      await RunContinuationService.appendStepsToActiveParallelGroup(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "sibling-a" }, { prompt: "sibling-b" }],
+        1,
+        new WorkflowLineageRepository(),
+        QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+        undefined,
+        6
+      );
+    assert.strictEqual(joined.joinedParallelGroup.promoted, true);
+    assert.strictEqual(joined.joinedParallelGroup.startIndex, 1);
+    assert.strictEqual(joined.joinedParallelGroup.endIndex, 3);
+    assert.strictEqual(joined.parallelGroupsAdded[0].failFast, false);
+    assert.strictEqual(joined.workingFile._runtime?.currentIndex, 1);
+    assert.deepStrictEqual(joined.workingFile._runtime?.activeParallelGroup, {
+      groupId: joined.joinedParallelGroup.id,
+      admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+    });
   });
 });
 

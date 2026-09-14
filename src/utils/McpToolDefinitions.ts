@@ -307,7 +307,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group; joining that group is not available through this position enum. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group and never joins it; use 'parallelWithCurrent' to join the active group. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
@@ -321,7 +321,11 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           oneOf: [
             {
               type: "string",
-              enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+              enum: [
+                QUEUE_POSITION.NEXT,
+                QUEUE_POSITION.END,
+                QUEUE_POSITION.PARALLEL_WITH_CURRENT,
+              ],
             },
             {
               type: "number",
@@ -329,7 +333,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
             },
           ],
           description:
-            "Use 'next' to queue them after the current step (or after an active parallel group; joining that group is not available through this position enum), 'end' to run them last, or a zero-based step index to insert them before that step.",
+            "Use 'next' to queue them after the current step (or after the active parallel group) and never join that group, 'parallelWithCurrent' to join the active group, 'end' to run them last, or a zero-based step index to insert them before that step.",
         },
         source: {
           type: "string",
@@ -359,6 +363,16 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
             },
           ],
           position: QUEUE_POSITION.END,
+        },
+      },
+      {
+        description: "join live parallel group",
+        args: {
+          steps: [
+            { prompt: "investigate the failing tests" },
+            { prompt: "review the current changes" },
+          ],
+          position: QUEUE_POSITION.PARALLEL_WITH_CURRENT,
         },
       },
     ],

@@ -2,6 +2,7 @@ import {
   BOOLEAN_STRING_VALUES,
   DEFAULT_MAX_QUEUE_SIZE,
 } from "../types/DashboardConstants";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
 
 /**
  * Read the queue size limit from the environment supplied to a harness's MCP
@@ -38,4 +39,19 @@ export interface QueueLimitPolicy {
 /** Resolve the policy from the MCP server's environment. */
 export function resolveQueueLimitPolicy(): QueueLimitPolicy {
   return { maxQueueSize: getMaxQueueSize(), unlimited: isUnlimitedMode() };
+}
+
+/**
+ * Read the active parallel-group width exported to a harness MCP process.
+ * Invalid, missing, and non-positive values use the shared settings default.
+ */
+export function getMaxParallelSteps(): number {
+  const envValue = process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
+  if (envValue) {
+    const parsed = parseInt(envValue, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps;
 }

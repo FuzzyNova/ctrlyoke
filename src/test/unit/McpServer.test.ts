@@ -14,6 +14,7 @@ import { getMaxQueueSize } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
+  type McpAppendStepArguments,
   MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_COORDINATION_TOOL_NAMES,
   MCP_EDIT_STEP_TOOL_NAME,
@@ -35,6 +36,8 @@ import type {
 import {
   DEFAULT_MAX_QUEUE_SIZE,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  PARALLEL_GROUP_ADMISSION,
   RUNNER_IDS,
   RUN_HISTORY_LOCATIONS,
   type ExecutionState,
@@ -59,6 +62,21 @@ interface RunFixture {
 function responseJson(result: unknown): any {
   const typed = result as { content: Array<{ text: string }> };
   return JSON.parse(typed.content[0].text);
+}
+
+async function invokeAppendHandler(
+  server: CtrlYokeMCPServer,
+  args: McpAppendStepArguments
+): Promise<unknown> {
+  // Phase 8 intentionally keeps the caller-level mutation ban in invokeTool.
+  // These cases exercise the MCP handler's live-join transaction while the
+  // run itself has a group and would therefore be identified as a member.
+  const handler = (
+    server as unknown as {
+      handleAppendStep: (input: McpAppendStepArguments) => Promise<unknown>;
+    }
+  ).handleAppendStep;
+  return handler.call(server, args);
 }
 
 suite("CtrlYokeMCPServer run-addressed contracts", () => {
@@ -87,6 +105,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   let priorParticipantLabel: string | undefined;
   let priorPromptIndex: string | undefined;
   let priorParallelGroupId: string | undefined;
+  let priorMaxParallelSteps: string | undefined;
 
   afterEach(async () => {
     if (priorPinnedFile === undefined) {
@@ -118,6 +137,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     } else {
       process.env.CTRLYOKE_PARALLEL_GROUP_ID = priorParallelGroupId;
+    }
+    if (priorMaxParallelSteps === undefined) {
+      delete process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
+    } else {
+      process.env.CTRLYOKE_MAX_PARALLEL_STEPS = priorMaxParallelSteps;
     }
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -285,12 +309,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     priorParticipantLabel = process.env.CTRLYOKE_PARTICIPANT_LABEL;
     priorPromptIndex = process.env.CTRLYOKE_PROMPT_INDEX;
     priorParallelGroupId = process.env.CTRLYOKE_PARALLEL_GROUP_ID;
+    priorMaxParallelSteps = process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
     delete process.env.CTRLYOKE_WORKING_FILE;
     delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     delete process.env.CTRLYOKE_EXECUTION_ROOT;
     delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
     delete process.env.CTRLYOKE_PROMPT_INDEX;
     delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
+    delete process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
     process.env.CTRLYOKE_EXECUTION_ROOT = workspaceRoot;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
@@ -815,6 +841,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.deepStrictEqual(append.properties.position.oneOf[0].enum, [
       "next",
       "end",
+      "parallelWithCurrent",
     ]);
     assert.strictEqual(append.properties.position.oneOf[1].type, "number");
 
@@ -1757,6 +1784,263 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         "mcp-next-append-owner"
       );
     }
+  });
+
+  test("promotes a running sequential step and returns the live-join shape", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("live-promote");
+    try {
+      const result = responseJson(
+        await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "join-a" }, { prompt: "join-b" }],
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.destination, "activeParallelGroup");
+      assert.strictEqual(result.queueItemsAdded, 2);
+      assert.strictEqual(result.stepsAdded, 2);
+      assert.strictEqual(result.insertIndex, 2);
+      assert.strictEqual(result.insertedEndIndex, 3);
+      assert.deepStrictEqual(result.placement, {
+        requestedIndex: 2,
+        insertedIndex: 2,
+      });
+      assert.strictEqual(result.joinedParallelGroup.promoted, true);
+      assert.deepStrictEqual(result.joinedParallelGroup, {
+        id: result.parallelGroupsAdded[0].id,
+        startIndex: 1,
+        endIndex: 3,
+        promoted: true,
+      });
+      assert.deepStrictEqual(
+        result.parallelGroupsAdded.map(
+          ({ id, startIndex, endIndex, failFast }: NonNullable<WorkingFile["parallelGroups"]>[number]) => ({
+            id,
+            startIndex,
+            endIndex,
+            failFast,
+          })
+        ),
+        [{ id: result.joinedParallelGroup.id, startIndex: 1, endIndex: 3, failFast: false }]
+      );
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "join-a", "join-b", "pending-a", "pending-b"]
+      );
+    assert.deepStrictEqual(persisted._runtime?.activeParallelGroup, {
+        groupId: result.joinedParallelGroup.id,
+        admission: "accepting",
+      });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("extends an active group once, preserves failFast, and accepts saturation", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("live-group");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.parallelGroups = [
+      { id: "active-group", startIndex: 1, endIndex: 2, failFast: true },
+    ];
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: workingFile._runtime?.currentIndex ?? 0,
+      executionState:
+        workingFile._runtime?.executionState ?? EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "active-group",
+        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+      },
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    try {
+      const result = responseJson(
+        await invokeAppendHandler(server, {
+          position: "parallelWithCurrent",
+          steps: [{ prompt: "late-a" }, { prompt: "late-b" }],
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.destination, "activeParallelGroup");
+      assert.strictEqual(result.joinedParallelGroup.id, "active-group");
+      assert.strictEqual(result.joinedParallelGroup.startIndex, 1);
+      assert.strictEqual(result.joinedParallelGroup.endIndex, 4);
+      assert.strictEqual(result.joinedParallelGroup.promoted, false);
+      assert.deepStrictEqual(result.parallelGroupsAdded, []);
+      assert.strictEqual(result.insertIndex, 3);
+      assert.strictEqual(result.insertedEndIndex, 4);
+      assert.deepStrictEqual(persisted.parallelGroups, [
+        { id: "active-group", startIndex: 1, endIndex: 4, failFast: true },
+      ]);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("rejects every live-join availability edge without falling back", async () => {
+    const server = await setup();
+    async function rejectJoin(
+      run: RunFixture,
+      expected: RegExp,
+      ownerToken?: string,
+      directHandler = false
+    ): Promise<void> {
+      process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      const args: McpAppendStepArguments = {
+        position: "parallelWithCurrent",
+        steps: [{ prompt: "must not be queued" }],
+      };
+      await assert.rejects(
+        directHandler
+          ? invokeAppendHandler(server, args)
+          : server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, args),
+        expected
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      if (ownerToken) {
+        await releaseActiveRun(run, ownerToken);
+      }
+    }
+
+    await rejectJoin(
+      await createRun("live-no-running", "2026-01-01T00-00-00-000Z"),
+      /running queue step|No queue step is currently running/i
+    );
+
+    const finalRun = await createRun("live-final", "2026-01-02T00-00-00-000Z");
+    let finalFile = JSON.parse(
+      await fs.readFile(finalRun.runFilePath, "utf8")
+    ) as WorkingFile;
+    finalFile._runtime = {
+      ...finalFile._runtime,
+      currentIndex: 0,
+      executionState: EXECUTION_STATES.RUNNING,
+      finalStep: {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+        startedAt: 3,
+      },
+    };
+    await fs.writeFile(finalRun.runFilePath, JSON.stringify(finalFile), "utf8");
+    await rejectJoin(finalRun, /final step/i);
+
+    for (const [suffix, state] of [
+      ["pausing", EXECUTION_STATES.PAUSING],
+      ["cancelling", EXECUTION_STATES.CANCELLING],
+      ["stopped", EXECUTION_STATES.STOPPED],
+      ["terminal", EXECUTION_STATES.COMPLETED],
+    ] as const) {
+      const { run, ownerToken } = await prepareActiveRun(`live-${suffix}`);
+      const file = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      file._runtime = {
+        ...file._runtime,
+        currentIndex: file._runtime?.currentIndex ?? 0,
+        executionState: state,
+      };
+      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      await rejectJoin(run, /state|executing|running/i, ownerToken);
+    }
+
+    const { run: closingRun, ownerToken: closingOwner } =
+      await prepareActiveRun("live-closing");
+    const closingFile = JSON.parse(
+      await fs.readFile(closingRun.runFilePath, "utf8")
+    ) as WorkingFile;
+    closingFile.parallelGroups = [
+      { id: "closing-group", startIndex: 1, endIndex: 2, failFast: true },
+    ];
+    closingFile._runtime = {
+      ...closingFile._runtime,
+      currentIndex: closingFile._runtime?.currentIndex ?? 0,
+      executionState:
+        closingFile._runtime?.executionState ?? EXECUTION_STATES.RUNNING,
+      activeParallelGroup: {
+        groupId: "closing-group",
+        admission: PARALLEL_GROUP_ADMISSION.CLOSING,
+      },
+    };
+    await fs.writeFile(
+      closingRun.runFilePath,
+      JSON.stringify(closingFile),
+      "utf8"
+    );
+    await rejectJoin(closingRun, /accepting/i, closingOwner, true);
+
+    const { run: widthRun, ownerToken: widthOwner } =
+      await prepareActiveRun("live-width-one");
+    process.env.CTRLYOKE_MAX_PARALLEL_STEPS = "1";
+    await rejectJoin(widthRun, /queue\.maxParallelSteps/i, widthOwner);
+    delete process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
+
+    const { run: containerRun, ownerToken: containerOwner } =
+      await prepareActiveRun("live-container");
+    process.env.CTRLYOKE_WORKING_FILE = containerRun.runFilePath;
+    const beforeContainer = await fs.readFile(containerRun.runFilePath, "utf8");
+    await assert.rejects(
+      invokeAppendHandler(server, {
+        position: "parallelWithCurrent",
+        steps: [
+          { parallel: [{ prompt: "nested-a" }, { prompt: "nested-b" }] },
+        ],
+      }),
+      /flat steps only/i
+    );
+    assert.strictEqual(
+      await fs.readFile(containerRun.runFilePath, "utf8"),
+      beforeContainer
+    );
+    await releaseActiveRun(containerRun, containerOwner);
+
+    const { run: invalidRun, ownerToken: invalidOwner } =
+      await prepareActiveRun("live-invalid-member");
+    await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceRoot, ".ctrlyoke", "capabilities.json"),
+      JSON.stringify({
+        harnesses: [
+          {
+            id: "claude-cli",
+            available: true,
+            models: [{ value: "valid-model" }],
+          },
+        ],
+      }),
+      "utf8"
+    );
+    process.env.CTRLYOKE_WORKING_FILE = invalidRun.runFilePath;
+    const beforeInvalid = await fs.readFile(invalidRun.runFilePath, "utf8");
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "parallelWithCurrent",
+        steps: [{ prompt: "invalid model", harness: "claude-cli", model: "bad-model" }],
+      }),
+      /Invalid model/i
+    );
+    await assert.rejects(
+      server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: "parallelWithCurrent",
+        steps: [{ prompt: "invalid harness", harness: "not-installed" }],
+      }),
+      /Invalid harness/i
+    );
+    assert.strictEqual(
+      await fs.readFile(invalidRun.runFilePath, "utf8"),
+      beforeInvalid
+    );
+    await releaseActiveRun(invalidRun, invalidOwner);
   });
 
   test("includes numeric group relocation in the append response", async () => {

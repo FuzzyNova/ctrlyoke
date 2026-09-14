@@ -1,9 +1,9 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Waves 1 and 2 complete; Barrier 2 is behind us. Track F (Phases 7,
-> 8, 9) is the last wave and is staged as seven sessions — see the Track F
-> session split under Wave 3. `parallelWithCurrent`, live join, durable
-> admission, and the caller-level mutation bans are what remain.
+> **Status:** Waves 1 and 2 complete; Barrier 2 is behind us. Phase 7 is
+> complete, including `parallelWithCurrent`, live join, and durable admission.
+> Track F sessions 6–7 remain for the caller-level mutation bans and
+> end-to-end close-out.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -113,7 +113,7 @@ half depends on Phase 2.
 | ------- | ---------------------------------------------------------- |
 | Wave 1  | Nothing user-visible except Run in New Workflow (Phase 4). |
 | Wave 2  | Sequential agents can enqueue future `parallel:` groups.   |
-| Phase 7 | Users and sequential MCP callers can join the live group.  |
+| Phase 7 | Complete — users and sequential MCP callers can join the live group. |
 | Wave 3  | Parallel-group agents can mutate future work.              |
 
 Phase 4 is the only wave-1 work that is shippable on its own; Phases 1–3A are
@@ -501,8 +501,8 @@ from exist only in a harness's MCP server subprocess. Session 2 landed publicati
 flattened MCP validation, and the structured append response. Session 3 landed
 generated MCP documentation for the flat and future-container forms, including
 the explicit `next`-queues-after-the-active-group wording. Barrier 2 inherits
-the complete Phase 3B future-enqueue contract; Phase 7 inherits the unbuilt
-`parallelWithCurrent` live-join path and durable admission state.
+the complete Phase 3B future-enqueue contract; Phase 7 now includes the
+shipped `parallelWithCurrent` live-join path and durable admission state.
 
 ### Wave 2 conflict surface
 
@@ -529,7 +529,7 @@ One loop, one worktree, phases in order. This wave is **not** parallelizable:
 every phase in it converges on the same join-and-admission code path, and Phase
 8 broadens who can exercise everything the previous eight phases built.
 
-**Phase 7 — Run in Parallel and durable admission.** Disp Stage 5 and MCP
+**Phase 7 — Run in Parallel and durable admission — complete.** Disp Stage 5 and MCP
 Stage 3, **shared core first** (see the ordering correction below):
 
 - Persist `ActiveParallelGroupRuntime { groupId, admission }` as root runtime.
@@ -633,7 +633,7 @@ and the plan close-out, and hands the dogfood to the user.
 | 2   | 7     | Locked reconcile-and-close join + promotion-aware sequential settlement   | Complete. `ParallelGroupRun.run()` delegates its final merge/admit-or-close decision to `PromptQueue.reconcileAndCloseParallelGroup()` under `WorkingFileManager.runInQueueWithWorkingFileLock()`; disk merges signal `WorkflowExecutor` through `PromptQueue.onDidMergeDiskSteps`, which calls the idempotent `ParallelGroupRun.reconcileMembers()` entry point. Sequential settlement uses the same lock and returns a promoted group without advancing its anchor. Sessions 3 and 5 must call `PromptQueue.appendParallelGroupMember()` / `PromptQueue.promoteStepToParallelGroup()` for topology and share `WorkflowExecutor.joinRunningParallelGroup()` / `ParallelGroupRun.reconcileMembers()` for in-process late-join admission; there must be no second late-join implementation. |
 | 3   | 7     | `RUN_PARALLEL` backend: constants, append-or-promote, join, width payload | Complete. Session 4 consumes `EXECUTE_PROMPT.action === ACTION_TYPES.RUN_PARALLEL`, the `STEPS_EXTENDED.runtimePromotionUndoSuppressed` echo flag, and `globalSettings.effectiveParallelGroupWidth` from the always-synced settings payload. |
 | 4   | 7     | Webview Run in Parallel: `useRunDispatchTargets`, gates, tooltips, toasts | Complete. The editor half now gates `Run in Parallel` from workflow/editor state, leaves saturation enabled, posts `ACTION_TYPES.RUN_PARALLEL`, restores rejected drafts, and uses the existing backend diagnostic toast path. |
-| 5   | 7     | MCP `parallelWithCurrent` live join + schema/doc exposure                 |
+| 5   | 7     | MCP `parallelWithCurrent` live join + schema/doc exposure                 | Complete. The schema and generated docs distinguish `next` (which never joins) from `parallelWithCurrent`; the locked MCP transaction validates running admission, width, final-step, topology, queue-limit, and harness/model edges, promotes sequential work with `failFast: false`, extends existing groups in one revision, and returns destination and joined-group metadata. |
 | 6   | 8     | Remove all three caller-level mutation bans together                      |
 | 7   | 9     | End-to-end integration coverage + close out all four plans                |
 
