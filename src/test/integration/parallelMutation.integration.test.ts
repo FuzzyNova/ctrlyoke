@@ -42,6 +42,7 @@ import {
 } from "../../utils/McpToolDefinitions";
 import { McpToolSkillGenerator } from "../../utils/McpToolSkillGenerator";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { withFileLock } from "../../utils/FileLockUtils";
 
 class PromotionSnapshotService extends WorkspaceSnapshotService {
   public captureCount = 0;
@@ -284,15 +285,22 @@ suite("Parallel mutation integration", () => {
         name: string,
         args: Record<string, unknown>
       ) => {
-        const addressedWorkingFile = await readWorkingFile(workingFilePath);
-        if (addressedWorkingFile._runtime) {
-          addressedWorkingFile._runtime.currentIndex = 1;
-          await fs.writeFile(
-            workingFilePath,
-            JSON.stringify(addressedWorkingFile),
-            "utf8"
-          );
-        }
+        // The run file has three concurrent writers here: this nudge, the
+        // executor's WorkingFileManager, and RunContinuationService's atomic
+        // write-temp-then-rename. Take the same lock they do — an unlocked
+        // read-modify-write leaves the destination open and the rename fails
+        // with EPERM on Windows.
+        await withFileLock(workingFilePath, async () => {
+          const addressedWorkingFile = await readWorkingFile(workingFilePath);
+          if (addressedWorkingFile._runtime) {
+            addressedWorkingFile._runtime.currentIndex = 1;
+            await fs.writeFile(
+              workingFilePath,
+              JSON.stringify(addressedWorkingFile),
+              "utf8"
+            );
+          }
+        });
         if (mode === "native") {
           assert.ok(
             server

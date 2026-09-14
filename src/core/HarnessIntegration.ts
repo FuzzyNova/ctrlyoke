@@ -36,9 +36,7 @@ import {
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
-import {
-  ctrlYokeDeniedToolNames,
-} from "../types/ExecutionPropertyResolver";
+import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
@@ -568,10 +566,9 @@ export abstract class HarnessIntegration {
       }
     }
 
-    const promptSkills = resolvedSkills;
-    const skillContent = promptSkills?.length
+    const skillContent = resolvedSkills?.length
       ? await this.expandSkillBlock(
-          promptSkills,
+          resolvedSkills,
           workspaceRoot,
           this.getExecutionCheckoutRoot(),
           mcpToolSkillContextForPrompt(workflowContext)
