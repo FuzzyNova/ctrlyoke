@@ -970,6 +970,42 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeInTheDocument();
   });
 
+  it("closes the settings and history search drawers when switching to a loaded workflow", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      activeWorkflowId: "workflow-other",
+      globalSettingsOpen: true,
+      isHistorySearchOpen: true,
+      loadedWorkflows: [
+        {
+          id: "workflow-running",
+          workflowKey: "running-switch" as never,
+          workflowName: "Running Switch Target",
+          filePath: "/path/running-switch.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+        } as never,
+      ],
+    });
+    render(<WorkflowStatus />);
+
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    const runningRow = document.querySelector(".running-workflow-item")!;
+    await user.click(
+      within(runningRow as HTMLElement).getByRole("button", {
+        name: /^Running Switch Target\b/,
+      })
+    );
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+      workflowId: "workflow-running",
+    });
+    expect(useUiStore.getState().globalSettingsOpen).toBe(false);
+    expect(useUiStore.getState().isHistorySearchOpen).toBe(false);
+  });
+
   it("shows no pinned running region when nothing is running", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
@@ -1064,6 +1100,8 @@ describe("WorkflowStatus — loaded state", () => {
         kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       runSummaries: [],
+      globalSettingsOpen: true,
+      isHistorySearchOpen: true,
     });
     useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
     setRecentWorkflows([
@@ -1095,6 +1133,10 @@ describe("WorkflowStatus — loaded state", () => {
     expect(useWorkflowStore.getState().executionState).toBe(
       EXECUTION_STATES.COMPLETED
     );
+    // Selecting another workflow is treated like clicking outside these
+    // fullscreen-ish drawers — see closeFullscreenDrawers().
+    expect(useUiStore.getState().globalSettingsOpen).toBe(false);
+    expect(useUiStore.getState().isHistorySearchOpen).toBe(false);
   });
 
   it("keeps a completed workflow selected after it leaves Running Workflows", async () => {

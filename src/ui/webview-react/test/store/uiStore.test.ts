@@ -381,6 +381,20 @@ describe("history search state", () => {
     expect(store().isHistorySearchOpen).toBe(false);
     expect(store().historySearchLoading).toBe(false);
   });
+
+  it("closeFullscreenDrawers closes settings and history search together", () => {
+    useUiStore.setState({
+      globalSettingsOpen: true,
+      isHistorySearchOpen: true,
+      historySearchLoading: true,
+    });
+
+    store().closeFullscreenDrawers();
+
+    expect(store().globalSettingsOpen).toBe(false);
+    expect(store().isHistorySearchOpen).toBe(false);
+    expect(store().historySearchLoading).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

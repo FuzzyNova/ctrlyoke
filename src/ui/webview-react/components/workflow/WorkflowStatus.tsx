@@ -161,6 +161,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const setViewingDeletedWorkflow = useUiStore(
     (s) => s.setViewingDeletedWorkflow
   );
+  const closeFullscreenDrawers = useUiStore((s) => s.closeFullscreenDrawers);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const effectiveWorktree = useMemo(() => {
@@ -913,9 +914,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         workflowId,
       });
       closeDropdown();
+      closeFullscreenDrawers();
     },
     [
       closeDropdown,
+      closeFullscreenDrawers,
       effectiveLoadedWorkflows,
       setActiveWorkflowWorkingFilePath,
       vscode,
@@ -949,8 +952,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         selectedWorkflow?.workflowName
       );
       closeDropdown();
+      closeFullscreenDrawers();
     },
-    [closeDropdown, recentWorkflows, vscode]
+    [closeDropdown, closeFullscreenDrawers, recentWorkflows, vscode]
   );
 
   // Drill into a lineage's run panel from the workflow list's run-indicator

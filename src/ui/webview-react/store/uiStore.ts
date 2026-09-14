@@ -1040,6 +1040,13 @@ interface UiActions {
   closeGlobalSettings: () => void;
   setGlobalSettingsTab: (tab: string) => void;
 
+  /**
+   * Closes the Global Settings and History Search drawers together —
+   * switching workflows is treated as a "click outside" for both fullscreen-ish
+   * drawers, which otherwise stay open across an unrelated lineage switch.
+   */
+  closeFullscreenDrawers: () => void;
+
   // Startup overlay
   setStartupReady: (ready: boolean) => void;
   setDevRestarting: (restarting: boolean) => void;
@@ -2197,6 +2204,14 @@ export const useUiStore = create<UiState & UiActions>()(
       closeGlobalSettings: () => set({ globalSettingsOpen: false }),
 
       setGlobalSettingsTab: (tab) => set({ globalSettingsActiveTab: tab }),
+
+      closeFullscreenDrawers: () =>
+        set({
+          globalSettingsOpen: false,
+          isHistorySearchOpen: false,
+          historySearchLoading: false,
+          historySearchRebuildProgress: null,
+        }),
 
       // ============================================================================
       // STARTUP OVERLAY
