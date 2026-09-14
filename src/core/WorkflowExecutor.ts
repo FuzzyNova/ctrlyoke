@@ -332,6 +332,10 @@ export interface WorkflowExecutionContext {
   resolvePriorContextItems?: WorkflowContext["resolvePriorContextItems"];
 }
 
+export type ParallelGroupJoinResult =
+  | { readonly accepted: true }
+  | { readonly accepted: false; readonly diagnostic: string };
+
 type ExecutionTarget = WorkflowAttemptTarget;
 
 function getExecutionTargetRunKey(target: ExecutionTarget): string {
@@ -382,6 +386,13 @@ export class WorkflowExecutor {
   private readonly waitingResponseTargets = new Set<string>();
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
+  private activeParallelGroupRun:
+    | ParallelGroupRun<WorkflowExecutionContext>
+    | undefined;
+  private activeParallelGroupPreflightMembers:
+    | Map<number, ParallelGroupPreflightMember>
+    | undefined;
+  private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -971,30 +982,213 @@ export class WorkflowExecutor {
           "[WorkflowExecutor] Workflow paused after parallel group members settled"
         ).then(() => undefined),
     });
-    const groupOutcome = await groupRun.run();
-    if (!groupOutcome.paused) {
-      try {
-        await context.releaseCoordinationGroupClaims?.(groupOutcome.group);
-      } catch (error) {
-        Log.warn(
-          "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
-          error
-        );
+    this.activeParallelGroupRun = groupRun;
+    this.activeParallelGroupPreflightMembers = new Map(
+      preflight.members.map((member) => [member.stepIndex, member])
+    );
+    try {
+      const groupOutcome = await groupRun.run();
+      if (!groupOutcome.paused) {
+        try {
+          await context.releaseCoordinationGroupClaims?.(groupOutcome.group);
+        } catch (error) {
+          Log.warn(
+            "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
+            error
+          );
+        }
+        this.broadcastSettledProgress(context);
+        if (
+          groupOutcome.stopped &&
+          this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
+          this.getRuntime().confirmStopped()
+        ) {
+          await this.promptQueue.commitRuntimeTransition();
+        }
+        if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
+          this.getRuntime().fail();
+          await this.promptQueue.commitRuntimeTransition();
+        }
       }
-      this.broadcastSettledProgress(context);
-      if (
-        groupOutcome.stopped &&
-        this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
-        this.getRuntime().confirmStopped()
-      ) {
-        await this.promptQueue.commitRuntimeTransition();
-      }
-      if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
-        this.getRuntime().fail();
-        await this.promptQueue.commitRuntimeTransition();
+      return groupOutcome;
+    } finally {
+      if (this.activeParallelGroupRun === groupRun) {
+        this.activeParallelGroupRun = undefined;
+        this.activeParallelGroupPreflightMembers = undefined;
       }
     }
-    return groupOutcome;
+  }
+
+  public joinRunningParallelGroup(
+    stepIndex: number
+  ): Promise<ParallelGroupJoinResult> {
+    const join = this.parallelGroupJoinQueue.then(() =>
+      this.admitParallelGroupMember(stepIndex)
+    );
+    this.parallelGroupJoinQueue = join.then(
+      () => undefined,
+      () => undefined
+    );
+    return join.catch((error: unknown) => ({
+      accepted: false,
+      diagnostic: `Parallel-group join failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    }));
+  }
+
+  private async admitParallelGroupMember(
+    stepIndex: number
+  ): Promise<ParallelGroupJoinResult> {
+    const groupRun = this.activeParallelGroupRun;
+    if (!groupRun) {
+      return {
+        accepted: false,
+        diagnostic: "No parallel group is currently running.",
+      };
+    }
+    if (!groupRun.isAdmissionOpen) {
+      return {
+        accepted: false,
+        diagnostic: "The running parallel group is no longer accepting members.",
+      };
+    }
+
+    const liveGroup = this.promptQueue
+      .getState()
+      .parallelGroups.find((candidate) => candidate.id === groupRun.group.id);
+    if (!liveGroup) {
+      return {
+        accepted: false,
+        diagnostic: `Parallel group ${groupRun.group.id} is missing from the current definition.`,
+      };
+    }
+    if (
+      stepIndex < liveGroup.startIndex ||
+      stepIndex > liveGroup.endIndex
+    ) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} is not a member of the running parallel group.`,
+      };
+    }
+
+    const step = this.promptQueue.getState().steps[stepIndex];
+    if (!step) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} does not exist in the current definition.`,
+      };
+    }
+    if (
+      step._runtime?.startedAt !== undefined ||
+      step._runtime?.completedAt !== undefined
+    ) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} has already started and cannot join the running parallel group.`,
+      };
+    }
+    if (step.enabled === false) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} is disabled and cannot join the running parallel group.`,
+      };
+    }
+
+    const stepId = step._runtime?.stepId;
+    if (!stepId) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} is missing its stable identity.`,
+      };
+    }
+    if (
+      groupRun.pendingIds.includes(stepId) ||
+      groupRun.running.has(stepId) ||
+      groupRun.outcomes.has(stepId)
+    ) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${stepIndex + 1} is already admitted to the running parallel group.`,
+      };
+    }
+
+    let preflight: ParallelGroupMemberPreflightResult;
+    try {
+      const reservedMembers = new Map(
+        this.activeParallelGroupPreflightMembers ?? []
+      );
+      for (const member of groupRun.running.values()) {
+        if (member.preflightMember) {
+          reservedMembers.set(
+            member.preflightMember.stepIndex,
+            member.preflightMember
+          );
+        }
+      }
+      preflight = await this.preflightGroupMember(
+        liveGroup,
+        step,
+        stepIndex,
+        groupRun.groupContext,
+        [...reservedMembers.values()].filter(
+          (member) =>
+            member.stepIndex !== stepIndex &&
+            member.stepIndex >= liveGroup.startIndex &&
+            member.stepIndex <= liveGroup.endIndex
+        )
+      );
+    } catch (error: unknown) {
+      await this.releaseRejectedParallelGroupMemberResources(
+        groupRun.groupContext,
+        stepIndex
+      );
+      return {
+        accepted: false,
+        diagnostic: `Parallel step ${stepIndex + 1} failed preflight: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+
+    if (preflight.issues.length > 0) {
+      await this.releaseRejectedParallelGroupMemberResources(
+        groupRun.groupContext,
+        stepIndex
+      );
+      return { accepted: false, diagnostic: preflight.failureMessage };
+    }
+
+    if (!groupRun.admit(stepId)) {
+      await this.releaseRejectedParallelGroupMemberResources(
+        groupRun.groupContext,
+        stepIndex
+      );
+      return {
+        accepted: false,
+        diagnostic: `The running parallel group stopped accepting members before step ${stepIndex + 1} could join.`,
+      };
+    }
+
+    return { accepted: true };
+  }
+
+  private async releaseRejectedParallelGroupMemberResources(
+    context: WorkflowExecutionContext,
+    stepIndex: number
+  ): Promise<void> {
+    try {
+      await context.releaseTargetResources?.({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex,
+      });
+    } catch (error) {
+      Log.warn(
+        `[WorkflowExecutor] Failed to release rejected parallel-group join resources for step ${stepIndex}:`,
+        error
+      );
+    }
   }
 
   private async persistGroupSettlement(
