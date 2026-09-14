@@ -1019,9 +1019,17 @@ export class WorkflowExecutor {
     this.activeParallelGroupPreflightMembers = new Map(
       preflight.members.map((member) => [member.stepIndex, member])
     );
+    const anchorSnapshotId = state.steps[group.startIndex]?._runtime?.stepId;
     try {
       const groupOutcome = await groupRun.run();
       if (!groupOutcome.paused) {
+        // The promoted anchor's held before-state has now been consumed as the
+        // group snapshot. Release it here rather than leaving a workspace
+        // capture pinned for the lifetime of the executor. A paused group is
+        // re-entered on resume and still needs it, so it is kept in that case.
+        if (anchorSnapshotId) {
+          this.pendingSequentialSnapshotBeforeStates.delete(anchorSnapshotId);
+        }
         try {
           await context.releaseCoordinationGroupClaims?.(groupOutcome.group);
         } catch (error) {

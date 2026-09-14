@@ -975,14 +975,8 @@ export function createMessageHandlers(
     // Also suppress undo recording for the initial auto-load (0 → N steps).
     // Loading from an empty state is a system-driven restore, not a user edit.
     const isInitialAutoLoad = currentSteps.length === 0;
-    // Queue-state updates carry executionState when they are runtime echoes.
-    // A topology mutation made while a workflow is running must update the
-    // store without opening an undo entry; the user-facing action already
-    // owns any edit history, while the runtime echo only synchronizes it.
-    const isRuntimeEcho = message.executionState !== undefined;
     const shouldRecord =
       !isInitialAutoLoad &&
-      !isRuntimeEcho &&
       (stepCountChanged || stepContentChanged || parallelGroupsChanged);
     WebviewLog.debug(
       `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
