@@ -6,10 +6,10 @@
 > `STEER_MESSAGE_PLAN.md`.
 >
 > **Companion to:** [`STEER_MESSAGE_PLAN.md`](../backlog/STEER_MESSAGE_PLAN.md) (backlog).
-> That plan introduces the split-button shell on `btn-editor-run` and its first
-> menu item ("Send Steer Message"). This plan defines the finished menu, adds
-> **Run in Parallel** and **Run in New Workflow**, and settles what happens to
-> the Queue button.
+> That plan contributes the menu's fourth item ("Send Steer Message"), which
+> ships here as a present-but-disabled placeholder. This plan defines the
+> finished menu, adds **Run in Parallel** and **Run in New Workflow**, and
+> settles what happens to the Queue button.
 >
 > **Depends on:** [`PARALLEL_STEPS_PLAN.md`](./PARALLEL_STEPS_PLAN.md)
 > (shipped) for the fork/join model that "Run in Parallel" extends, and on
@@ -17,9 +17,9 @@
 > (implemented) for the execution guards. Stages 3 and 4 now share the shipped
 > `ParallelGroupRun` extraction and admission path.
 >
-> **Build order is not fixed.** Whichever of the two plans lands first owns the
-> split-button shell (Stage 1 below); the other one only contributes a menu
-> item. Neither plan blocks the other.
+> **Build order settled:** this plan landed first, so it owns the split-button
+> shell (Stage 1 below). `STEER_MESSAGE_PLAN.md` now only fills in the
+> placeholder item's gate, tooltip, and `onClick`.
 >
 > **Follow-up:** [`MCP_PARALLEL_APPEND_PLAN.md`](./MCP_PARALLEL_APPEND_PLAN.md)
 > exposes the same late-join operation through `append_step` after Stages 3–4
@@ -658,7 +658,10 @@ are wired:
 path covered; the MCP live-join path is covered by the shipped MCP append plan.
 
 **Stage 6 — Steer item.** Owned by `STEER_MESSAGE_PLAN.md`; only the menu entry
-belongs here.
+belongs here, and it shipped as a disabled placeholder in Stage 1
+(`EditorFooter.tsx`). That plan's remaining work is the availability gate (a
+`steer` key on `useRunDispatchTargets`, backed by a new
+`useActiveInteractiveSession`), the tooltips, and the host-side dispatch.
 
 ---
 

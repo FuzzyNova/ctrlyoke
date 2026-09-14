@@ -1,5 +1,20 @@
 # Steer Message Plan
 
+> **Status:** Backlog, ready to implement. Every open question this plan
+> previously carried is answered below; nothing here is blocking.
+>
+> **Depends on:** [`RUN_DISPATCH_MENU_PLAN.md`](../implemented/RUN_DISPATCH_MENU_PLAN.md)
+> (implemented) — its Stage 6 is this plan. The split-button shell, the
+> disabled-vs-hidden policy, `useRunDispatchTargets`, and the
+> `EXECUTE_PROMPT_ERROR` draft-restore contract all shipped with it, so this
+> plan no longer owns any of them.
+>
+> **Also settles:** the Phase 7 spec correction in
+> [`PARALLEL_MUTATION_ROLLOUT_PLAN.md`](../implemented/PARALLEL_MUTATION_ROLLOUT_PLAN.md),
+> which recorded that `useRunDispatchTargets` could not compose
+> `useActiveInteractiveSession` because this plan was unbuilt, and that "the
+> steer plan adds its own key when it lands." This plan adds that key.
+
 ## Overview
 
 Today the only way to steer a live, interactive CLI harness session is to type
@@ -10,303 +25,518 @@ always queued: it waits for the current prompt to finish before it is sent,
 even if a harness session is already sitting there idle mid-turn, ready to
 take a follow-up.
 
-A companion plan, [`RUN_DISPATCH_MENU_PLAN.md`](../implemented/RUN_DISPATCH_MENU_PLAN.md),
-finishes the split button this plan introduces: it adds "Run in Parallel" and
-"Run in New Workflow" to the same drop-up, settles the disabled-vs-hidden
-policy for menu items, and keeps Queue as its own button. Either plan may land
-first; whichever does owns the split-button shell.
-
 This plan adds a **steer message**: a way to send the prompt editor's current
 draft directly into an already-running interactive PTY session, immediately,
-without adding a step to the queue. It reuses the follow-up detection already
-built for background work (`dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`)
-to pick up the harness's response to the injected turn — no new completion
-plumbing is needed on that side.
+without adding a step to the queue. It fills in the fourth and last item of
+the shipped dispatch menu.
 
 Steering is available only when:
 
-- the active workflow has a live, running interactive AI-CLI session
+- the active workflow has a live interactive AI-CLI session
   (`SESSION_KINDS.AI_CLI`, `TERMINAL_SESSION_STATUS.RUNNING`), and
 - the editor is in **new-prompt mode**, step type **prompt** (not script).
 
 All prompt overrides (harness, model, agent, skills, permissions, execution
 mode) are ignored for a steer send — the message goes to whatever session is
-already live. Changing any of those would require tearing down and
-recreating the TUI, which defeats the purpose of steering into a session
-that's already running.
+already live. Changing any of those would require tearing down and recreating
+the TUI, which defeats the purpose of steering into a session that's already
+running.
 
 ---
 
-## UX Decision
+## What already shipped
 
-Considered three shapes for exposing this in the editor:
+The dispatch menu landed on 2026-09-14. `EditorFooter.tsx:296-360` renders a
+`SplitButton` whose drop-up already contains the steer entry as a **disabled
+placeholder**:
 
-1. **Split button on Send** (chosen) — `EditorFooter`'s existing
-   `btn-editor-run` becomes a split button: the primary action stays "Run",
-   and a dropdown arrow reveals "Send Steer Message". Disabled/hidden when no
-   live interactive session exists for the active workflow, with a tooltip
-   explaining why. When enabled, its tooltip explains that all overrides are
-   ignored and the text is sent directly to the live session.
-2. A third `Prompt / Script / Steer` entry in `EditorSection`'s step-type
-   switcher, swapping the footer to a bare "Send Steer" button with the
-   overrides UI hidden.
-3. A permanently visible third button next to Queue/Run.
+```tsx
+{
+  label: "Send Steer Message",
+  value: "sendSteerMessage",
+  onClick: () => undefined,
+  disabled: true,
+  title: "No live harness session for this workflow",
+  icon: <Icon name="comment" />,
+}
+```
 
-**Rejected (2)**: `stepType` (`STEP_TYPES.PROMPT` / `STEP_TYPES.SCRIPT`) is a
-field that gets persisted onto a queued step
-(`src/types/DashboardConstants.ts` `STEP_TYPES`, threaded through
-`editorStore.ts`'s `stepType`/`setStepType`). A steer message is never
-queued, so it has no step to carry that field — forcing it into the same
-switcher conflates "what kind of step am I authoring" with "fire this at the
-live session right now," and raises awkward questions (what does Update/
-Delete mean in Steer mode? what happens to the switcher when a queued prompt
-is being edited?).
+So the UX work in this plan is: give that item a real gate, a real tooltip, and
+a real `onClick`. The label, position (first, above the divider), icon, and
+disabled-with-tooltip policy are settled and must not change.
 
-**Rejected (3)**: a permanent third button competes for footer space in an
-already narrow bar (see `EditorFooter.tsx`'s `isMediumWidth`/`isSmallWidth`
-collapsing) for an action that's usually unavailable (no live session), and
-suggests steering is a peer of Run/Queue rather than a special-case override
-of Run's normal dispatch.
+Three shipped facts shape everything below:
 
-**Chosen (1)** keeps the editor's job the same (compose text) and only adds
-an alternate dispatch action for the same draft, which matches the actual
-mechanics: same text, different destination.
+1. **`useRunDispatchTargets` (`hooks/useRunDispatchTargets.ts`) is the single
+   place dispatch availability is decided.** It returns
+   `{ parallel, newWorkflow }` today, each a
+   `RunDispatchTarget { enabled, disabledReason?, title }`. `EditorFooter` is a
+   presentation component and reaches into no store for gating. Steer adds a
+   third key to that object; it does not get its own parallel policy path.
+2. **Rejection, draft restore, and toast are already generic.**
+   `WorkflowStepHandlers.handleExecutePrompt` (`src/ui/WorkflowStepHandlers.ts:38-82`)
+   catches, emits `MESSAGE_TYPES.EXECUTE_PROMPT_ERROR { text }` (which
+   `PromptEditor.tsx:882-895` uses to restore the cleared draft) plus a
+   `USER_FEEDBACK` warning carrying the thrown message. `Run in Parallel`
+   rejects by _throwing a human-readable `Error`_ from
+   `WorkflowInstance.executeEphemeralParallelPrompt` (`WorkflowInstance.ts:3525+`)
+   and gets its toast for free. Steer does the same.
+3. **`Run in New Workflow` is the routing precedent for a non-mutating
+   dispatch.** It is a plain `vscode.postMessage` (not
+   `postWorkflowDefinitionMutation`), gets its own `MESSAGE_TYPES` entry next
+   to `EXECUTE_PROMPT`, and its own router case at
+   `WebviewMessageRouter.ts:801-822`. Steer follows it exactly.
+
+---
+
+## UX
+
+The shape is settled — split button, steer first in the drop-up, shown-disabled
+with a reason. What remains is the gate and the two tooltips.
 
 ### Scope and behavior
 
-- Steer is available **only in new-prompt mode** (`selectionTarget.kind ===
-EDITOR_TARGET_KINDS.NEW_PROMPT`), never while editing an existing queued
-  step. Steering is an out-of-band action unrelated to the queue; mixing it
-  with Update/Delete semantics on an existing step is confusing.
-- Steer is available **only in prompt mode** (`stepType === STEP_TYPES.PROMPT`),
-  not script mode — scripts don't talk to a harness session.
-- On send, the editor draft is **cleared**, same as a normal Run — consistent
-  with the existing new-prompt-mode behavior and avoids accidental resends of
-  stale text.
-- The properties drawer, quick pickers (`HarnessQuickPicker`,
-  `ModelQuickPicker`, `AgentQuickPicker`, `SkillsQuickPicker`,
-  `PermissionsQuickPicker`, `ContextQuickPicker`) stay visible and usable as
-  normal — they still apply to a subsequent Run/Queue of the same draft
-  before it's sent. They simply have no effect on a steer send; the tooltip
-  on the steer menu item is the only place this is called out.
-- No confirmation modal — steering should feel as immediate as typing into
-  the TUI directly.
-- Proactively add the sent steer text to the run's response/history feed, the
-  way the user's TUI keystrokes are effectively already visible in the
-  terminal — so users have a persistent, non-ephemeral record without having
-  to scroll xterm scrollback. (Not required for the mechanism to work — the
-  provider parsers already classify these via `TERMINAL_FOLLOWUP_TRACKING_PLAN.md`'s
-  "user-steer" event handling — but doing it improves discoverability of what
-  was actually sent, since prompt-reference expansion may differ from what
-  the user typed.)
+- **New-prompt mode only** (`selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT`).
+  Steering is out-of-band and unrelated to the queue; mixing it with
+  Update/Delete semantics on an existing step is confusing. `Run in Parallel`
+  already draws this line the same way.
+- **Prompt step type only** (`stepType === STEP_TYPES.PROMPT`). Scripts don't
+  talk to a harness session. This is the one place steer is _stricter_ than the
+  other two menu items, both of which accept script drafts.
+- **Clears the draft on send**, like every other dispatch, with the
+  `EXECUTE_PROMPT_ERROR` restore covering rejection.
+- **Overrides stay visible and usable.** The quick pickers and properties
+  drawer still apply to a subsequent Run/Queue of the same draft. They simply
+  have no effect on a steer send; the menu item's tooltip is the only place
+  this is stated.
+- **No confirmation modal.** Steering should feel as immediate as typing into
+  the TUI.
+- **No second receipt event.** See "The receipt is already built" below — this
+  reverses the earlier proposal to proactively echo the sent text into the
+  response feed.
+
+### Tooltips
+
+Follow the shipped convention, where the enabled tooltip states what the action
+binds to (`Run in Parallel`'s is `Runs beside step N; prior context resolves
+from before step N`). Steer's names the session it targets, which also answers
+the old "should the menu item show which harness?" question without widening
+the label:
+
+| State    | Tooltip                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enabled  | `Sends to the live <harness label> session (step N). Prompt overrides are ignored.`                                                                                                   |
+| Disabled | `No live harness session for this workflow` / `Only available for a new prompt` / `Steering is only available for prompt steps` / `Enter a prompt first` / `Read-only — external run` |
+
+The harness label comes from the rail-active `TerminalSession.harnessId`, which
+the store already carries (`terminalStore.ts:23`).
 
 ---
 
-## Availability Gate
+## Availability gate
 
-The steer control's enabled/disabled state is driven by:
-
-```
-terminalStore.activeSessionIds[activeWorkflowId] → sessionId
-terminalStore.sessions[activeWorkflowId].find(s => s.id === sessionId)
-  → session.kind === SESSION_KINDS.AI_CLI
-  && session.status === TERMINAL_SESSION_STATUS.RUNNING
-```
-
-This is the session currently shown in the terminal rail for the active
-workflow — i.e. "whatever interactive session the user is already looking
-at," not an independent picker. If a workflow ever has more than one
-concurrent AI-CLI session (parallel steps — see
-`dev/implemented/PARALLEL_STEPS_PLAN.md`), steering always targets the
-rail-active one; a session picker is out of scope for this plan (see Not In
-Scope).
-
-A new hook, `useActiveInteractiveSession(workflowId)` (mirroring the shape of
-the existing `useActiveWorkflowExternalOwner` hook referenced in
-`EditorSection.tsx`), should encapsulate this lookup so `EditorFooter`/
-`EditorSection` don't reach into `terminalStore` directly. It returns the
-live session (or `undefined`), letting the UI derive both "is steer
-available" and, for the tooltip's disabled reason, a human string ("No live
-harness session for this workflow" vs. "Process exited").
-
----
-
-## Dispatch Path (extension host)
-
-### Reuse, don't reinvent, prompt-reference resolution
-
-A steer message still needs `@file`, `#sym:`, `~change`, `$step:N` and slash
-tokens resolved the same way a normal queued prompt does — those are part of
-what the user typed, not part of the ignored overrides. The existing
-pipeline for this lives in `CliPromptPreparer` (`buildPromptSections`) and
-`CliIntegration.formatCategorizedReferences` /
-`CliIntegration.formatCategorizedInstruction` — see the excerpted format in
-`CliIntegration.ts:488-529`:
-
-```
-Following these agent instructions @agent.1.md[, @agent.2.md],
-using these secrets @secrets.md,
-using these available skills @skills.md,
-using these file references @src/foo.ts, @src/bar.ts,
-with this prior conversation context @context.md,
-and these attachment excerpts @excerpts.1.md[, @excerpts.2.md],
-follow the instructions in @prompt.md
-```
-
-For a steer send, call `buildPromptSections`/`formatCategorizedReferences`
-with **no resolved agent, no resolved skills, and no resolved
-harness/model/permission properties** — only the direct workspace file refs
-and prompt-text categories the user actually typed inline get formatted. The
-categorized-instruction sentence degrades gracefully when a category is
-empty (already documented in the JSDoc: "absent categories omitted"), so
-this should fall out of the existing formatter without new branching, though
-this needs verification once implementation starts — flagged as a risk
-below.
-
-### New message type
-
-Add to `MESSAGE_TYPES` in `src/types/DashboardConstants.ts`, alongside the
-other Terminal I/O entries:
+Add `useActiveInteractiveSession(workflowId)` in
+`src/ui/webview-react/hooks/`, mirroring `useActiveWorkflowExternalOwner.ts`:
 
 ```ts
-// Steer messages — webview → extension: inject a categorized prompt directly
-// into an already-running interactive PTY session. Never queued; ignores all
-// prompt overrides (harness/model/agent/skills/permissions).
-SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
+terminalStore.activeSessionIds[workflowId] → sessionId
+terminalStore.sessions[workflowId].find(s => s.id === sessionId)
+  → s.kind === SESSION_KINDS.AI_CLI && s.status === TERMINAL_SESSION_STATUS.RUNNING
 ```
 
-`text` is the raw prompt-editor draft (pre-reference-expansion); expansion
-happens on the extension host, same as `EXECUTE_PROMPT`.
+It returns the live `TerminalSession | undefined`. Then add a `steer` key to
+`RunDispatchTargets` (`useRunDispatchTargets.ts:29`) composed from it plus the
+existing `contentReason` / new-prompt checks, and the new prompt-step-type
+check. `EditorFooter` gets one more `RunDispatchTarget` prop and stops passing
+the hard-coded placeholder.
 
-### Extension-host handler
+This targets **the session the user is already looking at** in the terminal
+rail, not an independent picker. With several concurrent AI-CLI sessions (a
+parallel group), switching rail tabs before sending changes the target; there
+is no cross-session picker in this plan.
 
-Route this in `WebviewMessageRouter.ts` next to the other
-`registerTerminal()` entries, but dispatch to a new handler (not
-`terminalHandlers.handleInput`, which is raw keystroke routing for
-`TERMINAL_INPUT` and does not go through prompt-reference resolution at
-all). The handler needs to:
+**`status === RUNNING` deliberately covers two situations**, and both are
+wanted:
 
-1. Resolve the target `WorkflowInstance` / execution integration for
-   `workflowId` — specifically the live `CliIntegration` whose PTY session
-   ID matches `sessionId` (guard: if the session no longer matches a live
-   PTY, no-op with a user-facing notification — the session may have ended
-   between the button becoming enabled and the click landing).
-2. Run the reduced prompt-preparation path described above to produce the
-   final categorized text.
-3. Write that text directly to the PTY via whatever write path
-   `CliTransportCoordinator`/`PtyProcessManager` already uses for interactive
-   turn dispatch (`PtyProcessManager.ts` — `session.pty.write(data)`, see the
-   existing interrupt-signal calls at `PtyProcessManager.ts:595,653-654,749-750`
-   for the write surface shape) followed by the harness's turn-submit
-   sequence (Enter/newline) — this must match whatever the normal interactive
-   dispatch path already does today for submitting a queued prompt into an
-   open TUI, so it should reuse that code rather than duplicate it.
-4. Optionally emit a history/response-feed entry recording the steer text was
-   sent (see UX section above) — check whether `SessionActivityWatcher` /
-   the provider's "user-steer" classification already produces a receipt
-   event on its own that the dashboard can surface, before adding a second,
-   redundant one from the dispatch side.
+- **Mid-run** — a queue step is executing in that PTY right now.
+- **Between runs** — the workflow finished but the PTY is still alive because
+  inject mode retained it (`WorkflowInstance.liveInjectIntegrations`,
+  `WorkflowInstance.ts:439`). `terminalStore` only leaves `RUNNING` on
+  `TERMINAL_ENDED` (PTY exit) or `clearAiCliSessions` (next run start), so an
+  idle-but-alive TUI still reads as `RUNNING`.
+
+The second case is the safer and arguably primary one; see "Mid-turn steering
+races the queue" under Edge Cases for why.
+
+---
+
+## Dispatch path (extension host)
+
+### Reuse the whole prompt pipeline, in inject mode
+
+**Decision (answers old Open Question 1):** do not hand-assemble a call to
+`formatCategorizedReferences`. Call the live integration's existing
+`CliPromptPreparer.preparePrompt` (`src/core/harness/shared/CliPromptPreparer.ts:433`)
+with a synthetic one-off `PromptStep` built from the draft, and
+**`injectMode = true`**:
+
+```ts
+preparePrompt(
+  { prompt: draftText, /* no name, no overrides */ },
+  workflowContext,      // the live run's context — workspace roots, condition results
+  reducedResolvedProperties,
+  resolvedSessionId,
+  /* injectMode */ true
+) => { promptWithInstruction, tempFilePaths, diagnostics, imageFileRefs }
+```
+
+`promptWithInstruction` is the finished categorized text. The old question
+("does `formatCategorizedReferences` degrade cleanly with agent/skill/context
+/excerpt categories empty?") dissolves: `planPrompt` already walks that exact
+path on every inject-mode prompt that has no agent and no skills, and the
+formatter's documented "absent categories omitted" contract is exercised in
+production today. No new branching, and no new seam.
+
+`reducedResolvedProperties` keeps the **live session's** `harness` and `model`
+(the preparer reads `harness` for diagnostics and the integration's own
+`formatDirectFileRef`/`formatTempFileRef` must match the harness that will read
+the text) and neutralizes the rest: `agent: undefined`, `skills: []`,
+`priorContext: PRIOR_CONTEXT_KEYWORDS.NONE`.
+
+**`injectMode = true` is not optional, and this is the sharpest edge in the
+plan.** It switches the inline-vs-temp-file check from `isSimplePrompt` to
+`isInjectablePrompt` (`CliPromptPreparer.ts:467-471`), and
+`HarnessIntegration.isInjectablePrompt` (`src/core/HarnessIntegration.ts:837`)
+rejects any text containing `\x00-\x1f` or `\x7f`. A multi-line steer draft
+contains `\n`, so it _must_ go out as a temp-file reference — a raw `\n` in a
+PTY write is a newline inside the TUI's input box and a raw `\r` submits the
+turn early, mid-message. Preparing with `isSimplePrompt` would let multi-line
+text through inline and corrupt the send.
+
+### Writing the turn into the PTY
+
+**Decision (answers old Open Question 3):** the turn-submit sequence lives in
+`CliExecutionRunner.executeInteractiveInject`
+(`src/core/harness/shared/CliExecutionRunner.ts:193-275`), and it is more than
+"write text, then Enter":
+
+1. `INJECT_FOCUS_PULSE_COUNT` (2) writes of focus-in `\x1b[I`, each followed by
+   `INJECT_FOCUS_SETTLE_DELAY_MS` — some TUIs (Copilot CLI confirmed) ignore
+   input until they believe they have focus;
+2. the prompt streamed in `INJECT_PROMPT_CHUNK_SIZE` (256) chunks via
+   `chunkInjectPrompt` (`:914`), with an inter-chunk delay;
+3. `INJECT_PRE_SUBMIT_DELAY_MS`;
+4. `INJECT_SUBMIT_PULSE_COUNT` (2) writes of `\r` — `\r` is the submit key,
+   `\n` is not; duplicate submits are benign, a dropped one is not;
+5. an event-loop yield, then a `failureTracker.getPtyTermination()` check,
+   because `writeToCurrentPtySession` can return `true` for a process whose
+   `onExit` has not fired yet.
+
+Every write goes through `CliTransportCoordinator.writeToCurrentPtySession`
+(`CliTransportCoordinator.ts:516`), which returns `false` once the PTY is gone.
+
+**Extract steps 1–5 into a reusable async writer** — `writeTurnToLivePty(text):
+Promise<boolean>` on `CliExecutionRunner`, or a small `PtyTurnWriter` in
+`src/core/harness/shared/` if the constants want their own home. Both
+`executeInteractiveInject` and the steer path call it; the pulse counts and
+delays must not be duplicated. `executeInteractiveInject` keeps everything
+after the write (session-id persistence, log monitoring, inject-context
+bookkeeping) — steer needs none of it.
+
+**Serialize writes per session.** A steer is a single atomic, fully-formed turn
+rather than a keystroke, so two concurrent writers (two steers, or a steer and
+an inject-mode dispatch) would interleave 256-byte chunks into one input box
+and produce garbage. Guard the writer with an `AsyncMutex`
+(`src/core/harness/shared/AsyncMutex.ts`) held by the owning integration for
+the duration of the pulse sequence. This is also what makes viewer steering
+safe — see the decision below.
+
+### Resolving `sessionId` → the owning integration
+
+`WorkflowInstance` holds two registries, and the handler needs both because the
+two enabled states above resolve differently:
+
+| State        | Registry                                                                                      | Match on                                                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Mid-run      | `activeTargetResources` (`WorkflowInstance.ts:409`) — `{ target, integration, ptySessionId }` | `resource.ptySessionId === sessionId`                                                                                                    |
+| Between runs | `liveInjectIntegrations` (`WorkflowInstance.ts:439`) — keyed by harness id                    | `integration.getActivitySessionId() === sessionId` (`CliIntegration.ts:710`, which returns `transportCoordinator.getLastPtySessionId()`) |
+
+Add one private `findIntegrationForPtySession(sessionId)` covering both, and a
+public `WorkflowInstance.sendSteerMessage(sessionId, text)`.
+
+**Re-check liveness host-side; never trust the webview's gate.** Before
+preparing anything, assert
+`getPtyProcessManager()?.getSession(sessionId)` exists, that its `workflowId`
+is this instance's, and that its kind is `SESSION_KINDS.AI_CLI`. If any check
+fails, or `findIntegrationForPtySession` returns nothing, or the writer returns
+`false`, **throw a human-readable `Error`** — the shipped handler contract turns
+that into a restored draft plus a toast. Suggested messages: `"That harness
+session has ended. The steer message was not sent."` and `"No live harness
+session for this workflow."`
+
+### Temp files outlive the send — do not clean up in a `finally`
+
+Every existing `preparePrompt` caller deletes its `tempFilePaths` in a
+`finally` once the _monitored_ turn resolves (`CliExecutionRunner.ts:325`,
+`:686`; `CliTransportCoordinator.ts:206`, `:507`). A steer has no monitored
+turn, and the harness may not dequeue the steered turn for minutes if it is
+mid-generation — so deleting after the write would hand the TUI a path that
+404s by the time it reads it. This is the producing-side view of the "Temp
+prompt files" warning in `.github/copilot-instructions.md`.
+
+**Decision:** hand the steer's `tempFilePaths` to the owning integration to
+delete when that PTY session ends, alongside its existing artifact cleanup,
+with `TempFileManager.cleanupOrphanedFiles()`'s 24-hour activation sweep
+(`src/utils/TempFileManager.ts:499`) as the backstop. Never delete immediately
+after the write.
 
 ### `canReuseForInject` is unrelated
 
 `HarnessIntegration.canReuseForInject()` / `CliIntegration.canReuseForInject()`
-(`HarnessIntegration.ts:302-312`, `CliIntegration.ts:1682-1698`) governs
-whether an integration is kept alive **across separate workflow runs** so
-the _next_ run can resume the same PTY via inject mode. Steering targets a
-session that is already alive **within the current run** — it does not go
-through `canReuseForInject`, `WorkflowInstance.executeLoadedPromptFile`, or
-the queue/execution-state machine at all. This is worth stating explicitly
-in the implementation so nobody tries to route steer dispatch through the
-inject-mode continuation path by analogy — they're unrelated mechanisms that
-happen to share the word "inject."
+governs whether an integration is kept alive **across separate workflow runs**
+so the _next_ run can resume the same PTY. Steering targets a session that is
+already alive — it does not go through `canReuseForInject`,
+`WorkflowInstance.executeLoadedPromptFile`, or the queue/execution state
+machine at all. Stated explicitly so nobody routes steer dispatch through the
+inject-mode continuation path by analogy; the two mechanisms share only the
+word "inject" and, now, the extracted PTY writer.
 
 ---
 
-## Type/Message Changes
+## The receipt is already built
 
-- `src/types/DashboardConstants.ts`: add `SEND_STEER_MESSAGE` to
-  `MESSAGE_TYPES` (see above).
-- `src/ui/WebviewMessageRouter.ts`: register the new handler.
-- New handler file/class (naming TBD at implementation time — could live in
-  `terminalHandlers.ts` if it's kept thin and just delegates to
-  `WorkflowInstance`/`CliIntegration`, or in a new
-  `SteerMessageHandler.ts` if the prompt-preparation reuse needs its own
-  seam).
-- `src/ui/webview-react/hooks/`: new `useActiveInteractiveSession.ts`.
-- `src/ui/webview-react/components/editor/EditorFooter.tsx`: split-button
-  variant of `btn-editor-run` in the new-prompt-mode branch.
-- `src/ui/webview-react/components/editor/PromptEditor.tsx`: new
-  `sendSteerMessage` callback alongside `executePrompt`, gated the same way
-  Run/Queue's disabled states are today.
+**Decision (reverses the earlier "proactively add the sent text to the feed"
+proposal):** emit nothing extra. The user-steer machinery shipped with
+`TERMINAL_FOLLOWUP_TRACKING_PLAN.md` already produces exactly one receipt, in
+both enabled states, on all six harnesses.
+
+`CliLogEventPump.buildUserSteerEvent` (`src/core/harness/shared/CliLogEventPump.ts:96-124`)
+asks the parser's `classifyUserEvent` whether a `user`-role log entry is the
+prompt ctrlyoke dispatched or a genuine human follow-up, using
+`dispatchedPromptText` as the discriminator, and synthesizes a
+`CLI_EVENT_TYPES.USER_STEER` event for the latter. A steer message is never the
+in-flight step's `dispatchedPromptText`, so it classifies as `human-steer` in
+whichever reader owns the log at the time:
+
+- **Mid-run** — `CliLogMonitor` owns it (`CliLogMonitor.ts:164-183`), with
+  `dispatchedPromptText` set to the running step's prompt. The USER_STEER event
+  and the harness's answer stream into that step's events.
+- **Between runs** — `SessionActivityWatcher` owns it, with
+  `dispatchedPromptText: undefined` (`SessionActivityWatcher.ts:51`). Events
+  reach `WorkflowInstance.handleSessionActivityResumed`
+  (`WorkflowInstance.ts:3778`), which forwards to the dashboard _and_ persists
+  through `outputHistoryManager.recordFollowUpResponse`.
+
+So the persistent, non-ephemeral record the original plan wanted already
+exists, and adding a dispatch-side event would double it.
+
+**Correction to this plan's earlier claim about provider coverage.** The old
+text said Codex/Qwen/OpenCode "have no provider-specific follow-up signal," so
+steer pickup would be weaker there. That conflates two different things.
+`classifyUserEvent` and `extractUserSteerText` are implemented in **all six**
+parsers (`claude/`, `copilot/`, `codex/`, `qwen/`, `opencode/`,
+`antigravity/`), so the steer receipt and the response are captured everywhere.
+What is Claude/Copilot/Antigravity-only is _background-work completion holding_
+(`BackgroundFollowUpState`) — the ability to delay a step's completion while a
+resumed turn is still running. On the other three, a steered turn that starts
+after the step's own completion fires is more likely to be attributed to the
+follow-up channel than to the step's own output. Both are persisted; only the
+attribution boundary moves.
+
+**One caveat worth stating in the implementation.** Because a multi-line draft
+is sent as a temp-file reference, what surfaces in the USER_STEER row is the
+expanded sentence the harness actually saw (`…follow the instructions in
+@…prompt.md`), not the raw draft. That is an honest record of what was sent —
+and identical to what a user would see had they typed the same reference — but
+it is not readable as a message. If that proves annoying in practice, the fix
+is to render the referenced temp file's body in the USER_STEER row, not to emit
+a second event from the dispatch side.
+
+---
+
+## Type / message changes
+
+- `src/types/DashboardConstants.ts` — add next to `RUN_IN_NEW_WORKFLOW`
+  (`:502`), **not** in the Terminal I/O block: a steer is an editor dispatch
+  whose failure contract is the editor's, and it never touches raw keystroke
+  routing.
+
+  ```ts
+  // Steer messages — webview → extension: inject a categorized prompt directly
+  // into an already-running interactive PTY session. Never queued; ignores all
+  // prompt overrides (harness/model/agent/skills/permissions).
+  SEND_STEER_MESSAGE: "sendSteerMessage", // { workflowId, sessionId, text }
+  ```
+
+  `text` is the raw prompt-editor draft; expansion happens on the extension
+  host, same as `EXECUTE_PROMPT`.
+
+  **Not an `ACTION_TYPES` value.** `RUN_PARALLEL` is an action because it is a
+  queue mutation delivered through the revision-guarded `EXECUTE_PROMPT`.
+  Steering mutates no definition, so it must not be wrapped in
+  `postWorkflowDefinitionMutation` — it is a plain `vscode.postMessage`, like
+  `RUN_IN_NEW_WORKFLOW`.
+
+- `src/ui/WebviewMessageRouter.ts` — one case beside `RUN_IN_NEW_WORKFLOW`
+  (`:801`), delegating to `WorkflowStepHandlers`.
+- `src/ui/WorkflowStepHandlers.ts` — `handleSendSteerMessage(ctx, message)`,
+  with the same `try/catch` shape as `handleExecutePrompt` (`:38-82`): on
+  rejection emit `EXECUTE_PROMPT_ERROR { text }` **and** a `USER_FEEDBACK`
+  warning carrying `getErrorMessage(error)`. No `publishViewIdentity` call —
+  nothing was mutated, so there is no revision to hand back.
+  _(Aligned fix worth taking while here: `RUN_IN_NEW_WORKFLOW`'s catch at
+  `WebviewMessageRouter.ts:812-821` emits only `EXECUTE_PROMPT_ERROR`, so its
+  failures restore the draft silently with no toast. Give it the
+  `USER_FEEDBACK` emit too.)_
+- `src/core/WorkflowOrchestrator.ts` — resolve the instance for `workflowId`
+  and delegate.
+- `src/core/WorkflowInstance.ts` — `sendSteerMessage(sessionId, text)` plus the
+  private `findIntegrationForPtySession`.
+- `src/core/harness/CliIntegration.ts` — a `sendSteerMessage(text)` entry point
+  performing the reduced preparation, the mutex-guarded write, and the deferred
+  temp-file registration.
+- `src/core/harness/shared/CliExecutionRunner.ts` — extract the PTY turn writer.
+- `src/ui/webview-react/hooks/useActiveInteractiveSession.ts` — new.
+- `src/ui/webview-react/hooks/useRunDispatchTargets.ts` — add the `steer` key.
+- `src/ui/webview-react/components/editor/EditorFooter.tsx` — one new
+  `RunDispatchTarget` prop and `onSendSteerMessage`; replace the placeholder
+  option's hard-coded `disabled`/`title`/`onClick`.
+- `src/ui/webview-react/components/editor/PromptEditor.tsx` — a
+  `sendSteerMessage` callback beside `runInParallel` (`:1060`) and
+  `runInNewWorkflow` (`:1065`), setting `lastSubmittedTextRef` before clearing
+  so the restore path works.
 
 No changes to `schemas/workflow-schema.json` or `CtrlYokeTypes.ts` — steer
 messages are never persisted into a workflow file.
 
 ---
 
-## Edge Cases
+## Decisions on the remaining open questions
 
-- **Session ends between enabling the button and the click landing.** The
-  handler must re-check liveness server-side (not just trust the webview's
-  gate) and no-op with a clear notification rather than silently dropping
-  the message or throwing.
-- **User is a viewer, not controller, of the terminal
-  (`session.isController === false`).** Steering happens on the extension
-  host directly against the PTY, independent of the webview's
-  controller/viewer keystroke-routing distinction (`TerminalInstance.tsx`'s
-  `onData` gating) — so it should work the same for a viewer as a
-  controller. Confirm this is the desired behavior (a non-controlling
-  client can still steer) since it's a step up in privilege from what that
-  client can currently do (view-only, no `TERMINAL_INPUT`).
-- **Multiple concurrent PTYs for one workflow.** Steer always targets
-  `activeSessionIds[workflowId]`, the rail-active one — switching rail tabs
-  before sending changes the target. No cross-session picker in this plan.
-- **Draft contains unresolved/invalid `@`/`#` references.** Same validation
-  path as normal prompt submission should apply — don't special-case steer
-  to skip the existing `createContextReferenceLintExtension` validation.
-- **Harness has no notion of a mid-turn interjection** (e.g. some CLIs may
-  only accept input between turns, not during active generation). Verify per
-  provider — `TERMINAL_FOLLOWUP_TRACKING_PLAN.md` already documents provider
-  gaps (Codex/Qwen/OpenCode have no provider-specific follow-up signal), so
-  the "user-steer" pickup may be weaker on those; the send itself should
-  still work since it's just a PTY write, but response-feed reconciliation
-  may be incomplete on those three.
+**A viewer may steer; there is no `isController` check.** The
+controller/viewer gate in `TerminalMessageHandlers.isController`
+(`src/ui/TerminalMessageHandlers.ts:246-255`) exists so two clients' _raw
+keystrokes_ cannot interleave into one TUI input buffer — an echo and
+rendering concern, not an authority one. A steer is a single atomic,
+fully-formed turn, already serialized by the per-session mutex, so it cannot
+interleave the way keystrokes can. It is also semantically a sibling of Run,
+Run in Parallel, and Run in New Workflow, none of which consult
+`controllerClientId`: any client that can post `EXECUTE_PROMPT` for this
+workflow can already make the harness do anything. Withholding steer from a
+viewer would protect nothing while making the same button behave differently on
+two screens looking at the same run.
+
+**The menu item does not name the harness in its label; the tooltip does.**
+See the tooltip table above. The label stays `Send Steer Message`, matching the
+shipped placeholder and the other three items' verb-first naming.
 
 ---
 
-## Not In Scope (YAGNI)
+## Edge cases
 
-- A session picker for workflows with multiple concurrent interactive
-  sessions — always targets the rail-active session.
-- Any change to queued-step execution, `WorkflowExecutor`, or the state
-  machine — steering never touches the queue.
-- Persisting steer messages into workflow files, run manifests, or
-  `events.jsonl` as a first-class record type — reuse whatever the follow-up
-  tracking plan's "user-steer" classification already captures; only add a
-  dashboard-visible receipt if that data isn't already surfaced.
-- Steering into a **headless** (non-interactive) execution — there is no
-  PTY to write into.
-- Keyboard shortcut for steer send (e.g. a `Ctrl+Shift+Enter`-style bind) —
-  can be added later once the split-button UX ships and usage patterns are
-  clear.
+- **Session ends between the button enabling and the click landing.** Handled
+  by the host-side liveness re-check and the writer's `false` return; surfaces
+  as a restored draft plus a toast.
+- **Mid-turn steering races the queue advancing.** This is the sharpest
+  behavioral edge and it is documented, not gated. A steer written while the
+  TUI is generating is queued by the harness and processed as a _subsequent_
+  turn. If the step's completion detection fires on the first turn, the
+  workflow advances while the steered turn is still generating — and because
+  `CliIntegration` pauses `SessionActivityWatcher` before dispatching the next
+  prompt, the steered answer can be read by the _next_ step's `CliLogMonitor`
+  and attributed there. Nothing is lost, but attribution can land one step
+  late. The three harnesses with `BackgroundFollowUpState` narrow this window;
+  the other three do not. Accept it for v1 — the between-runs case (idle PTY,
+  no queue to advance) has none of this, and mid-run steering is still strictly
+  better than the status quo of typing into xterm, which has the identical
+  race with no record at all.
+- **Multi-line drafts.** Handled by `injectMode = true` → temp-file reference.
+  A draft that is a single line of plain text with no control characters goes
+  inline, which is the nicest case and also the only one whose USER_STEER
+  receipt reads as prose.
+- **Multiple concurrent PTYs for one workflow** (a parallel group). Steer
+  always targets `activeSessionIds[workflowId]`, the rail-active one. Switching
+  rail tabs before sending changes the target; no picker.
+- **Draft contains unresolved or invalid `@` / `#` references.** Same path as
+  normal submission — `createContextReferenceLintExtension` in the editor, and
+  `preparePrompt`'s `skippedReferences` → `UNRESOLVED_REFERENCE` diagnostics on
+  the host. Do not special-case steer to skip either.
+- **Shell (non-AI-CLI) rail session is active.** Gate returns not-enabled;
+  `session.kind` must be `AI_CLI`.
+- **Script draft.** Menu item disabled with `Steering is only available for
+prompt steps`. Unlike Run in Parallel and Run in New Workflow, which accept
+  script drafts.
+- **External run (CLI watch mode).** Disabled wholesale with the footer, same
+  as every other dispatch.
 
 ---
 
-## Open Questions
+## Implementation stages
 
-1. Does `formatCategorizedReferences` actually degrade cleanly with agent/
-   skill/context/excerpt categories all empty, or does some caller-side
-   assumption (e.g. a required prompt-file category) need adjusting? Needs a
-   direct test once implementation starts.
-2. Should a non-controller (viewer) client be allowed to steer, given
-   steering bypasses the controller/viewer keystroke gate entirely? Leaning
-   yes (it's a host-side action, not a webview keystroke), but worth a
-   deliberate decision rather than an accident of implementation.
-3. Where exactly does "submit the turn" (Enter/newline after the write) live
-   today for interactive dispatch, so it can be reused rather than
-   reimplemented? Needs a read of `CliTransportCoordinator`'s interactive
-   write path before implementation.
-4. Should the "Send Steer Message" menu item show which harness it's
-   targeting (in case the user forgot which session is rail-active)? Given
-   it's gated on the rail-active session already visible on screen, probably
-   unnecessary, but worth a quick UX pass.
+**Stage 1 — PTY turn writer.** Extract the focus/chunk/submit/verify sequence
+out of `executeInteractiveInject` into a reusable writer, add the per-session
+`AsyncMutex`, and prove `executeInteractiveInject` is behavior-preserving.
+Pure refactor; no steer surface yet.
+
+**Stage 2 — host-side steer.** `CliIntegration.sendSteerMessage` (reduced
+`preparePrompt` in inject mode, mutex-guarded write, deferred temp-file
+registration) and `WorkflowInstance.sendSteerMessage` +
+`findIntegrationForPtySession`, with the host-side liveness re-checks and
+human-readable rejection errors. Testable with no UI.
+
+**Stage 3 — message and route.** `MESSAGE_TYPES.SEND_STEER_MESSAGE`, the router
+case, `WorkflowStepHandlers.handleSendSteerMessage` with the
+`EXECUTE_PROMPT_ERROR` + `USER_FEEDBACK` contract, and the aligned
+`RUN_IN_NEW_WORKFLOW` toast fix.
+
+**Stage 4 — editor.** `useActiveInteractiveSession`, the `steer` key on
+`useRunDispatchTargets`, the `EditorFooter` prop, and `PromptEditor`'s
+`sendSteerMessage` callback. The placeholder becomes live in this stage and
+not before.
+
+---
+
+## Test strategy
+
+- `src/ui/webview-react/test/hooks/useRunDispatchTargets.test.ts` (exists):
+  each steer disabled reason, and enabled only with a live `AI_CLI` +
+  `RUNNING` rail session in new-prompt prompt-step mode.
+- `src/ui/webview-react/test/components/editor/EditorFooter.test.tsx` (exists):
+  the steer item is enabled/disabled with the right tooltip and fires
+  `onSendSteerMessage`.
+- `src/ui/webview-react/test/components/editor/PromptEditor.test.tsx` (exists):
+  the callback posts `SEND_STEER_MESSAGE` with `{ workflowId, sessionId, text }`,
+  is **not** wrapped in `postWorkflowDefinitionMutation`, clears the draft, and
+  restores it on `EXECUTE_PROMPT_ERROR`.
+- `src/test/unit/CliExecutionRunner.test.ts` (exists): the extracted writer
+  emits the same focus/chunk/submit byte sequence `executeInteractiveInject`
+  emitted before the refactor, returns `false` on a dead PTY, and serializes two
+  concurrent callers without interleaving chunks.
+- `src/test/unit/WorkflowInstance.test.ts` (exists): session→integration
+  resolution from both `activeTargetResources` and `liveInjectIntegrations`; a
+  `sessionId` belonging to another workflow, a shell session, or a dead PTY each
+  throws rather than writing; temp files are **not** deleted immediately after
+  the write.
+- A preparer test proving a multi-line steer draft is prepared as a temp-file
+  reference (i.e. `injectMode = true` is actually in force) and that a
+  single-line plain draft goes inline.
+
+---
+
+## Not in scope (YAGNI)
+
+- A session picker for workflows with multiple concurrent interactive sessions
+  — always the rail-active session.
+- Any change to queued-step execution, `WorkflowExecutor`, or the state machine
+  — steering never touches the queue.
+- A new persisted record type in run manifests or `events.jsonl` — the
+  USER_STEER classification already covers it.
+- Rendering the referenced temp prompt file's body in the USER_STEER row — the
+  named follow-up if the reference form proves unreadable.
+- Steering into a **headless** (non-interactive) execution — there is no PTY.
+- Steering into a script step's PTY.
+- A keyboard shortcut for steer send. `Run in Parallel` and `Run in New
+Workflow` both shipped without one; add all three together later if usage
+  patterns call for it.
+- An MCP equivalent (`steer_session`). Worth considering once the UI ships and
+  the mid-turn attribution edge is understood in practice.
