@@ -474,6 +474,14 @@ prompt steps`. Unlike Run in Parallel and Run in New Workflow, which accept
 
 ## Implementation stages
 
+**Stage 1 status — landed:** `CliExecutionRunner.writeTurnToLivePty(text)` in
+`src/core/harness/shared/CliExecutionRunner.ts` now owns the single-sourced
+focus/chunk/submit sequence and post-write PTY termination check. Its
+runner-owned `AsyncMutex` (`turnWriteMutex`) serializes the complete sequence;
+the runner is created once by each `CliIntegration`, so
+`executeInteractiveInject` and the future steer caller share the same lock.
+No steer surface was added in this stage.
+
 **Stage 1 — PTY turn writer.** Extract the focus/chunk/submit/verify sequence
 out of `executeInteractiveInject` into a reusable writer, add the per-session
 `AsyncMutex`, and prove `executeInteractiveInject` is behavior-preserving.

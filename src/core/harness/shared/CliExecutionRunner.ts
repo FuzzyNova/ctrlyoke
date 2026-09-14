@@ -27,6 +27,7 @@ import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/Comple
 import { configService } from "../../../config/CtrlYokeConfigService";
 import type { CliExecutionTransportCoordinator } from "./CliTransportCoordinator";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
+import { AsyncMutex } from "./AsyncMutex";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {
@@ -116,6 +117,8 @@ export class CliExecutionRunner {
     CliExecutionSession,
     string
   >();
+  /** Serializes complete turn writes for the PTY owned by this runner. */
+  private readonly turnWriteMutex = new AsyncMutex();
 
   constructor(private readonly deps: CliExecutionRunnerDeps) {}
 
@@ -202,89 +205,8 @@ export class CliExecutionRunner {
 
     const startTime = new Date();
 
-    // Submit the prepared prompt text to the running TUI.
-    // Some TUIs (Copilot CLI confirmed) use focus tracking and only activate their
-    // keyboard input handler after receiving the "focus-in" VT sequence (ESC [ I = \x1b[I).
-    // Without it, the text and Enter are silently ignored even though the PTY write succeeds.
-    // Prepending \x1b[I tells the TUI it has focus, enabling input acceptance.
-    // TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
-    // "\r" (CR, 0x0D) is the submit key — same byte xterm.js sends when Enter is pressed.
-    // "\n" (LF) acts as a newline in multi-line input boxes, NOT submit.
-    // Send focus-in twice, then stream the prompt in smaller chunks so an idling
-    // TUI has multiple chances to attach its input handler before the full prompt
-    // arrives. Finally, send Enter twice because duplicate submits are benign
-    // while an occasional dropped submit is not.
-    const focusIn = "\x1b[I";
-    const submit = "\r";
-    const promptChunks = this.chunkInjectPrompt(
-      session.promptArgument,
-      CliExecutionRunner.INJECT_PROMPT_CHUNK_SIZE
-    );
-    Log.trace(
-      `[inject] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT) + session.promptArgument + submit.repeat(CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT)).toString("hex")}`
-    );
-
-    for (
-      let pulse = 0;
-      pulse < CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT;
-      pulse += 1
-    ) {
-      const focused =
-        this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
-      if (!focused) {
-        Log.warn(
-          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
-        );
-        return { injected: false };
-      }
-      await this.delay(CliExecutionRunner.INJECT_FOCUS_SETTLE_DELAY_MS);
-    }
-
-    for (const chunk of promptChunks) {
-      const promptWritten =
-        this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
-      if (!promptWritten) {
-        Log.warn(
-          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
-        );
-        return { injected: false };
-      }
-      await this.delay(CliExecutionRunner.INJECT_CHUNK_DELAY_MS);
-    }
-
-    await this.delay(CliExecutionRunner.INJECT_PRE_SUBMIT_DELAY_MS);
-
-    for (
-      let pulse = 0;
-      pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT;
-      pulse += 1
-    ) {
-      const submitWritten =
-        this.deps.transportCoordinator.writeToCurrentPtySession(submit);
-
-      if (!submitWritten) {
-        Log.warn(
-          "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
-        );
-        return { injected: false };
-      }
-
-      if (pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT - 1) {
-        await this.delay(CliExecutionRunner.INJECT_SUBMIT_DELAY_MS);
-      }
-    }
-
-    // Yield to the event loop so any pending PTY exit events from the prior prompt
-    // can propagate before we commit to monitoring. Without this yield, writeToCurrentPtySession
-    // can return true (currentPtySession is still set) even when the process has already
-    // exited but its onExit callback hasn't fired yet. A single await tick is enough —
-    // PTY onExit callbacks are macrotasks that fire in the next event loop iteration.
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    if (this.deps.failureTracker.getPtyTermination()) {
-      Log.warn(
-        "[CliExecutionRunner] Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
-      );
+    const written = await this.writeTurnToLivePty(session.promptArgument);
+    if (!written) {
       return { injected: false };
     }
 
@@ -323,6 +245,106 @@ export class CliExecutionRunner {
       return { injected: true, success: result.success };
     } finally {
       await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
+    }
+  }
+
+  /**
+   * Write a complete prompt turn to the currently active interactive PTY.
+   *
+   * The mutex covers the complete focus, prompt, submit, and termination-check
+   * sequence so concurrent callers cannot interleave input chunks.
+   */
+  async writeTurnToLivePty(text: string): Promise<boolean> {
+    await this.turnWriteMutex.acquire();
+    try {
+      // Some TUIs (Copilot CLI confirmed) use focus tracking and only activate their
+      // keyboard input handler after receiving the "focus-in" VT sequence (ESC [ I = \x1b[I).
+      // Without it, the text and Enter are silently ignored even though the PTY write succeeds.
+      // Prepending \x1b[I tells the TUI it has focus, enabling input acceptance.
+      // TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
+      // "\r" (CR, 0x0D) is the submit key — same byte xterm.js sends when Enter is pressed.
+      // "\n" (LF) acts as a newline in multi-line input boxes, NOT submit.
+      // Send focus-in twice, then stream the prompt in smaller chunks so an idling
+      // TUI has multiple chances to attach its input handler before the full prompt
+      // arrives. Finally, send Enter twice because duplicate submits are benign
+      // while an occasional dropped submit is not.
+      const focusIn = "\x1b[I";
+      const submit = "\r";
+      const promptChunks = this.chunkInjectPrompt(
+        text,
+        CliExecutionRunner.INJECT_PROMPT_CHUNK_SIZE
+      );
+      Log.trace(
+        `[inject] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT) + text + submit.repeat(CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT)).toString("hex")}`
+      );
+
+      for (
+        let pulse = 0;
+        pulse < CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT;
+        pulse += 1
+      ) {
+        const focused =
+          this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
+        if (!focused) {
+          Log.warn(
+            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+          );
+          return false;
+        }
+        await this.delay(CliExecutionRunner.INJECT_FOCUS_SETTLE_DELAY_MS);
+      }
+
+      for (const chunk of promptChunks) {
+        const promptWritten =
+          this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
+        if (!promptWritten) {
+          Log.warn(
+            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+          );
+          return false;
+        }
+        await this.delay(CliExecutionRunner.INJECT_CHUNK_DELAY_MS);
+      }
+
+      await this.delay(CliExecutionRunner.INJECT_PRE_SUBMIT_DELAY_MS);
+
+      for (
+        let pulse = 0;
+        pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT;
+        pulse += 1
+      ) {
+        const submitWritten =
+          this.deps.transportCoordinator.writeToCurrentPtySession(submit);
+
+        if (!submitWritten) {
+          Log.warn(
+            "[CliExecutionRunner] Inject mode: PTY session not active — TUI may have exited"
+          );
+          return false;
+        }
+
+        if (pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT - 1) {
+          await this.delay(CliExecutionRunner.INJECT_SUBMIT_DELAY_MS);
+        }
+      }
+
+      // Yield to the event loop so any pending PTY exit events from the prior prompt
+      // can propagate before we commit to monitoring. Without this yield, writeToCurrentPtySession
+      // can return true (currentPtySession is still set) even when the process has already
+      // exited but its onExit callback hasn't fired yet. A single await tick is enough —
+      // PTY onExit callbacks are macrotasks that fire in the next event loop iteration.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      if (this.deps.failureTracker.getPtyTermination()) {
+        Log.warn(
+          "[CliExecutionRunner] Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
+        );
+        return false;
+      }
+
+      return true;
+    } finally {
+      this.turnWriteMutex.release();
     }
   }
 
