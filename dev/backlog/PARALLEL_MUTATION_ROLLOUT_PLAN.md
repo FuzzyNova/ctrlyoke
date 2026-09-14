@@ -377,13 +377,13 @@ and `_runtime`; only its group membership changes, which is precisely what
 
 #### Track D session split
 
-| #   | Phase | Deliverable                                                       |
-| --- | ----- | ----------------------------------------------------------------- |
-| 1   | 5     | Growable drain loop + open/closed admission on `ParallelGroupRun` |
-| 2   | 5     | `joinRunningParallelGroup` + per-member admission preflight       |
-| 3   | 6     | Topology append + promotion (started-anchor opt-in)               |
-| 4   | 6     | `PromptQueue` wiring, revision bump, `WorkflowInstance` echo fix  |
-| 5   | 6     | Promotion snapshot re-attribution + integration coverage          |
+| #   | Phase | Deliverable                                                       | Status / next-session note                                                                                                                                                                                                                                          |
+| --- | ----- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 5     | Growable drain loop + open/closed admission on `ParallelGroupRun` | Complete. `ParallelGroupRun.admit()` rejects duplicate/closed or stopping admissions, starts a worker when capacity exists, and the drain loop waits for late members. Session 2 should use `isAdmissionOpen` and supply the live member resolution/preflight path. |
+| 2   | 5     | `joinRunningParallelGroup` + per-member admission preflight       |                                                                                                                                                                                                                                                                     |
+| 3   | 6     | Topology append + promotion (started-anchor opt-in)               |                                                                                                                                                                                                                                                                     |
+| 4   | 6     | `PromptQueue` wiring, revision bump, `WorkflowInstance` echo fix  |                                                                                                                                                                                                                                                                     |
+| 5   | 6     | Promotion snapshot re-attribution + integration coverage          |                                                                                                                                                                                                                                                                     |
 
 **Exit criteria.** `ParallelGroupTopology.test.ts` covers
 append-extends-`endIndex`, later-group shifting, valid two-member promotion, and
