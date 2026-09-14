@@ -1,10 +1,9 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Track E / Phase 3B complete. The queue-item union, atomic future
-> parallel-group enqueue, structured response, and generated MCP documentation
-> are shipped. Barrier 2 inherits this complete future-enqueue path; Phase 7
-> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
-> live join, and durable admission remain unbuilt.
+> **Status:** Waves 1 and 2 complete; Barrier 2 is behind us. Track F (Phases 7,
+> 8, 9) is the last wave and is staged as seven sessions — see the Track F
+> session split under Wave 3. `parallelWithCurrent`, live join, durable
+> admission, and the caller-level mutation bans are what remain.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -530,19 +529,20 @@ One loop, one worktree, phases in order. This wave is **not** parallelizable:
 every phase in it converges on the same join-and-admission code path, and Phase
 8 broadens who can exercise everything the previous eight phases built.
 
-**Phase 7 — Run in Parallel and durable admission.** Disp Stage 5 then MCP
-Stage 3, in that order:
+**Phase 7 — Run in Parallel and durable admission.** Disp Stage 5 and MCP
+Stage 3, **shared core first** (see the ordering correction below):
 
+- Persist `ActiveParallelGroupRuntime { groupId, admission }` as root runtime.
+  Make sequential settlement promotion-aware under the same lock. Implement the
+  locked reconcile-and-close join and the idempotent member reconciliation the
+  working-file watcher drives.
 - `ACTION_TYPES.RUN_PARALLEL` and `QUEUE_POSITION.PARALLEL_WITH_CURRENT` end to
   end; `resolveQueueInsertIndex` gains its optional `parallelGroups` argument;
   `useRunDispatchTargets` composes the availability gates; the effective
   parallel width is added to the always-synced lightweight `GlobalSettings`
   payload so the webview never re-derives the fan-out gate from
   `fullGlobalSettings` (which is `null` until the Global Settings drawer opens).
-- Persist `ActiveParallelGroupRuntime { groupId, admission }` as root runtime,
-  stripped on Save As. Make sequential settlement promotion-aware under the same
-  lock. Implement the locked reconcile-and-close join. Only then expose
-  `parallelWithCurrent` in tool discovery.
+- Only then expose `parallelWithCurrent` in tool discovery.
 
 Both halves must call the Phase 6 topology operations. There must be exactly one
 late-join implementation shared by the editor and MCP.
@@ -553,9 +553,50 @@ missed join and that watcher reconciliation schedules every accepted ID exactly
 once; `McpServer.test.ts` proves every live-join availability edge rejects
 rather than falling back to `next` or `end`.
 
+#### Phase 7 ordering correction
+
+`RUN_DISPATCH_MENU_PLAN.md` Stage 5 and `MCP_PARALLEL_APPEND_PLAN.md` Stage 3
+were written independently, and the "Disp 5 then MCP 3" order this file carried
+was inherited from that, not derived. It is wrong in one specific way: the
+editor's **promotion** path races the in-flight sequential step's settlement
+exactly as the MCP path does, and the promotion-aware settlement handoff is
+listed only under MCP Stage 3. Building Disp 5 first therefore means building
+that handoff twice — once in-process for the editor, then again under the lock
+for MCP — which Disp Decision 1's "exactly one late-join implementation" rule
+forbids.
+
+Track F therefore lands the **shared core** (durable admission, idempotent
+reconciliation, promotion-aware settlement, locked reconcile-and-close) before
+either consumer, then the editor, then MCP. Exposing `parallelWithCurrent` last
+still satisfies Rule 3, because by then the whole join mechanism — including
+the editor half that shares it — is complete.
+
+#### Phase 7 spec corrections
+
+Three details in the source plans do not survive contact with the current code:
+
+- **`useRunDispatchTargets` cannot compose `useActiveInteractiveSession`.**
+  `RUN_DISPATCH_MENU_PLAN.md` says it does, but that hook belongs to
+  `STEER_MESSAGE_PLAN.md`, which is unbuilt backlog and explicitly not in this
+  rollout. The hook returns `{ parallel, newWorkflow }` availability and
+  reasons; **Send Steer Message** stays the disabled placeholder Phase 4 left in
+  `EditorFooter.tsx`, and the steer plan adds its own key when it lands.
+- **Save As already strips root runtime; no stripping code is needed.**
+  `WorkflowSerializer.buildCleanWorkflow` copies an allowlist
+  (`WORKFLOW_FIELDS` / `PROMPT_FIELDS`), so `_runtime` — and therefore
+  `activeParallelGroup` inside it — never reaches a saved workflow. Phase 7 owes
+  a regression test pinning that, not a new strip step.
+- **The promotion echo's undo pause needs an explicit signal.** Track D's review
+  pass reverted a `useMessageHandler` heuristic that suppressed undo for every
+  `STEPS_EXTENDED` carrying an `executionState`, because the clipboard-paste
+  echo carries one too and the heuristic made every paste non-undoable. Phase 7
+  must pause undo for the promotion echo with a field that says so, and must not
+  reintroduce an inference from `executionState`.
+
 **Phase 8 — Permit parallel callers.** Mut Stage 5. Remove all three bans
-_together_ — `ParallelGroupPreflight.ts:278`, the `context.groupMember` check at
-`mcp-server.ts:192`, and the skill projection's removal of
+_together_ — the `DYNAMIC_QUEUE` issue in `ParallelGroupPreflight.ts`, the
+`!context.groupMember` clause in `toolAllowed` (`mcp-server.ts`), and the
+skill-projection filter in `HarnessIntegration.ts` that removes
 `MCP_SKILL_NAMES.TOOLS` from skill-mode parallel prompts. Native MCP and
 MCP-as-skill must expose the same effective tools; enabling one delivery mode
 before the other is a bug, not a staging step. Update the now-stale "parallel
@@ -578,6 +619,26 @@ Then dogfood it: build a parallel variant of
 `src/templates/workflows/spec-driven-loop.ctrlyoke.yaml` and run it against a
 real task. **Do not ship that template in this rollout** — all three plans list
 it as out of scope. It is the acceptance test, not a deliverable.
+
+**The dogfood is the user's manual step, not a queued session.** It needs a real
+task, a real harness spend, and a human watching the fan-out; an agent cannot
+sign it off. Phase 9's queued work ends at the automated integration coverage
+and the plan close-out, and hands the dogfood to the user.
+
+#### Track F session split
+
+| #   | Phase | Deliverable                                                               |
+| --- | ----- | ------------------------------------------------------------------------- |
+| 1   | 7     | Durable admission state + idempotent member reconciliation                |
+| 2   | 7     | Locked reconcile-and-close join + promotion-aware sequential settlement   |
+| 3   | 7     | `RUN_PARALLEL` backend: constants, append-or-promote, join, width payload |
+| 4   | 7     | Webview Run in Parallel: `useRunDispatchTargets`, gates, tooltips, toasts |
+| 5   | 7     | MCP `parallelWithCurrent` live join + schema/doc exposure                 |
+| 6   | 8     | Remove all three caller-level mutation bans together                      |
+| 7   | 9     | End-to-end integration coverage + close out all four plans                |
+
+Sessions 1 and 2 are the shared core; 3–4 and 5 are its two consumers. Session 5
+is the first place `parallelWithCurrent` becomes visible to any caller.
 
 ---
 
