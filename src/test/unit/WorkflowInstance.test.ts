@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import type { IEvent, IPty } from "node-pty";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
@@ -36,6 +37,10 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
+import {
+  initPtyProcessManager,
+  PtySession,
+} from "../../core/harness/PtyProcessManager";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -109,6 +114,58 @@ class MockHarnessIntegration extends HarnessIntegration {
   protected async cancelImplementation(): Promise<void> {}
 }
 
+class SteerableMockHarnessIntegration extends MockHarnessIntegration {
+  private activitySessionId?: string;
+  readonly steerMessages: string[] = [];
+
+  setActivitySessionId(sessionId: string): void {
+    this.activitySessionId = sessionId;
+  }
+
+  override getActivitySessionId(): string | undefined {
+    return this.activitySessionId;
+  }
+
+  override async sendSteerMessage(text: string): Promise<boolean> {
+    this.steerMessages.push(text);
+    return true;
+  }
+}
+
+class MockPty implements IPty {
+  readonly pid = 1;
+  readonly cols = 80;
+  readonly rows = 24;
+  readonly process = "test";
+  handleFlowControl = false;
+  readonly onData: IEvent<string> = () => ({ dispose: () => {} });
+  readonly onExit: IEvent<{ exitCode: number; signal?: number }> = () => ({
+    dispose: () => {},
+  });
+
+  resize(): void {}
+  clear(): void {}
+  write(): void {}
+  kill(): void {}
+  pause(): void {}
+  resume(): void {}
+}
+
+function createPtySession(
+  sessionId: string,
+  workflowId: string,
+  kind: "ai-cli" | "shell" = "ai-cli"
+): PtySession {
+  return new PtySession(
+    sessionId,
+    workflowId,
+    "test session",
+    0,
+    kind,
+    new MockPty()
+  );
+}
+
 class MockIntegrationFactory extends IntegrationFactory {
   constructor(platform: PlatformAdapter) {
     super(platform);
@@ -169,6 +226,100 @@ suite("WorkflowInstance target resources", () => {
       assert.strictEqual(sequentialFirst, sequentialSecond);
     } finally {
       instance.dispose();
+    }
+  });
+});
+
+suite("WorkflowInstance steer dispatch", () => {
+  function createInstance(): WorkflowInstance {
+    const platform = new MockPlatform();
+    return new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+  }
+
+  test("resolves an active target integration by PTY session", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const session = createPtySession("active-session", instance.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).activeTargetResources.set("active", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      integration,
+      ptySessionId: session.id,
+    });
+
+    try {
+      await instance.sendSteerMessage(session.id, "active steer");
+      assert.deepStrictEqual(integration.steerMessages, ["active steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("resolves a retained integration by activity PTY session", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const session = createPtySession("retained-session", instance.id);
+    integration.setActivitySessionId(session.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).liveInjectIntegrations.set(
+      HARNESS_IDS.COPILOT_CLI,
+      integration
+    );
+
+    try {
+      await instance.sendSteerMessage(session.id, "retained steer");
+      assert.deepStrictEqual(integration.steerMessages, ["retained steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("rejects foreign, shell, and dead PTY sessions without writing", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    const foreignSession = createPtySession("foreign-session", "other-workflow");
+    const shellSession = createPtySession(
+      "shell-session",
+      instance.id,
+      "shell"
+    );
+    let currentSession: PtySession | undefined = foreignSession;
+    ptyManager.getSession = () => currentSession;
+    (instance as any).activeTargetResources.set("active", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      integration,
+      ptySessionId: foreignSession.id,
+    });
+
+    try {
+      await assert.rejects(
+        instance.sendSteerMessage(foreignSession.id, "foreign steer")
+      );
+      currentSession = shellSession;
+      await assert.rejects(
+        instance.sendSteerMessage(shellSession.id, "shell steer")
+      );
+      currentSession = undefined;
+      await assert.rejects(
+        instance.sendSteerMessage("dead-session", "dead steer")
+      );
+      assert.deepStrictEqual(integration.steerMessages, []);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
     }
   });
 });

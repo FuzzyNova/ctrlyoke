@@ -40,6 +40,61 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("uses inject-safe temp files for multiline prompts but keeps plain prompts inline", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      isInjectablePrompt: (promptText) => !/[\x00-\x1f\x7f]/u.test(promptText),
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" | "),
+    });
+
+    const properties = {
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      model: "model",
+      executionMode: EXECUTION_MODES.INTERACTIVE,
+      resumeSession: false,
+      mcpServers: [],
+      hooks: null,
+      toolPermissions: null,
+    } satisfies ResolvedProperties;
+    const multiline = await preparer.preparePrompt(
+      { prompt: "first line\nsecond line" },
+      undefined,
+      properties,
+      undefined,
+      true
+    );
+    const singleLine = await preparer.preparePrompt(
+      { prompt: "single line" },
+      undefined,
+      properties,
+      undefined,
+      true
+    );
+
+    assert.strictEqual(multiline.tempFilePaths.length, 1);
+    assert.ok(multiline.promptWithInstruction.includes("@"));
+    assert.deepStrictEqual(singleLine.tempFilePaths, []);
+    assert.strictEqual(singleLine.promptWithInstruction, "single line");
+    await new Promise<void>((resolve, reject) => {
+      fs.rm(multiline.tempFilePaths[0], { force: true }, (error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+  });
+
   test("diagnoses the skill-mode MCP-to-skill replacement", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
