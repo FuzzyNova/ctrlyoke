@@ -414,6 +414,30 @@ export class WorkflowExecutor {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator
     );
+    this.promptQueue.onDidMergeDiskSteps((steps) => {
+      const groupRun = this.activeParallelGroupRun;
+      if (!groupRun) {
+        return;
+      }
+      const group = this.promptQueue
+        .getState()
+        .parallelGroups.find((candidate) => candidate.id === groupRun.group.id);
+      if (!group) {
+        return;
+      }
+      const survivingIds = steps
+        .map((step) => step._runtime?.stepId)
+        .filter((stepId): stepId is string => stepId !== undefined)
+        .filter((stepId) => {
+          const index = this.promptQueue
+            .getState()
+            .steps.findIndex(
+              (candidate) => candidate._runtime?.stepId === stepId
+            );
+          return index >= group.startIndex && index <= group.endIndex;
+        });
+      groupRun.reconcileMembers(survivingIds);
+    });
   }
 
   private getRuntime() {
@@ -1017,6 +1041,18 @@ export class WorkflowExecutor {
         this.promptQueue.commitParallelGroupJoin(joinGroup, outcomes),
       persistAdmission: (admission) =>
         this.promptQueue.setActiveParallelGroupAdmission(group.id, admission),
+      reconcileAndClose: ({
+        groupId,
+        outcomes,
+        isKnownMember,
+        reconcileMembers,
+      }) =>
+        this.promptQueue.reconcileAndCloseParallelGroup(
+          groupId,
+          outcomes,
+          isKnownMember,
+          reconcileMembers
+        ),
       confirmPause: () =>
         this.confirmPauseAndStop(
           "[WorkflowExecutor] Workflow paused after parallel group members settled"
@@ -1098,7 +1134,8 @@ export class WorkflowExecutor {
     if (!groupRun.isAdmissionOpen) {
       return {
         accepted: false,
-        diagnostic: "The running parallel group is no longer accepting members.",
+        diagnostic:
+          "The running parallel group is no longer accepting members.",
       };
     }
 
@@ -1111,10 +1148,7 @@ export class WorkflowExecutor {
         diagnostic: `Parallel group ${groupRun.group.id} is missing from the current definition.`,
       };
     }
-    if (
-      stepIndex < liveGroup.startIndex ||
-      stepIndex > liveGroup.endIndex
-    ) {
+    if (stepIndex < liveGroup.startIndex || stepIndex > liveGroup.endIndex) {
       return {
         accepted: false,
         diagnostic: `Step ${stepIndex + 1} is not a member of the running parallel group.`,
@@ -1275,9 +1309,31 @@ export class WorkflowExecutor {
     outcome: StepExecutionOutcome,
     context: WorkflowExecutionContext
   ): Promise<boolean> {
-    await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
+    const settlement =
+      await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
     await this.settleCoordinationParticipant(outcome.target, context);
     this.broadcastSettledProgress(context);
+
+    // A promotion committed while the sequential target was running owns the
+    // target's outcome as a group member. Leave currentIndex at the group's
+    // anchor so the normal loop starts one shared ParallelGroupRun, and hand
+    // the outcome to an already-running coordinator when one exists.
+    if (settlement.promotedGroup) {
+      const stepId =
+        outcome.target.kind === FINAL_STEP_PHASES.QUEUE
+          ? this.promptQueue.getState().steps[outcome.target.stepIndex]
+              ?._runtime?.stepId
+          : undefined;
+      if (stepId) {
+        this.activeParallelGroupRun?.reconcileMembers([stepId]);
+      }
+      if (
+        await this.confirmPauseAndStop("[WorkflowExecutor] Workflow paused")
+      ) {
+        return false;
+      }
+      return true;
+    }
 
     if (outcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
       if (outcome.terminalFailure !== false) {

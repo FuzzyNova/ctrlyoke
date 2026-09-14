@@ -458,6 +458,79 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getActiveParallelGroupRuntime(), undefined);
   });
 
+  test("does not advance a sequential anchor promoted before settlement", async () => {
+    const queue = new PromptQueue();
+    const anchor = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const tail = new MockHarnessIntegration(undefined, false);
+    anchor.onSend = async () => {
+      await queue.promoteStepToParallelGroup(0, { prompt: "promoted-sibling" });
+      return { responseText: "anchor" };
+    };
+
+    queue.loadPrompts({
+      steps: [{ prompt: "anchor" }, { prompt: "tail" }],
+    });
+    const context = makeParallelContext(
+      new Map([
+        [0, anchor],
+        [1, sibling],
+        [2, tail],
+      ])
+    );
+
+    await makeExecutor(queue).execute(anchor, context);
+
+    assert.deepStrictEqual(anchor.sentPrompts, ["anchor"]);
+    assert.deepStrictEqual(sibling.sentPrompts, ["promoted-sibling"]);
+    assert.deepStrictEqual(tail.sentPrompts, ["tail"]);
+    assert.strictEqual(queue.getState().currentIndex, 3);
+    assert.deepStrictEqual(
+      queue
+        .getState()
+        .steps.map((step) => step._runtime?.completedAt !== undefined),
+      [true, true, true]
+    );
+  });
+
+  test("reconciles watcher members once when an in-process join races the merge", async () => {
+    const queue = new PromptQueue();
+    const first = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const late = new MockHarnessIntegration(undefined, false);
+    queue.loadPrompts({
+      steps: [{ prompt: "first" }, { prompt: "sibling" }, { prompt: "late" }],
+      parallelGroups: [
+        { id: "watcher-group", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    const context = makeParallelContext(
+      new Map([
+        [0, first],
+        [1, sibling],
+        [2, late],
+      ])
+    );
+    const executor = makeExecutor(queue);
+    let inProcessJoin:
+      | Awaited<ReturnType<WorkflowExecutor["joinRunningParallelGroup"]>>
+      | undefined;
+    first.onSend = async () => {
+      queue.getState().parallelGroups[0].endIndex = 2;
+      const mergedStep = queue.getState().steps[2];
+      assert.ok(mergedStep);
+      (queue as any).onDiskStepsMergedEmitter.fire([mergedStep]);
+      (queue as any).onDiskStepsMergedEmitter.fire([mergedStep]);
+      inProcessJoin = await executor.joinRunningParallelGroup(2);
+      return { responseText: "first" };
+    };
+
+    await executor.execute(first, context);
+
+    assert.strictEqual(inProcessJoin?.accepted, false);
+    assert.deepStrictEqual(late.sentPrompts, ["late"]);
+  });
+
   test("preflights a pending member from its edited definition after claiming", async () => {
     const queue = new PromptQueue();
     const first = new MockHarnessIntegration(undefined, false);
@@ -537,11 +610,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       [2, late],
     ]);
     queue.loadPrompts({
-      steps: [
-        { prompt: "first" },
-        { prompt: "sibling" },
-        { prompt: "late" },
-      ],
+      steps: [{ prompt: "first" }, { prompt: "sibling" }, { prompt: "late" }],
       parallelGroups: [
         { id: "late-join", startIndex: 0, endIndex: 1, failFast: true },
       ],
@@ -554,10 +623,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         boundaries.set(prompt.prompt, workflowContext?.groupStartBoundary);
         if (stepIndex === 0) {
           queue.getState().parallelGroups[0].endIndex = 2;
-          assert.deepStrictEqual(
-            await executor.joinRunningParallelGroup(2),
-            { accepted: true }
-          );
+          assert.deepStrictEqual(await executor.joinRunningParallelGroup(2), {
+            accepted: true,
+          });
           await firstRelease.promise;
         } else if (stepIndex === 2) {
           lateStarted.resolve();
@@ -603,7 +671,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     queue.loadPrompts({
       steps: [{ prompt: "first" }, { prompt: "sibling" }, { prompt: "late" }],
       parallelGroups: [
-        { id: "width-limited-join", startIndex: 0, endIndex: 1, failFast: true },
+        {
+          id: "width-limited-join",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: true,
+        },
       ],
     });
     const context = makeParallelContext(integrations);
@@ -613,10 +686,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     first.onSend = async () => {
       firstStarted.resolve();
       queue.getState().parallelGroups[0].endIndex = 2;
-      assert.deepStrictEqual(
-        await executor.joinRunningParallelGroup(2),
-        { accepted: true }
-      );
+      assert.deepStrictEqual(await executor.joinRunningParallelGroup(2), {
+        accepted: true,
+      });
       joinResolved.resolve();
       await firstRelease.promise;
       return { responseText: "first" };
@@ -712,17 +784,21 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.loadPrompts({
         steps: [{ prompt: "first" }, { prompt: "sibling" }, { prompt: "late" }],
         parallelGroups: [
-          { id: `stop-pause-${mode}`, startIndex: 0, endIndex: 1, failFast: true },
+          {
+            id: `stop-pause-${mode}`,
+            startIndex: 0,
+            endIndex: 1,
+            failFast: true,
+          },
         ],
       });
       const context = makeParallelContext(integrations);
       const executor = makeExecutor(queue);
       first.onSend = async () => {
         queue.getState().parallelGroups[0].endIndex = 2;
-        assert.deepStrictEqual(
-          await executor.joinRunningParallelGroup(2),
-          { accepted: true }
-        );
+        assert.deepStrictEqual(await executor.joinRunningParallelGroup(2), {
+          accepted: true,
+        });
         return { responseText: "first" };
       };
       late.onSend = async () => {
@@ -740,9 +816,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       await lateStarted.promise;
       assert.ok(
         queue.getState().status ===
-          (mode === "stop"
-            ? EXECUTION_STATES.STOPPED
-          : EXECUTION_STATES.PAUSED)
+          (mode === "stop" ? EXECUTION_STATES.STOPPED : EXECUTION_STATES.PAUSED)
       );
       assert.ok(
         admissions.some(
@@ -770,9 +844,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         { id: "closed-join", startIndex: 0, endIndex: 1, failFast: true },
       ],
     });
-    let closedRun: Awaited<
-      ReturnType<WorkflowExecutor["joinRunningParallelGroup"]>
-    > | undefined;
+    let closedRun:
+      | Awaited<ReturnType<WorkflowExecutor["joinRunningParallelGroup"]>>
+      | undefined;
     const context = makeParallelContext(
       new Map([
         [0, integration],

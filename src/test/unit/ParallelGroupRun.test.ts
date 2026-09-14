@@ -58,6 +58,16 @@ function makeRun(options: {
     stepId: string,
     target: WorkflowAttemptTarget
   ) => Promise<StepExecutionOutcome>;
+  readonly reconcileAndClose?: (
+    options: Parameters<
+      NonNullable<
+        import("../../core/ParallelGroupRun").ParallelGroupRunOptions<TestContext>["reconcileAndClose"]
+      >
+    >[0]
+  ) => Promise<{
+    readonly joined: boolean;
+    readonly group?: ParallelGroupDefinition;
+  }>;
   readonly onCancel?: () => void;
 }) {
   const steps = new Map(options.ids.map((id) => [id, step(id)]));
@@ -140,6 +150,7 @@ function makeRun(options: {
       joinCount += 1;
       void outcomes;
     },
+    reconcileAndClose: options.reconcileAndClose,
   });
 
   return {
@@ -285,6 +296,40 @@ suite("ParallelGroupRun", () => {
     await harness.run.run();
 
     assert.deepStrictEqual(harness.run.reconcileMembers(["late"]), []);
+  });
+
+  test("returns to draining when the locked close discovers a late member", async () => {
+    let closeAttempts = 0;
+    const executed: string[] = [];
+    const group: ParallelGroupDefinition = {
+      id: "group",
+      startIndex: 0,
+      endIndex: 1,
+      failFast: true,
+    };
+    const harness = makeRun({
+      ids: ["first", "late"],
+      pendingIds: ["first"],
+      width: 1,
+      execute: async (stepId, target) => {
+        executed.push(stepId);
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+      reconcileAndClose: ({ reconcileMembers }) => {
+        closeAttempts += 1;
+        if (closeAttempts === 1) {
+          assert.deepStrictEqual(reconcileMembers(["late"]), ["late"]);
+          return Promise.resolve({ joined: false, group });
+        }
+        return Promise.resolve({ joined: true, group });
+      },
+    });
+
+    const outcome = await harness.run.run();
+
+    assert.deepStrictEqual(executed, ["first", "late"]);
+    assert.strictEqual(closeAttempts, 2);
+    assert.strictEqual(outcome.settledCount, 2);
   });
 
   test("rejects admission during stop and settles the group", async () => {

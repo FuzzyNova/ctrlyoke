@@ -38,6 +38,11 @@ export interface ParallelGroupRunningMember {
   readonly preflightMember?: ParallelGroupPreflightMember;
 }
 
+export interface ParallelGroupReconcileAndCloseResult {
+  readonly joined: boolean;
+  readonly group?: ParallelGroupDefinition;
+}
+
 export interface ParallelGroupRunOptions<TContext extends object> {
   readonly group: ParallelGroupDefinition;
   readonly pendingIds: readonly string[];
@@ -97,6 +102,18 @@ export interface ParallelGroupRunOptions<TContext extends object> {
   readonly persistAdmission?: (
     admission: ParallelGroupAdmission
   ) => Promise<void>;
+  /**
+   * Atomically merges disk topology, reconciles late IDs, or closes and
+   * commits the group. The executor supplies the file-backed implementation.
+   */
+  readonly reconcileAndClose?: (options: {
+    readonly groupId: string;
+    readonly outcomes: readonly StepExecutionOutcome[];
+    readonly isKnownMember: (stepId: string) => boolean;
+    readonly reconcileMembers: (
+      stepIds: readonly string[]
+    ) => readonly string[];
+  }) => Promise<ParallelGroupReconcileAndCloseResult>;
   readonly confirmPause?: () => Promise<void>;
 }
 
@@ -198,50 +215,88 @@ export class ParallelGroupRun<TContext extends object> {
 
     try {
       this.runStarted = true;
-      await this.drainWorkers();
-      if (this.workerError !== undefined) {
-        await this.closeAdmission();
-        await this.cancelRunning();
-        throw this.workerError;
-      }
+      while (true) {
+        await this.drainWorkers();
+        if (this.workerError !== undefined) {
+          await this.closeAdmission();
+          await this.cancelRunning();
+          throw this.workerError;
+        }
 
-      const stopped = this.isStopped();
-      const paused = this.isPaused();
-      if (stopped || this.failFastTriggered) {
-        await this.closeAdmission();
-        await this.cancelRunning();
-        await this.cancelRemainingPending();
-      }
+        const stopped = this.isStopped();
+        const paused = this.isPaused();
+        if (stopped || this.failFastTriggered) {
+          await this.closeAdmission();
+          await this.cancelRunning();
+          await this.cancelRemainingPending();
+        }
 
-      // Close before reading the current group or committing the join. A
-      // concurrent admission must be rejected once the drain is complete.
-      await this.closeAdmission();
-      const orderedOutcomes = this.getOrderedOutcomes();
-      if (paused) {
-        await this.options.confirmPause?.();
-        return this.createOutcome(orderedOutcomes, false, true, false);
-      }
+        if (paused) {
+          await this.closeAdmission();
+          await this.options.confirmPause?.();
+          return this.createOutcome(
+            this.getOrderedOutcomes(),
+            false,
+            true,
+            false
+          );
+        }
 
-      const joinGroup = this.options.getCurrentGroup(this.options.group.id);
-      if (!joinGroup) {
-        throw new Error(
-          `Cannot join parallel group ${this.options.group.id}: group is missing from the current definition`
+        let joinGroup: ParallelGroupDefinition | undefined;
+        if (
+          !stopped &&
+          !this.failFastTriggered &&
+          this.options.reconcileAndClose
+        ) {
+          const reconciliation = await this.options.reconcileAndClose({
+            groupId: this.options.group.id,
+            outcomes: this.getOrderedOutcomes(),
+            isKnownMember: (stepId) =>
+              this.pendingIds.includes(stepId) ||
+              this.running.has(stepId) ||
+              this.outcomes.has(stepId),
+            reconcileMembers: (stepIds) => this.reconcileMembers(stepIds),
+          });
+          if (!reconciliation.joined) {
+            await this.drainWorkers();
+            continue;
+          }
+          this.admissionOpen = false;
+          this.admissionClosePromise ??= Promise.resolve();
+          joinGroup = reconciliation.group;
+        } else {
+          // Close before reading the current group or committing the join. A
+          // concurrent admission must be rejected once the drain is complete.
+          await this.closeAdmission();
+          joinGroup = this.options.getCurrentGroup(this.options.group.id);
+          if (!joinGroup) {
+            throw new Error(
+              `Cannot join parallel group ${this.options.group.id}: group is missing from the current definition`
+            );
+          }
+          await this.options.commitJoin(joinGroup, this.getOrderedOutcomes());
+        }
+
+        if (!joinGroup) {
+          throw new Error(
+            `Cannot join parallel group ${this.options.group.id}: commit did not return a group`
+          );
+        }
+        const orderedOutcomes = this.getOrderedOutcomes();
+
+        const terminalFailure = orderedOutcomes.some(
+          (outcome) =>
+            outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
+            outcome.terminalFailure !== false
+        );
+        return this.createOutcome(
+          orderedOutcomes,
+          terminalFailure,
+          false,
+          stopped,
+          joinGroup
         );
       }
-      await this.options.commitJoin(joinGroup, orderedOutcomes);
-
-      const terminalFailure = orderedOutcomes.some(
-        (outcome) =>
-          outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
-          outcome.terminalFailure !== false
-      );
-      return this.createOutcome(
-        orderedOutcomes,
-        terminalFailure,
-        false,
-        stopped,
-        joinGroup
-      );
     } finally {
       stopWatcher?.dispose();
     }

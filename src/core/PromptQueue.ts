@@ -64,6 +64,15 @@ import {
 } from "./ParallelGroupTopology";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+
+export interface SequentialStepSettlement {
+  readonly promotedGroup?: ParallelGroupDefinition;
+}
+
+export interface ParallelGroupReconcileResult {
+  readonly joined: boolean;
+  readonly group?: ParallelGroupDefinition;
+}
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportPromptCompleted } from "../utils/TelemetryEvents";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -150,6 +159,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   private readonly stateMachine: WorkflowStateMachine;
   private readonly runtimeArchive = new Map<string, PromptRuntimeMetadata>();
   private activeParallelGroupRuntime?: ActiveParallelGroupRuntime;
+  private readonly onDiskStepsMergedEmitter = new TypedEmitter<
+    readonly WorkflowStep[]
+  >();
   /**
    * Resolver-derived active-execution output cache. These values deliberately
    * never live on WorkflowStep._runtime or in workflow.ctrlyoke.json.
@@ -162,6 +174,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
+  /** Fired when a working-file merge discovers new queue members. */
+  public readonly onDidMergeDiskSteps = this.onDiskStepsMergedEmitter.event;
 
   constructor(stateMachine: WorkflowStateMachine = new WorkflowStateMachine()) {
     this.stateMachine = stateMachine;
@@ -194,6 +208,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         diskSteps: WorkflowStep[],
         parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
       ) => this.mergeDiskSteps(diskSteps, parallelGroups),
+      onDiskStepsMerged: (steps) => this.onDiskStepsMergedEmitter.fire(steps),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
       getFinalStepExecutionMetadata: () =>
@@ -296,7 +311,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /** Return the durable projection for the currently executing parallel group. */
-  public getActiveParallelGroupRuntime(): ActiveParallelGroupRuntime | undefined {
+  public getActiveParallelGroupRuntime():
+    | ActiveParallelGroupRuntime
+    | undefined {
     return this.activeParallelGroupRuntime
       ? { ...this.activeParallelGroupRuntime }
       : undefined;
@@ -1006,18 +1023,113 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   async commitStepOutcomeAndAdvance(
     outcome: StepExecutionOutcome
-  ): Promise<void> {
-    if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
-      return;
+  ): Promise<SequentialStepSettlement> {
+    const target = outcome.target;
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return {};
     }
 
-    this.applyStepOutcome(outcome);
-    this.state.currentIndex = Math.max(
-      this.state.currentIndex,
-      outcome.target.stepIndex + 1
-    );
-    this.emitStateChange();
-    await this.updateWorkingFile();
+    let settlement: SequentialStepSettlement = {};
+    await this.workingFileManager.runInQueueWithWorkingFileLock(async () => {
+      const workingFilePath = this.state.workingFilePath;
+      if (workingFilePath) {
+        const workingFile = await this.readWorkingFile(workingFilePath);
+        const diskSteps = workingFile.steps ?? [];
+        const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
+        const newStepsFromDisk = this.mergeDiskSteps(
+          diskSteps,
+          workingFile.parallelGroups
+        );
+        if (newStepsFromDisk.length > 0) {
+          this.state.definitionRevision = diskDefinitionRevision;
+          this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
+          this.emitStateChange();
+        }
+      }
+
+      const promotedGroup = this.state.parallelGroups.find(
+        (group) =>
+          target.stepIndex >= group.startIndex &&
+          target.stepIndex <= group.endIndex
+      );
+
+      this.applyStepOutcome(outcome);
+      if (promotedGroup) {
+        settlement = { promotedGroup };
+      } else {
+        this.state.currentIndex = Math.max(
+          this.state.currentIndex,
+          target.stepIndex + 1
+        );
+      }
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect(true, true);
+    });
+    return settlement;
+  }
+
+  /**
+   * Merge the latest definition and atomically reconcile or close a live
+   * group. The caller supplies the run's ID-keyed reconciliation so this
+   * queue remains independent from the executor's worker pool.
+   */
+  public async reconcileAndCloseParallelGroup(
+    groupId: string,
+    outcomes: readonly StepExecutionOutcome[],
+    isKnownMember: (stepId: string) => boolean,
+    reconcileMembers: (stepIds: readonly string[]) => readonly string[]
+  ): Promise<ParallelGroupReconcileResult> {
+    let result: ParallelGroupReconcileResult = { joined: false };
+    await this.workingFileManager.runInQueueWithWorkingFileLock(async () => {
+      const workingFilePath = this.state.workingFilePath;
+      if (workingFilePath) {
+        const workingFile = await this.readWorkingFile(workingFilePath);
+        const newStepsFromDisk = this.mergeDiskSteps(
+          workingFile.steps ?? [],
+          workingFile.parallelGroups
+        );
+        if (newStepsFromDisk.length > 0) {
+          this.state.definitionRevision = workingFile.definitionRevision ?? 1;
+          this.emitStateChange();
+        }
+      }
+
+      const joinGroup = this.state.parallelGroups.find(
+        (group) => group.id === groupId
+      );
+      if (!joinGroup) {
+        throw new Error(
+          `Cannot join parallel group ${groupId}: group is missing from the current definition`
+        );
+      }
+
+      if (workingFilePath) {
+        const survivingIds = this.state.steps
+          .slice(joinGroup.startIndex, joinGroup.endIndex + 1)
+          .map((step) => step._runtime?.stepId)
+          .filter(
+            (stepId): stepId is string =>
+              stepId !== undefined && !isKnownMember(stepId)
+          );
+        if (survivingIds.length > 0) {
+          const admitted = reconcileMembers(survivingIds);
+          if (admitted.length > 0) {
+            result = { joined: false, group: joinGroup };
+            return;
+          }
+        }
+      }
+
+      this.activeParallelGroupRuntime = {
+        groupId,
+        admission: PARALLEL_GROUP_ADMISSION.CLOSING,
+      };
+      this.emitStateChange();
+      this.applyParallelGroupJoin(joinGroup, outcomes);
+      await this.workingFileManager.updateWorkingFileDirect(true, true);
+      result = { joined: true, group: joinGroup };
+    });
+    return result;
   }
 
   async commitParallelGroupJoin(
@@ -1025,31 +1137,38 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     outcomes: readonly StepExecutionOutcome[]
   ): Promise<void> {
     await this.workingFileManager.runInQueue(async () => {
-      for (const outcome of outcomes) {
-        if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
-          continue;
-        }
-
-        if (
-          outcome.target.stepIndex < group.startIndex ||
-          outcome.target.stepIndex > group.endIndex
-        ) {
-          continue;
-        }
-
-        this.applyStepOutcome(outcome);
-      }
-
-      this.state.currentIndex = Math.max(
-        this.state.currentIndex,
-        group.endIndex + 1
-      );
-      if (this.activeParallelGroupRuntime?.groupId === group.id) {
-        this.activeParallelGroupRuntime = undefined;
-      }
+      this.applyParallelGroupJoin(group, outcomes);
       this.emitStateChange();
       await this.workingFileManager.updateWorkingFileDirect();
     });
+  }
+
+  private applyParallelGroupJoin(
+    group: ParallelGroupDefinition,
+    outcomes: readonly StepExecutionOutcome[]
+  ): void {
+    for (const outcome of outcomes) {
+      if (outcome.target.kind !== FINAL_STEP_PHASES.QUEUE) {
+        continue;
+      }
+
+      if (
+        outcome.target.stepIndex < group.startIndex ||
+        outcome.target.stepIndex > group.endIndex
+      ) {
+        continue;
+      }
+
+      this.applyStepOutcome(outcome);
+    }
+
+    this.state.currentIndex = Math.max(
+      this.state.currentIndex,
+      group.endIndex + 1
+    );
+    if (this.activeParallelGroupRuntime?.groupId === group.id) {
+      this.activeParallelGroupRuntime = undefined;
+    }
   }
 
   getSettledCount(): number {
@@ -1782,6 +1901,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         `[PromptQueue] mergeStepsFromDisk: Found ${newStepsFromDisk.length} new steps from disk (MCP append), merging into queue`
       );
 
+      this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
+
       // Update queue extension tracking
       this.state.queueExtensions++;
       this.state.lastReloadTime = Date.now();
@@ -1922,12 +2043,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       step,
       () => stepIndex + 1,
       (topology, identifiedStep) =>
-        promoteStepToParallelGroup(topology, stepIndex, identifiedStep, options),
+        promoteStepToParallelGroup(
+          topology,
+          stepIndex,
+          identifiedStep,
+          options
+        ),
       (topology) =>
         topology.parallelGroups.find(
           (candidate) =>
-            stepIndex >= candidate.startIndex &&
-            stepIndex <= candidate.endIndex
+            stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
         )?.id
     );
   }
@@ -1977,7 +2102,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const insertIndex = nextTopology.steps.indexOf(identifiedStep);
       if (insertIndex < 0) {
-        throw new Error(`Parallel group member was not inserted (${operation})`);
+        throw new Error(
+          `Parallel group member was not inserted (${operation})`
+        );
       }
 
       const activeGroupId = getActiveGroupId?.(nextTopology);

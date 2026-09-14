@@ -441,6 +441,9 @@ export interface IWorkingFileQueueAccess {
     parallelGroups?: ParallelGroupDefinition[]
   ): WorkflowStep[];
 
+  /** Notify the execution owner that disk supplied new queue members. */
+  onDiskStepsMerged?(steps: readonly WorkflowStep[]): void;
+
   /** Emit state change notification to listeners */
   emitStateChange(): void;
 
@@ -1905,16 +1908,18 @@ export class WorkingFileManager {
    * Direct working file update (no operation queue serialization).
    * Use this when already executing within the operation queue context (e.g., from runInQueue).
    * @param skipMerge If true, writes memory state directly without checking for MCP changes
+   * @param alreadyLocked If true, assumes the caller already holds the working-file lock
    */
   public async updateWorkingFileDirect(
-    skipMerge: boolean = false
+    skipMerge: boolean = false,
+    alreadyLocked: boolean = false
   ): Promise<void> {
     const workingFilePath = this.queueAccess.getWorkingFilePath();
     if (!workingFilePath) {
       return; // No working file to update
     }
 
-    await withFileLock(workingFilePath, async () => {
+    const update = async () => {
       // Read current working file from disk
       const workingFile = await this.readWorkingFile(workingFilePath);
       this.assertExpectedDefinitionRevision(workingFile);
@@ -1942,6 +1947,8 @@ export class WorkingFileManager {
           Log.info(
             `[WorkingFileManager] updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
           );
+
+          this.queueAccess.onDiskStepsMerged?.(newStepsFromDisk);
 
           // Emit state change so dashboard updates
           this.queueAccess.emitStateChange();
@@ -2045,7 +2052,13 @@ export class WorkingFileManager {
           "lastModifiedAt",
         ],
       });
-    });
+    };
+
+    if (alreadyLocked) {
+      await update();
+    } else {
+      await withFileLock(workingFilePath, update);
+    }
   }
 
   private getPersistedExecutionTiming(): Pick<
@@ -2324,6 +2337,31 @@ export class WorkingFileManager {
       }
     );
     await operation;
+  }
+
+  /**
+   * Run a serialized queue operation while holding the working-file lock.
+   * The callback must use `updateWorkingFileDirect(true, true)` for writes.
+   */
+  public async runInQueueWithWorkingFileLock<T>(
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const operation = this.operationQueue.then(async () => {
+      const workingFilePath = this.queueAccess.getWorkingFilePath();
+      if (!workingFilePath) {
+        return fn();
+      }
+      return withFileLock(workingFilePath, fn);
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      (err) => {
+        Log.error(
+          `[WorkingFileManager] operationQueue: locked operation failed: ${getErrorMessage(err)}`
+        );
+      }
+    );
+    return operation;
   }
 
   // ==================== Private Helpers ====================
