@@ -1,8 +1,10 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Track E / Phase 3B / Session 2 complete. The queue-item union is
-> published through `append_step`; generated MCP documentation and later
-> rollout work remain backlog.
+> **Status:** Track E / Phase 3B complete. The queue-item union, atomic future
+> parallel-group enqueue, structured response, and generated MCP documentation
+> are shipped. Barrier 2 inherits this complete future-enqueue path; Phase 7
+> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
+> live join, and durable admission remain unbuilt.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -372,7 +374,7 @@ landed. Publishing the queue-item union _is_ an edit to `append_step`'s
 name `McpToolSkillGenerator.test.ts`; the original two-file "Owns" list could
 not satisfy either. Track D enters neither file, so there is no wave-2 conflict.
 
-**Phase 3B.** MCP Stage 2 publishes the Phase 3A queue-item union as
+**Phase 3B — complete.** MCP Stage 2 publishes the Phase 3A queue-item union as
 `append_step`'s `items` schema and deletes the flat-only `"parallel" in step`
 rejection in `handleAppendStep`; accepts an incoming `ParallelGroupTopology`
 rather than only `WorkflowStep[]`; inserts the whole batch atomically in one
@@ -421,8 +423,11 @@ Each session closes exactly one of the three exit-criteria test files above.
 Session 1 landed the shared queue-limit helpers and the topology-accepting,
 locked continuation transaction, including flattened capacity enforcement and
 atomic append metadata. Session 2 landed publication of the queue-item union,
-flattened MCP validation, and the structured append response. Session 3 still
-owes generated MCP documentation for the flat and future-container forms.
+flattened MCP validation, and the structured append response. Session 3 landed
+generated MCP documentation for the flat and future-container forms, including
+the explicit `next`-queues-after-the-active-group wording. Barrier 2 inherits
+the complete Phase 3B future-enqueue contract; Phase 7 inherits the unbuilt
+`parallelWithCurrent` live-join path and durable admission state.
 
 ### Wave 2 conflict surface
 

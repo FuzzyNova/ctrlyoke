@@ -4,6 +4,8 @@ import {
   MCP_TOOL_DEFINITIONS,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
+  type McpToolDefinition,
+  type McpToolExample,
 } from "./McpToolDefinitions";
 import { MCP_SKILL_NAMES } from "../types/DashboardConstants";
 import type { McpToolSkillRunContext } from "../types/WorkflowContextTypes";
@@ -86,6 +88,75 @@ function renderParameters(schema: McpToolInputSchema): string {
   return ["Parameters:", ...lines].join("\n");
 }
 
+function renderCommand(
+  tool: McpToolDefinition,
+  args: Record<string, unknown>,
+  paths: {
+    mcpServerPath: string;
+    workspaceRoot: string;
+    workingFilePath: string;
+    commitOutputPath: string;
+    executionRoot: string;
+  },
+  context: McpToolSkillRunContext | undefined
+): string {
+  const serializedArgs = JSON.stringify(args);
+  if (tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME) {
+    return `node \"${paths.mcpServerPath}\" --tool ${tool.name} --args '${serializedArgs}' --workspace \"${paths.workspaceRoot}\" --commit-output \"${paths.commitOutputPath}\"`;
+  }
+
+  return (
+    `node \"${paths.mcpServerPath}\" --tool ${tool.name} --args '${serializedArgs}' --workspace \"${paths.workspaceRoot}\" --working-file \"${paths.workingFilePath}\"` +
+    (MCP_COORDINATION_TOOL_NAMES.includes(
+      tool.name as (typeof MCP_COORDINATION_TOOL_NAMES)[number]
+    )
+      ? ` --execution-root \"${paths.executionRoot}\"${
+          context?.parallelGroupId !== undefined || !context
+            ? ` --step-index \"${resolveValue(context, "stepIndex", STEP_INDEX_PLACEHOLDER)}\"`
+            : ""
+        }${
+          context?.parallelGroupId !== undefined || !context
+            ? ` --parallel-group-id \"${resolveValue(context, "parallelGroupId", PARALLEL_GROUP_ID_PLACEHOLDER)}\"`
+            : ""
+        }`
+      : "")
+  );
+}
+
+function renderExamples(
+  tool: McpToolDefinition,
+  paths: {
+    mcpServerPath: string;
+    workspaceRoot: string;
+    workingFilePath: string;
+    commitOutputPath: string;
+    executionRoot: string;
+  },
+  context: McpToolSkillRunContext | undefined
+): string[] {
+  const examples: readonly McpToolExample[] = tool.examples ?? [
+    {
+      description: "example",
+      args: getMcpSchemaExampleValue(tool.inputSchema) as Record<
+        string,
+        unknown
+      >,
+    },
+  ];
+
+  if (examples.length === 1 && examples[0].description === "example") {
+    return ["Example:", renderCommand(tool, examples[0].args, paths, context)];
+  }
+
+  return [
+    "Examples:",
+    ...examples.flatMap((example) => [
+      `Example (${example.description}):`,
+      renderCommand(tool, example.args, paths, context),
+    ]),
+  ];
+}
+
 /** Render live MCP tool definitions as instructions for the built-in skill. */
 export class McpToolSkillGenerator {
   static generateToolReference(
@@ -125,32 +196,21 @@ export class McpToolSkillGenerator {
     return [
       "## Available ctrlyoke MCP tools",
       ...tools.map((tool) => {
-        const args = JSON.stringify(getMcpSchemaExampleValue(tool.inputSchema));
-        const command =
-          tool.name === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
-            ? `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --commit-output \"${commitOutputPath}\"`
-            : `${
-                `node \"${mcpServerPath}\" --tool ${tool.name} --args '${args}' --workspace \"${workspaceRoot}\" --working-file \"${workingFilePath}\"` +
-                (MCP_COORDINATION_TOOL_NAMES.includes(
-                  tool.name as (typeof MCP_COORDINATION_TOOL_NAMES)[number]
-                )
-                  ? ` --execution-root \"${executionRoot}\"${
-                      context?.parallelGroupId !== undefined || !context
-                        ? ` --step-index \"${resolveValue(context, "stepIndex", STEP_INDEX_PLACEHOLDER)}\"`
-                        : ""
-                    }${
-                      context?.parallelGroupId !== undefined || !context
-                        ? ` --parallel-group-id \"${resolveValue(context, "parallelGroupId", PARALLEL_GROUP_ID_PLACEHOLDER)}\"`
-                        : ""
-                    }`
-                  : "")
-              }`;
         return [
           `### ${tool.name}`,
           tool.description,
           renderParameters(tool.inputSchema),
-          "Example:",
-          command,
+          ...renderExamples(
+            tool,
+            {
+              mcpServerPath,
+              workspaceRoot,
+              workingFilePath,
+              commitOutputPath,
+              executionRoot,
+            },
+            context
+          ),
         ].join("\n");
       }),
     ].join("\n\n");

@@ -1,8 +1,10 @@
 # MCP Parallel Append Plan
 
-> **Status:** Phase 3B / Stage 2 / Session 2 complete. The queue-item union is
-> published through `append_step`; generated MCP documentation and later stages
-> remain backlog.
+> **Status:** Phase 3B / Stage 2 complete. The queue-item union, atomic future
+> parallel-group enqueue, structured response, and generated MCP documentation
+> are shipped. Barrier 2 inherits the complete future-enqueue contract; Phase 7
+> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
+> live join, and durable admission remain unbuilt.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -394,10 +396,10 @@ incoming batch after absolute-index translation. For a live join,
 `parallelGroupsAdded` contains the promoted group only when promotion created
 one.
 
-The generated MCP skill/reference must include one flat example, one future
-container example, and one `parallelWithCurrent` example. Tool descriptions
-must say explicitly that `next` queues after the active group while
-`parallelWithCurrent` joins it.
+The generated MCP skill/reference must include one flat example and one future
+container example. Tool descriptions must say explicitly that `next` queues
+after the active group; joining it is not available through this position enum
+until the later live-join stage.
 
 ---
 
@@ -471,13 +473,15 @@ authored `parallel:` items, keeping relative range math single-sourced. Stage 2
 inherits this helper and its normalized topology result. The queue-item union
 schema is published through `append_step` alongside the handler change.
 
-**Stage 2 — Future parallel-group enqueue.** Session 1 landed the shared
+**Stage 2 — Future parallel-group enqueue — complete.** Session 1 landed the shared
 queue-limit helpers, topology-accepting continuation transaction, atomic
 topology insertion, flattened in-lock capacity validation, and append metadata
 for absolute groups and added steps. Session 2 landed publication of the
 queue-item union and MCP-side flattened validation/structured response. Session
-3 still owes generated MCP docs covering both append forms. This stage can ship
-before manual late join and is already useful to sequential orchestrators.
+3 landed generated MCP docs covering both append forms. This stage ships before
+manual late join and is already useful to sequential orchestrators. Barrier 2
+inherits the complete future-enqueue contract; Phase 7 inherits the unbuilt
+`parallelWithCurrent` live-join path and durable admission state.
 
 **Stage 3 — Durable live-join admission.** After the mutability and dispatch
 prerequisites, persist admission state, add queue-definition reconciliation,
