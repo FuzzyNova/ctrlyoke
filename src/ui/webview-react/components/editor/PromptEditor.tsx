@@ -56,8 +56,8 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
-import { notifyUser } from "@utils/notifyUser";
-import { showWebviewToast } from "@utils/notifyUser";
+import { notifyUser, showWebviewToast } from "@utils/notifyUser";
+import { generateWorkflowNameFromPrompt } from "@root/utils/workflowNaming";
 import {
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
@@ -94,19 +94,6 @@ function isOnlyColorChange(
     originalWithoutColor as WorkflowStep,
     submittedWithoutColor as WorkflowStep
   );
-}
-
-function ephemeralWorkflowName(text: string, promptName: string): string {
-  if (promptName.trim()) return promptName.trim();
-
-  const cleanWords = text
-    .trim()
-    .split(/\s+/)
-    .slice(0, 5)
-    .map((word) => word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
-    .filter((word) => word.length > 0);
-
-  return cleanWords.length > 0 ? cleanWords.join(" ") : "Ephemeral Prompt";
 }
 
 /**
@@ -940,6 +927,56 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return () => window.removeEventListener("message", handleMessage);
   }, [vscode]);
 
+  // The script step's property payload. Every dispatch destination sends the
+  // identical set, so it is built once here — a second copy drifts the moment
+  // one path gains a script property and the other does not.
+  const buildScriptProperties = useCallback(
+    (): Record<string, unknown> => ({
+      type: STEP_TYPES.SCRIPT,
+      ...(scriptEnv &&
+        Object.keys(scriptEnv).length > 0 && {
+          env: scriptEnv,
+        }),
+      ...(properties.secrets === null
+        ? { secrets: null }
+        : Array.isArray(properties.secrets) && properties.secrets.length > 0
+          ? { secrets: properties.secrets }
+          : {}),
+      ...(properties.errorBehavior !== undefined && {
+        errorBehavior: properties.errorBehavior,
+      }),
+      ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+      ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+        onPass: scriptOnPass,
+      }),
+      ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
+        onFail: scriptOnFail,
+      }),
+      ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+        compareSource: scriptCompareSource,
+      }),
+      ...(scriptReturns && { returns: scriptReturns }),
+      ...(scriptExecutionMode !== undefined && {
+        executionMode: scriptExecutionMode,
+      }),
+      ...(scriptShell?.trim() && { shell: scriptShell }),
+      ...(properties.color !== undefined && { color: properties.color }),
+      ...(!stepEnabled && { enabled: false }),
+    }),
+    [
+      properties,
+      scriptCompareSource,
+      scriptEnv,
+      scriptExecutionMode,
+      scriptOnFail,
+      scriptOnPass,
+      scriptReturns,
+      scriptShell,
+      scriptTimeout,
+      stepEnabled,
+    ]
+  );
+
   // Compute the final action based on execution state (shared by prompt and script paths)
   const resolveFinalAction = useCallback(
     (action: string): string => {
@@ -970,39 +1007,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.EXECUTE_PROMPT,
           text: command,
-          properties: {
-            type: STEP_TYPES.SCRIPT,
-            ...(scriptEnv &&
-              Object.keys(scriptEnv).length > 0 && {
-                env: scriptEnv,
-              }),
-            ...(properties.secrets === null
-              ? { secrets: null }
-              : Array.isArray(properties.secrets) &&
-                  properties.secrets.length > 0
-                ? { secrets: properties.secrets }
-                : {}),
-            ...(properties.errorBehavior !== undefined && {
-              errorBehavior: properties.errorBehavior,
-            }),
-            ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
-              onPass: scriptOnPass,
-            }),
-            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
-              onFail: scriptOnFail,
-            }),
-            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
-              compareSource: scriptCompareSource,
-            }),
-            ...(scriptReturns && { returns: scriptReturns }),
-            ...(scriptExecutionMode !== undefined && {
-              executionMode: scriptExecutionMode,
-            }),
-            ...(scriptShell?.trim() && { shell: scriptShell }),
-            ...(properties.color !== undefined && { color: properties.color }),
-            ...(!stepEnabled && { enabled: false }),
-          },
+          properties: buildScriptProperties(),
           action: finalAction,
           promptName: promptName.trim(),
         });
@@ -1038,16 +1043,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     [
       isScriptMode,
       scriptCommand,
-      scriptTimeout,
-      scriptOnPass,
-      scriptOnFail,
-      scriptCompareSource,
-      scriptReturns,
-      scriptEnv,
-      scriptExecutionMode,
-      scriptShell,
-      properties,
-      stepEnabled,
+      buildScriptProperties,
       promptText,
       promptName,
       getPropertyValues,
@@ -1068,36 +1064,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       text = scriptCommand.trim();
       if (!text) return;
 
-      propertyValues = {
-        type: STEP_TYPES.SCRIPT,
-        ...(scriptEnv &&
-          Object.keys(scriptEnv).length > 0 && { env: scriptEnv }),
-        ...(properties.secrets === null
-          ? { secrets: null }
-          : Array.isArray(properties.secrets) && properties.secrets.length > 0
-            ? { secrets: properties.secrets }
-            : {}),
-        ...(properties.errorBehavior !== undefined && {
-          errorBehavior: properties.errorBehavior,
-        }),
-        ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-        ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
-          onPass: scriptOnPass,
-        }),
-        ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
-          onFail: scriptOnFail,
-        }),
-        ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
-          compareSource: scriptCompareSource,
-        }),
-        ...(scriptReturns && { returns: scriptReturns }),
-        ...(scriptExecutionMode !== undefined && {
-          executionMode: scriptExecutionMode,
-        }),
-        ...(scriptShell?.trim() && { shell: scriptShell }),
-        ...(properties.color !== undefined && { color: properties.color }),
-        ...(!stepEnabled && { enabled: false }),
-      };
+      propertyValues = buildScriptProperties();
     } else {
       text = promptText.trim();
       if (!text) return;
@@ -1108,7 +1075,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       pendingNewWorkflowToastRef.current = {
         previousWorkflowId: currentWorkflowId,
         previousWorkflowName: currentWorkflowName,
-        newWorkflowName: ephemeralWorkflowName(text, promptName),
+        newWorkflowName: generateWorkflowNameFromPrompt(text, promptName),
       };
     }
     lastSubmittedTextRef.current = text;
@@ -1122,24 +1089,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     markClean();
     vscode.setState(null);
   }, [
+    buildScriptProperties,
     fileName,
     getPropertyValues,
     isScriptMode,
     markClean,
-    properties,
     promptName,
     promptText,
     resetEditor,
     scriptCommand,
-    scriptCompareSource,
-    scriptEnv,
-    scriptExecutionMode,
-    scriptOnFail,
-    scriptOnPass,
-    scriptReturns,
-    scriptShell,
-    scriptTimeout,
-    stepEnabled,
     vscode,
     workflowName,
   ]);

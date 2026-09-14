@@ -146,6 +146,12 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     menuPlacement,
     "200px"
   );
+  // A portaled menu is not in the DOM until its position is measured, so the
+  // focus effect below has to re-run once it mounts. Depend on this boolean
+  // rather than on `popupPos` itself: every scroll and resize re-measures and
+  // hands back a fresh object, which would re-run the effect and yank keyboard
+  // focus back to the first item mid-navigation.
+  const isMenuMounted = !portal || popupPos !== null;
 
   // Browsers dispatch no pointer events on a disabled control, so in collapsed
   // mode a disabled main action would take its own menu down with it. Keep the
@@ -177,7 +183,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       );
       setFocusedIndex(firstEnabled >= 0 ? firstEnabled : -1);
     }
-  }, [isOpen, options, popupPos, portal]);
+  }, [isOpen, options, isMenuMounted]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

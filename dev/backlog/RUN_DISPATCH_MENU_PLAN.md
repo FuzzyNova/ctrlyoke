@@ -1,6 +1,9 @@
 # Run Dispatch Menu Plan
 
-> **Status:** Backlog / design proposal. Nothing here is implemented.
+> **Status:** Partially implemented. **Stages 1–2 have shipped** (the
+> split-button shell and Run in New Workflow, landed as Phase 4 / Track B of the
+> rollout plan below). Stages 3–5 are still backlog and remain a design
+> proposal; Stage 6 belongs to `STEER_MESSAGE_PLAN.md`.
 >
 > **Companion to:** [`STEER_MESSAGE_PLAN.md`](./STEER_MESSAGE_PLAN.md) (backlog).
 > That plan introduces the split-button shell on `btn-editor-run` and its first

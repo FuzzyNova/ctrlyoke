@@ -49,6 +49,7 @@ import {
   readWorkflowStopRequest,
 } from "../utils/WorkflowStopRequest";
 import { pathsEqual } from "../utils/PathCasing";
+import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
   ACTION_TYPES,
   COMPARE_SOURCES,
@@ -3518,7 +3519,7 @@ export class WorkflowInstance {
     step: WorkflowStep;
     stepHarness: HarnessId | undefined;
   } {
-    const workflowName = this.generateWorkflowNameFromPrompt(text, promptName);
+    const workflowName = generateWorkflowNameFromPrompt(text, promptName);
     const step = buildEphemeralWorkflowStep(text, properties, promptName);
     return {
       workflowName,
@@ -6106,23 +6107,5 @@ export class WorkflowInstance {
     }
 
     return workingFilePath;
-  }
-
-  private generateWorkflowNameFromPrompt(
-    text: string,
-    promptName?: string
-  ): string {
-    if (promptName?.trim()) {
-      return promptName.trim();
-    }
-
-    const cleanWords = text
-      .trim()
-      .split(/\s+/)
-      .slice(0, 5)
-      .map((word) => word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
-      .filter((word) => word.length > 0);
-
-    return cleanWords.length > 0 ? cleanWords.join(" ") : "Ephemeral Prompt";
   }
 }

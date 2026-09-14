@@ -321,3 +321,30 @@ describe("SplitButton — footer form", () => {
     ).toHaveAttribute("aria-selected", "true");
   });
 });
+
+describe("SplitButton — portaled menu keyboard focus survives repositioning", () => {
+  it("keeps the highlighted item when a scroll or resize re-measures the popup", async () => {
+    const user = userEvent.setup();
+    renderSplitButton({ portal: true, menuPlacement: "top" });
+
+    queryChevron()!.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("option", { name: "First option" });
+    await user.keyboard("{ArrowDown}");
+    expect(
+      screen.getByRole("option", { name: "Second option" })
+    ).toHaveAttribute("aria-selected", "true");
+
+    // Re-measuring hands back a fresh position object on every scroll and
+    // resize. If the focus effect depends on that object rather than on
+    // whether the menu is mounted, the highlight snaps back to the first item.
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(
+      screen.getByRole("option", { name: "Second option" })
+    ).toHaveAttribute("aria-selected", "true");
+  });
+});

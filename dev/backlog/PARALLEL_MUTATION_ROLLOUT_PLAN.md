@@ -191,12 +191,13 @@ Workflow" enabled and the other two items present-but-disabled; implement
 `RUN_IN_NEW_WORKFLOW` end to end with pending-PTY-controller registration, view
 switch, and toast; delete `forceNewWorkflow`.
 
-**Exit criteria.** New
-`src/ui/webview-react/test/components/editor/EditorFooter.test.tsx` (none exists
-today), `PromptEditor.test.tsx` updated, and
-`src/test/unit/WorkflowOrchestrator.test.ts` proving the previous instance keeps
-running. `.btn-editor-run` stays on the **primary** button — three existing
-tests select on it.
+**Exit criteria — met.** New
+`src/ui/webview-react/test/components/editor/EditorFooter.test.tsx`,
+`PromptEditor.test.tsx` updated, and `src/test/unit/WorkflowOrchestrator.test.ts`
+proving the previous instance keeps running. `.btn-editor-run` stays on the
+**primary** button, and the primary button keeps its `Run` accessible name —
+that name, not the class, is what the existing `PromptEditor.test.tsx`
+assertions select on, which is why `SplitButton` gained `mainAriaLabel`.
 
 **Do not:** implement Run in Parallel behavior (Phase 7) or Send Steer Message
 (owned by `STEER_MESSAGE_PLAN.md`). Both are disabled placeholders with tooltips
