@@ -424,6 +424,44 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(second.sentPrompts, ["edited-before-dispatch"]);
   });
 
+  test("joins on the group's current bounds after a pending member is removed", async () => {
+    const queue = new PromptQueue();
+    const first = new MockHarnessIntegration(undefined, false);
+    const second = new MockHarnessIntegration(undefined, false);
+    const after = new MockHarnessIntegration(undefined, false);
+    // Shrink the group mid-run. A join that reused the fork-time endIndex
+    // would advance currentIndex past "after" and silently skip it.
+    first.onSend = async () => {
+      await queue.deletePrompt(2);
+      return { responseText: "first" };
+    };
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, first],
+      [1, second],
+      [2, after],
+    ]);
+    queue.loadPrompts({
+      steps: [
+        { prompt: "member-one" },
+        { prompt: "member-two" },
+        { prompt: "member-three" },
+        { prompt: "after-group" },
+      ],
+      parallelGroups: [
+        { id: "shrinking", startIndex: 0, endIndex: 2, failFast: false },
+      ],
+    });
+
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 1;
+    await makeExecutor(queue).execute(first, context);
+
+    assert.deepStrictEqual(queue.getState().parallelGroups, [
+      { id: "shrinking", startIndex: 0, endIndex: 1, failFast: false },
+    ]);
+    assert.deepStrictEqual(after.sentPrompts, ["after-group"]);
+  });
+
   test("captures cumulative group snapshots at the group target", async () => {
     const queue = new PromptQueue();
     const integrations = new Map<number, MockHarnessIntegration>();
