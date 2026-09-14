@@ -3523,7 +3523,9 @@ export class WorkflowInstance {
    * The topology mutation and the executor admission deliberately use the
    * shared PromptQueue/WorkflowExecutor paths used by other late joiners.
    */
-  private async executeEphemeralParallelPrompt(step: WorkflowStep): Promise<void> {
+  private async executeEphemeralParallelPrompt(
+    step: WorkflowStep
+  ): Promise<void> {
     const state = this.promptQueue.getState();
     const executionState = this.getAuthoritativeExecutionState();
     if (executionState !== EXECUTION_STATES.RUNNING) {
@@ -4657,7 +4659,9 @@ export class WorkflowInstance {
       session.kind !== SESSION_KINDS.AI_CLI ||
       session.status !== TERMINAL_SESSION_STATUS.RUNNING
     ) {
-      throw new Error("That harness session has ended. The steer message was not sent.");
+      throw new Error(
+        "That harness session has ended. The steer message was not sent."
+      );
     }
 
     const integration = this.findIntegrationForPtySession(sessionId);
@@ -4667,7 +4671,9 @@ export class WorkflowInstance {
 
     const sent = await integration.sendSteerMessage(text);
     if (!sent) {
-      throw new Error("That harness session has ended. The steer message was not sent.");
+      throw new Error(
+        "That harness session has ended. The steer message was not sent."
+      );
     }
   }
 

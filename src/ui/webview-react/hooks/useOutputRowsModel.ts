@@ -141,7 +141,9 @@ export function useOutputRowsModel({
     () => new Set(hiddenOutputTargets[hiddenOutputAddressKey]?.keys ?? []),
     [hiddenOutputAddressKey, hiddenOutputTargets]
   );
-  const coordinationScope = useWorkflowStore((state) => state.coordinationScope);
+  const coordinationScope = useWorkflowStore(
+    (state) => state.coordinationScope
+  );
   const [diffCollapseState, setDiffCollapseState] = useState<
     Map<string, boolean>
   >(new Map());

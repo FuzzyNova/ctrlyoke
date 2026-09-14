@@ -186,7 +186,7 @@ expecting a PO/procurement process, so it stays self-serve.
          assumed: - `subscription_created` (Subscription object — has `product_id`/
          `variant_id`/`order_id` directly, unlike Order) → looks up the license
          already created by `order_created` via `metadata.lsOrderId ==
- subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
+subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          so renewal events can find it later. LS doesn't guarantee this fires
          after `order_created` completes (only "alongside" it) — a race throws
          and lets LS's webhook retry catch it up, the same idempotent-retry
@@ -345,7 +345,7 @@ expecting a PO/procurement process, so it stays self-serve.
          `buyerEmail`, `buyerName` all survived the merge (proves
          `updateLicenseMetadata`'s fetch-then-merge, not LS's simulator, since
          this ran against the real purchase). - `subscription_payment_success` (invoice `8404222`, `billing_reason:
- "initial"`) → 200, correctly ignored (no renewal on the invoice that
+"initial"`) → 200, correctly ignored (no renewal on the invoice that
          accompanies the purchase itself). - License: policy **ctrlyoke Enterprise**, product **ctrlyoke**, status
          **ACTIVE**, expiry **2027-09-08 (1 year out)**, machine cap **0 of
          3000** — matches the policy's own duration, no explicit expiry needed
@@ -650,7 +650,7 @@ ships is what makes the bypassable one safe to have.
       should be confirmed on the first real `workflow_dispatch` run.
 - [x] **`release.yml` on `push: tags: ["v*"]`** — ✅ Built September 7, 2026:
       `.github/workflows/release.yml`. Runs the version/tag guard, `npm run
-  package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
+package`, `npx vsce publish --packagePath ctrlyoke-<version>.vsix`, then
       creates the GitHub Release via `softprops/action-gh-release@v2` with the
       matching `CHANGELOG.md` section (from the new
       `scripts/verify-release-tag.mjs`) as the body and the VSIX attached.

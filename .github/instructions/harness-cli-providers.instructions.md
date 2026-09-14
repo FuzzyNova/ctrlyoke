@@ -38,14 +38,15 @@ Harness-specific adapters for CLI execution. Provider directories should contain
   attribution result, not a coordination failure or a reason for a provider
   workaround.
 
-  | Harness | MCP config channel | Spawn-environment finding |
-  | --- | --- | --- |
-  | `copilot-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
-  | `claude-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
-  | `codex-cli` | Per-invocation config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
-  | `opencode-cli` | Process-local inline config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
-  | `qwen-cli` | Process-local inline config | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
-  | `antigravity-cli` | Workspace `.agents/mcp_config.json` | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| Harness           | MCP config channel                  | Spawn-environment finding                                                   |
+| ----------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| `copilot-cli`     | Per-invocation config               | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| `claude-cli`      | Per-invocation config               | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| `codex-cli`       | Per-invocation config               | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| `opencode-cli`    | Process-local inline config         | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| `qwen-cli`        | Process-local inline config         | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+| `antigravity-cli` | Workspace `.agents/mcp_config.json` | Inherits the shared spawn environment; vendor stdio launch may sanitize it. |
+
 </coordinationIdentity>
 
 <parsingAndRecovery>

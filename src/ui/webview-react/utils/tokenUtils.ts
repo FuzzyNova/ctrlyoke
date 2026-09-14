@@ -32,8 +32,12 @@ export function resolveEffectiveContextWindow(params: {
   latestOutputTokens?: ContextWindowTokens;
   runtimeContextWindow?: ContextWindowTokens;
 }): ContextWindowSnapshot | undefined {
-  const { isCurrent, liveContextWindow, latestOutputTokens, runtimeContextWindow } =
-    params;
+  const {
+    isCurrent,
+    liveContextWindow,
+    latestOutputTokens,
+    runtimeContextWindow,
+  } = params;
   const completed = latestOutputTokens?.contextWindowSize
     ? {
         used: latestOutputTokens.contextWindowUsed ?? 0,

@@ -531,7 +531,9 @@ describe("PromptEditor — Send Steer Message", () => {
     const runButton = screen.getByRole("button", { name: "Run" });
     runButton.focus();
     await user.keyboard("{ArrowDown}");
-    await user.click(screen.getByRole("option", { name: "Send Steer Message" }));
+    await user.click(
+      screen.getByRole("option", { name: "Send Steer Message" })
+    );
   }
 
   it("posts the plain steer message and clears the draft", async () => {

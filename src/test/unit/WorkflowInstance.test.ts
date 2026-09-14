@@ -290,7 +290,10 @@ suite("WorkflowInstance steer dispatch", () => {
     const instance = createInstance();
     const integration = new SteerableMockHarnessIntegration(undefined, false);
     const ptyManager = initPtyProcessManager(() => undefined);
-    const foreignSession = createPtySession("foreign-session", "other-workflow");
+    const foreignSession = createPtySession(
+      "foreign-session",
+      "other-workflow"
+    );
     const shellSession = createPtySession(
       "shell-session",
       instance.id,
@@ -1807,9 +1810,7 @@ suite("WorkflowInstance append-and-continue", () => {
         ACTION_TYPES.QUEUE
       );
 
-      const ephemeralEcho = updateCalls.find(
-        (args) => args[4] === instance.id
-      );
+      const ephemeralEcho = updateCalls.find((args) => args[4] === instance.id);
       assert.ok(ephemeralEcho);
       assert.deepStrictEqual(
         ephemeralEcho[5],
@@ -1832,7 +1833,10 @@ suite("WorkflowInstance append-and-continue", () => {
           updateProgress: () => {},
           updateWorkflowName: () => {},
         },
-        { get: (target, property: string | symbol) => target[property as keyof typeof target] ?? (() => {}) }
+        {
+          get: (target, property: string | symbol) =>
+            target[property as keyof typeof target] ?? (() => {}),
+        }
       );
       const instance = new WorkflowInstance(
         new MockPlatform(),
@@ -1899,10 +1903,13 @@ suite("WorkflowInstance append-and-continue", () => {
       );
       assert.strictEqual(state.steps.length, 2);
       assert.strictEqual(state.parallelGroups[0]?.endIndex, 1);
-      assert.deepStrictEqual(instance.promptQueue.getActiveParallelGroupRuntime(), {
-        groupId: state.parallelGroups[0]?.id,
-        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
-      });
+      assert.deepStrictEqual(
+        instance.promptQueue.getActiveParallelGroupRuntime(),
+        {
+          groupId: state.parallelGroups[0]?.id,
+          admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+        }
+      );
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
@@ -1937,7 +1944,10 @@ suite("WorkflowInstance append-and-continue", () => {
         undefined,
         parallelGroups
       );
-      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
       await startQueueExecution(instance);
       await instance.promptQueue.setActiveParallelGroupAdmission(
         "group-1",
@@ -1993,7 +2003,10 @@ suite("WorkflowInstance append-and-continue", () => {
         /No step is running/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 1);
-      assert.deepStrictEqual(instance.promptQueue.getState().parallelGroups, []);
+      assert.deepStrictEqual(
+        instance.promptQueue.getState().parallelGroups,
+        []
+      );
     } finally {
       instance.dispose();
     }
@@ -2013,10 +2026,7 @@ suite("WorkflowInstance append-and-continue", () => {
         () => {},
         tempWorkspace
       );
-      const steps: PromptStep[] = [
-        { prompt: "anchor" },
-        { prompt: "member" },
-      ];
+      const steps: PromptStep[] = [{ prompt: "anchor" }, { prompt: "member" }];
       const parallelGroups = [
         { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
       ];
@@ -2028,7 +2038,10 @@ suite("WorkflowInstance append-and-continue", () => {
         undefined,
         parallelGroups
       );
-      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
       await startQueueExecution(instance);
 
       await instance.promptQueue.setFinalStepRuntime({
@@ -2037,7 +2050,11 @@ suite("WorkflowInstance append-and-continue", () => {
         startedAt: Date.now(),
       });
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject final", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject final",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /final step cannot run in parallel/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 2);
@@ -2046,19 +2063,31 @@ suite("WorkflowInstance append-and-continue", () => {
       const stateMachine = instance.promptQueue.getRuntimeStateMachine();
       assert.strictEqual(stateMachine.pause(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject pause", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject pause",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /pausing/
       );
       assert.strictEqual(stateMachine.cancelPause(), true);
 
       assert.strictEqual(stateMachine.requestStop(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject stopping", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject stopping",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /No step is running/
       );
       assert.strictEqual(stateMachine.confirmStopped(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject stopped", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject stopped",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /No step is running/
       );
 
@@ -2072,7 +2101,11 @@ suite("WorkflowInstance append-and-continue", () => {
         startedAt: Date.now(),
       };
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject closed", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject closed",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /no longer accepting members/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 2);

@@ -15,7 +15,11 @@ describe("useActiveInteractiveSession", () => {
 
   it.each([
     ["a shell session", SESSION_KINDS.SHELL, TERMINAL_SESSION_STATUS.RUNNING],
-    ["a completed AI session", SESSION_KINDS.AI_CLI, TERMINAL_SESSION_STATUS.COMPLETED],
+    [
+      "a completed AI session",
+      SESSION_KINDS.AI_CLI,
+      TERMINAL_SESSION_STATUS.COMPLETED,
+    ],
   ] as const)("rejects %s", (_label, kind, status) => {
     useTerminalStore.setState({
       sessions: {

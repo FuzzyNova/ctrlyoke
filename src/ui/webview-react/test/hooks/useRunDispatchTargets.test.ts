@@ -199,7 +199,11 @@ describe("useRunDispatchTargets", () => {
   });
 
   it.each([
-    ["without a live session", undefined, "No live harness session for this workflow"],
+    [
+      "without a live session",
+      undefined,
+      "No live harness session for this workflow",
+    ],
     [
       "with a shell session",
       { kind: SESSION_KINDS.SHELL },
@@ -225,8 +229,16 @@ describe("useRunDispatchTargets", () => {
   });
 
   it.each([
-    ["outside new-prompt mode", { selectionTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP } }, "Only available for a new prompt"],
-    ["for a script step", { stepType: STEP_TYPES.SCRIPT }, "Steering is only available for prompt steps"],
+    [
+      "outside new-prompt mode",
+      { selectionTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP } },
+      "Only available for a new prompt",
+    ],
+    [
+      "for a script step",
+      { stepType: STEP_TYPES.SCRIPT },
+      "Steering is only available for prompt steps",
+    ],
     ["without draft content", { promptText: "" }, "Enter a prompt first"],
   ] as const)("disables steer %s", (_label, state, reason) => {
     setActiveAiCliSession();

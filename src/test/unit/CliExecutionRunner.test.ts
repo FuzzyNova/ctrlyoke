@@ -420,10 +420,7 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(await runner.executeHeadless(session, []), true);
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PROMPT_INDEX, "1");
-    assert.strictEqual(
-      getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID,
-      "group-1"
-    );
+    assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID, "group-1");
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

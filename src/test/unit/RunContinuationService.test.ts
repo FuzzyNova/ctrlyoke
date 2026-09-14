@@ -477,7 +477,9 @@ suite("RunContinuationService topology append transaction", () => {
       ]
     );
     const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     source._runtime = {
       ...source._runtime,
       currentIndex: 1,
@@ -514,7 +516,9 @@ suite("RunContinuationService topology append transaction", () => {
     ]);
     assert.strictEqual(joined.definitionRevision, 2);
 
-    const closing = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const closing = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     closing._runtime = {
       ...closing._runtime,
       currentIndex: closing._runtime?.currentIndex ?? 0,
@@ -548,15 +552,15 @@ suite("RunContinuationService topology append transaction", () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-live-promotion-transaction-")
     );
-    await seedRun(
-      [
-        { prompt: "completed", _runtime: { completedAt: 1 } },
-        { prompt: "running", _runtime: { startedAt: 2 } },
-        { prompt: "pending" },
-      ]
-    );
+    await seedRun([
+      { prompt: "completed", _runtime: { completedAt: 1 } },
+      { prompt: "running", _runtime: { startedAt: 2 } },
+      { prompt: "pending" },
+    ]);
     const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    const source = JSON.parse(await fs.readFile(runPath, "utf8")) as WorkingFile;
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
     source._runtime = {
       ...source._runtime,
       currentIndex: 1,

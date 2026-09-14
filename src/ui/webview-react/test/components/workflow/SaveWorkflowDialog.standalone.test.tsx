@@ -56,8 +56,6 @@ describe("SaveWorkflowDialog Browse in the hosted browser (isStandalone)", () =>
     render(<SaveWorkflowDialog />);
     fireEvent.click(screen.getByRole("button", { name: "Browse…" }));
 
-    expect(useUiStore.getState().fileBrowserState?.initialPath).toBe(
-      "sub/dir"
-    );
+    expect(useUiStore.getState().fileBrowserState?.initialPath).toBe("sub/dir");
   });
 });

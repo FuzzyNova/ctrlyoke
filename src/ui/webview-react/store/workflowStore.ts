@@ -931,8 +931,7 @@ export const useWorkflowStore = create<
 
       setWorkflowName: (workflowName) => set({ workflowName }),
 
-      setCoordinationScope: (coordinationScope) =>
-        set({ coordinationScope }),
+      setCoordinationScope: (coordinationScope) => set({ coordinationScope }),
 
       setPrompts: (steps) => {
         // Diagnostic logging for the "running badge/highlight never appear on

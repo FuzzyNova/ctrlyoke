@@ -270,7 +270,8 @@ export class WebviewSettingsSync {
     );
 
     const workflowState = this.getCurrentState(clientId);
-    const coordinationScope = await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
+    const coordinationScope =
+      await this.getOrchestrator()?.getCoordinationScopeSnapshot?.(clientId);
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
     this.licenseAccess = await this.resolveLicenseAccess();
