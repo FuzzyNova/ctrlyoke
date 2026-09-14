@@ -16,6 +16,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
+import { useActiveInteractiveSession } from "../../hooks/useActiveInteractiveSession";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -168,6 +169,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
   const runDispatchTargets = useRunDispatchTargets(activeWorkflowId);
+  const activeInteractiveSession =
+    useActiveInteractiveSession(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PropertiesDrawer for footer tab bar) ─────
   const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
@@ -1062,6 +1065,38 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     executePrompt(ACTION_TYPES.RUN_PARALLEL);
   }, [executePrompt, runDispatchTargets.parallel.enabled]);
 
+  const sendSteerMessage = useCallback(() => {
+    if (
+      !runDispatchTargets.steer.enabled ||
+      !activeWorkflowId ||
+      !activeInteractiveSession
+    ) {
+      return;
+    }
+
+    const text = promptText.trim();
+    if (!text) return;
+
+    lastSubmittedTextRef.current = text;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+      workflowId: activeWorkflowId,
+      sessionId: activeInteractiveSession.id,
+      text,
+    });
+    resetEditor();
+    markClean();
+    vscode.setState(null);
+  }, [
+    activeInteractiveSession,
+    activeWorkflowId,
+    markClean,
+    promptText,
+    resetEditor,
+    runDispatchTargets.steer.enabled,
+    vscode,
+  ]);
+
   const runInNewWorkflow = useCallback(() => {
     const currentWorkflowId = useUiStore.getState().activeWorkflowId;
     const currentWorkflowName = workflowName || fileName || "current workflow";
@@ -1599,8 +1634,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onRun={() => executePrompt(ACTION_TYPES.RUN)}
         onRunInParallel={runInParallel}
         onRunInNewWorkflow={runInNewWorkflow}
+        onSendSteerMessage={sendSteerMessage}
         runInParallelTarget={runDispatchTargets.parallel}
         newWorkflowTarget={runDispatchTargets.newWorkflow}
+        steerTarget={runDispatchTargets.steer}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

@@ -1,7 +1,11 @@
 # Steer Message Plan
 
-> **Status:** Stage 2 landed; Stages 3–4 remain. Every open question this plan
-> previously carried is answered below; nothing here is blocking.
+> **Status:** Stage 4 shipped; the steer dispatch is live. Accepted v1
+> limitations are the mid-turn attribution race and the temp-file-reference
+> form of the `USER_STEER` receipt for multi-line drafts. Named follow-ups are
+> rendering the referenced temp file's body in the `USER_STEER` row and an MCP
+> `steer_session` equivalent. Every open question this plan previously carried
+> is answered below; nothing here is blocking.
 >
 > **Depends on:** [`RUN_DISPATCH_MENU_PLAN.md`](../implemented/RUN_DISPATCH_MENU_PLAN.md)
 > (implemented) — its Stage 6 is this plan. The split-button shell, the

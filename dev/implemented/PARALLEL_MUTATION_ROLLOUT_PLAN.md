@@ -574,12 +574,11 @@ the editor half that shares it — is complete.
 
 Three details in the source plans do not survive contact with the current code:
 
-- **`useRunDispatchTargets` cannot compose `useActiveInteractiveSession`.**
-  `RUN_DISPATCH_MENU_PLAN.md` says it does, but that hook belongs to
-  `STEER_MESSAGE_PLAN.md`, which is unbuilt backlog and explicitly not in this
-  rollout. The hook returns `{ parallel, newWorkflow }` availability and
-  reasons; **Send Steer Message** stays the disabled placeholder Phase 4 left in
-  `EditorFooter.tsx`, and the steer plan adds its own key when it lands.
+- **`useRunDispatchTargets` now composes `useActiveInteractiveSession`.**
+  That hook belonged to the steer plan, which was unbuilt when this Phase 7
+  correction was written. The steer plan has now shipped: the hook returns the
+  live rail-selected session for the `steer` availability gate, and
+  **Send Steer Message** is live in `EditorFooter.tsx`.
 - **Save As already strips root runtime; no stripping code is needed.**
   `WorkflowSerializer.buildCleanWorkflow` copies an allowlist
   (`WORKFLOW_FIELDS` / `PROMPT_FIELDS`), so `_runtime` — and therefore
