@@ -30,6 +30,7 @@ import {
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
   PARALLEL_GROUP_INSERT_POSITIONS,
+  type ParallelGroupInsertPlacement,
 } from "../ParallelGroupTopology";
 import {
   mergeWorkflowStepUpdate,
@@ -251,6 +252,8 @@ export class RunContinuationService {
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    placement: ParallelGroupInsertPlacement;
+    /** @deprecated Use placement.insertedIndex. */
     insertIndex: number;
   }> {
     if (tail.length === 0) {
@@ -331,7 +334,7 @@ export class RunContinuationService {
             "insert"
           );
         }
-        const insertIndex = resolveParallelGroupInsertIndex(
+        const placement = resolveParallelGroupInsertIndex(
           sourceTopology,
           requestedIndex,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
@@ -353,7 +356,8 @@ export class RunContinuationService {
           workingFile,
           definitionRevision: workingFile.definitionRevision,
           descriptorRevision: descriptor.revision,
-          insertIndex,
+          placement,
+          insertIndex: placement.insertedIndex,
         };
       });
     });
@@ -552,11 +556,12 @@ export class RunContinuationService {
           throw new Error(`Invalid insert index: ${index}`);
         }
         assertEditableDuringExecution(source, topology.steps, index, "insert");
-        const insertIndex = resolveParallelGroupInsertIndex(
+        const placement = resolveParallelGroupInsertIndex(
           topology,
           index,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
+        const insertIndex = placement.insertedIndex;
         const identifiedStep = ensureStepIds([
           ...topology.steps,
           stripStepRuntime([step])[0],

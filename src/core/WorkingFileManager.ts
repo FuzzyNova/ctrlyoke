@@ -55,6 +55,7 @@ import {
   resolveParallelGroupInsertIndex,
   snapParallelGroupStartPosition,
   PARALLEL_GROUP_INSERT_POSITIONS,
+  type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
@@ -1071,6 +1072,8 @@ export class WorkingFileManager {
     workingFile: WorkingFile;
     definitionRevision: number;
     descriptorRevision: number;
+    placement: ParallelGroupInsertPlacement;
+    /** @deprecated Use placement.insertedIndex. */
     insertIndex: number;
   }> {
     return RunContinuationService.appendStepsToRun(
@@ -1312,11 +1315,12 @@ export class WorkingFileManager {
           throw new Error(`Invalid insert index: ${afterIndex}`);
         }
         const requestedIndex = afterIndex + 1;
-        const insertIndex = resolveParallelGroupInsertIndex(
+        const placement = resolveParallelGroupInsertIndex(
           topology,
           requestedIndex,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
+        const insertIndex = placement.insertedIndex;
         const nextTopology = insertParallelGroupSteps(
           topology,
           requestedIndex,

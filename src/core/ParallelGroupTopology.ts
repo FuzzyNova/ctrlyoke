@@ -7,6 +7,10 @@ import {
   assertStartedStepPositionsPreserved,
   hasStarted,
 } from "./StepIdentity";
+import {
+  PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
+  type ParallelGroupInsertRelocationKind,
+} from "../types/DashboardConstants";
 
 export interface ParallelGroupTopology {
   steps: WorkflowStep[];
@@ -26,6 +30,17 @@ export const PARALLEL_GROUP_INSERT_POSITIONS = {
 
 export type ParallelGroupInsertPosition =
   (typeof PARALLEL_GROUP_INSERT_POSITIONS)[keyof typeof PARALLEL_GROUP_INSERT_POSITIONS];
+
+export interface ParallelGroupInsertRelocation {
+  kind: ParallelGroupInsertRelocationKind;
+  groupId: string;
+}
+
+export interface ParallelGroupInsertPlacement {
+  requestedIndex: number;
+  insertedIndex: number;
+  relocation?: ParallelGroupInsertRelocation;
+}
 
 function cloneTopology(topology: ParallelGroupTopology): ParallelGroupTopology {
   return {
@@ -141,7 +156,7 @@ export function resolveParallelGroupInsertIndex(
   topology: ParallelGroupTopology,
   index: number,
   position: ParallelGroupInsertPosition
-): number {
+): ParallelGroupInsertPlacement {
   const normalized = normalizeParallelGroupTopology(topology);
   assertIndex(index, "Insert index");
   if (index < 0 || index > normalized.steps.length) {
@@ -158,11 +173,23 @@ export function resolveParallelGroupInsertIndex(
     (group) => index > group.startIndex && index <= group.endIndex
   );
   if (!containing) {
-    return index;
+    return { requestedIndex: index, insertedIndex: index };
   }
-  return position === PARALLEL_GROUP_INSERT_POSITIONS.BEFORE
-    ? containing.startIndex
-    : containing.endIndex + 1;
+  const insertedIndex =
+    position === PARALLEL_GROUP_INSERT_POSITIONS.BEFORE
+      ? containing.startIndex
+      : containing.endIndex + 1;
+  return {
+    requestedIndex: index,
+    insertedIndex,
+    relocation: {
+      kind:
+        position === PARALLEL_GROUP_INSERT_POSITIONS.BEFORE
+          ? PARALLEL_GROUP_INSERT_RELOCATION_KINDS.BEFORE_PARALLEL_GROUP
+          : PARALLEL_GROUP_INSERT_RELOCATION_KINDS.AFTER_PARALLEL_GROUP,
+      groupId: containing.id,
+    },
+  };
 }
 
 /**
@@ -203,11 +230,12 @@ export function insertParallelGroupSteps(
   position: ParallelGroupInsertPosition = PARALLEL_GROUP_INSERT_POSITIONS.AFTER
 ): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
-  const insertIndex = resolveParallelGroupInsertIndex(
+  const placement = resolveParallelGroupInsertIndex(
     normalized,
     index,
     position
   );
+  const insertIndex = placement.insertedIndex;
   const result = {
     steps: [...normalized.steps],
     parallelGroups: shiftForInsert(
@@ -229,11 +257,12 @@ export function insertParallelGroupTopology(
 ): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
   const incomingNormalized = normalizeParallelGroupTopology(incoming);
-  const insertIndex = resolveParallelGroupInsertIndex(
+  const placement = resolveParallelGroupInsertIndex(
     normalized,
     index,
     position
   );
+  const insertIndex = placement.insertedIndex;
   const result: ParallelGroupTopology = {
     steps: [...normalized.steps],
     parallelGroups: [

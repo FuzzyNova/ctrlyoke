@@ -1736,7 +1736,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         ...this.state.steps,
         ...steps,
       ]).slice(this.state.steps.length);
-      const insertIndex = resolveParallelGroupInsertIndex(
+      const placement = resolveParallelGroupInsertIndex(
         {
           steps: this.state.steps,
           parallelGroups: this.state.parallelGroups,
@@ -1744,6 +1744,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         requestedIndex,
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
+      const insertIndex = placement.insertedIndex;
 
       // Insert steps at the specified position
       const identifiedTopology = insertParallelGroupTopology(
@@ -1832,11 +1833,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         parallelGroups: this.state.parallelGroups,
       };
       const requestedIndex = afterIndex + 1;
-      const insertIndex = resolveParallelGroupInsertIndex(
+      const placement = resolveParallelGroupInsertIndex(
         topology,
         requestedIndex,
         PARALLEL_GROUP_INSERT_POSITIONS.AFTER
       );
+      const insertIndex = placement.insertedIndex;
       const identifiedStep = ensureStepIds([...this.state.steps, step]).at(-1)!;
       const nextTopology = insertParallelGroupSteps(topology, requestedIndex, [
         identifiedStep,

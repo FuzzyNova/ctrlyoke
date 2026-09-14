@@ -193,6 +193,18 @@ Session 5 is the one Track D extends. Session 5 also performs the
 `preflightParallelGroupMember` split, because Decision 2 needs per-member
 resolution for _edits_, not only for the Phase 5 late join.
 
+#### Track A status
+
+Track A (Phases 1 and 2) is complete and ready for Barrier 1. The six sessions
+landed stable step identity, lock-held claim-by-ID dispatch, shared mutation
+guards, identity-keyed disk reconciliation, the `ParallelGroupRun` extraction,
+and structured insert placement. Placement is a plain
+`ParallelGroupInsertPlacement` returned by the topology resolver and carried
+through the continuation transaction as well as the MCP append response;
+`next` still never joins a live group. Track D can consume that result directly
+for late-join work, and Track E can extend the MCP response without changing the
+insertion transaction.
+
 ### Track B — Dashboard shell (Phase 4)
 
 **Owns:** `src/ui/webview-react/components/shared/SplitButton.tsx`,

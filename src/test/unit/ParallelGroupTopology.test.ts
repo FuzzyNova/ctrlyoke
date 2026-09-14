@@ -15,8 +15,10 @@ import {
   validateParallelGroupTopology,
   deleteParallelGroupStep,
   PARALLEL_GROUP_INSERT_POSITIONS,
+  resolveParallelGroupInsertIndex,
   type ParallelGroupTopology,
 } from "../../core/ParallelGroupTopology";
+import { PARALLEL_GROUP_INSERT_RELOCATION_KINDS } from "../../types/DashboardConstants";
 import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 
 const step = (name: string): WorkflowStep => ({ prompt: name });
@@ -129,6 +131,35 @@ suite("ParallelGroupTopology", () => {
   });
 
   suite("insertion and deletion", () => {
+    test("reports relocation after an enclosing parallel group", () => {
+      assert.deepStrictEqual(
+        resolveParallelGroupInsertIndex(
+          topology(),
+          2,
+          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+        ),
+        {
+          requestedIndex: 2,
+          insertedIndex: 4,
+          relocation: {
+            kind: PARALLEL_GROUP_INSERT_RELOCATION_KINDS.AFTER_PARALLEL_GROUP,
+            groupId: "g1",
+          },
+        }
+      );
+    });
+
+    test("reports an ordinary insertion without relocation", () => {
+      assert.deepStrictEqual(
+        resolveParallelGroupInsertIndex(
+          topology(),
+          5,
+          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+        ),
+        { requestedIndex: 5, insertedIndex: 5 }
+      );
+    });
+
     test("moves an insertion inside a group after the group", () => {
       const result = insertParallelGroupStep(topology(), 2, step("x"));
       assert.deepStrictEqual(names(result), ["a", "b", "c", "d", "x", "e"]);

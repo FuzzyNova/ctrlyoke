@@ -939,6 +939,15 @@ export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
 export type ParallelGroupPreflightDiagnosticCode =
   (typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES)[keyof typeof PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES];
 
+/** Reasons an insertion index was relocated around a parallel group. */
+export const PARALLEL_GROUP_INSERT_RELOCATION_KINDS = {
+  AFTER_PARALLEL_GROUP: "afterParallelGroup",
+  BEFORE_PARALLEL_GROUP: "beforeParallelGroup",
+} as const;
+
+export type ParallelGroupInsertRelocationKind =
+  (typeof PARALLEL_GROUP_INSERT_RELOCATION_KINDS)[keyof typeof PARALLEL_GROUP_INSERT_RELOCATION_KINDS];
+
 /** Commands emitted by the workflow runtime state machine. */
 export const WORKFLOW_RUNTIME_COMMANDS = {
   START_EXECUTION: "startExecution",

@@ -52,6 +52,7 @@ import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import type { ParallelGroupInsertPlacement } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
 import { isPathWithinDirectory } from "./utils/PathSecurity";
@@ -994,6 +995,7 @@ export class CtrlYokeMCPServer {
       stepsRejected: number;
       newQueueSize: number;
       insertIndex: number;
+      placement: ParallelGroupInsertPlacement;
       workingFile: string;
       runDirectory: string;
       workflowKey: WorkflowKey;
@@ -1044,7 +1046,8 @@ export class CtrlYokeMCPServer {
         newQueueSize: appended.workingFile.steps?.length ?? 0,
         // Resolved inside the run-file lock; with 'next' it can differ from the
         // caller's view if the run advanced between its status read and this write.
-        insertIndex: appended.insertIndex,
+        insertIndex: appended.placement.insertedIndex,
+        placement: appended.placement,
         workingFile: selected.filePath,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
           selected.filePath

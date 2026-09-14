@@ -1359,6 +1359,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         })
       );
       assert.strictEqual(inserted.insertIndex, 2);
+      assert.deepStrictEqual(inserted.placement, {
+        requestedIndex: 2,
+        insertedIndex: 2,
+      });
 
       await assert.rejects(
         () =>
@@ -1575,6 +1579,45 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         "mcp-next-append-owner"
       );
     }
+  });
+
+  test("includes numeric group relocation in the append response", async () => {
+    const server = await setup();
+    const run = await createRun("group-append", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 0,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.parallelGroups = [
+      { id: "mcp-authored-group", startIndex: 0, endIndex: 1, failFast: true },
+    ];
+    // Keep this an unattached, completed run so the Phase 8 caller-level group
+    // mutation ban remains exercised by the live-run tests above.
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      currentIndex: -1,
+      executionState: workingFile._runtime!.executionState,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool("append_step", {
+        position: 1,
+        steps: [{ prompt: "after authored group" }],
+      })
+    );
+
+    assert.deepStrictEqual(result.placement, {
+      requestedIndex: 1,
+      insertedIndex: 2,
+      relocation: {
+        kind: "afterParallelGroup",
+        groupId: "mcp-authored-group",
+      },
+    });
   });
 
   test("clamps a 'next' insert past every completed step when the head lags", async () => {

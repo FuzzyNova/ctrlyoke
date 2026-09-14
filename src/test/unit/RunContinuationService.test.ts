@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, suite, test } from "mocha";
 import {
   EXECUTION_STATES,
+  QUEUE_POSITION,
   RUNNER_IDS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
@@ -16,6 +17,7 @@ import type {
   RunRef,
   RunnerHostIdentity,
   WorkflowKey,
+  WorkingFile,
 } from "../../types/CtrlYokeTypes";
 
 /**
@@ -495,6 +497,63 @@ suite("RunContinuationService addressed step mutations", () => {
       (edited.workingFile.steps![1] as { prompt: string }).prompt,
       "next (edited)"
     );
+  });
+
+  test("returns placement relocation when next lands inside a parallel group", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-placement-")
+    );
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "running", _runtime: { startedAt: 11 } },
+      { prompt: "sibling" },
+      { prompt: "pending" },
+    ]);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const run = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as WorkingFile;
+    run.parallelGroups = [
+      { id: "live-group", startIndex: 1, endIndex: 2, failFast: true },
+    ];
+    await fs.writeFile(runFilePath, JSON.stringify(run), "utf8");
+
+    const appended = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "after group" }],
+      1,
+      new WorkflowLineageRepository(),
+      true,
+      QUEUE_POSITION.NEXT
+    );
+
+    assert.deepStrictEqual(appended.placement, {
+      requestedIndex: 2,
+      insertedIndex: 3,
+      relocation: { kind: "afterParallelGroup", groupId: "live-group" },
+    });
+
+    const numeric = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "numeric after group" }],
+      2,
+      new WorkflowLineageRepository(),
+      true,
+      2
+    );
+    assert.deepStrictEqual(numeric.placement, {
+      requestedIndex: 2,
+      insertedIndex: 3,
+      relocation: { kind: "afterParallelGroup", groupId: "live-group" },
+    });
   });
 });
 
