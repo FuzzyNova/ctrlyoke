@@ -383,7 +383,18 @@ and `_runtime`; only its group membership changes, which is precisely what
 | 2   | 5     | `joinRunningParallelGroup` + per-member admission preflight       | Complete. `joinRunningParallelGroup(stepIndex): Promise<ParallelGroupJoinResult>` returns `{ accepted: true }` or `{ accepted: false, diagnostic }`; rejection covers no live/closed run, non-member or started step, and admission-preflight issues without affecting the group. |
 | 3   | 6     | Topology append + promotion (started-anchor opt-in)               | Complete. Added `appendParallelGroupMember(topology: ParallelGroupTopology, group: string \| number, step: WorkflowStep): ParallelGroupTopology`, `appendParallelGroupMembers(topology: ParallelGroupTopology, group: string \| number, steps: WorkflowStep[]): ParallelGroupTopology`, and `promoteStepToParallelGroup(topology: ParallelGroupTopology, stepIndex: number, step: WorkflowStep, options?: { failFast?: boolean }): ParallelGroupTopology`. `groupParallelGroupSteps` now accepts `startedAnchorIndex?: number` as its sixth parameter; promotion uses it to preserve the running anchor. Ad-hoc promotion defaults to `failFast: false`. Session 4 should call the append/promotion signatures and publish the resulting topology. |
 | 4   | 6     | `PromptQueue` wiring, revision bump, `WorkflowInstance` echo fix  | Complete. Added `PromptQueue.appendParallelGroupMember(group, step)` and `PromptQueue.promoteStepToParallelGroup(stepIndex, step, options?)`; both use the shared topology helpers, preserve started-step anchors, bump the definition revision, and persist the working topology. The ephemeral dashboard echo now includes `workflowId` and `parallelGroups`. Phase 7's `RUN_PARALLEL` path calls these same signatures; it must not add a second topology implementation. |
-| 5   | 6     | Promotion snapshot re-attribution + integration coverage          | Next. Re-attribute the promoted step's group snapshot and suppress per-step undo after the session 4 wiring calls `promoteStepToParallelGroup(...)`; cover the append and promotion signatures through integration tests. |
+| 5   | 6     | Promotion snapshot re-attribution + integration coverage          | Complete. Sequential settlement now re-attributes the held before-state to the promoted group's start target, marks it with the group id, and withholds the promoted step's per-step snapshot; integration coverage verifies persisted append/promotion topology and unsettled-member recovery. |
+
+**Track D status — complete.** Phase 7 inherits
+`joinRunningParallelGroup(stepIndex): Promise<ParallelGroupJoinResult>`, which
+resolves to `{ accepted: true }` or `{ accepted: false, diagnostic }` for
+no-live/closed, non-member/started, and admission-preflight rejection paths.
+It also inherits the `PromptQueue.appendParallelGroupMember(group, step)` and
+`PromptQueue.promoteStepToParallelGroup(stepIndex, step, options?)` operation
+names and the shared topology helpers behind them. A promoted group keeps the
+in-flight step's original before-state as its group snapshot at
+`queue:<startIndex>` with `parallelGroupId`; its per-step prompt undo is
+withheld, and later member settlements update that group-level snapshot.
 
 **Exit criteria.** `ParallelGroupTopology.test.ts` covers
 append-extends-`endIndex`, later-group shifting, valid two-member promotion, and

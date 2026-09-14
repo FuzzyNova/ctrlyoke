@@ -3308,6 +3308,33 @@ describe("STEPS_EXTENDED", () => {
       STEP_STATUS.COMPLETED
     );
   });
+
+  it("does not record runtime topology echoes in the undo stack", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("running"), makePrompt("sibling")],
+      });
+    });
+    useWorkflowStore.temporal.getState().clear();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [makePrompt("running"), makePrompt("sibling")],
+        executionState: EXECUTION_STATES.RUNNING,
+        parallelGroups: [
+          { id: "promoted", startIndex: 0, endIndex: 1, failFast: false },
+        ],
+      });
+    });
+
+    expect(useWorkflowStore.getState().parallelGroups).toEqual([
+      { id: "promoted", startIndex: 0, endIndex: 1, failFast: false },
+    ]);
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

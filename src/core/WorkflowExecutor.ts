@@ -393,6 +393,15 @@ export class WorkflowExecutor {
     | Map<number, ParallelGroupPreflightMember>
     | undefined;
   private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
+  /**
+   * A sequential step can become a group's started anchor while it is still
+   * executing. Keep its captured before-state until the promoted group has
+   * settled so the group snapshot retains the original undo boundary.
+   */
+  private readonly pendingSequentialSnapshotBeforeStates = new Map<
+    string,
+    RawWorkspaceState
+  >();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -468,9 +477,21 @@ export class WorkflowExecutor {
           ) {
             break;
           }
-          const group = state.parallelGroups.find(
-            (candidate) => candidate.startIndex === state.currentIndex
-          );
+          const group = state.parallelGroups.find((candidate) => {
+            if (candidate.startIndex === state.currentIndex) {
+              return true;
+            }
+            // A sequential anchor advances currentIndex when it settles. If
+            // it was promoted while in flight, resume at the next unsettled
+            // member but keep the group's original start boundary.
+            return (
+              state.currentIndex > candidate.startIndex &&
+              state.currentIndex <= candidate.endIndex &&
+              state.steps
+                .slice(candidate.startIndex, state.currentIndex)
+                .every((step) => step._runtime?.completedAt !== undefined)
+            );
+          });
           if (group) {
             const groupOutcome = await this.executeParallelGroup(
               group,
@@ -806,24 +827,36 @@ export class WorkflowExecutor {
   ): Promise<ParallelGroupOutcome> {
     const preflight = await this.preflightGroup(group, context);
     let groupBeforeState: RawWorkspaceState | undefined;
+    const state = this.promptQueue.getState();
     if (preflight.effectiveWidth > 1 && snapshotStrategy) {
-      try {
-        groupBeforeState = await context.snapshotService?.captureWorkspaceState(
-          context.executionWorkspace.executionRoot,
-          snapshotStrategy,
-          context.executionWorkspace.namedWorkspaceRoots
-        );
-      } catch (error) {
-        Log.warn(
-          "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
-          error
-        );
+      const anchorId = state.steps[group.startIndex]?._runtime?.stepId;
+      groupBeforeState = anchorId
+        ? this.pendingSequentialSnapshotBeforeStates.get(anchorId)
+        : undefined;
+      if (!groupBeforeState) {
+        const hasSettledMember = state.steps
+          .slice(group.startIndex, group.endIndex + 1)
+          .some((step) => step._runtime?.completedAt !== undefined);
+        if (!hasSettledMember) {
+          try {
+            groupBeforeState =
+              await context.snapshotService?.captureWorkspaceState(
+                context.executionWorkspace.executionRoot,
+                snapshotStrategy,
+                context.executionWorkspace.namedWorkspaceRoots
+              );
+          } catch (error) {
+            Log.warn(
+              "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
+              error
+            );
+          }
+        }
       }
     }
     const pendingIds: string[] = [];
     const initialOutcomes = new Map<string, StepExecutionOutcome>();
     const admissionTargets = new Map<string, number>();
-    const state = this.promptQueue.getState();
     for (
       let stepIndex = group.startIndex;
       stepIndex <= group.endIndex;
@@ -2452,6 +2485,17 @@ export class WorkflowExecutor {
       }
     }
 
+    const sequentialStepId =
+      target.kind === FINAL_STEP_PHASES.QUEUE && preflightMember === undefined
+        ? step._runtime?.stepId
+        : undefined;
+    if (beforeState && sequentialStepId) {
+      this.pendingSequentialSnapshotBeforeStates.set(
+        sequentialStepId,
+        beforeState
+      );
+    }
+
     try {
       const outcome = await this.executeTarget(
         target,
@@ -2462,11 +2506,21 @@ export class WorkflowExecutor {
 
       if (beforeState && context.snapshotService && snapshotStrategy) {
         try {
-          await this.captureAndEmitSnapshot(
+          const promotedGroup = this.getPromotedGroupForTarget(
             target,
+            preflightMember
+          );
+          await this.captureAndEmitSnapshot(
+            promotedGroup
+              ? {
+                  kind: FINAL_STEP_PHASES.QUEUE,
+                  stepIndex: promotedGroup.startIndex,
+                }
+              : target,
             beforeState,
             snapshotStrategy,
-            context
+            context,
+            promotedGroup?.id
           );
         } catch (e) {
           Log.warn(
@@ -2475,10 +2529,31 @@ export class WorkflowExecutor {
           );
         }
       }
+      if (!this.getPromotedGroupForTarget(target, preflightMember)) {
+        if (sequentialStepId) {
+          this.pendingSequentialSnapshotBeforeStates.delete(sequentialStepId);
+        }
+      }
       return outcome;
     } finally {
       context.unregisterActiveTarget?.(target);
     }
+  }
+
+  private getPromotedGroupForTarget(
+    target: ExecutionTarget,
+    preflightMember?: ParallelGroupPreflightMember
+  ): ParallelGroupDefinition | undefined {
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE || preflightMember) {
+      return undefined;
+    }
+    return this.promptQueue
+      .getState()
+      .parallelGroups.find(
+        (group) =>
+          target.stepIndex >= group.startIndex &&
+          target.stepIndex <= group.endIndex
+      );
   }
 
   /**
