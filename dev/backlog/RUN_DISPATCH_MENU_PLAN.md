@@ -652,8 +652,10 @@ own against an authored group with no UI at all. **Blocked on
 `promoteStepToParallelGroup`, snapshot re-attribution, `PromptQueue` wiring,
 the `WorkflowInstance` echo fix.
 
-**Stage 5 — Run in Parallel wiring and gates.** `ACTION_TYPES.RUN_PARALLEL`
-end to end, `useRunDispatchTargets`, tooltips, rejection toasts.
+**Stage 5 — Run in Parallel wiring and gates.** Editor half complete:
+`ACTION_TYPES.RUN_PARALLEL` reaches the webview through
+`useRunDispatchTargets`, with the availability tooltips and rejection-toast
+path covered. MCP live-join wiring remains for the next rollout session.
 
 **Stage 6 — Steer item.** Owned by `STEER_MESSAGE_PLAN.md`; only the menu entry
 belongs here.

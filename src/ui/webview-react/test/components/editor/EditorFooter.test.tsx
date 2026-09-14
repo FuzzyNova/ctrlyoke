@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { EditorFooter } from "@components/editor/EditorFooter";
 import { useEditorStore } from "@store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import type { RunDispatchTarget } from "@hooks/useRunDispatchTargets";
 
 const layout = vi.hoisted(() => ({ medium: false, small: false }));
 
@@ -47,7 +48,17 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
   runButtonTooltip: "Run this prompt",
   queueButtonTooltip: "Queue this prompt",
   onRun: vi.fn(),
+  onRunInParallel: vi.fn(),
   onRunInNewWorkflow: vi.fn(),
+  runInParallelTarget: {
+    enabled: false,
+    disabledReason: "No step is running",
+    title: "No step is running",
+  } satisfies RunDispatchTarget,
+  newWorkflowTarget: {
+    enabled: true,
+    title: "Starts a separate workflow with default settings and this prompt",
+  } satisfies RunDispatchTarget,
   onQueue: vi.fn(),
   onUpdate: vi.fn(),
   onDelete: vi.fn(),
@@ -100,6 +111,49 @@ describe("EditorFooter run menu", () => {
       "title",
       "Starts a separate workflow with default settings and this prompt"
     );
+  });
+
+  it.each([
+    "No step is running",
+    "The final step can't run in parallel",
+    "Parallel width is 1 — raise `queue.maxParallelSteps`",
+    "Workflow is pausing",
+  ])("shows the parallel disabled reason: %s", async (reason) => {
+    const user = userEvent.setup();
+    renderFooter({
+      runInParallelTarget: {
+        enabled: false,
+        disabledReason: reason,
+        title: reason,
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const parallel = screen.getByRole("option", { name: "Run in Parallel" });
+    expect(parallel).toBeDisabled();
+    expect(parallel).toHaveAttribute("title", reason);
+  });
+
+  it("keeps Run in Parallel enabled when the worker pool is saturated", async () => {
+    const user = userEvent.setup();
+    renderFooter({
+      runInParallelTarget: {
+        enabled: true,
+        title: "Runs beside step 3; prior context resolves from before step 3",
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const parallel = screen.getByRole("option", { name: "Run in Parallel" });
+    expect(parallel).toBeEnabled();
+    expect(parallel).toHaveAttribute(
+      "title",
+      "Runs beside step 3; prior context resolves from before step 3"
+    );
+    await user.click(parallel);
+    expect(defaultProps.onRunInParallel).toHaveBeenCalledTimes(1);
   });
 
   it.each([

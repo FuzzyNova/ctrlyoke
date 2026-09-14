@@ -15,6 +15,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
+import { useRunDispatchTargets } from "../../hooks/useRunDispatchTargets";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -162,9 +163,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     propertiesDrawerOpen,
     togglePropertiesDrawer,
     closePropertiesDrawer,
+    activeWorkflowId,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
+  const runDispatchTargets = useRunDispatchTargets(activeWorkflowId);
 
   // ── Drawer tab state (lifted from PropertiesDrawer for footer tab bar) ─────
   const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
@@ -1054,6 +1057,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     ]
   );
 
+  const runInParallel = useCallback(() => {
+    if (!runDispatchTargets.parallel.enabled) return;
+    executePrompt(ACTION_TYPES.RUN_PARALLEL);
+  }, [executePrompt, runDispatchTargets.parallel.enabled]);
+
   const runInNewWorkflow = useCallback(() => {
     const currentWorkflowId = useUiStore.getState().activeWorkflowId;
     const currentWorkflowName = workflowName || fileName || "current workflow";
@@ -1589,7 +1597,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         runButtonTooltip={getRunButtonTooltip()}
         queueButtonTooltip={getQueueButtonTooltip()}
         onRun={() => executePrompt(ACTION_TYPES.RUN)}
+        onRunInParallel={runInParallel}
         onRunInNewWorkflow={runInNewWorkflow}
+        runInParallelTarget={runDispatchTargets.parallel}
+        newWorkflowTarget={runDispatchTargets.newWorkflow}
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}

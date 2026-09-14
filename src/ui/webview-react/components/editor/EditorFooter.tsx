@@ -14,6 +14,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { SplitButton } from "../shared/SplitButton";
+import type { RunDispatchTarget } from "../../hooks/useRunDispatchTargets";
 
 export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 
@@ -31,7 +32,10 @@ interface EditorFooterProps {
   runButtonTooltip: string;
   queueButtonTooltip: string;
   onRun: () => void;
+  onRunInParallel: () => void;
   onRunInNewWorkflow: () => void;
+  runInParallelTarget: RunDispatchTarget;
+  newWorkflowTarget: RunDispatchTarget;
   onQueue: () => void;
   onUpdate: () => void;
   onDelete: () => void;
@@ -71,7 +75,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   runButtonTooltip,
   queueButtonTooltip,
   onRun,
+  onRunInParallel,
   onRunInNewWorkflow,
+  runInParallelTarget,
+  newWorkflowTarget,
   onQueue,
   onUpdate,
   onDelete,
@@ -321,9 +328,16 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 {
                   label: "Run in Parallel",
                   value: "runInParallel",
-                  onClick: () => undefined,
-                  disabled: true,
-                  title: "No step is running",
+                  onClick: onRunInParallel,
+                  disabled:
+                    isExternallyManaged ||
+                    !hasContent ||
+                    !runInParallelTarget.enabled,
+                  title: isExternallyManaged
+                    ? (externalReadOnlyLabel ?? "Read-only — external run")
+                    : !hasContent
+                      ? "Enter a prompt first"
+                      : runInParallelTarget.title,
                   icon: <Icon name="split-horizontal" />,
                 },
                 {
@@ -336,9 +350,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   label: "Run in New Workflow",
                   value: "runInNewWorkflow",
                   onClick: onRunInNewWorkflow,
-                  disabled: isExternallyManaged || !hasContent,
-                  title:
-                    "Starts a separate workflow with default settings and this prompt",
+                  disabled:
+                    isExternallyManaged ||
+                    !hasContent ||
+                    !newWorkflowTarget.enabled,
+                  title: isExternallyManaged
+                    ? (externalReadOnlyLabel ?? "Read-only — external run")
+                    : !hasContent
+                      ? "Enter a prompt first"
+                      : newWorkflowTarget.title,
                   icon: <Icon name="sparkle" />,
                 },
               ]}

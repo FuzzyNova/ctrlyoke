@@ -434,6 +434,71 @@ describe("PromptEditor — Run in New Workflow", () => {
   });
 });
 
+describe("PromptEditor — Run in Parallel", () => {
+  function enableParallelDispatch() {
+    useUiStore.setState({ activeWorkflowId: "workflow-1" });
+    useWorkflowStore.setState({
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      activeStepIndices: [1],
+      finalStepPhase: null,
+    });
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        effectiveParallelGroupWidth: 2,
+      },
+    }));
+  }
+
+  it("posts RUN_PARALLEL and clears the draft", async () => {
+    const user = userEvent.setup();
+    enableParallelDispatch();
+    useEditorStore.getState().setPromptText("run beside the active step");
+
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(screen.getByRole("option", { name: "Run in Parallel" }));
+
+    expect(findExecutePromptMessage()).toMatchObject({
+      type: MESSAGE_TYPES.EXECUTE_PROMPT,
+      text: "run beside the active step",
+      action: ACTION_TYPES.RUN_PARALLEL,
+    });
+    expect(useEditorStore.getState().promptText).toBe("");
+  });
+
+  it("restores the draft when the backend rejects the dispatch", async () => {
+    const user = userEvent.setup();
+    enableParallelDispatch();
+    useEditorStore.getState().setPromptText("keep this if admission fails");
+
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(screen.getByRole("option", { name: "Run in Parallel" }));
+
+    expect(useEditorStore.getState().promptText).toBe("");
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+          text: "keep this if admission fails",
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().promptText).toBe(
+        "keep this if admission fails"
+      );
+    });
+  });
+});
+
 describe("PromptEditor — prompt-file action", () => {
   function renderWithAction() {
     let action: PromptFileAction | null = null;

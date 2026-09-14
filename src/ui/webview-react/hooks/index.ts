@@ -47,6 +47,11 @@ export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export { useIsSystemGeneratedWorkflow } from "./useIsSystemGeneratedWorkflow";
 export { useActiveWorkflowExternalOwner } from "./useActiveWorkflowExternalOwner";
 export {
+  useRunDispatchTargets,
+  type RunDispatchTarget,
+  type RunDispatchTargets,
+} from "./useRunDispatchTargets";
+export {
   useHideableOptions,
   type HideablePartition,
 } from "./useHideableOptions";
