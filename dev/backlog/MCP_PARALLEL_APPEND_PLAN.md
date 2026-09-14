@@ -1,6 +1,7 @@
 # MCP Parallel Append Plan
 
-> **Status:** Backlog / design proposal. Nothing here is implemented.
+> **Status:** Phase 3A / Stage 1 complete. The queue-item union remains
+> unpublished until Phase 3B; later stages remain backlog.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -452,10 +453,16 @@ parallel-specific quota is added.
 
 ## Implementation stages
 
-**Stage 1 — MCP item union and shared normalization.** Add the schema facets,
-types, examples, and shared flattener; move `PromptFileParser` to it. Unit-test
-mixed batches, cardinality, exact discrimination, default `failFast`, and nested
-rejection.
+**Stage 1 — MCP item union and shared normalization — complete.** The schema
+facets, types, examples, unpublished union, validator tests, and the exported
+`flattenParallelItems(items: readonly ResolvedParallelItem[]): FlattenedParallelItems`
+(where `ResolvedParallelItem` is `WorkflowStep | ResolvedParallelContainer`, both
+exported beside it)
+flattener are landed. `PromptFileParser` consumes the same flattener for
+authored `parallel:` items, keeping relative range math single-sourced. Stage 2
+inherits this helper and its normalized topology result. The queue-item union
+schema is still unpublished: Phase 3B must publish it through `append_step`
+alongside the handler change.
 
 **Stage 2 — Future parallel-group enqueue.** Change the continuation transaction
 to insert incoming topology atomically, move flattened queue-limit validation

@@ -1,6 +1,5 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { randomUUID } from "crypto";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import {
@@ -25,7 +24,11 @@ import {
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
-import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
+import {
+  flattenParallelItems,
+  normalizeParallelGroupTopology,
+  type ResolvedParallelItem,
+} from "./ParallelGroupTopology";
 
 type ParallelValidationProperties = Pick<
   ExecutionProperties,
@@ -335,16 +338,16 @@ export class PromptFileParser {
 
     // Handle multiple prompts format
     if (parsed.steps && Array.isArray(parsed.steps)) {
-      const resolvedPrompts: WorkflowStep[] = [];
-      const authoredGroups: ParallelGroupDefinition[] = [];
+      const resolvedItems: ResolvedParallelItem[] = [];
+      let resolvedStepCount = 0;
+      let hasAuthoredParallelGroups = false;
 
       for (const item of parsed.steps) {
         if (isObject(item) && hasOwn(item, "parallel")) {
-          const startIndex = resolvedPrompts.length;
           const failFast = item.failFast;
           if (failFast !== undefined && typeof failFast !== "boolean") {
             throw new Error(
-              `Step ${startIndex + 1}: parallel failFast must be a boolean`
+              `Step ${resolvedStepCount + 1}: parallel failFast must be a boolean`
             );
           }
           const resolvedMembers: WorkflowStep[] = await Promise.all(
@@ -359,36 +362,43 @@ export class PromptFileParser {
               return this.buildPromptStep(promptValue, member);
             })
           );
-          resolvedPrompts.push(...resolvedMembers);
-          authoredGroups.push({
-            id: randomUUID(),
-            startIndex,
-            endIndex: resolvedPrompts.length - 1,
-            failFast: failFast ?? true,
+          resolvedItems.push({
+            parallel: resolvedMembers,
+            failFast,
           });
+          resolvedStepCount += resolvedMembers.length;
+          hasAuthoredParallelGroups = true;
           continue;
         }
 
         if (item.type === STEP_TYPES.SCRIPT) {
-          resolvedPrompts.push(this.buildScriptStep(item));
+          resolvedItems.push(this.buildScriptStep(item));
+          resolvedStepCount += 1;
           continue;
         }
         const promptValue = await this.validatePromptReference(
           item.prompt,
           promptFilePath
         );
-        resolvedPrompts.push(this.buildPromptStep(promptValue, item));
+        resolvedItems.push(this.buildPromptStep(promptValue, item));
+        resolvedStepCount += 1;
       }
 
       const hasParallelGroups =
-        authoredGroups.length > 0 || parsed.parallelGroups !== undefined;
-      const normalizedTopology = normalizeParallelGroupTopology({
-        steps: resolvedPrompts,
-        parallelGroups:
-          parsed.parallelGroups !== undefined
-            ? parsed.parallelGroups
-            : authoredGroups,
-      });
+        hasAuthoredParallelGroups || parsed.parallelGroups !== undefined;
+      // Flatten first so both branches agree on step order. Root
+      // `parallelGroups` and authored `parallel:` items are mutually exclusive
+      // (`validateAuthoredParallelStructure` rejects a file carrying both), so
+      // in the root branch flattening is the identity over a flat array.
+      const flattened = flattenParallelItems(resolvedItems);
+      const normalizedTopology =
+        parsed.parallelGroups !== undefined
+          ? normalizeParallelGroupTopology({
+              steps: flattened.topology.steps,
+              parallelGroups: parsed.parallelGroups,
+            })
+          : flattened.topology;
+      const resolvedPrompts = normalizedTopology.steps;
       if (hasParallelGroups) {
         this.throwOnParallelReferenceErrors(
           resolvedPrompts,
