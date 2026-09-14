@@ -43,6 +43,14 @@ export interface ParallelGroupPreflightMember {
   readonly variables: Readonly<Record<string, string>>;
   readonly effectivePromptText?: string;
   readonly resolvedSessionId?: string;
+  /** Internal reservation used to verify integration isolation. */
+  readonly integrationReservation?: unknown;
+}
+
+export interface ParallelGroupMemberPreflightResult {
+  readonly member: ParallelGroupPreflightMember;
+  readonly issues: readonly ParallelGroupPreflightIssue[];
+  readonly failureMessage: string;
 }
 
 export interface ParallelGroupPreflightResult {
@@ -81,6 +89,12 @@ export interface ParallelGroupPreflightOptions {
     member: ParallelGroupPreflightMember
   ) => Promise<unknown> | unknown;
   readonly finalStepSessionId?: string;
+}
+
+export interface ParallelGroupMemberPreflightOptions extends ParallelGroupPreflightOptions {
+  readonly stepIndex: number;
+  readonly step: WorkflowStep;
+  readonly reservedMembers?: readonly ParallelGroupPreflightMember[];
 }
 
 export class ParallelGroupPreflightError extends Error {
@@ -125,10 +139,17 @@ function sameGroupNumericReferences(
   });
 }
 
-/** Resolve and validate every enabled member before any group member launches. */
-export async function preflightParallelGroup(
-  options: ParallelGroupPreflightOptions
-): Promise<ParallelGroupPreflightResult> {
+/**
+ * Resolve and validate one member against the current definition and the
+ * reservations held by members that have already been admitted.
+ *
+ * The executor calls this after its atomic claim. Keeping this path separate
+ * from group admission is what makes edits arriving from another process
+ * visible to a member that is still pending.
+ */
+export async function preflightParallelGroupMember(
+  options: ParallelGroupMemberPreflightOptions
+): Promise<ParallelGroupMemberPreflightResult> {
   const {
     workflow,
     group,
@@ -136,19 +157,203 @@ export async function preflightParallelGroup(
     supportsConcurrentInteractiveSessions,
   } = options;
   const variables = Object.freeze({ ...(workflow.vars ?? {}) });
+  const issues: ParallelGroupPreflightIssue[] = [];
+
+  const step = options.step;
+  const prompt = promptProjection(step);
+  const resolvedTarget = resolveExecutionProperties(prompt, workflow, {
+    defaults: options.defaults,
+    hostCanProvidePty,
+  });
+  let resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+    resolvedTarget.properties,
+    variables
+  );
+  const effectivePromptText = isScriptStep(step)
+    ? undefined
+    : options.resolvePromptText
+      ? await options.resolvePromptText(step.prompt, variables)
+      : VarSubstitutor.applyToPromptText(step.prompt, variables);
+  if (options.normalizeProperties) {
+    resolvedProperties = await options.normalizeProperties(
+      resolvedProperties,
+      step,
+      effectivePromptText
+    );
+  }
+
+  const invalidPriorContext = sameGroupNumericReferences(
+    resolvedProperties.priorContext,
+    group
+  );
+  const invalidSession = sameGroupNumericReferences(
+    resolvedProperties.sessionId,
+    group
+  );
+  if (invalidPriorContext.length > 0 || invalidSession.length > 0) {
+    const details = [
+      ...(invalidPriorContext.length > 0
+        ? [`priorContext ${invalidPriorContext.join(", ")}`]
+        : []),
+      ...(invalidSession.length > 0
+        ? [`sessionId ${invalidSession.join(", ")}`]
+        : []),
+    ].join(" and ");
+    issues.push({
+      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INVALID_REFERENCE,
+      memberIndices: [options.stepIndex],
+      message: `${memberLabel(workflow, options.stepIndex)} has an effective ${details} reference into its own parallel group.`,
+    });
+  }
+
+  const resolvedSessionId = isScriptStep(step)
+    ? undefined
+    : SessionResolver.resolveWithProperties(
+        prompt,
+        options.stepIndex,
+        workflow.steps ?? [],
+        resolvedProperties,
+        options.finalStepSessionId,
+        group.startIndex,
+        false
+      );
+  const member: ParallelGroupPreflightMember = {
+    stepIndex: options.stepIndex,
+    step,
+    resolvedTarget: {
+      ...resolvedTarget,
+      properties: resolvedProperties,
+    },
+    resolvedProperties,
+    variables,
+    ...(effectivePromptText !== undefined ? { effectivePromptText } : {}),
+    ...(resolvedSessionId !== undefined ? { resolvedSessionId } : {}),
+  };
+
+  const reservedMembers = options.reservedMembers ?? [];
+  const sessionOwners = reservedMembers.filter(
+    (reserved) =>
+      !isScriptStep(reserved.step) &&
+      resolvedSessionId !== undefined &&
+      reserved.resolvedSessionId === resolvedSessionId &&
+      reserved.resolvedProperties.harness === resolvedProperties.harness
+  );
+  if (sessionOwners.length > 0) {
+    const indices = [
+      ...sessionOwners.map((owner) => owner.stepIndex),
+      options.stepIndex,
+    ];
+    issues.push({
+      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION,
+      memberIndices: indices,
+      message: `${memberList(workflow, indices)} resolve to the same ${resolvedProperties.harness} session "${resolvedSessionId}". Parallel members must use distinct sessions.`,
+    });
+  }
+
+  const interactiveOwners = reservedMembers.filter(
+    (reserved) =>
+      reserved.resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE
+  );
+  if (
+    resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE &&
+    interactiveOwners.length > 0 &&
+    !supportsConcurrentInteractiveSessions
+  ) {
+    const indices = [
+      ...interactiveOwners.map((owner) => owner.stepIndex),
+      options.stepIndex,
+    ];
+    issues.push({
+      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
+      memberIndices: indices,
+      message: `${memberList(workflow, indices)} resolve to interactive mode, but this host cannot multiplex interactive sessions. Run headless or set those members to executionMode: headless.`,
+    });
+  }
+
+  // Only the step-mutating tools race the coordinator's join. A member that
+  // denies those keeps the rest of the ctrlyoke server — including the
+  // coordination board, which exists precisely for group members.
+  if (
+    !isScriptStep(step) &&
+    ctrlYokeToolFamilies(resolvedProperties).mutation &&
+    resolvedProperties.ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL
+  ) {
+    issues.push({
+      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
+      memberIndices: [options.stepIndex],
+      message: `${memberLabel(workflow, options.stepIndex)} enables ctrlyoke's workflow-modifying tools (${MCP_WORKFLOW_MUTATION_TOOL_NAMES.join(", ")}), which are unavailable inside a parallel group. Deny those tools on the ctrlyoke server to keep the rest of it.`,
+    });
+  }
+
+  if (!isScriptStep(step) && options.checkHarnessReady) {
+    const reason = await options.checkHarnessReady(resolvedProperties.harness);
+    if (reason) {
+      issues.push({
+        code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE,
+        memberIndices: [options.stepIndex],
+        message: `${memberLabel(workflow, options.stepIndex)} require ${resolvedProperties.harness}, which is not ready: ${reason}`,
+      });
+    }
+  }
+
+  let memberWithIntegration = member;
+  if (!isScriptStep(step) && options.ensureIsolatedIntegration) {
+    try {
+      const integration = await options.ensureIsolatedIntegration(member);
+      memberWithIntegration = {
+        ...member,
+        integrationReservation: integration,
+      };
+      const previousOwner = reservedMembers.find(
+        (reserved) =>
+          integration !== undefined &&
+          integration !== null &&
+          reserved.integrationReservation === integration
+      );
+      if (previousOwner) {
+        const indices = [previousOwner.stepIndex, options.stepIndex];
+        issues.push({
+          code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
+          memberIndices: indices,
+          message: `${memberList(workflow, indices)} were assigned the same integration instead of isolated integrations.`,
+        });
+      }
+    } catch (error) {
+      issues.push({
+        code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
+        memberIndices: [options.stepIndex],
+        message: `${memberLabel(workflow, options.stepIndex)} could not create an isolated ${resolvedProperties.harness} integration: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  const result: ParallelGroupMemberPreflightResult = {
+    member: memberWithIntegration,
+    issues,
+    failureMessage: [
+      `Parallel step ${options.stepIndex + 1} failed preflight:`,
+      ...issues.map((issue) => `- ${issue.message}`),
+    ].join("\n"),
+  };
+  return result;
+}
+
+/** Resolve and validate every enabled member before any group member launches. */
+export async function preflightParallelGroup(
+  options: ParallelGroupPreflightOptions
+): Promise<ParallelGroupPreflightResult> {
   const effectiveWidth = getEffectiveParallelGroupWidth(
     options.configuredWidth,
     options.fanOutEnabled
   );
   const issues: ParallelGroupPreflightIssue[] = [];
   const members: ParallelGroupPreflightMember[] = [];
-
   for (
-    let stepIndex = group.startIndex;
-    stepIndex <= group.endIndex;
+    let stepIndex = options.group.startIndex;
+    stepIndex <= options.group.endIndex;
     stepIndex += 1
   ) {
-    const step = workflow.steps?.[stepIndex];
+    const step = options.workflow.steps?.[stepIndex];
     if (
       !step ||
       step.enabled === false ||
@@ -157,189 +362,19 @@ export async function preflightParallelGroup(
     ) {
       continue;
     }
-
-    const prompt = promptProjection(step);
-    const resolvedTarget = resolveExecutionProperties(prompt, workflow, {
-      defaults: options.defaults,
-      hostCanProvidePty,
-    });
-    let resolvedProperties = VarSubstitutor.applyToResolvedProperties(
-      resolvedTarget.properties,
-      variables
-    );
-    const substitutedTarget: ResolvedExecutionTarget = {
-      ...resolvedTarget,
-      properties: resolvedProperties,
-    };
-    const effectivePromptText = isScriptStep(step)
-      ? undefined
-      : options.resolvePromptText
-        ? await options.resolvePromptText(step.prompt, variables)
-        : VarSubstitutor.applyToPromptText(step.prompt, variables);
-    if (options.normalizeProperties) {
-      resolvedProperties = await options.normalizeProperties(
-        resolvedProperties,
-        step,
-        effectivePromptText
-      );
-    }
-
-    const invalidPriorContext = sameGroupNumericReferences(
-      resolvedProperties.priorContext,
-      group
-    );
-    const invalidSession = sameGroupNumericReferences(
-      resolvedProperties.sessionId,
-      group
-    );
-    if (invalidPriorContext.length > 0 || invalidSession.length > 0) {
-      const details = [
-        ...(invalidPriorContext.length > 0
-          ? [`priorContext ${invalidPriorContext.join(", ")}`]
-          : []),
-        ...(invalidSession.length > 0
-          ? [`sessionId ${invalidSession.join(", ")}`]
-          : []),
-      ].join(" and ");
-      issues.push({
-        code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INVALID_REFERENCE,
-        memberIndices: [stepIndex],
-        message: `${memberLabel(workflow, stepIndex)} has an effective ${details} reference into its own parallel group.`,
-      });
-    }
-
-    const resolvedSessionId = isScriptStep(step)
-      ? undefined
-      : SessionResolver.resolveWithProperties(
-          prompt,
-          stepIndex,
-          workflow.steps ?? [],
-          resolvedProperties,
-          options.finalStepSessionId,
-          group.startIndex,
-          false
-        );
-    const member: ParallelGroupPreflightMember = {
-      stepIndex,
+    const memberResult = await preflightParallelGroupMember({
+      ...options,
       step,
-      resolvedTarget: {
-        ...substitutedTarget,
-        properties: resolvedProperties,
-      },
-      resolvedProperties,
-      variables,
-      ...(effectivePromptText !== undefined ? { effectivePromptText } : {}),
-      ...(resolvedSessionId !== undefined ? { resolvedSessionId } : {}),
-    };
-    members.push(member);
-
-    // Only the step-mutating tools race the coordinator's join. A member that
-    // denies those keeps the rest of the ctrlyoke server — including the
-    // coordination board, which exists precisely for group members.
-    if (
-      !isScriptStep(step) &&
-      ctrlYokeToolFamilies(resolvedProperties).mutation &&
-      resolvedProperties.ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL
-    ) {
-      issues.push({
-        code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
-        memberIndices: [stepIndex],
-        message: `${memberLabel(workflow, stepIndex)} enables ctrlyoke's workflow-modifying tools (${MCP_WORKFLOW_MUTATION_TOOL_NAMES.join(", ")}), which are unavailable inside a parallel group. Deny those tools on the ctrlyoke server to keep the rest of it.`,
-      });
-    }
-  }
-
-  const sessions = new Map<string, number[]>();
-  for (const member of members) {
-    if (!member.resolvedSessionId || isScriptStep(member.step)) continue;
-    const key = `${member.resolvedProperties.harness}\0${member.resolvedSessionId}`;
-    const indices = sessions.get(key) ?? [];
-    indices.push(member.stepIndex);
-    sessions.set(key, indices);
-  }
-  for (const [key, indices] of sessions) {
-    if (indices.length < 2) continue;
-    const [harnessId, sessionId] = key.split("\0");
-    issues.push({
-      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION,
-      memberIndices: indices,
-      message: `${memberList(workflow, indices)} resolve to the same ${harnessId} session "${sessionId}". Parallel members must use distinct sessions.`,
+      stepIndex,
+      reservedMembers: members,
     });
-  }
-
-  const interactiveIndices = members
-    .filter(
-      (member) =>
-        member.resolvedProperties.executionMode === EXECUTION_MODES.INTERACTIVE
-    )
-    .map((member) => member.stepIndex);
-  if (interactiveIndices.length > 1 && !supportsConcurrentInteractiveSessions) {
-    issues.push({
-      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
-      memberIndices: interactiveIndices,
-      message: `${memberList(workflow, interactiveIndices)} resolve to interactive mode, but this host cannot multiplex interactive sessions. Run headless or set those members to executionMode: headless.`,
-    });
-  }
-
-  const promptMembers = members.filter((member) => !isScriptStep(member.step));
-  const harnessErrors = new Map<
-    string,
-    { harness: HarnessId; indices: number[] }
-  >();
-  if (options.checkHarnessReady) {
-    for (const member of promptMembers) {
-      const reason = await options.checkHarnessReady(
-        member.resolvedProperties.harness
-      );
-      if (!reason) continue;
-      const key = `${member.resolvedProperties.harness}\0${reason}`;
-      const found = harnessErrors.get(key) ?? {
-        harness: member.resolvedProperties.harness,
-        indices: [],
-      };
-      found.indices.push(member.stepIndex);
-      harnessErrors.set(key, found);
-    }
-  }
-  for (const [key, failure] of harnessErrors) {
-    const reason = key.slice(key.indexOf("\0") + 1);
-    issues.push({
-      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE,
-      memberIndices: failure.indices,
-      message: `${memberList(workflow, failure.indices)} require ${failure.harness}, which is not ready: ${reason}`,
-    });
-  }
-
-  if (options.ensureIsolatedIntegration) {
-    const integrationOwners = new Map<unknown, number>();
-    for (const member of promptMembers) {
-      try {
-        const integration = await options.ensureIsolatedIntegration(member);
-        if (integration !== undefined && integration !== null) {
-          const previousOwner = integrationOwners.get(integration);
-          if (previousOwner !== undefined) {
-            issues.push({
-              code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
-              memberIndices: [previousOwner, member.stepIndex],
-              message: `${memberList(workflow, [previousOwner, member.stepIndex])} were assigned the same integration instead of isolated integrations.`,
-            });
-          } else {
-            integrationOwners.set(integration, member.stepIndex);
-          }
-        }
-      } catch (error) {
-        issues.push({
-          code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTEGRATION_CREATION,
-          memberIndices: [member.stepIndex],
-          message: `${memberLabel(workflow, member.stepIndex)} could not create an isolated ${member.resolvedProperties.harness} integration: ${error instanceof Error ? error.message : String(error)}`,
-        });
-      }
-    }
+    members.push(memberResult.member);
+    issues.push(...memberResult.issues);
   }
 
   return {
-    group,
-    groupStartBoundary: group.startIndex,
+    group: options.group,
+    groupStartBoundary: options.group.startIndex,
     effectiveWidth,
     executableMemberCount: members.length,
     members,

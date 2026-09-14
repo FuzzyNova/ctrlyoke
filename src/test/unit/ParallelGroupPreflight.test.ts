@@ -15,7 +15,10 @@ import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
 } from "../../utils/McpToolDefinitions";
-import { preflightParallelGroup } from "../../core/ParallelGroupPreflight";
+import {
+  preflightParallelGroup,
+  preflightParallelGroupMember,
+} from "../../core/ParallelGroupPreflight";
 
 const group: ParallelGroupDefinition = {
   id: "group",
@@ -125,6 +128,50 @@ suite("ParallelGroupPreflight", () => {
           PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
       ),
       false
+    );
+  });
+
+  test("checks an edited member against current running reservations", async () => {
+    const workflow: PromptFile = {
+      steps: [
+        {
+          prompt: "running",
+          sessionId: "shared-session",
+          resumeSession: true,
+        },
+        { prompt: "pending" },
+      ],
+      parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+    };
+    const admitted = await run(workflow);
+    const editedStep = {
+      ...workflow.steps![1],
+      sessionId: "shared-session",
+      resumeSession: true,
+    };
+    const edited = await preflightParallelGroupMember({
+      workflow: {
+        ...workflow,
+        steps: [workflow.steps![0], editedStep],
+      },
+      group: workflow.parallelGroups![0],
+      stepIndex: 1,
+      step: editedStep,
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      reservedMembers: [admitted.members[0]],
+    });
+
+    assert.strictEqual(
+      edited.issues.some(
+        (issue) =>
+          issue.code ===
+          PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+      ),
+      true
     );
   });
 

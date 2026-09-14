@@ -291,6 +291,13 @@ admission checks rather than factoring it again; add
 rejected join leave the group healthy rather than failing it. Testable against
 an authored group with no UI.
 
+Track A's extraction lives in `src/core/ParallelGroupRun.ts`. It owns the
+ID-keyed `pendingIds`, `running`, `outcomes`, abort watcher, fixed worker pool,
+and current-bound join, while `WorkflowExecutor` supplies execution,
+preflight, persistence, snapshot, and coordination callbacks. Phase 5 should
+extend that object with a drain loop and late-join reconciliation; it must not
+move the closure back into the executor or create a second group-run type.
+
 **Phase 6 — Late-join topology.** Disp Stage 4: `appendParallelGroupMember` and
 the batch `appendParallelGroupMembers` MCP needs, `promoteStepToParallelGroup`
 (implemented as `insertParallelGroupSteps` + `groupParallelGroupSteps` so there

@@ -398,6 +398,32 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(integrations.get(1)?.sentPrompts, ["parallel-two"]);
   });
 
+  test("preflights a pending member from its edited definition after claiming", async () => {
+    const queue = new PromptQueue();
+    const first = new MockHarnessIntegration(undefined, false);
+    const second = new MockHarnessIntegration(undefined, false);
+    first.onSend = async () => {
+      await queue.updatePrompt(1, { prompt: "edited-before-dispatch" });
+      return { responseText: "first" };
+    };
+    const integrations = new Map<number, MockHarnessIntegration>([
+      [0, first],
+      [1, second],
+    ]);
+    queue.loadPrompts({
+      steps: [{ prompt: "first" }, { prompt: "original" }],
+      parallelGroups: [
+        { id: "fresh-preflight", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+
+    const context = makeParallelContext(integrations);
+    context.dynamicQueueConfig.maxParallelSteps = 1;
+    await makeExecutor(queue).execute(first, context);
+
+    assert.deepStrictEqual(second.sentPrompts, ["edited-before-dispatch"]);
+  });
+
   test("captures cumulative group snapshots at the group target", async () => {
     const queue = new PromptQueue();
     const integrations = new Map<number, MockHarnessIntegration>();

@@ -127,9 +127,13 @@ import {
 } from "./orchestration/StatusMessageReporter";
 import {
   preflightParallelGroup,
+  preflightParallelGroupMember,
   throwIfParallelGroupPreflightFailed,
+  type ParallelGroupMemberPreflightResult,
   type ParallelGroupPreflightMember,
+  type ParallelGroupPreflightOptions,
 } from "./ParallelGroupPreflight";
+import { ParallelGroupRun } from "./ParallelGroupRun";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
@@ -658,8 +662,44 @@ export class WorkflowExecutor {
     group: ParallelGroupDefinition,
     context: WorkflowExecutionContext
   ) {
+    const preflight = await preflightParallelGroup(
+      this.getParallelGroupPreflightOptions(group, context)
+    );
+
+    Log.info(
+      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
+    );
+    if (preflight.issues.length > 0) {
+      await Promise.all(
+        preflight.members.map((member) =>
+          context.releaseTargetResources?.({
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: member.stepIndex,
+          })
+        )
+      );
+      throwIfParallelGroupPreflightFailed(preflight);
+    }
+    for (const member of preflight.members) {
+      if (
+        !isScriptStep(member.step) &&
+        member.resolvedProperties.resumeSession &&
+        member.resolvedSessionId === undefined
+      ) {
+        Log.warn(
+          `[WorkflowExecutor] Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
+        );
+      }
+    }
+    return preflight;
+  }
+
+  private getParallelGroupPreflightOptions(
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext
+  ): ParallelGroupPreflightOptions {
     const workflow = this.promptQueue.getWorkflowFile();
-    const preflight = await preflightParallelGroup({
+    return {
       workflow,
       group,
       defaults: PropertyResolver.createContext({
@@ -701,34 +741,32 @@ export class WorkflowExecutor {
       finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
         | string
         | undefined,
-    });
+    };
+  }
 
-    Log.info(
-      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: effective width ${preflight.effectiveWidth}`
-    );
-    if (preflight.issues.length > 0) {
-      await Promise.all(
-        preflight.members.map((member) =>
-          context.releaseTargetResources?.({
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: member.stepIndex,
-          })
-        )
+  private async preflightGroupMember(
+    group: ParallelGroupDefinition,
+    step: WorkflowStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    runningMembers: readonly ParallelGroupPreflightMember[]
+  ): Promise<ParallelGroupMemberPreflightResult> {
+    const result = await preflightParallelGroupMember({
+      ...this.getParallelGroupPreflightOptions(group, context),
+      step,
+      stepIndex,
+      reservedMembers: runningMembers,
+    });
+    if (
+      !isScriptStep(result.member.step) &&
+      result.member.resolvedProperties.resumeSession &&
+      result.member.resolvedSessionId === undefined
+    ) {
+      Log.warn(
+        `[WorkflowExecutor] Parallel preflight: Step ${stepIndex + 1}${result.member.step.name ? ` ("${result.member.step.name}")` : ""} has no historical ${result.member.resolvedProperties.harness} session at the group boundary; starting fresh.`
       );
-      throwIfParallelGroupPreflightFailed(preflight);
     }
-    for (const member of preflight.members) {
-      if (
-        !isScriptStep(member.step) &&
-        member.resolvedProperties.resumeSession &&
-        member.resolvedSessionId === undefined
-      ) {
-        Log.warn(
-          `[WorkflowExecutor] Parallel preflight: Step ${member.stepIndex + 1}${member.step.name ? ` ("${member.step.name}")` : ""} has no historical ${member.resolvedProperties.harness} session at the group boundary; starting fresh.`
-        );
-      }
-    }
-    return preflight;
+    return result;
   }
 
   private getRecoveredGroupOutcome(
@@ -756,10 +794,6 @@ export class WorkflowExecutor {
     snapshotStrategy: "git" | "filesystem" | undefined
   ): Promise<ParallelGroupOutcome> {
     const preflight = await this.preflightGroup(group, context);
-    const preflightMembers = new Map(
-      preflight.members.map((member) => [member.stepIndex, member])
-    );
-    const outcomes = new Map<number, StepExecutionOutcome>();
     let groupBeforeState: RawWorkspaceState | undefined;
     if (preflight.effectiveWidth > 1 && snapshotStrategy) {
       try {
@@ -775,23 +809,31 @@ export class WorkflowExecutor {
         );
       }
     }
-    const pendingIndices: number[] = [];
+    const pendingIds: string[] = [];
+    const initialOutcomes = new Map<string, StepExecutionOutcome>();
+    const admissionTargets = new Map<string, number>();
+    const state = this.promptQueue.getState();
     for (
       let stepIndex = group.startIndex;
       stepIndex <= group.endIndex;
       stepIndex += 1
     ) {
+      const step = state.steps[stepIndex];
+      const stepId = step?._runtime?.stepId;
+      if (!step || !stepId) {
+        throw new Error(
+          `Cannot initialize parallel step ${stepIndex}: missing step identity`
+        );
+      }
       const recovered = this.getRecoveredGroupOutcome(stepIndex);
       if (recovered) {
-        outcomes.set(stepIndex, recovered);
-      } else if (
-        this.promptQueue.getState().steps[stepIndex]?.enabled === false
-      ) {
+        initialOutcomes.set(stepId, recovered);
+      } else if (step.enabled === false) {
         const skipped: StepExecutionOutcome = {
           target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
           status: PROMPT_TERMINAL_STATUS.SKIPPED,
         };
-        outcomes.set(stepIndex, skipped);
+        initialOutcomes.set(stepId, skipped);
         await this.persistGroupSettlement(skipped, context);
         if (groupBeforeState && snapshotStrategy) {
           await this.captureAndEmitSnapshot(
@@ -808,260 +850,151 @@ export class WorkflowExecutor {
           );
         }
       } else {
-        pendingIndices.push(stepIndex);
+        pendingIds.push(stepId);
+        admissionTargets.set(stepId, stepIndex);
       }
     }
-
-    const abortController = new AbortController();
-    const groupContext: WorkflowExecutionContext = {
-      ...context,
-      abortSignal: abortController.signal,
-    };
-    const running = new Map<number, ExecutionTarget>();
-    let nextPending = 0;
-    let failFastTriggered = false;
-
-    const cancelRunning = async (exceptIndex?: number): Promise<void> => {
-      abortController.abort();
-      await Promise.allSettled(
-        [...running.entries()]
-          .filter(([stepIndex]) => stepIndex !== exceptIndex)
-          .map(([, target]) => context.cancelTarget?.(target))
-      );
-    };
-    const stopWatcher = this.getRuntime().onDidTransition((transition) => {
-      if (
-        transition.current.status !== EXECUTION_STATES.CANCELLING &&
-        transition.current.status !== EXECUTION_STATES.STOPPED
-      ) {
-        return;
-      }
-
-      abortController.abort();
-      void Promise.allSettled(
-        [...running.values()].map((target) => context.cancelTarget?.(target))
-      );
-    });
-
-    const runMember = async (stepIndex: number): Promise<void> => {
-      const pendingStep = this.promptQueue.getState().steps[stepIndex];
-      const stepId = pendingStep?._runtime?.stepId;
-      if (!stepId) {
-        throw new Error(
-          `Cannot dispatch parallel step ${stepIndex}: missing stepId`
-        );
-      }
-      const claim = await this.promptQueue.claimStepById(
-        stepId,
-        Date.now(),
-        groupContext.executionWorkspace.stateRoot
-      );
-      if (claim.status === STEP_CLAIM_OUTCOMES.MISSING) {
+    const groupRun = new ParallelGroupRun<WorkflowExecutionContext>({
+      group,
+      pendingIds,
+      initialOutcomes,
+      effectiveWidth: preflight.effectiveWidth,
+      context,
+      snapshotStrategy,
+      groupBeforeState,
+      resolveStepById: (stepId) => {
+        const stepIndex = this.promptQueue
+          .getState()
+          .steps.findIndex(
+            (candidate) => candidate._runtime?.stepId === stepId
+          );
+        const step =
+          stepIndex >= 0
+            ? this.promptQueue.getState().steps[stepIndex]
+            : undefined;
+        return step ? { step, stepIndex } : undefined;
+      },
+      releaseRemovedPendingMember: async (stepId) => {
+        const stepIndex = admissionTargets.get(stepId);
+        if (stepIndex === undefined) return;
         await context.releaseTargetResources?.({
           kind: FINAL_STEP_PHASES.QUEUE,
           stepIndex,
         });
-        return;
-      }
-      if (claim.status !== STEP_CLAIM_OUTCOMES.CLAIMED) {
-        throw new Error(
-          `Cannot dispatch parallel step ${stepId}: claim ${claim.status}`
-        );
-      }
-      const target: ExecutionTarget = {
-        kind: FINAL_STEP_PHASES.QUEUE,
-        stepIndex: claim.stepIndex,
-      };
-      running.set(claim.stepIndex, target);
-      let outcome: StepExecutionOutcome;
-      try {
-        outcome = await this.executeWithSnapshot(
-          target,
-          claim.step,
-          groupContext,
-          preflight.effectiveWidth === 1 ? snapshotStrategy : undefined,
-          preflightMembers.get(stepIndex)
-        );
-      } catch (error) {
-        const failureReason =
-          error instanceof Error ? error.message : String(error);
-        outcome = {
-          target,
-          status: PROMPT_TERMINAL_STATUS.FAILED,
-          failureReason,
-        };
-      }
-      if (
-        abortController.signal.aborted &&
-        failFastTriggered &&
-        outcome.status === PROMPT_TERMINAL_STATUS.FAILED
-      ) {
-        outcome = {
-          target,
-          status: PROMPT_TERMINAL_STATUS.CANCELLED,
-        };
-      }
-      this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
-      running.delete(claim.stepIndex);
-      outcomes.set(claim.stepIndex, outcome);
-      await this.persistGroupSettlement(outcome, context);
-      if (groupBeforeState && snapshotStrategy) {
-        await this.captureAndEmitSnapshot(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: group.startIndex },
-          groupBeforeState,
-          snapshotStrategy,
+      },
+      claimStepById: (stepId, startedAt, groupContext) =>
+        this.promptQueue.claimStepById(
+          stepId,
+          startedAt,
+          groupContext.executionWorkspace.stateRoot
+        ),
+      preflightMember: async ({ step, stepIndex, runningMembers }) => {
+        const liveGroup = this.promptQueue
+          .getState()
+          .parallelGroups.find((candidate) => candidate.id === group.id);
+        if (!liveGroup) {
+          throw new Error(
+            `Cannot preflight parallel group ${group.id}: group is missing from the current definition`
+          );
+        }
+        return this.preflightGroupMember(
+          liveGroup,
+          step,
+          stepIndex,
           context,
-          group.id
-        ).catch((error) =>
+          runningMembers
+        );
+      },
+      executeMember: async (
+        target,
+        step,
+        groupContext,
+        memberSnapshotStrategy,
+        member
+      ) => {
+        try {
+          return await this.executeWithSnapshot(
+            target,
+            step,
+            groupContext,
+            memberSnapshotStrategy,
+            member
+          );
+        } finally {
+          this.targetExecutionErrors.delete(getExecutionTargetRunKey(target));
+        }
+      },
+      persistSettlement: (outcome, settlementContext) =>
+        this.persistGroupSettlement(outcome, settlementContext),
+      captureGroupSnapshot: async (
+        target,
+        beforeState,
+        strategy,
+        groupId,
+        snapshotContext
+      ) => {
+        try {
+          await this.captureAndEmitSnapshot(
+            target,
+            beforeState,
+            strategy,
+            snapshotContext,
+            groupId
+          );
+        } catch (error) {
           Log.warn(
             "[WorkflowExecutor] Failed to capture parallel group workspace snapshot:",
             error
-          )
+          );
+        }
+      },
+      cancelTarget: context.cancelTarget,
+      releaseTargetResources: context.releaseTargetResources,
+      getRuntimeStatus: () => this.getRuntime().status,
+      subscribeToStop: (onStop) =>
+        this.getRuntime().onDidTransition((transition) => {
+          if (
+            transition.current.status === EXECUTION_STATES.CANCELLING ||
+            transition.current.status === EXECUTION_STATES.STOPPED
+          ) {
+            onStop();
+          }
+        }),
+      getCurrentGroup: (groupId) =>
+        this.promptQueue
+          .getState()
+          .parallelGroups.find((candidate) => candidate.id === groupId),
+      commitJoin: (joinGroup, outcomes) =>
+        this.promptQueue.commitParallelGroupJoin(joinGroup, outcomes),
+      confirmPause: () =>
+        this.confirmPauseAndStop(
+          "[WorkflowExecutor] Workflow paused after parallel group members settled"
+        ).then(() => undefined),
+    });
+    const groupOutcome = await groupRun.run();
+    if (!groupOutcome.paused) {
+      try {
+        await context.releaseCoordinationGroupClaims?.(groupOutcome.group);
+      } catch (error) {
+        Log.warn(
+          "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
+          error
         );
       }
-      await context.releaseTargetResources?.(target);
-
+      this.broadcastSettledProgress(context);
       if (
-        outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
-        outcome.terminalFailure !== false &&
-        group.failFast &&
-        !failFastTriggered
+        groupOutcome.stopped &&
+        this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
+        this.getRuntime().confirmStopped()
       ) {
-        failFastTriggered = true;
-        await cancelRunning(stepIndex);
+        await this.promptQueue.commitRuntimeTransition();
       }
-    };
-
-    const worker = async (): Promise<void> => {
-      while (nextPending < pendingIndices.length) {
-        const status = this.getRuntime().status;
-        if (
-          abortController.signal.aborted ||
-          status === EXECUTION_STATES.PAUSING ||
-          status === EXECUTION_STATES.PAUSED ||
-          status === EXECUTION_STATES.CANCELLING ||
-          status === EXECUTION_STATES.STOPPED
-        ) {
-          return;
-        }
-        const stepIndex = pendingIndices[nextPending++];
-        await runMember(stepIndex);
-      }
-    };
-
-    const workerCount = Math.min(
-      Math.max(1, preflight.effectiveWidth),
-      Math.max(1, pendingIndices.length)
-    );
-    const workerSettlements = await Promise.allSettled(
-      Array.from({ length: workerCount }, () => worker())
-    );
-    const rejectedWorker = workerSettlements.find(
-      (settlement): settlement is PromiseRejectedResult =>
-        settlement.status === "rejected"
-    );
-    if (rejectedWorker) {
-      await cancelRunning();
-      stopWatcher.dispose();
-      throw rejectedWorker.reason;
-    }
-
-    const stopped =
-      this.getRuntime().status === EXECUTION_STATES.CANCELLING ||
-      this.getRuntime().status === EXECUTION_STATES.STOPPED;
-    if (stopped || failFastTriggered) {
-      await cancelRunning();
-      for (; nextPending < pendingIndices.length; nextPending += 1) {
-        const stepIndex = pendingIndices[nextPending];
-        const cancelled: StepExecutionOutcome = {
-          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          status: PROMPT_TERMINAL_STATUS.CANCELLED,
-        };
-        outcomes.set(stepIndex, cancelled);
-        await this.persistGroupSettlement(cancelled, context);
-        await context.releaseTargetResources?.(cancelled.target);
-      }
-    }
-
-    const paused =
-      this.getRuntime().status === EXECUTION_STATES.PAUSING ||
-      this.getRuntime().status === EXECUTION_STATES.PAUSED;
-    const orderedOutcomes = [...outcomes.values()].sort(
-      (left, right) =>
-        (left.target.kind === FINAL_STEP_PHASES.QUEUE
-          ? left.target.stepIndex
-          : Number.MAX_SAFE_INTEGER) -
-        (right.target.kind === FINAL_STEP_PHASES.QUEUE
-          ? right.target.stepIndex
-          : Number.MAX_SAFE_INTEGER)
-    );
-
-    if (paused) {
-      stopWatcher.dispose();
-      await this.confirmPauseAndStop(
-        "[WorkflowExecutor] Workflow paused after parallel group members settled"
-      );
-      return {
-        group,
-        outcomes: orderedOutcomes,
-        settledCount: orderedOutcomes.length,
-        terminalFailure: false,
-        paused: true,
-        stopped: false,
-      };
-    }
-
-    const liveGroup = this.promptQueue
-      .getState()
-      .parallelGroups.find((candidate) => candidate.id === group.id);
-    const joinGroup =
-      liveGroup ??
-      ({
-        ...group,
-        endIndex: Math.max(
-          this.promptQueue.getState().currentIndex - 1,
-          ...orderedOutcomes.map((outcome) =>
-            outcome.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? outcome.target.stepIndex
-              : -1
-          )
-        ),
-      } as ParallelGroupDefinition);
-    await this.promptQueue.commitParallelGroupJoin(joinGroup, orderedOutcomes);
-    try {
-      await context.releaseCoordinationGroupClaims?.(joinGroup);
-    } catch (error) {
-      Log.warn(
-        "[WorkflowExecutor] Failed to release parallel-group coordination claims:",
-        error
-      );
-    }
-    stopWatcher.dispose();
-    this.broadcastSettledProgress(context);
-
-    if (stopped && this.getRuntime().status === EXECUTION_STATES.CANCELLING) {
-      if (this.getRuntime().confirmStopped()) {
+      if (groupOutcome.terminalFailure && !groupOutcome.stopped) {
+        this.getRuntime().fail();
         await this.promptQueue.commitRuntimeTransition();
       }
     }
-
-    const terminalFailure = orderedOutcomes.some(
-      (outcome) =>
-        outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
-        outcome.terminalFailure !== false
-    );
-    if (terminalFailure && !stopped) {
-      this.getRuntime().fail();
-      await this.promptQueue.commitRuntimeTransition();
-    }
-    return {
-      group,
-      outcomes: orderedOutcomes,
-      settledCount: orderedOutcomes.length,
-      terminalFailure,
-      paused: false,
-      stopped,
-    };
+    return groupOutcome;
   }
 
   private async persistGroupSettlement(
