@@ -10,7 +10,10 @@ import type {
   ParallelGroupDefinition,
   PromptFile,
 } from "../../types/CtrlYokeTypes";
-import type { ExecutionPropertyDefaults } from "../../types/ExecutionPropertyResolver";
+import {
+  ctrlYokeToolFamilies,
+  type ExecutionPropertyDefaults,
+} from "../../types/ExecutionPropertyResolver";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
@@ -175,7 +178,7 @@ suite("ParallelGroupPreflight", () => {
     );
   });
 
-  test("rejects dynamic queue and interactive multiplexing at group index zero", async () => {
+  test("reports interactive multiplexing without banning workflow mutation", async () => {
     const result = await run(
       {
         executionMode: "interactive",
@@ -191,18 +194,11 @@ suite("ParallelGroupPreflight", () => {
     assert.strictEqual(result.effectiveWidth, 1);
     assert.deepStrictEqual(
       new Set(result.issues.map((issue) => issue.code)),
-      new Set([
-        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
-        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
-      ])
+      new Set([PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX])
     );
   });
 
   test("admits group members that deny only the step-mutating tools", async () => {
-    // Decision 8: a member keeps the board and the read-only workflow tools;
-    // only append/edit/remove/reorder race the coordinator's join. Banning on
-    // mere server presence took the coordination tools away from exactly the
-    // participants the coordination board exists for.
     const result = await run({
       mcpServers: [
         { id: "ctrlyoke", deniedTools: [...MCP_WORKFLOW_MUTATION_TOOL_NAMES] },
@@ -211,16 +207,15 @@ suite("ParallelGroupPreflight", () => {
       parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
     });
 
-    assert.strictEqual(
-      result.issues.some(
-        (issue) =>
-          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
-      ),
-      false
+    assert.strictEqual(result.issues.length, 0);
+    assert.ok(
+      result.members.every(
+        (member) => !ctrlYokeToolFamilies(member.resolvedProperties).mutation
+      )
     );
   });
 
-  test("still rejects a group member that keeps one step-mutating tool", async () => {
+  test("does not reject a group member that keeps one step-mutating tool", async () => {
     const result = await run({
       mcpServers: [
         {
@@ -234,16 +229,15 @@ suite("ParallelGroupPreflight", () => {
       parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
     });
 
-    assert.strictEqual(
-      result.issues.some(
-        (issue) =>
-          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
-      ),
-      true
+    assert.strictEqual(result.issues.length, 0);
+    assert.ok(
+      result.members.every(
+        (member) => ctrlYokeToolFamilies(member.resolvedProperties).mutation
+      )
     );
   });
 
-  test("delivers only coordination to skill-mode group members", async () => {
+  test("retains workflow and coordination skills for skill-mode group members", async () => {
     const result = await run(
       {
         mcpServers: ["ctrlyoke"],
@@ -260,13 +254,7 @@ suite("ParallelGroupPreflight", () => {
         [MCP_SKILL_NAMES.TOOLS, MCP_SKILL_NAMES.COORDINATION],
       ]
     );
-    assert.strictEqual(
-      result.issues.some(
-        (issue) =>
-          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
-      ),
-      false
-    );
+    assert.strictEqual(result.issues.length, 0);
   });
 
   test("allows skill-mode members that did not request ctrlyoke", async () => {
@@ -282,12 +270,6 @@ suite("ParallelGroupPreflight", () => {
       result.members.map((member) => member.resolvedProperties.skills),
       [undefined, undefined]
     );
-    assert.strictEqual(
-      result.issues.some(
-        (issue) =>
-          issue.code === PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE
-      ),
-      false
-    );
+    assert.strictEqual(result.issues.length, 0);
   });
 });

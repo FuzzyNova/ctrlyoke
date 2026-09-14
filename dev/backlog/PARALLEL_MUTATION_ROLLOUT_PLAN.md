@@ -593,7 +593,7 @@ Three details in the source plans do not survive contact with the current code:
   must pause undo for the promotion echo with a field that says so, and must not
   reintroduce an inference from `executionState`.
 
-**Phase 8 — Permit parallel callers.** Mut Stage 5. Remove all three bans
+**Phase 8 — Permit parallel callers — complete.** Mut Stage 5. Removed all three bans
 _together_ — the `DYNAMIC_QUEUE` issue in `ParallelGroupPreflight.ts`, the
 `!context.groupMember` clause in `toolAllowed` (`mcp-server.ts`), and the
 skill-projection filter in `HarnessIntegration.ts` that removes

@@ -389,8 +389,8 @@ shared with late join.
 **Stage 4 — Placement transparency.** Return structured placement/relocation
 from the insert resolver and include it in MCP mutation responses.
 
-**Stage 5 — Permit parallel callers.** Remove all three caller-level mutation
-bans and update generated tool documentation and diagnostics. Do not enable any
+**Stage 5 — Permit parallel callers — complete.** Removed all three caller-level mutation
+bans and updated generated tool documentation and diagnostics. Do not enable any
 one delivery mode before the others: native MCP and MCP-as-skill must expose the
 same effective tools. `MCP_PARALLEL_APPEND_PLAN.md` then builds the richer
 append contract on this permission boundary.

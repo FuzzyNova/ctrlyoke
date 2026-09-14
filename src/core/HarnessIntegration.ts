@@ -33,14 +33,11 @@ import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
-  CTRLYOKE_MCP_MODES,
-  MCP_SKILL_NAMES,
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
 import {
   ctrlYokeDeniedToolNames,
-  ctrlYokeToolFamilies,
 } from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
@@ -68,30 +65,6 @@ export type PriorContextItem = {
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
 };
-
-function skillsForPrompt(
-  resolvedSkills: string[] | undefined,
-  workflowContext: WorkflowContext | undefined
-): string[] | undefined {
-  if (!resolvedSkills?.length || !workflowContext) return resolvedSkills;
-
-  const isParallelMember = workflowContext.workflowFile?.parallelGroups?.some(
-    (group) =>
-      workflowContext.promptIndex >= group.startIndex &&
-      workflowContext.promptIndex <= group.endIndex
-  );
-  if (
-    !isParallelMember ||
-    workflowContext.resolvedProperties?.ctrlyokeMcpMode !==
-      CTRLYOKE_MCP_MODES.SKILL ||
-    !workflowContext.resolvedProperties ||
-    !ctrlYokeToolFamilies(workflowContext.resolvedProperties).workflow
-  ) {
-    return resolvedSkills;
-  }
-
-  return resolvedSkills.filter((skill) => skill !== MCP_SKILL_NAMES.TOOLS);
-}
 
 /**
  * Carry the step's ctrlyoke denials into skill generation so a denied tool is
@@ -595,7 +568,7 @@ export abstract class HarnessIntegration {
       }
     }
 
-    const promptSkills = skillsForPrompt(resolvedSkills, workflowContext);
+    const promptSkills = resolvedSkills;
     const skillContent = promptSkills?.length
       ? await this.expandSkillBlock(
           promptSkills,

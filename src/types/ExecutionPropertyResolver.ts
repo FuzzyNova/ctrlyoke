@@ -73,13 +73,13 @@ export interface ResolvedExecutionTarget {
  * Which families of ctrlyoke tools effective properties actually deliver, by
  * any mechanism. Every field folds the ctrlyoke entry's `deniedTools`, so a
  * step that attaches the server but denies a whole family reads as not having
- * that family — which is what lets a parallel-group member keep the board
- * while giving up step mutation.
+ * that family, so explicit `deniedTools` remains the single way to opt out of
+ * a subset of the attached server or skill surface.
  */
 export interface CtrlYokeToolFamilies {
   /** At least one ctrlyoke tool survives, so the server/skill is worth attaching. */
   any: boolean;
-  /** A step-list mutating tool survives. This is what a parallel group bans. */
+  /** A step-list mutating tool survives. */
   mutation: boolean;
   /** A workflow tool survives, so the workflow skill has something to document. */
   workflow: boolean;

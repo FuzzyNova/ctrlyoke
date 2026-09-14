@@ -599,11 +599,10 @@ export const MCP_WORKFLOW_TOOL_NAMES = [
 ] as const;
 
 /**
- * The subset of workflow tools that mutate the step list. A parallel-group
- * member must never hold these — they race the coordinator's join — so the
- * preflight ban and the server's `ListTools` filter both key on this one list
- * rather than on "does the ctrlyoke server appear at all", which would also
- * take the read-only and coordination tools away from group members.
+ * The subset of workflow tools that mutate the step list. Keeping this list
+ * separate lets permission checks and generated skill documentation share the
+ * same mutation family while preserving the user's explicit `deniedTools`
+ * opt-out.
  */
 export const MCP_WORKFLOW_MUTATION_TOOL_NAMES = [
   MCP_APPEND_STEP_TOOL_NAME,

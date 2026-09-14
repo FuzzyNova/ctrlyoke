@@ -7,6 +7,7 @@ import {
 import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
   MCP_COORDINATION_TOOL_NAMES,
+  MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_TOOL_NAMES,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
@@ -198,6 +199,10 @@ suite("McpToolSkillGenerator", () => {
         content.includes(`### ${toolName}`),
         `expected ${toolName} in the un-denied listing`
       );
+    }
+    for (const toolName of MCP_WORKFLOW_MUTATION_TOOL_NAMES) {
+      assert.ok(content.includes(`### ${toolName}`));
+      assert.ok(content.includes(`--tool ${toolName}`));
     }
   });
 

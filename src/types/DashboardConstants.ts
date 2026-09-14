@@ -940,7 +940,6 @@ export function getEffectiveParallelGroupWidth(
 export const PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES = {
   INVALID_REFERENCE: "parallelGroup.preflight.invalidReference",
   SESSION_COLLISION: "parallelGroup.preflight.sessionCollision",
-  DYNAMIC_QUEUE: "parallelGroup.preflight.dynamicQueue",
   HARNESS_UNAVAILABLE: "parallelGroup.preflight.harnessUnavailable",
   INTEGRATION_CREATION: "parallelGroup.preflight.integrationCreation",
   INTERACTIVE_MULTIPLEX: "parallelGroup.preflight.interactiveMultiplex",

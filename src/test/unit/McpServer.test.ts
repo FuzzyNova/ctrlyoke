@@ -24,6 +24,7 @@ import {
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
+  MCP_WORKFLOW_MUTATION_TOOL_NAMES,
 } from "../../utils/McpToolDefinitions";
 import type {
   RunRef,
@@ -68,15 +69,7 @@ async function invokeAppendHandler(
   server: CtrlYokeMCPServer,
   args: McpAppendStepArguments
 ): Promise<unknown> {
-  // Phase 8 intentionally keeps the caller-level mutation ban in invokeTool.
-  // These cases exercise the MCP handler's live-join transaction while the
-  // run itself has a group and would therefore be identified as a member.
-  const handler = (
-    server as unknown as {
-      handleAppendStep: (input: McpAppendStepArguments) => Promise<unknown>;
-    }
-  ).handleAppendStep;
-  return handler.call(server, args);
+  return server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, args);
 }
 
 suite("CtrlYokeMCPServer run-addressed contracts", () => {
@@ -301,6 +294,28 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   }
 
+  async function prepareAttachedGroupRun(suffix: string): Promise<{
+    run: RunFixture;
+    ownerToken: string;
+  }> {
+    const active = await prepareActiveRun(suffix);
+    const workingFile = JSON.parse(
+      await fs.readFile(active.run.runFilePath, "utf8")
+    ) as WorkingFile;
+    const groupId = "group-" + suffix;
+    workingFile.parallelGroups = [
+      { id: groupId, startIndex: 1, endIndex: 3, failFast: true },
+    ];
+    await fs.writeFile(
+      active.run.runFilePath,
+      JSON.stringify(workingFile),
+      "utf8"
+    );
+    process.env.CTRLYOKE_PROMPT_INDEX = "1";
+    process.env.CTRLYOKE_PARALLEL_GROUP_ID = groupId;
+    return active;
+  }
+
   async function setup(): Promise<CtrlYokeMCPServer> {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-mcp-"));
     priorPinnedFile = process.env.CTRLYOKE_WORKING_FILE;
@@ -365,12 +380,18 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const external = names({ attested: false, groupMember: false });
 
     assert.ok(ordinary.includes(MCP_APPEND_STEP_TOOL_NAME));
-    assert.ok(!grouped.includes(MCP_APPEND_STEP_TOOL_NAME));
+    for (const toolName of MCP_WORKFLOW_MUTATION_TOOL_NAMES) {
+      assert.ok(
+        grouped.includes(toolName),
+        `expected ${toolName} for a group member`
+      );
+    }
     assert.ok(grouped.includes("read_output"));
     assert.ok(external.includes(MCP_POST_NOTE_TOOL_NAME));
     assert.ok(external.includes("global_status"));
     assert.ok(!external.includes("workflow_status"));
     assert.ok(!external.includes("read_output"));
+    assert.ok(!external.includes(MCP_APPEND_STEP_TOOL_NAME));
   });
 
   test("refuses a filtered-out tool at CallTool", async () => {
@@ -383,6 +404,34 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         }),
       /tool is not available/
     );
+  });
+
+  test("allows an attached group member to invoke every mutation tool", async () => {
+    const server = await setup();
+    const invocations = [
+      [
+        MCP_APPEND_STEP_TOOL_NAME,
+        { position: "end", steps: [{ prompt: "appended by a member" }] },
+      ],
+      [
+        MCP_EDIT_STEP_TOOL_NAME,
+        { index: 2, updates: { prompt: "edited by a member" } },
+      ],
+      [MCP_REMOVE_STEP_TOOL_NAME, { index: 2 }],
+      [MCP_REORDER_STEPS_TOOL_NAME, { indices: [1, 3, 2] }],
+    ] as const;
+
+    for (const [index, [toolName, args]] of invocations.entries()) {
+      const { run, ownerToken } = await prepareAttachedGroupRun(
+        "group-mutation-" + index
+      );
+      try {
+        const result = responseJson(await server.invokeTool(toolName, args));
+        assert.strictEqual(result.success, true);
+      } finally {
+        await releaseActiveRun(run, ownerToken);
+      }
+    }
   });
 
   test("posts and reads attributed untrusted notes, then releases all claims by default", async () => {

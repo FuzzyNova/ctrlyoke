@@ -5,7 +5,6 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  CTRLYOKE_MCP_MODES,
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES,
   type HarnessId,
@@ -24,8 +23,6 @@ import type {
 } from "../types/ExecutionPropertyResolver";
 import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
-import { ctrlYokeToolFamilies } from "./harness/shared/CliProviderUtils";
-import { MCP_WORKFLOW_MUTATION_TOOL_NAMES } from "../utils/McpToolDefinitions";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 
@@ -267,21 +264,6 @@ export async function preflightParallelGroupMember(
       code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.INTERACTIVE_MULTIPLEX,
       memberIndices: indices,
       message: `${memberList(workflow, indices)} resolve to interactive mode, but this host cannot multiplex interactive sessions. Run headless or set those members to executionMode: headless.`,
-    });
-  }
-
-  // Only the step-mutating tools race the coordinator's join. A member that
-  // denies those keeps the rest of the ctrlyoke server — including the
-  // coordination board, which exists precisely for group members.
-  if (
-    !isScriptStep(step) &&
-    ctrlYokeToolFamilies(resolvedProperties).mutation &&
-    resolvedProperties.ctrlyokeMcpMode !== CTRLYOKE_MCP_MODES.SKILL
-  ) {
-    issues.push({
-      code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.DYNAMIC_QUEUE,
-      memberIndices: [options.stepIndex],
-      message: `${memberLabel(workflow, options.stepIndex)} enables ctrlyoke's workflow-modifying tools (${MCP_WORKFLOW_MUTATION_TOOL_NAMES.join(", ")}), which are unavailable inside a parallel group. Deny those tools on the ctrlyoke server to keep the rest of it.`,
     });
   }
 

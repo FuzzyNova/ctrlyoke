@@ -196,12 +196,7 @@ function toolAllowed(name: string, context: McpToolCallingContext): boolean {
   ) {
     return true;
   }
-  // The step-mutating tools race the coordinator's join, so a group member
-  // never sees them. Same list the parallel-group preflight bans on.
-  return (
-    !context.groupMember &&
-    MCP_WORKFLOW_MUTATION_TOOL_NAMES.some((toolName) => toolName === name)
-  );
+  return MCP_WORKFLOW_MUTATION_TOOL_NAMES.some((toolName) => toolName === name);
 }
 
 const lineageRepository = new WorkflowLineageRepository();
