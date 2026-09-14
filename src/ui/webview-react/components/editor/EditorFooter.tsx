@@ -13,6 +13,7 @@ import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { SplitButton } from "../shared/SplitButton";
 
 export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 
@@ -30,6 +31,7 @@ interface EditorFooterProps {
   runButtonTooltip: string;
   queueButtonTooltip: string;
   onRun: () => void;
+  onRunInNewWorkflow: () => void;
   onQueue: () => void;
   onUpdate: () => void;
   onDelete: () => void;
@@ -69,6 +71,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   runButtonTooltip,
   queueButtonTooltip,
   onRun,
+  onRunInNewWorkflow,
   onQueue,
   onUpdate,
   onDelete,
@@ -283,22 +286,63 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               {!isMediumWidth && <span className="btn-text">Queue</span>}
             </button>
 
-            <button
-              className="btn-editor-run border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              onClick={onRun}
-              disabled={isExternallyManaged || !hasContent}
-              aria-label="Run"
-              title={
+            <SplitButton
+              mainLabel={
+                <>
+                  <Icon name="send" />
+                  {!isMediumWidth && (
+                    <span className="btn-text">{runButtonText}</span>
+                  )}
+                </>
+              }
+              mainAction={onRun}
+              mainAriaLabel="Run"
+              mainTitle={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
-            >
-              <Icon name="send" />
-              {!isMediumWidth && (
-                <span className="btn-text">{runButtonText}</span>
-              )}
-            </button>
+              mainDisabled={isExternallyManaged || !hasContent}
+              mainClassName="btn-editor-run"
+              dropdownClassName="btn-editor-run-menu"
+              size="compact"
+              menuPlacement="top"
+              portal
+              hideMenuButton={isSmallWidth}
+              options={[
+                {
+                  label: "Send Steer Message",
+                  value: "sendSteerMessage",
+                  onClick: () => undefined,
+                  disabled: true,
+                  title: "No live harness session for this workflow",
+                  icon: <Icon name="comment" />,
+                },
+                {
+                  label: "Run in Parallel",
+                  value: "runInParallel",
+                  onClick: () => undefined,
+                  disabled: true,
+                  title: "No step is running",
+                  icon: <Icon name="split-horizontal" />,
+                },
+                {
+                  label: "",
+                  value: "runMenuDivider",
+                  onClick: () => undefined,
+                  divider: true,
+                },
+                {
+                  label: "Run in New Workflow",
+                  value: "runInNewWorkflow",
+                  onClick: onRunInNewWorkflow,
+                  disabled: isExternallyManaged || !hasContent,
+                  title:
+                    "Starts a separate workflow with default settings and this prompt",
+                  icon: <Icon name="sparkle" />,
+                },
+              ]}
+            />
           </>
         )}
       </div>

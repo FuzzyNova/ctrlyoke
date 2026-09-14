@@ -15,6 +15,7 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
+import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -4441,7 +4442,6 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {},
         ACTION_TYPES.RUN,
         undefined,
-        false,
         PANEL_CLIENT_ID,
         {
           address: {
@@ -4515,7 +4515,6 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {},
         ACTION_TYPES.QUEUE,
         undefined,
-        false,
         PANEL_CLIENT_ID,
         {
           address: {
@@ -4580,7 +4579,6 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {},
         ACTION_TYPES.RUN,
         undefined,
-        false,
         PANEL_CLIENT_ID,
         {
           address: {
@@ -4598,10 +4596,101 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {},
         ACTION_TYPES.RUN,
         undefined,
-        false,
       ]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("starts a new workflow for one client without touching the source instance", async () => {
+    const sourceInstance = {
+      id: "source-instance",
+      getQueueState: () => ({ status: EXECUTION_STATES.RUNNING }),
+      getSummary: () => ({
+        executionState: EXECUTION_STATES.RUNNING,
+        workflowName: "Source workflow",
+      }),
+    };
+    const { orchestrator, internal } = createHarness(
+      path.join(os.tmpdir(), "ctrlyoke-new-workflow-test"),
+      "source-key" as never,
+      "source-run" as never,
+      sourceInstance
+    );
+    internal.instances.delete("active");
+    internal.instances.set(sourceInstance.id, sourceInstance);
+    const clientId = "browser:new-workflow";
+    internal.viewerRegistry.set(clientId, sourceInstance.id);
+    const events: string[] = [];
+    const sent: unknown[] = [];
+    let initialized: unknown[] | undefined;
+    let startedWith: unknown;
+    const newInstance = {
+      id: "new-instance",
+      initializeEphemeralPrompt: async (...args: unknown[]) => {
+        events.push("seed");
+        initialized = args;
+        return "claude-cli";
+      },
+      executeLoadedPromptFile: async (harness: unknown) => {
+        events.push("execute");
+        startedWith = harness;
+      },
+      getSummary: () => ({ workflowName: "Spin-off" }),
+      getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
+    };
+    internal.buildWorkflowInstance = () => {
+      events.push("register");
+      return newInstance;
+    };
+    internal.replayWorkflowStateTo = async (
+      workflowId: string,
+      _send: unknown,
+      replayClientId: string
+    ) => {
+      events.push("replay");
+      assert.strictEqual(workflowId, newInstance.id);
+      assert.strictEqual(replayClientId, clientId);
+      assert.strictEqual(internal.viewerRegistry.get(clientId), newInstance.id);
+    };
+
+    const ptyManager = initPtyProcessManager(() => undefined);
+    try {
+      const explicitProperties = {
+        harness: "claude-cli",
+        model: "model-from-draft",
+      };
+      await orchestrator.runInNewWorkflowForClient(
+        "spin-off prompt",
+        explicitProperties,
+        "Spin-off",
+        (message) => sent.push(message),
+        clientId
+      );
+
+      assert.deepStrictEqual(events, ["register", "seed", "replay", "execute"]);
+      assert.deepStrictEqual(initialized, [
+        "spin-off prompt",
+        explicitProperties,
+        "Spin-off",
+      ]);
+      assert.strictEqual(startedWith, "claude-cli");
+      assert.strictEqual(sent.length, 0);
+      assert.strictEqual(
+        ptyManager.getExpectedController(newInstance.id),
+        clientId
+      );
+      assert.strictEqual(
+        internal.instances.get(sourceInstance.id),
+        sourceInstance
+      );
+      assert.strictEqual(
+        sourceInstance.getSummary().executionState,
+        EXECUTION_STATES.RUNNING
+      );
+      assert.strictEqual(internal.instances.get(newInstance.id), newInstance);
+    } finally {
+      ptyManager.dispose();
     }
   });
 

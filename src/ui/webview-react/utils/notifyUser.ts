@@ -1,5 +1,6 @@
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
+import type { ToastOptions } from "@store/uiStore";
 import {
   MESSAGE_TYPES,
   type UserFeedbackSeverity,
@@ -22,4 +23,13 @@ export function notifyUser(
     message,
     detail,
   });
+}
+
+/** Show an in-app toast that may include a webview-only action callback. */
+export function showWebviewToast(
+  message: string,
+  severity: UserFeedbackSeverity,
+  options?: ToastOptions
+): void {
+  useUiStore.getState().showToast(message, severity, options);
 }

@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import { createPortal } from "react-dom";
 import { useClickOutside } from "@hooks/useClickOutside";
-import { constrainPopupToViewport, parsePixelProp } from "@utils/dropdownUtils";
+import { useAnchoredPopupPosition } from "@hooks/useAnchoredPopupPosition";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */
@@ -65,50 +65,14 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    bottom: number;
-    left: number;
-    maxHeight: number;
-    minWidth?: number;
-    maxWidth: number;
-  } | null>(null);
 
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const requestedMinWidth = parsePixelProp(popupMinWidth);
-      const requestedMaxWidth = parsePixelProp(popupMaxWidth);
-      const constrained = constrainPopupToViewport({
-        left: rect.left,
-        minWidth: requestedMinWidth,
-        maxWidth: requestedMaxWidth,
-        preferredWidth: requestedMaxWidth ?? requestedMinWidth,
-      });
-      setPopupPos({
-        bottom: window.innerHeight - rect.top + 4,
-        left: constrained.left,
-        maxHeight: rect.top - 4,
-        minWidth: constrained.minWidth,
-        maxWidth: constrained.maxWidth,
-      });
-    }
-  }, [popupMaxWidth, popupMinWidth]);
-
-  // Compute/update position whenever the popup opens or the window moves.
-  // Reset to null on close so stale coordinates never flash on next open.
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
+  const [popupPos] = useAnchoredPopupPosition(
+    buttonRef,
+    isOpen,
+    "top",
+    popupMinWidth,
+    popupMaxWidth
+  );
 
   useClickOutside([buttonRef, popupRef], isOpen, onClose);
 

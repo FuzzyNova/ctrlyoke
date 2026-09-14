@@ -256,3 +256,95 @@ describe("SplitButton — disabled main action while collapsed", () => {
     expect(mainButton()).toBeDisabled();
   });
 });
+
+describe("SplitButton — footer form", () => {
+  it("renders a drop-up menu through the portal outside the button container", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSplitButton({
+      menuPlacement: "top",
+      portal: true,
+    });
+
+    await user.click(queryChevron()!);
+    const menu = await screen.findByRole("listbox");
+
+    expect(menu).toBeInTheDocument();
+    expect(container).not.toContainElement(menu);
+    expect(menu.style.bottom).not.toBe("");
+  });
+
+  it("applies the compact editor button sizing", () => {
+    renderSplitButton({ size: "compact" });
+
+    expect(mainButton()).toHaveClass("px-3", "py-1", "text-xs");
+    expect(queryChevron()).toHaveClass("text-xs");
+  });
+
+  it("uses mainAriaLabel as the primary button name", () => {
+    renderSplitButton({ mainAriaLabel: "Run" });
+
+    expect(screen.getByRole("button", { name: "Run" })).toBe(mainButton());
+  });
+
+  it("keeps click-outside and Escape closing a portaled menu", async () => {
+    const user = userEvent.setup();
+    renderSplitButton({ portal: true });
+
+    await user.click(queryChevron()!);
+    await screen.findByRole("option", { name: "First option" });
+    fireEvent.mouseDown(document.body);
+    expect(
+      screen.queryByRole("option", { name: "First option" })
+    ).not.toBeInTheDocument();
+
+    await user.click(queryChevron()!);
+    await screen.findByRole("option", { name: "First option" });
+    await user.keyboard("{Escape}");
+    expect(
+      screen.queryByRole("option", { name: "First option" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("supports keyboard navigation in a portaled menu", async () => {
+    const user = userEvent.setup();
+    renderSplitButton({ portal: true });
+
+    await user.click(queryChevron()!);
+    await screen.findByRole("option", { name: "First option" });
+    await user.keyboard("{ArrowDown}");
+    expect(
+      screen.getByRole("option", { name: "First option" })
+    ).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{ArrowDown}");
+    expect(
+      screen.getByRole("option", { name: "Second option" })
+    ).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("SplitButton — portaled menu keyboard focus survives repositioning", () => {
+  it("keeps the highlighted item when a scroll or resize re-measures the popup", async () => {
+    const user = userEvent.setup();
+    renderSplitButton({ portal: true, menuPlacement: "top" });
+
+    queryChevron()!.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("option", { name: "First option" });
+    await user.keyboard("{ArrowDown}");
+    expect(
+      screen.getByRole("option", { name: "Second option" })
+    ).toHaveAttribute("aria-selected", "true");
+
+    // Re-measuring hands back a fresh position object on every scroll and
+    // resize. If the focus effect depends on that object rather than on
+    // whether the menu is mounted, the highlight snaps back to the first item.
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(
+      screen.getByRole("option", { name: "Second option" })
+    ).toHaveAttribute("aria-selected", "true");
+  });
+});

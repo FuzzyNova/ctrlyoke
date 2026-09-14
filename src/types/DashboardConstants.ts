@@ -498,6 +498,7 @@ export const MESSAGE_TYPES = {
   // Multi-workflow coordination — Webview → Extension
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
+  RUN_IN_NEW_WORKFLOW: "runInNewWorkflow",
 
   // Stable run lifecycle controls — Webview → Extension
   EXECUTE_DRAFT: "executeDraft",

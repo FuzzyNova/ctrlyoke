@@ -523,7 +523,9 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
     if (this.currentWorkspaceFolder) {
-      this.ensureCoordinationWatchSession(this.currentWorkspaceFolder.uri.fsPath);
+      this.ensureCoordinationWatchSession(
+        this.currentWorkspaceFolder.uri.fsPath
+      );
       this.harnessUsageService = new HarnessUsageService(
         this.currentWorkspaceFolder.uri.fsPath,
         undefined,
@@ -5615,12 +5617,29 @@ export class WorkflowOrchestrator {
     );
   }
 
+  async runInNewWorkflowForClient(
+    text: string,
+    properties: unknown,
+    promptName: string | undefined,
+    send: (message: unknown) => void,
+    clientId: string
+  ): Promise<void> {
+    const instance = this.registerNewInstance(clientId);
+    getPtyProcessManager()?.setPendingController(instance.id, clientId);
+    const stepHarness = await instance.initializeEphemeralPrompt(
+      text,
+      properties,
+      promptName
+    );
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
+    await instance.executeLoadedPromptFile(stepHarness);
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,
     action: ActionType,
     promptName?: string,
-    forceNewWorkflow?: boolean,
     clientId: string = this.PANEL_CLIENT_ID,
     mutation?: WorkflowDefinitionMutation
   ): Promise<void> {
@@ -5635,11 +5654,7 @@ export class WorkflowOrchestrator {
     // instance owns the addressed run itself (the everyday single-run case,
     // including dynamic append to the executing run), the instance path below
     // already targets the right file.
-    if (
-      !forceNewWorkflow &&
-      mutation &&
-      mutation.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-    ) {
+    if (mutation && mutation.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       const runAddress = mutation.address;
       const queueState = instance.getQueueState();
       const instanceOwnsAddressedRun =
@@ -5665,10 +5680,9 @@ export class WorkflowOrchestrator {
       action === ACTION_TYPES.RUN ||
       action === ACTION_TYPES.RUN_NEXT ||
       action === ACTION_TYPES.RUN_BEFORE_CURRENT;
-    if (isRunAction || forceNewWorkflow) {
+    if (isRunAction) {
       const summary = instance.getSummary();
       const wouldStart =
-        forceNewWorkflow ||
         !summary.totalSteps ||
         summary.executionState === EXECUTION_STATES.IDLE ||
         summary.executionState === EXECUTION_STATES.COMPLETED ||
@@ -5683,8 +5697,7 @@ export class WorkflowOrchestrator {
       text,
       properties,
       action,
-      promptName,
-      forceNewWorkflow
+      promptName
     );
   }
 

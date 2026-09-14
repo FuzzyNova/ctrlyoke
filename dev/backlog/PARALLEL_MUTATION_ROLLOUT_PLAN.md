@@ -210,23 +210,32 @@ insertion transaction.
 **Owns:** `src/ui/webview-react/components/shared/SplitButton.tsx`,
 `components/editor/EditorFooter.tsx`, `components/editor/PromptEditor.tsx`,
 `hooks/`, `utils/dropdownUtils`, `src/ui/WebviewMessageRouter.ts`,
-`src/ui/WebviewSettingsSync.ts`, `store/settingsStore.ts`, plus
-`runInNewWorkflowForClient` in `src/core/WorkflowOrchestrator.ts` and the
-`forceNewWorkflow` removal in `src/core/WorkflowInstance.ts`.
+`src/ui/WorkflowStepHandlers.ts`, plus `runInNewWorkflowForClient` in
+`src/core/WorkflowOrchestrator.ts` and the `forceNewWorkflow` removal in
+`src/core/WorkflowInstance.ts`.
 
-**Phase 4.** Disp Stages 1–2: extract `useAnchoredPopupPosition` shared between
+**Not in this track:** `src/ui/WebviewSettingsSync.ts` and
+`store/settingsStore.ts`. The only reason those files appear in this plan is the
+effective-parallel-width field in the lightweight `GlobalSettings` payload, and
+that field exists solely to gate **Run in Parallel** — Phase 7 work, listed
+under Phase 7 below. Phase 4 must not add it: the width gate has no consumer
+until `ACTION_TYPES.RUN_PARALLEL` exists, and shipping an unused settings field
+in wave 1 puts a dead payload in front of every client.
+
+**Phase 4 — complete.** Disp Stages 1–2: extract `useAnchoredPopupPosition` shared between
 `FooterQuickPicker` and `SplitButton`; add `menuPlacement` / compact size /
 `portal` to `SplitButton`; wire the footer split button with "Run in New
 Workflow" enabled and the other two items present-but-disabled; implement
 `RUN_IN_NEW_WORKFLOW` end to end with pending-PTY-controller registration, view
 switch, and toast; delete `forceNewWorkflow`.
 
-**Exit criteria.** New
-`src/ui/webview-react/test/components/editor/EditorFooter.test.tsx` (none exists
-today), `PromptEditor.test.tsx` updated, and
-`src/test/unit/WorkflowOrchestrator.test.ts` proving the previous instance keeps
-running. `.btn-editor-run` stays on the **primary** button — three existing
-tests select on it.
+**Exit criteria — met.** New
+`src/ui/webview-react/test/components/editor/EditorFooter.test.tsx`,
+`PromptEditor.test.tsx` updated, and `src/test/unit/WorkflowOrchestrator.test.ts`
+proving the previous instance keeps running. `.btn-editor-run` stays on the
+**primary** button, and the primary button keeps its `Run` accessible name —
+that name, not the class, is what the existing `PromptEditor.test.tsx`
+assertions select on, which is why `SplitButton` gained `mainAriaLabel`.
 
 **Do not:** implement Run in Parallel behavior (Phase 7) or Send Steer Message
 (owned by `STEER_MESSAGE_PLAN.md`). Both are disabled placeholders with tooltips

@@ -798,6 +798,29 @@ export class WebviewMessageRouter {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW, (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      void orchestrator
+        .runInNewWorkflowForClient(
+          message.text,
+          message.properties,
+          message.promptName,
+          ctx.postMessage,
+          ctx.clientId
+        )
+        .catch((error) => {
+          Log.error(
+            "[WebviewMessageRouter] Failed to run prompt in new workflow:",
+            error
+          );
+          ctx.emit({
+            type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+            text: message.text,
+          });
+        });
+    });
+
     table.set(MESSAGE_TYPES.UPDATE_PROMPT, (message, ctx) => {
       void this.workflowStepHandlers.handleUpdatePrompt(ctx, message);
     });
