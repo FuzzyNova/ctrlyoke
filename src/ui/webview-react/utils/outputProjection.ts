@@ -301,7 +301,11 @@ export function mapOrderedHistoryEntriesToMessages(
         activity.kind === OUTPUT_ACTIVITY_KINDS.STATUS
           ? {
               message: activity.text ?? "",
-              severity: STATUS_MESSAGE_SEVERITY.INFO,
+              // This message replaces the aggregate `OrderedStatusHistoryEntry`
+              // for the same target below, so the activity's own severity is
+              // the only one that reaches the row. Hardcoding info here painted
+              // every warning and error — "Execution failed" included — blue.
+              severity: activity.severity ?? STATUS_MESSAGE_SEVERITY.INFO,
               timestamp: formatTime(activity.timestampMs),
               timestampMs: activity.timestampMs,
             }

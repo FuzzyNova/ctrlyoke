@@ -194,6 +194,70 @@ describe("outputProjection", () => {
     ]);
   });
 
+  // A STATUS activity suppresses the aggregate OrderedStatusHistoryEntry for
+  // the same target, so the activity's severity is the only one the rendered
+  // row can read. It used to be hardcoded to info, which painted every warning
+  // and error blue — including the "Execution failed" row for a workflow that
+  // had just been torn down.
+  it("carries a status message's severity onto its activity message", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 3 } as const;
+    const statusMessage = {
+      message: "Execution failed: Failed to write working file: EPERM",
+      severity: "error",
+      timestamp: 1000,
+    } as const;
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [
+        {
+          kind: OUTPUT_HISTORY_KINDS.STATUS,
+          target,
+          statusMessage,
+          timestampMs: 1000,
+          sequence: 1,
+        },
+      ],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+          text: statusMessage.message,
+          severity: statusMessage.severity,
+        },
+      ]
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.data).toMatchObject({
+      message: statusMessage.message,
+      severity: "error",
+    });
+  });
+
+  it("falls back to info for a status activity projected without a severity", () => {
+    // Runs projected before `severity` existed on OutputActivityEntry.
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+          text: "Running end condition",
+        },
+      ]
+    );
+
+    expect(messages[0]?.data).toMatchObject({ severity: "info" });
+  });
+
   it("carries the attempt's prompt and command onto its activity messages", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const messages = mapOrderedHistoryEntriesToMessages(

@@ -1060,6 +1060,7 @@ export const useWorkflowStore = create<
                     attemptIndex: 0,
                     kind: OUTPUT_ACTIVITY_KINDS.STATUS,
                     text: entry.statusMessage.message,
+                    severity: entry.statusMessage.severity,
                   })
                 : state.liveActivityEntries;
             return {
@@ -1081,6 +1082,7 @@ export const useWorkflowStore = create<
                           attemptIndex: 0,
                           kind: OUTPUT_ACTIVITY_KINDS.STATUS,
                           text: entry.statusMessage.message,
+                          severity: entry.statusMessage.severity,
                         }
                       ),
                     }

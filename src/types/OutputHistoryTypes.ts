@@ -65,6 +65,19 @@ export interface OutputActivityEntry {
   kind: OutputActivityKind;
   events?: CliEvent[];
   text?: string;
+  /**
+   * Severity for `OUTPUT_ACTIVITY_KINDS.STATUS` entries, mirroring the
+   * `StatusMessage.severity` of the entry this was projected from.
+   *
+   * Load-bearing, not decorative: the activity projection *replaces* the
+   * `OrderedStatusHistoryEntry` for the same target (`outputProjection.ts`
+   * drops the aggregate when a STATUS activity exists), so this is the only
+   * severity the rendered row can read. Without it every status message —
+   * including "Execution failed" — painted as info.
+   *
+   * Absent on entries projected before this field existed, which read as info.
+   */
+  severity?: StatusMessage["severity"];
 }
 
 export type OrderedHistoryEntry =

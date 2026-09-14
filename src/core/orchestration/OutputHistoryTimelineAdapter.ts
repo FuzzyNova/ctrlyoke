@@ -265,6 +265,7 @@ export class OutputHistoryTimelineAdapter {
             attemptIndex: 0,
             kind: OUTPUT_ACTIVITY_KINDS.STATUS,
             text: event.payload.statusMessage.message,
+            severity: event.payload.statusMessage.severity,
           });
           orderedEntries.push({
             kind: OUTPUT_HISTORY_KINDS.STATUS,
