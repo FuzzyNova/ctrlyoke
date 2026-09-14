@@ -23,6 +23,30 @@ import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 
 const step = (name: string): WorkflowStep => ({ prompt: name });
 
+/** A member the executor has already claimed: an immutable absolute-index anchor. */
+const startedStep = (name: string): WorkflowStep => ({
+  prompt: name,
+  _runtime: { stepId: `id-${name}`, startedAt: 1 },
+});
+
+/**
+ * Live group `g1` spanning indices 1-3 whose named members have been claimed.
+ * Mirrors the shape the executor sees mid-fan-out, where `currentIndex` is
+ * still pinned at the group's `startIndex`.
+ */
+function liveGroupTopology(
+  started: string[] = ["b"],
+  steps = ["a", "b", "c", "d", "e"],
+  parallelGroups = [{ id: "g1", startIndex: 1, endIndex: 3, failFast: true }]
+): ParallelGroupTopology {
+  return {
+    steps: steps.map((name) =>
+      started.includes(name) ? startedStep(name) : step(name)
+    ),
+    parallelGroups,
+  };
+}
+
 function topology(
   steps = ["a", "b", "c", "d", "e"],
   parallelGroups = [{ id: "g1", startIndex: 1, endIndex: 3, failFast: true }]
@@ -436,6 +460,88 @@ suite("ParallelGroupTopology", () => {
     test("rejects invalid snap indices", () => {
       assert.throws(() => snapParallelGroupIndex(topology(), -1));
       assert.throws(() => snapParallelGroupIndex(topology(), 6));
+    });
+  });
+  suite("live group mutation rules", () => {
+    test("removes an unstarted member while started anchors keep their index", () => {
+      const result = deleteParallelGroupStep(liveGroupTopology(["b"]), 3);
+      assert.deepStrictEqual(names(result), ["a", "b", "c", "e"]);
+      assert.strictEqual(ranges(result), "g1:1-2");
+      assert.strictEqual(result.steps[1]._runtime?.stepId, "id-b");
+    });
+
+    test("rejects shrinking an active two-member group to one", () => {
+      const value = liveGroupTopology(
+        ["b"],
+        ["a", "b", "c", "d"],
+        [{ id: "g1", startIndex: 1, endIndex: 2, failFast: true }]
+      );
+      assert.throws(
+        () => deleteParallelGroupStep(value, 2),
+        /Cannot shrink active parallel group g1 from two members to one/
+      );
+    });
+
+    test("still dissolves a two-member group that never started", () => {
+      const value = liveGroupTopology(
+        [],
+        ["a", "b", "c", "d"],
+        [{ id: "g1", startIndex: 1, endIndex: 2, failFast: true }]
+      );
+      const result = deleteParallelGroupStep(value, 2);
+      assert.deepStrictEqual(names(result), ["a", "b", "d"]);
+      assert.strictEqual(ranges(result), "");
+    });
+
+    test("rejects a reorder that would move a started member", () => {
+      assert.throws(
+        () => reorderParallelGroupSteps(liveGroupTopology(["b"]), 1, 3),
+        /started/i
+      );
+    });
+
+    test("reorders unstarted members within a live group's slots", () => {
+      // currentIndex is pinned at the group's startIndex for the whole run, so
+      // the pending slice is ["b", "c", "d", "e"] and its indices are relative.
+      const result = reorderParallelGroupPendingSteps(
+        liveGroupTopology(["b"]),
+        1,
+        [0, 2, 1, 3],
+        [{ id: "g1", start: 0, end: 2, failFast: true }],
+        true
+      );
+      assert.deepStrictEqual(names(result), ["a", "b", "d", "c", "e"]);
+      assert.strictEqual(ranges(result), "g1:1-3");
+      assert.strictEqual(result.steps[1]._runtime?.stepId, "id-b");
+    });
+
+    test("rejects moving a member out of an active group", () => {
+      assert.throws(
+        () =>
+          reorderParallelGroupPendingSteps(
+            liveGroupTopology(["b"]),
+            1,
+            [0, 1, 2, 3],
+            [{ id: "g1", start: 0, end: 1, failFast: true }],
+            true
+          ),
+        /Cannot change membership of active parallel group g1/
+      );
+    });
+
+    test("pushes a generic insert past a live group instead of joining it", () => {
+      const value = liveGroupTopology(["b"]);
+      const result = insertParallelGroupSteps(value, 2, [step("new")]);
+      assert.deepStrictEqual(names(result), ["a", "b", "c", "d", "new", "e"]);
+      assert.strictEqual(ranges(result), "g1:1-3");
+      assert.strictEqual(
+        resolveParallelGroupInsertIndex(
+          value,
+          2,
+          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+        ).insertedIndex,
+        4
+      );
     });
   });
 });
