@@ -50,6 +50,7 @@ import {
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
+import { getMaxQueueSize, isUnlimitedMode } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import type { ParallelGroupInsertPlacement } from "./core/ParallelGroupTopology";
@@ -241,28 +242,8 @@ function log(...args: any[]) {
  * ctrlyoke MCP Server
  * Provides tools for AI agents to read and extend workflow queues
  */
-/**
- * Read queue size limit from environment (set by the extension via MCP config env vars).
- * Falls back to the shared queue setting default if not set. A value of 0 or
- * CTRLYOKE_UNLIMITED_MODE=true means no limit.
- */
-export function getMaxQueueSize(): number {
-  const envValue = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-  if (envValue) {
-    const parsed = parseInt(envValue, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-  return DEFAULT_MAX_QUEUE_SIZE;
-}
-
 /** Hard response cap for the workspace-wide live execution radar. */
 export const MAX_GLOBAL_STATUS_RESULTS = 100;
-
-function isUnlimitedMode(): boolean {
-  return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
-}
 
 function toWorkflowStepUpdates(
   updates: McpEditStepArguments["updates"]
@@ -1005,29 +986,6 @@ export class CtrlYokeMCPServer {
     } | null = null;
 
     {
-      const queueData: WorkingFile = JSON.parse(
-        await fs.readFile(selected.filePath, "utf8")
-      );
-      log("Current queue size:", queueData.steps?.length || 0);
-
-      // Validate queue size limit (only for prompts that will actually be added)
-      const unlimited = isUnlimitedMode();
-      const maxQueueSize = getMaxQueueSize();
-      const newTotalSize = (queueData.steps || []).length + steps.length;
-      log("Queue size check:", {
-        current: (queueData.steps || []).length,
-        adding: steps.length,
-        rejected: 0,
-        newTotal: newTotalSize,
-        max: unlimited ? "unlimited" : maxQueueSize,
-      });
-
-      if (!unlimited && newTotalSize > maxQueueSize) {
-        throw new Error(
-          `Queue size limit exceeded. Current: ${(queueData.steps || []).length}, Adding: ${steps.length}, Max: ${maxQueueSize}`
-        );
-      }
-
       const appended = await RunContinuationService.appendStepsToRun(
         this.workspaceRoot,
         selected.workflowKey,

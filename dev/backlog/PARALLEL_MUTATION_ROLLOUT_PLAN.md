@@ -416,6 +416,13 @@ have `mcp-server.ts` import them back for its `workflow_status` reporting.
 
 Each session closes exactly one of the three exit-criteria test files above.
 
+Session 1 landed the shared queue-limit helpers and the topology-accepting,
+locked continuation transaction, including flattened capacity enforcement and
+atomic append metadata. Session 2 still owes publication of the queue-item
+union plus flattened MCP validation and the structured append response. Session
+3 still owes generated MCP documentation for the flat and future-container
+forms.
+
 ### Wave 2 conflict surface
 
 | File                                                  | Tracks | Rule                                                                  |

@@ -6,11 +6,11 @@ import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import {
   CtrlYokeMCPServer,
-  getMaxQueueSize,
   MAX_GLOBAL_STATUS_RESULTS,
   parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
+import { getMaxQueueSize } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,

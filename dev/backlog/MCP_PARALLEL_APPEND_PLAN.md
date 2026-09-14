@@ -471,11 +471,13 @@ inherits this helper and its normalized topology result. The queue-item union
 schema is still unpublished: Phase 3B must publish it through `append_step`
 alongside the handler change.
 
-**Stage 2 — Future parallel-group enqueue.** Change the continuation transaction
-to insert incoming topology atomically, move flattened queue-limit validation
-inside the lock, validate every member, and return structured topology. This
-stage can ship before manual late join and is already useful to sequential
-orchestrators.
+**Stage 2 — Future parallel-group enqueue.** Session 1 landed the shared
+queue-limit helpers, topology-accepting continuation transaction, atomic
+topology insertion, flattened in-lock capacity validation, and append metadata
+for absolute groups and added steps. Sessions 2–3 still owe publication of the
+queue-item union and MCP-side flattened validation/structured response, then
+generated MCP docs covering both append forms. This stage can ship before
+manual late join and is already useful to sequential orchestrators.
 
 **Stage 3 — Durable live-join admission.** After the mutability and dispatch
 prerequisites, persist admission state, add queue-definition reconciliation,

@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import type {
+  ParallelGroupDefinition,
   RunRef,
   RunnerHostIdentity,
   WorkflowKey,
@@ -18,12 +19,14 @@ import {
   type QueuePosition,
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { getMaxQueueSize, isUnlimitedMode } from "../../utils/QueueLimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
   deleteParallelGroupStep,
   insertParallelGroupSteps,
+  insertParallelGroupTopology,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
   type PendingParallelGroupRange,
@@ -31,6 +34,7 @@ import {
   resolveParallelGroupInsertIndex,
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
+  type ParallelGroupTopology,
 } from "../ParallelGroupTopology";
 import {
   mergeWorkflowStepUpdate,
@@ -243,7 +247,7 @@ export class RunContinuationService {
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    tail: WorkflowStep[],
+    tail: WorkflowStep[] | ParallelGroupTopology,
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
@@ -255,8 +259,13 @@ export class RunContinuationService {
     placement: ParallelGroupInsertPlacement;
     /** @deprecated Use placement.insertedIndex. */
     insertIndex: number;
+    parallelGroupsAdded: ParallelGroupDefinition[];
+    stepsAdded: number;
   }> {
-    if (tail.length === 0) {
+    const incomingTopology = Array.isArray(tail)
+      ? normalizeParallelGroupTopology({ steps: tail })
+      : normalizeParallelGroupTopology(tail);
+    if (incomingTopology.steps.length === 0) {
       throw new Error("Append continuation requires at least one tail step");
     }
     const runFilePath = WorkflowPaths.runFilePath(
@@ -295,6 +304,17 @@ export class RunContinuationService {
         ) {
           throw new Error(`Cannot append while run is in state ${sourceState}`);
         }
+        const currentQueueSize = source.steps?.length ?? 0;
+        const stepsToAdd = incomingTopology.steps.length;
+        const maxQueueSize = getMaxQueueSize();
+        if (
+          !isUnlimitedMode() &&
+          currentQueueSize + stepsToAdd > maxQueueSize
+        ) {
+          throw new Error(
+            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${maxQueueSize}`
+          );
+        }
         // Resolve the splice point from the run file read under this same
         // lock. Reading it earlier (or from the caller's snapshot) would let
         // the executing run advance in between and land `next` on the wrong
@@ -305,8 +325,12 @@ export class RunContinuationService {
         });
         const identifiedTail = ensureStepIds([
           ...sourceTopology.steps,
-          ...tail.map((step) => stripStepRuntime([step])[0]),
+          ...stripStepRuntime(incomingTopology.steps),
         ]).slice(sourceTopology.steps.length);
+        const sanitizedIncomingTopology = {
+          steps: identifiedTail.map(stripViewOnlyWorkflowStepFields),
+          parallelGroups: incomingTopology.parallelGroups,
+        };
         const requestedIndex =
           typeof position === "number"
             ? position
@@ -339,10 +363,16 @@ export class RunContinuationService {
           requestedIndex,
           PARALLEL_GROUP_INSERT_POSITIONS.AFTER
         );
-        const nextTopology = insertParallelGroupSteps(
+        const nextTopology = insertParallelGroupTopology(
           sourceTopology,
           requestedIndex,
-          identifiedTail.map(stripViewOnlyWorkflowStepFields)
+          sanitizedIncomingTopology
+        );
+        const incomingGroupIds = new Set(
+          sanitizedIncomingTopology.parallelGroups.map((group) => group.id)
+        );
+        const parallelGroupsAdded = nextTopology.parallelGroups.filter(
+          (group) => incomingGroupIds.has(group.id)
         );
         const workingFile: WorkingFile = {
           ...source,
@@ -358,6 +388,8 @@ export class RunContinuationService {
           descriptorRevision: descriptor.revision,
           placement,
           insertIndex: placement.insertedIndex,
+          parallelGroupsAdded,
+          stepsAdded: stepsToAdd,
         };
       });
     });
