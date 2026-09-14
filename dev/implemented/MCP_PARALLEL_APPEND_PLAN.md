@@ -1,8 +1,9 @@
 # MCP Parallel Append Plan
 
-> **Status:** Phase 3B / Stage 2 and Phase 7 / Stage 3 complete. The queue-item
+> **Status:** Implemented 2026-09-14. Stages 1–4 are shipped. The queue-item
 > union, atomic future parallel-group enqueue, durable live-join admission,
-> structured responses, and generated MCP documentation are shipped.
+> structured responses, generated MCP documentation, and parallel-caller
+> end-to-end coverage are complete.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -16,7 +17,7 @@
 > the mutability plan's Stage 5 permission change.
 >
 > **Related shipped design:**
-> [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md) defines the
+> [`PARALLEL_STEPS_PLAN.md`](./PARALLEL_STEPS_PLAN.md) defines the
 > fork/join and authored `parallel:` semantics this API exposes.
 >
 > **Build order:** [`PARALLEL_MUTATION_ROLLOUT_PLAN.md`](./PARALLEL_MUTATION_ROLLOUT_PLAN.md)
@@ -488,10 +489,10 @@ reconcile-and-close are shipped. `parallelWithCurrent` is exposed in the MCP
 schema and generated documentation; live joins are locked, flat-step-only, and
 return destination plus joined-group metadata.
 
-**Stage 4 — Parallel-caller end-to-end enablement.** Land with or after the
-mutability plan's Stage 5. Verify native MCP and MCP-as-skill expose identical
-contracts to a group member and dogfood the implementation/orchestrator workflow
-pattern.
+**Stage 4 — Parallel-caller end-to-end enablement — complete.** Native MCP and
+MCP-as-skill expose identical mutation contracts to a group member, and
+integration coverage verifies the implementation/orchestrator workflow pattern.
+Manual dogfood remains the user's acceptance step.
 
 `parallelWithCurrent` is exposed in tool discovery now that Stage 3 is complete.
 Future container enqueue and live join are independently releasable because the

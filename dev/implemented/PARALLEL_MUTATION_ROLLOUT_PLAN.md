@@ -1,9 +1,8 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Waves 1 and 2 complete; Barrier 2 is behind us. Phase 7 is
-> complete, including `parallelWithCurrent`, live join, and durable admission.
-> Track F sessions 6–7 remain for the caller-level mutation bans and
-> end-to-end close-out.
+> **Status:** Implemented 2026-09-14. Waves 1–3 and Phases 1–9 are complete,
+> including caller-level mutation enablement, end-to-end integration coverage,
+> and the plan close-out. The real-workflow dogfood remains a manual user step.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -114,7 +113,7 @@ half depends on Phase 2.
 | Wave 1  | Nothing user-visible except Run in New Workflow (Phase 4). |
 | Wave 2  | Sequential agents can enqueue future `parallel:` groups.   |
 | Phase 7 | Complete — users and sequential MCP callers can join the live group. |
-| Wave 3  | Parallel-group agents can mutate future work.              |
+| Wave 3  | Complete — parallel-group agents can mutate future work.    |
 
 Phase 4 is the only wave-1 work that is shippable on its own; Phases 1–3A are
 invisible infrastructure. Do not gate a release on them individually.
@@ -609,7 +608,7 @@ dynamic-queue diagnostic but still honors explicit `deniedTools`;
 member lists and invokes mutation tools in both modes while unattached external
 callers stay denied.
 
-**Phase 9 — End-to-end enablement.** MCP Stage 4 plus the integration coverage
+**Phase 9 — End-to-end enablement — complete.** MCP Stage 4 plus the integration coverage
 from all three plans: a two-member implementation/orchestrator group appends,
 edits, and removes flat future work and joins without stale indices; output,
 snapshot, PTY, and coordination attribution stay attached to started members
@@ -634,8 +633,8 @@ and the plan close-out, and hands the dogfood to the user.
 | 3   | 7     | `RUN_PARALLEL` backend: constants, append-or-promote, join, width payload | Complete. Session 4 consumes `EXECUTE_PROMPT.action === ACTION_TYPES.RUN_PARALLEL`, the `STEPS_EXTENDED.runtimePromotionUndoSuppressed` echo flag, and `globalSettings.effectiveParallelGroupWidth` from the always-synced settings payload. |
 | 4   | 7     | Webview Run in Parallel: `useRunDispatchTargets`, gates, tooltips, toasts | Complete. The editor half now gates `Run in Parallel` from workflow/editor state, leaves saturation enabled, posts `ACTION_TYPES.RUN_PARALLEL`, restores rejected drafts, and uses the existing backend diagnostic toast path. |
 | 5   | 7     | MCP `parallelWithCurrent` live join + schema/doc exposure                 | Complete. The schema and generated docs distinguish `next` (which never joins) from `parallelWithCurrent`; the locked MCP transaction validates running admission, width, final-step, topology, queue-limit, and harness/model edges, promotes sequential work with `failFast: false`, extends existing groups in one revision, and returns destination and joined-group metadata. |
-| 6   | 8     | Remove all three caller-level mutation bans together                      |
-| 7   | 9     | End-to-end integration coverage + close out all four plans                |
+| 6   | 8     | Remove all three caller-level mutation bans together                      | Complete. Native MCP, MCP-as-skill, and preflight all permit eligible group-member mutations while explicit `deniedTools` remains authoritative. |
+| 7   | 9     | End-to-end integration coverage + close out all four plans                | Complete. Integration coverage proves mutation/index reconciliation, attribution, recovery, promotion, snapshots, and final join behavior. Manual dogfood remains with the user. |
 
 Sessions 1 and 2 are the shared core; 3–4 and 5 are its two consumers. Session 5
 is the first place `parallelWithCurrent` becomes visible to any caller.

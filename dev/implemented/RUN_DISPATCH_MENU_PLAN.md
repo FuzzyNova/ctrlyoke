@@ -1,23 +1,21 @@
 # Run Dispatch Menu Plan
 
-> **Status:** Partially implemented. **Stages 1–2 have shipped** (the
-> split-button shell and Run in New Workflow, landed as Phase 4 / Track B of the
-> rollout plan below). Stages 3–5 are still backlog and remain a design
-> proposal; Stage 6 belongs to `STEER_MESSAGE_PLAN.md`.
+> **Status:** Implemented 2026-09-14. **Stages 1–5 have shipped** (the
+> split-button shell, Run in New Workflow, late join, topology/promotion, and
+> Run in Parallel wiring). Stage 6 belongs to the still-backlog
+> `STEER_MESSAGE_PLAN.md`.
 >
-> **Companion to:** [`STEER_MESSAGE_PLAN.md`](./STEER_MESSAGE_PLAN.md) (backlog).
+> **Companion to:** [`STEER_MESSAGE_PLAN.md`](../backlog/STEER_MESSAGE_PLAN.md) (backlog).
 > That plan introduces the split-button shell on `btn-editor-run` and its first
 > menu item ("Send Steer Message"). This plan defines the finished menu, adds
 > **Run in Parallel** and **Run in New Workflow**, and settles what happens to
 > the Queue button.
 >
-> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)
+> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](./PARALLEL_STEPS_PLAN.md)
 > (shipped) for the fork/join model that "Run in Parallel" extends, and on
 > [`PARALLEL_STEP_MUTABILITY_PLAN.md`](./PARALLEL_STEP_MUTABILITY_PLAN.md)
-> (backlog, **prerequisite**) for the execution guards. Stages 3 and 4 here
-> assume a live group can be mutated safely; today it cannot, for reasons that
-> plan documents. Its Stages 1–3 must land first, and the two plans share the
-> `ParallelGroupRun` extraction — whichever gets there first owns it.
+> (implemented) for the execution guards. Stages 3 and 4 now share the shipped
+> `ParallelGroupRun` extraction and admission path.
 >
 > **Build order is not fixed.** Whichever of the two plans lands first owns the
 > split-button shell (Stage 1 below); the other one only contributes a menu
@@ -642,20 +640,20 @@ registration, state replay, view switching, and a scoped confirmation toast.
 The source instance remains untouched, and the obsolete `forceNewWorkflow` path
 is removed.
 
-**Stage 3 — Executor late join.** `ParallelGroupRun` extraction, growable
+**Stage 3 — Executor late join — complete.** `ParallelGroupRun` extraction, growable
 worker pool, per-member preflight, `joinRunningParallelGroup`. Testable on its
-own against an authored group with no UI at all. **Blocked on
-`PARALLEL_STEP_MUTABILITY_PLAN.md` Stages 1–3**, which share the
-`ParallelGroupRun` extraction and supply the guard this stage assumes.
+own against an authored group with no UI at all. It shares the shipped
+`ParallelGroupRun` extraction and mutation guard with the mutability plan.
 
-**Stage 4 — Topology + ad-hoc promotion.** `appendParallelGroupMember`,
+**Stage 4 — Topology + ad-hoc promotion — complete.** `appendParallelGroupMember`,
 `promoteStepToParallelGroup`, snapshot re-attribution, `PromptQueue` wiring,
 the `WorkflowInstance` echo fix.
 
-**Stage 5 — Run in Parallel wiring and gates.** Editor half complete:
+**Stage 5 — Run in Parallel wiring and gates — complete.** Editor and MCP halves
+are wired:
 `ACTION_TYPES.RUN_PARALLEL` reaches the webview through
 `useRunDispatchTargets`, with the availability tooltips and rejection-toast
-path covered. MCP live-join wiring remains for the next rollout session.
+path covered; the MCP live-join path is covered by the shipped MCP append plan.
 
 **Stage 6 — Steer item.** Owned by `STEER_MESSAGE_PLAN.md`; only the menu entry
 belongs here.

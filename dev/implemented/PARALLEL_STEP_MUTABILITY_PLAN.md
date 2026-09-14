@@ -1,16 +1,17 @@
 # Parallel Step Mutability Plan
 
-> **Status:** Backlog / design proposal. Nothing here is implemented.
+> **Status:** Implemented 2026-09-14. Stages 1–5 are shipped and covered by
+> unit, integration, and caller-contract tests.
 >
 > **Prerequisite for:** [`RUN_DISPATCH_MENU_PLAN.md`](./RUN_DISPATCH_MENU_PLAN.md).
 > That plan's Decision 1 ("Run in Parallel") appends a member to a group that is
 > already executing. Stages 1–3 below are the safety boundary that must land
 > before a late join or general mutation from a parallel member is enabled.
 >
-> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](../implemented/PARALLEL_STEPS_PLAN.md)
+> **Depends on:** [`PARALLEL_STEPS_PLAN.md`](./PARALLEL_STEPS_PLAN.md)
 > (shipped) for the fork/join model this plan hardens.
 >
-> **Related:** [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)
+> **Related:** [`EXECUTION_ROOT_COORDINATION_PLAN.md`](./EXECUTION_ROOT_COORDINATION_PLAN.md)
 > (shipped). Its Decision 8 currently withholds step-mutating tools from
 > parallel-group members because the mutation guards and executor cannot safely
 > observe a changing live group. Stage 5 deliberately removes that ban after the
@@ -366,34 +367,33 @@ contract there avoids mixing it into the executor safety stages here.
 Stages 1–3 are the prerequisite milestone for
 `RUN_DISPATCH_MENU_PLAN.md` Stages 3–5 and for the permission relaxation here.
 
-**Stage 1 — Honest runtime identity and atomic dispatch claim.** Make
+**Stage 1 — Honest runtime identity and atomic dispatch claim — complete.** Make
 `PromptRuntimeMetadata.startedAt` optional, remove the implicit default, add
 `_runtime.stepId`, centralize ID assignment/backfill/lookup, and add the locked
 claim-by-ID operation. Use it for sequential and parallel dispatch. Rewind
 preserves IDs and clears execution state. Land tests proving every dispatch
 path claims before launch.
 
-**Stage 2 — Repoint every guard and disk merge.** Introduce the shared target
+**Stage 2 — Repoint every guard and disk merge — complete.** Introduce the shared target
 and structural validators; use them from `PromptQueue`,
 `RunContinuationService`, reorder, and topology transforms. Reconcile external
 working-file changes by `stepId`, preserving in-memory runtime/results for every
 matching started member rather than only an index prefix. This stage closes the
 current live safety hole even while the caller-level group ban remains.
 
-**Stage 3 — Identity-keyed mutable group run.** Extract `ParallelGroupRun` with
+**Stage 3 — Identity-keyed mutable group run — complete.** Extract `ParallelGroupRun` with
 `pendingIds`, ID-keyed running/outcomes, current-bound join, and per-member
 dispatch-time preflight. Implement the active-group edit/remove/reorder rules,
 including the two-to-one deletion rejection. This is the executor foundation
 shared with late join.
 
-**Stage 4 — Placement transparency.** Return structured placement/relocation
+**Stage 4 — Placement transparency — complete.** Return structured placement/relocation
 from the insert resolver and include it in MCP mutation responses.
 
-**Stage 5 — Permit parallel callers — complete.** Removed all three caller-level mutation
-bans and updated generated tool documentation and diagnostics. Do not enable any
-one delivery mode before the others: native MCP and MCP-as-skill must expose the
-same effective tools. `MCP_PARALLEL_APPEND_PLAN.md` then builds the richer
-append contract on this permission boundary.
+**Stage 5 — Permit parallel callers — complete.** Removed all three caller-level
+mutation bans and updated generated tool documentation and diagnostics. Native
+MCP and MCP-as-skill expose the same effective tools, and the richer append
+contract is shipped on this permission boundary.
 
 ---
 

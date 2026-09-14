@@ -652,7 +652,7 @@ the server's `ListTools` filter so the two cannot drift — and
 `ctrlYokeToolFamilies` folds the ctrlyoke entry's `deniedTools`, so a member
 that denies those four passes preflight and keeps the board plus the read-only
 workflow tools. A member that keeps any of the four still fails exactly as
-before. See `PARALLEL_STEP_MUTABILITY_PLAN.md` for why the ban is still
+before. See [`PARALLEL_STEP_MUTABILITY_PLAN.md`](./PARALLEL_STEP_MUTABILITY_PLAN.md) for why the ban was
 necessary at all: the mutation guards approximate "has started" as
 `index <= currentIndex`, which is wrong for every group member after the first.
 

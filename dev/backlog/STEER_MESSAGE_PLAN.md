@@ -10,7 +10,7 @@ always queued: it waits for the current prompt to finish before it is sent,
 even if a harness session is already sitting there idle mid-turn, ready to
 take a follow-up.
 
-A companion plan, [`RUN_DISPATCH_MENU_PLAN.md`](./RUN_DISPATCH_MENU_PLAN.md),
+A companion plan, [`RUN_DISPATCH_MENU_PLAN.md`](../implemented/RUN_DISPATCH_MENU_PLAN.md),
 finishes the split button this plan introduces: it adds "Run in Parallel" and
 "Run in New Workflow" to the same drop-up, settles the disabled-vs-hidden
 policy for menu items, and keeps Queue as its own button. Either plan may land

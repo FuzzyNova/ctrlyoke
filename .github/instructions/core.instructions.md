@@ -30,6 +30,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - `WorkflowInstance.reconcileExecutionStateAfterStepChange()` is required after queue edits that can change whether work remains. It is what keeps edited workflows aligned with `STOPPED` vs `COMPLETED`.
 - External execution requires three independent facts: an active persisted execution state, an active lock naming the exact `workflowKey`/`RunRef`, and an inspection proving external locality. A live lock alone is never proof that a run is executing.
 - Host identity is the durable locality signal. PID equality is diagnostic defense in depth; contradictory or incomplete identity is indeterminate and must remain on a non-mutating path. `ownerToken` identifies the exact acquisition and must be preserved for heartbeat, stop, release, and watch revalidation.
+- Live parallel-group admission is linearized by the run-file lock: a join persists its topology/admission before the executor's locked reconcile-and-close, and reconciliation is keyed by `stepId`. Mutation consumers must use that shared seam rather than caller-local worker/index updates.
 
 ## External watch sessions
 
