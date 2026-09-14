@@ -10,6 +10,7 @@ import {
 import {
   PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
   type ParallelGroupInsertRelocationKind,
+  PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
 
 export interface ParallelGroupTopology {
@@ -245,6 +246,95 @@ export function insertParallelGroupSteps(
     ),
   };
   result.steps.splice(insertIndex, 0, ...steps);
+  validateParallelGroupTopology(result);
+  return result;
+}
+
+function assertParallelGroupCanAcceptMembers(
+  group: ParallelGroupDefinition,
+  members: readonly WorkflowStep[]
+): void {
+  const groupHasSettled = members.every(
+    (step) =>
+      step._runtime?.completedAt !== undefined ||
+      step._runtime?.terminalStatus !== undefined
+  );
+  if (groupHasSettled) {
+    throw new Error(`Cannot append to settled parallel group ${group.id}`);
+  }
+
+  if (
+    group.failFast &&
+    members.some(
+      (step) => step._runtime?.terminalStatus === PROMPT_TERMINAL_STATUS.FAILED
+    )
+  ) {
+    throw new Error(
+      `Cannot append to fail-fast parallel group ${group.id} after failure`
+    );
+  }
+
+  if (
+    members.some(
+      (step) =>
+        step._runtime?.terminalStatus === PROMPT_TERMINAL_STATUS.CANCELLED
+    )
+  ) {
+    throw new Error(
+      `Cannot append to cancelling or stopping parallel group ${group.id}`
+    );
+  }
+}
+
+/** Extend a group by one member at endIndex + 1. Shifts later steps/groups. */
+export function appendParallelGroupMember(
+  topology: ParallelGroupTopology,
+  group: string | number,
+  step: WorkflowStep
+): ParallelGroupTopology {
+  return appendParallelGroupMembers(topology, group, [step]);
+}
+
+/** Extend a group by appending several members at endIndex + 1. */
+export function appendParallelGroupMembers(
+  topology: ParallelGroupTopology,
+  group: string | number,
+  steps: WorkflowStep[]
+): ParallelGroupTopology {
+  const normalized = normalizeParallelGroupTopology(topology);
+  const selected =
+    normalized.parallelGroups[groupIndex(normalized.parallelGroups, group)];
+  const existingMembers = normalized.steps.slice(
+    selected.startIndex,
+    selected.endIndex + 1
+  );
+  assertParallelGroupCanAcceptMembers(selected, existingMembers);
+  if (steps.length === 0) {
+    return normalized;
+  }
+
+  const insertIndex = selected.endIndex + 1;
+  const result: ParallelGroupTopology = {
+    steps: [...normalized.steps],
+    parallelGroups: shiftForInsert(
+      normalized.parallelGroups,
+      insertIndex,
+      steps.length
+    ),
+  };
+  result.steps.splice(insertIndex, 0, ...steps);
+  const resultGroup = result.parallelGroups.find(
+    (candidate) => candidate.id === selected.id
+  );
+  if (!resultGroup) {
+    throw new Error(`Unknown parallel group: ${selected.id}`);
+  }
+  resultGroup.endIndex += steps.length;
+  assertStartedStepPositionsPreserved(
+    normalized.steps,
+    result.steps,
+    "append to parallel group"
+  );
   validateParallelGroupTopology(result);
   return result;
 }
@@ -802,7 +892,8 @@ export function groupParallelGroupSteps(
   startIndex: number,
   endIndex: number,
   failFast = true,
-  id?: string
+  id?: string,
+  startedAnchorIndex?: number
 ): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
   assertIndex(startIndex, "Group start index");
@@ -824,10 +915,37 @@ export function groupParallelGroupSteps(
   ) {
     throw new Error("Parallel group range overlaps an existing group");
   }
+
+  if (startedAnchorIndex !== undefined) {
+    assertIndex(startedAnchorIndex, "Started anchor index");
+    if (
+      startedAnchorIndex < startIndex ||
+      startedAnchorIndex > endIndex ||
+      !hasStarted(normalized.steps[startedAnchorIndex])
+    ) {
+      throw new Error(
+        "Started anchor index must identify a started step in the group range"
+      );
+    }
+    if (
+      normalized.steps[startedAnchorIndex]._runtime?.completedAt !==
+        undefined ||
+      normalized.steps[startedAnchorIndex]._runtime?.terminalStatus !==
+        undefined
+    ) {
+      throw new Error(
+        "Cannot create a parallel group around a settled started step"
+      );
+    }
+  }
+
   if (
     normalized.steps
       .slice(startIndex, endIndex + 1)
-      .some(hasStarted)
+      .some(
+        (step, offset) =>
+          hasStarted(step) && startIndex + offset !== startedAnchorIndex
+      )
   ) {
     throw new Error(
       "Cannot change membership of a started step while creating a parallel group"
@@ -843,6 +961,49 @@ export function groupParallelGroupSteps(
   };
   validateParallelGroupTopology(result);
   return result;
+}
+
+/** Wrap an ungrouped step and a new sibling into a fresh two-member group. */
+export function promoteStepToParallelGroup(
+  topology: ParallelGroupTopology,
+  stepIndex: number,
+  step: WorkflowStep,
+  options?: { failFast?: boolean }
+): ParallelGroupTopology {
+  const normalized = normalizeParallelGroupTopology(topology);
+  assertIndex(stepIndex, "Promotion step index");
+  if (stepIndex < 0 || stepIndex >= normalized.steps.length) {
+    throw new Error(`Promotion step index ${stepIndex} is out of bounds`);
+  }
+  if (
+    normalized.parallelGroups.some(
+      (group) => stepIndex >= group.startIndex && stepIndex <= group.endIndex
+    )
+  ) {
+    throw new Error(
+      "Cannot promote a step that is already in a parallel group"
+    );
+  }
+
+  const inserted = insertParallelGroupSteps(
+    normalized,
+    stepIndex + 1,
+    [step],
+    PARALLEL_GROUP_INSERT_POSITIONS.AFTER
+  );
+  assertStartedStepPositionsPreserved(
+    normalized.steps,
+    inserted.steps,
+    "promote to parallel group"
+  );
+  return groupParallelGroupSteps(
+    inserted,
+    stepIndex,
+    stepIndex + 1,
+    options?.failFast ?? false,
+    undefined,
+    hasStarted(normalized.steps[stepIndex]) ? stepIndex : undefined
+  );
 }
 
 export function ungroupParallelGroup(

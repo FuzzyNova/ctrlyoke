@@ -109,8 +109,13 @@ export class ParallelGroupRun<TContext extends object> {
   public readonly abortController = new AbortController();
 
   private nextPending = 0;
+  private activeWorkers = 0;
+  private readonly workerPromises = new Set<Promise<void>>();
+  private workerError: unknown;
   private failFastTriggered = false;
   private preflightQueue = Promise.resolve();
+  private runStarted = false;
+  private admissionOpen = true;
 
   constructor(private readonly options: ParallelGroupRunOptions<TContext>) {
     this.pendingIds = [...options.pendingIds];
@@ -134,35 +139,61 @@ export class ParallelGroupRun<TContext extends object> {
     return this.failFastTriggered;
   }
 
+  /** Whether this run can still accept a late member. */
+  public get isAdmissionOpen(): boolean {
+    return this.admissionOpen;
+  }
+
+  /**
+   * Enqueue a late member, starting it immediately when a worker slot is free.
+   * A saturated pool intentionally accepts the member and lets the drain loop
+   * dispatch it when an existing worker settles.
+   */
+  public admit(stepId: string): boolean {
+    if (
+      !this.admissionOpen ||
+      this.failFastTriggered ||
+      this.shouldStopDispatching() ||
+      this.pendingIds.includes(stepId) ||
+      this.running.has(stepId) ||
+      this.outcomes.has(stepId)
+    ) {
+      return false;
+    }
+
+    this.pendingIds.push(stepId);
+    if (this.runStarted && this.activeWorkers < this.effectiveWorkerWidth()) {
+      this.spawnWorker();
+    }
+    return true;
+  }
+
   public async run(): Promise<ParallelGroupOutcome> {
     const stopWatcher = this.options.subscribeToStop?.(() => {
+      this.closeAdmission();
       void this.cancelRunning();
     });
 
     try {
-      const workerCount = Math.min(
-        Math.max(1, this.options.effectiveWidth),
-        Math.max(1, this.pendingIds.length)
-      );
-      const workerSettlements = await Promise.allSettled(
-        Array.from({ length: workerCount }, () => this.worker())
-      );
-      const rejectedWorker = workerSettlements.find(
-        (settlement): settlement is PromiseRejectedResult =>
-          settlement.status === "rejected"
-      );
-      if (rejectedWorker) {
+      this.runStarted = true;
+      await this.drainWorkers();
+      if (this.workerError !== undefined) {
+        this.closeAdmission();
         await this.cancelRunning();
-        throw rejectedWorker.reason;
+        throw this.workerError;
       }
 
       const stopped = this.isStopped();
+      const paused = this.isPaused();
       if (stopped || this.failFastTriggered) {
+        this.closeAdmission();
         await this.cancelRunning();
         await this.cancelRemainingPending();
       }
 
-      const paused = this.isPaused();
+      // Close before reading the current group or committing the join. A
+      // concurrent admission must be rejected once the drain is complete.
+      this.closeAdmission();
       const orderedOutcomes = this.getOrderedOutcomes();
       if (paused) {
         await this.options.confirmPause?.();
@@ -217,6 +248,63 @@ export class ParallelGroupRun<TContext extends object> {
       const stepId = this.pendingIds[this.nextPending++];
       await this.runMember(stepId);
     }
+  }
+
+  private async drainWorkers(): Promise<void> {
+    this.startAvailableWorkers();
+
+    while (
+      this.activeWorkers > 0 ||
+      this.nextPending < this.pendingIds.length
+    ) {
+      if (this.isPaused()) {
+        this.closeAdmission();
+        if (this.activeWorkers === 0) return;
+      } else if (this.shouldStopDispatching()) {
+        this.closeAdmission();
+        await this.cancelRunning();
+        await this.cancelRemainingPending();
+      } else if (this.activeWorkers === 0) {
+        this.startAvailableWorkers();
+        if (this.activeWorkers === 0) return;
+      }
+
+      if (this.workerPromises.size > 0) {
+        await Promise.all(this.workerPromises);
+      }
+    }
+  }
+
+  private startAvailableWorkers(): void {
+    while (
+      this.activeWorkers < this.effectiveWorkerWidth() &&
+      this.nextPending < this.pendingIds.length &&
+      !this.shouldStopDispatching()
+    ) {
+      this.spawnWorker();
+    }
+  }
+
+  private spawnWorker(): void {
+    this.activeWorkers += 1;
+    let workerPromise!: Promise<void>;
+    workerPromise = this.worker()
+      .catch((error: unknown) => {
+        this.workerError ??= error;
+      })
+      .finally(() => {
+        this.activeWorkers -= 1;
+        this.workerPromises.delete(workerPromise);
+      });
+    this.workerPromises.add(workerPromise);
+  }
+
+  private effectiveWorkerWidth(): number {
+    return Math.max(1, this.options.effectiveWidth);
+  }
+
+  private closeAdmission(): void {
+    this.admissionOpen = false;
   }
 
   private async runMember(stepId: string): Promise<void> {
@@ -375,6 +463,7 @@ export class ParallelGroupRun<TContext extends object> {
       !this.failFastTriggered
     ) {
       this.failFastTriggered = true;
+      this.closeAdmission();
       await this.cancelRunning(
         outcome.target.kind === FINAL_STEP_PHASES.QUEUE
           ? this.findStepIdForTarget(outcome.target)

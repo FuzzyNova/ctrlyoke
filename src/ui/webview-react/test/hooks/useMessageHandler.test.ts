@@ -3308,6 +3308,34 @@ describe("STEPS_EXTENDED", () => {
       STEP_STATUS.COMPLETED
     );
   });
+
+  it("records a step insert that arrives alongside a piggybacked executionState", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("first")],
+      });
+    });
+    useWorkflowStore.temporal.getState().clear();
+
+    // A clipboard paste echoes through STEPS_EXTENDED carrying the current
+    // executionState. Carrying that field must not make the edit un-undoable:
+    // `getAuthoritativeExecutionState()` is always defined, so treating it as
+    // a "runtime echo" marker silently disables undo for real user edits.
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [makePrompt("first"), makePrompt("pasted")],
+        executionState: EXECUTION_STATES.IDLE,
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toHaveLength(2);
+    expect(
+      useWorkflowStore.temporal.getState().pastStates.length
+    ).toBeGreaterThan(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

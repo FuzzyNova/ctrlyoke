@@ -3479,7 +3479,9 @@ export class WorkflowInstance {
           updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           undefined,
-          updatedState.definitionRevision
+          updatedState.definitionRevision,
+          this.id,
+          updatedState.parallelGroups
         );
       }
 

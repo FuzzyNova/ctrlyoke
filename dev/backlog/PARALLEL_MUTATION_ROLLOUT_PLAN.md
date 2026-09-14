@@ -34,10 +34,10 @@ order of how hard they block:
 The spec-driven loop's entire mechanism is a `finalStep` orchestrator that calls
 `append_step` / `edit_step` / `remove_step` / `reorder_steps` to grow its own
 queue. Those four tools are exactly `MCP_WORKFLOW_MUTATION_TOOL_NAMES`
-(`src/utils/McpToolDefinitions.ts:489`), and they are withheld from group
+(`src/utils/McpToolDefinitions.ts:533`), and they are withheld from group
 members in three places today:
 
-- `ParallelGroupPreflight.ts:247` rejects a member that requests them;
+- `ParallelGroupPreflight.ts:278` rejects a member that requests them;
 - `mcp-server.ts:192` filters them out when `context.groupMember` is set;
 - the skill projection removes them from skill-mode parallel prompts.
 
@@ -132,7 +132,7 @@ Three tracks, no dependency between them. Launch all three at once.
 `src/core/ParallelGroupTopology.ts` (existing transforms),
 `src/core/orchestration/RunContinuationService.ts`,
 `src/core/ParallelGroupPreflight.ts` (the per-member preflight split only —
-the caller-level mutation ban at `:247` stays untouched until Phase 8),
+the caller-level mutation ban at `:278` stays untouched until Phase 8),
 `src/types/CtrlYokeTypes.ts` (`PromptRuntimeMetadata`),
 `schemas/workflow-schema.json`.
 
@@ -321,18 +321,32 @@ Gate: `npm test` green on merged `main`, plus `npm run lint` and
 
 ### Track D — Executor late join and topology (Phases 5 and 6)
 
-**Owns:** `src/core/WorkflowExecutor.ts`, `src/core/ParallelGroupTopology.ts`,
-`src/core/PromptQueue.ts`, `src/core/ParallelGroupPreflight.ts`.
+**Owns:** `src/core/WorkflowExecutor.ts`, `src/core/ParallelGroupRun.ts`,
+`src/core/ParallelGroupTopology.ts`, `src/core/PromptQueue.ts`,
+`src/core/ParallelGroupPreflight.ts`, and — for the echo fix in Phase 6 only —
+`src/core/WorkflowInstance.ts`.
+
+Track A's `ParallelGroupRun` extraction landed in its own file, so wave 2's
+executor work is split across `WorkflowExecutor.ts` and `ParallelGroupRun.ts`;
+Disp Stage 3 predates that split and still describes both as one method.
+`WorkflowInstance.ts` was missing from the earlier ownership list even though
+Phase 6 names the echo fix inside it — it is in scope, for that fix only.
 
 **Phase 5 — Growable executor.** Disp Stage 3, **extending the Track A
 `ParallelGroupRun`, not re-extracting it**: replace the one-shot
 `Promise.allSettled` with a drain loop that spawns an extra worker on join while
 `activeWorkers < effectiveWidth`; **call** the `preflightParallelGroupMember`
-that Track A already factored out of `preflightParallelGroup` for the late-join
-admission checks rather than factoring it again; add
-`joinRunningParallelGroup(stepIndex)`; make a
-rejected join leave the group healthy rather than failing it. Testable against
+that Track A already factored out of `preflightParallelGroup`
+(`src/core/ParallelGroupPreflight.ts:150`, reached through
+`WorkflowExecutor.preflightGroupMember`) for the late-join admission checks
+rather than factoring it again; add `joinRunningParallelGroup(stepIndex)`; make
+a rejected join leave the group healthy rather than failing it. Testable against
 an authored group with no UI.
+
+Admission needs an **open/closed** state on the run even in this phase, or a
+join racing the end of the drain loop is silently dropped rather than rejected.
+Phase 5 owns the in-memory flag and the rejection it produces; Phase 7 owns
+persisting `ActiveParallelGroupRuntime` and the locked reconcile-and-close.
 
 Track A's extraction lives in `src/core/ParallelGroupRun.ts`. It owns the
 ID-keyed `pendingIds`, `running`, `outcomes`, abort watcher, fixed worker pool,
@@ -346,11 +360,69 @@ the batch `appendParallelGroupMembers` MCP needs, `promoteStepToParallelGroup`
 (implemented as `insertParallelGroupSteps` + `groupParallelGroupSteps` so there
 is one grouping implementation), snapshot re-attribution on promotion with
 per-step undo suppressed, `PromptQueue` wiring that bumps the definition
-revision, and the `WorkflowInstance.ts:3358` echo fix that currently omits
-`parallelGroups` and `workflowId`.
+revision, and the `WorkflowInstance.ts:3478` echo fix that currently omits
+`parallelGroups` and `workflowId` (compare the `appendFromFile` echo at `:2864`,
+which passes both).
 
 Ad-hoc groups default to `failFast: false`, against the authored schema default
 of `true`. That is deliberate — see Disp Decision 1.
+
+**Promotion collides with a Track A guard, and the fix is a parameter, not a
+fork.** `groupParallelGroupSteps` (`ParallelGroupTopology.ts:800`) rejects the
+range outright if any step in it `hasStarted`. Promotion wraps the step that is
+_running right now_, so it trips that guard by construction. Do not write a
+second grouping implementation to dodge it — Disp Decision 1 requires exactly
+one. Extend `groupParallelGroupSteps` with an explicit opt-in naming the started
+anchor index, and keep the ban for every other member of the range. The
+relaxation is sound because promotion preserves the started step's index, id,
+and `_runtime`; only its group membership changes, which is precisely what
+`assertStartedStepPositionsPreserved` already permits.
+
+#### Track D session split
+
+| #   | Phase | Deliverable                                                       | Status / next-session note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | ----- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 5     | Growable drain loop + open/closed admission on `ParallelGroupRun` | Complete. `ParallelGroupRun.admit()` rejects duplicate/closed or stopping admissions, starts a worker when capacity exists, and the drain loop waits for late members. Session 2 should use `isAdmissionOpen` and supply the live member resolution/preflight path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2   | 5     | `joinRunningParallelGroup` + per-member admission preflight       | Complete. `joinRunningParallelGroup(stepIndex): Promise<ParallelGroupJoinResult>` returns `{ accepted: true }` or `{ accepted: false, diagnostic }`; rejection covers no live/closed run, non-member or started step, and admission-preflight issues without affecting the group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 3   | 6     | Topology append + promotion (started-anchor opt-in)               | Complete. Added `appendParallelGroupMember(topology: ParallelGroupTopology, group: string \| number, step: WorkflowStep): ParallelGroupTopology`, `appendParallelGroupMembers(topology: ParallelGroupTopology, group: string \| number, steps: WorkflowStep[]): ParallelGroupTopology`, and `promoteStepToParallelGroup(topology: ParallelGroupTopology, stepIndex: number, step: WorkflowStep, options?: { failFast?: boolean }): ParallelGroupTopology`. `groupParallelGroupSteps` now accepts `startedAnchorIndex?: number` as its sixth parameter; promotion uses it to preserve the running anchor. Ad-hoc promotion defaults to `failFast: false`. Session 4 should call the append/promotion signatures and publish the resulting topology. |
+| 4   | 6     | `PromptQueue` wiring, revision bump, `WorkflowInstance` echo fix  | Complete. Added `PromptQueue.appendParallelGroupMember(group, step)` and `PromptQueue.promoteStepToParallelGroup(stepIndex, step, options?)`; both use the shared topology helpers, preserve started-step anchors, bump the definition revision, and persist the working topology. The ephemeral dashboard echo now includes `workflowId` and `parallelGroups`. Phase 7's `RUN_PARALLEL` path calls these same signatures; it must not add a second topology implementation.                                                                                                                                                                                                                                                                       |
+| 5   | 6     | Promotion snapshot re-attribution + integration coverage          | Complete. Sequential settlement now re-attributes the held before-state to the promoted group's start target, marks it with the group id, and withholds the promoted step's per-step snapshot; integration coverage verifies persisted append/promotion topology and unsettled-member recovery.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+**Review corrections (applied after session 5).** Three fixes landed in the
+review pass, and one of them moves a requirement into Phase 7:
+
+- **The promotion undo-echo is Phase 7's, not Track D's.** Session 5 suppressed
+  undo recording in `useMessageHandler` for every `STEPS_EXTENDED` carrying an
+  `executionState`, on the theory that only runtime echoes carry it. They do
+  not: the clipboard-paste echo (`WorkflowInstance.ts:3115`) passes
+  `getAuthoritativeExecutionState()`, which is never `undefined`, so the
+  heuristic made **every paste non-undoable**. It was reverted, and a webview
+  test now pins that a step insert arriving with a piggybacked `executionState`
+  still records undo. Nothing regressed by the revert, because promotion has no
+  production caller until Phase 7 — which must pause undo for the promotion
+  echo _specifically_ (an explicit signal, not an inference from a field that
+  user edits also carry).
+- **`PromptQueue`'s two member insertions run inside the working-file operation
+  queue.** They originally mutated `this.state` outside it and persisted with
+  `updateWorkingFile`, leaving the read-modify-write open to interleaving with a
+  concurrent MCP append. Both now share one private helper that runs in
+  `runInQueue` and persists with `updateWorkingFileDirect`, matching
+  `insertStepAfterIndex`.
+- **A promoted anchor's held before-state is released once consumed.**
+  `pendingSequentialSnapshotBeforeStates` was only cleared on the non-promoted
+  path, pinning a workspace capture per promoted group for the executor's
+  lifetime.
+
+**Track D status — complete.** Phase 7 inherits
+`joinRunningParallelGroup(stepIndex): Promise<ParallelGroupJoinResult>`, which
+resolves to `{ accepted: true }` or `{ accepted: false, diagnostic }` for
+no-live/closed, non-member/started, and admission-preflight rejection paths.
+It also inherits the `PromptQueue.appendParallelGroupMember(group, step)` and
+`PromptQueue.promoteStepToParallelGroup(stepIndex, step, options?)` operation
+names and the shared topology helpers behind them. A promoted group keeps the
+in-flight step's original before-state as its group snapshot at
+`queue:<startIndex>` with `parallelGroupId`; its per-step prompt undo is
+withheld, and later member settlements update that group-level snapshot.
 
 **Exit criteria.** `ParallelGroupTopology.test.ts` covers
 append-extends-`endIndex`, later-group shifting, valid two-member promotion, and
@@ -482,7 +554,7 @@ once; `McpServer.test.ts` proves every live-join availability edge rejects
 rather than falling back to `next` or `end`.
 
 **Phase 8 — Permit parallel callers.** Mut Stage 5. Remove all three bans
-_together_ — `ParallelGroupPreflight.ts:247`, the `context.groupMember` check at
+_together_ — `ParallelGroupPreflight.ts:278`, the `context.groupMember` check at
 `mcp-server.ts:192`, and the skill projection's removal of
 `MCP_SKILL_NAMES.TOOLS` from skill-mode parallel prompts. Native MCP and
 MCP-as-skill must expose the same effective tools; enabling one delivery mode

@@ -46,12 +46,15 @@ import {
 } from "../types/DashboardConstants";
 import {
   PARALLEL_GROUP_INSERT_POSITIONS,
+  appendParallelGroupMember,
   deleteParallelGroupStep,
   insertParallelGroupTopology,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
+  type ParallelGroupTopology,
   type PendingParallelGroupRange,
+  promoteStepToParallelGroup,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
   snapParallelGroupStartPosition,
@@ -1793,6 +1796,121 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       await this.workingFileManager.updateWorkingFileDirect(true);
       Log.info(
         `[PromptQueue] Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
+      );
+    });
+  }
+
+  /** Append a new pending member to an existing parallel group. */
+  public async appendParallelGroupMember(
+    group: string | number,
+    step: WorkflowStep
+  ): Promise<void> {
+    await this.applyParallelGroupMemberInsertion(
+      "append parallel group member",
+      step,
+      (topology) => topology.steps.length,
+      (topology, identifiedStep) =>
+        appendParallelGroupMember(topology, group, identifiedStep)
+    );
+  }
+
+  /** Promote an existing queue step and a new sibling into a parallel group. */
+  public async promoteStepToParallelGroup(
+    stepIndex: number,
+    step: WorkflowStep,
+    options?: { failFast?: boolean }
+  ): Promise<void> {
+    if (stepIndex < 0 || stepIndex >= this.state.steps.length) {
+      throw new Error(`Invalid prompt index: ${stepIndex}`);
+    }
+    await this.applyParallelGroupMemberInsertion(
+      "promote step to parallel group",
+      step,
+      () => stepIndex + 1,
+      (topology, identifiedStep) =>
+        promoteStepToParallelGroup(topology, stepIndex, identifiedStep, options)
+    );
+  }
+
+  /**
+   * Shared read-modify-write for the two parallel-group member insertions.
+   *
+   * Runs inside the working-file operation queue and persists with
+   * `updateWorkingFileDirect`, exactly like `insertStepAfterIndex`: the whole
+   * transform must be atomic against a concurrent MCP append, and the
+   * disk-authoritative merge would otherwise rebuild the queue from the
+   * pre-insert snapshot and drop the member that was just added.
+   */
+  private async applyParallelGroupMemberInsertion(
+    operation: string,
+    step: WorkflowStep,
+    resolveGuardIndex: (topology: ParallelGroupTopology) => number,
+    transform: (
+      topology: ParallelGroupTopology,
+      identifiedStep: WorkflowStep
+    ) => ParallelGroupTopology
+  ): Promise<void> {
+    if (!this.canAppend()) {
+      throw new Error(
+        `Cannot ${operation}: Queue is in cancelled or error state`
+      );
+    }
+
+    await this.workingFileManager.runInQueue(async () => {
+      const previousSteps = this.state.steps;
+      const topology = normalizeParallelGroupTopology({
+        steps: this.state.steps,
+        parallelGroups: this.state.parallelGroups,
+      });
+      const identifiedStep = ensureStepIds([...topology.steps, step]).at(-1)!;
+      const guardIndex = resolveGuardIndex(topology);
+      this.assertPendingRewindSuffixIndex(guardIndex, operation);
+      this.assertEditableDuringExecution(guardIndex, operation);
+      assertStepMutable(identifiedStep, operation);
+
+      const nextTopology = transform(topology, identifiedStep);
+      assertStartedStepPositionsPreserved(
+        previousSteps,
+        nextTopology.steps,
+        operation
+      );
+      const insertIndex = nextTopology.steps.indexOf(identifiedStep);
+      if (insertIndex < 0) {
+        throw new Error(`Parallel group member was not inserted (${operation})`);
+      }
+
+      this.state.steps = nextTopology.steps;
+      this.state.parallelGroups = nextTopology.parallelGroups;
+      this.state.results.splice(insertIndex, 0, {
+        prompt: isScriptStep(identifiedStep)
+          ? identifiedStep.script
+          : identifiedStep.prompt,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      });
+      if (insertIndex < this.state.currentIndex) {
+        this.state.currentIndex += 1;
+      }
+      if (this.state.completedIndices.size > 0) {
+        this.state.completedIndices = new Set(
+          Array.from(this.state.completedIndices, (entry) => {
+            const index = parseInt(entry, 10);
+            return String(index >= insertIndex ? index + 1 : index);
+          })
+        );
+      }
+      this.bumpDefinitionRevision();
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect(true);
+      Log.info(
+        `[PromptQueue] ${operation} at index ${insertIndex} (definitionRevision=${this.state.definitionRevision})`
       );
     });
   }

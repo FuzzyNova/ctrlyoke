@@ -13,6 +13,7 @@ import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
+  ACTION_TYPES,
   CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_PHASES,
@@ -1599,6 +1600,69 @@ suite("WorkflowInstance append-and-continue", () => {
       });
       assert.ok(appendedRuntime?.stepId);
       assert.deepStrictEqual(persistedAppendedStep, appendedStep);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("ephemeral append echoes workflow identity and parallel-group topology", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-echo-")
+    );
+    try {
+      const updateCalls: unknown[][] = [];
+      const dashboardSink: any = {
+        updateStepsExtended: (...args: unknown[]) => {
+          updateCalls.push(args);
+        },
+        updateWorkflowName: () => {},
+        updateProgress: () => {},
+      };
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        dashboardSink,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [
+        { prompt: "member-a" },
+        { prompt: "member-b" },
+      ];
+      const parallelGroups = [
+        { id: "echo-group", startIndex: 0, endIndex: 1, failFast: false },
+      ];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "echo-workflow",
+        steps,
+        tempWorkspace,
+        undefined,
+        undefined,
+        parallelGroups
+      );
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
+      updateCalls.length = 0;
+
+      await instance.executeEphemeralPrompt(
+        "queued prompt",
+        {},
+        ACTION_TYPES.QUEUE
+      );
+
+      const ephemeralEcho = updateCalls.find(
+        (args) => args[4] === instance.id
+      );
+      assert.ok(ephemeralEcho);
+      assert.deepStrictEqual(
+        ephemeralEcho[5],
+        instance.promptQueue.getState().parallelGroups
+      );
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
