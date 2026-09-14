@@ -370,7 +370,7 @@ interface McpAppendStepResult {
     endIndex: number;
     promoted: boolean;
   };
-  relocation?: QueueInsertRelocation;
+  placement: ParallelGroupInsertPlacement;
   workingFile: string;
   runDirectory: string;
   workflowKey: WorkflowKey;
@@ -379,6 +379,13 @@ interface McpAppendStepResult {
   descriptorRevision: number;
 }
 ```
+
+`placement` is the `ParallelGroupInsertPlacement`
+(`{ requestedIndex, insertedIndex, relocation? }`) that Stage 1's Phase 2 work
+already landed and that `append_step` already returns; the relocation this plan
+originally described as a separate `QueueInsertRelocation` field lives inside it.
+Do not add a second, flattened copy — `insertIndex` stays only because it is an
+already-published alias for `placement.insertedIndex`.
 
 For a future mixed batch, `parallelGroupsAdded` contains only groups from the
 incoming batch after absolute-index translation. For a live join,
