@@ -326,9 +326,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   value: "sendSteerMessage",
                   onClick: onSendSteerMessage,
                   disabled:
-                    isExternallyManaged ||
-                    !hasContent ||
-                    !steerTarget.enabled,
+                    isExternallyManaged || !hasContent || !steerTarget.enabled,
                   title: isExternallyManaged
                     ? (externalReadOnlyLabel ?? "Read-only — external run")
                     : !hasContent

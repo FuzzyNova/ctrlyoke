@@ -12,8 +12,8 @@ import { useTerminalStore } from "@store/terminalStore";
 export function useActiveInteractiveSession(
   workflowId: string | null
 ): TerminalSession | undefined {
-  const activeSessionId = useTerminalStore(
-    (state) => (workflowId ? state.activeSessionIds[workflowId] : null)
+  const activeSessionId = useTerminalStore((state) =>
+    workflowId ? state.activeSessionIds[workflowId] : null
   );
   const sessions = useTerminalStore((state) =>
     workflowId ? state.sessions[workflowId] : undefined

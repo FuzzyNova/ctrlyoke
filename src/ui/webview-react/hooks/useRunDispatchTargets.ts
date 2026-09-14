@@ -99,9 +99,8 @@ export function useRunDispatchTargets(
     const steerStepNumber =
       (activeInteractiveSession?.stepIndex ?? runningStepIndex) + 1;
     const harnessLabel = activeInteractiveSession?.harnessId
-      ? (HARNESS_INFO[
-          activeInteractiveSession.harnessId as HarnessId
-        ]?.name ?? activeInteractiveSession.harnessId)
+      ? (HARNESS_INFO[activeInteractiveSession.harnessId as HarnessId]?.name ??
+        activeInteractiveSession.harnessId)
       : "harness";
     const steerEnabledTitle = `Sends to the live ${harnessLabel} session (step ${steerStepNumber}). Prompt overrides are ignored.`;
 
@@ -148,9 +147,7 @@ export function useRunDispatchTargets(
       },
       steer: {
         enabled: steerDisabledReason === undefined,
-        ...(steerDisabledReason
-          ? { disabledReason: steerDisabledReason }
-          : {}),
+        ...(steerDisabledReason ? { disabledReason: steerDisabledReason } : {}),
         title: steerDisabledReason ?? steerEnabledTitle,
       },
     };
