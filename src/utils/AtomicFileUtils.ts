@@ -15,24 +15,75 @@ import * as fs from "fs/promises";
  * moment the executor writes its first `_runtime` update to it.
  *
  * Deliberately not gated to `win32`: the same codes appear on network and
- * container-mounted filesystems elsewhere, the retry budget is small enough to
- * be invisible on a genuinely failing write, and one code path is worth more
- * than a platform branch nothing exercises.
+ * container-mounted filesystems elsewhere, and one code path is worth more than
+ * a platform branch nothing exercises.
  */
 
 /** Errors that mean "the destination is momentarily held", not "denied". */
 const TRANSIENT_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 /**
- * Bounded so a real permission problem still surfaces promptly: the observed
- * collisions clear within a few milliseconds, and the caller is usually an
- * executor writing run state a client is waiting on.
+ * Default window for a caller whose failure costs little — a settings sidecar,
+ * a search-index shard, a lease file. Long enough to ride out the contention
+ * this module exists for, short enough that a genuinely denied write surfaces
+ * while the user is still looking at what triggered it.
  */
-const RENAME_ATTEMPTS = 10;
-const RENAME_INITIAL_DELAY_MS = 5;
-const RENAME_MAX_DELAY_MS = 100;
+export const DEFAULT_RENAME_BUDGET_MS = 500;
 
-function sleep(ms: number): Promise<void> {
+/**
+ * Window for a write whose failure aborts a running workflow.
+ *
+ * A run's `workflow.ctrlyoke.json` is written throughout execution, so an
+ * unlucky rename does not fail one save — it tears down a workflow that may be
+ * hours in, and the work in that run is not recoverable by retrying the run.
+ * Against that, stalling the executor while the holder lets go costs nothing
+ * but time. The budget is therefore sized for the *holder* (an antivirus pass
+ * over a freshly published run directory, a cloud-sync client uploading it, a
+ * search-index rebuild) rather than for the collisions that clear in a
+ * millisecond.
+ *
+ * The trade this accepts: a *permanently* unwritable file (a read-only
+ * attribute, a broken ACL) now stalls that run for five minutes before it
+ * reports the same error it used to report at once. Callers pass an
+ * `onTransientRetry` that logs, so the stall is diagnosable rather than silent.
+ */
+export const WORKFLOW_CRITICAL_RENAME_BUDGET_MS = 5 * 60 * 1000;
+
+const RENAME_INITIAL_DELAY_MS = 5;
+const RENAME_MAX_DELAY_MS = 1000;
+
+/** Reported to `onTransientRetry` before each wait. */
+export interface TransientRenameRetry {
+  /** 1-indexed attempt that just failed. */
+  attempt: number;
+  /** Time since the first attempt started, in ms. */
+  elapsedMs: number;
+  /** Milliseconds left in the budget once this wait completes. */
+  remainingMs: number;
+  /** The transient error being retried. */
+  error: NodeJS.ErrnoException;
+}
+
+export interface RenameRetryOptions {
+  /**
+   * Total wall-clock window for retries, in ms. The first attempt always runs;
+   * `0` therefore means "try once". Retrying stops as soon as the next wait
+   * would leave the window.
+   */
+  budgetMs?: number;
+  /** Called before each backoff wait, for logging a write that is taking a while. */
+  onTransientRetry?: (retry: TransientRenameRetry) => void;
+  /**
+   * Injectable for tests; nothing in production passes these. `sleep` and `now`
+   * go together — a test that fakes one without the other either busy-loops for
+   * the whole real budget or never advances past the first wait.
+   */
+  rename?: (source: string, destination: string) => Promise<void>;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}
+
+function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -42,22 +93,28 @@ function isTransientRenameError(error: unknown): boolean {
 }
 
 /**
- * `fs.rename`, retrying only the transient sharing codes above. Every other
- * failure — `ENOENT`, `ENOTEMPTY`, `EEXIST`, `EXDEV` — is a real conflict the
- * caller must see immediately, so it propagates on the first attempt.
+ * `fs.rename`, retrying only the transient sharing codes above for up to
+ * `budgetMs`. Every other failure — `ENOENT`, `ENOTEMPTY`, `EEXIST`, `EXDEV` —
+ * is a real conflict the caller must see immediately, so it propagates on the
+ * first attempt. That distinction is the whole point of this helper and is why
+ * it is not `retryWithBackoff` from `RetryUtils`: that one retries every error
+ * and reports exhaustion as `undefined`, which would both delay the callers who
+ * act on those codes (`EEXIST` from the staging publish *is* the run-ref
+ * collision check) and discard the error they need to act on.
  *
- * `rename` is injectable for tests; nothing in production passes it.
+ * On exhaustion the last transient error is rethrown unchanged, so the caller
+ * still reports the real `EPERM`.
  */
 export async function renameWithTransientRetry(
   source: string,
   destination: string,
-  options: {
-    attempts?: number;
-    rename?: (source: string, destination: string) => Promise<void>;
-  } = {}
+  options: RenameRetryOptions = {}
 ): Promise<void> {
-  const attempts = options.attempts ?? RENAME_ATTEMPTS;
+  const budgetMs = options.budgetMs ?? DEFAULT_RENAME_BUDGET_MS;
   const rename = options.rename ?? fs.rename;
+  const sleep = options.sleep ?? defaultSleep;
+  const now = options.now ?? Date.now;
+  const startedAt = now();
   let delay = RENAME_INITIAL_DELAY_MS;
 
   for (let attempt = 1; ; attempt++) {
@@ -65,10 +122,23 @@ export async function renameWithTransientRetry(
       await rename(source, destination);
       return;
     } catch (error) {
-      if (attempt >= attempts || !isTransientRenameError(error)) {
+      if (!isTransientRenameError(error)) {
         throw error;
       }
-      await sleep(delay);
+      const elapsedMs = now() - startedAt;
+      // Never overshoot the window: a wait that would end outside it is a wait
+      // the caller did not ask for.
+      const wait = Math.min(delay, budgetMs - elapsedMs);
+      if (wait <= 0) {
+        throw error;
+      }
+      options.onTransientRetry?.({
+        attempt,
+        elapsedMs,
+        remainingMs: budgetMs - elapsedMs - wait,
+        error: error as NodeJS.ErrnoException,
+      });
+      await sleep(wait);
       delay = Math.min(delay * 2, RENAME_MAX_DELAY_MS);
     }
   }
@@ -83,12 +153,13 @@ export async function renameWithTransientRetry(
  */
 export async function writeFileAtomic(
   filePath: string,
-  contents: string | Buffer
+  contents: string | Buffer,
+  options: RenameRetryOptions = {}
 ): Promise<void> {
   const tempPath = `${filePath}.tmp`;
   try {
     await fs.writeFile(tempPath, contents);
-    await renameWithTransientRetry(tempPath, filePath);
+    await renameWithTransientRetry(tempPath, filePath, options);
   } catch (error) {
     await fs.unlink(tempPath).catch(() => {});
     throw error;

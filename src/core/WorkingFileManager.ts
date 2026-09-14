@@ -29,7 +29,11 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
-import { writeFileAtomic } from "../utils/AtomicFileUtils";
+import {
+  writeFileAtomic,
+  WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
+  type RenameRetryOptions,
+} from "../utils/AtomicFileUtils";
 import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
@@ -319,6 +323,35 @@ async function logWorkingFileWriteDiagnostics(
   );
 }
 
+/**
+ * Retry options every run-state write in this module shares.
+ *
+ * These are the writes whose failure takes a workflow down rather than failing
+ * one save, so they get `WORKFLOW_CRITICAL_RENAME_BUDGET_MS` instead of the
+ * default window (see `AtomicFileUtils`). The logging exists because a write
+ * that waits minutes must not look like a hang: the first wait says a holder
+ * turned up, and the periodic line says it has not let go.
+ */
+const RUN_STATE_WRITE_RETRY_LOG_INTERVAL_MS = 15_000;
+
+function runStateWriteOptions(filePath: string): RenameRetryOptions {
+  let nextLogAtMs = 0;
+  return {
+    budgetMs: WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
+    onTransientRetry: ({ attempt, elapsedMs, remainingMs, error }) => {
+      if (elapsedMs < nextLogAtMs) {
+        return;
+      }
+      nextLogAtMs = elapsedMs + RUN_STATE_WRITE_RETRY_LOG_INTERVAL_MS;
+      Log.warn(
+        `[WorkingFileManager] ${filePath} is held by another process ` +
+          `(${error.code}); retrying (attempt ${attempt}, ${Math.round(elapsedMs)}ms elapsed, ` +
+          `${Math.round(remainingMs)}ms of budget left) rather than failing the run`
+      );
+    },
+  };
+}
+
 /** Write a working file atomically (temp + rename), optionally under `withFileLock`. */
 async function writeWorkingFileAtomicTo(
   workingFilePath: string,
@@ -338,7 +371,8 @@ async function writeWorkingFileAtomicTo(
           stripTimelineDuplicatedWorkingFileOutput(workingFile),
           null,
           2
-        )
+        ),
+        runStateWriteOptions(workingFilePath)
       );
     } catch (error) {
       throw new Error(
@@ -368,7 +402,11 @@ async function writeSnapshotAtomic(
   content: Buffer
 ): Promise<void> {
   try {
-    await writeFileAtomic(snapshotPath, content);
+    await writeFileAtomic(
+      snapshotPath,
+      content,
+      runStateWriteOptions(snapshotPath)
+    );
   } catch (error) {
     throw new Error(
       `Failed to write pending rewind snapshot: ${getErrorMessage(error)}`
@@ -382,7 +420,11 @@ async function restoreSnapshotAtomic(
   content: Buffer
 ): Promise<void> {
   try {
-    await writeFileAtomic(workingFilePath, content);
+    await writeFileAtomic(
+      workingFilePath,
+      content,
+      runStateWriteOptions(workingFilePath)
+    );
   } catch (error) {
     throw new Error(
       `Failed to restore pending rewind snapshot: ${getErrorMessage(error)}`

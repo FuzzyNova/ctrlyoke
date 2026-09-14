@@ -17,6 +17,7 @@ import { suite, test } from "mocha";
 import {
   renameWithTransientRetry,
   writeFileAtomic,
+  WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
 } from "../../utils/AtomicFileUtils";
 
 function errorWithCode(code: string): NodeJS.ErrnoException {
@@ -66,10 +67,19 @@ suite("AtomicFileUtils", () => {
   });
 
   test("gives up on a destination that never clears, preserving the error", async () => {
+    // A virtual clock keeps the assertion about the *budget* rather than about
+    // how fast the machine running the test happens to be.
+    let clock = 0;
+    let slept = 0;
     let attempts = 0;
     await assert.rejects(
       renameWithTransientRetry("source", "destination", {
-        attempts: 4,
+        budgetMs: 200,
+        now: () => clock,
+        sleep: async (ms) => {
+          slept += ms;
+          clock += ms;
+        },
         rename: async () => {
           attempts += 1;
           throw errorWithCode("EPERM");
@@ -78,7 +88,81 @@ suite("AtomicFileUtils", () => {
       (error: NodeJS.ErrnoException) => error.code === "EPERM",
       "a permanently held destination must still surface the real error"
     );
-    assert.strictEqual(attempts, 4, "the retry budget must be bounded");
+    assert.ok(attempts > 1, "a transient code must be retried at least once");
+    assert.ok(
+      slept <= 200,
+      `the budget must bound the wait (slept ${slept}ms of 200ms)`
+    );
+  });
+
+  test("honours a budget large enough to outlast a slow holder", async () => {
+    // The regression this guards: the default window was ~555ms, and a holder
+    // that kept the destination for longer (an antivirus pass over a freshly
+    // published run directory) failed the write and tore down the workflow.
+    let clock = 0;
+    let attempts = 0;
+    let slept = 0;
+    await renameWithTransientRetry("source", "destination", {
+      budgetMs: WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
+      now: () => clock,
+      sleep: async (ms) => {
+        slept += ms;
+        clock += ms;
+      },
+      rename: async () => {
+        attempts += 1;
+        // Held for far longer than the default budget would have tolerated.
+        if (slept < 90_000) {
+          throw errorWithCode("EPERM");
+        }
+      },
+    });
+    assert.ok(
+      slept >= 90_000,
+      "the workflow-critical budget must outlast a minutes-long holder"
+    );
+    assert.ok(
+      attempts < 400,
+      `backoff must cap the syscall rate (${attempts} attempts over ${slept}ms)`
+    );
+  });
+
+  test("tries exactly once when given no budget", async () => {
+    let attempts = 0;
+    await assert.rejects(
+      renameWithTransientRetry("source", "destination", {
+        budgetMs: 0,
+        rename: async () => {
+          attempts += 1;
+          throw errorWithCode("EBUSY");
+        },
+      }),
+      (error: NodeJS.ErrnoException) => error.code === "EBUSY"
+    );
+    assert.strictEqual(attempts, 1, "budgetMs 0 must not retry");
+  });
+
+  test("reports each wait so a long stall is diagnosable, not silent", async () => {
+    let clock = 0;
+    const retries: number[] = [];
+    await renameWithTransientRetry("source", "destination", {
+      budgetMs: 10_000,
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+      onTransientRetry: ({ attempt }) => retries.push(attempt),
+      rename: async () => {
+        if (retries.length < 3) {
+          throw errorWithCode("EPERM");
+        }
+      },
+    });
+    assert.deepStrictEqual(
+      retries,
+      [1, 2, 3],
+      "every retried attempt must be reported to the caller"
+    );
   });
 
   test("replaces a file whole and leaves no temp behind", async () => {
