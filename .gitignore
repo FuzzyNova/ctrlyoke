@@ -47,3 +47,7 @@ dev/test_keys.md
 
 # Azure Application Insights connection strings (see dev/backlog/TELEMETRY_PLAN.md)
 .env
+
+# Merge-conflict artifacts (a committed *.orig once shipped conflict markers into src/test)
+*.orig
+*.rej

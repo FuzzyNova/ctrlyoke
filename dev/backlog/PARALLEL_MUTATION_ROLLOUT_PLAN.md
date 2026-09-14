@@ -31,10 +31,10 @@ order of how hard they block:
 The spec-driven loop's entire mechanism is a `finalStep` orchestrator that calls
 `append_step` / `edit_step` / `remove_step` / `reorder_steps` to grow its own
 queue. Those four tools are exactly `MCP_WORKFLOW_MUTATION_TOOL_NAMES`
-(`src/utils/McpToolDefinitions.ts:489`), and they are withheld from group
+(`src/utils/McpToolDefinitions.ts:533`), and they are withheld from group
 members in three places today:
 
-- `ParallelGroupPreflight.ts:247` rejects a member that requests them;
+- `ParallelGroupPreflight.ts:278` rejects a member that requests them;
 - `mcp-server.ts:192` filters them out when `context.groupMember` is set;
 - the skill projection removes them from skill-mode parallel prompts.
 
@@ -129,7 +129,7 @@ Three tracks, no dependency between them. Launch all three at once.
 `src/core/ParallelGroupTopology.ts` (existing transforms),
 `src/core/orchestration/RunContinuationService.ts`,
 `src/core/ParallelGroupPreflight.ts` (the per-member preflight split only —
-the caller-level mutation ban at `:247` stays untouched until Phase 8),
+the caller-level mutation ban at `:278` stays untouched until Phase 8),
 `src/types/CtrlYokeTypes.ts` (`PromptRuntimeMetadata`),
 `schemas/workflow-schema.json`.
 
@@ -318,18 +318,32 @@ Gate: `npm test` green on merged `main`, plus `npm run lint` and
 
 ### Track D — Executor late join and topology (Phases 5 and 6)
 
-**Owns:** `src/core/WorkflowExecutor.ts`, `src/core/ParallelGroupTopology.ts`,
-`src/core/PromptQueue.ts`, `src/core/ParallelGroupPreflight.ts`.
+**Owns:** `src/core/WorkflowExecutor.ts`, `src/core/ParallelGroupRun.ts`,
+`src/core/ParallelGroupTopology.ts`, `src/core/PromptQueue.ts`,
+`src/core/ParallelGroupPreflight.ts`, and — for the echo fix in Phase 6 only —
+`src/core/WorkflowInstance.ts`.
+
+Track A's `ParallelGroupRun` extraction landed in its own file, so wave 2's
+executor work is split across `WorkflowExecutor.ts` and `ParallelGroupRun.ts`;
+Disp Stage 3 predates that split and still describes both as one method.
+`WorkflowInstance.ts` was missing from the earlier ownership list even though
+Phase 6 names the echo fix inside it — it is in scope, for that fix only.
 
 **Phase 5 — Growable executor.** Disp Stage 3, **extending the Track A
 `ParallelGroupRun`, not re-extracting it**: replace the one-shot
 `Promise.allSettled` with a drain loop that spawns an extra worker on join while
 `activeWorkers < effectiveWidth`; **call** the `preflightParallelGroupMember`
-that Track A already factored out of `preflightParallelGroup` for the late-join
-admission checks rather than factoring it again; add
-`joinRunningParallelGroup(stepIndex)`; make a
-rejected join leave the group healthy rather than failing it. Testable against
+that Track A already factored out of `preflightParallelGroup`
+(`src/core/ParallelGroupPreflight.ts:150`, reached through
+`WorkflowExecutor.preflightGroupMember`) for the late-join admission checks
+rather than factoring it again; add `joinRunningParallelGroup(stepIndex)`; make
+a rejected join leave the group healthy rather than failing it. Testable against
 an authored group with no UI.
+
+Admission needs an **open/closed** state on the run even in this phase, or a
+join racing the end of the drain loop is silently dropped rather than rejected.
+Phase 5 owns the in-memory flag and the rejection it produces; Phase 7 owns
+persisting `ActiveParallelGroupRuntime` and the locked reconcile-and-close.
 
 Track A's extraction lives in `src/core/ParallelGroupRun.ts`. It owns the
 ID-keyed `pendingIds`, `running`, `outcomes`, abort watcher, fixed worker pool,
@@ -343,11 +357,33 @@ the batch `appendParallelGroupMembers` MCP needs, `promoteStepToParallelGroup`
 (implemented as `insertParallelGroupSteps` + `groupParallelGroupSteps` so there
 is one grouping implementation), snapshot re-attribution on promotion with
 per-step undo suppressed, `PromptQueue` wiring that bumps the definition
-revision, and the `WorkflowInstance.ts:3358` echo fix that currently omits
-`parallelGroups` and `workflowId`.
+revision, and the `WorkflowInstance.ts:3478` echo fix that currently omits
+`parallelGroups` and `workflowId` (compare the `appendFromFile` echo at `:2864`,
+which passes both).
 
 Ad-hoc groups default to `failFast: false`, against the authored schema default
 of `true`. That is deliberate — see Disp Decision 1.
+
+**Promotion collides with a Track A guard, and the fix is a parameter, not a
+fork.** `groupParallelGroupSteps` (`ParallelGroupTopology.ts:800`) rejects the
+range outright if any step in it `hasStarted`. Promotion wraps the step that is
+_running right now_, so it trips that guard by construction. Do not write a
+second grouping implementation to dodge it — Disp Decision 1 requires exactly
+one. Extend `groupParallelGroupSteps` with an explicit opt-in naming the started
+anchor index, and keep the ban for every other member of the range. The
+relaxation is sound because promotion preserves the started step's index, id,
+and `_runtime`; only its group membership changes, which is precisely what
+`assertStartedStepPositionsPreserved` already permits.
+
+#### Track D session split
+
+| #   | Phase | Deliverable                                                       |
+| --- | ----- | ----------------------------------------------------------------- |
+| 1   | 5     | Growable drain loop + open/closed admission on `ParallelGroupRun` |
+| 2   | 5     | `joinRunningParallelGroup` + per-member admission preflight       |
+| 3   | 6     | Topology append + promotion (started-anchor opt-in)               |
+| 4   | 6     | `PromptQueue` wiring, revision bump, `WorkflowInstance` echo fix  |
+| 5   | 6     | Promotion snapshot re-attribution + integration coverage          |
 
 **Exit criteria.** `ParallelGroupTopology.test.ts` covers
 append-extends-`endIndex`, later-group shifting, valid two-member promotion, and
@@ -435,7 +471,7 @@ once; `McpServer.test.ts` proves every live-join availability edge rejects
 rather than falling back to `next` or `end`.
 
 **Phase 8 — Permit parallel callers.** Mut Stage 5. Remove all three bans
-_together_ — `ParallelGroupPreflight.ts:247`, the `context.groupMember` check at
+_together_ — `ParallelGroupPreflight.ts:278`, the `context.groupMember` check at
 `mcp-server.ts:192`, and the skill projection's removal of
 `MCP_SKILL_NAMES.TOOLS` from skill-mode parallel prompts. Native MCP and
 MCP-as-skill must expose the same effective tools; enabling one delivery mode
