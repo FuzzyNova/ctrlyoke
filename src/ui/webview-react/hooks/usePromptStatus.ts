@@ -70,15 +70,15 @@ export function usePromptStatus() {
     }
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
       // An in-flight failure advances currentStep past the step that actually
-      // failed (see WorkflowStepsPanel's workflowContinuedAfterFailure), and
-      // that step's own FAILED status is sent before executionState flips to
-      // ERROR. So if the previous step already recorded FAILED, currentStep
-      // now points at the next, not-yet-run step — leave it alone instead of
-      // painting a second error icon. Only fall back to eagerly marking
-      // currentStep FAILED for failures with no per-step status of their own
-      // (e.g. a pre-flight harness failure before any step started).
+      // failed (see WorkflowStepRow's workflowContinuedAfterFailure), and that
+      // step's own FAILED status is sent before executionState flips to ERROR.
+      // So if the previous step already failed, currentStep now points at the
+      // next, not-yet-run step — leave it alone instead of painting a second
+      // error icon. Only fall back to eagerly marking currentStep FAILED for
+      // failures with no per-step status of their own (e.g. a pre-flight
+      // harness failure before any step started).
       const previousStep = currentStep > 0 ? steps[currentStep - 1] : undefined;
-      if ((previousStep as any)?.status !== STEP_STATUS.FAILED) {
+      if (previousStep?.status !== STEP_STATUS.FAILED) {
         return STEP_STATUS.FAILED;
       }
     }

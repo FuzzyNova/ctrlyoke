@@ -386,20 +386,32 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return true;
   }
 
-  public finalizeFailedInFlightPrompt(error?: string): boolean {
+  /**
+   * Fail the in-flight step and advance past it.
+   *
+   * Returns the index of the step that was failed, or `undefined` when there
+   * was nothing to finalize. Callers must use that index to report the failure
+   * to the dashboard: this path bypasses the attempt state machine, so no
+   * `WORKFLOW_ATTEMPT_COMMANDS.FAIL` transition fires and nothing else emits a
+   * `STEP_STATUS_CHANGED` for it. Advancing `currentIndex` here means the
+   * dashboard's `currentStep` points at the *next* step by the time the
+   * workflow flips to ERROR, so without that report the webview cannot tell
+   * which of the two actually failed and paints the error icon one row low.
+   */
+  public finalizeFailedInFlightPrompt(error?: string): number | undefined {
     if (!this.hasNext()) {
-      return false;
+      return undefined;
     }
 
     const index = this.state.currentIndex;
     if (!this.canFinalizeStep(index)) {
-      return false;
+      return undefined;
     }
 
     void this.failStep(index, error);
     this.state.currentIndex++;
     this.emitStateChange();
-    return true;
+    return index;
   }
 
   /**

@@ -2123,6 +2123,84 @@ suite("WorkflowInstance append-and-continue", () => {
     ]);
   });
 
+  // finalizeFailedInFlightPrompt advances currentIndex past the step it just
+  // failed, so by the time the workflow flips to ERROR the dashboard's
+  // currentStep names the *next* step. Nothing else reports this failure — the
+  // setup/startup path never reaches the attempt state machine — so without an
+  // explicit updateStepStatus the webview paints the error icon one row low.
+  test("reports the failed step index when execution start throws mid-run", async () => {
+    const platform = new MockPlatform();
+    const stepStatusCalls: Array<{ stepIndex: number; state: string }> = [];
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: (stepIndex: number, status: { state: string }) => {
+        stepStatusCalls.push({ stepIndex, state: status.state });
+      },
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    const steps = [
+      { prompt: "first" },
+      { prompt: "second" },
+      { prompt: "third" },
+    ];
+    instance.promptQueue.loadPrompts({ steps });
+    instance.setCurrentPromptFile("workflow.prompt.md", { steps });
+    // Mid-run: step 0 done, step 1 in flight.
+    (instance.promptQueue as any).state.currentIndex = 1;
+    (instance.promptQueue as any).state.results[0].status =
+      STEP_STATUS.COMPLETED;
+    (instance.promptQueue as any).state.results[1].status = STEP_STATUS.RUNNING;
+
+    (instance as any).prepareExecutionWorktree = async () => {};
+    (instance as any).startWorkflowExecution = async () => {
+      throw new Error("EPERM: operation not permitted, rename '…'");
+    };
+
+    await (instance as any).executeLoadedPromptFile(undefined, true);
+
+    assert.deepStrictEqual(stepStatusCalls, [
+      { stepIndex: 1, state: STEP_STATUS.FAILED },
+    ]);
+    // The reported index is the step that failed, not the advanced cursor.
+    assert.strictEqual(instance.promptQueue.getState().currentIndex, 2);
+    assert.strictEqual(
+      instance.promptQueue.getState().results[1].status,
+      STEP_STATUS.FAILED
+    );
+    assert.match(
+      instance.promptQueue.getState().results[1].error ?? "",
+      /EPERM/
+    );
+  });
+
+
   // Publishing a run deletes the lineage's draft, so once promotion succeeds the
   // run is the only place the user's definition lives. A start that throws after
   // that point — here the timeline init the promotion itself needs — must still

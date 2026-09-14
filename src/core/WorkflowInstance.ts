@@ -2401,7 +2401,20 @@ export class WorkflowInstance {
         "[executeLoadedPromptFile] Failed to execute prompt file:",
         error
       );
-      this.promptQueue.finalizeFailedInFlightPrompt();
+      const failureMessage = getErrorMessage(error);
+      const failedStepIndex =
+        this.promptQueue.finalizeFailedInFlightPrompt(failureMessage);
+      // Report before flipping the workflow to ERROR. This setup/startup path
+      // never reaches the attempt state machine, so it is the only chance to
+      // tell the dashboard which step failed — and `finalizeFailedInFlightPrompt`
+      // has already advanced `currentIndex` past it, so a dashboard that never
+      // hears about it can only guess, and guesses one row too far.
+      if (failedStepIndex !== undefined) {
+        this.dashboardSink?.updateStepStatus(failedStepIndex, {
+          state: STEP_STATUS.FAILED,
+          message: failureMessage,
+        });
+      }
       this.workflowRuntime.fail();
       await this.promptQueue.commitRuntimeTransition();
       // Worktree provisioning can succeed before integration construction or
