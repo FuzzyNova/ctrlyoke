@@ -914,8 +914,10 @@ function assertEditableDuringExecution(
  * `stripViewOnlyWorkflowStepFields`, but `buildClearUpdates` writes whatever
  * keys it is handed straight onto the merged step. Without this, a caller
  * could clear `_runtime` — erasing `completedAt`, and with it the step's
- * membership in `immutablePrefixLength`, which is what keeps
- * `manifest.json`/`events.jsonl` attribution pinned to a stable index.
+ * membership in `immutablePrefixLength`, which is the conservative insertion
+ * floor retained for numeric cross-process positions and legacy files. The
+ * queue's disk merge uses stepId directly; this floor is not a second merge
+ * identity rule.
  */
 const NON_CLEARABLE_STEP_PROPERTIES = ["_runtime", "status", "details"];
 
@@ -981,12 +983,12 @@ function buildPendingGroupRanges(
 }
 
 /**
- * Number of leading steps a cross-process insert must never shift. Only steps
- * that already recorded a terminal `completedAt` are immutable: their array
- * index is how `manifest.json`/`events.jsonl` address their recorded attempts,
- * so moving one would re-attribute recorded output to a different step. Pending
- * steps past the execution head stay editable, matching the in-process rule in
- * `PromptQueue.assertEditableDuringExecution`.
+ * Conservative floor for a numeric cross-process insert. Steps that already
+ * recorded a terminal `completedAt` remain index anchors because
+ * `manifest.json`/`events.jsonl` address their recorded attempts by position.
+ * The actual structural rule is `assertStartedStepPositionsPreserved`; this
+ * helper only keeps legacy, ID-less callers from attempting an obviously unsafe
+ * prefix splice before that validator runs.
  */
 export function immutablePrefixLength(steps: WorkflowStep[]): number {
   let boundary = 0;

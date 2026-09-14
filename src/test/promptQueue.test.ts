@@ -27,8 +27,11 @@ import { withFileLock } from "../utils/FileLockUtils";
 /**
  * Helper to wrap prompts array into PromptFile for tests
  */
-function createPromptFile(steps: PromptStep[]): PromptFile {
-  return { steps };
+function createPromptFile(
+  steps: PromptStep[],
+  parallelGroups: ParallelGroupDefinition[] = []
+): PromptFile {
+  return { steps, parallelGroups };
 }
 
 async function startQueueExecution(queue: PromptQueue): Promise<void> {
@@ -1847,7 +1850,9 @@ suite("PromptQueue State Machine Tests", () => {
     test("should preserve in-memory _runtime.sessionId when MCP appends a new prompt", () => {
       // Simulate: prompt[0] ran, session ID set in memory but not yet persisted to disk
       queue.loadPrompts(createPromptFile([{ prompt: "prompt-0" }]));
+      const originalStepId = queue.getState().steps[0]._runtime?.stepId;
       (queue as any).state.steps[0]._runtime = {
+        stepId: originalStepId,
         harness: "copilot-cli",
         model: "claude-sonnet-4.5",
         sessionId: "b52bceab-9c03-49b3-8324-4220292e9acb",
@@ -1878,6 +1883,11 @@ suite("PromptQueue State Machine Tests", () => {
         "b52bceab-9c03-49b3-8324-4220292e9acb",
         "session ID must be preserved from memory, not lost to disk replacement"
       );
+      assert.strictEqual(
+        state.steps[0]._runtime?.stepId,
+        originalStepId,
+        "the index fallback must backfill an older disk snapshot without changing identity"
+      );
       assert.deepStrictEqual(Object.keys(state.steps[1]._runtime ?? {}), [
         "stepId",
       ]);
@@ -1887,7 +1897,9 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(
         createPromptFile([{ prompt: "prompt-0", enabled: true }])
       );
+      const stepId = queue.getState().steps[0]._runtime?.stepId;
       (queue as any).state.steps[0]._runtime = {
+        stepId,
         sessionId: "s0",
         startedAt: 1000,
         completedAt: 2000,
@@ -1951,6 +1963,116 @@ suite("PromptQueue State Machine Tests", () => {
         "stepId",
       ]);
       assert.strictEqual(state.results.length, 3);
+    });
+
+    test("keeps every started group member keyed by stepId across pending changes", () => {
+      queue.loadPrompts(
+        createPromptFile(
+          [
+            { prompt: "member-0" },
+            { prompt: "member-1" },
+            { prompt: "pending" },
+          ],
+          [{ id: "group", startIndex: 0, endIndex: 1, failFast: true }]
+        )
+      );
+      const initial = queue.getState();
+      const [member0Id, member1Id, pendingId] = initial.steps.map(
+        (step) => step._runtime?.stepId
+      );
+      assert.ok(member0Id && member1Id && pendingId);
+
+      (queue as any).state.steps[0]._runtime = {
+        stepId: member0Id,
+        sessionId: "member-0-session",
+        startedAt: 10,
+      };
+      (queue as any).state.steps[1]._runtime = {
+        stepId: member1Id,
+        sessionId: "member-1-session",
+        startedAt: 11,
+      };
+      (queue as any).state.results[0] = {
+        prompt: "member-0",
+        status: STEP_STATUS.RUNNING,
+        timestamp: new Date(),
+        preCondition: { passed: true, stdout: "gate-0" },
+      };
+      (queue as any).state.results[1] = {
+        prompt: "member-1",
+        status: STEP_STATUS.RUNNING,
+        timestamp: new Date(),
+        endCondition: { passed: true, stdout: "gate-1" },
+      };
+
+      const insertedId = "inserted-pending-id";
+      (queue as any).mergeDiskSteps([
+        { prompt: "member-0", _runtime: { stepId: member0Id } },
+        { prompt: "member-1", _runtime: { stepId: member1Id } },
+        { prompt: "inserted", _runtime: { stepId: insertedId } },
+        { prompt: "pending", _runtime: { stepId: pendingId } },
+      ]);
+
+      let state = queue.getState();
+      assert.strictEqual(
+        state.steps[0]._runtime?.sessionId,
+        "member-0-session"
+      );
+      assert.strictEqual(
+        state.steps[1]._runtime?.sessionId,
+        "member-1-session"
+      );
+      assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
+      assert.strictEqual(state.results[1].endCondition?.stdout, "gate-1");
+      assert.strictEqual(state.steps[2]._runtime?.stepId, insertedId);
+
+      (queue as any).mergeDiskSteps([
+        { prompt: "member-0", _runtime: { stepId: member0Id } },
+        { prompt: "member-1", _runtime: { stepId: member1Id } },
+        { prompt: "inserted", _runtime: { stepId: insertedId } },
+      ]);
+
+      state = queue.getState();
+      assert.strictEqual(state.steps.length, 3);
+      assert.strictEqual(
+        state.steps[0]._runtime?.sessionId,
+        "member-0-session"
+      );
+      assert.strictEqual(
+        state.steps[1]._runtime?.sessionId,
+        "member-1-session"
+      );
+      assert.strictEqual(state.results[0].preCondition?.stdout, "gate-0");
+      assert.strictEqual(state.results[1].endCondition?.stdout, "gate-1");
+    });
+
+    test("does not alias duplicate prompt text when disk order changes by ID", () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "repeat" }, { prompt: "repeat" }])
+      );
+      const [firstId, secondId] = queue
+        .getState()
+        .steps.map((step) => step._runtime?.stepId);
+      assert.ok(firstId && secondId);
+      (queue as any).state.steps[0]._runtime = {
+        stepId: firstId,
+        sessionId: "first-session",
+        startedAt: 10,
+      };
+      (queue as any).state.steps[1]._runtime = {
+        stepId: secondId,
+        sessionId: "second-session",
+        startedAt: 11,
+      };
+
+      (queue as any).mergeDiskSteps([
+        { prompt: "repeat", _runtime: { stepId: secondId } },
+        { prompt: "repeat", _runtime: { stepId: firstId } },
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "second-session");
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "first-session");
     });
 
     test("should use the shorter disk/memory immutable boundary", () => {

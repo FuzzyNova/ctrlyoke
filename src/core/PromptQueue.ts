@@ -69,7 +69,6 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import {
-  immutablePrefixLength,
   RunContinuationService,
   type RunStepClaimResult,
 } from "./orchestration/RunContinuationService";
@@ -1538,100 +1537,104 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       steps: diskSteps,
       parallelGroups,
     });
-    const memorySteps = this.state.steps;
-    // The disk boundary can lag the in-memory boundary while a just-completed
-    // step is waiting for its runtime flush. Only the shared prefix is safe to
-    // merge by index; a later disk insertion may have shifted the rest.
-    const immutablePrefix = Math.min(
-      immutablePrefixLength(diskTopology.steps),
-      immutablePrefixLength(memorySteps)
-    );
-    // Completed steps are index-stable, and so are the steps executing right
-    // now: `RunContinuationService` clamps every cross-process splice past the
-    // completed boundary, and the positions MCP can request resolve to either
-    // `next` (after the execution head) or `end`. Nothing can renumber the
-    // running step, and its in-memory state is the *newest* copy — disk has
-    // not seen its session ID or its condition summaries yet. Stopping the
-    // merge at the completed boundary therefore threw away live execution
-    // state: the running step lost its `_runtime` (session ID, startedAt) and
-    // its `results` entry, which is where `getPreConditionSummary` /
-    // `getEndConditionSummary` read the gate output that `$preCondition:*` and
-    // `$endCondition:*` substitute into the dispatched prompt.
-    const executionHead = Math.min(
-      diskTopology.steps.length,
-      Math.max(immutablePrefix, this.state.currentIndex + 1)
-    );
+    // Every queue created by the current runtime already has IDs. The helper
+    // also repairs test/legacy state where a runtime update replaced the
+    // metadata object, and supplies the explicit index fallback needed to read
+    // older working files that predate stepId.
+    const memorySteps = ensureStepIds(this.state.steps);
+    const identifiedDiskSteps = ensureStepIds(diskTopology.steps, memorySteps);
+    const memoryById = new Map<
+      string,
+      { step: WorkflowStep; result?: PromptResult; index: number }
+    >();
+    for (const [index, step] of memorySteps.entries()) {
+      const stepId = step._runtime?.stepId;
+      if (stepId !== undefined) {
+        memoryById.set(stepId, {
+          step,
+          result: this.state.results[index],
+          index,
+        });
+      }
+    }
 
-    // Per-index sanity check, not an identity search: state is only ever reused
-    // for the *same* index, and only while the step there still matches. This
-    // never relocates state by content the way the removed hash lookup did.
-    const stepMatchesMemory = (
+    const sameDefinition = (left: WorkflowStep, right: WorkflowStep) =>
+      isDeepStrictEqual(
+        stripStepRuntime([left])[0],
+        stripStepRuntime([right])[0]
+      );
+
+    // A missing disk ID is the only case where identity is inferred by index.
+    // If memory also lacks an ID, keep the old structural sanity check so an
+    // inserted or shifted legacy step cannot inherit a sibling's runtime. A
+    // current queue with IDs can safely backfill an older disk snapshot by
+    // position; there is no content-hash relocation in either path.
+    const memoryMatchFor = (
       diskStep: WorkflowStep,
       index: number
-    ): boolean => {
-      const memoryStep = memorySteps[index];
-      return (
-        memoryStep !== undefined &&
-        isDeepStrictEqual(
-          stripStepRuntime([diskStep])[0],
-          stripStepRuntime([memoryStep])[0]
-        )
-      );
+    ):
+      | { step: WorkflowStep; result?: PromptResult; index: number }
+      | undefined => {
+      const memoryMatch = memoryById.get(diskStep._runtime?.stepId ?? "");
+      if (!memoryMatch) {
+        return undefined;
+      }
+      const diskHadId = diskSteps[index]?._runtime?.stepId !== undefined;
+      const memoryHadId =
+        this.state.steps[memoryMatch.index]?._runtime?.stepId !== undefined;
+      if (
+        !diskHadId &&
+        !memoryHadId &&
+        !sameDefinition(diskStep, memoryMatch.step)
+      ) {
+        return undefined;
+      }
+      return memoryMatch;
     };
 
-    // Disk owns order and topology. Memory contributes _runtime only across the
-    // index-stable prefix, so duplicate prompt text cannot alias two different
-    // steps' sessions.
-    const mergedSteps = diskTopology.steps.map((diskStep, index) => {
-      if (index >= executionHead || !memorySteps[index]) {
+    // Disk owns order and topology. Memory contributes runtime metadata for
+    // every matching step. It is also authoritative for a pending reset that
+    // intentionally retains only stepId (for example, a restart after a
+    // completed run); allowing stale terminal disk runtime to win would make
+    // the next execution skip that step again.
+    const mergedSteps = identifiedDiskSteps.map((diskStep, index) => {
+      const memoryMatch = memoryMatchFor(diskStep, index);
+      if (!memoryMatch) {
         return diskStep;
       }
-      if (index >= immutablePrefix && !stepMatchesMemory(diskStep, index)) {
-        return diskStep;
-      }
-
-      const memoryRuntime = memorySteps[index]._runtime;
-      return memoryRuntime
-        ? { ...diskStep, _runtime: memoryRuntime }
-        : diskStep;
+      const memoryRuntime = memoryMatch.step._runtime;
+      const diskRuntime = diskStep._runtime;
+      const runtime = memoryRuntime ?? diskRuntime;
+      return runtime ? { ...diskStep, _runtime: runtime } : diskStep;
     });
 
-    // The novelty signal is structural rather than content identity: disk
-    // steps beyond the shared prefix are new when their index is absent from
-    // memory or their structure differs. This keeps the existing array/count
-    // contract used by WorkingFileManager and the proactive dashboard push.
-    const newStepsFromDisk = diskTopology.steps
-      .slice(immutablePrefix)
-      .filter((diskStep, offset) => {
-        const memoryStep = memorySteps[immutablePrefix + offset];
-        return (
-          !memoryStep ||
-          !isDeepStrictEqual(
-            stripStepRuntime([diskStep])[0],
-            stripStepRuntime([memoryStep])[0]
-          )
-        );
-      });
+    // Keep the existing array/count contract, but define novelty by identity
+    // instead of position or prompt text. This means duplicate prompt text can
+    // never alias a different step's session.
+    const newStepsFromDisk = identifiedDiskSteps.filter(
+      (diskStep, index) => memoryMatchFor(diskStep, index) === undefined
+    );
 
-    // Rebuild results on the same index basis as the runtime merge, so the
-    // running step keeps its condition summaries and status. Results for
-    // shifted or newly introduced suffix steps must not follow prompt text.
-    const newResults: PromptResult[] = diskTopology.steps.map((step, index) => {
-      const canReuse =
-        index < executionHead &&
-        this.state.results[index] !== undefined &&
-        (index < immutablePrefix || stepMatchesMemory(step, index));
-      if (canReuse) {
-        return this.state.results[index];
+    // Results use exactly the same identity lookup as runtime metadata. A
+    // started sibling therefore keeps condition summaries after a reorder or
+    // removal of unrelated pending work.
+    const newResults: PromptResult[] = identifiedDiskSteps.map(
+      (step, index) => {
+        const memoryMatch = memoryMatchFor(step, index);
+        if (memoryMatch?.result) {
+          return {
+            ...memoryMatch.result,
+            prompt: isScriptStep(step) ? step.script : step.prompt,
+          };
+        }
+        const content = isScriptStep(step) ? step.script : step.prompt;
+        return {
+          prompt: content,
+          status: STEP_STATUS.PENDING,
+          timestamp: new Date(),
+        };
       }
-
-      const content = isScriptStep(step) ? step.script : step.prompt;
-      return {
-        prompt: content,
-        status: STEP_STATUS.PENDING,
-        timestamp: new Date(),
-      };
-    });
+    );
 
     const identifiedSteps = ensureStepIds(mergedSteps, memorySteps);
     this.state.steps = identifiedSteps;
