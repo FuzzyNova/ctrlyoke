@@ -50,6 +50,7 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
   onRun: vi.fn(),
   onRunInParallel: vi.fn(),
   onRunInNewWorkflow: vi.fn(),
+  onSendSteerMessage: vi.fn(),
   runInParallelTarget: {
     enabled: false,
     disabledReason: "No step is running",
@@ -58,6 +59,11 @@ const defaultProps: React.ComponentProps<typeof EditorFooter> = {
   newWorkflowTarget: {
     enabled: true,
     title: "Starts a separate workflow with default settings and this prompt",
+  } satisfies RunDispatchTarget,
+  steerTarget: {
+    enabled: false,
+    disabledReason: "No live harness session for this workflow",
+    title: "No live harness session for this workflow",
   } satisfies RunDispatchTarget,
   onQueue: vi.fn(),
   onUpdate: vi.fn(),
@@ -154,6 +160,28 @@ describe("EditorFooter run menu", () => {
     );
     await user.click(parallel);
     expect(defaultProps.onRunInParallel).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables steer with its target tooltip and fires the callback", async () => {
+    const user = userEvent.setup();
+    renderFooter({
+      steerTarget: {
+        enabled: true,
+        title:
+          "Sends to the live Codex session (step 3). Prompt overrides are ignored.",
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const steer = screen.getByRole("option", { name: "Send Steer Message" });
+    expect(steer).toBeEnabled();
+    expect(steer).toHaveAttribute(
+      "title",
+      "Sends to the live Codex session (step 3). Prompt overrides are ignored."
+    );
+    await user.click(steer);
+    expect(defaultProps.onSendSteerMessage).toHaveBeenCalledTimes(1);
   });
 
   it.each([

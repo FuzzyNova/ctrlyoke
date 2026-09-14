@@ -43,6 +43,7 @@ import {
   type HarnessId,
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
+  PRIOR_CONTEXT_KEYWORDS,
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -157,6 +158,12 @@ export class CliIntegration extends HarnessIntegration {
   /** Active per-prompt session while sendPrompt() is running. */
   private activeSession?: CliExecutionSession;
   private activeSecretRedactor?: RunSecretRedactor;
+  /** Last execution context retained for steering while the PTY remains alive. */
+  private lastWorkflowContext?: WorkflowContext;
+  private lastResolvedProperties?: ResolvedProperties;
+  private lastResolvedSessionId?: string;
+  /** Temp prompt files held until the live PTY exits after a steer. */
+  private deferredSteerTempFilePaths: string[] = [];
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -787,6 +794,16 @@ export class CliIntegration extends HarnessIntegration {
     this.sessionActivityWatcher?.stop();
     this.sessionActivityWatcher = undefined;
 
+    const deferredSteerTempFilePaths = this.deferredSteerTempFilePaths;
+    this.deferredSteerTempFilePaths = [];
+    if (deferredSteerTempFilePaths.length > 0) {
+      void this.cleanupTempFiles(deferredSteerTempFilePaths).catch((error) => {
+        Log.warn(
+          `[CliIntegration] Failed to clean up deferred steer temp files: ${String(error)}`
+        );
+      });
+    }
+
     if (this.suppressPtyExitSessionId === session.id) {
       this.suppressPtyExitSessionId = undefined;
       Log.info(
@@ -852,6 +869,11 @@ export class CliIntegration extends HarnessIntegration {
   ): CliExecutionSession {
     this.lastExecutionSnapshot = undefined;
     this.activeSecretRedactor = workflowContext?.secretRedactor;
+    this.lastWorkflowContext = workflowContext
+      ? { ...workflowContext, stateRoot: this.getStateRoot() }
+      : undefined;
+    this.lastResolvedProperties = resolvedProperties;
+    this.lastResolvedSessionId = resolvedSessionId;
     return new CliExecutionSession({
       prompt,
       workflowContext: workflowContext
@@ -1456,6 +1478,62 @@ export class CliIntegration extends HarnessIntegration {
     Log.debug(
       `[CliIntegration] Cleaned up ${tempFilePaths.length} temp file(s)`
     );
+  }
+
+  /** Keep steer prompt files available until the live PTY has consumed them. */
+  private registerDeferredSteerTempFiles(tempFilePaths: string[]): void {
+    this.deferredSteerTempFilePaths.push(...tempFilePaths);
+  }
+
+  /**
+   * Prepare and write a steer turn without entering the workflow execution
+   * pipeline. The PTY writer owns serialization with ordinary inject turns.
+   */
+  override async sendSteerMessage(text: string): Promise<boolean> {
+    // During a monitored prompt, CliLogMonitor already owns the parser. Only
+    // pause the activity watcher for the between-runs case; resuming it while
+    // the prompt monitor is active would violate the one-reader rule.
+    const hasActivePrompt = this.activeSession !== undefined;
+    if (!hasActivePrompt) {
+      this.sessionActivityWatcher?.pause();
+    }
+    try {
+      const activeSession = this.activeSession;
+      const workflowContext =
+        activeSession?.workflowContext ?? this.lastWorkflowContext;
+      const liveProperties =
+        activeSession?.resolvedProperties ?? this.lastResolvedProperties;
+      if (!liveProperties) {
+        return false;
+      }
+
+      const reducedResolvedProperties: ResolvedProperties = {
+        ...liveProperties,
+        agent: undefined,
+        skills: [],
+        priorContext: PRIOR_CONTEXT_KEYWORDS.NONE,
+      };
+      const resolvedSessionId =
+        activeSession?.effectiveSessionId ??
+        this.executionRunner.getLastInteractiveContext()?.sessionId ??
+        this.lastResolvedSessionId;
+      const prepared = await this.promptPreparer.preparePrompt(
+        { prompt: text },
+        workflowContext,
+        reducedResolvedProperties,
+        resolvedSessionId,
+        true
+      );
+
+      this.registerDeferredSteerTempFiles(prepared.tempFilePaths);
+      return await this.executionRunner.writeTurnToLivePty(
+        prepared.promptWithInstruction
+      );
+    } finally {
+      if (!hasActivePrompt) {
+        this.sessionActivityWatcher?.resume();
+      }
+    }
   }
 
   // ============================================================

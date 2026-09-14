@@ -798,6 +798,10 @@ export class WebviewMessageRouter {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
     });
 
+    table.set(MESSAGE_TYPES.SEND_STEER_MESSAGE, (message, ctx) => {
+      void this.workflowStepHandlers.handleSendSteerMessage(ctx, message);
+    });
+
     table.set(MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW, (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
@@ -817,6 +821,12 @@ export class WebviewMessageRouter {
           ctx.emit({
             type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
             text: message.text,
+          });
+          ctx.emit({
+            type: MESSAGE_TYPES.USER_FEEDBACK,
+            id: `run-in-new-workflow-error-${Date.now()}`,
+            severity: USER_FEEDBACK_SEVERITY.WARNING,
+            message: getErrorMessage(error),
           });
         });
     });

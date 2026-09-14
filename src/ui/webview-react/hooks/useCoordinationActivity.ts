@@ -1,5 +1,8 @@
 import { useWorkflowStore } from "@store/workflowStore";
-import type { CoordinationEntry, CoordinationParticipant } from "@root/types/CtrlYokeTypes";
+import type {
+  CoordinationEntry,
+  CoordinationParticipant,
+} from "@root/types/CtrlYokeTypes";
 
 const EMPTY_PARTICIPANTS: CoordinationParticipant[] = [];
 const EMPTY_ENTRIES: CoordinationEntry[] = [];

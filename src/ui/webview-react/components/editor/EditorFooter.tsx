@@ -34,8 +34,10 @@ interface EditorFooterProps {
   onRun: () => void;
   onRunInParallel: () => void;
   onRunInNewWorkflow: () => void;
+  onSendSteerMessage: () => void;
   runInParallelTarget: RunDispatchTarget;
   newWorkflowTarget: RunDispatchTarget;
+  steerTarget: RunDispatchTarget;
   onQueue: () => void;
   onUpdate: () => void;
   onDelete: () => void;
@@ -77,8 +79,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onRun,
   onRunInParallel,
   onRunInNewWorkflow,
+  onSendSteerMessage,
   runInParallelTarget,
   newWorkflowTarget,
+  steerTarget,
   onQueue,
   onUpdate,
   onDelete,
@@ -320,9 +324,14 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 {
                   label: "Send Steer Message",
                   value: "sendSteerMessage",
-                  onClick: () => undefined,
-                  disabled: true,
-                  title: "No live harness session for this workflow",
+                  onClick: onSendSteerMessage,
+                  disabled:
+                    isExternallyManaged || !hasContent || !steerTarget.enabled,
+                  title: isExternallyManaged
+                    ? (externalReadOnlyLabel ?? "Read-only — external run")
+                    : !hasContent
+                      ? "Enter a prompt first"
+                      : steerTarget.title,
                   icon: <Icon name="comment" />,
                 },
                 {

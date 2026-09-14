@@ -1018,9 +1018,7 @@ export function ungroupParallelGroup(
       .slice(selected.startIndex, selected.endIndex + 1)
       .some(hasStarted)
   ) {
-    throw new Error(
-      `Cannot remove active parallel group ${selected.id}`
-    );
+    throw new Error(`Cannot remove active parallel group ${selected.id}`);
   }
   const result = cloneTopology(normalized);
   result.parallelGroups.splice(index, 1);
@@ -1040,9 +1038,7 @@ export function unwrapParallelGroup(
       .slice(selected.startIndex, selected.endIndex + 1)
       .some(hasStarted)
   ) {
-    throw new Error(
-      `Cannot remove active parallel group ${selected.id}`
-    );
+    throw new Error(`Cannot remove active parallel group ${selected.id}`);
   }
   result.parallelGroups.splice(index, 1);
   validateParallelGroupTopology(result);

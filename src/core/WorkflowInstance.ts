@@ -65,6 +65,7 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CAPABILITY_FIDELITIES,
@@ -3535,7 +3536,9 @@ export class WorkflowInstance {
    * The topology mutation and the executor admission deliberately use the
    * shared PromptQueue/WorkflowExecutor paths used by other late joiners.
    */
-  private async executeEphemeralParallelPrompt(step: WorkflowStep): Promise<void> {
+  private async executeEphemeralParallelPrompt(
+    step: WorkflowStep
+  ): Promise<void> {
     const state = this.promptQueue.getState();
     const executionState = this.getAuthoritativeExecutionState();
     if (executionState !== EXECUTION_STATES.RUNNING) {
@@ -4639,6 +4642,52 @@ export class WorkflowInstance {
           : []
       )
       .sort((left, right) => left - right);
+  }
+
+  /** Find the integration that owns an interactive PTY session. */
+  private findIntegrationForPtySession(
+    sessionId: string
+  ): HarnessIntegration | undefined {
+    for (const resource of this.activeTargetResources.values()) {
+      if (resource.ptySessionId === sessionId && resource.integration) {
+        return resource.integration;
+      }
+    }
+
+    for (const integration of this.liveInjectIntegrations.values()) {
+      if (integration.getActivitySessionId() === sessionId) {
+        return integration;
+      }
+    }
+
+    return undefined;
+  }
+
+  /** Send a steer message directly to a live AI-CLI PTY session. */
+  async sendSteerMessage(sessionId: string, text: string): Promise<void> {
+    const session = getPtyProcessManager()?.getSession(sessionId);
+    if (
+      !session ||
+      session.workflowId !== this.id ||
+      session.kind !== SESSION_KINDS.AI_CLI ||
+      session.status !== TERMINAL_SESSION_STATUS.RUNNING
+    ) {
+      throw new Error(
+        "That harness session has ended. The steer message was not sent."
+      );
+    }
+
+    const integration = this.findIntegrationForPtySession(sessionId);
+    if (!integration) {
+      throw new Error("No live harness session for this workflow.");
+    }
+
+    const sent = await integration.sendSteerMessage(text);
+    if (!sent) {
+      throw new Error(
+        "That harness session has ended. The steer message was not sent."
+      );
+    }
   }
 
   private createIntegrationForMode(

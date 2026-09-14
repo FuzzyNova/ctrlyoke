@@ -478,6 +478,14 @@ export abstract class HarnessIntegration {
   ): Promise<boolean>;
 
   /**
+   * Send a fully prepared steer message to a live interactive session.
+   * Integrations without a live PTY do not support steering.
+   */
+  async sendSteerMessage(_text: string): Promise<boolean> {
+    return false;
+  }
+
+  /**
    * Get the current status of the integration
    * Must be implemented by subclasses
    */

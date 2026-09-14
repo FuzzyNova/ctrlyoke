@@ -1,7 +1,11 @@
 # Steer Message Plan
 
-> **Status:** Backlog, ready to implement. Every open question this plan
-> previously carried is answered below; nothing here is blocking.
+> **Status:** Stage 4 shipped; the steer dispatch is live. Accepted v1
+> limitations are the mid-turn attribution race and the temp-file-reference
+> form of the `USER_STEER` receipt for multi-line drafts. Named follow-ups are
+> rendering the referenced temp file's body in the `USER_STEER` row and an MCP
+> `steer_session` equivalent. Every open question this plan previously carried
+> is answered below; nothing here is blocking.
 >
 > **Depends on:** [`RUN_DISPATCH_MENU_PLAN.md`](../implemented/RUN_DISPATCH_MENU_PLAN.md)
 > (implemented) — its Stage 6 is this plan. The split-button shell, the
@@ -233,7 +237,8 @@ text through inline and corrupt the send.
    `onExit` has not fired yet.
 
 Every write goes through `CliTransportCoordinator.writeToCurrentPtySession`
-(`CliTransportCoordinator.ts:516`), which returns `false` once the PTY is gone.
+(`src/core/harness/shared/CliTransportCoordinator.ts:516`), which returns
+`false` once the PTY is gone.
 
 **Extract steps 1–5 into a reusable async writer** — `writeTurnToLivePty(text):
 Promise<boolean>` on `CliExecutionRunner`, or a small `PtyTurnWriter` in
@@ -278,7 +283,7 @@ session for this workflow."`
 
 Every existing `preparePrompt` caller deletes its `tempFilePaths` in a
 `finally` once the _monitored_ turn resolves (`CliExecutionRunner.ts:325`,
-`:686`; `CliTransportCoordinator.ts:206`, `:507`). A steer has no monitored
+`:686`; `shared/CliTransportCoordinator.ts:206`, `:507`). A steer has no monitored
 turn, and the harness may not dequeue the steered turn for minutes if it is
 mid-generation — so deleting after the write would hand the TUI a path that
 404s by the time it reads it. This is the producing-side view of the "Temp
@@ -473,16 +478,49 @@ prompt steps`. Unlike Run in Parallel and Run in New Workflow, which accept
 
 ## Implementation stages
 
+**Stage 1 status — landed:** `CliExecutionRunner.writeTurnToLivePty(text)` in
+`src/core/harness/shared/CliExecutionRunner.ts` now owns the single-sourced
+focus/chunk/submit sequence and post-write PTY termination check. Its
+runner-owned `AsyncMutex` (`turnWriteMutex`) serializes the complete sequence;
+the runner is created once by each `CliIntegration`, so
+`executeInteractiveInject` and the future steer caller share the same lock.
+No steer surface was added in this stage.
+
+**Stage 2 status — landed:** the extension-host dispatch surface is now
+`WorkflowInstance.sendSteerMessage(sessionId: string, text: string): Promise<void>`.
+It resolves the owning integration through the private
+`findIntegrationForPtySession(sessionId: string)` across both active-target and
+retained-inject registries, re-checks the live AI-CLI PTY session, and delegates
+to `CliIntegration.sendSteerMessage(text: string): Promise<boolean>`. The latter
+uses the live workflow context and reduced properties to call
+`CliPromptPreparer.preparePrompt(..., injectMode = true)` before invoking
+`CliExecutionRunner.writeTurnToLivePty(text: string): Promise<boolean>`.
+
+Steer-created temp prompt files are registered by
+`CliIntegration.registerDeferredSteerTempFiles(tempFilePaths: string[]): void`
+and held in
+`deferredSteerTempFilePaths`; `handlePtyExit` drains that list through the
+existing `CliIntegration.cleanupTempFiles(...)` path. They are never deleted
+after the steer write.
+
 **Stage 1 — PTY turn writer.** Extract the focus/chunk/submit/verify sequence
 out of `executeInteractiveInject` into a reusable writer, add the per-session
 `AsyncMutex`, and prove `executeInteractiveInject` is behavior-preserving.
 Pure refactor; no steer surface yet.
 
-**Stage 2 — host-side steer.** `CliIntegration.sendSteerMessage` (reduced
-`preparePrompt` in inject mode, mutex-guarded write, deferred temp-file
-registration) and `WorkflowInstance.sendSteerMessage` +
-`findIntegrationForPtySession`, with the host-side liveness re-checks and
+**Stage 2 — host-side steer (landed).** `CliIntegration.sendSteerMessage`
+(reduced `preparePrompt` in inject mode, mutex-guarded write, deferred temp-file
+registration) and `WorkflowInstance.sendSteerMessage` plus
+`findIntegrationForPtySession`, with host-side liveness re-checks and
 human-readable rejection errors. Testable with no UI.
+
+**Stage 3 status — landed:** `MESSAGE_TYPES.SEND_STEER_MESSAGE` carries the
+`{ workflowId, sessionId, text }` payload from the webview to the extension.
+The router delegates it to `WorkflowStepHandlers`, which calls the host-side
+dispatch and restores the raw `text` through `EXECUTE_PROMPT_ERROR` plus a
+warning toast on rejection. `RUN_IN_NEW_WORKFLOW` now emits the same warning
+toast on failure. Stage 4 must post exactly:
+`{ type: MESSAGE_TYPES.SEND_STEER_MESSAGE, workflowId, sessionId, text }`.
 
 **Stage 3 — message and route.** `MESSAGE_TYPES.SEND_STEER_MESSAGE`, the router
 case, `WorkflowStepHandlers.handleSendSteerMessage` with the

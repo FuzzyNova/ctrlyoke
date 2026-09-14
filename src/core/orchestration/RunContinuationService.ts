@@ -446,8 +446,7 @@ export class RunContinuationService {
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
     queueLimit?: QueueLimitPolicy,
-    configuredParallelWidth =
-      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
+    configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
   ): Promise<RunParallelJoinMutationResult> {
     if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       throw new Error(
@@ -597,8 +596,7 @@ export class RunContinuationService {
           );
           const promotedGroup = nextTopology.parallelGroups.find(
             (group) =>
-              currentIndex >= group.startIndex &&
-              currentIndex <= group.endIndex
+              currentIndex >= group.startIndex && currentIndex <= group.endIndex
           );
           if (!promotedGroup) {
             throw new Error("Failed to create the ad-hoc parallel group");

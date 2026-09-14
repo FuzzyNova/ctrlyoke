@@ -410,7 +410,8 @@ const initialGlobalSettings: GlobalSettings = {
   skills: [],
   secrets: [],
   executionMode: EXECUTION_MODES.INTERACTIVE,
-  effectiveParallelGroupWidth: CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
+  effectiveParallelGroupWidth:
+    CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
   resumeSession: false,
   mcpServers: [],
   hooks: [],

@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import type { IEvent, IPty } from "node-pty";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import {
@@ -36,6 +37,10 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
+import {
+  initPtyProcessManager,
+  PtySession,
+} from "../../core/harness/PtyProcessManager";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -109,6 +114,58 @@ class MockHarnessIntegration extends HarnessIntegration {
   protected async cancelImplementation(): Promise<void> {}
 }
 
+class SteerableMockHarnessIntegration extends MockHarnessIntegration {
+  private activitySessionId?: string;
+  readonly steerMessages: string[] = [];
+
+  setActivitySessionId(sessionId: string): void {
+    this.activitySessionId = sessionId;
+  }
+
+  override getActivitySessionId(): string | undefined {
+    return this.activitySessionId;
+  }
+
+  override async sendSteerMessage(text: string): Promise<boolean> {
+    this.steerMessages.push(text);
+    return true;
+  }
+}
+
+class MockPty implements IPty {
+  readonly pid = 1;
+  readonly cols = 80;
+  readonly rows = 24;
+  readonly process = "test";
+  handleFlowControl = false;
+  readonly onData: IEvent<string> = () => ({ dispose: () => {} });
+  readonly onExit: IEvent<{ exitCode: number; signal?: number }> = () => ({
+    dispose: () => {},
+  });
+
+  resize(): void {}
+  clear(): void {}
+  write(): void {}
+  kill(): void {}
+  pause(): void {}
+  resume(): void {}
+}
+
+function createPtySession(
+  sessionId: string,
+  workflowId: string,
+  kind: "ai-cli" | "shell" = "ai-cli"
+): PtySession {
+  return new PtySession(
+    sessionId,
+    workflowId,
+    "test session",
+    0,
+    kind,
+    new MockPty()
+  );
+}
+
 class MockIntegrationFactory extends IntegrationFactory {
   constructor(platform: PlatformAdapter) {
     super(platform);
@@ -169,6 +226,103 @@ suite("WorkflowInstance target resources", () => {
       assert.strictEqual(sequentialFirst, sequentialSecond);
     } finally {
       instance.dispose();
+    }
+  });
+});
+
+suite("WorkflowInstance steer dispatch", () => {
+  function createInstance(): WorkflowInstance {
+    const platform = new MockPlatform();
+    return new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+  }
+
+  test("resolves an active target integration by PTY session", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const session = createPtySession("active-session", instance.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).activeTargetResources.set("active", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      integration,
+      ptySessionId: session.id,
+    });
+
+    try {
+      await instance.sendSteerMessage(session.id, "active steer");
+      assert.deepStrictEqual(integration.steerMessages, ["active steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("resolves a retained integration by activity PTY session", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const session = createPtySession("retained-session", instance.id);
+    integration.setActivitySessionId(session.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).liveInjectIntegrations.set(
+      HARNESS_IDS.COPILOT_CLI,
+      integration
+    );
+
+    try {
+      await instance.sendSteerMessage(session.id, "retained steer");
+      assert.deepStrictEqual(integration.steerMessages, ["retained steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("rejects foreign, shell, and dead PTY sessions without writing", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    const foreignSession = createPtySession(
+      "foreign-session",
+      "other-workflow"
+    );
+    const shellSession = createPtySession(
+      "shell-session",
+      instance.id,
+      "shell"
+    );
+    let currentSession: PtySession | undefined = foreignSession;
+    ptyManager.getSession = () => currentSession;
+    (instance as any).activeTargetResources.set("active", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      integration,
+      ptySessionId: foreignSession.id,
+    });
+
+    try {
+      await assert.rejects(
+        instance.sendSteerMessage(foreignSession.id, "foreign steer")
+      );
+      currentSession = shellSession;
+      await assert.rejects(
+        instance.sendSteerMessage(shellSession.id, "shell steer")
+      );
+      currentSession = undefined;
+      await assert.rejects(
+        instance.sendSteerMessage("dead-session", "dead steer")
+      );
+      assert.deepStrictEqual(integration.steerMessages, []);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
     }
   });
 });
@@ -1656,9 +1810,7 @@ suite("WorkflowInstance append-and-continue", () => {
         ACTION_TYPES.QUEUE
       );
 
-      const ephemeralEcho = updateCalls.find(
-        (args) => args[4] === instance.id
-      );
+      const ephemeralEcho = updateCalls.find((args) => args[4] === instance.id);
       assert.ok(ephemeralEcho);
       assert.deepStrictEqual(
         ephemeralEcho[5],
@@ -1681,7 +1833,10 @@ suite("WorkflowInstance append-and-continue", () => {
           updateProgress: () => {},
           updateWorkflowName: () => {},
         },
-        { get: (target, property: string | symbol) => target[property as keyof typeof target] ?? (() => {}) }
+        {
+          get: (target, property: string | symbol) =>
+            target[property as keyof typeof target] ?? (() => {}),
+        }
       );
       const instance = new WorkflowInstance(
         new MockPlatform(),
@@ -1748,10 +1903,13 @@ suite("WorkflowInstance append-and-continue", () => {
       );
       assert.strictEqual(state.steps.length, 2);
       assert.strictEqual(state.parallelGroups[0]?.endIndex, 1);
-      assert.deepStrictEqual(instance.promptQueue.getActiveParallelGroupRuntime(), {
-        groupId: state.parallelGroups[0]?.id,
-        admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
-      });
+      assert.deepStrictEqual(
+        instance.promptQueue.getActiveParallelGroupRuntime(),
+        {
+          groupId: state.parallelGroups[0]?.id,
+          admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
+        }
+      );
     } finally {
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
@@ -1786,7 +1944,10 @@ suite("WorkflowInstance append-and-continue", () => {
         undefined,
         parallelGroups
       );
-      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
       await startQueueExecution(instance);
       await instance.promptQueue.setActiveParallelGroupAdmission(
         "group-1",
@@ -1842,7 +2003,10 @@ suite("WorkflowInstance append-and-continue", () => {
         /No step is running/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 1);
-      assert.deepStrictEqual(instance.promptQueue.getState().parallelGroups, []);
+      assert.deepStrictEqual(
+        instance.promptQueue.getState().parallelGroups,
+        []
+      );
     } finally {
       instance.dispose();
     }
@@ -1862,10 +2026,7 @@ suite("WorkflowInstance append-and-continue", () => {
         () => {},
         tempWorkspace
       );
-      const steps: PromptStep[] = [
-        { prompt: "anchor" },
-        { prompt: "member" },
-      ];
+      const steps: PromptStep[] = [{ prompt: "anchor" }, { prompt: "member" }];
       const parallelGroups = [
         { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
       ];
@@ -1877,7 +2038,10 @@ suite("WorkflowInstance append-and-continue", () => {
         undefined,
         parallelGroups
       );
-      instance.promptQueue.loadPrompts({ steps, parallelGroups }, workingFilePath);
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
       await startQueueExecution(instance);
 
       await instance.promptQueue.setFinalStepRuntime({
@@ -1886,7 +2050,11 @@ suite("WorkflowInstance append-and-continue", () => {
         startedAt: Date.now(),
       });
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject final", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject final",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /final step cannot run in parallel/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 2);
@@ -1895,19 +2063,31 @@ suite("WorkflowInstance append-and-continue", () => {
       const stateMachine = instance.promptQueue.getRuntimeStateMachine();
       assert.strictEqual(stateMachine.pause(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject pause", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject pause",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /pausing/
       );
       assert.strictEqual(stateMachine.cancelPause(), true);
 
       assert.strictEqual(stateMachine.requestStop(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject stopping", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject stopping",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /No step is running/
       );
       assert.strictEqual(stateMachine.confirmStopped(), true);
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject stopped", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject stopped",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /No step is running/
       );
 
@@ -1921,7 +2101,11 @@ suite("WorkflowInstance append-and-continue", () => {
         startedAt: Date.now(),
       };
       await assert.rejects(
-        instance.executeEphemeralPrompt("reject closed", {}, ACTION_TYPES.RUN_PARALLEL),
+        instance.executeEphemeralPrompt(
+          "reject closed",
+          {},
+          ACTION_TYPES.RUN_PARALLEL
+        ),
         /no longer accepting members/
       );
       assert.strictEqual(instance.promptQueue.getState().steps.length, 2);

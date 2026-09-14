@@ -49,6 +49,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useTerminalStore } from "@store/terminalStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
   MESSAGE_TYPES,
@@ -62,6 +63,8 @@ import {
   SECRET_REGISTRY_STATES,
   STEP_COLOR_MODES,
   STEP_TYPES,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
@@ -83,6 +86,7 @@ beforeEach(() => {
     activeWorkflowId: null,
     toastQueue: [],
   });
+  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
@@ -495,6 +499,83 @@ describe("PromptEditor — Run in Parallel", () => {
       expect(useEditorStore.getState().promptText).toBe(
         "keep this if admission fails"
       );
+    });
+  });
+});
+
+describe("PromptEditor — Send Steer Message", () => {
+  function enableSteerDispatch() {
+    useUiStore.setState({ activeWorkflowId: "workflow-1" });
+    useTerminalStore.setState({
+      sessions: {
+        "workflow-1": [
+          {
+            id: "session-1",
+            workflowId: "workflow-1",
+            stepName: "Step 1",
+            stepIndex: 0,
+            kind: SESSION_KINDS.AI_CLI,
+            harnessId: "codex-cli",
+            status: TERMINAL_SESSION_STATUS.RUNNING,
+            isController: true,
+          },
+        ],
+      },
+      activeSessionIds: { "workflow-1": "session-1" },
+    });
+  }
+
+  async function clickSteer() {
+    const user = userEvent.setup();
+    render(<PromptEditor />);
+    const runButton = screen.getByRole("button", { name: "Run" });
+    runButton.focus();
+    await user.keyboard("{ArrowDown}");
+    await user.click(
+      screen.getByRole("option", { name: "Send Steer Message" })
+    );
+  }
+
+  it("posts the plain steer message and clears the draft", async () => {
+    enableSteerDispatch();
+    useEditorStore.getState().setPromptText("follow up immediately");
+
+    await clickSteer();
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SEND_STEER_MESSAGE,
+      workflowId: "workflow-1",
+      sessionId: "session-1",
+      text: "follow up immediately",
+    });
+    expect(
+      postMessageSpy.mock.calls.find(
+        ([message]) =>
+          (message as { type?: string }).type ===
+          MESSAGE_TYPES.SEND_STEER_MESSAGE
+      )?.[0]
+    ).not.toHaveProperty("mutation");
+    expect(useEditorStore.getState().promptText).toBe("");
+  });
+
+  it("restores the draft when the steer dispatch is rejected", async () => {
+    enableSteerDispatch();
+    useEditorStore.getState().setPromptText("restore this steer");
+
+    await clickSteer();
+    expect(useEditorStore.getState().promptText).toBe("");
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+          text: "restore this steer",
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().promptText).toBe("restore this steer");
     });
   });
 });

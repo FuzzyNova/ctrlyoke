@@ -266,6 +266,72 @@ suite("CliExecutionRunner", () => {
     assert.deepStrictEqual(result, { injected: false });
   });
 
+  test("should return false when a live PTY write fails", async function () {
+    const writes: string[] = [];
+    const { runner } = createRunner({
+      writeToCurrentPtySession: (text) => {
+        writes.push(text);
+        return false;
+      },
+    });
+
+    const success = await runner.writeTurnToLivePty("prompt");
+
+    assert.strictEqual(success, false);
+    assert.deepStrictEqual(writes, ["\x1b[I"]);
+  });
+
+  test("should return false when the PTY terminates after writing", async function () {
+    const writes: string[] = [];
+    const { runner, failureTracker } = createRunner({
+      writeToCurrentPtySession: (text) => {
+        writes.push(text);
+        if (text === "\r") {
+          failureTracker.capturePtyExit(0, []);
+        }
+        return true;
+      },
+    });
+
+    const success = await runner.writeTurnToLivePty("prompt");
+
+    assert.strictEqual(success, false);
+    assert.deepStrictEqual(writes, ["\x1b[I", "\x1b[I", "prompt", "\r", "\r"]);
+  });
+
+  test("should serialize concurrent turn writers without interleaving chunks", async function () {
+    const writes: string[] = [];
+    const { runner } = createRunner({
+      writeToCurrentPtySession: (text) => {
+        writes.push(text);
+        return true;
+      },
+    });
+    const firstPrompt = "a".repeat(257);
+    const secondPrompt = "b".repeat(257);
+
+    const results = await Promise.all([
+      runner.writeTurnToLivePty(firstPrompt),
+      runner.writeTurnToLivePty(secondPrompt),
+    ]);
+
+    assert.deepStrictEqual(results, [true, true]);
+    assert.deepStrictEqual(writes, [
+      "\x1b[I",
+      "\x1b[I",
+      "a".repeat(256),
+      "a",
+      "\r",
+      "\r",
+      "\x1b[I",
+      "\x1b[I",
+      "b".repeat(256),
+      "b",
+      "\r",
+      "\r",
+    ]);
+  });
+
   test("should expose collector failure reason for headless execution failures", async () => {
     const { runner, failureTracker, getFailureReason } = createRunner({
       collectedHeadlessResponse: {
@@ -354,10 +420,7 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(await runner.executeHeadless(session, []), true);
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PROMPT_INDEX, "1");
-    assert.strictEqual(
-      getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID,
-      "group-1"
-    );
+    assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID, "group-1");
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

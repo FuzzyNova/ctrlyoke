@@ -118,6 +118,35 @@ function createLineageBindingHarness() {
   };
 }
 
+suite("WorkflowOrchestrator steer dispatch", () => {
+  test("resolves the workflow instance and delegates the session and text", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const calls: unknown[] = [];
+    internal.instances = new Map([
+      [
+        "workflow-1",
+        {
+          sendSteerMessage: async (...args: unknown[]) => {
+            calls.push(args);
+          },
+        },
+      ],
+    ]);
+    internal.retiredInstances = new Map();
+
+    await orchestrator.sendSteerMessage(
+      "workflow-1",
+      "session-1",
+      "steer text"
+    );
+
+    assert.deepStrictEqual(calls, [["session-1", "steer text"]]);
+  });
+});
+
 suite("WorkflowOrchestrator startup auto-load gating", () => {
   test("triggers startup auto-load immediately when dashboard becomes ready after init", async () => {
     const { orchestrator, internal, getAutoLoadCalls } =

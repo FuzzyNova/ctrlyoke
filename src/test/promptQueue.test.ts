@@ -422,7 +422,10 @@ suite("PromptQueue State Machine Tests", () => {
             admission: PARALLEL_GROUP_ADMISSION.CLOSING,
           },
         };
-        await fs.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2));
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2)
+        );
 
         const resumed = new PromptQueue();
         await resumed.restoreFromWorkingFile(workingFilePath);
@@ -437,7 +440,10 @@ suite("PromptQueue State Machine Tests", () => {
           totalPausedDuration: 0,
         });
         workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-        await fs.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2));
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2)
+        );
         const stopped = new PromptQueue();
         await stopped.restoreFromWorkingFile(workingFilePath);
         assert.strictEqual(stopped.getActiveParallelGroupRuntime(), undefined);

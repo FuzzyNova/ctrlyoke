@@ -202,6 +202,39 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
   });
 });
 
+suite("WebviewMessageRouter — new workflow failure feedback", () => {
+  test("restores the draft and emits a warning when starting a new workflow fails", async () => {
+    const messages: unknown[] = [];
+    const router = buildRouter(
+      {
+        runInNewWorkflowForClient: async () => {
+          throw new Error("harness unavailable");
+        },
+      },
+      (message) => messages.push(message)
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.RUN_IN_NEW_WORKFLOW,
+      text: "new workflow draft",
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.deepStrictEqual(messages, [
+      {
+        type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+        text: "new workflow draft",
+      },
+      {
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: messages[1] && (messages[1] as { id: string }).id,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: "harness unavailable",
+      },
+    ]);
+  });
+});
+
 suite("WebviewMessageRouter — native feedback", () => {
   test("delegates each severity to the existing VS Code feedback sink", async () => {
     const calls: string[] = [];

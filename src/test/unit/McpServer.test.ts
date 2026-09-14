@@ -1867,20 +1867,32 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       });
       assert.deepStrictEqual(
         result.parallelGroupsAdded.map(
-          ({ id, startIndex, endIndex, failFast }: NonNullable<WorkingFile["parallelGroups"]>[number]) => ({
+          ({
+            id,
+            startIndex,
+            endIndex,
+            failFast,
+          }: NonNullable<WorkingFile["parallelGroups"]>[number]) => ({
             id,
             startIndex,
             endIndex,
             failFast,
           })
         ),
-        [{ id: result.joinedParallelGroup.id, startIndex: 1, endIndex: 3, failFast: false }]
+        [
+          {
+            id: result.joinedParallelGroup.id,
+            startIndex: 1,
+            endIndex: 3,
+            failFast: false,
+          },
+        ]
       );
       assert.deepStrictEqual(
         persisted.steps?.map((step) => (step as { prompt: string }).prompt),
         ["completed", "in flight", "join-a", "join-b", "pending-a", "pending-b"]
       );
-    assert.deepStrictEqual(persisted._runtime?.activeParallelGroup, {
+      assert.deepStrictEqual(persisted._runtime?.activeParallelGroup, {
         groupId: result.joinedParallelGroup.id,
         admission: "accepting",
       });
@@ -2041,9 +2053,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     await assert.rejects(
       invokeAppendHandler(server, {
         position: "parallelWithCurrent",
-        steps: [
-          { parallel: [{ prompt: "nested-a" }, { prompt: "nested-b" }] },
-        ],
+        steps: [{ parallel: [{ prompt: "nested-a" }, { prompt: "nested-b" }] }],
       }),
       /flat steps only/i
     );
@@ -2074,7 +2084,13 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     await assert.rejects(
       server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
         position: "parallelWithCurrent",
-        steps: [{ prompt: "invalid model", harness: "claude-cli", model: "bad-model" }],
+        steps: [
+          {
+            prompt: "invalid model",
+            harness: "claude-cli",
+            model: "bad-model",
+          },
+        ],
       }),
       /Invalid model/i
     );
