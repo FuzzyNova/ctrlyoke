@@ -26,16 +26,32 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(reference.includes("### append_step"));
     assert.ok(
       reference.includes(
-        "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow"
+        "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow"
       )
     );
-    assert.ok(reference.includes("- `steps` (required, array of object)"));
+    assert.ok(
+      reference.includes(
+        "Position 'next' queues after an active parallel group; joining that group is not available through this position enum."
+      )
+    );
+    assert.ok(
+      reference.includes("- `steps` (required, array of object or object)")
+    );
     assert.ok(reference.includes("- `source` (optional, string)"));
     assert.ok(
       reference.includes(
         `node \"<mcp-server.js path>\" --tool append_step --args '{"steps":[{"prompt":"example"}],"position":"next"}' --workspace \"<path>\" --working-file \"<path>\"`
       )
     );
+    assert.ok(reference.includes("Example (flat step):"));
+    assert.ok(reference.includes("Example (future parallel group):"));
+    assert.ok(
+      reference.includes(
+        `--args '{\"steps\":[{\"parallel\":[{\"prompt\":\"implement the API\"},{\"prompt\":\"write the API tests\"}],\"failFast\":true}],\"position\":\"end\"}'`
+      )
+    );
+    assert.strictEqual((reference.match(/Example \(/g) ?? []).length, 2);
+    assert.ok(!reference.includes("parallelWithCurrent"));
     assert.ok(
       reference.includes(
         `node \"<mcp-server.js path>\" --tool workflow_status --args '{}' --workspace \"<path>\" --working-file \"<path>\"`
@@ -149,6 +165,22 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(content.includes("### append_step"));
     assert.ok(!content.includes("### remove_step"));
     assert.ok(!content.includes("### reorder_steps"));
+  });
+
+  test("denying append_step removes its complete generated surface", () => {
+    const content = McpToolSkillGenerator.generateBuiltInSkillContent(
+      MCP_SKILL_NAMES.TOOLS,
+      "# Workflow tools",
+      {
+        mcpServerPath: "C:/extension/out/mcp-server.js",
+        workspaceRoot: "C:/state",
+        deniedTools: ["append_step"],
+      }
+    );
+
+    assert.ok(content !== undefined);
+    assert.ok(!content.includes("### append_step"));
+    assert.ok(!content.includes("future parallel group"));
   });
 
   test("keeps the full listing when no denials are supplied", () => {

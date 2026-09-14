@@ -6,11 +6,11 @@ import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
 import {
   CtrlYokeMCPServer,
-  getMaxQueueSize,
   MAX_GLOBAL_STATUS_RESULTS,
   parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
+import { getMaxQueueSize } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
@@ -1377,6 +1377,184 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("validates capabilities for members inside a parallel container", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "nested-capability",
+      "2026-01-01T00-00-00-000Z"
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const capabilitiesDirectory = path.join(workspaceRoot, ".ctrlyoke");
+    await fs.mkdir(capabilitiesDirectory, { recursive: true });
+    await fs.writeFile(
+      path.join(capabilitiesDirectory, "capabilities.json"),
+      JSON.stringify({
+        generatedAt: 1,
+        harnesses: [
+          {
+            id: "copilot-cli",
+            displayName: "Copilot CLI",
+            available: true,
+            models: [],
+          },
+        ],
+      }),
+      "utf8"
+    );
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              parallel: [
+                { prompt: "valid member", harness: "copilot-cli" },
+                { prompt: "invalid member", harness: "not-installed" },
+              ],
+            },
+          ],
+        }),
+      /Invalid harness 'not-installed'/
+    );
+    assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+  });
+
+  test("reports flattened mixed topology and relocation in the append response", async () => {
+    const server = await setup();
+    const run = await createRun("mixed-append", "2026-01-01T00-00-00-000Z", {
+      stepCount: 4,
+      currentIndex: -1,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.parallelGroups = [
+      { id: "existing-a", startIndex: 0, endIndex: 1, failFast: true },
+      { id: "existing-b", startIndex: 2, endIndex: 3, failFast: true },
+    ];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+        position: 1,
+        steps: [
+          { prompt: "flat-before" },
+          {
+            parallel: [{ prompt: "group-first" }, { prompt: "group-second" }],
+            failFast: false,
+          },
+          { prompt: "flat-after" },
+        ],
+      })
+    );
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.destination, "queue");
+    assert.strictEqual(result.queueItemsAdded, 3);
+    assert.strictEqual(result.stepsAdded, 4);
+    assert.strictEqual(result.newQueueSize, 8);
+    assert.strictEqual(result.insertIndex, 2);
+    assert.strictEqual(result.insertedEndIndex, 5);
+    assert.deepStrictEqual(result.placement, {
+      requestedIndex: 1,
+      insertedIndex: 2,
+      relocation: {
+        kind: "afterParallelGroup",
+        groupId: "existing-a",
+      },
+    });
+    assert.deepStrictEqual(
+      result.parallelGroupsAdded.map(
+        (group: {
+          startIndex: number;
+          endIndex: number;
+          failFast: boolean;
+        }) => ({
+          startIndex: group.startIndex,
+          endIndex: group.endIndex,
+          failFast: group.failFast,
+        })
+      ),
+      [{ startIndex: 3, endIndex: 4, failFast: false }]
+    );
+    assert.deepStrictEqual(
+      persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+      [
+        "prompt-mixed-append",
+        "prompt-mixed-append-1",
+        "flat-before",
+        "group-first",
+        "group-second",
+        "flat-after",
+        "prompt-mixed-append-2",
+        "prompt-mixed-append-3",
+      ]
+    );
+    assert.deepStrictEqual(
+      persisted.parallelGroups?.map(
+        ({ id, startIndex, endIndex, failFast }) => ({
+          id,
+          startIndex,
+          endIndex,
+          failFast,
+        })
+      ),
+      [
+        { id: "existing-a", startIndex: 0, endIndex: 1, failFast: true },
+        {
+          id: result.parallelGroupsAdded[0].id,
+          startIndex: 3,
+          endIndex: 4,
+          failFast: false,
+        },
+        { id: "existing-b", startIndex: 6, endIndex: 7, failFast: true },
+      ]
+    );
+  });
+
+  test("rejects invalid parallel container shapes without changing the definition", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "invalid-container",
+      "2026-01-01T00-00-00-000Z"
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ parallel: [{ prompt: "only member" }] }],
+        }),
+      /append_step\.steps\[0\] must be object or object/
+    );
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [
+            {
+              parallel: [
+                {
+                  parallel: [{ prompt: "nested-a" }, { prompt: "nested-b" }],
+                },
+                { prompt: "flat" },
+              ],
+            },
+          ],
+        }),
+      /append_step\.steps\[0\] must be object or object/
+    );
+    assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+  });
+
   test("appends to its own run through the continuation transaction", async () => {
     const server = await setup();
     const run = await createRun("append", "2026-01-01T00-00-00-000Z");
@@ -1385,7 +1563,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const result = responseJson(
       await server.invokeTool("append_step", {
         position: "end",
-        steps: [{ prompt: "new tail", _runtime: { responseText: "omit" } }],
+        steps: [{ prompt: "new tail" }],
       })
     );
     const persisted = JSON.parse(
@@ -1434,7 +1612,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     ) as WorkingFile;
 
     assert.strictEqual(result.stepsAdded, 1);
-    assert.strictEqual(result.stepsRejected, 0);
+    assert.strictEqual("stepsRejected" in result, false);
     assert.strictEqual(persisted.steps?.length, 2);
     assert.strictEqual(
       (persisted.steps?.[1] as { prompt: string }).prompt,
@@ -1690,6 +1868,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     // Serialized through the server's operation queue, so an agent that adds
     // work twice gets both appends rather than a spurious revision conflict.
+    // Which of the two reaches the queue first is deliberately not asserted:
+    // `invokeTool` awaits `resolveCallingContext` before it enqueues, so two
+    // concurrently issued calls race to that boundary — and MCP gives an
+    // in-flight request no ordering guarantee either. Both landing is the
+    // contract; the order they land in is not.
     const results = await Promise.all(
       ["first", "second"].map((prompt) =>
         server.invokeTool("append_step", {
@@ -1699,7 +1882,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       )
     );
     assert.deepStrictEqual(
-      results.map((result) => responseJson(result).newQueueSize),
+      results.map((result) => responseJson(result).newQueueSize).sort(),
       [2, 3]
     );
   });

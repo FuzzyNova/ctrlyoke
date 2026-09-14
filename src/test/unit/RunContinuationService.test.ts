@@ -10,6 +10,7 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
+import type { ParallelGroupTopology } from "../../core/ParallelGroupTopology";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -215,6 +216,248 @@ suite(
     });
   }
 );
+
+suite("RunContinuationService topology append transaction", () => {
+  const workflowKey = "topology-append-2026-01-01T00-00-00" as WorkflowKey;
+  const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+  let workspace: string;
+
+  async function seedRun(
+    steps: Array<Record<string, unknown>>,
+    parallelGroups: ParallelGroupTopology["parallelGroups"] = []
+  ): Promise<void> {
+    const descriptorPath = WorkflowPaths.descriptorPath(workspace, workflowKey);
+    await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
+    await fs.writeFile(
+      descriptorPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        workflowKey,
+        workflowName: "Topology append",
+        isFavorite: false,
+        createdAt: 0,
+        lastModifiedAt: 0,
+        latestRunRef: runRef,
+        nextRunId: 2,
+        revision: 1,
+      }),
+      "utf8"
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        workflowName: "Topology append",
+        startedAt: 0,
+        definitionRevision: 1,
+        steps,
+        parallelGroups,
+        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.IDLE },
+      }),
+      "utf8"
+    );
+  }
+
+  afterEach(async () => {
+    if (workspace) {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("persists a container batch in one revision with absolute ranges", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-append-")
+    );
+    await seedRun(
+      [
+        { prompt: "existing-0" },
+        { prompt: "existing-1" },
+        { prompt: "existing-2" },
+        { prompt: "existing-group-0" },
+        { prompt: "existing-group-1" },
+      ],
+      [{ id: "existing-group", startIndex: 3, endIndex: 4, failFast: true }]
+    );
+
+    const incoming: ParallelGroupTopology = JSON.parse(
+      JSON.stringify({
+        steps: [
+          { prompt: "flat" },
+          {
+            prompt: "parallel-a",
+            _runtime: { stepId: "caller-id", responseText: "remove me" },
+            status: "running",
+            details: "remove me",
+          },
+          { prompt: "parallel-b" },
+        ],
+        parallelGroups: [
+          {
+            id: "incoming-group",
+            startIndex: 1,
+            endIndex: 2,
+            failFast: false,
+          },
+        ],
+      })
+    );
+
+    const appended = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      incoming,
+      1,
+      new WorkflowLineageRepository(),
+      false,
+      2
+    );
+
+    assert.strictEqual(appended.definitionRevision, 2);
+    assert.strictEqual(appended.stepsAdded, 3);
+    assert.deepStrictEqual(appended.parallelGroupsAdded, [
+      { id: "incoming-group", startIndex: 3, endIndex: 4, failFast: false },
+    ]);
+    assert.deepStrictEqual(appended.workingFile.parallelGroups, [
+      { id: "incoming-group", startIndex: 3, endIndex: 4, failFast: false },
+      { id: "existing-group", startIndex: 6, endIndex: 7, failFast: true },
+    ]);
+    assert.strictEqual(appended.workingFile.steps?.length, 8);
+    const insertedStep = appended.workingFile.steps?.[4];
+    assert.ok(insertedStep);
+    assert.strictEqual("status" in insertedStep, false);
+    assert.strictEqual("details" in insertedStep, false);
+    assert.deepStrictEqual(insertedStep._runtime, {
+      stepId: insertedStep._runtime?.stepId,
+    });
+    assert.ok(appended.workingFile.steps?.[4]._runtime?.stepId);
+  });
+
+  test("enforces capacity using flattened members inside the transaction", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-capacity-")
+    );
+    await seedRun([{ prompt: "existing-0" }, { prompt: "existing-1" }]);
+
+    await assert.rejects(
+      RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey,
+        runRef,
+        {
+          steps: [{ prompt: "member-a" }, { prompt: "member-b" }],
+          parallelGroups: [
+            { id: "too-large", startIndex: 0, endIndex: 1, failFast: true },
+          ],
+        },
+        1,
+        new WorkflowLineageRepository(),
+        false,
+        QUEUE_POSITION.END,
+        { maxQueueSize: 3, unlimited: false }
+      ),
+      /Current: 2, Adding: 2, Max: 3/
+    );
+
+    const run = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, workflowKey, runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.strictEqual(run.definitionRevision, 1);
+    assert.strictEqual(run.steps?.length, 2);
+  });
+
+  // The dashboard and CLI append paths own no capacity policy, and the
+  // environment the MCP server reads its limit from is unset in their
+  // processes. Enforcing unconditionally here would cap them at the default
+  // while ignoring the user's configured `queue.maxSize`.
+  test("leaves capacity unenforced for a caller that supplies no policy", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-nopolicy-")
+    );
+    await seedRun([{ prompt: "existing-0" }, { prompt: "existing-1" }]);
+
+    const appended = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "tail-a" }, { prompt: "tail-b" }],
+      1,
+      new WorkflowLineageRepository()
+    );
+
+    assert.strictEqual(appended.workingFile.steps?.length, 4);
+    assert.strictEqual(appended.stepsAdded, 2);
+  });
+
+  test("serializes concurrent appends as whole batches", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-concurrent-")
+    );
+    process.env.CTRLYOKE_UNLIMITED_MODE = "true";
+    await seedRun([]);
+
+    async function appendWithRetry(
+      steps: Array<{ prompt: string }>
+    ): Promise<void> {
+      for (;;) {
+        const run = JSON.parse(
+          await fs.readFile(
+            WorkflowPaths.runFilePath(workspace, workflowKey, runRef),
+            "utf8"
+          )
+        ) as WorkingFile;
+        try {
+          await RunContinuationService.appendStepsToRun(
+            workspace,
+            workflowKey,
+            runRef,
+            steps,
+            run.definitionRevision ?? 1,
+            new WorkflowLineageRepository()
+          );
+          return;
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !/revision conflict/i.test(error.message)
+          ) {
+            throw error;
+          }
+        }
+      }
+    }
+
+    await Promise.all([
+      appendWithRetry([{ prompt: "batch-a-0" }, { prompt: "batch-a-1" }]),
+      appendWithRetry([{ prompt: "batch-b-0" }, { prompt: "batch-b-1" }]),
+    ]);
+
+    const run = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspace, workflowKey, runRef),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assert.strictEqual(run.definitionRevision, 3);
+    const prompts = run.steps?.map((step) =>
+      "prompt" in step ? step.prompt : "script"
+    );
+    assert.ok(
+      JSON.stringify(prompts) ===
+        JSON.stringify(["batch-a-0", "batch-a-1", "batch-b-0", "batch-b-1"]) ||
+        JSON.stringify(prompts) ===
+          JSON.stringify(["batch-b-0", "batch-b-1", "batch-a-0", "batch-a-1"])
+    );
+  });
+});
 
 suite("RunContinuationService addressed step mutations", () => {
   const workflowKey =

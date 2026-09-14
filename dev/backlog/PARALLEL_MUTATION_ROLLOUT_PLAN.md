@@ -1,7 +1,10 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Track C / Phase 3A complete. The queue-item union remains
-> unpublished until Phase 3B; later rollout work remains backlog.
+> **Status:** Track E / Phase 3B complete. The queue-item union, atomic future
+> parallel-group enqueue, structured response, and generated MCP documentation
+> are shipped. Barrier 2 inherits this complete future-enqueue path; Phase 7
+> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
+> live join, and durable admission remain unbuilt.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -361,17 +364,26 @@ admission state (Phase 7), or remove any mutation ban (Phase 8).
 ### Track E — Future parallel-group enqueue (Phase 3B)
 
 **Owns:** `src/core/orchestration/RunContinuationService.ts`,
-`src/mcp-server.ts`.
+`src/mcp-server.ts`, `src/utils/McpToolDefinitions.ts`,
+`src/utils/McpToolSkillGenerator.ts`, and the shared queue-limit helper module
+extracted from `mcp-server.ts`.
 
-**Phase 3B.** MCP Stage 2: publish the Phase 3A queue-item union as
-`append_step`'s `items` schema and delete the flat-only `"parallel" in step`
-rejection in `handleAppendStep`; accept an incoming `ParallelGroupTopology` rather
-than only `WorkflowStep[]`; insert the whole batch atomically in one definition
-revision; move the queue-size check from the pre-lock read in `mcp-server.ts`
-**inside** the locked transaction and count flattened executable members;
-validate harness/model capability for every flattened member; return the
-structured response with `parallelGroupsAdded`, `queueItemsAdded`, `stepsAdded`,
-and the Phase 2 `relocation`. Drop `stepsRejected`.
+The last two were Track C's in wave 1 and transfer here now that Track C has
+landed. Publishing the queue-item union _is_ an edit to `append_step`'s
+`inputSchema` in `McpToolDefinitions.ts`, and this track's own exit criteria
+name `McpToolSkillGenerator.test.ts`; the original two-file "Owns" list could
+not satisfy either. Track D enters neither file, so there is no wave-2 conflict.
+
+**Phase 3B — complete.** MCP Stage 2 publishes the Phase 3A queue-item union as
+`append_step`'s `items` schema and deletes the flat-only `"parallel" in step`
+rejection in `handleAppendStep`; accepts an incoming `ParallelGroupTopology`
+rather than only `WorkflowStep[]`; inserts the whole batch atomically in one
+definition revision; moves the queue-size check from the pre-lock read in
+`mcp-server.ts` **inside** the locked transaction and counts flattened
+executable members; validates harness/model capability for every flattened
+member; and returns the structured response with `parallelGroupsAdded`,
+`queueItemsAdded`, `stepsAdded`, and the Phase 2 `relocation`. `stepsRejected`
+is removed.
 
 `next` and numeric positions keep their current meaning: a requested index
 inside a running group relocates to `endIndex + 1` and enqueues a **future**
@@ -384,15 +396,50 @@ validation inside containers and the structured response shape;
 `McpToolSkillGenerator.test.ts` proves the generated docs cover the future
 container form.
 
-**Do not:** expose `parallelWithCurrent` (Phase 7) or touch
-`WorkflowExecutor.ts`.
+**Do not:** expose `parallelWithCurrent` (Phase 7), touch
+`WorkflowExecutor.ts`, or break `appendStepsToRun`'s existing `WorkflowStep[]`
+call signature. It must _widen_ to accept `WorkflowStep[] | ParallelGroupTopology`
+so that `src/cli.ts`, `src/core/WorkflowOrchestrator.ts`, and
+`src/core/WorkingFileManager.ts` — all callers, none owned by this track — keep
+compiling untouched.
+
+**The capacity helpers move; they are not imported.** `getMaxQueueSize` and
+`isUnlimitedMode` live in `src/mcp-server.ts` today. Enforcing the limit inside
+the locked transaction means `RunContinuationService` needs them, and core must
+never import the MCP server entrypoint — `mcp-server.ts` already imports the
+service, so that would be an import cycle. Extract both into a shared util and
+have `mcp-server.ts` import them back for its `workflow_status` reporting.
+
+#### Track E session split
+
+| #   | Deliverable                                                                  |
+| --- | ---------------------------------------------------------------------------- |
+| 1   | Shared queue-limit helpers; topology-accepting, in-lock capacity transaction |
+| 2   | Publish the queue-item union; flatten, validate, and answer structurally     |
+| 3   | Generated MCP docs covering both append forms                                |
+
+Each session closes exactly one of the three exit-criteria test files above.
+
+Session 1 landed the shared queue-limit helpers and the topology-accepting,
+locked continuation transaction, including flattened capacity enforcement and
+atomic append metadata. The review pass then made that enforcement opt-in via a
+`QueueLimitPolicy` the MCP handler supplies: enforcing it unconditionally in the
+shared transaction had silently capped the dashboard and CLI append paths at
+`DEFAULT_MAX_QUEUE_SIZE`, because the environment variables the limit is read
+from exist only in a harness's MCP server subprocess. Session 2 landed publication of the queue-item union,
+flattened MCP validation, and the structured append response. Session 3 landed
+generated MCP documentation for the flat and future-container forms, including
+the explicit `next`-queues-after-the-active-group wording. Barrier 2 inherits
+the complete Phase 3B future-enqueue contract; Phase 7 inherits the unbuilt
+`parallelWithCurrent` live-join path and durable admission state.
 
 ### Wave 2 conflict surface
 
-| File                        | Tracks | Rule                                                                  |
-| --------------------------- | ------ | --------------------------------------------------------------------- |
-| `ParallelGroupTopology.ts`  | D, E   | D writes it; E only calls the Phase 3A flattener and D's new helpers. |
-| `RunContinuationService.ts` | E      | Track D must not enter this file in wave 2.                           |
+| File                                                | Tracks | Rule                                                                  |
+| --------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| `ParallelGroupTopology.ts`                          | D, E   | D writes it; E only calls the Phase 3A flattener and D's new helpers. |
+| `RunContinuationService.ts`                         | E      | Track D must not enter this file in wave 2.                           |
+| `McpToolDefinitions.ts`, `McpToolSkillGenerator.ts` | E      | Transferred from the finished Track C. D never enters them.           |
 
 If both tracks need a new helper in the same file mid-wave, the owning track
 adds it and the other waits for barrier 2 rather than duplicating it.

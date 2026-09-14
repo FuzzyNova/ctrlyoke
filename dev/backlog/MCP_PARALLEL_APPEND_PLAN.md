@@ -1,7 +1,10 @@
 # MCP Parallel Append Plan
 
-> **Status:** Phase 3A / Stage 1 complete. The queue-item union remains
-> unpublished until Phase 3B; later stages remain backlog.
+> **Status:** Phase 3B / Stage 2 complete. The queue-item union, atomic future
+> parallel-group enqueue, structured response, and generated MCP documentation
+> are shipped. Barrier 2 inherits the complete future-enqueue contract; Phase 7
+> inherits the still-unbuilt live-join admission work. `parallelWithCurrent`,
+> live join, and durable admission remain unbuilt.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -370,7 +373,7 @@ interface McpAppendStepResult {
     endIndex: number;
     promoted: boolean;
   };
-  relocation?: QueueInsertRelocation;
+  placement: ParallelGroupInsertPlacement;
   workingFile: string;
   runDirectory: string;
   workflowKey: WorkflowKey;
@@ -380,16 +383,23 @@ interface McpAppendStepResult {
 }
 ```
 
+`placement` is the `ParallelGroupInsertPlacement`
+(`{ requestedIndex, insertedIndex, relocation? }`) that Stage 1's Phase 2 work
+already landed and that `append_step` already returns; the relocation this plan
+originally described as a separate `QueueInsertRelocation` field lives inside it.
+Do not add a second, flattened copy — `insertIndex` stays only because it is an
+already-published alias for `placement.insertedIndex`.
+
 For a future mixed batch, `parallelGroupsAdded` contains only groups from the
 incoming batch after absolute-index translation. For a live join,
 `joinedParallelGroup` contains the active group's new full range and
 `parallelGroupsAdded` contains the promoted group only when promotion created
 one.
 
-The generated MCP skill/reference must include one flat example, one future
-container example, and one `parallelWithCurrent` example. Tool descriptions
-must say explicitly that `next` queues after the active group while
-`parallelWithCurrent` joins it.
+The generated MCP skill/reference must include one flat example and one future
+container example. Tool descriptions must say explicitly that `next` queues
+after the active group; joining it is not available through this position enum
+until the later live-join stage.
 
 ---
 
@@ -454,21 +464,24 @@ parallel-specific quota is added.
 ## Implementation stages
 
 **Stage 1 — MCP item union and shared normalization — complete.** The schema
-facets, types, examples, unpublished union, validator tests, and the exported
+facets, types, examples, published union, validator tests, and the exported
 `flattenParallelItems(items: readonly ResolvedParallelItem[]): FlattenedParallelItems`
 (where `ResolvedParallelItem` is `WorkflowStep | ResolvedParallelContainer`, both
 exported beside it)
 flattener are landed. `PromptFileParser` consumes the same flattener for
 authored `parallel:` items, keeping relative range math single-sourced. Stage 2
 inherits this helper and its normalized topology result. The queue-item union
-schema is still unpublished: Phase 3B must publish it through `append_step`
-alongside the handler change.
+schema is published through `append_step` alongside the handler change.
 
-**Stage 2 — Future parallel-group enqueue.** Change the continuation transaction
-to insert incoming topology atomically, move flattened queue-limit validation
-inside the lock, validate every member, and return structured topology. This
-stage can ship before manual late join and is already useful to sequential
-orchestrators.
+**Stage 2 — Future parallel-group enqueue — complete.** Session 1 landed the shared
+queue-limit helpers, topology-accepting continuation transaction, atomic
+topology insertion, flattened in-lock capacity validation, and append metadata
+for absolute groups and added steps. Session 2 landed publication of the
+queue-item union and MCP-side flattened validation/structured response. Session
+3 landed generated MCP docs covering both append forms. This stage ships before
+manual late join and is already useful to sequential orchestrators. Barrier 2
+inherits the complete future-enqueue contract; Phase 7 inherits the unbuilt
+`parallelWithCurrent` live-join path and durable admission state.
 
 **Stage 3 — Durable live-join admission.** After the mutability and dispatch
 prerequisites, persist admission state, add queue-definition reconciliation,

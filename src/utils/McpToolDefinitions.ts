@@ -2,7 +2,8 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "../types/DashboardConstants";
-import type { PromptStep } from "../types/CtrlYokeTypes";
+import type { ParallelGroupInsertPlacement } from "../core/ParallelGroupTopology";
+import type { PromptStep, RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 /**
  * JSON-schema shape used by ctrlyoke's MCP tools.
@@ -40,9 +41,38 @@ export type McpAppendQueueItem =
   | McpAppendParallelGroupInput;
 
 export interface McpAppendStepArguments {
-  steps: McpAppendStepInput[];
+  steps: McpAppendQueueItem[];
   position: QueuePosition | number;
   source?: string;
+}
+
+export interface McpAppendStepResult {
+  success: true;
+  destination: "queue" | "activeParallelGroup";
+  queueItemsAdded: number;
+  stepsAdded: number;
+  newQueueSize: number;
+  insertIndex: number;
+  insertedEndIndex: number;
+  parallelGroupsAdded: Array<{
+    id: string;
+    startIndex: number;
+    endIndex: number;
+    failFast: boolean;
+  }>;
+  joinedParallelGroup?: {
+    id: string;
+    startIndex: number;
+    endIndex: number;
+    promoted: boolean;
+  };
+  placement: ParallelGroupInsertPlacement;
+  workingFile: string;
+  runDirectory: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  definitionRevision: number;
+  descriptorRevision: number;
 }
 
 export type McpStepUpdateArguments = Omit<
@@ -119,6 +149,12 @@ export interface McpToolDefinition {
   name: string;
   description: string;
   inputSchema: McpToolInputSchema;
+  examples?: readonly McpToolExample[];
+}
+
+export interface McpToolExample {
+  description: string;
+  args: Record<string, unknown>;
 }
 
 /** Tool that reports the current workflow state. */
@@ -201,7 +237,7 @@ const MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA: McpToolInputSchema = {
   additionalProperties: false,
 };
 
-/** Unpublished queue-item union for the Phase 3B append_step contract. */
+/** Published queue-item union for the Phase 3B append_step contract. */
 export const MCP_APPEND_QUEUE_ITEM_SCHEMA: McpToolInputSchema = {
   oneOf: [
     MCP_APPEND_QUEUE_ITEM_FLAT_SCHEMA,
@@ -271,14 +307,15 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_APPEND_STEP_TOOL_NAME,
     description:
-      "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Call list_harnesses first if you want to choose a harness or model for the new steps.",
+      "Add one or more steps or future parallel groups to your workflow's queue. This is how you build up or extend the workflow — from staging the very first steps of a plan to adding a follow-up once you discover more work is needed. Position 'next' queues after an active parallel group; joining that group is not available through this position enum. Call list_harnesses first if you want to choose a harness or model for the new steps.",
     inputSchema: {
       type: "object",
       properties: {
         steps: {
           type: "array",
-          items: MCP_APPEND_STEP_INPUT_SCHEMA,
-          description: "One or more steps to add, in the order to run them.",
+          items: MCP_APPEND_QUEUE_ITEM_SCHEMA,
+          description:
+            "One or more steps or future parallel groups to add, in order. A parallel group must contain at least two steps.",
         },
         position: {
           oneOf: [
@@ -292,7 +329,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
             },
           ],
           description:
-            "Use 'next' to run them after the current step, 'end' to run them last, or a zero-based step index to insert them before that step.",
+            "Use 'next' to queue them after the current step (or after an active parallel group; joining that group is not available through this position enum), 'end' to run them last, or a zero-based step index to insert them before that step.",
         },
         source: {
           type: "string",
@@ -301,6 +338,30 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
       },
       required: ["steps", "position"],
     },
+    examples: [
+      {
+        description: "flat step",
+        args: {
+          steps: [{ prompt: "example" }],
+          position: QUEUE_POSITION.NEXT,
+        },
+      },
+      {
+        description: "future parallel group",
+        args: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "implement the API" },
+                { prompt: "write the API tests" },
+              ],
+              failFast: true,
+            },
+          ],
+          position: QUEUE_POSITION.END,
+        },
+      },
+    ],
   },
   {
     name: MCP_EDIT_STEP_TOOL_NAME,
