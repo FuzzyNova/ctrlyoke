@@ -233,7 +233,8 @@ text through inline and corrupt the send.
    `onExit` has not fired yet.
 
 Every write goes through `CliTransportCoordinator.writeToCurrentPtySession`
-(`CliTransportCoordinator.ts:516`), which returns `false` once the PTY is gone.
+(`src/core/harness/shared/CliTransportCoordinator.ts:516`), which returns
+`false` once the PTY is gone.
 
 **Extract steps 1–5 into a reusable async writer** — `writeTurnToLivePty(text):
 Promise<boolean>` on `CliExecutionRunner`, or a small `PtyTurnWriter` in
@@ -278,7 +279,7 @@ session for this workflow."`
 
 Every existing `preparePrompt` caller deletes its `tempFilePaths` in a
 `finally` once the _monitored_ turn resolves (`CliExecutionRunner.ts:325`,
-`:686`; `CliTransportCoordinator.ts:206`, `:507`). A steer has no monitored
+`:686`; `shared/CliTransportCoordinator.ts:206`, `:507`). A steer has no monitored
 turn, and the harness may not dequeue the steered turn for minutes if it is
 mid-generation — so deleting after the write would hand the TUI a path that
 404s by the time it reads it. This is the producing-side view of the "Temp
