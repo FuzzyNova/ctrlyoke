@@ -46,12 +46,14 @@ import {
 } from "../types/DashboardConstants";
 import {
   PARALLEL_GROUP_INSERT_POSITIONS,
+  appendParallelGroupMember,
   deleteParallelGroupStep,
   insertParallelGroupTopology,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
   type PendingParallelGroupRange,
+  promoteStepToParallelGroup,
   replaceParallelGroupStep,
   resolveParallelGroupInsertIndex,
   snapParallelGroupStartPosition,
@@ -1795,6 +1797,157 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         `[PromptQueue] Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
       );
     });
+  }
+
+  /** Append a new pending member to an existing parallel group. */
+  public async appendParallelGroupMember(
+    group: string | number,
+    step: WorkflowStep
+  ): Promise<void> {
+    if (!this.canAppend()) {
+      throw new Error(
+        "Cannot append parallel group member: Queue is in cancelled or error state"
+      );
+    }
+
+    const topology = normalizeParallelGroupTopology({
+      steps: this.state.steps,
+      parallelGroups: this.state.parallelGroups,
+    });
+    const identifiedStep = ensureStepIds([...topology.steps, step]).at(-1)!;
+    this.assertPendingRewindSuffixIndex(
+      topology.steps.length,
+      "append parallel group member"
+    );
+    this.assertEditableDuringExecution(
+      topology.steps.length,
+      "append parallel group member"
+    );
+    assertStepMutable(identifiedStep, "append parallel group member");
+
+    const nextTopology = appendParallelGroupMember(
+      topology,
+      group,
+      identifiedStep
+    );
+    assertStartedStepPositionsPreserved(
+      this.state.steps,
+      nextTopology.steps,
+      "append parallel group member"
+    );
+    const insertIndex = nextTopology.steps.indexOf(identifiedStep);
+    if (insertIndex < 0) {
+      throw new Error("Appended parallel group member was not inserted");
+    }
+
+    this.state.steps = nextTopology.steps;
+    this.state.parallelGroups = nextTopology.parallelGroups;
+    this.state.results.splice(insertIndex, 0, {
+      prompt: isScriptStep(identifiedStep)
+        ? identifiedStep.script
+        : identifiedStep.prompt,
+      status: STEP_STATUS.PENDING,
+      timestamp: new Date(),
+    });
+    if (insertIndex < this.state.currentIndex) {
+      this.state.currentIndex += 1;
+    }
+    if (this.state.completedIndices.size > 0) {
+      this.state.completedIndices = new Set(
+        Array.from(this.state.completedIndices, (entry) => {
+          const index = parseInt(entry, 10);
+          return String(index >= insertIndex ? index + 1 : index);
+        })
+      );
+    }
+    this.workflowFile = this.workflowFile
+      ? {
+          ...this.workflowFile,
+          steps: [...this.state.steps],
+          parallelGroups: this.state.parallelGroups,
+        }
+      : this.workflowFile;
+    this.bumpDefinitionRevision();
+    await this.updateWorkingFile(true);
+    this.emitStateChange();
+  }
+
+  /** Promote an existing queue step and a new sibling into a parallel group. */
+  public async promoteStepToParallelGroup(
+    stepIndex: number,
+    step: WorkflowStep,
+    options?: { failFast?: boolean }
+  ): Promise<void> {
+    if (!this.canAppend()) {
+      throw new Error(
+        "Cannot promote step to parallel group: Queue is in cancelled or error state"
+      );
+    }
+    if (stepIndex < 0 || stepIndex >= this.state.steps.length) {
+      throw new Error(`Invalid prompt index: ${stepIndex}`);
+    }
+
+    const topology = normalizeParallelGroupTopology({
+      steps: this.state.steps,
+      parallelGroups: this.state.parallelGroups,
+    });
+    const identifiedStep = ensureStepIds([...topology.steps, step]).at(-1)!;
+    this.assertPendingRewindSuffixIndex(
+      stepIndex + 1,
+      "promote step to parallel group"
+    );
+    this.assertEditableDuringExecution(
+      stepIndex + 1,
+      "promote step to parallel group"
+    );
+    assertStepMutable(identifiedStep, "promote step to parallel group");
+
+    const nextTopology = promoteStepToParallelGroup(
+      topology,
+      stepIndex,
+      identifiedStep,
+      options
+    );
+    assertStartedStepPositionsPreserved(
+      this.state.steps,
+      nextTopology.steps,
+      "promote step to parallel group"
+    );
+    const insertIndex = nextTopology.steps.indexOf(identifiedStep);
+    if (insertIndex < 0) {
+      throw new Error("Promoted parallel group member was not inserted");
+    }
+
+    this.state.steps = nextTopology.steps;
+    this.state.parallelGroups = nextTopology.parallelGroups;
+    this.state.results.splice(insertIndex, 0, {
+      prompt: isScriptStep(identifiedStep)
+        ? identifiedStep.script
+        : identifiedStep.prompt,
+      status: STEP_STATUS.PENDING,
+      timestamp: new Date(),
+    });
+    if (insertIndex < this.state.currentIndex) {
+      this.state.currentIndex += 1;
+    }
+    if (this.state.completedIndices.size > 0) {
+      this.state.completedIndices = new Set(
+        Array.from(this.state.completedIndices, (entry) => {
+          const index = parseInt(entry, 10);
+          return String(index >= insertIndex ? index + 1 : index);
+        })
+      );
+    }
+    this.workflowFile = this.workflowFile
+      ? {
+          ...this.workflowFile,
+          steps: [...this.state.steps],
+          parallelGroups: this.state.parallelGroups,
+        }
+      : this.workflowFile;
+    this.bumpDefinitionRevision();
+    await this.updateWorkingFile(true);
+    this.emitStateChange();
   }
 
   /**

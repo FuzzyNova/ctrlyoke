@@ -562,6 +562,105 @@ suite("PromptQueue State Machine Tests", () => {
           /permutation/
         );
       });
+
+      test("appends group members and bumps the definition revision once per call", async () => {
+        const initialRevision = queue.getState().definitionRevision;
+
+        await queue.appendParallelGroupMember("group-1", {
+          prompt: "member-d",
+        });
+        assert.strictEqual(
+          queue.getState().definitionRevision,
+          initialRevision + 1
+        );
+        assert.strictEqual(queue.getState().parallelGroups[0].endIndex, 4);
+
+        await queue.appendParallelGroupMember("group-1", {
+          prompt: "member-e",
+        });
+        assert.strictEqual(
+          queue.getState().definitionRevision,
+          initialRevision + 2
+        );
+        assert.deepStrictEqual(
+          queue.getState().steps.map((step) => (step as PromptStep).prompt),
+          [
+            "before",
+            "member-a",
+            "member-b",
+            "member-c",
+            "member-d",
+            "member-e",
+            "after",
+          ]
+        );
+        assert.strictEqual(queue.getState().parallelGroups[0].endIndex, 5);
+      });
+
+      test("promotes a started step without changing its runtime or fail-fast policy", async () => {
+        const runtime = { stepId: "started-anchor", startedAt: 1234 };
+        queue.loadPrompts({
+          steps: [
+            { prompt: "started", _runtime: runtime },
+            { prompt: "after" },
+          ],
+        });
+
+        await queue.promoteStepToParallelGroup(0, { prompt: "sibling" });
+
+        const state = queue.getState();
+        assert.deepStrictEqual(state.parallelGroups, [
+          {
+            id: state.parallelGroups[0].id,
+            startIndex: 0,
+            endIndex: 1,
+            failFast: false,
+          },
+        ]);
+        assert.deepStrictEqual(state.steps[0]._runtime, runtime);
+        assert.deepStrictEqual(
+          state.steps.map((step) => (step as PromptStep).prompt),
+          ["started", "sibling", "after"]
+        );
+      });
+
+      test("rejects appending to settled and cancelling groups", async () => {
+        queue.loadPrompts({
+          steps: [
+            { prompt: "settled-a", _runtime: { completedAt: 1 } },
+            { prompt: "settled-b", _runtime: { completedAt: 2 } },
+          ],
+          parallelGroups: [
+            { id: "settled", startIndex: 0, endIndex: 1, failFast: false },
+          ],
+        });
+        await assert.rejects(
+          queue.appendParallelGroupMember("settled", { prompt: "late" }),
+          /settled parallel group/
+        );
+
+        queue.loadPrompts({
+          steps: [
+            {
+              prompt: "cancelling",
+              _runtime: { terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED },
+            },
+            { prompt: "pending" },
+          ],
+          parallelGroups: [
+            {
+              id: "cancelling",
+              startIndex: 0,
+              endIndex: 1,
+              failFast: false,
+            },
+          ],
+        });
+        await assert.rejects(
+          queue.appendParallelGroupMember("cancelling", { prompt: "late" }),
+          /cancelling or stopping parallel group/
+        );
+      });
     });
   });
 
@@ -2264,6 +2363,46 @@ suite("PromptQueue State Machine Tests", () => {
             assert.deepStrictEqual(persisted.prompts, ["p0", "inserted", "p1"]);
           }
         );
+      });
+
+      test("round-trips promoted topology and runtime through the working file", async () => {
+        const tempRoot = await fs.mkdtemp(
+          path.join(os.tmpdir(), "ctrlyoke-prompt-queue-promotion-")
+        );
+        try {
+          const steps: PromptStep[] = [
+            { prompt: "started", _runtime: { startedAt: 42 } },
+            { prompt: "tail" },
+          ];
+          const workingFilePath = await queue.createWorkingFile(
+            "promotion-workflow",
+            steps,
+            tempRoot
+          );
+          queue.loadPrompts({ steps }, workingFilePath);
+
+          await queue.promoteStepToParallelGroup(0, { prompt: "sibling" });
+
+          const persisted = await queue.readWorkingFile(workingFilePath);
+          assert.strictEqual(persisted.parallelGroups?.length, 1);
+          assert.strictEqual(persisted.parallelGroups?.[0].startIndex, 0);
+          assert.strictEqual(persisted.parallelGroups?.[0].endIndex, 1);
+          assert.strictEqual(persisted.parallelGroups?.[0].failFast, false);
+          assert.strictEqual(persisted.steps?.[0]._runtime?.startedAt, 42);
+
+          const recovered = new PromptQueue();
+          await recovered.restoreFromWorkingFile(workingFilePath);
+          assert.deepStrictEqual(
+            recovered.getState().parallelGroups,
+            persisted.parallelGroups
+          );
+          assert.strictEqual(
+            recovered.getState().steps[0]._runtime?.startedAt,
+            42
+          );
+        } finally {
+          await fs.rm(tempRoot, { recursive: true, force: true });
+        }
       });
     }
   );
