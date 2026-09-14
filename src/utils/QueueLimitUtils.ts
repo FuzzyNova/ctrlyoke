@@ -22,3 +22,20 @@ export function getMaxQueueSize(): number {
 export function isUnlimitedMode(): boolean {
   return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
 }
+
+/**
+ * A resolved queue-capacity policy. Enforcement is the caller's to opt into:
+ * the environment variables below are supplied only to a harness's MCP server
+ * subprocess, so an in-process caller (the extension host, the CLI) that read
+ * them would silently get the default limit instead of the user's configured
+ * `queue.maxSize` / `queue.unlimitedMode`.
+ */
+export interface QueueLimitPolicy {
+  maxQueueSize: number;
+  unlimited: boolean;
+}
+
+/** Resolve the policy from the MCP server's environment. */
+export function resolveQueueLimitPolicy(): QueueLimitPolicy {
+  return { maxQueueSize: getMaxQueueSize(), unlimited: isUnlimitedMode() };
+}

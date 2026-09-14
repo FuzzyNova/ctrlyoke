@@ -19,7 +19,7 @@ import {
   type QueuePosition,
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
-import { getMaxQueueSize, isUnlimitedMode } from "../../utils/QueueLimitUtils";
+import type { QueueLimitPolicy } from "../../utils/QueueLimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -251,7 +251,8 @@ export class RunContinuationService {
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
-    position: QueuePosition | number = QUEUE_POSITION.END
+    position: QueuePosition | number = QUEUE_POSITION.END,
+    queueLimit?: QueueLimitPolicy
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
@@ -306,13 +307,17 @@ export class RunContinuationService {
         }
         const currentQueueSize = source.steps?.length ?? 0;
         const stepsToAdd = incomingTopology.steps.length;
-        const maxQueueSize = getMaxQueueSize();
+        // Counted here, under the run-file lock, rather than from a pre-lock
+        // read: two concurrent appends would each pass an unlocked check and
+        // together cross the limit. Only a caller that owns a capacity policy
+        // passes one -- see `QueueLimitPolicy`.
         if (
-          !isUnlimitedMode() &&
-          currentQueueSize + stepsToAdd > maxQueueSize
+          queueLimit &&
+          !queueLimit.unlimited &&
+          currentQueueSize + stepsToAdd > queueLimit.maxQueueSize
         ) {
           throw new Error(
-            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${maxQueueSize}`
+            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${queueLimit.maxQueueSize}`
           );
         }
         // Resolve the splice point from the run file read under this same

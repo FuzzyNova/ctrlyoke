@@ -88,16 +88,18 @@ function renderParameters(schema: McpToolInputSchema): string {
   return ["Parameters:", ...lines].join("\n");
 }
 
+interface McpToolExamplePaths {
+  mcpServerPath: string;
+  workspaceRoot: string;
+  workingFilePath: string;
+  commitOutputPath: string;
+  executionRoot: string;
+}
+
 function renderCommand(
   tool: McpToolDefinition,
   args: Record<string, unknown>,
-  paths: {
-    mcpServerPath: string;
-    workspaceRoot: string;
-    workingFilePath: string;
-    commitOutputPath: string;
-    executionRoot: string;
-  },
+  paths: McpToolExamplePaths,
   context: McpToolSkillRunContext | undefined
 ): string {
   const serializedArgs = JSON.stringify(args);
@@ -123,34 +125,29 @@ function renderCommand(
   );
 }
 
+/**
+ * A tool that declares `examples` documents every one of them; anything else
+ * falls back to a single example derived from its schema. A `oneOf` schema
+ * collapses to its first branch there, which is why a tool with more than one
+ * accepted input shape has to declare them.
+ */
 function renderExamples(
   tool: McpToolDefinition,
-  paths: {
-    mcpServerPath: string;
-    workspaceRoot: string;
-    workingFilePath: string;
-    commitOutputPath: string;
-    executionRoot: string;
-  },
+  paths: McpToolExamplePaths,
   context: McpToolSkillRunContext | undefined
 ): string[] {
-  const examples: readonly McpToolExample[] = tool.examples ?? [
-    {
-      description: "example",
-      args: getMcpSchemaExampleValue(tool.inputSchema) as Record<
-        string,
-        unknown
-      >,
-    },
-  ];
-
-  if (examples.length === 1 && examples[0].description === "example") {
-    return ["Example:", renderCommand(tool, examples[0].args, paths, context)];
+  const declared: readonly McpToolExample[] = tool.examples ?? [];
+  if (declared.length === 0) {
+    const args = getMcpSchemaExampleValue(tool.inputSchema) as Record<
+      string,
+      unknown
+    >;
+    return ["Example:", renderCommand(tool, args, paths, context)];
   }
 
   return [
     "Examples:",
-    ...examples.flatMap((example) => [
+    ...declared.flatMap((example) => [
       `Example (${example.description}):`,
       renderCommand(tool, example.args, paths, context),
     ]),

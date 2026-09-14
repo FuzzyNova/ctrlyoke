@@ -74,6 +74,7 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 - Queue appends are protected twice on purpose:
   - `operationQueue` serializes append requests within this process
   - `withFileLock(...)` protects the working file across processes
+  - It serializes them; it does not order them. `invokeTool` awaits `resolveCallingContext` **before** it reaches `queueOperation`, so two concurrently issued calls race to that boundary and may enqueue in either order. That is fine — MCP gives in-flight requests no ordering guarantee — but a test that asserts which of two concurrent appends lands first is asserting a coin flip, and will flake.
 - Append validation is best-effort against `.ctrlyoke/capabilities.json`; that file is produced by the VS Code-side settings sync and may be absent early in workspace setup.
 - `submit_commit_message` writes to `CTRLYOKE_COMMIT_OUTPUT` when present; this is the structured capture path used by commit-message generation.
   </mcpServer>

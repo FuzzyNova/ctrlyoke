@@ -50,7 +50,11 @@ import {
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
-import { getMaxQueueSize, isUnlimitedMode } from "./utils/QueueLimitUtils";
+import {
+  getMaxQueueSize,
+  isUnlimitedMode,
+  resolveQueueLimitPolicy,
+} from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
@@ -992,7 +996,8 @@ export class CtrlYokeMCPServer {
         target.definitionRevision,
         lineageRepository,
         target.allowInterruptedRun,
-        position
+        position,
+        resolveQueueLimitPolicy()
       );
 
       response = {

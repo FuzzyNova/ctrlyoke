@@ -1868,6 +1868,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     // Serialized through the server's operation queue, so an agent that adds
     // work twice gets both appends rather than a spurious revision conflict.
+    // Which of the two reaches the queue first is deliberately not asserted:
+    // `invokeTool` awaits `resolveCallingContext` before it enqueues, so two
+    // concurrently issued calls race to that boundary — and MCP gives an
+    // in-flight request no ordering guarantee either. Both landing is the
+    // contract; the order they land in is not.
     const results = await Promise.all(
       ["first", "second"].map((prompt) =>
         server.invokeTool("append_step", {
@@ -1877,7 +1882,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       )
     );
     assert.deepStrictEqual(
-      results.map((result) => responseJson(result).newQueueSize),
+      results.map((result) => responseJson(result).newQueueSize).sort(),
       [2, 3]
     );
   });

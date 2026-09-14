@@ -221,8 +221,6 @@ suite("RunContinuationService topology append transaction", () => {
   const workflowKey = "topology-append-2026-01-01T00-00-00" as WorkflowKey;
   const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
   let workspace: string;
-  let previousMaxQueueSize: string | undefined;
-  let previousUnlimitedMode: string | undefined;
 
   async function seedRun(
     steps: Array<Record<string, unknown>>,
@@ -269,25 +267,12 @@ suite("RunContinuationService topology append transaction", () => {
     if (workspace) {
       await fs.rm(workspace, { recursive: true, force: true });
     }
-    if (previousMaxQueueSize === undefined) {
-      delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-    } else {
-      process.env.CTRLYOKE_MAX_QUEUE_SIZE = previousMaxQueueSize;
-    }
-    if (previousUnlimitedMode === undefined) {
-      delete process.env.CTRLYOKE_UNLIMITED_MODE;
-    } else {
-      process.env.CTRLYOKE_UNLIMITED_MODE = previousUnlimitedMode;
-    }
   });
 
   test("persists a container batch in one revision with absolute ranges", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-append-")
     );
-    previousMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-    previousUnlimitedMode = process.env.CTRLYOKE_UNLIMITED_MODE;
-    process.env.CTRLYOKE_UNLIMITED_MODE = "true";
     await seedRun(
       [
         { prompt: "existing-0" },
@@ -357,10 +342,6 @@ suite("RunContinuationService topology append transaction", () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-capacity-")
     );
-    previousMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-    previousUnlimitedMode = process.env.CTRLYOKE_UNLIMITED_MODE;
-    process.env.CTRLYOKE_MAX_QUEUE_SIZE = "3";
-    delete process.env.CTRLYOKE_UNLIMITED_MODE;
     await seedRun([{ prompt: "existing-0" }, { prompt: "existing-1" }]);
 
     await assert.rejects(
@@ -375,7 +356,10 @@ suite("RunContinuationService topology append transaction", () => {
           ],
         },
         1,
-        new WorkflowLineageRepository()
+        new WorkflowLineageRepository(),
+        false,
+        QUEUE_POSITION.END,
+        { maxQueueSize: 3, unlimited: false }
       ),
       /Current: 2, Adding: 2, Max: 3/
     );
@@ -390,12 +374,33 @@ suite("RunContinuationService topology append transaction", () => {
     assert.strictEqual(run.steps?.length, 2);
   });
 
+  // The dashboard and CLI append paths own no capacity policy, and the
+  // environment the MCP server reads its limit from is unset in their
+  // processes. Enforcing unconditionally here would cap them at the default
+  // while ignoring the user's configured `queue.maxSize`.
+  test("leaves capacity unenforced for a caller that supplies no policy", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-nopolicy-")
+    );
+    await seedRun([{ prompt: "existing-0" }, { prompt: "existing-1" }]);
+
+    const appended = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "tail-a" }, { prompt: "tail-b" }],
+      1,
+      new WorkflowLineageRepository()
+    );
+
+    assert.strictEqual(appended.workingFile.steps?.length, 4);
+    assert.strictEqual(appended.stepsAdded, 2);
+  });
+
   test("serializes concurrent appends as whole batches", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-concurrent-")
     );
-    previousMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-    previousUnlimitedMode = process.env.CTRLYOKE_UNLIMITED_MODE;
     process.env.CTRLYOKE_UNLIMITED_MODE = "true";
     await seedRun([]);
 

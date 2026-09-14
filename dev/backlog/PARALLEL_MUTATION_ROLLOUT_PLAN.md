@@ -422,7 +422,11 @@ Each session closes exactly one of the three exit-criteria test files above.
 
 Session 1 landed the shared queue-limit helpers and the topology-accepting,
 locked continuation transaction, including flattened capacity enforcement and
-atomic append metadata. Session 2 landed publication of the queue-item union,
+atomic append metadata. The review pass then made that enforcement opt-in via a
+`QueueLimitPolicy` the MCP handler supplies: enforcing it unconditionally in the
+shared transaction had silently capped the dashboard and CLI append paths at
+`DEFAULT_MAX_QUEUE_SIZE`, because the environment variables the limit is read
+from exist only in a harness's MCP server subprocess. Session 2 landed publication of the queue-item union,
 flattened MCP validation, and the structured append response. Session 3 landed
 generated MCP documentation for the flat and future-container forms, including
 the explicit `next`-queues-after-the-active-group wording. Barrier 2 inherits
