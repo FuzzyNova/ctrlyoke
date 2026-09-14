@@ -480,7 +480,9 @@ context-menu key — all of which are live at _every_ width, so the chevron
 teaches the menu exists where there is room and the same gesture keeps working
 where there is not. The collapsed main button carries a corner flyout marker,
 `aria-haspopup`/`aria-expanded`, and the gesture hint in its `title`.
-`WorkflowControls` opts in below `sm`. Two consequences for this plan:
+`WorkflowControls` opts in below `xs` (380px, `useIsNarrowMobile`) — between
+`xs` and `sm` its icon-only label already buys enough room, so the chevron
+stays. Two consequences for this plan:
 
 - Stage 1 does not have to invent a narrow-width story for the footer. It
   passes `hideMenuButton` from `EditorFooter`'s existing `isSmallWidth`

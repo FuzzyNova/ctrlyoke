@@ -13,7 +13,7 @@ export {
   type UseCompatibilityDiagnosticsResult,
   type UseCompatibilityDiagnosticsOptions,
 } from "./useCompatibilityDiagnostics";
-export { useMediaQuery, useIsMobile } from "./useMediaQuery";
+export { useMediaQuery, useIsMobile, useIsNarrowMobile } from "./useMediaQuery";
 export { useIosVisualViewportRootStyle } from "./useIosVisualViewportRootStyle";
 export {
   useElementNarrow,

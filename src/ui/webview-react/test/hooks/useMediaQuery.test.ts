@@ -1,9 +1,13 @@
 /**
- * Tests for useMediaQuery and useIsMobile hooks.
+ * Tests for useMediaQuery, useIsMobile and useIsNarrowMobile hooks.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useMediaQuery, useIsMobile } from "@hooks/useMediaQuery";
+import {
+  useMediaQuery,
+  useIsMobile,
+  useIsNarrowMobile,
+} from "@hooks/useMediaQuery";
 
 // ---------------------------------------------------------------------------
 // matchMedia mock
@@ -142,6 +146,37 @@ describe("useIsMobile", () => {
   it("returns false for wide viewport", () => {
     mockMatchMedia(false);
     const { result } = renderHook(() => useIsMobile());
+
+    expect(result.current).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useIsNarrowMobile
+// ---------------------------------------------------------------------------
+
+describe("useIsNarrowMobile", () => {
+  let originalMatchMedia: typeof window.matchMedia;
+
+  beforeEach(() => {
+    originalMatchMedia = window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it("queries below the xs breakpoint, one pixel under Tailwind's 380px", () => {
+    mockMatchMedia(true);
+    const { result } = renderHook(() => useIsNarrowMobile());
+
+    expect(result.current).toBe(true);
+    expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 379px)");
+  });
+
+  it("returns false above the xs breakpoint", () => {
+    mockMatchMedia(false);
+    const { result } = renderHook(() => useIsNarrowMobile());
 
     expect(result.current).toBe(false);
   });

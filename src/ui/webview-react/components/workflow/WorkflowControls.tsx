@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
-import { useIsMobile } from "@hooks/useMediaQuery";
+import { useIsMobile, useIsNarrowMobile } from "@hooks/useMediaQuery";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -49,6 +49,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
 }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  const isNarrowMobile = useIsNarrowMobile();
   const btnSizes = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
@@ -191,12 +192,13 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainTitle="Create new workflow"
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"
-        // Below `sm` the header is already two rows and the label has dropped
-        // to icon-only, so the chevron is the next ~26px to give back. The
-        // menu stays reachable by right-click / press-and-hold, which are
-        // live at every width — so the gesture is learnable at desktop widths
-        // where the chevron is still there to advertise the menu.
-        hideMenuButton={isMobile}
+        // Only below `xs` (380px) — the same width at which the header starts
+        // dropping non-actionable run slots outright. Between `xs` and `sm`
+        // the label has already gone icon-only and that buys enough room, so
+        // the chevron stays and keeps advertising the menu. The menu remains
+        // reachable by right-click / press-and-hold at every width, which is
+        // what makes the gesture learnable before it becomes the only way in.
+        hideMenuButton={isNarrowMobile}
       />
       <WorkflowFilePickerModal
         isOpen={filePickerMode !== null}
