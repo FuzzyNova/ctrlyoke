@@ -2,6 +2,8 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { getEffectiveParallelGroupWidth } from "../../types/DashboardConstants";
 import {
+  appendParallelGroupMember,
+  appendParallelGroupMembers,
   groupParallelGroupSteps,
   insertParallelGroupStep,
   insertParallelGroupSteps,
@@ -16,10 +18,14 @@ import {
   deleteParallelGroupStep,
   PARALLEL_GROUP_INSERT_POSITIONS,
   flattenParallelItems,
+  promoteStepToParallelGroup,
   resolveParallelGroupInsertIndex,
   type ParallelGroupTopology,
 } from "../../core/ParallelGroupTopology";
-import { PARALLEL_GROUP_INSERT_RELOCATION_KINDS } from "../../types/DashboardConstants";
+import {
+  PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
+  PROMPT_TERMINAL_STATUS,
+} from "../../types/DashboardConstants";
 import type { WorkflowStep } from "../../types/CtrlYokeTypes";
 
 const step = (name: string): WorkflowStep => ({ prompt: name });
@@ -243,6 +249,79 @@ suite("ParallelGroupTopology", () => {
   });
 
   suite("insertion and deletion", () => {
+    test("appends a member, grows its group, and shifts later groups", () => {
+      const anchored = startedStep("b");
+      const input: ParallelGroupTopology = {
+        steps: [
+          step("a"),
+          anchored,
+          step("c"),
+          step("d"),
+          step("e"),
+          step("f"),
+          step("g"),
+        ],
+        parallelGroups: [
+          { id: "g1", startIndex: 1, endIndex: 2, failFast: true },
+          { id: "g2", startIndex: 5, endIndex: 6, failFast: false },
+        ],
+      };
+
+      const result = appendParallelGroupMember(input, "g1", step("late"));
+
+      assert.deepStrictEqual(names(result), [
+        "a",
+        "b",
+        "c",
+        "late",
+        "d",
+        "e",
+        "f",
+        "g",
+      ]);
+      assert.deepStrictEqual(result.parallelGroups, [
+        { id: "g1", startIndex: 1, endIndex: 3, failFast: true },
+        { id: "g2", startIndex: 6, endIndex: 7, failFast: false },
+      ]);
+      assert.strictEqual(result.steps[1], anchored);
+      assert.deepStrictEqual(result.steps[1]._runtime, anchored._runtime);
+    });
+
+    test("batch appends shift later groups by the batch size", () => {
+      const result = appendParallelGroupMembers(
+        {
+          steps: [
+            step("a"),
+            step("b"),
+            step("c"),
+            step("d"),
+            step("e"),
+            step("f"),
+            step("g"),
+          ],
+          parallelGroups: [
+            { id: "g1", startIndex: 1, endIndex: 2, failFast: true },
+            { id: "g2", startIndex: 5, endIndex: 6, failFast: false },
+          ],
+        },
+        "g1",
+        [step("late-1"), step("late-2")]
+      );
+
+      assert.deepStrictEqual(names(result), [
+        "a",
+        "b",
+        "c",
+        "late-1",
+        "late-2",
+        "d",
+        "e",
+        "f",
+        "g",
+      ]);
+      assert.strictEqual(ranges(result), "g1:1-4,g2:7-8");
+    });
+
     test("reports relocation after an enclosing parallel group", () => {
       assert.deepStrictEqual(
         resolveParallelGroupInsertIndex(
@@ -520,6 +599,102 @@ suite("ParallelGroupTopology", () => {
       assert.deepStrictEqual(
         unwrapParallelGroup(created, "new").parallelGroups,
         []
+      );
+    });
+
+    test("promotes a started step into a non-fail-fast two-member group", () => {
+      const running = startedStep("running");
+      const input: ParallelGroupTopology = {
+        steps: [running, step("after")],
+        parallelGroups: [],
+      };
+
+      const result = promoteStepToParallelGroup(input, 0, step("late"));
+
+      assert.deepStrictEqual(names(result), ["running", "late", "after"]);
+      assert.deepStrictEqual(result.parallelGroups, [
+        {
+          id: result.parallelGroups[0].id,
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ]);
+      assert.strictEqual(result.steps[0], running);
+      assert.strictEqual(result.steps[0]._runtime?.stepId, "id-running");
+      assert.deepStrictEqual(result.steps[0]._runtime, running._runtime);
+    });
+
+    test("promotion rejects a started non-anchor member", () => {
+      assert.throws(
+        () =>
+          promoteStepToParallelGroup(
+            {
+              steps: [startedStep("running"), step("after")],
+              parallelGroups: [],
+            },
+            0,
+            startedStep("late")
+          ),
+        /started step while creating a parallel group/
+      );
+    });
+
+    test("grouping without the opt-in still rejects a started step", () => {
+      assert.throws(
+        () =>
+          groupParallelGroupSteps(
+            {
+              steps: [startedStep("running"), step("late")],
+              parallelGroups: [],
+            },
+            0,
+            1
+          ),
+        /started step while creating a parallel group/
+      );
+    });
+
+    test("append operations reject settled, cancelling, and fail-fast groups", () => {
+      const settled = (
+        terminalStatus: (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS]
+      ) => ({
+        prompt: "settled",
+        _runtime: {
+          stepId: `id-${terminalStatus}`,
+          startedAt: 1,
+          completedAt: 2,
+          terminalStatus,
+        },
+      });
+      const cancelled: ParallelGroupTopology = {
+        steps: [
+          settled(PROMPT_TERMINAL_STATUS.CANCELLED),
+          settled(PROMPT_TERMINAL_STATUS.CANCELLED),
+        ],
+        parallelGroups: [
+          { id: "cancelled", startIndex: 0, endIndex: 1, failFast: false },
+        ],
+      };
+      assert.throws(
+        () => appendParallelGroupMember(cancelled, "cancelled", step("late")),
+        /settled parallel group/
+      );
+      assert.throws(
+        () =>
+          appendParallelGroupMembers(cancelled, "cancelled", [step("late")]),
+        /settled parallel group/
+      );
+
+      const failed: ParallelGroupTopology = {
+        steps: [settled(PROMPT_TERMINAL_STATUS.FAILED), step("pending")],
+        parallelGroups: [
+          { id: "failed", startIndex: 0, endIndex: 1, failFast: true },
+        ],
+      };
+      assert.throws(
+        () => appendParallelGroupMember(failed, "failed", step("late")),
+        /fail-fast parallel group/
       );
     });
 
