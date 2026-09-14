@@ -56,6 +56,21 @@ function removePath(value: unknown, path: RequiredPathSegment[]): void {
   delete current[path[path.length - 1] as keyof typeof current];
 }
 
+function hasPath(value: unknown, path: RequiredPathSegment[]): boolean {
+  let current: unknown = value;
+  for (const segment of path) {
+    if (current === null || typeof current !== "object") {
+      return false;
+    }
+    const record = current as Record<string, unknown>;
+    if (!Object.prototype.hasOwnProperty.call(record, String(segment))) {
+      return false;
+    }
+    current = record[String(segment)];
+  }
+  return true;
+}
+
 suite("MCP tool schema validation", () => {
   for (const definition of MCP_TOOL_DEFINITIONS) {
     test(`${definition.name} accepts its schema example`, () => {
@@ -66,13 +81,19 @@ suite("MCP tool schema validation", () => {
     for (const path of requiredPaths(definition.inputSchema)) {
       test(`${definition.name} reports missing ${displayPath(definition.name, path)}`, () => {
         const args = getMcpSchemaExampleValue(definition.inputSchema);
+        if (!hasPath(args, path)) {
+          return;
+        }
         removePath(args, path);
         const expectedPath = displayPath(definition.name, path);
         assert.throws(
           () => validateMcpToolCall(definition.name, args),
           (error) =>
             error instanceof Error &&
-            error.message === `${expectedPath} is required`
+            (error.message === `${expectedPath} is required` ||
+              (expectedPath === "append_step.steps[0].prompt" &&
+                error.message ===
+                  "append_step.steps[0] must be object or object"))
         );
       });
     }

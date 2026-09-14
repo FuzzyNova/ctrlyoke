@@ -1,7 +1,8 @@
 # Parallel Mutation Rollout — Staging Plan
 
-> **Status:** Track C / Phase 3A complete. The queue-item union remains
-> unpublished until Phase 3B; later rollout work remains backlog.
+> **Status:** Track E / Phase 3B / Session 2 complete. The queue-item union is
+> published through `append_step`; generated MCP documentation and later
+> rollout work remain backlog.
 >
 > **What this is:** the build order for three design plans that must ship
 > together, sliced into nine phases and six workflow tracks that can be handed
@@ -371,15 +372,16 @@ landed. Publishing the queue-item union _is_ an edit to `append_step`'s
 name `McpToolSkillGenerator.test.ts`; the original two-file "Owns" list could
 not satisfy either. Track D enters neither file, so there is no wave-2 conflict.
 
-**Phase 3B.** MCP Stage 2: publish the Phase 3A queue-item union as
-`append_step`'s `items` schema and delete the flat-only `"parallel" in step`
-rejection in `handleAppendStep`; accept an incoming `ParallelGroupTopology` rather
-than only `WorkflowStep[]`; insert the whole batch atomically in one definition
-revision; move the queue-size check from the pre-lock read in `mcp-server.ts`
-**inside** the locked transaction and count flattened executable members;
-validate harness/model capability for every flattened member; return the
-structured response with `parallelGroupsAdded`, `queueItemsAdded`, `stepsAdded`,
-and the Phase 2 `relocation`. Drop `stepsRejected`.
+**Phase 3B.** MCP Stage 2 publishes the Phase 3A queue-item union as
+`append_step`'s `items` schema and deletes the flat-only `"parallel" in step`
+rejection in `handleAppendStep`; accepts an incoming `ParallelGroupTopology`
+rather than only `WorkflowStep[]`; inserts the whole batch atomically in one
+definition revision; moves the queue-size check from the pre-lock read in
+`mcp-server.ts` **inside** the locked transaction and counts flattened
+executable members; validates harness/model capability for every flattened
+member; and returns the structured response with `parallelGroupsAdded`,
+`queueItemsAdded`, `stepsAdded`, and the Phase 2 `relocation`. `stepsRejected`
+is removed.
 
 `next` and numeric positions keep their current meaning: a requested index
 inside a running group relocates to `endIndex + 1` and enqueues a **future**
@@ -410,26 +412,25 @@ have `mcp-server.ts` import them back for its `workflow_status` reporting.
 
 | #   | Deliverable                                                                  |
 | --- | ---------------------------------------------------------------------------- |
-| 1   | Shared queue-limit helpers; topology-accepting, in-lock capacity transaction  |
-| 2   | Publish the queue-item union; flatten, validate, and answer structurally      |
-| 3   | Generated MCP docs covering both append forms                                 |
+| 1   | Shared queue-limit helpers; topology-accepting, in-lock capacity transaction |
+| 2   | Publish the queue-item union; flatten, validate, and answer structurally     |
+| 3   | Generated MCP docs covering both append forms                                |
 
 Each session closes exactly one of the three exit-criteria test files above.
 
 Session 1 landed the shared queue-limit helpers and the topology-accepting,
 locked continuation transaction, including flattened capacity enforcement and
-atomic append metadata. Session 2 still owes publication of the queue-item
-union plus flattened MCP validation and the structured append response. Session
-3 still owes generated MCP documentation for the flat and future-container
-forms.
+atomic append metadata. Session 2 landed publication of the queue-item union,
+flattened MCP validation, and the structured append response. Session 3 still
+owes generated MCP documentation for the flat and future-container forms.
 
 ### Wave 2 conflict surface
 
-| File                                                  | Tracks | Rule                                                                  |
-| ----------------------------------------------------- | ------ | --------------------------------------------------------------------- |
-| `ParallelGroupTopology.ts`                            | D, E   | D writes it; E only calls the Phase 3A flattener and D's new helpers. |
-| `RunContinuationService.ts`                           | E      | Track D must not enter this file in wave 2.                           |
-| `McpToolDefinitions.ts`, `McpToolSkillGenerator.ts`   | E      | Transferred from the finished Track C. D never enters them.           |
+| File                                                | Tracks | Rule                                                                  |
+| --------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| `ParallelGroupTopology.ts`                          | D, E   | D writes it; E only calls the Phase 3A flattener and D's new helpers. |
+| `RunContinuationService.ts`                         | E      | Track D must not enter this file in wave 2.                           |
+| `McpToolDefinitions.ts`, `McpToolSkillGenerator.ts` | E      | Transferred from the finished Track C. D never enters them.           |
 
 If both tracks need a new helper in the same file mid-wave, the owning track
 adds it and the other waits for barrier 2 rather than duplicating it.

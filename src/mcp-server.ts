@@ -53,7 +53,10 @@ import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { getMaxQueueSize, isUnlimitedMode } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
-import type { ParallelGroupInsertPlacement } from "./core/ParallelGroupTopology";
+import {
+  flattenParallelItems,
+  type ResolvedParallelItem,
+} from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
 import { isPathWithinDirectory } from "./utils/PathSecurity";
@@ -98,6 +101,7 @@ import {
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
   type McpAppendStepArguments,
+  type McpAppendStepResult,
   type McpClaimPathsArguments,
   type McpEditStepArguments,
   type McpGlobalStatusArguments,
@@ -912,12 +916,6 @@ export class CtrlYokeMCPServer {
       log("ERROR: Invalid steps array", steps);
       throw new Error("steps must be a non-empty array");
     }
-    if (steps.some((step) => "parallel" in step)) {
-      throw new Error(
-        "append_step accepts flat workflow steps only; parallel groups cannot be created through MCP"
-      );
-    }
-
     if (
       position !== QUEUE_POSITION.NEXT &&
       position !== QUEUE_POSITION.END &&
@@ -939,10 +937,23 @@ export class CtrlYokeMCPServer {
       true
     );
 
+    const resolvedItems: ResolvedParallelItem[] = steps.map((item) =>
+      "parallel" in item
+        ? {
+            parallel: item.parallel.map((member) => ({ ...member })),
+            ...(item.failFast === undefined ? {} : { failFast: item.failFast }),
+          }
+        : { ...item }
+    );
+    const flattened = flattenParallelItems(resolvedItems);
+
     // Validate harness/model against capabilities.json (best-effort: skip if file absent)
     const capabilities = await this.readCapabilities();
     if (capabilities) {
-      for (const p of steps) {
+      for (const p of flattened.topology.steps) {
+        if (isScriptStep(p)) {
+          continue;
+        }
         const promptHarness = p.harness;
         const promptModel = p.model;
         if (promptHarness) {
@@ -970,27 +981,14 @@ export class CtrlYokeMCPServer {
       }
     }
 
-    let response: {
-      success: boolean;
-      stepsAdded: number;
-      stepsRejected: number;
-      newQueueSize: number;
-      insertIndex: number;
-      placement: ParallelGroupInsertPlacement;
-      workingFile: string;
-      runDirectory: string;
-      workflowKey: WorkflowKey;
-      runRef: RunRef;
-      definitionRevision: number;
-      descriptorRevision: number;
-    } | null = null;
+    let response: McpAppendStepResult | null = null;
 
     {
       const appended = await RunContinuationService.appendStepsToRun(
         this.workspaceRoot,
         selected.workflowKey,
         selected.runRef,
-        steps,
+        flattened.topology,
         target.definitionRevision,
         lineageRepository,
         target.allowInterruptedRun,
@@ -999,13 +997,17 @@ export class CtrlYokeMCPServer {
 
       response = {
         success: true,
-        stepsAdded: steps.length,
-        stepsRejected: 0,
+        destination: "queue",
+        queueItemsAdded: steps.length,
+        stepsAdded: appended.stepsAdded,
         newQueueSize: appended.workingFile.steps?.length ?? 0,
         // Resolved inside the run-file lock; with 'next' it can differ from the
         // caller's view if the run advanced between its status read and this write.
         insertIndex: appended.placement.insertedIndex,
+        insertedEndIndex:
+          appended.placement.insertedIndex + appended.stepsAdded - 1,
         placement: appended.placement,
+        parallelGroupsAdded: appended.parallelGroupsAdded,
         workingFile: selected.filePath,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(
           selected.filePath

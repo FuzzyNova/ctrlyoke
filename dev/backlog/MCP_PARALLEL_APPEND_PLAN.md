@@ -1,7 +1,8 @@
 # MCP Parallel Append Plan
 
-> **Status:** Phase 3A / Stage 1 complete. The queue-item union remains
-> unpublished until Phase 3B; later stages remain backlog.
+> **Status:** Phase 3B / Stage 2 / Session 2 complete. The queue-item union is
+> published through `append_step`; generated MCP documentation and later stages
+> remain backlog.
 >
 > **Scope:** Expand the existing `append_step` MCP tool so it can enqueue
 > future `parallel:` groups and, as a second stage, add members to the group
@@ -461,23 +462,22 @@ parallel-specific quota is added.
 ## Implementation stages
 
 **Stage 1 — MCP item union and shared normalization — complete.** The schema
-facets, types, examples, unpublished union, validator tests, and the exported
+facets, types, examples, published union, validator tests, and the exported
 `flattenParallelItems(items: readonly ResolvedParallelItem[]): FlattenedParallelItems`
 (where `ResolvedParallelItem` is `WorkflowStep | ResolvedParallelContainer`, both
 exported beside it)
 flattener are landed. `PromptFileParser` consumes the same flattener for
 authored `parallel:` items, keeping relative range math single-sourced. Stage 2
 inherits this helper and its normalized topology result. The queue-item union
-schema is still unpublished: Phase 3B must publish it through `append_step`
-alongside the handler change.
+schema is published through `append_step` alongside the handler change.
 
 **Stage 2 — Future parallel-group enqueue.** Session 1 landed the shared
 queue-limit helpers, topology-accepting continuation transaction, atomic
 topology insertion, flattened in-lock capacity validation, and append metadata
-for absolute groups and added steps. Sessions 2–3 still owe publication of the
-queue-item union and MCP-side flattened validation/structured response, then
-generated MCP docs covering both append forms. This stage can ship before
-manual late join and is already useful to sequential orchestrators.
+for absolute groups and added steps. Session 2 landed publication of the
+queue-item union and MCP-side flattened validation/structured response. Session
+3 still owes generated MCP docs covering both append forms. This stage can ship
+before manual late join and is already useful to sequential orchestrators.
 
 **Stage 3 — Durable live-join admission.** After the mutability and dispatch
 prerequisites, persist admission state, add queue-definition reconciliation,

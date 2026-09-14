@@ -29,7 +29,9 @@ suite("McpToolSkillGenerator", () => {
         "Add one or more steps to your workflow's queue. This is how you build up or extend the workflow"
       )
     );
-    assert.ok(reference.includes("- `steps` (required, array of object)"));
+    assert.ok(
+      reference.includes("- `steps` (required, array of object or object)")
+    );
     assert.ok(reference.includes("- `source` (optional, string)"));
     assert.ok(
       reference.includes(
