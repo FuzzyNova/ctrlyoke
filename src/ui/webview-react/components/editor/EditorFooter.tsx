@@ -332,7 +332,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                     : !hasContent
                       ? "Enter a prompt first"
                       : steerTarget.title,
-                  icon: <Icon name="comment" />,
+                  icon: <Icon name="arrow-up" />,
                 },
                 {
                   label: "Run in Parallel",
@@ -347,7 +347,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                     : !hasContent
                       ? "Enter a prompt first"
                       : runInParallelTarget.title,
-                  icon: <Icon name="split-horizontal" />,
+                  icon: <Icon name="worktree" />,
                 },
                 {
                   label: "",
@@ -368,7 +368,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                     : !hasContent
                       ? "Enter a prompt first"
                       : newWorkflowTarget.title,
-                  icon: <Icon name="sparkle" />,
+                  icon: <Icon name="empty-window" />,
                 },
               ]}
             />

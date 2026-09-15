@@ -24,7 +24,7 @@
       "description": "Run independent research prompts concurrently, then synthesize their findings",
       "file": "parallel-research.ctrlyoke.yaml",
       "tags": ["parallel", "research", "independent"],
-      "icon": "$(split-horizontal)"
+      "icon": "$(worktree)"
     },
     {
       "id": "fix-tests",
