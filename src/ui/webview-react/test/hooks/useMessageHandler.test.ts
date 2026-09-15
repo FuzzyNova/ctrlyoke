@@ -3817,7 +3817,7 @@ describe("TERMINAL_STARTED", () => {
     ]);
   });
 
-  it("replaces the previous AI CLI session for the same harness", () => {
+  it("keeps the previous AI CLI session for the same harness", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {
@@ -3845,8 +3845,11 @@ describe("TERMINAL_STARTED", () => {
     });
 
     const sessions = useTerminalStore.getState().sessions["workflow-1"];
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].id).toBe("new-claude-session");
+    expect(sessions).toHaveLength(2);
+    expect(sessions.map((s) => s.id)).toEqual([
+      "old-claude-session",
+      "new-claude-session",
+    ]);
   });
 
   it("preserves same-harness parallel sessions as separate labeled tabs", () => {
@@ -3896,7 +3899,7 @@ describe("TERMINAL_STARTED", () => {
     expect(sessions.every((session) => session.isController)).toBe(false);
   });
 
-  it("reuses a single script PTY terminal tab", () => {
+  it("keeps multiple script PTY terminal tabs", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {
@@ -3920,8 +3923,11 @@ describe("TERMINAL_STARTED", () => {
     });
 
     const sessions = useTerminalStore.getState().sessions["workflow-1"];
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].id).toBe("script-session-2");
+    expect(sessions).toHaveLength(2);
+    expect(sessions.map((s) => s.id)).toEqual([
+      "script-session-1",
+      "script-session-2",
+    ]);
   });
 
   it("preserves parallel script PTYs as separate tabs", () => {

@@ -408,28 +408,25 @@ with 64-bit FNV-1a. `getInjectIncompatibilityReason` compares those canonical fi
 retaining its existing reasons and adding `secrets`/`ctrlyokeMcpMode`. The tests cover the
 canonicalization and the invariant that the hash and predicate cannot disagree. Folding
 `undefined` into `null` causes _fewer_ restarts, while adding `secrets`/`ctrlyokeMcpMode`
-causes _more_; nothing yet keys a cache on the hash.
+causes _more_; Stage 2 now keys compatible integration caches with that hash.
 
-**Stage 2 — the behavioural change, as one landing**, in this internal order:
+**Stage 2 — the behavioural change, landed in one commit**, in this internal order:
 
 1. Thread `ResolvedProperties` through `getIntegrationForPrompt` and re-key the caches,
    including the `activeIntegration` short-circuit.
 2. Narrow the teardown to the session-id conflict predicate.
 3. Delete the webview harness-eviction block.
 
-**These three cannot be split, and the order within the stage matters.** Narrowing the teardown
-before the re-keying orphans processes: the restart would stop killing the old PTY while the
-same coordinator immediately overwrites `currentPtySession` with the new one, leaving a live
-harness process that no integration references and no code path disposes. Re-keying first is
-what gives the second conversation its own integration and coordinator, so nothing is ever
-orphaned — and it also makes the narrowing mostly redundant in practice, since a differing
-spawn identity now yields a fresh coordinator whose `hasLivePtySession()` is false and which
-therefore never reaches the teardown at all. The narrowing stays because it makes the
-remaining case (an explicit `sessionId` naming a different live session) an intentional kill
-rather than an incidental one.
+**These three cannot be split, and the order within the stage matters.** Re-keying the
+sequential integrations first gives every differing spawn identity its own coordinator, so
+narrowing teardown cannot orphan a live PTY. The interactive restart path now kills only when
+the new resume would take over the live PTY's session; model changes and fresh sessions spawn
+siblings, while same-session resumes still kill, await exit, and then spawn. The webview now
+keeps every started terminal until an explicit close message, so it no longer guesses which
+same-harness tab the backend intended to retain.
 
-Landing 1 without 3 leaves live PTYs the user cannot see or close, because the webview still
-evicts their tabs by harness.
+Stage 1 and Stage 2 are complete. No per-workflow terminal cap, setting, or eviction logic was
+added; `CliTransportCoordinator` still owns exactly one PTY per integration.
 
 ---
 

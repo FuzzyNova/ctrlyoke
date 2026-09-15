@@ -167,6 +167,7 @@ import {
 } from "../types/CompatibilityAnalyzer";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
+import { spawnIdentityHash } from "../types/ExecutionSpawnIdentity";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
   OutputActivityEntry,
@@ -397,14 +398,17 @@ export class WorkflowInstance {
 
   /**
    * Execution integrations created for the current/most-recent run — disposed in finally block.
-   * Keyed by harness ID so harness switches reuse the same integration instance rather than
-   * allocating a new one per prompt (important for long-running / infinite-queue workflows).
-   * Max live integrations = number of distinct harness types used (≤ 4).
+   * Keyed by harness ID and spawn identity so compatible prompts reuse the same integration
+   * instance rather than allocating a new one per prompt (important for long-running /
+   * infinite-queue workflows).
    */
   private readonly executionIntegrations = new Map<
     string,
     HarnessIntegration
   >();
+  /** Integrations that must be fresh and therefore cannot live in the cache. */
+  private readonly uncachedExecutionIntegrations =
+    new Set<HarnessIntegration>();
   /** Target-keyed integrations used by a future parallel group fan-out. */
   private readonly targetExecutionIntegrations = new Map<
     string,
@@ -430,12 +434,9 @@ export class WorkflowInstance {
 
   /**
    * Live integrations retained between `startWorkflowExecution` passes when
-   * inject mode is active, keyed by the same harness ID used in
-   * executionIntegrations (e.g. "copilot-cli", "claude-cli"). One entry per
-   * harness that completed a prompt with an active PTY session. A multi-harness
-   * workflow (prompt 1 = copilot-cli, prompt 2 = claude-cli) produces two
-   * entries, so the next pass can inject into whichever harness its first
-   * prompt targets.
+   * inject mode is active, keyed by the same harness/spawn-identity key used in
+   * executionIntegrations. Each entry represents a compatible process that
+   * completed a prompt with an active PTY session.
    *
    * **This retention never crosses a RunRef.** "Pass" here means another
    * `startWorkflowExecution` call on the *same* run — appending a prompt to a
@@ -1161,6 +1162,11 @@ export class WorkflowInstance {
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
+    for (const integration of this.uncachedExecutionIntegrations) {
+      integration.closeTerminal();
+      integration.dispose();
+    }
+    this.uncachedExecutionIntegrations.clear();
     for (const integration of this.targetExecutionIntegrations.values()) {
       integration.closeTerminal();
       integration.dispose();
@@ -4348,6 +4354,8 @@ export class WorkflowInstance {
     targetKeyedExecution: boolean = false
   ): WorkflowExecutionContext {
     const self = this;
+    let currentIntegration = activeIntegration;
+    let activeIntegrationKey: string | undefined;
     return {
       executionWorkspace: this.executionWorkspace,
       workspaceFolderPath: this.workspaceFolderPath,
@@ -4422,10 +4430,9 @@ export class WorkflowInstance {
       targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,
-        harnessOverride?: HarnessId,
+        resolvedProperties: ResolvedProperties,
         target?: WorkflowAttemptTarget
       ) => {
-        const resolvedHarness = harnessOverride;
         const targetIsGrouped =
           target?.kind === FINAL_STEP_PHASES.QUEUE &&
           this.promptQueue
@@ -4437,26 +4444,32 @@ export class WorkflowInstance {
             );
         if (target && (targetKeyedExecution || targetIsGrouped)) {
           const targetIntegration = this.createIntegrationForMode(
-            resolvedHarness,
-            target
+            resolvedProperties.harness,
+            target,
+            resolvedProperties
           );
           this.registerTargetIntegration(target, targetIntegration);
           return targetIntegration;
         }
-        const currentIntegration = activeIntegration;
+
+        const integrationKey =
+          this.getSequentialIntegrationKey(resolvedProperties);
+        const requiresFreshIntegration = !resolvedProperties.resumeSession;
         if (
-          resolvedHarness &&
-          resolvedHarness !== currentIntegration.getIntegrationMode()
+          requiresFreshIntegration ||
+          activeIntegrationKey !== integrationKey
         ) {
           Log.info(
-            `[inst:${this.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}; retaining the previous harness terminal`
+            `[inst:${this.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} selecting spawn identity ${resolvedProperties.harness}::${integrationKey.slice(-16)}; retaining incompatible terminals`
           );
-          const overrideIntegration =
-            this.createIntegrationForMode(resolvedHarness);
-          if (target) {
-            this.registerTargetIntegration(target, overrideIntegration);
-          }
-          return overrideIntegration;
+          currentIntegration = this.createIntegrationForMode(
+            resolvedProperties.harness,
+            undefined,
+            resolvedProperties
+          );
+          activeIntegrationKey = requiresFreshIntegration
+            ? undefined
+            : integrationKey;
         }
         if (target) {
           this.registerTargetIntegration(target, currentIntegration);
@@ -4879,9 +4892,13 @@ export class WorkflowInstance {
 
   private createIntegrationForMode(
     harnessOverride?: HarnessId,
-    target?: WorkflowAttemptTarget
+    target?: WorkflowAttemptTarget,
+    resolvedProperties?: ResolvedProperties
   ): HarnessIntegration {
-    const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
+    const harness =
+      resolvedProperties?.harness ??
+      harnessOverride ??
+      ConfigurationUtils.getIntegrationMode();
     const targetKey = target
       ? this.getExecutionTargetRunKey(target)
       : undefined;
@@ -4906,34 +4923,50 @@ export class WorkflowInstance {
       return targetIntegration;
     }
 
+    // Calls made before the executor has resolved a prompt (notably the initial
+    // setup integration) cannot identify a compatible cache entry safely. Keep
+    // that integration provisional; prompt selection below resolves the exact
+    // spawn-identity key before it is used for a prompt.
+    if (!resolvedProperties) {
+      return this.createUncachedExecutionIntegration(harness);
+    }
+
+    // A fresh-session prompt must never reuse a cached integration, even when
+    // its other spawn-time properties happen to match a previous prompt.
+    if (!resolvedProperties.resumeSession) {
+      return this.createUncachedExecutionIntegration(harness);
+    }
+
+    const integrationKey = this.getSequentialIntegrationKey(resolvedProperties);
+
     // If a live integration from the previous run is waiting in liveInjectIntegrations,
     // promote it into executionIntegrations immediately — before checking the cache or
     // creating a new instance. This ensures the live one wins even when
     // executeLoadedPromptFile calls createIntegrationForMode() before startWorkflowExecution
     // has a chance to run its own restore loop.
-    const live = this.liveInjectIntegrations.get(harness);
+    const live = this.liveInjectIntegrations.get(integrationKey);
     if (live) {
-      this.liveInjectIntegrations.delete(harness);
+      this.liveInjectIntegrations.delete(integrationKey);
       if (!this.canReuseExecutionIntegration(live)) {
-        void this.cleanupRetainedIntegrationArtifacts(harness, live);
+        void this.cleanupRetainedIntegrationArtifacts(integrationKey, live);
         live.closeTerminalGracefully();
         live.dispose();
       } else {
         live.resetForNewRun();
         live.setSourceDefinitionPath(this.sourceDefinitionPath);
-        this.executionIntegrations.set(harness, live);
+        this.executionIntegrations.set(integrationKey, live);
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Reusing live inject integration (harness=${harness}) from previous run`
+          `[inst:${this.id.slice(0, 8)}] Reusing live inject integration (key=${integrationKey}) from previous run`
         );
         return live;
       }
     }
 
-    const cached = this.executionIntegrations.get(harness);
+    const cached = this.executionIntegrations.get(integrationKey);
     if (cached) {
       cached.setSourceDefinitionPath(this.sourceDefinitionPath);
       Log.debug(
-        `[WorkflowInstance] Reusing cached integration for harness: ${harness}`
+        `[WorkflowInstance] Reusing cached integration for key: ${integrationKey}`
       );
       return cached;
     }
@@ -4945,7 +4978,27 @@ export class WorkflowInstance {
       this.executionWorkspace
     );
     this.configureExecutionIntegration(integration);
-    this.executionIntegrations.set(harness, integration);
+    this.executionIntegrations.set(integrationKey, integration);
+    return integration;
+  }
+
+  private getSequentialIntegrationKey(
+    resolvedProperties: ResolvedProperties
+  ): string {
+    return `${resolvedProperties.harness}::${spawnIdentityHash(
+      resolvedProperties
+    )}`;
+  }
+
+  private createUncachedExecutionIntegration(
+    harness: HarnessId
+  ): HarnessIntegration {
+    const integration = this.integrationFactory.createForExecution(
+      harness,
+      this.executionWorkspace
+    );
+    this.configureExecutionIntegration(integration);
+    this.uncachedExecutionIntegrations.add(integration);
     return integration;
   }
 
@@ -5478,6 +5531,7 @@ export class WorkflowInstance {
     this.executionRunRef = runRef;
     const lockWorkspaceRoot =
       this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    let activeIntegration: HarnessIntegration | undefined;
 
     try {
       await this.ensureRunnerLock(workingFilePath);
@@ -5534,13 +5588,13 @@ export class WorkflowInstance {
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveInjectIntegrations.size}`
       );
       for (const [
-        harness,
+        integrationKey,
         liveIntegration,
       ] of this.liveInjectIntegrations.entries()) {
         if (!this.canReuseExecutionIntegration(liveIntegration)) {
-          this.liveInjectIntegrations.delete(harness);
+          this.liveInjectIntegrations.delete(integrationKey);
           await this.cleanupRetainedIntegrationArtifacts(
-            harness,
+            integrationKey,
             liveIntegration
           );
           liveIntegration.closeTerminalGracefully();
@@ -5548,14 +5602,14 @@ export class WorkflowInstance {
           continue;
         }
         liveIntegration.resetForNewRun();
-        this.executionIntegrations.set(harness, liveIntegration);
+        this.executionIntegrations.set(integrationKey, liveIntegration);
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Restored live inject integration (harness=${harness}) at workflow start`
+          `[inst:${this.id.slice(0, 8)}] Restored live inject integration (key=${integrationKey}) at workflow start`
         );
       }
       this.liveInjectIntegrations.clear();
 
-      const activeIntegration = integration || this.createIntegrationForMode();
+      activeIntegration = integration || this.createIntegrationForMode();
       this.registerTargetIntegration(
         {
           kind: FINAL_STEP_PHASES.QUEUE,
@@ -5634,16 +5688,24 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
       );
-      for (const [
-        harnessKey,
-        execIntegration,
-      ] of this.executionIntegrations.entries()) {
+      const executionIntegrationEntries = [
+        ...this.executionIntegrations.entries(),
+        ...Array.from(
+          this.uncachedExecutionIntegrations,
+          (execIntegration, index) =>
+            [`uncached:${index}`, execIntegration] as const
+        ),
+      ];
+      for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
+        const isUncachedIntegration =
+          this.uncachedExecutionIntegrations.has(execIntegration);
         const retainIntegration =
-          (preserveWorktreeReservation &&
+          !isUncachedIntegration &&
+          ((preserveWorktreeReservation &&
             execIntegration.canReuseForInject()) ||
-          (!this.executionWorkspace.worktree &&
-            (execIntegration.canReuseForInject() ||
-              execIntegration.shouldPersistForSessionActivity()));
+            (!this.executionWorkspace.worktree &&
+              (execIntegration.canReuseForInject() ||
+                execIntegration.shouldPersistForSessionActivity())));
         if (retainIntegration) {
           // Either the PTY is still alive with inject context set (CLI), or the
           // integration wants to stay alive for its own post-completion session
@@ -5719,6 +5781,7 @@ export class WorkflowInstance {
         }
       }
       this.executionIntegrations.clear();
+      this.uncachedExecutionIntegrations.clear();
 
       for (const targetIntegration of this.targetExecutionIntegrations.values()) {
         targetIntegration.closeTerminalGracefully();

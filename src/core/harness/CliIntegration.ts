@@ -1206,9 +1206,13 @@ export class CliIntegration extends HarnessIntegration {
         "[CliIntegration] Inject mode unavailable — falling back to restart mode"
       );
       await this.retireInteractivePtyForRestartFallback();
-    } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
+    } else if (
+      isInteractive &&
+      this.transportCoordinator.hasLivePtySession() &&
+      this.doesInteractivePtyOwnSession(session)
+    ) {
       // Inject mode was preemptively skipped (settings changed, resumeSession: false,
-      // etc.) but a live PTY from the previous step is still running. Gracefully signal
+      // etc.) and the new spawn would resume the live PTY's session. Gracefully signal
       // it before spawning a fresh one so the CLI TUI can clean up.
       await this.retireInteractivePtyForRestartFallback();
     }
@@ -1393,16 +1397,8 @@ export class CliIntegration extends HarnessIntegration {
   private async retireInteractivePtyBeforeHeadlessResume(
     session: CliExecutionSession
   ): Promise<void> {
-    const ctx = this.executionRunner.getLastInteractiveContext();
     const resolvedSessionId = session.resolvedSessionId;
-    if (!ctx || !resolvedSessionId) {
-      return;
-    }
-
-    const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
-      (id): id is string => typeof id === "string" && id.length > 0
-    );
-    if (!activeSessionIds.includes(resolvedSessionId)) {
+    if (!this.doesInteractivePtyOwnSession(session)) {
       return;
     }
 
@@ -1418,6 +1414,28 @@ export class CliIntegration extends HarnessIntegration {
         `[CliIntegration] Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
       );
     }
+  }
+
+  /**
+   * Returns true only when a new resume would take over the session owned by
+   * the retained interactive PTY. Fresh-session prompts never conflict with
+   * that PTY, even if their resolver carried an old or explicit session ID.
+   */
+  private doesInteractivePtyOwnSession(session: CliExecutionSession): boolean {
+    if (session.resolvedProperties?.resumeSession === false) {
+      return false;
+    }
+
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    const resolvedSessionId = session.resolvedSessionId;
+    if (!ctx || !resolvedSessionId) {
+      return false;
+    }
+
+    const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    );
+    return activeSessionIds.includes(resolvedSessionId);
   }
 
   private async persistExecutionOutcome(

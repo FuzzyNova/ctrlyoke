@@ -2068,8 +2068,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
     const context: WorkflowExecutionContext = {
       ...makeContext(effectiveIntegration),
-      getIntegrationForPrompt: (_prompt, harnessOverride) => {
-        requestedHarnesses.push(harnessOverride);
+      getIntegrationForPrompt: (_prompt, resolvedProperties) => {
+        requestedHarnesses.push(resolvedProperties.harness);
         return effectiveIntegration;
       },
     };

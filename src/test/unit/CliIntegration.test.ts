@@ -1477,6 +1477,129 @@ suite("CliIntegration", () => {
     assert.match(retiredReason ?? "", /headless resume of AI session/u);
   });
 
+  async function sendInteractiveWithLivePty(
+    integration: CliIntegration,
+    resolvedProperties: ResolvedProperties,
+    resolvedSessionId: string | undefined,
+    lifecycle: string[]
+  ): Promise<boolean> {
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties,
+      resolvedSessionId,
+    });
+    (integration as any).initializeExecutionSession = async () => {};
+    (integration as any).resumeSessionActivityWatcher = () => {};
+    (integration as any).shouldUseInjectMode = () => false;
+    (integration as any).transportCoordinator.hasLivePtySession = () => true;
+    (integration as any).executionPlanBuilder.plan = async () => ({
+      resolvedCommand: undefined,
+      args: [],
+      cliArgs: [],
+      mutations: [],
+      providerPreparation: { cliArgs: [], mutations: [], diagnostics: [] },
+      permissionApplication: { diagnostics: [] },
+      mcpApplication: { cliArgs: [], mutations: [], diagnostics: [] },
+      effectiveToolPermissions: undefined,
+      diagnostics: [],
+    });
+    (integration as any).executionPlanBuilder.apply = async () => {};
+    (integration as any).executionRunner.executeInteractive = async () => {
+      lifecycle.push("spawn");
+      return true;
+    };
+    return integration.sendPrompt({ prompt: "continue" });
+  }
+
+  test("spawns a sibling without killing the live PTY when the model changes", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(
+        createResolvedProperties({ model: "old-model" })
+      );
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ model: "new-model" }),
+          undefined,
+          lifecycle
+        ),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("awaits same-session PTY exit before spawning its replacement", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    let releaseExit!: () => void;
+    const exitComplete = new Promise<void>((resolve) => {
+      releaseExit = resolve;
+    });
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        await exitComplete;
+        lifecycle.push("exit");
+        return "pty-existing";
+      };
+
+    try {
+      const send = sendInteractiveWithLivePty(
+        integration,
+        createResolvedProperties(),
+        "session-existing",
+        lifecycle
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(lifecycle, ["kill"]);
+      releaseExit();
+      assert.strictEqual(await send, true);
+      assert.deepStrictEqual(lifecycle, ["kill", "exit", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("never kills a live PTY for resumeSession false", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ resumeSession: false }),
+          "session-existing",
+          lifecycle
+        ),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
   test("should persist cancelled prompt runtime when a sendPrompt attempt is cancelled", async () => {
     const integration = createHeadlessIntegration();
     const prompt: PromptStep = { prompt: "say hi" };

@@ -17,6 +17,7 @@ import {
   ACTION_TYPES,
   CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  EXECUTION_MODES,
   EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -31,6 +32,7 @@ import {
   type HarnessId,
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
+import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -43,6 +45,26 @@ import {
   initPtyProcessManager,
   PtySession,
 } from "../../core/harness/PtyProcessManager";
+import { spawnIdentityHash } from "../../types/ExecutionSpawnIdentity";
+
+function createResolvedProperties(
+  overrides: Partial<ResolvedProperties> = {}
+): ResolvedProperties {
+  return {
+    harness: HARNESS_IDS.COPILOT_CLI,
+    model: "test-model",
+    executionMode: EXECUTION_MODES.INTERACTIVE,
+    resumeSession: true,
+    mcpServers: null,
+    hooks: null,
+    toolPermissions: null,
+    ...overrides,
+  };
+}
+
+function integrationCacheKey(props: ResolvedProperties): string {
+  return `${props.harness}::${spawnIdentityHash(props)}`;
+}
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -209,23 +231,108 @@ suite("WorkflowInstance target resources", () => {
     );
 
     try {
+      const sequentialProperties = createResolvedProperties();
       const first = (instance as any).createIntegrationForMode(
         HARNESS_IDS.COPILOT_CLI,
-        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        sequentialProperties
       ) as HarnessIntegration;
       const second = (instance as any).createIntegrationForMode(
         HARNESS_IDS.COPILOT_CLI,
-        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 }
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        sequentialProperties
       ) as HarnessIntegration;
       const sequentialFirst = (instance as any).createIntegrationForMode(
-        HARNESS_IDS.COPILOT_CLI
+        HARNESS_IDS.COPILOT_CLI,
+        undefined,
+        sequentialProperties
       ) as HarnessIntegration;
       const sequentialSecond = (instance as any).createIntegrationForMode(
-        HARNESS_IDS.COPILOT_CLI
+        HARNESS_IDS.COPILOT_CLI,
+        undefined,
+        sequentialProperties
       ) as HarnessIntegration;
 
       assert.notStrictEqual(first, second);
       assert.strictEqual(sequentialFirst, sequentialSecond);
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("selects same-harness integrations by spawn identity", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const initial = new MockHarnessIntegration(undefined, false);
+    const context = (instance as any).buildWorkflowExecutionContext(
+      initial,
+      "",
+      undefined
+    );
+    const firstProperties = createResolvedProperties({ model: "model-one" });
+    const secondProperties = createResolvedProperties({ model: "model-two" });
+
+    try {
+      const first = context.getIntegrationForPrompt(
+        { name: "step one", prompt: "one" },
+        firstProperties
+      );
+      const second = context.getIntegrationForPrompt(
+        { name: "step two", prompt: "two" },
+        secondProperties
+      );
+      const third = context.getIntegrationForPrompt(
+        { name: "step three", prompt: "three" },
+        firstProperties
+      );
+
+      assert.notStrictEqual(first, second);
+      assert.strictEqual(third, first);
+      assert.strictEqual(
+        (instance as any).executionIntegrations.size,
+        2,
+        "each live spawn identity must retain its own integration"
+      );
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  test("always creates a fresh integration when resumeSession is false", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const properties = createResolvedProperties({ resumeSession: false });
+
+    try {
+      const first = (instance as any).createIntegrationForMode(
+        properties.harness,
+        undefined,
+        properties
+      );
+      const second = (instance as any).createIntegrationForMode(
+        properties.harness,
+        undefined,
+        properties
+      );
+
+      assert.notStrictEqual(first, second);
+      assert.strictEqual((instance as any).executionIntegrations.size, 0);
     } finally {
       instance.dispose();
     }
@@ -279,7 +386,9 @@ suite("WorkflowInstance steer dispatch", () => {
     const ptyManager = initPtyProcessManager(() => undefined);
     ptyManager.getSession = () => session;
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.COPILOT_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.COPILOT_CLI })
+      ),
       integration
     );
 
@@ -300,7 +409,9 @@ suite("WorkflowInstance steer dispatch", () => {
     const ptyManager = initPtyProcessManager(() => undefined);
     ptyManager.getSession = () => session;
     (instance as any).liveInjectIntegrations.set(
-      HARNESS_IDS.COPILOT_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.COPILOT_CLI })
+      ),
       integration
     );
 
@@ -3148,14 +3259,14 @@ suite("WorkflowInstance append-and-continue", () => {
 
     const claudeIntegration = context.getIntegrationForPrompt(
       { name: "Claude follow-up", prompt: "continue" },
-      HARNESS_IDS.CLAUDE_CLI
+      createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
     ) as TrackingIntegration;
 
     assert.strictEqual(initialIntegration.closeTerminalCalls, 0);
 
     context.getIntegrationForPrompt(
       { name: "Copilot follow-up", prompt: "continue" },
-      HARNESS_IDS.COPILOT_CLI
+      createResolvedProperties({ harness: HARNESS_IDS.COPILOT_CLI })
     );
 
     assert.strictEqual(claudeIntegration.closeTerminalCalls, 0);
@@ -3271,7 +3382,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     const integration = new RetainedIntegration(undefined, false);
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.ANTIGRAVITY_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.ANTIGRAVITY_CLI })
+      ),
       integration
     );
     (instance as any).workflowExecutor.execute = async () => {};
@@ -3340,7 +3453,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     const integration = new EagerCleanupIntegration(undefined, false);
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.CODEX_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CODEX_CLI })
+      ),
       integration
     );
     (instance as any).workflowExecutor.execute = async () => {};
@@ -3408,7 +3523,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     const integration = new WorktreeIntegration(undefined, false);
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.CLAUDE_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
       integration
     );
     (instance as any).workflowExecutor.execute = async () => {};
@@ -3480,7 +3597,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
     let runnerLockReleaseCalls = 0;
     let runtimeTrustReleaseCalls = 0;
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.CLAUDE_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
       integration
     );
     (instance as any).workflowExecutor.execute = async () => {};
@@ -3519,7 +3638,11 @@ suite("WorkflowInstance retained integration artifacts", () => {
     );
     assert.strictEqual(integration.gracefulCloseCalls, 0);
     assert.strictEqual(
-      (instance as any).liveInjectIntegrations.get(HARNESS_IDS.CLAUDE_CLI),
+      (instance as any).liveInjectIntegrations.get(
+        integrationCacheKey(
+          createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+        )
+      ),
       integration,
       "the integration must be parked so the next run can reuse it via inject"
     );
@@ -3582,11 +3705,15 @@ suite("WorkflowInstance retained integration artifacts", () => {
     let leaseReleaseCalls = 0;
     let runnerLockReleaseCalls = 0;
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.CLAUDE_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CLAUDE_CLI })
+      ),
       injectable
     );
     (instance as any).executionIntegrations.set(
-      HARNESS_IDS.CODEX_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.CODEX_CLI })
+      ),
       ordinary
     );
     (instance as any).workflowExecutor.execute = async () => {};
@@ -3665,7 +3792,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
     const livePrevious = new RetainedTerminalIntegration(undefined, false);
     (instance as any).lastRunIntegrations = [disposedPrevious];
     (instance as any).liveInjectIntegrations.set(
-      HARNESS_IDS.OPENCODE_CLI,
+      integrationCacheKey(
+        createResolvedProperties({ harness: HARNESS_IDS.OPENCODE_CLI })
+      ),
       livePrevious
     );
 

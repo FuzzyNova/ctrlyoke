@@ -24,19 +24,6 @@ import {
 } from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 
-function isScriptPtySession(session: {
-  kind?: string;
-  harnessId?: string;
-  promptNumber?: number;
-  parallelGroupId?: string;
-}): boolean {
-  return (
-    session.kind === SESSION_KINDS.AI_CLI &&
-    session.harnessId === undefined &&
-    session.promptNumber === undefined
-  );
-}
-
 const pendingAutoClaims = new Set<string>();
 
 function getPendingAutoClaimKey(workflowId: string, sessionId: string): string {
@@ -241,38 +228,6 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         );
       }
       return;
-    }
-
-    // Keep one AI terminal per live harness PTY for sequential execution.
-    // Different harnesses can stay visible together, and parallel siblings
-    // stay distinct even when they share a harness (or are script PTYs).
-    if (kind === SESSION_KINDS.AI_CLI) {
-      const termStore = useTerminalStore.getState();
-      const prevSessionIds = (termStore.sessions[workflowId] ?? [])
-        .filter((s) => {
-          if (harnessId) {
-            return (
-              s.kind === SESSION_KINDS.AI_CLI &&
-              s.harnessId === harnessId &&
-              !(
-                parallelGroupId !== undefined &&
-                s.parallelGroupId === parallelGroupId
-              )
-            );
-          }
-          return (
-            isScriptPtySession(s) &&
-            !(
-              parallelGroupId !== undefined &&
-              s.parallelGroupId === parallelGroupId
-            )
-          );
-        })
-        .map((s) => s.id);
-      for (const prevSessionId of prevSessionIds) {
-        terminalRegistry.clearSession(workflowId, prevSessionId);
-        termStore.removeSession(workflowId, prevSessionId);
-      }
     }
 
     useTerminalStore.getState().addSession({
