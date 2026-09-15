@@ -113,11 +113,10 @@ what parallel already does: `targetExecutionIntegrations` (`:409`) is keyed
 `queue:<stepIndex>`, and `createIntegrationForMode` (`:4880`) returns a distinct integration
 per target. Parallel same-harness terminals work today precisely because of this.
 
-Proposed key for the sequential caches: `` `${harnessId}::${spawnIdentityHash}` `` where
-`spawnIdentityHash` is a stable hash of the fields `getInjectIncompatibilityReason` compares
-(`model`, `toolPermissions`, `hooks`, `mcpServers`, `additionalArgs`). Single-source it beside
-that function so the key and the inject predicate can never drift — equal hashes guarantee
-inject compatibility, and unequal ones were always going to spawn separately.
+Key for the sequential caches: `` `${harnessId}::${spawnIdentityHash(props)}` ``. Equal hashes
+guarantee inject compatibility, and unequal ones were always going to spawn separately. The
+field list, canonicalization, and digest are decided under **Spawn identity** below, in a
+module both the cache key and the inject predicate read, so the two cannot drift.
 
 `resumeSession: false` steps bypass the cache entirely and always allocate a fresh
 integration, since by definition they must not continue anything.
@@ -128,24 +127,120 @@ integration, since by definition they must not continue anything.
 (or a hash computed at the call site) so `createIntegrationForMode` can compose the key. That
 signature change is the first piece of work, and it is what makes the rest mechanical.
 
+The other call site, `ensureIsolatedIntegration` (`:827`), already has
+`member.resolvedProperties` in hand, so the wider signature costs it nothing — and it always
+passes a `target`, so it takes the target-keyed branch and never composes a spawn-identity
+key at all.
+
 **Ordering at that call site is load-bearing and already correct — do not move it.** By
 `:2109`, `resolvedProperties` has already been through `{{var}}` substitution, MCP
-normalization (`resolvedProperties = mcpNormalization.properties`, `:2077`), and the hooks
-rewrite (`:2089-2095`). Those are exactly the post-normalization values
+normalization (`resolvedProperties = mcpNormalization.properties`, `:2077`), and the
+secrets/hooks rewrite (`:2089-2103`). Those are exactly the post-normalization values
 `getInjectIncompatibilityReason` later compares against `ctx.spawnedWith`, which is itself
 `session.resolvedProperties` (`CliExecutionRunner.ts:681`). Hashing before any of those steps
 would key on values the inject check never sees, silently reintroducing the drift this design
-exists to prevent.
-
-**Where the hash lives.** `getInjectIncompatibilityReason` is a `private static` on
-`CliIntegration`, and `WorkflowInstance` should not reach into it. Put `spawnIdentityHash` in
-a small shared module beside the `ResolvedProperties` contract and have both the private
-static and `createIntegrationForMode` call it, so neither owns it.
+exists to prevent. `:2089-2103` matters twice over now that `secrets` is hashed: that block is
+where `secrets` becomes the effective grant list (`:2091`) and where granted values are
+expanded into `hooks[].env`.
 
 Affected: `executionIntegrations` (`:404`), `liveInjectIntegrations` (`:455`),
 `retainedIntegrationArtifactContexts` (`:465`), and the restore loop in
 `startWorkflowExecution` (`:5519-5556`). All three are already `Map<string, …>`, so the key
 change is mechanical; the disposal loops iterate values and need no change.
+
+### Spawn identity: what is hashed, and how
+
+**Decided.** One module, `src/types/ExecutionSpawnIdentity.ts`, beside the `ResolvedProperties`
+contract it reads, exporting a canonical field record and a digest of it:
+
+```ts
+/** Canonical serialization of each spawn-time field, keyed by field name. */
+export function spawnIdentityFields(
+  props: ResolvedProperties
+): Record<SpawnIdentityField, string>;
+/** Stable cache-key fragment: the digest of that record. */
+export function spawnIdentityHash(props: ResolvedProperties): string;
+```
+
+Both callers go through it. `createIntegrationForMode` hashes the whole record;
+`getInjectIncompatibilityReason` compares `spawnIdentityFields(curr)[f]` against
+`spawnIdentityFields(prev)[f]` field by field, so it keeps its readable `"hooks changed"`
+reasons while losing its private `JSON.stringify` comparisons. Equal hash then means every
+field the predicate checks is equal **by construction**, which is the property the whole design
+rests on — not a convention two files have to remember.
+
+#### Which fields
+
+| Field             | Hashed  | Why                                                                                                                                                                                                                                          |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`         | yes     | Domain separator inside the payload, even though it is also the key prefix — a bare hash then stays unambiguous if anything ever uses it alone.                                                                                              |
+| `model`           | yes     | Spawn arg; already in the predicate.                                                                                                                                                                                                         |
+| `toolPermissions` | yes     | Spawn args; already in the predicate.                                                                                                                                                                                                        |
+| `hooks`           | yes     | Written into the harness config at spawn; already in the predicate.                                                                                                                                                                          |
+| `mcpServers`      | yes     | Spawn config, post-normalization; already in the predicate.                                                                                                                                                                                  |
+| `additionalArgs`  | yes     | Literal spawn args; already in the predicate.                                                                                                                                                                                                |
+| `secrets`         | **new** | Resolved into the PTY's environment at spawn (`CliTransportCoordinator.ts:251-259`). A process spawned without a grant cannot acquire it by injection — a gap in today's predicate that the hash closes.                                     |
+| `ctrlyokeMcpMode` | **new** | Decides whether the ctrlyoke MCP server is attached at all (`CliProviderUtils.hasCtrlYokeServer`, `:60`). Uniform within a run in practice, since it comes from a global setting; included so it can never silently drift from `mcpServers`. |
+
+Deliberately excluded:
+
+- **`resumeSession`** — those steps bypass the cache entirely, so hashing it is dead weight.
+- **`sessionId`** — including it would be _actively wrong_. Step A spawns without one and lands
+  in session `S1`; step B names `S1` explicitly. Differing hashes would hand B a fresh
+  integration that resumes `S1` while A's process still owns it — exactly the
+  two-processes-one-session conflict rule 1 exists to prevent. Explicit session references stay
+  the conflict predicate's job, and this is what keeps the narrowed teardown load-bearing
+  rather than vestigial.
+- **`executionMode`** — a headless step must keep resolving to the retained interactive
+  integration so `retireInteractivePtyBeforeHeadlessResume` (`CliIntegration.ts:1360-1388`) can
+  decide about that PTY. Splitting by mode would hide the live PTY from the check that guards it.
+- **`agent`, `skills`, `priorContext`, `endCondition`, `preCondition`, `errorBehavior`** —
+  per-turn inputs consumed by `CliPromptPreparer` and the executor, not baked into the process.
+
+The asymmetry governing every one of those calls: a field wrongly **included** costs one extra
+terminal; a field wrongly **omitted** silently reuses a process spawned with different args.
+When a new spawn-time property is added, add it here — when in doubt, include it.
+
+#### Canonicalization
+
+The digest input is built by a recursive canonical serializer, not `JSON.stringify` of the raw
+value:
+
+1. **Object keys sorted, recursively.** This is the key-order sensitivity the previous pass
+   flagged: two authorings of the same MCP server entry must not fork a terminal.
+2. **Array order preserved.** `args`, `hooks`, and the tool lists are authored sequences and
+   some are order-significant to the harness. Sorting them would conflate configurations that
+   are not identical — the expensive direction of the asymmetry above.
+3. **`undefined` folded to `null`**, and `additionalArgs` to `?? ""` (matching today's
+   predicate). Nothing further: `[]` is **not** folded into `null`, because the resolver
+   distinguishes "explicitly none" from "empty" (`resolveNullable`) and providers are free to
+   as well.
+4. **One canonical string per field**, so the predicate can still name which field changed.
+
+Rule 3 is the plan's one intentional behavioural delta: today `JSON.stringify(undefined)` and
+`JSON.stringify(null)` differ, so an absent `mcpServers` reads as a change and forces a
+spurious restart. After this it injects.
+
+#### The digest
+
+**64-bit FNV-1a rendered as 16 lowercase hex characters**, implemented in the module with no
+imports. Two reasons to deviate from this repo's `createHash("sha256").digest("hex").slice(0, 12)`
+idiom (`ProjectStatePaths.projectKey`, `WorktreeUtils.createWorktreeDirectoryName`):
+
+- **The module must stay isomorphic.** `src/types/ExecutionPropertyResolver.ts` is imported at
+  runtime by the webview (`hooks/useCompatibilityDiagnostics.ts:22`). A `node:crypto` import in
+  a sibling module is a bundle landmine the first time someone adds a value import, and staying
+  pure leaves the door open for the webview to compute the same identity for a "this step opens
+  a new terminal" preview — the one place drift would be visible to a user.
+- **It is a cache key, not an integrity boundary.** Nothing authenticates on it and the inputs
+  are the user's own resolved config. 64 bits against the ≤10 live entries the cap allows does
+  not justify a dependency on node.
+
+**The canonical string is never the key itself and is never logged.** By `:2109` the hooks
+rewrite (`WorkflowExecutor.ts:2089-2103`) has expanded granted secret _values_ into
+`hooks[].env`, so the serialized identity contains plaintext secrets. Hashing is what makes the
+key safe to hold in a `Map`, write to `Log`, or put in a message payload later. Log
+`harness`, `model`, and the hash — never the payload.
 
 ### Which terminal does a later step inject into?
 
@@ -299,14 +394,15 @@ failure.
 
 ## Files
 
-| File                                                            | Change                                                                                                                                                                                                              |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/core/harness/CliIntegration.ts`                            | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Export `spawnIdentityHash` beside `getInjectIncompatibilityReason`. |
-| `src/core/WorkflowExecutor.ts`                                  | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite.                                                           |
-| `src/core/WorkflowInstance.ts`                                  | Compose cache keys from harness + spawn identity; `resumeSession: false` bypasses the cache. Supply the active-target predicate to the cap.                                                                         |
-| `src/core/harness/PtyProcessManager.ts`                         | Cap enforcement and eviction order in `spawnPty`.                                                                                                                                                                   |
-| `src/types/CtrlYokeSettings.ts`, `schemas/settings-schema.json` | `terminal.maxSessionsPerWorkflow`, default 10, `-1` unlimited.                                                                                                                                                      |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`         | Delete the harness-eviction block.                                                                                                                                                                                  |
+| File                                                            | Change                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/ExecutionSpawnIdentity.ts`                           | **New.** `spawnIdentityFields` / `spawnIdentityHash` — the sole source of both the cache key and the inject predicate's field comparison. No imports (see **The digest**).                                                                          |
+| `src/core/harness/CliIntegration.ts`                            | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Replace `getInjectIncompatibilityReason`'s `JSON.stringify` comparisons with `spawnIdentityFields`. |
+| `src/core/WorkflowExecutor.ts`                                  | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite.                                                                                           |
+| `src/core/WorkflowInstance.ts`                                  | Compose cache keys from harness + spawn identity; `resumeSession: false` bypasses the cache. Supply the active-target predicate to the cap.                                                                                                         |
+| `src/core/harness/PtyProcessManager.ts`                         | Cap enforcement and eviction order in `spawnPty`.                                                                                                                                                                                                   |
+| `src/types/CtrlYokeSettings.ts`, `schemas/settings-schema.json` | `terminal.maxSessionsPerWorkflow`, default 10, `-1` unlimited.                                                                                                                                                                                      |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`         | Delete the harness-eviction block.                                                                                                                                                                                                                  |
 
 No `schemas/workflow-schema.json` change — nothing here is authored per workflow.
 
@@ -320,7 +416,8 @@ testable.
 
 **Stage 2 — the behavioural change, as one landing**, in this internal order:
 
-1. Thread `ResolvedProperties` through `getIntegrationForPrompt` and re-key the caches.
+1. Add `ExecutionSpawnIdentity`, thread `ResolvedProperties` through
+   `getIntegrationForPrompt`, and re-key the caches.
 2. Narrow the teardown to the session-id conflict predicate.
 3. Delete the webview harness-eviction block.
 
@@ -342,9 +439,15 @@ evicts their tabs by harness.
 
 ## Tests
 
+- `src/test/unit/ExecutionSpawnIdentity.test.ts` — object key order does not change the hash;
+  array order does; `undefined` and `null` fold together but `[]` and `null` do not; a change
+  to each hashed field moves the hash; a change to `sessionId`, `executionMode`, `agent`, or
+  `skills` does not. Plus the invariant that ties the two consumers together: equal
+  `spawnIdentityHash` implies `getInjectIncompatibilityReason` reports no field change.
 - `src/test/unit/CliIntegration.test.ts` — extends the existing `inject compatibility` suite:
   a model change spawns a sibling without killing the live PTY; a same-session resume kills
-  first and awaits exit before spawning; `resumeSession: false` never kills.
+  first and awaits exit before spawning; `resumeSession: false` never kills; a `secrets` change
+  no longer injects.
 - `src/test/unit/PtyProcessManager.test.ts` — eviction order (ended before running, oldest
   first), shells never evicted, active-target sessions never evicted, over-cap spawn when
   nothing is evictable logs and proceeds.
