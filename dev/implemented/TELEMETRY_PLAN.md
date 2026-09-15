@@ -1,5 +1,13 @@
 # Telemetry Plan
 
+**Status:** ✅ Implemented — verified against the code 2026-09-15. The
+reporter singleton, all five events plus `extension/activationFailed`, and
+the README disclosure are all live in `src/utils/TelemetryReporter.ts` /
+`src/utils/TelemetryEvents.ts`. Remaining deferred work (token-usage wiring,
+generic command-handler error telemetry, optional `telemetry.json`, and the
+pre-ship Application Insights verification step) is tracked separately in
+[`../backlog/TELEMETRY_FOLLOWUPS_PLAN.md`](../backlog/TELEMETRY_FOLLOWUPS_PLAN.md).
+
 ## Overview
 
 Add opt-in telemetry to ctrlyoke using `@vscode/extension-telemetry`, which wraps
@@ -37,10 +45,7 @@ const CONNECTION_STRING = "InstrumentationKey=...;IngestionEndpoint=..."; // fro
 
 let reporter: TelemetryReporter | undefined;
 
-export function initTelemetry(
-  extensionId: string,
-  extensionVersion: string
-): TelemetryReporter {
+export function initTelemetry(): TelemetryReporter | undefined {
   reporter = new TelemetryReporter(CONNECTION_STRING);
   return reporter;
 }
@@ -272,7 +277,8 @@ Add a brief note to the README and marketplace description:
 - [x] Add `cli/not_found` to `CliIntegration.handleInitializationError`
 - [x] Add `extension/activationFailed` to `extension.ts`'s top-level activate() catch
 - [x] Update README with disclosure text (marketplace listing renders the README directly, so no separate marketplace-only copy is needed; `PRIVACY.md` §3.1 already covered this accurately)
-- [ ] Optionally add a `telemetry.json` at the extension root once events are defined (not a package.json field — see Disclosure note above)
-- [ ] Verify events appear in Application Insights Live Metrics before shipping
-- [ ] Follow-up (not in this pass): wire `inputTokens`/`outputTokens`/`cachedInputTokens` into `prompt/completed`
-- [ ] Follow-up (not in this pass): generic command-handler error telemetry across `extension.ts`'s `registerCommand` catch blocks
+
+Remaining items (optional `telemetry.json`, the pre-ship Application Insights
+Live Metrics check, token-usage wiring, and generic command-handler error
+telemetry) are tracked in
+[`../backlog/TELEMETRY_FOLLOWUPS_PLAN.md`](../backlog/TELEMETRY_FOLLOWUPS_PLAN.md).

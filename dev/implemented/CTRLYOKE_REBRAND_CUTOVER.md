@@ -1,9 +1,9 @@
 # ctrlyoke Rebrand — External / Business Cutover
 
 **Created:** June 30, 2026
-**Status:** 🟡 Not started — this is the external/business "Part 3" of the rebrand. The **code rebrand is complete** (see [`CTRLYOKE_REBRAND_PLAN.md`](CTRLYOKE_REBRAND_PLAN.md) Execution Status, incl. docs/landing/legal prose now swapped to `ctrlyoke`).
+**Status:** ✅ DONE (verified 2026-09-15) — this was the external/business "Part 3" of the rebrand, and it's complete. §1–5 (domain/DNS, Netlify, Google Workspace, GitHub, VS Code Marketplace reservation) are all done. §6–7 (Lemon Squeezy, Keygen "create fresh") were already marked superseded here and are now tracked to full current detail in [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 4–5, which is the live tracker for any remaining vendor/launch work. §8's code follow-ups are individually gated in that same checklist (license effective dates are already set; `CHECKOUT_URL`/`LAUNCHED` are deliberately still held pending Marketplace publish — see `RELEASE_CHECKLIST.md` Phase 9). This document is kept as the historical record of the identity-migration work itself.
 **Owner:** Nathan (manual, external dashboards — not code changes)
-**Purpose:** the single forward-looking checklist for moving the live business identity from `flightpath.dev` → `ctrlyoke.dev`, all instructions pointed at **ctrlyoke**.
+**Purpose (historical):** the checklist used to move the live business identity from `flightpath.dev` → `ctrlyoke.dev`, all instructions pointed at **ctrlyoke**. For current/remaining launch work, see [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md).
 
 > **Why a separate doc?** [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) records launch work genuinely **done under the `flightpath.dev` identity** (Phase 0–2). Rather than rewrite that history to falsely read "ctrlyoke", this doc supersedes its still-pending external items and re-points them at the new brand. Where an item was already completed under FlightPath, it's listed here as a **migrate** task; where it never existed, it's a **create-fresh-under-ctrlyoke** task.
 
@@ -61,8 +61,8 @@
   - [x] `privacy@ctrlyoke.dev`
   - [x] `licensing@ctrlyoke.dev`
 - [x] Clean break — no `@flightpath.dev` forwarders/aliases kept. Nothing has ever hit these inboxes, so there's no overlap window needed.
-- [ ] Studio inboxes `admin@`/`hello@fuzzno.com` are **unaffected** — do not touch.
-- [ ] These addresses are already referenced in the shipped `LICENSE.md` / `PRIVACY.md` and the site footer (all now `@ctrlyoke.dev`), so the inboxes must exist before/at launch.
+- [x] Studio inboxes `admin@`/`hello@fuzzno.com` confirmed **unaffected** — left untouched, as intended.
+- [x] Confirmed these addresses are referenced correctly in the shipped `LICENSE.md` / `PRIVACY.md` and the site footer (all now `@ctrlyoke.dev`) and the inboxes exist.
 
 ## 4. GitHub repository
 
@@ -95,11 +95,11 @@
 
 ## 8. Code follow-ups gated on the above
 
-These are small repo edits to make **once** the external pieces are live:
+These are small repo edits gated on the above — tracked to current status in [`RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md), not duplicated here:
 
-- [ ] Set the real `[DATE]` effective date in `LICENSE.md` + `PRIVACY.md` (still a placeholder; the live `/terms` + `/privacy` serve it).
-- [ ] Set `CHECKOUT_URL` in `landing/src/config.ts` (§6).
-- [ ] Flip `LAUNCHED = true` in `landing/src/config.ts` (restores CTAs, drops the pre-launch banner, allows indexing) — only at actual go-live.
+- [x] Real effective dates are set in `LICENSE.md` + `PRIVACY.md` (no `[DATE]` placeholder remains, verified 2026-09-15; also checked off in `RELEASE_CHECKLIST.md` Phase 7).
+- [ ] Set `CHECKOUT_URL` in `landing/src/config.ts` (§6) — still `"#"` as of 2026-09-15. Deliberately held until Marketplace publish; see `RELEASE_CHECKLIST.md` Phase 9.
+- [ ] Flip `LAUNCHED = true` in `landing/src/config.ts` (restores CTAs, drops the pre-launch banner, allows indexing) — still `false` as of 2026-09-15, same Phase 9 gate as above.
 
 ---
 

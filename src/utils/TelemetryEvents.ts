@@ -8,7 +8,7 @@ import type {
 } from "../types/DashboardConstants";
 
 /**
- * Single source of truth for telemetry event names — see dev/backlog/TELEMETRY_PLAN.md
+ * Single source of truth for telemetry event names — see dev/implemented/TELEMETRY_PLAN.md
  * for the schema each one carries and exactly where it's fired from.
  */
 export const TELEMETRY_EVENTS = {

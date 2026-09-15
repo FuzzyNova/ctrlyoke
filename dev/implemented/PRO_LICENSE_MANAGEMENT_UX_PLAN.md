@@ -1,7 +1,27 @@
 # Pro License Management UX Plan
 
 **Created:** August 28, 2026
-**Status:** Proposed.
+**Status:** Implemented (verified against code 2026-09-15). Moved from
+`dev/backlog/` to `dev/implemented/`. All six phases landed:
+`LicenseService.listMachines`/`deactivateMachine`/`getRemoteAccessTrialEndsAt`/
+`LicenseActivationLimitError` (Phase 1); the full `ACTIVATE_LICENSE_KEY`/
+`IMPORT_LICENSE_FILE`/`DEACTIVATE_LICENSE`/`REQUEST_LICENSE_MACHINES`/
+`DEACTIVATE_LICENSE_MACHINE` message set with client-scoped
+`LICENSE_MACHINES_UPDATED`/`LICENSE_ACTION_RESULT` replies, routed through the
+new `src/ui/LicenseSettingsHandlers.ts` (Phase 2); `LicenseSection.tsx` wired
+into `GlobalSettingsDrawer` (Phase 3); the bind-address write gate and
+`bindAddressFallback` banner end-to-end, the Pro-feature `description` on the
+`0.0.0.0` option, and the `pro-brand` border treatment (Phase 5); and the
+`ctrlyoke.manageLicense`/`openGlobalSettingsTab` facade (Phase 6). One
+deviation from spec: Phase 4's "Unlock Pro Features" CTA was built as an
+inline upsell button at the top of `ServerSection.tsx` (gated on
+`!licenseAccess.isPro`, navigating to the License tab), not as an
+always-visible button in `GlobalSettingsDrawer`'s title bar — it only shows
+while viewing the Server tab rather than from every tab. Functionally
+equivalent for the main use case (a non-Pro user looking at gated server
+settings) but narrower reach than "always visible in the header." See
+[`PRO_LICENSE_FOLLOWUPS_PLAN.md`](../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md)
+for remaining/deferred work.
 **Builds on:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (IMPLEMENTED — `LicenseService`, both activation flows, gate sites, remote-access trial).
 **Cross-cutting with:** [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](VSCODE_DEPENDENCY_DECOUPLING_PLAN.md) — every new affordance in this plan must be reachable from a dashboard message, not a native VS Code dialog, so it survives the eventual `ctrlyoke server` standalone target.
 
