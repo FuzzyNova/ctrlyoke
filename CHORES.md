@@ -2,6 +2,12 @@
 
 Regular maintenance tasks for ctrlyoke development. These are manual tasks that don't happen automatically during builds.
 
+**Scope**: everything in this document is safe to run unattended (e.g. on a schedule) —
+`npm update` only moves within the semver ranges already declared in `package.json`, so it never
+silently jumps a major version. Deliberate major-version dependency bumps (TypeScript, etc.) live
+in [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md) instead — nothing in this file
+runs one, and nothing here should.
+
 ## Quick Start
 
 Run the automated chore script:
@@ -277,15 +283,15 @@ Keep dependencies up-to-date and secure.
 2. **Update dependencies**:
 
    ```bash
-   # Update all minor/patch versions
+   # Update all minor/patch versions (stays within package.json's declared ranges)
    npm update
 
-   # Or update specific packages
+   # Or update a specific package, same constraint
    npm update <package-name>
-
-   # For major version updates
-   npm install <package-name>@latest
    ```
+
+   For a major-version bump (`npm install <package-name>@latest` past the declared range), see
+   [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md) instead.
 
 3. **Run security audit**:
 
@@ -325,19 +331,15 @@ Keep dependencies up-to-date and secure.
    diff it before trusting the output; `git checkout -- <file>` to discard
    the drift rather than re-running `--write` on it again.
 
-5. **Update TypeScript and VS Code types**:
-
-   ```bash
-   npm install --save-dev typescript@latest
-   npm install --save-dev @types/vscode@latest
-   npm install --save-dev @types/node@latest
-   ```
-
-6. **Commit changes**:
+5. **Commit changes**:
    ```bash
    git add package.json package-lock.json
    git commit -m "chore: update dependencies"
    ```
+
+**Not included here**: forcing `typescript`, `@types/vscode`, or any other package to `@latest`
+past what `npm update` would pick — that's a deliberate major-version bump, not a routine chore.
+See [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md).
 
 ---
 
@@ -404,6 +406,8 @@ Before releasing a new version, run these tasks:
 - [ ] Update models (`npm run chores -- --task sync-models`)
 - [ ] Update VS Code commands (list and document)
 - [ ] Update dependencies (`npm update` + `npm audit`)
+- [ ] Review [`MAJOR_DEPENDENCY_UPGRADES.md`](MAJOR_DEPENDENCY_UPGRADES.md) for anything worth
+      tackling before this release (optional, not blocking)
 - [ ] Run full test suite (`npm test`)
 - [ ] Run linter (`npm run lint:fix`)
 - [ ] Format code (`npm run format`)
