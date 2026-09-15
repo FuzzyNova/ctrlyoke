@@ -22,13 +22,22 @@ import type {
 } from "../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  COMPARE_SOURCES,
+  COMPARE_SOURCE_LABELS,
   OPERATION_STATUS,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
+  SCRIPT_MATCH_RULE_NONE,
+  SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
+  type ScriptOutputSource,
 } from "../types/DashboardConstants";
+import type { ScriptVerdict } from "../types/CtrlYokeTypes";
+import type { CliOutput } from "../types/WebviewMessageTypes";
+import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import type {
   PromptCompleteData,
   PromptStartData,
@@ -50,10 +59,74 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 const MAX_DIFF_LINES = 60;
 const MAX_EVENT_DETAIL_LINES = 8;
 const MAX_EVENT_DETAIL_LINE_LENGTH = 200;
+const MAX_SCRIPT_OUTPUT_LINES = 200;
+const MAX_SCRIPT_OUTPUT_CHARS = 20_000;
+const MAX_SCRIPT_VERDICT_FIELD_LINES = 20;
+const MAX_SCRIPT_VERDICT_FIELD_CHARS = 4_000;
+const SCRIPT_OUTPUT_BORDER = "#c878ff";
 const ASK_USER_QUESTION_DECLINE_LABELS = {
   clarify: "Asked to clarify",
   rejected: "Question declined",
 } as const satisfies Record<AskUserQuestionDeclined["reason"], string>;
+
+const SCRIPT_SOURCE_LABELS: Record<ScriptOutputSource, string> = {
+  [SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP]: "Script step",
+  [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION]: "Pre-condition",
+  [SCRIPT_OUTPUT_SOURCES.END_CONDITION]: "End condition",
+  [SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP]: "Worktree setup",
+};
+
+const SCRIPT_MATCH_RULE_LABELS: Record<ScriptVerdict["matchRule"], string> = {
+  exitCode: "exit code",
+  exact: "exact",
+  boolean: "boolean",
+  numericGte: "numeric ≥",
+  substring: "substring",
+  [SCRIPT_MATCH_RULE_NONE]: "no match",
+};
+
+interface ScriptStreamingState {
+  shownChars: number;
+  shownLines: number;
+  totalChars: number;
+  totalLines: number;
+  endsWithNewline: boolean;
+}
+
+function countOutputLines(text: string): number {
+  if (!text) return 0;
+  return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}
+
+function scriptOutputLabel(output: CliOutput): string | undefined {
+  return output.source === undefined
+    ? undefined
+    : SCRIPT_SOURCE_LABELS[output.source];
+}
+
+function scriptCompareLabel(verdict: ScriptVerdict): string {
+  const actualSource =
+    verdict.actualSource === COMPARE_SOURCES.EXIT_CODE
+      ? "exit code"
+      : verdict.actualSource;
+  return verdict.compareSource === COMPARE_SOURCES.AUTO
+    ? `auto → ${actualSource}`
+    : COMPARE_SOURCE_LABELS[verdict.compareSource];
+}
+
+function scriptOutcomePresentation(outcome: ScriptVerdict["outcome"]): {
+  icon: string;
+  label: string;
+  color: (text: string) => string;
+} {
+  if (outcome === SCRIPT_VERDICT_OUTCOMES.PASSED) {
+    return { icon: "✔", label: "Passed", color: chalk.green };
+  }
+  if (outcome === SCRIPT_VERDICT_OUTCOMES.FAILED) {
+    return { icon: "✖", label: "Failed", color: chalk.red };
+  }
+  return { icon: "⚠", label: "Errored", color: chalk.yellow };
+}
 
 export interface CliOutputTarget {
   stepIndex: number;
@@ -393,6 +466,8 @@ export class CliTerminalFormatter {
     }
   >();
 
+  private static _scriptStreaming = new Map<string, ScriptStreamingState>();
+
   private static targetKey(target?: CliOutputTarget): string {
     return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
   }
@@ -402,6 +477,205 @@ export class CliTerminalFormatter {
     process.stdout.write(
       chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `)
     );
+  }
+
+  /**
+   * Returns the exact one-line status summary emitted by the script reporter.
+   * The CLI uses it to collapse that status into the richer verdict block.
+   */
+  static getScriptVerdictStatusSummary(output: CliOutput): string | undefined {
+    const verdict = output.scriptVerdict;
+    const label = scriptOutputLabel(output);
+    return verdict && label ? formatVerdictSummary(label, verdict) : undefined;
+  }
+
+  /** Renders the command, bounded streamed output, and completed script verdict. */
+  static renderScriptOutput(output: CliOutput, target: CliOutputTarget): void {
+    const sourceLabel = scriptOutputLabel(output);
+    if (!sourceLabel) return;
+
+    const key = CliTerminalFormatter.targetKey(target);
+    const border = chalk.hex(SCRIPT_OUTPUT_BORDER)("│");
+    let state = CliTerminalFormatter._scriptStreaming.get(key);
+
+    if (output.isStreaming) {
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      if (output.cliCommand !== undefined) {
+        console.log(`${border} ${chalk.dim("$ " + output.cliCommand)}`);
+        console.log();
+      }
+      if (output.response) {
+        if (!state) {
+          state = {
+            shownChars: 0,
+            shownLines: 0,
+            totalChars: 0,
+            totalLines: 0,
+            endsWithNewline: true,
+          };
+          CliTerminalFormatter._scriptStreaming.set(key, state);
+          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+        }
+        CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
+      }
+      return;
+    }
+
+    if (!state && output.response) {
+      state = {
+        shownChars: 0,
+        shownLines: 0,
+        totalChars: 0,
+        totalLines: 0,
+        endsWithNewline: true,
+      };
+      CliTerminalFormatter._scriptStreaming.set(key, state);
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+      CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
+    }
+
+    if (state) {
+      const totalText = output.response;
+      state.totalChars = Math.max(state.totalChars, totalText.length);
+      state.totalLines = Math.max(
+        state.totalLines,
+        countOutputLines(totalText)
+      );
+      if (!state.endsWithNewline) process.stdout.write("\n");
+      const omittedLines = Math.max(0, state.totalLines - state.shownLines);
+      const omittedChars = Math.max(0, state.totalChars - state.shownChars);
+      if (omittedLines > 0 || omittedChars > 0) {
+        const omitted = [
+          omittedLines > 0 ? `${omittedLines} more lines` : "",
+          omittedChars > 0 ? `${omittedChars} more characters` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+        console.log(
+          `${border} ${chalk.yellow(`… script output truncated: ${omitted}`)}`
+        );
+      }
+    }
+
+    if (output.scriptVerdict) {
+      CliTerminalFormatter.renderScriptVerdict(
+        output.scriptVerdict,
+        sourceLabel,
+        border
+      );
+    }
+    CliTerminalFormatter._scriptStreaming.delete(key);
+  }
+
+  private static writeBoundedScriptChunk(
+    chunk: string,
+    state: ScriptStreamingState
+  ): void {
+    state.totalChars += chunk.length;
+    state.totalLines += countOutputLines(chunk);
+
+    const remainingChars = Math.max(
+      0,
+      MAX_SCRIPT_OUTPUT_CHARS - state.shownChars
+    );
+    const remainingLines = Math.max(
+      0,
+      MAX_SCRIPT_OUTPUT_LINES - state.shownLines
+    );
+    if (remainingChars === 0 || remainingLines === 0) return;
+
+    let visible = chunk.slice(0, remainingChars);
+    const visibleLines = countOutputLines(visible);
+    if (visibleLines > remainingLines) {
+      const pieces = visible.split("\n");
+      visible = pieces.slice(0, remainingLines).join("\n");
+    }
+    if (!visible) return;
+
+    process.stdout.write(visible);
+    state.shownChars += visible.length;
+    state.shownLines += countOutputLines(visible);
+    state.endsWithNewline = visible.endsWith("\n");
+  }
+
+  private static renderScriptVerdict(
+    verdict: ScriptVerdict,
+    sourceLabel: string,
+    border: string
+  ): void {
+    const presentation = scriptOutcomePresentation(verdict.outcome);
+    const summary = formatVerdictSummary(sourceLabel, verdict);
+    console.log(
+      `${border} ${presentation.color(`${presentation.icon} ${presentation.label}`)} ${chalk.dim(`— ${summary}`)}`
+    );
+    console.log(`${border}   Compare: ${scriptCompareLabel(verdict)}`);
+    CliTerminalFormatter.writeBoundedScriptField(
+      "Expected",
+      verdict.expected ?? "exit code 0 (no `returns` set)",
+      border
+    );
+    CliTerminalFormatter.writeBoundedScriptField(
+      "Actual",
+      verdict.actual || "∅",
+      border
+    );
+    console.log(
+      `${border}   Matched by: ${SCRIPT_MATCH_RULE_LABELS[verdict.matchRule]}`
+    );
+    console.log(
+      `${border}   Result: ${presentation.label}${verdict.timedOut ? " (timed out)" : ""}`
+    );
+    console.log(
+      `${border}   Action: ${verdict.action}${verdict.actionDetail ? ` (${verdict.actionDetail})` : ""}`
+    );
+    console.log(
+      `${border}   Exit code: ${verdict.exitCode === undefined ? "—" : verdict.exitCode}`
+    );
+    console.log(
+      `${border}   Duration: ${(verdict.durationMs / 1000).toFixed(1)}s`
+    );
+    console.log(`${border}   Timed out: ${verdict.timedOut ? "yes" : "no"}`);
+    if (verdict.error) {
+      CliTerminalFormatter.writeBoundedScriptField(
+        "Error",
+        verdict.error,
+        border,
+        chalk.red
+      );
+    }
+    console.log();
+  }
+
+  private static writeBoundedScriptField(
+    label: string,
+    value: string,
+    border: string,
+    color: (text: string) => string = (text) => text
+  ): void {
+    const charLimited = value.slice(0, MAX_SCRIPT_VERDICT_FIELD_CHARS);
+    const lines = charLimited.split("\n");
+    const visibleLines = lines.slice(0, MAX_SCRIPT_VERDICT_FIELD_LINES);
+    const visible = visibleLines.join("\n");
+    const omittedLines = Math.max(
+      0,
+      value.split("\n").length - visibleLines.length
+    );
+    const omittedChars = Math.max(0, value.length - visible.length);
+    const firstLine = visibleLines[0] ?? "";
+    console.log(`${border}   ${label}: ${color(firstLine)}`);
+    for (const line of visibleLines.slice(1)) {
+      console.log(`${border}     ${color(line)}`);
+    }
+    if (omittedLines > 0 || omittedChars > 0) {
+      const omitted = [
+        omittedLines > 0 ? `${omittedLines} more lines` : "",
+        omittedChars > 0 ? `${omittedChars} more characters` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.log(`${border}     ${chalk.yellow(`… ${omitted} omitted`)}`);
+    }
   }
 
   /**

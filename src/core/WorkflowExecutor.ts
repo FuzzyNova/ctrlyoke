@@ -216,6 +216,13 @@ export interface WorkflowExecutionContext {
     stepName: string;
     chunk: string;
   }) => void;
+  /** Fires script command/output updates with the execution target that produced them. */
+  onScriptOutput?: (target: OutputExecutionTarget, output: CliOutput) => void;
+  /** Fires completed script output, including the structured verdict. */
+  onScriptCompletedOutput?: (
+    target: OutputExecutionTarget,
+    output: CliOutput
+  ) => void;
   outputHistoryManager?: OutputHistoryManager;
   /** Run-owned redactor populated only with values resolved during execution. */
   secretRedactor?: RunSecretRedactor;

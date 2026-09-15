@@ -486,6 +486,14 @@ export class WorkflowInstance {
   public readonly onTargetStreamingChunk =
     this._targetedStreamingChunkEmitter.event;
 
+  private readonly _targetedScriptOutputEmitter = new TypedEmitter<{
+    target: OutputExecutionTarget;
+    output: CliOutput;
+  }>();
+  /** Fires script command/output updates with the execution target that produced them. */
+  public readonly onTargetScriptOutput =
+    this._targetedScriptOutputEmitter.event;
+
   private readonly _responseCompleteEmitter = new TypedEmitter<string>();
   /** Fires the final plain-text response from the active execution integration. */
   public readonly onResponseComplete = this._responseCompleteEmitter.event;
@@ -4411,6 +4419,10 @@ export class WorkflowInstance {
         this._targetedStreamingEventsEmitter.fire(data),
       onTargetStreamingChunk: (data) =>
         this._targetedStreamingChunkEmitter.fire(data),
+      onScriptOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
+      onScriptCompletedOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
       snapshotService: new WorkspaceSnapshotService(),
       onSnapshotCaptured: (target, snapshot) => {
         self.dashboardSink?.sendStepUndoDataUpdated(
@@ -4871,6 +4883,10 @@ export class WorkflowInstance {
               outputHistoryManager: this.outputHistoryManager,
               getDefinitionRevisionContext: () =>
                 this.getDefinitionRevisionContext(),
+              onScriptOutput: (target, output) =>
+                this._targetedScriptOutputEmitter.fire({ target, output }),
+              onScriptCompletedOutput: (target, output) =>
+                this._targetedScriptOutputEmitter.fire({ target, output }),
             } satisfies ScriptExecutionReporterContext,
             source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
             properties: {

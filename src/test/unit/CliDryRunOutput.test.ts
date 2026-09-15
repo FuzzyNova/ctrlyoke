@@ -107,7 +107,7 @@ function runFormatterScript(body: string): string {
     [
       "-e",
       `const { CliTerminalFormatter } = require(${requirePath("cli", "CliTerminalFormatter.js")});
-const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS } = require(${requirePath("types", "DashboardConstants.js")});
+const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS, SCRIPT_OUTPUT_SOURCES } = require(${requirePath("types", "DashboardConstants.js")});
 ${body}`,
     ],
     { encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } }
@@ -259,6 +259,86 @@ CliTerminalFormatter.renderEvent({
     );
 
     assert.ok(output.includes("Follow-up resumed"));
+  });
+
+  test("renders pass, fail, and errored script verdicts", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+  response: "ok",
+  elapsed: 0.012,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "stdout",
+    expected: "ok",
+    actual: "ok",
+    actualSource: "stdout",
+    exitCode: 0,
+    outcome: "passed",
+    matchRule: "exact",
+    action: "continue",
+    durationMs: 12,
+  },
+}, { stepIndex: 0, stepName: "pre-condition", key: "pass" });
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+  response: "bad",
+  elapsed: 0.034,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "stdout",
+    expected: "ok",
+    actual: "bad",
+    actualSource: "stdout",
+    exitCode: 1,
+    outcome: "failed",
+    matchRule: "substring",
+    action: "retry",
+    actionDetail: "retry 1 of 3",
+    durationMs: 34,
+  },
+}, { stepIndex: 1, stepName: "end-condition", key: "fail" });
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+  response: "spawn failed",
+  elapsed: 0.056,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "exitCode",
+    actual: "",
+    actualSource: "exitCode",
+    outcome: "errored",
+    matchRule: "none",
+    action: "stopWorkflow",
+    durationMs: 56,
+    timedOut: true,
+    error: "spawn failed",
+  },
+}, { stepIndex: 2, stepName: "worktree-setup", key: "error" });`);
+
+    assert.ok(output.includes("Passed"));
+    assert.ok(output.includes("Failed"));
+    assert.ok(output.includes("Errored"));
+    assert.ok(output.includes("Compare: Stdout"));
+    assert.ok(output.includes("Expected: ok"));
+    assert.ok(output.includes("Actual: bad"));
+    assert.ok(output.includes("Matched by: substring"));
+    assert.ok(output.includes("Action: retry (retry 1 of 3)"));
+    assert.ok(output.includes("Timed out: yes"));
+    assert.ok(output.includes("Error: spawn failed"));
+  });
+
+  test("bounds streamed script output with an explicit notice", () => {
+    const output = runFormatterScript(`
+const chunk = Array.from({ length: 240 }, (_, index) => "line " + index + "\\n").join("");
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "check.sh" }, { stepIndex: 0, stepName: "script", key: "bounded" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "bounded" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: false, scriptVerdict: { compareSource: "stdout", actual: "ok", actualSource: "stdout", outcome: "passed", matchRule: "exact", action: "continue", durationMs: 1 } }, { stepIndex: 0, stepName: "script", key: "bounded" });`);
+
+    assert.ok(output.includes("line 199"));
+    assert.ok(!output.includes("line 200"));
+    assert.ok(output.includes("script output truncated"));
+    assert.ok(output.includes("more lines"));
   });
 
   test("keeps category labels exhaustive", () => {

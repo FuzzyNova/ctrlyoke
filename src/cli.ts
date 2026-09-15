@@ -737,8 +737,35 @@ async function runCommand(
     !options.quiet &&
     !options.json
   ) {
+    // The script reporter emits a rich verdict and also sends the historical
+    // one-line status message. Collapse the latter when its matching verdict
+    // has already reached this terminal, while preserving unrelated statuses.
+    const pendingScriptStatusMessages = new Map<string, number>();
+
     instance.onPromptStart((data) => {
       CliTerminalFormatter.renderPromptHeader(data);
+    });
+    instance.onTargetScriptOutput((data) => {
+      const statusSummary = CliTerminalFormatter.getScriptVerdictStatusSummary(
+        data.output
+      );
+      if (statusSummary) {
+        pendingScriptStatusMessages.set(
+          statusSummary,
+          (pendingScriptStatusMessages.get(statusSummary) ?? 0) + 1
+        );
+      }
+      CliTerminalFormatter.renderScriptOutput(data.output, {
+        stepIndex:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? data.target.stepIndex
+            : data.target.loopIndex,
+        stepName: data.output.source ?? "script",
+        key:
+          data.target.kind === FINAL_STEP_PHASES.QUEUE
+            ? `queue:${data.target.stepIndex}`
+            : `final:${data.target.loopIndex}`,
+      });
     });
     instance.onTargetStreamingEvents((data) => {
       CliTerminalFormatter.renderEvents(data.events, {
@@ -767,6 +794,15 @@ async function runCommand(
       } satisfies CliOutputTarget);
     });
     instance.onWorkflowStatusMessage((data) => {
+      const pendingCount = pendingScriptStatusMessages.get(data.message) ?? 0;
+      if (pendingCount > 0) {
+        if (pendingCount === 1) {
+          pendingScriptStatusMessages.delete(data.message);
+        } else {
+          pendingScriptStatusMessages.set(data.message, pendingCount - 1);
+        }
+        return;
+      }
       CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
     });
     instance.onPromptComplete((data) => {

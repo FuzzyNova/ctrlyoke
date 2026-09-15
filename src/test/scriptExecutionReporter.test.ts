@@ -163,6 +163,53 @@ suite("ScriptExecutionReporter", () => {
     }
   });
 
+  test("fires script stream and completed-output callbacks alongside the dashboard", async () => {
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(makeResult(), events);
+    const streamed: CliOutput[] = [];
+    const completed: CliOutput[] = [];
+    const target: OutputExecutionTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 3,
+    };
+    context.onScriptOutput = (receivedTarget, output) => {
+      assert.deepStrictEqual(receivedTarget, target);
+      streamed.push(output);
+    };
+    context.onScriptCompletedOutput = (receivedTarget, output) => {
+      assert.deepStrictEqual(receivedTarget, target);
+      completed.push(output);
+    };
+
+    await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+      properties: {
+        script: "check.sh",
+        compareSource: "stdout",
+        returns: "ok",
+      },
+      phase: EXECUTION_PHASES.PRE_CONDITION,
+      target,
+      signedStepIndex: target.stepIndex,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+    });
+
+    assert.strictEqual(streamed.length, 2);
+    assert.strictEqual(streamed[0].cliCommand, "check.sh");
+    assert.strictEqual(streamed[0].isStreaming, true);
+    assert.strictEqual(streamed[1].response, "chunk");
+    assert.strictEqual(streamed[1].isStreaming, true);
+    assert.strictEqual(completed.length, 1);
+    assert.strictEqual(completed[0].scriptVerdict?.outcome, "passed");
+    assert.deepStrictEqual(events, ["placeholder", "chunk", "final"]);
+  });
+
   test("persists a worktree setup output entry in its own phase", async () => {
     const temporaryDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-script-reporter-")

@@ -56,6 +56,13 @@ export interface ScriptExecutionReporterContext {
     message: string,
     severity: string
   ) => void;
+  /** Receives the script command placeholder and each streamed output chunk. */
+  onScriptOutput?: (target: OutputExecutionTarget, output: CliOutput) => void;
+  /** Receives the completed script output, including its verdict. */
+  onScriptCompletedOutput?: (
+    target: OutputExecutionTarget,
+    output: CliOutput
+  ) => void;
   captureCompletedOutput?: (
     stepIndex: number,
     output: CliOutput,
@@ -204,6 +211,7 @@ export class ScriptExecutionReporter {
     };
 
     this.dispatchDashboardOutput(context, target, signedStepIndex, initOutput);
+    context.onScriptOutput?.(targetForHistory, initOutput);
     if (context.historyFilePath && history) {
       await history.startStreamingExecutionOutput(
         context.historyFilePath,
@@ -249,6 +257,11 @@ export class ScriptExecutionReporter {
           );
         }
       }
+      context.onScriptOutput?.(targetForHistory, {
+        ...initOutput,
+        cliCommand: undefined,
+        response: sanitizedChunk,
+      });
     };
 
     // stdout arrives one packet at a time; the dashboard renders a script's
@@ -303,6 +316,7 @@ export class ScriptExecutionReporter {
     };
 
     this.dispatchCompletedOutput(context, target, signedStepIndex, finalOutput);
+    context.onScriptCompletedOutput?.(targetForHistory, finalOutput);
     if (context.historyFilePath && history) {
       await history.saveExecutionOutput(
         context.historyFilePath,
