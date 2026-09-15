@@ -319,7 +319,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
 
-  const { openContextMenu, contextMenuPortal, setPositionModal } =
+  const { openContextMenu, contextMenuPortal, setPositionModal, deleteModal } =
     useStepContextMenu({
       isExternallyManaged,
       externalReadOnlyLabel,
@@ -327,6 +327,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       canPasteStep,
       executionState,
       confirmResetOperations: globalSettings.confirmResetOperations,
+      confirmDeleteOperations: globalSettings.confirmDeleteOperations,
       totalSteps: prompts.length,
       currentStep,
       parallelGroups,
@@ -674,6 +675,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
 
       {contextMenuPortal}
       {setPositionModal}
+      {deleteModal}
       {pasteToEndMenuPortal}
       {finalStepContextMenuPortal}
     </div>

@@ -734,6 +734,7 @@ const WorkflowStepsPanelInner: React.FC<{
     handleSetStartPosition,
     contextMenuPortal,
     setPositionModal,
+    deleteModal,
   } = useStepContextMenu({
     isExternallyManaged,
     externalReadOnlyLabel,
@@ -741,6 +742,7 @@ const WorkflowStepsPanelInner: React.FC<{
     canPasteStep,
     executionState,
     confirmResetOperations: globalSettings.confirmResetOperations,
+    confirmDeleteOperations: globalSettings.confirmDeleteOperations,
     totalSteps: steps.length,
     currentStep,
     pendingRewind: pendingRewind ?? undefined,
@@ -1803,6 +1805,7 @@ const WorkflowStepsPanelInner: React.FC<{
       />
       {contextMenuPortal}
       {setPositionModal}
+      {deleteModal}
       {pasteToEndMenuPortal}
       {finalStepContextMenuPortal}
     </div>
