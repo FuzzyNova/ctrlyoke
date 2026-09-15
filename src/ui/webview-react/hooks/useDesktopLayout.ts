@@ -15,6 +15,7 @@ import { readPanelSnapshot } from "@utils/panelSnapshot";
 import { syncCollapsiblePanel } from "@utils/panelSync";
 import { useUiStore } from "@store/uiStore";
 import { centerPanelMountDefaults } from "@utils/panelSync";
+import { CENTER_PANEL_IDS } from "@utils/editorAutoExpand";
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
@@ -314,8 +315,8 @@ export function useDesktopLayout({
     const outputPct = Number((100 - editorPct).toFixed(3));
 
     return {
-      "output-panel": outputPct,
-      "editor-panel": editorPct,
+      [CENTER_PANEL_IDS.desktop.output]: outputPct,
+      [CENTER_PANEL_IDS.desktop.editor]: editorPct,
     };
   };
 
@@ -369,12 +370,12 @@ export function useDesktopLayout({
     const expandedPct = Number((100 - collapsedPct).toFixed(3));
     const layout = outputCollapsed
       ? {
-          "output-panel": collapsedPct,
-          "editor-panel": expandedPct,
+          [CENTER_PANEL_IDS.desktop.output]: collapsedPct,
+          [CENTER_PANEL_IDS.desktop.editor]: expandedPct,
         }
       : {
-          "output-panel": expandedPct,
-          "editor-panel": collapsedPct,
+          [CENTER_PANEL_IDS.desktop.output]: expandedPct,
+          [CENTER_PANEL_IDS.desktop.editor]: collapsedPct,
         };
 
     try {

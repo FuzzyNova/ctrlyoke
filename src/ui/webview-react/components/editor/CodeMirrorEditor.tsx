@@ -87,6 +87,12 @@ import {
 } from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 import { keyboardTooltipSpace as getKeyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
+import {
+  EDITOR_OVERFLOW_CAUSES,
+  EDITOR_OVERFLOW_EVENT,
+  EDITOR_REMEASURE_EVENT,
+  type EditorOverflowDetail,
+} from "@utils/editorAutoExpand";
 
 export { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 
@@ -868,15 +874,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         viewRef.current?.requestMeasure();
       });
     };
-    window.addEventListener("cy-request-editor-remeasure", handleRemeasure);
+    window.addEventListener(EDITOR_REMEASURE_EVENT, handleRemeasure);
     return () => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId);
       }
-      window.removeEventListener(
-        "cy-request-editor-remeasure",
-        handleRemeasure
-      );
+      window.removeEventListener(EDITOR_REMEASURE_EVENT, handleRemeasure);
     };
   }, []);
 
@@ -1566,7 +1569,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             mode === CODE_MIRROR_EDITOR_MODES.PROMPT &&
             (update.docChanged || update.geometryChanged)
           ) {
-            const cause = update.docChanged ? "doc" : "geometry";
+            const cause = update.docChanged
+              ? EDITOR_OVERFLOW_CAUSES.DOC
+              : EDITOR_OVERFLOW_CAUSES.GEOMETRY;
             update.view.requestMeasure({
               read(v: EditorView) {
                 // contentHeight is CodeMirror's computed document height — unlike
@@ -1583,9 +1588,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
                 if (changed) {
                   lastOverflowRef.current = signedOverflow;
                   window.dispatchEvent(
-                    new CustomEvent("cy-editor-overflow-change", {
-                      detail: { signedOverflow, cause },
-                    })
+                    new CustomEvent<EditorOverflowDetail>(
+                      EDITOR_OVERFLOW_EVENT,
+                      { detail: { signedOverflow, cause } }
+                    )
                   );
                 }
               },
@@ -1614,8 +1620,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (Math.abs(signedOverflow - (lastOverflowRef.current ?? 0)) >= 1) {
             lastOverflowRef.current = signedOverflow;
             window.dispatchEvent(
-              new CustomEvent("cy-editor-overflow-change", {
-                detail: { signedOverflow, cause: "doc" },
+              new CustomEvent<EditorOverflowDetail>(EDITOR_OVERFLOW_EVENT, {
+                detail: { signedOverflow, cause: EDITOR_OVERFLOW_CAUSES.DOC },
               })
             );
           }

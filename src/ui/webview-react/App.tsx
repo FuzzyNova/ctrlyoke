@@ -26,6 +26,17 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
+import {
+  applyEditorHeightPx,
+  CENTER_PANEL_IDS,
+  clampEditorHeightPx,
+  editorAutoExpandCeilingPx,
+  EDITOR_OVERFLOW_CAUSES,
+  EDITOR_OVERFLOW_EVENT,
+  measureCenterSplit,
+  type CenterSplitHandles,
+  type EditorOverflowDetail,
+} from "@utils/editorAutoExpand";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -114,28 +125,76 @@ function App() {
     editorCollapsed,
   });
 
-  // ── Editor auto-expand refs ─────────────────────────────────────────────────
+  // ── Editor expansion refs ──────────────────────────────────────────────────────────
   // How many pixels above the user's base size the editor is currently
-  // auto-expanded (0 = at base, never persisted).
+  // expanded (0 = at base, never persisted).
   const editorAutoExpandPxRef = useRef(0);
   // Signed overflow as of the last doc-change event. Used to detect the
   // 0→>0 transition that enters auto-expand mode.  Updated on doc events and
   // on geometry events that create overflow (e.g. user drags panel smaller).
   const prevDocSignedOverflowRef = useRef(0);
+  // Set while the properties drawer is holding the editor open: `floorPx` is
+  // the height it expanded to — a floor typing auto-expand must not shrink
+  // below, or deleting text would collapse the drawer back out of view — and
+  // `restorePx` is the measured height to hand back when the drawer closes.
+  const drawerExpansionRef = useRef<{
+    floorPx: number;
+    restorePx: number;
+  } | null>(null);
+
+  /** A resizable center split plus the sizes expansion decisions need. */
+  type EditorExpansionContext = CenterSplitHandles & {
+    /** The user's own (persisted) editor height — what expansion grows from. */
+    basePx: number;
+    editorPx: number;
+    totalPx: number;
+  };
+
+  // Live geometry of whichever center split is mounted. Re-assigned each
+  // render so the overflow listener and the drawer effect always see the
+  // current layout without re-registering; returns null whenever the split
+  // cannot be resized (a panel collapsed, refs not mounted, mid-remount).
+  const editorExpansionContextRef = useRef<() => EditorExpansionContext | null>(
+    () => null
+  );
+  editorExpansionContextRef.current = () => {
+    if (outputCollapsed || editorCollapsed) return null;
+    const handles: CenterSplitHandles = isMobile
+      ? {
+          groupRef: mobile.mobileCenterGroupRef,
+          outputRef: mobile.mobileOutputRef,
+          editorRef: mobile.mobileEditorRef,
+          panelIds: CENTER_PANEL_IDS.mobile,
+        }
+      : {
+          groupRef: desktop.verticalGroupRef,
+          outputRef: desktop.outputRef,
+          editorRef: desktop.editorRef,
+          panelIds: CENTER_PANEL_IDS.desktop,
+        };
+    const measurement = measureCenterSplit(handles);
+    if (!measurement) return null;
+    return {
+      ...handles,
+      basePx: isMobile
+        ? mobile.lastMobileSizes.current.editor
+        : desktop.lastDesktopSizes.current.editor,
+      ...measurement,
+    };
+  };
 
   // Stable handler ref — re-assigned each render so it always closes over the
   // latest isMobile / collapsed state without re-registering the listener.
   const overflowHandlerRef = useRef<(e: Event) => void>(() => {});
   overflowHandlerRef.current = (e: Event) => {
-    const { signedOverflow, cause } = (
-      e as CustomEvent<{ signedOverflow: number; cause: "doc" | "geometry" }>
-    ).detail;
+    const { signedOverflow, cause } = (e as CustomEvent<EditorOverflowDetail>)
+      .detail;
 
     const autoExpand =
       useSettingsStore.getState().globalSettings.autoExpandEditorWhenTyping;
     if (autoExpand === false) return;
 
-    if (cause === "geometry") {
+    if (cause === EDITOR_OVERFLOW_CAUSES.GEOMETRY) {
       if (signedOverflow > 0) {
         prevDocSignedOverflowRef.current = signedOverflow;
       }
@@ -143,123 +202,94 @@ function App() {
     }
 
     // ── doc event ────────────────────────────────────────────────────────────
-    const A = editorAutoExpandPxRef.current;
+    const previousExpandPx = editorAutoExpandPxRef.current;
     const prevDoc = prevDocSignedOverflowRef.current;
     prevDocSignedOverflowRef.current = signedOverflow;
 
-    const shouldEnter = A === 0 && prevDoc <= 0 && signedOverflow > 0;
-    if (!shouldEnter && A === 0) {
-      return;
-    }
+    const shouldEnter =
+      previousExpandPx === 0 && prevDoc <= 0 && signedOverflow > 0;
+    if (!shouldEnter && previousExpandPx === 0) return;
 
-    if (isMobile) {
-      // ── Mobile ─────────────────────────────────────────────────────────────
-      if (outputCollapsed || editorCollapsed) return;
-      const mobileOutputRef = mobile.mobileOutputRef;
-      const mobileEditorRef = mobile.mobileEditorRef;
-      const mobileCenterGroupRef = mobile.mobileCenterGroupRef;
-      if (
-        !mobileCenterGroupRef.current ||
-        !mobileOutputRef.current ||
-        !mobileEditorRef.current
-      )
-        return;
+    const context = editorExpansionContextRef.current();
+    if (!context) return;
+    const { basePx, editorPx, totalPx } = context;
 
-      const outputPx = mobileOutputRef.current.getSize().inPixels ?? 0;
-      const editorPx = mobileEditorRef.current.getSize().inPixels ?? 0;
-      const totalPx = outputPx + editorPx;
-      if (totalPx <= 0) return;
+    // Anchor growth on the ACTUAL measured editor size, not
+    // `basePx + previousExpandPx`. The accumulator drifts from reality
+    // (percentage rounding via toFixed(3), minSize clamping,
+    // preserve-pixel-size after window/group resizes), so an absolute
+    // `basePx + A` snaps the panel to a slightly wrong size — leaving the
+    // first/last line clipped behind the editor header/footer. Growing from
+    // the measured size by exactly the overflow, then clamping, self-heals.
+    const targetPx = clampEditorHeightPx(
+      editorPx + signedOverflow,
+      drawerExpansionRef.current?.floorPx ?? basePx,
+      editorAutoExpandCeilingPx(totalPx, basePx)
+    );
+    if (Math.abs(targetPx - editorPx) < 1) return;
 
-      const basePx = mobile.lastMobileSizes.current.editor;
-      const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
-      // Anchor growth on the ACTUAL measured editor size, not `basePx + A`
-      // (see the desktop branch for why the `A` accumulator drifts and clips
-      // the first/last line). Growing from the measured size is self-healing.
-      const targetEditorPx = Math.max(
-        basePx,
-        Math.min(editorPx + signedOverflow, basePx + maxAutoExpand)
-      );
-      const targetA = targetEditorPx - basePx;
-      if (Math.abs(targetEditorPx - editorPx) < 1) return;
-
-      const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
-      const outputPct = Number((100 - editorPct).toFixed(3));
-
-      // Set BEFORE setLayout so onResize sees the new value immediately,
-      // regardless of whether setLayout fires onResize synchronously or async.
-      editorAutoExpandPxRef.current = targetA;
-      try {
-        mobileCenterGroupRef.current.setLayout({
-          "mobile-output-panel": outputPct,
-          "mobile-editor-panel": editorPct,
-        });
-        window.dispatchEvent(new CustomEvent("cy-request-editor-remeasure"));
-      } catch {
-        // ignore setLayout errors during unstable states
-      }
-    } else {
-      // ── Desktop ────────────────────────────────────────────────────────────
-      if (outputCollapsed || editorCollapsed) {
-        return;
-      }
-      if (
-        !desktop.verticalGroupRef.current ||
-        !desktop.outputRef.current ||
-        !desktop.editorRef.current
-      ) {
-        return;
-      }
-
-      const outputPx = desktop.outputRef.current.getSize().inPixels ?? 0;
-      const editorPx = desktop.editorRef.current.getSize().inPixels ?? 0;
-      const totalPx = outputPx + editorPx;
-      if (totalPx <= 0) {
-        return;
-      }
-
-      const basePx = desktop.lastDesktopSizes.current.editor;
-      const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
-      // Anchor growth on the ACTUAL measured editor size, not `basePx + A`.
-      // The `A` accumulator drifts from reality (percentage rounding via
-      // toFixed(3), minSize clamping, preserve-pixel-size after window/group
-      // resizes), so `basePx + targetA` snaps the panel to a slightly wrong
-      // absolute size — leaving the first/last line clipped behind the
-      // editor header/footer. Growing from the measured size by exactly the
-      // overflow, then clamping to [basePx, basePx + maxAutoExpand], is
-      // self-healing.
-      const targetEditorPx = Math.max(
-        basePx,
-        Math.min(editorPx + signedOverflow, basePx + maxAutoExpand)
-      );
-      const targetA = targetEditorPx - basePx;
-
-      if (Math.abs(targetEditorPx - editorPx) < 1) {
-        return;
-      }
-
-      const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
-      const outputPct = Number((100 - editorPct).toFixed(3));
-
-      editorAutoExpandPxRef.current = targetA;
-      try {
-        desktop.verticalGroupRef.current.setLayout({
-          "output-panel": outputPct,
-          "editor-panel": editorPct,
-        });
-        window.dispatchEvent(new CustomEvent("cy-request-editor-remeasure"));
-      } catch {
-        editorAutoExpandPxRef.current = A; // revert on error
-      }
+    // Set BEFORE applying so onResize sees the new value immediately,
+    // regardless of whether setLayout fires onResize synchronously or async.
+    editorAutoExpandPxRef.current = targetPx - basePx;
+    if (!applyEditorHeightPx(context, targetPx, totalPx)) {
+      editorAutoExpandPxRef.current = previousExpandPx; // revert on error
     }
   };
 
   // Register the stable event listener once
   useEffect(() => {
     const listener = (e: Event) => overflowHandlerRef.current(e);
-    window.addEventListener("cy-editor-overflow-change", listener);
-    return () =>
-      window.removeEventListener("cy-editor-overflow-change", listener);
+    window.addEventListener(EDITOR_OVERFLOW_EVENT, listener);
+    return () => window.removeEventListener(EDITOR_OVERFLOW_EVENT, listener);
   }, []);
+
+  // ── Properties-drawer expansion ──────────────────────────────────────────────
+  // The drawer covers the editor panel, so on a short panel it shows only a
+  // sliver of the properties. Opening it grows the editor to the same ceiling
+  // typing auto-expand uses; closing it hands the previous height back. It
+  // never shrinks the panel — an editor already taller than the ceiling is
+  // left exactly as it is.
+  const propertiesDrawerOpen = useUiStore((s) => s.propertiesDrawerOpen);
+  useEffect(() => {
+    const context = editorExpansionContextRef.current();
+
+    if (propertiesDrawerOpen) {
+      // Already holding the panel open — a re-render, not a fresh open.
+      if (drawerExpansionRef.current) return;
+      if (!context) return;
+      const { basePx, editorPx, totalPx } = context;
+      const targetPx = Math.max(
+        editorPx,
+        editorAutoExpandCeilingPx(totalPx, basePx)
+      );
+      drawerExpansionRef.current = { floorPx: targetPx, restorePx: editorPx };
+      if (targetPx - editorPx < 1) return;
+
+      const previousExpandPx = editorAutoExpandPxRef.current;
+      editorAutoExpandPxRef.current = targetPx - basePx;
+      if (!applyEditorHeightPx(context, targetPx, totalPx)) {
+        editorAutoExpandPxRef.current = previousExpandPx;
+        drawerExpansionRef.current = null;
+      }
+      return;
+    }
+
+    const expansion = drawerExpansionRef.current;
+    drawerExpansionRef.current = null;
+    if (!expansion || !context) return;
+    const { basePx, editorPx, totalPx } = context;
+    const targetPx = clampEditorHeightPx(
+      expansion.restorePx,
+      basePx,
+      editorAutoExpandCeilingPx(totalPx, basePx)
+    );
+    // Keep the accumulator exactly `targetPx - basePx` so the panel's own
+    // onResize reads this as an expansion resize and leaves the user's
+    // persisted base size alone.
+    editorAutoExpandPxRef.current = targetPx - basePx;
+    if (Math.abs(targetPx - editorPx) < 1) return;
+    applyEditorHeightPx(context, targetPx, totalPx);
+  }, [propertiesDrawerOpen]);
 
   // Mobile overlay closing animation state.
   // When true, the overlay stays mounted but plays a slide-out animation.
@@ -547,7 +577,7 @@ function App() {
                 collapsible
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_CENTER}
-                id="mobile-output-panel"
+                id={CENTER_PANEL_IDS.mobile.output}
                 onResize={() => {
                   if (!mobile.mobileInitializedRef.current || !uiLayoutReady) {
                     return;
@@ -645,7 +675,7 @@ function App() {
                 collapsible
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_EDITOR}
-                id="mobile-editor-panel"
+                id={CENTER_PANEL_IDS.mobile.editor}
                 onResize={() => {
                   if (!mobile.mobileInitializedRef.current || !uiLayoutReady) {
                     return;
@@ -672,6 +702,9 @@ function App() {
                           .getState()
                           .setLastMobileSizes({ editor: px });
                         editorAutoExpandPxRef.current = 0;
+                        // The user chose this height: stop holding the panel
+                        // open for the drawer and stop restoring on close.
+                        drawerExpansionRef.current = null;
                       }
                     }
                   }
@@ -833,7 +866,7 @@ function App() {
                   collapsible
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_CENTER}
-                  id="output-panel"
+                  id={CENTER_PANEL_IDS.desktop.output}
                   onResize={() => {
                     const isRemountUnstable =
                       desktop.needsForcedResize.current ||
@@ -884,7 +917,7 @@ function App() {
                   collapsible
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_EDITOR}
-                  id="editor-panel"
+                  id={CENTER_PANEL_IDS.desktop.editor}
                   onResize={() => {
                     const isRemountUnstable =
                       desktop.needsForcedResize.current ||
@@ -920,6 +953,9 @@ function App() {
                             .getState()
                             .setLastDesktopSizes({ editor: px });
                           editorAutoExpandPxRef.current = 0;
+                          // The user chose this height: stop holding the panel
+                          // open for the drawer and stop restoring on close.
+                          drawerExpansionRef.current = null;
                         }
                       }
                     }
