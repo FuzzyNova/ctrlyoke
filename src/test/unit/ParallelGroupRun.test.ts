@@ -52,6 +52,7 @@ function resolvedProperties(): ResolvedProperties {
 function makeRun(options: {
   readonly ids: readonly string[];
   readonly pendingIds?: readonly string[];
+  readonly adoptedMemberIds?: readonly string[];
   readonly width: number;
   readonly failFast?: boolean;
   readonly execute?: (
@@ -86,6 +87,9 @@ function makeRun(options: {
   const run = new ParallelGroupRun<TestContext>({
     group,
     pendingIds,
+    ...(options.adoptedMemberIds
+      ? { adoptedMemberIds: options.adoptedMemberIds }
+      : {}),
     effectiveWidth: options.width,
     context: {},
     snapshotStrategy: undefined,
@@ -412,6 +416,87 @@ suite("ParallelGroupRun", () => {
     assert.strictEqual(rejected, true);
     assert.strictEqual(outcome.terminalFailure, true);
     assert.strictEqual(harness.run.isAdmissionOpen, false);
+  });
+
+  test("dispatches a member beside an adopted anchor instead of waiting for it", async () => {
+    const memberStarted = deferred();
+    const memberRelease = deferred();
+    const harness = makeRun({
+      ids: ["anchor", "member"],
+      pendingIds: ["member"],
+      adoptedMemberIds: ["anchor"],
+      width: 3,
+      execute: async (stepId, target) => {
+        assert.strictEqual(stepId, "member");
+        memberStarted.resolve();
+        await memberRelease.promise;
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+    });
+
+    const completion = harness.run.run();
+    // The anchor is still executing outside the run; the member must not wait
+    // for it before starting.
+    await memberStarted.promise;
+    memberRelease.resolve();
+    await Promise.resolve();
+    assert.strictEqual(harness.joinCount, 0);
+    assert.deepStrictEqual(harness.run.adoptedMemberIds, ["anchor"]);
+
+    await harness.run.settleAdoptedMember("anchor", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    });
+    const outcome = await completion;
+
+    assert.strictEqual(harness.joinCount, 1);
+    assert.strictEqual(outcome.settledCount, 2);
+    assert.deepStrictEqual(
+      outcome.outcomes.map((memberOutcome) => memberOutcome.target),
+      [
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+      ]
+    );
+  });
+
+  test("an adopted member holds a fan-out slot and is never dispatched", async () => {
+    const started: string[] = [];
+    const release = new Map(
+      ["one", "two"].map((id) => [id, deferred()] as const)
+    );
+    const dispatched = new Map(
+      ["one", "two"].map((id) => [id, deferred()] as const)
+    );
+    const harness = makeRun({
+      ids: ["anchor", "one", "two"],
+      pendingIds: ["one", "two"],
+      adoptedMemberIds: ["anchor"],
+      width: 2,
+      execute: async (stepId, target) => {
+        started.push(stepId);
+        dispatched.get(stepId)!.resolve();
+        await release.get(stepId)!.promise;
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+    });
+
+    const completion = harness.run.run();
+    await dispatched.get("one")!.promise;
+    // Width 2 with one slot held by the adopted anchor leaves room for one.
+    assert.deepStrictEqual(started, ["one"]);
+    assert.strictEqual(harness.run.admit("anchor"), false);
+
+    release.get("one")!.resolve();
+    await harness.run.settleAdoptedMember("anchor", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    });
+    release.get("two")!.resolve();
+    const outcome = await completion;
+
+    assert.deepStrictEqual(started, ["one", "two"]);
+    assert.strictEqual(outcome.settledCount, 3);
   });
 
   test("retains the existing behavior when no member is admitted late", async () => {

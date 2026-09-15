@@ -13,6 +13,7 @@ import {
  */
 export interface StepWithRuntimeStatus {
   _runtime?: {
+    startedAt?: number;
     completedAt?: number;
     terminalStatus?: PromptTerminalStatus;
   };
@@ -34,6 +35,12 @@ export interface StepWithRuntimeStatus {
  * `inFlightStatus` exists because the two call sites paint the in-flight step
  * differently: the live external-run push reports it as RUNNING, while the
  * addressed run-view snapshot reports it as SENT.
+ *
+ * `startedAt` is the executor's dispatch claim, so it — not `currentIndex` —
+ * is what identifies an in-flight step. During a parallel group `currentIndex`
+ * stays pinned at the group's `startIndex` until the join, so every member
+ * after the first would otherwise read as PENDING while a worker is executing
+ * it.
  */
 export function deriveStepStatusesFromRuntime(
   steps: readonly StepWithRuntimeStatus[],
@@ -46,7 +53,10 @@ export function deriveStepStatusesFromRuntime(
     if (stepRuntime?.completedAt !== undefined) {
       return stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED;
     }
-    if (index === currentIndex && executionState === EXECUTION_STATES.RUNNING) {
+    if (executionState !== EXECUTION_STATES.RUNNING) {
+      return STEP_STATUS.PENDING;
+    }
+    if (stepRuntime?.startedAt !== undefined || index === currentIndex) {
       return inFlightStatus;
     }
     return STEP_STATUS.PENDING;

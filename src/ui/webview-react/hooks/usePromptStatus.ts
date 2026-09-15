@@ -38,6 +38,12 @@ export function usePromptStatus() {
       );
       if (currentGroup) {
         const recordedStatus = (prompt as { status?: StepStatus }).status;
+        // SENT is the backend's "dispatched, in flight" status for the step at
+        // currentIndex. Outside a group that step resolves to RUNNING below, so
+        // surfacing SENT raw here would give a group's anchor a different icon
+        // from the identical sequential step — which is exactly what an ad-hoc
+        // promotion did to the step the user was watching.
+        if (recordedStatus === STEP_STATUS.SENT) return STEP_STATUS.RUNNING;
         if (recordedStatus !== undefined) return recordedStatus;
       }
       if (index === currentStep) return STEP_STATUS.RUNNING;

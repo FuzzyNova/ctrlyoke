@@ -52,6 +52,29 @@ suite("StepStatusDerivation", () => {
     );
   });
 
+  test("paints every claimed-but-unsettled parallel member in flight", () => {
+    // currentIndex stays pinned at the group's startIndex until the join, so a
+    // positional rule would report members 1 and 2 as PENDING while workers
+    // are executing them.
+    const statuses = deriveStepStatusesFromRuntime(
+      [
+        { _runtime: { startedAt: 1, completedAt: 2 } },
+        { _runtime: { startedAt: 3 } },
+        { _runtime: { startedAt: 4 } },
+        {},
+      ],
+      0,
+      EXECUTION_STATES.RUNNING
+    );
+
+    assert.deepStrictEqual(statuses, [
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.RUNNING,
+      STEP_STATUS.RUNNING,
+      STEP_STATUS.PENDING,
+    ]);
+  });
+
   test("honours the caller's in-flight status", () => {
     // The addressed run-view snapshot paints the in-flight step SENT, while the
     // live external-run push paints it RUNNING.
