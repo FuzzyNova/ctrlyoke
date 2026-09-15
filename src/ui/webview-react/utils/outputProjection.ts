@@ -137,6 +137,31 @@ function normalizeStructuredActivityEvents(
   return eventsBySlice;
 }
 
+/**
+ * The logical identity of an already-projected `OutputMessage`, in the same
+ * key space as `cliEntryIdentityKey`.
+ *
+ * Aggregate/activity pairing and aggregate suppression both key on this, so it
+ * must stay a single function: a target alone is *not* an identity — a step's
+ * pre/end-condition scripts and its retries all share its target — and keying
+ * either side by target silently discarded whole rows (see the suppression
+ * loop in `mapOrderedHistoryEntriesToMessages`).
+ */
+export function outputMessageIdentityKey(message: OutputMessage): string {
+  return cliEntryIdentityKey({
+    target:
+      message.target.kind === FINAL_STEP_PHASES.QUEUE
+        ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.target.index }
+        : {
+            kind: FINAL_STEP_PHASES.FINAL_STEP,
+            loopIndex: message.target.index,
+          },
+    runIndex: message.runIndex ?? 0,
+    attemptIndex: message.attemptIndex ?? 0,
+    phase: message.phase,
+  });
+}
+
 export function matchesCliEntryIdentity(
   entry: OrderedHistoryEntry,
   identity: CliEntryIdentity
@@ -228,21 +253,7 @@ export function mapOrderedHistoryEntriesToMessages(
   const aggregateByIdentity = new Map<string, OutputMessage>();
   for (const message of aggregateMessages) {
     if (message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
-    aggregateByIdentity.set(
-      cliEntryIdentityKey({
-        target:
-          message.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.target.index }
-            : {
-                kind: FINAL_STEP_PHASES.FINAL_STEP,
-                loopIndex: message.target.index,
-              },
-        runIndex: message.runIndex ?? 0,
-        attemptIndex: message.attemptIndex ?? 0,
-        phase: message.phase,
-      }),
-      message
-    );
+    aggregateByIdentity.set(outputMessageIdentityKey(message), message);
   }
 
   const sortedActivities = [...activityEntries].sort(
@@ -333,31 +344,35 @@ export function mapOrderedHistoryEntriesToMessages(
     projected.push(message);
   }
 
-  const activityKindsByTarget = new Map<
-    string,
-    Set<OutputActivityEntry["kind"]>
-  >();
+  // A CLI aggregate is superseded only by the activities that actually stand in
+  // for it, so this is keyed by full identity. Keying it by target dropped an
+  // aggregate whose own identity produced no activity at all while a *sibling*
+  // identity under the same target did: a pre/end-condition script that exits
+  // silently streams no chunk, so its row — command, exit code, verdict — was
+  // erased by the AI response's activities at the same step.
+  //
+  // Status activities stay target-keyed: an `OrderedStatusHistoryEntry` has no
+  // run/attempt/phase of its own, so target is the whole of its identity.
+  const cliActivityIdentities = new Set<string>();
+  const statusActivityTargets = new Set<string>();
   for (const message of projected) {
     if (!message.isActivity || !message.activityKind) continue;
-    const key = getTargetKey(message.target);
-    const kinds = activityKindsByTarget.get(key) ?? new Set();
-    kinds.add(message.activityKind);
-    activityKindsByTarget.set(key, kinds);
+    if (message.activityKind === OUTPUT_ACTIVITY_KINDS.STATUS) {
+      statusActivityTargets.add(getTargetKey(message.target));
+    } else {
+      cliActivityIdentities.add(outputMessageIdentityKey(message));
+    }
   }
   for (const aggregate of aggregateMessages) {
     if (
       aggregate.type === OUTPUT_MESSAGE_TYPES.CLI &&
-      [
-        ...(activityKindsByTarget.get(getTargetKey(aggregate.target)) ?? []),
-      ].some((kind) => kind !== OUTPUT_ACTIVITY_KINDS.STATUS)
+      cliActivityIdentities.has(outputMessageIdentityKey(aggregate))
     ) {
       continue;
     }
     if (
       aggregate.type === OUTPUT_MESSAGE_TYPES.STATUS &&
-      activityKindsByTarget
-        .get(getTargetKey(aggregate.target))
-        ?.has(OUTPUT_ACTIVITY_KINDS.STATUS)
+      statusActivityTargets.has(getTargetKey(aggregate.target))
     ) {
       continue;
     }

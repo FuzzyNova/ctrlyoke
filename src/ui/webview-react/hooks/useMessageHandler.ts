@@ -1684,6 +1684,12 @@ export function createMessageHandlers(
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
       runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
+      // The watcher forwards *every* CLI entry for the step, condition and
+      // worktree-setup scripts included, so the phase must be recovered the
+      // same way CLI_OUTPUT does. Leaving it undefined filed them all under the
+      // prompt phase, where `appendLiveEntry`'s identity match let a script's
+      // output overwrite the step's AI response.
+      phase: getExecutionPhaseForScriptOutputSource(message.output.source),
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
       sequence: store.liveSequence,

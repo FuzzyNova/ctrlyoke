@@ -43,7 +43,7 @@ import type {
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
-import { getTargetKey } from "./outputProjection";
+import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import { computePromptUndoActions } from "./promptUndo";
 import type { PromptUndoActions } from "./promptUndo";
 import {
@@ -2177,14 +2177,18 @@ export function buildOutputRows(
     input.outputContentWidth >= OUTPUT_SECTION_HEADER_NARROW_THRESHOLD;
   const attemptGroups = new Map<string, AttemptGroupAggregate>();
   const attemptGroupByMessageIndex = new Map<number, string>();
-  const activityTargets = new Set(
+  // Keyed by full identity, not target — see the matching suppression in
+  // `outputProjection.mapOrderedHistoryEntriesToMessages`. A step's condition
+  // scripts and its retries share its target, so a target-keyed set hid an
+  // aggregate that no activity had replaced.
+  const activityIdentities = new Set(
     input.allMessages
       .filter(
         (message) =>
           message.isActivity &&
           message.activityKind !== OUTPUT_ACTIVITY_KINDS.STATUS
       )
-      .map((message) => getTargetKey(message.target))
+      .map((message) => outputMessageIdentityKey(message))
   );
   const activityStatusTargets = new Set(
     input.allMessages
@@ -2419,7 +2423,10 @@ export function buildOutputRows(
       continue;
     }
 
-    if (!message.isActivity && activityTargets.has(targetKey)) {
+    if (
+      !message.isActivity &&
+      activityIdentities.has(outputMessageIdentityKey(message))
+    ) {
       continue;
     }
 

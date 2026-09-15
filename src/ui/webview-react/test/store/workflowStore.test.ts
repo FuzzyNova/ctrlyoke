@@ -407,6 +407,42 @@ describe("appendStreamingEvents", () => {
     ]);
   });
 
+  it("stamps a newly created streaming entry with its own phase", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    // An end-condition script streams before any entry exists for it. The
+    // entry fabricated here is looked up by identity, and `phase` is part of
+    // that identity: when it was omitted the second batch never matched the
+    // first, and the step's own prompt-phase output matched instead.
+    store().appendStreamingEvents(
+      0,
+      [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "checking" } }],
+      0,
+      0,
+      EXECUTION_PHASES.END_CONDITION
+    );
+    store().appendStreamingEvents(
+      0,
+      [{ type: CLI_EVENT_TYPES.TEXT, data: { text: " ok" } }],
+      0,
+      0,
+      EXECUTION_PHASES.END_CONDITION
+    );
+
+    const entries = store().liveOrderedEntries.filter(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      phase: EXECUTION_PHASES.END_CONDITION,
+    });
+  });
+
   it("does not merge prompt events into a pre-condition entry sharing the same attempt", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 

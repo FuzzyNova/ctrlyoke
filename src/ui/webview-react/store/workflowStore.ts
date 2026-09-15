@@ -769,6 +769,11 @@ function appendStreamingEventsToOutputState(
         target,
         runIndex,
         attemptIndex,
+        // `phase` is part of the identity this entry is looked up by, so
+        // omitting it filed a condition/worktree-setup batch under the prompt
+        // phase: the next batch for the same script never matched it, and the
+        // step's own AI output did.
+        phase,
         cliOutput,
         timestampMs: cliOutput.timestampMs!,
       }),

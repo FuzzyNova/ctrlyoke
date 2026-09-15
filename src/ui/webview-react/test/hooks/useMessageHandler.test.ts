@@ -66,6 +66,8 @@ import {
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 import {
+  EXECUTION_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
   STEP_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -4041,6 +4043,74 @@ describe("TERMINAL_STARTED", () => {
 // ---------------------------------------------------------------------------
 // Message listener cleanup
 // ---------------------------------------------------------------------------
+
+describe("CLI_WATCH_OUTPUT", () => {
+  // The watcher replays *every* CLI entry for a step, condition scripts
+  // included, and forwards only the CliOutput — so the phase has to be
+  // recovered from its source. Without that every entry arrived prompt-phase,
+  // and `appendLiveEntry`'s identity match made the end-condition script
+  // overwrite the step's AI response instead of sitting beside it.
+  it("recovers the execution phase of a watched condition script's output", () => {
+    renderHook(() => useMessageHandler());
+    const workflowId = "cli-managed-instance";
+
+    act(() => {
+      useUiStore.setState({ activeWorkflowId: workflowId });
+      useWorkflowStore.getState().loadWorkflow({
+        fileName: "wf.ctrlyoke.json",
+        steps: [makePrompt("Step 0")],
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLI_WATCH_OUTPUT, {
+        workflowId,
+        stepIndex: 0,
+        output: {
+          prompt: "do the thing",
+          response: "ai response",
+          elapsed: 12,
+          isStreaming: false,
+          runIndex: 0,
+          attemptIndex: 0,
+          timestampMs: 1000,
+        },
+      });
+      dispatch(MESSAGE_TYPES.CLI_WATCH_OUTPUT, {
+        workflowId,
+        stepIndex: 0,
+        output: {
+          response: "1 failing",
+          elapsed: 0.4,
+          isStreaming: false,
+          source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+          exitCode: 1,
+          runIndex: 0,
+          attemptIndex: 0,
+          timestampMs: 2000,
+        },
+      });
+    });
+
+    const entries = useWorkflowStore
+      .getState()
+      .liveOrderedEntries.filter(
+        (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+      );
+
+    expect(entries).toHaveLength(2);
+    expect(entries).toMatchObject([
+      {
+        phase: EXECUTION_PHASES.PROMPT,
+        cliOutput: { response: "ai response" },
+      },
+      {
+        phase: EXECUTION_PHASES.END_CONDITION,
+        cliOutput: { response: "1 failing", exitCode: 1 },
+      },
+    ]);
+  });
+});
 
 describe("cleanup", () => {
   it("stops handling messages after unmount", () => {

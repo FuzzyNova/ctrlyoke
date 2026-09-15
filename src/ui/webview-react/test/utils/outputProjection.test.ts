@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mapOrderedHistoryEntriesToMessages } from "@utils/outputProjection";
 import {
   CLI_EVENT_TYPES,
+  EXECUTION_PHASES,
   FINAL_STEP_PHASES,
   OPERATION_STATUS,
   OUTPUT_ACTIVITY_KINDS,
@@ -256,6 +257,79 @@ describe("outputProjection", () => {
     );
 
     expect(messages[0]?.data).toMatchObject({ severity: "info" });
+  });
+
+  // Activities stand in for the aggregate of *their own* identity, not for
+  // everything sharing the step. A condition script that exits without writing
+  // to stdout streams no chunk, so it produces no activity at all — and when
+  // the suppression was keyed by target, the step's AI activities erased that
+  // script's only row, taking its command, exit code and verdict with it.
+  it("keeps an aggregate whose own identity produced no activity", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const messages = mapOrderedHistoryEntriesToMessages(
+      [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          cliOutput: {
+            prompt: "do the thing",
+            response: "done",
+            elapsed: 12,
+            isStreaming: false,
+            timestampMs: 1000,
+          },
+          timestampMs: 1000,
+          sequence: 1,
+        },
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          phase: EXECUTION_PHASES.END_CONDITION,
+          cliOutput: {
+            response: "",
+            elapsed: 0.2,
+            isStreaming: false,
+            cliCommand: "npm test",
+            exitCode: 0,
+            timestampMs: 2000,
+          },
+          timestampMs: 2000,
+          sequence: 3,
+        },
+      ],
+      [
+        {
+          timestampMs: 1000,
+          sequence: 2,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.TEXT,
+          text: "done",
+        },
+      ]
+    );
+
+    // The prompt-phase aggregate is replaced by its activity; the silent
+    // end-condition aggregate has no stand-in and must survive untouched.
+    const endCondition = messages.filter(
+      (message) => message.phase === EXECUTION_PHASES.END_CONDITION
+    );
+    expect(endCondition).toHaveLength(1);
+    expect(endCondition[0]?.isActivity).toBeUndefined();
+    expect(endCondition[0]?.data).toMatchObject({
+      cliCommand: "npm test",
+      exitCode: 0,
+    });
+    expect(
+      messages.filter(
+        (message) => message.phase === undefined && message.isActivity !== true
+      )
+    ).toHaveLength(0);
   });
 
   it("carries the attempt's prompt and command onto its activity messages", () => {
