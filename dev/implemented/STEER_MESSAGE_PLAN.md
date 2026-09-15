@@ -258,16 +258,22 @@ safe — see the decision below.
 
 ### Resolving `sessionId` → the owning integration
 
-`WorkflowInstance` holds two registries, and the handler needs both because the
-two enabled states above resolve differently:
+`WorkflowInstance` holds several integration registries and the handler must
+search all of them, because which one holds the owner depends on whether a run
+is in flight: `activeTargetResources` and the target/harness-keyed execution
+caches mid-run, `liveInjectIntegrations` between runs.
 
-| State        | Registry                                                                                      | Match on                                                                                                                                 |
-| ------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Mid-run      | `activeTargetResources` (`WorkflowInstance.ts:409`) — `{ target, integration, ptySessionId }` | `resource.ptySessionId === sessionId`                                                                                                    |
-| Between runs | `liveInjectIntegrations` (`WorkflowInstance.ts:439`) — keyed by harness id                    | `integration.getActivitySessionId() === sessionId` (`CliIntegration.ts:710`, which returns `transportCoordinator.getLastPtySessionId()`) |
+**Match on `integration.getActivitySessionId()` in every case**
+(`CliIntegration.ts`, which returns `transportCoordinator.getLastPtySessionId()`).
+_Correction to this plan's original text, which shipped as a bug:_ it specified
+matching mid-run on `ActiveTargetResources.ptySessionId`. That field is written
+only by `registerTargetPtySession`, which the executor calls exclusively for
+interactive **script** PTYs — an AI-CLI TUI never populates it. So every mid-run
+steer failed with `No live harness session for this workflow.` until the lookup
+was rewritten to match on the activity session id alone.
 
-Add one private `findIntegrationForPtySession(sessionId)` covering both, and a
-public `WorkflowInstance.sendSteerMessage(sessionId, text)`.
+Add one private `findIntegrationForPtySession(sessionId)` covering all the
+registries, and a public `WorkflowInstance.sendSteerMessage(sessionId, text)`.
 
 **Re-check liveness host-side; never trust the webview's gate.** Before
 preparing anything, assert

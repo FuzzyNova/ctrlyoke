@@ -4169,6 +4169,20 @@ describe("message passthroughs", () => {
       expect.stringContaining("Unknown message type")
     );
   });
+
+  it("does not warn for execute-prompt errors handled by the editor", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTE_PROMPT_ERROR, {
+        text: "restore me",
+      });
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

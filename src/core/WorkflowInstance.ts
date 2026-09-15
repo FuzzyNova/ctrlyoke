@@ -4736,17 +4736,37 @@ export class WorkflowInstance {
       .sort((left, right) => left - right);
   }
 
-  /** Find the integration that owns an interactive PTY session. */
+  /**
+   * Every integration this instance could still own a live PTY for, in
+   * most-specific-first order: the per-target ones registered by the running
+   * attempt, the target- and harness-keyed execution caches, and the
+   * inject-mode integrations retained between runs.
+   */
+  private *getLivePtyIntegrationCandidates(): Generator<HarnessIntegration> {
+    for (const resource of this.activeTargetResources.values()) {
+      if (resource.integration) {
+        yield resource.integration;
+      }
+    }
+    yield* this.targetExecutionIntegrations.values();
+    yield* this.executionIntegrations.values();
+    yield* this.liveInjectIntegrations.values();
+  }
+
+  /**
+   * Find the integration that owns an interactive PTY session.
+   *
+   * Match on the integration's own activity session id rather than
+   * `ActiveTargetResources.ptySessionId`: that field is only ever populated by
+   * `registerTargetPtySession`, which the executor calls for interactive
+   * *script* PTYs. An AI-CLI TUI is spawned by `CliTransportCoordinator`, which
+   * reports its session through `getActivitySessionId()` — so a mid-run steer
+   * resolves here and nowhere else.
+   */
   private findIntegrationForPtySession(
     sessionId: string
   ): HarnessIntegration | undefined {
-    for (const resource of this.activeTargetResources.values()) {
-      if (resource.ptySessionId === sessionId && resource.integration) {
-        return resource.integration;
-      }
-    }
-
-    for (const integration of this.liveInjectIntegrations.values()) {
+    for (const integration of this.getLivePtyIntegrationCandidates()) {
       if (integration.getActivitySessionId() === sessionId) {
         return integration;
       }

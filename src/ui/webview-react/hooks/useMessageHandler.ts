@@ -2254,6 +2254,15 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE] = () => {};
 
   // --------------------------------------------------------------------------
+  // EXECUTE_PROMPT_ERROR - Handled by PromptEditor.tsx
+  // --------------------------------------------------------------------------
+  // Restoring a rejected dispatch's draft needs the editor's own component
+  // state (`setPromptText` plus the pending new-workflow toast ref), so it is
+  // consumed by a window listener there rather than routed through a store.
+  // Register a no-op here so the central router doesn't log "Unknown message type".
+  handlers[MESSAGE_TYPES.EXECUTE_PROMPT_ERROR] = () => {};
+
+  // --------------------------------------------------------------------------
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {

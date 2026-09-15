@@ -245,21 +245,46 @@ suite("WorkflowInstance steer dispatch", () => {
     );
   }
 
+  // `ptySessionId` is only populated for interactive *script* PTYs, so a
+  // mid-run AI-CLI steer has to resolve through the integration's own activity
+  // session id. Seeding `ptySessionId` here would test a shape production
+  // never produces.
   test("resolves an active target integration by PTY session", async () => {
     const instance = createInstance();
     const integration = new SteerableMockHarnessIntegration(undefined, false);
     const session = createPtySession("active-session", instance.id);
+    integration.setActivitySessionId(session.id);
     const ptyManager = initPtyProcessManager(() => undefined);
     ptyManager.getSession = () => session;
     (instance as any).activeTargetResources.set("active", {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       integration,
-      ptySessionId: session.id,
     });
 
     try {
       await instance.sendSteerMessage(session.id, "active steer");
       assert.deepStrictEqual(integration.steerMessages, ["active steer"]);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("resolves a harness-keyed execution integration by PTY session", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    const session = createPtySession("execution-session", instance.id);
+    integration.setActivitySessionId(session.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.COPILOT_CLI,
+      integration
+    );
+
+    try {
+      await instance.sendSteerMessage(session.id, "execution steer");
+      assert.deepStrictEqual(integration.steerMessages, ["execution steer"]);
     } finally {
       instance.dispose();
       ptyManager.dispose();
@@ -302,10 +327,10 @@ suite("WorkflowInstance steer dispatch", () => {
     );
     let currentSession: PtySession | undefined = foreignSession;
     ptyManager.getSession = () => currentSession;
+    integration.setActivitySessionId(foreignSession.id);
     (instance as any).activeTargetResources.set("active", {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       integration,
-      ptySessionId: foreignSession.id,
     });
 
     try {
@@ -319,6 +344,30 @@ suite("WorkflowInstance steer dispatch", () => {
       currentSession = undefined;
       await assert.rejects(
         instance.sendSteerMessage("dead-session", "dead steer")
+      );
+      assert.deepStrictEqual(integration.steerMessages, []);
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
+    }
+  });
+
+  test("rejects a live session no integration claims", async () => {
+    const instance = createInstance();
+    const integration = new SteerableMockHarnessIntegration(undefined, false);
+    integration.setActivitySessionId("some-other-session");
+    const session = createPtySession("unclaimed-session", instance.id);
+    const ptyManager = initPtyProcessManager(() => undefined);
+    ptyManager.getSession = () => session;
+    (instance as any).activeTargetResources.set("active", {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      integration,
+    });
+
+    try {
+      await assert.rejects(
+        instance.sendSteerMessage(session.id, "unclaimed steer"),
+        /No live harness session/
       );
       assert.deepStrictEqual(integration.steerMessages, []);
     } finally {
