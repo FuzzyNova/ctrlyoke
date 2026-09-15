@@ -125,6 +125,13 @@ export const workspace = {
 
   workspaceFolders: undefined as undefined,
 
+  /**
+   * There is no VS Code workspace-folder model in the standalone CLI. Shared
+   * code uses this lookup only to discover optional workspace-local resources,
+   * so report no match rather than making the headless bundle fail at runtime.
+   */
+  getWorkspaceFolder: (_uri: { fsPath?: string }) => undefined,
+
   /** Use Node.js fs to fulfill basic file-system operations. */
   fs: {
     async stat(uri: { fsPath: string }) {

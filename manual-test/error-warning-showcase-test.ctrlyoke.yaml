@@ -1,0 +1,86 @@
+# Error & Warning Showcase Test
+#
+# Manual test that exercises ctrlyoke's error/warning surfaces in one short
+# run, and doubles as a manual regression check for the mid-flow error-icon
+# placement bug fixed in commit e22a79e5 (finalizeFailedInFlightPrompt /
+# STEP_STATUS_CHANGED reporting) — see WorkflowStep.tsx / WorkflowStepsPanel.tsx.
+# Mostly script steps so re-running costs nothing except the one "say hi"
+# prompt.
+#
+# Two gotchas found by actually running this file once (do not "simplify"
+# these back out — the obvious version silently no-ops):
+#   - A scriptStep's own compareSource resolves to "exitCode" by default
+#     (WorkflowExecutor.ts ~2207), NOT "auto" like preCondition/endCondition
+#     use. Without `compareSource: auto`, a scriptStep's `returns` is
+#     compared against the exit code only — stdout content ("false" from
+#     always_false.py, which always exits 0) is ignored, so the step always
+#     "passes". Steps 1 and 4 below set `compareSource: auto` explicitly to
+#     get the documented stdout-aware comparison.
+#   - A scriptStep's `timeout` is interpreted as SECONDS (multiplied by 1000
+#     internally), even though scriptProperties.timeout's own schema
+#     description says "milliseconds". Step 3 below sets `timeout: 3`
+#     (seconds) to actually fire before timeout_script.py's 20s sleep ends.
+#
+# Expected behavior:
+#   1. continuing-script-validation-failure — always_false.py's stdout
+#      ("false") fails the `returns: "true"` check under explicit
+#      compareSource: auto. onFail: continue logs a WARNING and the
+#      workflow keeps going.
+#   2. say-hi-with-condition-warnings — a real prompt with a failing
+#      preCondition (advisory, onFail: continue) and a failing endCondition
+#      (onFail: continue). Both surface warning messages around real AI
+#      output without stopping the run.
+#   3. continuing-script-execution-error — timeout_script.py sleeps well
+#      past the 3s timeout, which is a genuine execution ERROR (the script
+#      never returns), not a validation failure — so errorBehavior, not
+#      onFail, governs it. onError: continue keeps the workflow going.
+#   4. terminal-script-failure — always_false.py fails again (same
+#      compareSource: auto trick as step 1), this time with the default
+#      onFail: stopWorkflow. This is the step that should actually halt the
+#      workflow (executionState -> error) and is the one to watch closely
+#      for the error-icon-on-the-wrong-row bug.
+#   5. never-executes — dummy prompt that must remain pending/untouched.
+#      If its status icon ever shows anything but pending, the bug from
+#      e22a79e5 has regressed.
+
+harness: codex-cli
+model: gpt-5.6-luna
+
+steps:
+  - name: continuing-script-validation-failure
+    type: script
+    script: manual-test/.ctrlyoke/scripts/always_false.py
+    compareSource: auto
+    returns: "true"
+    onFail: continue
+
+  - name: say-hi-with-condition-warnings
+    prompt: |
+      Just say hi! Please respond with a single friendly line, e.g. "Hi Nathan!".
+    preCondition:
+      script: manual-test/.ctrlyoke/scripts/always_false.py
+      returns: "true"
+      onFail: continue
+    endCondition:
+      script: manual-test/.ctrlyoke/scripts/always_false.py
+      returns: "true"
+      onFail: continue
+
+  - name: continuing-script-execution-error
+    type: script
+    script: manual-test/.ctrlyoke/scripts/timeout_script.py
+    timeout: 3
+    errorBehavior:
+      onError: continue
+
+  - name: terminal-script-failure
+    type: script
+    script: manual-test/.ctrlyoke/scripts/always_false.py
+    compareSource: auto
+    returns: "true"
+
+  - name: never-executes
+    prompt: |
+      If you are executing this, the workflow did NOT stop after the
+      terminal-script-failure step as expected. Please respond with:
+      "ERROR - this step should never have run."

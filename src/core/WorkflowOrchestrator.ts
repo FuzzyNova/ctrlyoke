@@ -7143,18 +7143,29 @@ export class WorkflowOrchestrator {
       );
     }
 
-    // Derive step statuses from current position:
-    //   < currentIndex  → completed
-    //   = currentIndex  → running
-    //   > currentIndex  → pending
-    const results = steps.map((_, i) => ({
-      status:
-        i < currentIndex
-          ? STEP_STATUS.COMPLETED
-          : i === currentIndex
-            ? STEP_STATUS.RUNNING
-            : STEP_STATUS.PENDING,
-    }));
+    // Derive each step's status from its own persisted `_runtime`, mirroring
+    // the RUN_VIEW_LOADED reconstruction in useMessageHandler.ts — never from
+    // position relative to currentIndex alone. `commitStepOutcomeAndAdvance`
+    // advances currentIndex past a step even when that step's outcome is a
+    // terminal failure that stops the workflow, so "i < currentIndex →
+    // completed" mislabels the actually-failed step as COMPLETED. That fools
+    // the dashboard's usePromptStatus stale-failure guard (which only
+    // suppresses painting the error badge on currentIndex when the previous
+    // step's *recorded* status is already FAILED) into painting the error
+    // badge on the next, never-executed step instead.
+    const results = steps.map((step, i) => {
+      const stepRuntime = step._runtime;
+      if (stepRuntime?.completedAt !== undefined) {
+        return { status: stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED };
+      }
+      if (
+        i === currentIndex &&
+        externalEntry.summary.executionState === EXECUTION_STATES.RUNNING
+      ) {
+        return { status: STEP_STATUS.RUNNING };
+      }
+      return { status: STEP_STATUS.PENDING };
+    });
 
     const fileName = path.basename(workingFilePath);
     const target: IDashboardSink = sink ?? this.dashboardBroadcastHub;

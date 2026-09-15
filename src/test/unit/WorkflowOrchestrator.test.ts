@@ -23,6 +23,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   RUNNER_IDS,
+  STEP_STATUS,
   VSCODE_CONTEXT_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   type ExecutionState,
@@ -371,6 +372,61 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
       // the webview classify the untagged SESSION_RESTORED as a replay of the
       // workflow already on screen and keep that workflow's view address.
       assert.strictEqual(calls[0][12], undefined);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("derives step results from each step's own _runtime, not position vs. currentIndex", async () => {
+    // Reproduces the manual error/warning test's real bug: a terminal script
+    // failure (stopWorkflow) leaves `_runtime.currentIndex` one past the step
+    // that actually failed (`commitStepOutcomeAndAdvance` always advances
+    // past the settled step). A watching dashboard must still show the FAILED
+    // badge on the step that failed, and PENDING (never RUNNING/FAILED) on
+    // the step after it, which never executed.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-external-run-results-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "error showcase",
+          startedAt: 0,
+          definitionRevision: 1,
+          _runtime: { currentIndex: 2, executionState: EXECUTION_STATES.ERROR },
+          steps: [
+            { prompt: "ok", _runtime: { completedAt: 1, terminalStatus: STEP_STATUS.COMPLETED } },
+            { prompt: "terminal failure", _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.FAILED } },
+            { prompt: "never executes" },
+          ],
+        })
+      );
+      const calls: unknown[][] = [];
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.dashboardBroadcastHub = {
+        updateSessionRestored: (...args: unknown[]) => calls.push(args),
+      };
+
+      await internal.sendExternalRunFullStateToDashboard("external-run", {
+        session: { getActiveHistoryFilePath: () => undefined },
+        summary: {
+          workingFilePath,
+          workflowName: "error showcase",
+          executionState: EXECUTION_STATES.ERROR,
+          currentStep: 2,
+        },
+      });
+
+      assert.strictEqual(calls.length, 1);
+      const results = calls[0][2] as Array<{ status: string }>;
+      assert.strictEqual(results[0].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(results[1].status, STEP_STATUS.FAILED);
+      assert.strictEqual(results[2].status, STEP_STATUS.PENDING);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
