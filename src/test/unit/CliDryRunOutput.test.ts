@@ -107,7 +107,7 @@ function runFormatterScript(body: string): string {
     [
       "-e",
       `const { CliTerminalFormatter } = require(${requirePath("cli", "CliTerminalFormatter.js")});
-const { CLI_EVENT_TYPES } = require(${requirePath("types", "DashboardConstants.js")});
+const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS } = require(${requirePath("types", "DashboardConstants.js")});
 ${body}`,
     ],
     { encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } }
@@ -162,6 +162,103 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("⚙ queue:append"));
     assert.ok(output.includes('{"prompt":"terminal parameter output"}'));
     assert.ok(output.includes("⎿  terminal result output"));
+  });
+
+  test("renders ask-user-question prompts, options, and resolution", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.INITIATED,
+    questions: [{
+      question: "Which deployment target?",
+      options: [
+        { label: "Staging", description: "Shared test environment" },
+        { label: "Production", description: "Live environment" },
+      ],
+    }],
+  },
+});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.COMPLETED,
+    questions: [{
+      question: "Which deployment target?",
+      options: [{ label: "Staging" }, { label: "Production" }],
+      answer: "Staging",
+    }],
+  },
+});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.FAILED,
+    questions: [{ question: "Continue?", options: [] }],
+    declined: { reason: "rejected" },
+  },
+});`
+    );
+
+    assert.ok(output.includes("Asked 1 question"));
+    assert.ok(output.includes("Which deployment target?"));
+    assert.ok(output.includes("Staging"));
+    assert.ok(output.includes("Answered 1 question"));
+    assert.ok(output.includes("Answer: Staging"));
+    assert.ok(output.includes("Question declined"));
+    assert.ok(output.includes("⎿ Question declined"));
+  });
+
+  test("truncates ask-user-question preview art with a notice", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    questions: [{
+      question: "Choose a layout",
+      options: [{
+        label: "Grid",
+        preview: Array.from({ length: 10 }, (_, index) => "preview line " + index).join("\\n"),
+      }],
+    }],
+  },
+});`
+    );
+
+    assert.ok(output.includes("preview line 7"));
+    assert.ok(!output.includes("preview line 8"));
+    assert.ok(output.includes("… 2 more lines"));
+  });
+
+  test("renders compaction details and truncates its summary with a notice", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.COMPACTION,
+  data: {
+    trigger: COMPACTION_TRIGGERS.AUTO,
+    preTokens: 12000,
+    postTokens: 2400,
+    summary: Array.from({ length: 10 }, (_, index) => "summary line " + index).join("\\n"),
+  },
+});`
+    );
+
+    assert.ok(output.includes("Conversation compacted (auto)"));
+    assert.ok(output.includes("12,000 → 2,400 tokens"));
+    assert.ok(output.includes("summary line 7"));
+    assert.ok(!output.includes("summary line 8"));
+    assert.ok(output.includes("… 2 more lines"));
+  });
+
+  test("renders a follow-up-resumed divider", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+  data: { resumedAt: 0 },
+});`
+    );
+
+    assert.ok(output.includes("Follow-up resumed"));
   });
 
   test("keeps category labels exhaustive", () => {

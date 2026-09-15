@@ -15,6 +15,10 @@ import type {
   ToolCall,
   ToolResultData,
   UnifiedDiffHunk,
+  AskUserQuestionData,
+  AskUserQuestionDeclined,
+  CompactionData,
+  FollowUpResumedData,
 } from "../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -44,6 +48,12 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
+const MAX_EVENT_DETAIL_LINES = 8;
+const MAX_EVENT_DETAIL_LINE_LENGTH = 200;
+const ASK_USER_QUESTION_DECLINE_LABELS = {
+  clarify: "Asked to clarify",
+  rejected: "Question declined",
+} as const satisfies Record<AskUserQuestionDeclined["reason"], string>;
 
 export interface CliOutputTarget {
   stepIndex: number;
@@ -185,6 +195,63 @@ function renderDiffBlock(data: FileEditData): void {
       chalk.dim(`  … ${remaining} more line${remaining !== 1 ? "s" : ""}`)
     );
   }
+}
+
+function writeEventLine(
+  content: string,
+  border: (text: string) => string = chalk.cyan
+): void {
+  console.log(`${border("│")} ${content}`);
+}
+
+/** Write bounded secondary event detail with an explicit truncation notice. */
+function writeBoundedEventDetail(
+  text: string,
+  maxLines: number,
+  indentation: string,
+  border: (text: string) => string = chalk.cyan
+): void {
+  const lines = text.split(/\r?\n/);
+  const displayedLines = lines.slice(0, maxLines);
+
+  for (const line of displayedLines) {
+    if (line.length > MAX_EVENT_DETAIL_LINE_LENGTH) {
+      writeEventLine(
+        chalk.dim(
+          `${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`
+        ),
+        border
+      );
+      writeEventLine(
+        chalk.dim(
+          `${indentation}… ${line.length - MAX_EVENT_DETAIL_LINE_LENGTH} more characters`
+        ),
+        border
+      );
+    } else {
+      writeEventLine(chalk.dim(`${indentation}${line}`), border);
+    }
+  }
+
+  const remaining = lines.length - displayedLines.length;
+  if (remaining > 0) {
+    writeEventLine(
+      chalk.dim(
+        `${indentation}… ${remaining} more line${remaining !== 1 ? "s" : ""}`
+      ),
+      border
+    );
+  }
+}
+
+function formatAskUserQuestionCount(count: number): string {
+  return `${count} question${count === 1 ? "" : "s"}`;
+}
+
+function formatAskUserQuestionDecline(
+  declined: AskUserQuestionDeclined
+): string {
+  return ASK_USER_QUESTION_DECLINE_LABELS[declined.reason];
 }
 
 // ---- Main formatter ----
@@ -606,6 +673,122 @@ export class CliTerminalFormatter {
         }
         break;
       }
+
+      case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as AskUserQuestionData;
+        const heading = data.declined
+          ? formatAskUserQuestionDecline(data.declined)
+          : data.status === OPERATION_STATUS.COMPLETED
+            ? `Answered ${formatAskUserQuestionCount(data.questions.length)}`
+            : `Asked ${formatAskUserQuestionCount(data.questions.length)}`;
+        writeEventLine(chalk.bold(heading));
+
+        for (const [questionIndex, question] of data.questions.entries()) {
+          if (questionIndex > 0) writeEventLine(chalk.dim("────────"));
+          const header = question.header
+            ? chalk.dim(` [${question.header}]`)
+            : "";
+          const selectedOption = question.options.find(
+            (option) => option.label === question.answer
+          );
+          const questionLines = question.question.split(/\r?\n/);
+          writeEventLine(`${questionLines[0]}${header}`);
+          for (const line of questionLines.slice(1)) {
+            writeEventLine(chalk.dim(`  ${line}`));
+          }
+
+          for (const option of question.options) {
+            const selected = option.label === question.answer;
+            const marker = selected ? chalk.green("✓") : chalk.dim("○");
+            const description = option.description
+              ? chalk.dim(` — ${option.description}`)
+              : "";
+            writeEventLine(`  ${marker} ${option.label}${description}`);
+            if (option.preview) {
+              writeBoundedEventDetail(
+                option.preview,
+                MAX_EVENT_DETAIL_LINES,
+                "    ",
+                chalk.cyan
+              );
+            }
+          }
+
+          if (question.answerPreview && !selectedOption?.preview) {
+            writeBoundedEventDetail(
+              question.answerPreview,
+              MAX_EVENT_DETAIL_LINES,
+              "    "
+            );
+          }
+
+          if (question.answer !== undefined) {
+            writeEventLine(chalk.dim(`  ⎿ Answer: ${question.answer}`));
+          }
+          if (question.notes) {
+            writeEventLine(chalk.dim(`  ⎿ Note: ${question.notes}`));
+          }
+        }
+
+        if (data.declined) {
+          writeEventLine(
+            chalk.red(`  ⎿ ${formatAskUserQuestionDecline(data.declined)}`)
+          );
+          if (data.declined.feedback) {
+            writeBoundedEventDetail(
+              data.declined.feedback,
+              MAX_EVENT_DETAIL_LINES,
+              "    "
+            );
+          }
+        }
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.COMPACTION: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as CompactionData;
+        const tokenInfo =
+          data.preTokens !== undefined && data.postTokens !== undefined
+            ? ` — ${data.preTokens.toLocaleString()} → ${data.postTokens.toLocaleString()} tokens`
+            : data.preTokens !== undefined
+              ? ` — ${data.preTokens.toLocaleString()} tokens compacted`
+              : "";
+        writeEventLine(
+          chalk.dim(`Conversation compacted (${data.trigger})${tokenInfo}`),
+          chalk.magenta
+        );
+        if (data.summary) {
+          writeBoundedEventDetail(
+            data.summary,
+            MAX_EVENT_DETAIL_LINES,
+            "  ",
+            chalk.magenta
+          );
+        }
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as FollowUpResumedData;
+        const timestamp = data.resumedAt
+          ? new Date(data.resumedAt).toLocaleTimeString()
+          : "";
+        writeEventLine(
+          chalk.dim(
+            `── Follow-up resumed${timestamp ? ` (${timestamp})` : ""}`
+          ),
+          chalk.blue
+        );
+        break;
+      }
+
+      // USER_STEER is display-only and CONTEXT_WINDOW_SYNC is invisible on both
+      // sides, so these event types are intentionally left unhandled.
     }
   }
 
