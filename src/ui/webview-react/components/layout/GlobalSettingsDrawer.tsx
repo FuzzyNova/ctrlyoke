@@ -68,7 +68,7 @@ const ALL_TABS = [
   {
     id: GLOBAL_SETTINGS_TABS.COORDINATION,
     label: "Coordination",
-    icon: "codicon-git-pull-request-go-to-changes",
+    icon: "codicon-person-voice",
   },
   // Output
   {
