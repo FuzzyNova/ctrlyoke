@@ -42,6 +42,7 @@ import type {
   PromptCompleteData,
   PromptStartData,
 } from "../core/WorkflowInstance";
+import type { ParallelGroupDefinition } from "../types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import {
   formatTokenBreakdown,
@@ -334,6 +335,45 @@ function formatAskUserQuestionDecline(
  * Used by the standalone ctrlyoke CLI to stream structured output to stdout.
  */
 export class CliTerminalFormatter {
+  /** Renders the live start marker for one workflow parallel group. */
+  static renderParallelGroupHeader(
+    group: ParallelGroupDefinition,
+    memberCount: number
+  ): void {
+    console.log();
+    console.log(
+      chalk.bold(`Parallel group ${group.id} — ${memberCount} member(s)`)
+    );
+  }
+
+  /** Renders the current live branch tally for one workflow parallel group. */
+  static renderParallelGroupProgress(
+    groupId: string,
+    running: number,
+    completed: number,
+    failed: number
+  ): void {
+    console.log(
+      chalk.dim(
+        `  Parallel group ${groupId}: ${running} running · ${completed} done · ${failed} failed`
+      )
+    );
+  }
+
+  /** Renders the collapsed aggregate for a step's retry attempts. */
+  static renderAttemptGroupSummary(
+    stepName: string,
+    attemptCount: number,
+    totalElapsed: number
+  ): void {
+    console.log();
+    console.log(
+      chalk.dim(
+        `↻ ${stepName}: ${attemptCount} attempts · ${totalElapsed}s total`
+      )
+    );
+  }
+
   /** Render a complete, redacted dry-run snapshot with diagnostics first. */
   static renderExecutionPreview(
     preview: WorkflowExecutionPreview,

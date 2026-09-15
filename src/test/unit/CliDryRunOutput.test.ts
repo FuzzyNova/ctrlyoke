@@ -341,6 +341,53 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(output.includes("more lines"));
   });
 
+  test("renders parallel-group tally transitions, including a failed branch", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderParallelGroupHeader({ id: "research", startIndex: 0, endIndex: 1, failFast: false }, 2);
+CliTerminalFormatter.renderParallelGroupProgress("research", 1, 0, 0);
+CliTerminalFormatter.renderParallelGroupProgress("research", 1, 1, 0);
+CliTerminalFormatter.renderParallelGroupProgress("research", 0, 1, 1);`);
+
+    assert.ok(output.includes("Parallel group research — 2 member(s)"));
+    assert.ok(
+      output.includes("Parallel group research: 1 running · 0 done · 0 failed")
+    );
+    assert.ok(
+      output.includes("Parallel group research: 1 running · 1 done · 0 failed")
+    );
+    assert.ok(
+      output.includes("Parallel group research: 0 running · 1 done · 1 failed")
+    );
+  });
+
+  test("renders the closing retry-attempt aggregate", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderAttemptGroupSummary("compile", 3, 12.75);`
+    );
+
+    assert.ok(output.includes("↻ compile: 3 attempts · 12.75s total"));
+  });
+
+  test("keeps a single non-parallel, non-retried prompt byte-for-byte unchanged", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "single", promptText: "do work", attemptIndex: 0, runIndex: 0 });
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "single", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "harness run" });`);
+
+    assert.strictEqual(
+      output,
+      [
+        "",
+        "─".repeat(52),
+        "│ Step 1/1 — single",
+        "│ do work",
+        "",
+        "│ $ harness run",
+        "",
+        "",
+      ].join("\n")
+    );
+  });
+
   test("keeps category labels exhaustive", () => {
     const labels: Record<PreviewPromptCategory, string> =
       PREVIEW_PROMPT_CATEGORY_LABELS;

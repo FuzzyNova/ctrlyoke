@@ -25,6 +25,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
   HARNESS_INFO,
+  STATUS_MESSAGE_SEVERITY,
 } from "./types/DashboardConstants";
 import type {
   CliValidateStrictPolicy,
@@ -40,6 +41,7 @@ import {
   type WorkflowKey,
   type WorkflowStep,
   type WorkingFile,
+  type ParallelGroupDefinition,
 } from "./types/CtrlYokeTypes";
 import { configService } from "./config/CtrlYokeConfigService";
 import {
@@ -349,6 +351,22 @@ program.parse();
 // ---- Types ----
 
 type RunOptions = RunCommandOptions;
+
+interface CliParallelGroupState {
+  group: ParallelGroupDefinition;
+  memberCount: number;
+  started: Set<number>;
+  completed: Set<number>;
+  failed: Set<number>;
+}
+
+interface CliAttemptState {
+  stepName: string;
+  attemptCount: number;
+  totalElapsed: number;
+  retried: boolean;
+  activeAttemptCompleted: boolean;
+}
 
 interface ValidateCommandOptions {
   harness?: string;
@@ -732,6 +750,7 @@ async function runCommand(
   // Subscriptions go on the instance (not detectorIntegration) because WorkflowInstance
   // creates a fresh execution integration via the factory and forwards events from it.
   // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
+  let releaseHeadlessOutputState = (): void => {};
   if (
     executionMode === EXECUTION_MODES.HEADLESS &&
     !options.quiet &&
@@ -741,8 +760,110 @@ async function runCommand(
     // one-line status message. Collapse the latter when its matching verdict
     // has already reached this terminal, while preserving unrelated statuses.
     const pendingScriptStatusMessages = new Map<string, number>();
+    const parallelGroups = new Map<string, CliParallelGroupState>();
+    const attempts = new Map<number, CliAttemptState>();
+    let released = false;
+
+    const getParallelGroup = (
+      parallelGroupId: string | undefined
+    ): CliParallelGroupState | undefined => {
+      if (!parallelGroupId) {
+        return undefined;
+      }
+      const group = instance.promptQueue
+        .getState()
+        .parallelGroups.find((candidate) => candidate.id === parallelGroupId);
+      if (!group) {
+        return undefined;
+      }
+      let state = parallelGroups.get(group.id);
+      if (!state) {
+        state = {
+          group,
+          memberCount: group.endIndex - group.startIndex + 1,
+          started: new Set<number>(),
+          completed: new Set<number>(),
+          failed: new Set<number>(),
+        };
+        parallelGroups.set(group.id, state);
+      }
+      return state;
+    };
+
+    const renderParallelGroupProgress = (
+      state: CliParallelGroupState
+    ): void => {
+      const running = Math.max(
+        0,
+        state.started.size - state.completed.size - state.failed.size
+      );
+      CliTerminalFormatter.renderParallelGroupProgress(
+        state.group.id,
+        running,
+        state.completed.size,
+        state.failed.size
+      );
+    };
+
+    releaseHeadlessOutputState = (): void => {
+      if (released) {
+        return;
+      }
+      released = true;
+      for (const attempt of attempts.values()) {
+        if (attempt.retried) {
+          CliTerminalFormatter.renderAttemptGroupSummary(
+            attempt.stepName,
+            attempt.attemptCount,
+            attempt.totalElapsed
+          );
+        }
+      }
+      attempts.clear();
+      parallelGroups.clear();
+      pendingScriptStatusMessages.clear();
+    };
 
     instance.onPromptStart((data) => {
+      if (data.cliCommand !== undefined) {
+        CliTerminalFormatter.renderPromptHeader(data);
+        return;
+      }
+
+      const attempt = attempts.get(data.stepIndex) ?? {
+        stepName: data.stepName,
+        attemptCount: 0,
+        totalElapsed: 0,
+        retried: false,
+        activeAttemptCompleted: false,
+      };
+      attempt.stepName = data.stepName;
+      attempt.attemptCount = Math.max(
+        attempt.attemptCount,
+        data.attemptIndex + 1
+      );
+      attempt.retried ||= data.attemptIndex > 0;
+      attempt.activeAttemptCompleted = false;
+      attempts.set(data.stepIndex, attempt);
+
+      const state = getParallelGroup(data.parallelGroupId);
+      if (!state) {
+        CliTerminalFormatter.renderPromptHeader(data);
+        return;
+      }
+      if (!state.started.has(data.stepIndex)) {
+        state.started.add(data.stepIndex);
+        CliTerminalFormatter.renderParallelGroupHeader(
+          state.group,
+          state.memberCount
+        );
+      }
+      // A retry re-opens a branch that was tentatively settled by its prior
+      // attempt. The tally therefore remains truthful while branches stream
+      // concurrently into one linear terminal.
+      state.completed.delete(data.stepIndex);
+      state.failed.delete(data.stepIndex);
+      renderParallelGroupProgress(state);
       CliTerminalFormatter.renderPromptHeader(data);
     });
     instance.onTargetScriptOutput((data) => {
@@ -794,6 +915,22 @@ async function runCommand(
       } satisfies CliOutputTarget);
     });
     instance.onWorkflowStatusMessage((data) => {
+      if (data.severity === STATUS_MESSAGE_SEVERITY.ERROR) {
+        const state = getParallelGroup(
+          instance.promptQueue
+            .getState()
+            .parallelGroups.find(
+              (group) =>
+                data.stepIndex >= group.startIndex &&
+                data.stepIndex <= group.endIndex
+            )?.id
+        );
+        if (state?.started.has(data.stepIndex)) {
+          state.completed.delete(data.stepIndex);
+          state.failed.add(data.stepIndex);
+          renderParallelGroupProgress(state);
+        }
+      }
       const pendingCount = pendingScriptStatusMessages.get(data.message) ?? 0;
       if (pendingCount > 0) {
         if (pendingCount === 1) {
@@ -806,6 +943,18 @@ async function runCommand(
       CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
     });
     instance.onPromptComplete((data) => {
+      const attempt = attempts.get(data.stepIndex);
+      if (attempt && !attempt.activeAttemptCompleted) {
+        attempt.totalElapsed += data.elapsed ?? 0;
+        attempt.activeAttemptCompleted = true;
+      }
+      const state = getParallelGroup(data.parallelGroupId);
+      if (state?.started.has(data.stepIndex)) {
+        if (!state.failed.has(data.stepIndex)) {
+          state.completed.add(data.stepIndex);
+          renderParallelGroupProgress(state);
+        }
+      }
       CliTerminalFormatter.flushStreamingBuffer({
         stepIndex: data.stepIndex,
         stepName: data.stepName,
@@ -906,6 +1055,8 @@ async function runCommand(
       );
     }
 
+    releaseHeadlessOutputState();
+
     const state = instance.promptQueue.getState();
     const exitCode = getExitCode(state);
     const completed = exitCode === 0;
@@ -945,6 +1096,7 @@ async function runCommand(
 
     process.exit(exitCode);
   } catch (err) {
+    releaseHeadlessOutputState();
     const message = err instanceof Error ? err.message : String(err);
     if (options.json) {
       const state = instance.getQueueState();
