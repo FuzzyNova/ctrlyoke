@@ -1029,7 +1029,10 @@ definitions:
       - properties:
           startedAt:
             type: number
-            description: Timestamp when this prompt started execution
+            description: Timestamp when the executor claimed this step for dispatch
+          stepId:
+            type: string
+            description: Stable internal identity for this queue step within its run
           completedAt:
             type: number
             description: >-
@@ -1065,8 +1068,6 @@ definitions:
             description: >-
               Whether a failed member remains terminal for its parallel group. False when a per-step
               continue policy resolved the failure.
-        required:
-          - startedAt
   runtimeMetadata:
     type: object
     description: >-
@@ -1099,6 +1100,21 @@ definitions:
       executionEndTime:
         type: number
         description: Wall-clock timestamp when workflow execution reached a terminal state
+      activeParallelGroup:
+        type: object
+        description: Durable admission state for the currently executing parallel group
+        properties:
+          groupId:
+            type: string
+          admission:
+            type: string
+            enum:
+              - accepting
+              - closing
+        required:
+          - groupId
+          - admission
+        additionalProperties: false
       tokenTotals:
         $ref: '#/definitions/workflowTokenTotals'
         description: >-
