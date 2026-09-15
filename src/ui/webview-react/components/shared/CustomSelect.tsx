@@ -7,6 +7,8 @@ import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
   dropdownBorderClass,
   dropdownWarningClass,
+  dropdownWarningIcon,
+  type ValidationSeverity,
 } from "@utils/dropdownValidation";
 import { Icon } from "./Icon";
 
@@ -62,8 +64,14 @@ interface CustomSelectProps extends HideableProps {
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
   inline?: boolean;
-  /** Soft validation message for a value unavailable in the current workspace. */
+  /** Validation message for a value unavailable in the current workspace. */
   warning?: string;
+  /**
+   * How `warning` is painted. Defaults to the soft yellow treatment; pass
+   * "error" for a combination that cannot run at all (see
+   * dev/implemented/DROPDOWN_VALIDATION_STYLING_PLAN.md).
+   */
+  warningSeverity?: ValidationSeverity;
   /** Id of the message that explains the warning to assistive technology. */
   warningId?: string;
 }
@@ -99,6 +107,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   dropdownMaxHeight = "60vh",
   inline = false,
   warning,
+  warningSeverity,
   warningId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -304,7 +313,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-label={triggerAriaLabel}
         aria-describedby={warning ? warningId : undefined}
         title={triggerTitle}
-        className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(warning)}`}
+        className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(
+          warning,
+          warningSeverity
+        )}`}
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <Icon
@@ -315,9 +327,15 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       {warning && (
         <span
           id={warningId}
-          className={`text-xxs mt-0.5 flex items-start gap-1 ${dropdownWarningClass(warning)}`}
+          className={`text-xxs mt-0.5 flex items-start gap-1 ${dropdownWarningClass(
+            warning,
+            warningSeverity
+          )}`}
         >
-          <Icon name="warning" className="mt-px flex-shrink-0" />
+          <Icon
+            name={dropdownWarningIcon(warningSeverity)}
+            className="mt-px flex-shrink-0"
+          />
           {warning}
         </span>
       )}

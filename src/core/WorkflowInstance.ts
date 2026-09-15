@@ -184,11 +184,11 @@ import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor
 import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
-  getShellInvocationError,
   ptyPostMessage,
   resolveShellInvocation,
   toPtySpawnArgs,
 } from "./harness/PtyProcessManager";
+import { getShellInvocationError } from "../utils/ShellCatalog";
 export type {
   PromptStartData,
   PromptCompleteData,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { DrawerRow } from "./DrawerRow";
 import { CustomSelect } from "./CustomSelect";
 import { ActionButton } from "./ActionButton";
@@ -15,6 +15,8 @@ import { CreateScriptModal } from "./CreateScriptModal";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { useSettingsStore } from "@store/settingsStore";
 import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  CUSTOM_SHELL_OPTION,
   INHERIT_DEFAULT_OPTION,
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
@@ -26,9 +28,21 @@ import {
   type EndConditionScriptType,
   type ExecutionMode,
 } from "@root/types/DashboardConstants";
+import {
+  resolveShellKind,
+  getShellInvocationError,
+} from "@root/utils/ShellCatalog";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { notifyUser } from "@utils/notifyUser";
+import { detectPlatform } from "@utils/platform";
+import { shellWarning } from "@utils/dropdownValidation";
 import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
+import {
+  buildShellOptions,
+  customShellPathPlaceholder,
+  shellSelectValue,
+  usesCustomShellPath,
+} from "./shellSelectOptions";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
@@ -310,6 +324,46 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     update({ shell: shellInput.trim() === "" ? undefined : shellInput });
   };
 
+  // The dropdown lists the shells this platform normally has, but a workflow
+  // file travels: a step pinned to `zsh` on macOS stays selected (and warned
+  // about) when the same file is opened on Windows rather than being dropped.
+  const platform = useMemo(() => detectPlatform(), []);
+  const [customShellPath, setCustomShellPath] = useState(() =>
+    usesCustomShellPath(v.shell)
+  );
+
+  useEffect(() => {
+    setCustomShellPath(usesCustomShellPath(v.shell));
+  }, [v.shell]);
+
+  const shellOptions = useMemo(
+    () => buildShellOptions(v.shell, platform),
+    [v.shell, platform]
+  );
+
+  const handleShellSelect = (selected: string) => {
+    if (selected === CUSTOM_SHELL_OPTION) {
+      // Keep the current value as the starting point for the path input.
+      setCustomShellPath(true);
+      return;
+    }
+    setCustomShellPath(false);
+    update({
+      shell: selected === INHERIT_DEFAULT_OPTION ? undefined : selected,
+    });
+  };
+
+  // A multi-line script under cmd cannot run at all, so it outranks the softer
+  // "this platform probably lacks that shell" notice and is painted as an error.
+  const shellInvocationError = v.shell
+    ? getShellInvocationError(v.script ?? "", resolveShellKind(v.shell))
+    : undefined;
+  const shellValidation =
+    shellInvocationError ?? shellWarning(v.shell, platform) ?? undefined;
+  const shellValidationSeverity = shellInvocationError
+    ? COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING;
+
   const compareSource = (v.compareSource ??
     COMPARE_SOURCES.AUTO) as CompareSource;
   const { affUri, dicUri } = getDictionaryUris();
@@ -503,24 +557,51 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-shell`}
             className="text-xs font-medium text-foreground"
+            title="Pins the interpreter for this script's inline text. Script files with a known extension (.ps1, .sh) always use their own interpreter."
           >
             Shell
           </label>
+          <CustomSelect
+            id={`${idPrefix}-shell`}
+            value={shellSelectValue(v.shell, customShellPath)}
+            onChange={handleShellSelect}
+            options={shellOptions}
+            disabled={disabled}
+            warning={shellValidation}
+            warningSeverity={shellValidationSeverity}
+            warningId={`${idPrefix}-shell-warning`}
+          />
+        </div>
+      </DrawerRow>
+
+      {/* Free-text escape hatch for an interpreter the catalog doesn't know. */}
+      {customShellPath && (
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={`${idPrefix}-shell-path`}
+            className="text-xs font-medium text-foreground"
+          >
+            Custom shell path
+          </label>
           <input
             type="text"
-            id={`${idPrefix}-shell`}
+            id={`${idPrefix}-shell-path`}
             value={shellInput}
             onChange={(e) => setShellInput(e.target.value)}
             onBlur={commitShell}
             onKeyDown={(e) => {
               if (e.key === KEYBOARD_KEYS.ENTER) e.currentTarget.blur();
             }}
-            placeholder="Auto (terminal.shellExecutable, or platform default)"
+            placeholder={customShellPathPlaceholder(platform)}
             disabled={disabled}
             className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
           />
+          <span className="text-xxs text-description-fg">
+            Machine-specific paths do not travel with a shared workflow — prefer
+            a bare shell name where one fits.
+          </span>
         </div>
-      </DrawerRow>
+      )}
 
       {/* Variant-specific fields that follow the shared timeout/shell row. */}
       {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry ? (

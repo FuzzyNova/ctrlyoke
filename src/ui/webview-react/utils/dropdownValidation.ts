@@ -4,7 +4,12 @@ import type {
   SkillOption,
 } from "@store/settingsStore";
 import type { HarnessId } from "../types/messages";
-import { COMPATIBILITY_DIAGNOSTIC_SEVERITIES } from "@root/types/DashboardConstants";
+import {
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  UI_PLATFORM_LABELS,
+  type UiPlatform,
+} from "@root/types/DashboardConstants";
+import { isShellAvailableOnPlatform } from "@root/utils/ShellCatalog";
 
 function isKnownName(
   value: string,
@@ -66,6 +71,24 @@ export function skillsWarning(
     .join(", ")}.`;
 }
 
+/**
+ * Returns a warning when a pinned per-script shell is not normally installed
+ * on this platform — a workflow authored on macOS pinning `zsh`, opened on
+ * Windows. Informational only: the value is preserved and still runs wherever
+ * that shell does exist, and an unrecognized custom path never warns because
+ * ctrlyoke cannot know what it is.
+ */
+export function shellWarning(
+  shell: string | null | undefined,
+  platform: UiPlatform
+): string | null {
+  if (!shell || isShellAvailableOnPlatform(shell, platform)) {
+    return null;
+  }
+
+  return `Shell "${shell}" is not typically available on ${UI_PLATFORM_LABELS[platform]}.`;
+}
+
 export type ValidationSeverity = "warning" | "error";
 
 /**
@@ -83,9 +106,24 @@ export function dropdownBorderClass(
   return validation ? "border-warning-fg" : "border-dropdown-border";
 }
 
-/** Returns the consistent text token for a soft dropdown warning. */
+/** Returns the consistent text token for a dropdown warning or input error. */
 export function dropdownWarningClass(
-  warning: string | null | undefined
+  warning: string | null | undefined,
+  severity: ValidationSeverity = "warning"
 ): string {
-  return warning ? "text-warning-fg" : "text-description-fg";
+  if (!warning) {
+    return "text-description-fg";
+  }
+  return severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    ? "text-error-fg"
+    : "text-warning-fg";
+}
+
+/** Returns the codicon name that matches a dropdown validation severity. */
+export function dropdownWarningIcon(
+  severity: ValidationSeverity = "warning"
+): string {
+  return severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    ? "error"
+    : "warning";
 }

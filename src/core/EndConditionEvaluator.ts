@@ -38,11 +38,11 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
+import { resolveShellInvocation } from "./harness/PtyProcessManager";
 import {
   getShellInvocationError,
   resolveShellKind,
-  resolveShellInvocation,
-} from "./harness/PtyProcessManager";
+} from "../utils/ShellCatalog";
 import {
   buildSecretProcessEnvironment,
   resolveSecretEnvironment,
