@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { execFileSync } from "child_process";
 import chalk from "chalk";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { suite, test, setup, teardown } from "mocha";
 import { buildCliPreviewJsonResult } from "../../cli/CliJsonResultBuilder";
 import { CliTerminalFormatter } from "../../cli/CliTerminalFormatter";
 import type { WorkflowExecutionPreview } from "../../types/ExecutionPreviewTypes";
@@ -87,32 +87,59 @@ function previewFixture(): WorkflowExecutionPreview {
   };
 }
 
+/** `out/test/unit` -> `out`: these cases require the compiled formatter. */
+const COMPILED_ROOT = path.resolve(__dirname, "..", "..");
+
+/**
+ * Runs `body` in a child Node process with the compiled formatter and
+ * `CLI_EVENT_TYPES` already required, and returns everything it wrote to
+ * stdout.
+ *
+ * `FORCE_COLOR: "0"` is the load-bearing part. See the suite's `setup` below:
+ * the child inherits the environment, so without this it colours its output
+ * exactly when the developer's terminal is a TTY.
+ */
+function runFormatterScript(body: string): string {
+  const requirePath = (...segments: string[]): string =>
+    JSON.stringify(path.join(COMPILED_ROOT, ...segments));
+  return execFileSync(
+    process.execPath,
+    [
+      "-e",
+      `const { CliTerminalFormatter } = require(${requirePath("cli", "CliTerminalFormatter.js")});
+const { CLI_EVENT_TYPES } = require(${requirePath("types", "DashboardConstants.js")});
+${body}`,
+    ],
+    { encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } }
+  );
+}
+
 suite("CLI dry-run output", () => {
+  /**
+   * These cases assert on the formatter's *structure* — heading text, ordering,
+   * indentation — so they must see it uncoloured, and chalk's level is ambient:
+   * `npm` exports `FORCE_COLOR` to the scripts it runs whenever its own stdout
+   * is a TTY, and chalk honours that in preference to `isTTY`. That is why a
+   * bare `npm test` failed here while `npm test > out.log` passed — the
+   * redirect is what stopped npm exporting the variable. Pin the level instead
+   * of inheriting it; the one case that needs colour turns it back on itself.
+   */
+  let previousChalkLevel: typeof chalk.level;
+
+  setup(() => {
+    previousChalkLevel = chalk.level;
+    chalk.level = 0;
+  });
+
+  teardown(() => {
+    chalk.level = previousChalkLevel;
+  });
+
   test("keeps concurrent headless bursts identified by target", () => {
-    const repoRoot = path.resolve(__dirname, "..", "..", "..");
-    const formatterPath = path.join(
-      repoRoot,
-      "out",
-      "cli",
-      "CliTerminalFormatter.js"
-    );
-    const constantsPath = path.join(
-      repoRoot,
-      "out",
-      "types",
-      "DashboardConstants.js"
-    );
-    const output = execFileSync(
-      process.execPath,
-      [
-        "-e",
-        `const { CliTerminalFormatter } = require(${JSON.stringify(formatterPath)});
-const { CLI_EVENT_TYPES } = require(${JSON.stringify(constantsPath)});
-CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "research" } }], { stepIndex: 1, stepName: "research-auth" });
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "research" } }], { stepIndex: 1, stepName: "research-auth" });
 CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }], { stepIndex: 2, stepName: "unit-tests" });
-CliTerminalFormatter.flushStreamingBuffer();`,
-      ],
-      { encoding: "utf8" }
+CliTerminalFormatter.flushStreamingBuffer();`
     );
 
     assert.ok(output.includes("[2 research-auth] research"));
@@ -120,26 +147,8 @@ CliTerminalFormatter.flushStreamingBuffer();`,
   });
 
   test("renders MCP parameters and results in terminal output", () => {
-    const repoRoot = path.resolve(__dirname, "..", "..", "..");
-    const formatterPath = path.join(
-      repoRoot,
-      "out",
-      "cli",
-      "CliTerminalFormatter.js"
-    );
-    const constantsPath = path.join(
-      repoRoot,
-      "out",
-      "types",
-      "DashboardConstants.js"
-    );
-    const output = execFileSync(
-      process.execPath,
-      [
-        "-e",
-        `const { CliTerminalFormatter } = require(${JSON.stringify(formatterPath)});
-const { CLI_EVENT_TYPES } = require(${JSON.stringify(constantsPath)});
-CliTerminalFormatter.renderEvent({
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
   type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
   data: {
     server: "queue",
@@ -147,9 +156,7 @@ CliTerminalFormatter.renderEvent({
     parameters: { prompt: "terminal parameter output" },
     result: { success: true, output: "terminal result output" },
   },
-});`,
-      ],
-      { encoding: "utf8" }
+});`
     );
 
     assert.ok(output.includes("⚙ queue:append"));
