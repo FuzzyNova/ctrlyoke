@@ -282,6 +282,34 @@ suite("CliIntegration", () => {
       );
     });
 
+    test("forces a restart when secrets change", () => {
+      const previous = createResolvedProperties({ secrets: ["API_TOKEN"] });
+      const current = createResolvedProperties({ secrets: [] });
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(previous),
+          current,
+          "session-existing"
+        ),
+        "secrets changed"
+      );
+    });
+
+    test("permits inject when mcpServers changes from absent to null", () => {
+      const previous = createResolvedProperties();
+      delete (previous as Partial<ResolvedProperties>).mcpServers;
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(previous),
+          createResolvedProperties({ mcpServers: null }),
+          "session-existing"
+        ),
+        null
+      );
+    });
+
     test("forces a restart when the prompt needs parallel-group identity", () => {
       const properties = createResolvedProperties();
 

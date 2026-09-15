@@ -402,11 +402,13 @@ No `schemas/workflow-schema.json` change — nothing here is authored per workfl
 
 ## Staging
 
-**Stage 1 — `ExecutionSpawnIdentity`, and the inject predicate rewired onto it.** Separable
-and safe alone: it only moves `getInjectIncompatibilityReason`'s comparisons behind a shared
-serializer, and both behavioural deltas fail safe — folding `undefined` into `null` causes
-_fewer_ restarts, while adding `secrets`/`ctrlyokeMcpMode` causes _more_, which is today's
-behaviour applied more often. Nothing yet keys a cache on it.
+**Stage 1 — `ExecutionSpawnIdentity`, and the inject predicate rewired onto it — landed.**
+The shared pure module now canonicalizes the eight spawn-time fields and hashes their record
+with 64-bit FNV-1a. `getInjectIncompatibilityReason` compares those canonical field values,
+retaining its existing reasons and adding `secrets`/`ctrlyokeMcpMode`. The tests cover the
+canonicalization and the invariant that the hash and predicate cannot disagree. Folding
+`undefined` into `null` causes _fewer_ restarts, while adding `secrets`/`ctrlyokeMcpMode`
+causes _more_; nothing yet keys a cache on the hash.
 
 **Stage 2 — the behavioural change, as one landing**, in this internal order:
 

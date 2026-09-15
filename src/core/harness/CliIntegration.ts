@@ -69,6 +69,10 @@ import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
 import type { ExecutionPreviewHarness } from "../ExecutionPreviewService";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import {
+  SPAWN_IDENTITY_FIELDS,
+  spawnIdentityFields,
+} from "../../types/ExecutionSpawnIdentity";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
@@ -637,27 +641,56 @@ export class CliIntegration extends HarnessIntegration {
       return "resumeSession is false — fresh session required";
     }
 
-    if (curr.model !== prev.model) {
+    const currIdentity = spawnIdentityFields(curr);
+    const prevIdentity = spawnIdentityFields(prev);
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.MODEL] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.MODEL]
+    ) {
       return `model changed (${prev.model} → ${curr.model})`;
     }
 
     if (
-      JSON.stringify(curr.toolPermissions) !==
-      JSON.stringify(prev.toolPermissions)
+      currIdentity[SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS]
     ) {
       return "toolPermissions changed";
     }
 
-    if (JSON.stringify(curr.hooks) !== JSON.stringify(prev.hooks)) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.HOOKS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.HOOKS]
+    ) {
       return "hooks changed";
     }
 
-    if (JSON.stringify(curr.mcpServers) !== JSON.stringify(prev.mcpServers)) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.MCP_SERVERS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.MCP_SERVERS]
+    ) {
       return "mcpServers changed";
     }
 
-    if ((curr.additionalArgs ?? "") !== (prev.additionalArgs ?? "")) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS]
+    ) {
       return `additionalArgs changed`;
+    }
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.SECRETS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.SECRETS]
+    ) {
+      return "secrets changed";
+    }
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.CTRLYOKE_MCP_MODE] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.CTRLYOKE_MCP_MODE]
+    ) {
+      return "ctrlyokeMcpMode changed";
     }
 
     return null;
