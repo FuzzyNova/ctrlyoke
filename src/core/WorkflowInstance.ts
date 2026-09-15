@@ -76,6 +76,7 @@ import {
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -4902,7 +4903,8 @@ export class WorkflowInstance {
             onPass: CONDITION_ACTIONS.CONTINUE,
             onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
             actionForErrored: CONDITION_ACTIONS.STOP_WORKFLOW,
-            statusLabel: "Worktree setup",
+            statusLabel:
+              SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP],
             emitStatus: false,
             vars: args.vars,
             evaluate: async (onOutput): Promise<EvaluationResult> => {

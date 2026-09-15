@@ -1039,6 +1039,9 @@ async function runCommand(
       console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
     }
     await instance.shutdown();
+    // Flush any pending retry aggregate so an interrupted run still reports the
+    // attempts it made. Idempotent with the normal and error exit paths.
+    releaseHeadlessOutputState();
     process.exit(5);
   };
   process.on("SIGINT", () => {

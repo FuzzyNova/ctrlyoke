@@ -43,6 +43,7 @@ import {
   COMPARE_SOURCES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
   FAILURE_KINDS,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
@@ -1643,7 +1644,8 @@ export class WorkflowExecutor {
           timestampMs: Date.now(),
           onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
-          statusLabel: "Pre-condition",
+          statusLabel:
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
           timeoutMs: resolvedPreCondition.timeout,
           vars: workflowFileForPre.vars,
           secretNames: preSecretNames,
@@ -1669,7 +1671,7 @@ export class WorkflowExecutor {
             context,
             target,
             this.getSignedStepIndex(target),
-            "Pre-condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
             preResult,
             preErrorBehavior,
             attemptIndex
@@ -1697,7 +1699,7 @@ export class WorkflowExecutor {
           await this.trackConditionResult(
             context,
             target,
-            "Pre-condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
             preReport.verdict,
             STATUS_MESSAGE_SEVERITY.WARNING
           );
@@ -2308,7 +2310,7 @@ export class WorkflowExecutor {
         timestampMs,
         onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
         onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        statusLabel: "Script step",
+        statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
         timeoutMs: timeout,
         vars: this.promptQueue.getWorkflowFile().vars,
         secretNames,
@@ -2337,7 +2339,7 @@ export class WorkflowExecutor {
           context,
           target,
           signedStepIndex,
-          "Script step",
+          SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
           evalResult,
           errorBehavior,
           attemptIndex,
@@ -2354,7 +2356,7 @@ export class WorkflowExecutor {
         await this.trackConditionResult(
           context,
           target,
-          "Script step",
+          SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
           report.verdict,
           STATUS_MESSAGE_SEVERITY.ERROR
         );
@@ -3351,7 +3353,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         missingScriptResult,
         errorBehavior,
         attemptIndex,
@@ -3399,7 +3401,7 @@ export class WorkflowExecutor {
       onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
       actionForErrored: this.getErrorConditionAction(errorBehavior),
-      statusLabel: "End condition",
+      statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
       timeoutMs: endCondition.timeout,
       vars,
       secretNames,
@@ -3424,7 +3426,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         evaluationResult,
         errorBehavior,
         attemptIndex,
@@ -3435,7 +3437,7 @@ export class WorkflowExecutor {
     await this.trackConditionResult(
       context,
       target,
-      "End condition",
+      SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
       endReport.verdict,
       STATUS_MESSAGE_SEVERITY.ERROR
     );
@@ -3470,7 +3472,8 @@ export class WorkflowExecutor {
           onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
           actionForErrored: this.getErrorConditionAction(errorBehavior),
-          statusLabel: "End condition",
+          statusLabel:
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
           timeoutMs: condition.timeout,
           vars,
           secretNames,
@@ -3488,7 +3491,7 @@ export class WorkflowExecutor {
           await this.trackConditionResult(
             context,
             target,
-            "End condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
             retryVerdict,
             STATUS_MESSAGE_SEVERITY.ERROR
           );
@@ -3516,7 +3519,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         result.errorResult,
         errorBehavior,
         result.errorAttemptIndex ?? attemptIndex,

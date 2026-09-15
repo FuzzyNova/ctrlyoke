@@ -31,9 +31,9 @@ import {
   PREVIEW_TRUNCATION_REASONS,
   SCRIPT_MATCH_RULE_NONE,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
   SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
-  type ScriptOutputSource,
   type HarnessId,
 } from "../types/DashboardConstants";
 import type { ScriptVerdict } from "../types/CtrlYokeTypes";
@@ -73,13 +73,6 @@ const ASK_USER_QUESTION_DECLINE_LABELS = {
   clarify: "Asked to clarify",
   rejected: "Question declined",
 } as const satisfies Record<AskUserQuestionDeclined["reason"], string>;
-
-const SCRIPT_SOURCE_LABELS: Record<ScriptOutputSource, string> = {
-  [SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP]: "Script step",
-  [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION]: "Pre-condition",
-  [SCRIPT_OUTPUT_SOURCES.END_CONDITION]: "End condition",
-  [SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP]: "Worktree setup",
-};
 
 const SCRIPT_MATCH_RULE_LABELS: Record<ScriptVerdict["matchRule"], string> = {
   exitCode: "exit code",
