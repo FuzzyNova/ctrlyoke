@@ -193,14 +193,20 @@ describe("EditorFooter run menu", () => {
     async (_label, hasContent, externallyManaged, enabled) => {
       const user = userEvent.setup();
       renderFooter({ hasContent, isExternallyManaged: externallyManaged });
-      await user.click(screen.getByRole("button", { name: "More options" }));
 
       const run = document.querySelector<HTMLButtonElement>(".btn-editor-run");
-      const newWorkflow = screen.getByRole("option", {
-        name: "Run in New Workflow",
-      });
+      const moreOptions = screen.getByRole("button", { name: "More options" });
+      // The dropdown trigger shares Run's disabled state — a disabled Run
+      // button must not leave its menu reachable.
       expect(run).toHaveProperty("disabled", !enabled);
-      expect(newWorkflow).toHaveProperty("disabled", !enabled);
+      expect(moreOptions).toHaveProperty("disabled", !enabled);
+
+      if (enabled) {
+        await user.click(moreOptions);
+        expect(
+          screen.getByRole("option", { name: "Run in New Workflow" })
+        ).toBeEnabled();
+      }
     }
   );
 

@@ -313,7 +313,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
-              mainDisabled={isExternallyManaged || !hasContent}
+              disabled={isExternallyManaged || !hasContent}
               mainClassName="btn-editor-run"
               dropdownClassName="btn-editor-run-menu"
               size="compact"

@@ -438,8 +438,8 @@ ${MENU_GESTURE_HINT}`
           title={hideMenuButton ? collapsedTitle : mainTitle}
           aria-haspopup={hideMenuButton ? "listbox" : undefined}
           aria-expanded={hideMenuButton ? isOpen : undefined}
-          className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none ${mainClassName} ${
-            hideMenuButton ? "relative gap-1" : ""
+          className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none gap-1 ${mainClassName} ${
+            hideMenuButton ? "relative" : ""
           } ${mainActionDisabled ? disabledClass : ""}`}
         >
           {mainLabel}
