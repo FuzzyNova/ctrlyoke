@@ -23,6 +23,9 @@ import {
   type QueuePosition,
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import { runStateWriteOptions } from "../../utils/RunStateWrites";
+import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import type { QueueLimitPolicy } from "../../utils/QueueLimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -1301,18 +1304,30 @@ export function immutablePrefixLength(steps: WorkflowStep[]): number {
   return boundary;
 }
 
+/**
+ * These are run working files mid-execution, so they get the same
+ * transient-rename budget `WorkingFileManager`'s writes get: a hand-rolled
+ * `writeFile` + `rename` pair here had none, and a Windows `EPERM` from a
+ * reader holding the destination for a few milliseconds failed the whole run.
+ *
+ * `invalidateRunSummaryFor` is the write-through hook `RunSummaryCache`
+ * requires of every in-process writer of a cached run file.
+ */
 async function writeWorkingFileAtomic(
   filePath: string,
   workingFile: WorkingFile
 ): Promise<void> {
-  const temporaryPath = `${filePath}.tmp`;
   try {
-    await fs.writeFile(temporaryPath, JSON.stringify(workingFile, null, 2));
-    await fs.rename(temporaryPath, filePath);
+    await writeFileAtomic(
+      filePath,
+      JSON.stringify(workingFile, null, 2),
+      runStateWriteOptions(filePath, "RunContinuationService")
+    );
   } catch (error) {
-    await fs.unlink(temporaryPath).catch(() => {});
     throw new Error(
       `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
     );
+  } finally {
+    invalidateRunSummaryFor(filePath);
   }
 }

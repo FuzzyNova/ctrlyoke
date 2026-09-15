@@ -10,8 +10,6 @@ import {
 } from "../../completions/BranchCompletionHelpers";
 
 suite("BranchCompletionHelpers", function () {
-  this.timeout(10_000);
-
   let workspaceRoot: string;
 
   function runGit(args: string[]): string {

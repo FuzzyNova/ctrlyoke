@@ -33,15 +33,24 @@ class RecordingWorktreeSetupRunner implements WorktreeSetupRunner {
 }
 
 suite("WorktreeManager", function () {
-  this.timeout(20_000);
-
   const temporaryDirectories: string[] = [];
 
   teardown(async () => {
     await Promise.all(
-      temporaryDirectories
-        .splice(0)
-        .map((directory) => fs.rm(directory, { recursive: true, force: true }))
+      temporaryDirectories.splice(0).map((directory) =>
+        // These are real git repositories with worktrees attached, and Windows
+        // holds transient locks on pack files as git's own processes exit —
+        // `rm` then fails with EBUSY/EPERM. Retry those, and never let residual
+        // cleanup of an OS temp directory fail an otherwise green run.
+        fs
+          .rm(directory, {
+            recursive: true,
+            force: true,
+            maxRetries: 10,
+            retryDelay: 100,
+          })
+          .catch(() => {})
+      )
     );
   });
 

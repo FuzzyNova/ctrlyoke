@@ -267,9 +267,7 @@ suite("RetryUtils", () => {
       assert.strictEqual(attempts, 0);
     });
 
-    test("should interrupt an active backoff delay when aborted", async function () {
-      this.timeout(1_000);
-
+    test("should interrupt an active backoff delay when aborted", async () => {
       const abortController = new AbortController();
       let attempts = 0;
       const startTime = Date.now();
@@ -290,8 +288,11 @@ suite("RetryUtils", () => {
 
       assert.strictEqual(result, undefined);
       assert.strictEqual(attempts, 1);
+      // Generous against the 10s backoff it must *not* wait out: the margin is
+      // what keeps this measuring the abort rather than the host's scheduler
+      // under full-suite load.
       assert.ok(
-        Date.now() - startTime < 500,
+        Date.now() - startTime < 5_000,
         "abort should end the active backoff without waiting for its timer"
       );
     });

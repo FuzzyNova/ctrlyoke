@@ -436,7 +436,6 @@ suite("CliIntegration", () => {
   });
 
   test("streams a log-sourced headless response in standalone CLI context", async function () {
-    this.timeout(15_000);
     const workspaceRoot = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-cli-standalone-")
     );

@@ -322,7 +322,6 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
   }
 
   test("a live, fresh-heartbeat lock cannot be acquired by a second owner", async function () {
-    this.timeout(8000); // acquireLock retries against a live owner for up to 5s before giving up
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-exclusive-")
     );

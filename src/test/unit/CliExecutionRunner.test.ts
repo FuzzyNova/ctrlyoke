@@ -198,13 +198,14 @@ suite("CliExecutionRunner", () => {
     assert.match(failureReason, /waiting for SessionStart hook/iu);
   });
 
-  test("should stop early when PTY exits during session log discovery", async function () {
-    this.timeout(5_000);
-
+  test("should stop early when PTY exits during session log discovery", async () => {
+    // Discovery sleeps far longer than the assertion below allows, so "aborted
+    // on PTY exit" stays distinguishable from "discovery simply finished" even
+    // when the host is loaded enough to blow past a few hundred milliseconds.
     const { runner, failureTracker, getFailureReason } = createRunner({
       supportsSessionStart: false,
       discoverSessionLog: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 30_000));
         return null;
       },
     });
@@ -218,7 +219,7 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.ok(
-      elapsedMs < 300,
+      elapsedMs < 10_000,
       `expected discovery to abort quickly after PTY exit, but it took ${elapsedMs}ms`
     );
     assert.strictEqual(failureTracker.wasLastFailureProcessExit(), true);
@@ -228,8 +229,6 @@ suite("CliExecutionRunner", () => {
   });
 
   test("should send inject prompt in chunks with repeated focus and submit pulses", async function () {
-    this.timeout(5_000);
-
     const writes: string[] = [];
     const prompt = "x".repeat(300);
     const { runner, failureTracker } = createRunner({

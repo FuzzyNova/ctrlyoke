@@ -2384,7 +2384,6 @@ suite("WorkflowInstance append-and-continue", () => {
     );
   });
 
-
   // Publishing a run deletes the lineage's draft, so once promotion succeeds the
   // run is the only place the user's definition lives. A start that throws after
   // that point — here the timeline init the promotion itself needs — must still

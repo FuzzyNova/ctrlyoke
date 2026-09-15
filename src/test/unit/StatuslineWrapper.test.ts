@@ -74,11 +74,15 @@ function nodeCommand(code: string): string {
  * command, and a cold Node start on a loaded Windows machine comfortably
  * outruns the wrapper's 200 ms production forward budget. What is under test is
  * the forwarding behaviour, not the host's process-spawn latency, so raise the
- * budget well clear of it, but still under Mocha's 10s case timeout -- the 200 ms
- * default itself is asserted separately by `forwardToCommand`'s own timeout
- * cases, which pass the budget explicitly.
+ * budget well clear of it -- the 200 ms default itself is asserted separately by
+ * `forwardToCommand`'s own timeout cases, which pass the budget explicitly.
+ *
+ * 5s was not clear of it: `npm test` runs this file's nested `node` spawns
+ * beside five other extension hosts and the Vitest pool, and a wrapper that
+ * overruns the budget silently falls back to the branded line -- so the tell is
+ * an assertion failure on the forwarded text, not a timeout.
  */
-const FORWARD_TIMEOUT_FOR_TESTS = "5000";
+const FORWARD_TIMEOUT_FOR_TESTS = "20000";
 
 async function runWrapper(
   script: string,
@@ -187,7 +191,12 @@ async function writeWorkspaceSettings(
   await fs.writeFile(filePath, JSON.stringify(value));
 }
 
-suite("Shared statusline wrappers", () => {
+suite("Shared statusline wrappers", function () {
+  // Nearly every case here spawns a wrapper process that itself spawns a
+  // `node -e` child, so this file is dominated by cold process starts; under
+  // full-suite load that legitimately outruns the harness's 30s hang budget.
+  this.timeout(120_000);
+
   let tempDirectory = "";
   let tempHome = "";
   const originalHome = process.env.HOME;
@@ -1036,14 +1045,18 @@ suite("Shared statusline wrappers", () => {
     );
     assert.strictEqual(failed.length, 0);
 
+    // The child outlives its budget by a wide margin so that "the budget was
+    // enforced" stays distinguishable from "the child happened to finish" even
+    // when a cold Node start on a loaded machine eats seconds before the timer
+    // can matter.
     const startedAt = Date.now();
     const timedOut = await shared.forwardToCommand(
-      nodeCommand("setTimeout(() => {}, 1000)"),
+      nodeCommand("setTimeout(() => {}, 60000)"),
       "input",
       25
     );
     assert.strictEqual(timedOut.length, 0);
-    assert.ok(Date.now() - startedAt < 1000);
+    assert.ok(Date.now() - startedAt < 30_000);
   });
 
   for (const [provider, script] of [

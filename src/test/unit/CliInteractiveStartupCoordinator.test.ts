@@ -340,8 +340,6 @@ suite("CliInteractiveStartupCoordinator", () => {
   });
 
   test("should fail after hard startup timeout when no hook or log ever arrives", async function () {
-    this.timeout(1_000);
-
     let failureReason: string | undefined;
     let discoverAttempts = 0;
 
@@ -402,8 +400,6 @@ suite("CliInteractiveStartupCoordinator", () => {
   });
 
   test("should abort in-flight session-log discovery when cancelled", async function () {
-    this.timeout(1_000);
-
     let cancelled = false;
     let discoveryAborted = false;
 

@@ -61,8 +61,6 @@ suite("CLI Integration Tests", () => {
   });
 
   test("Should detect harness status", async function () {
-    this.timeout(10000);
-
     // Verify extension activated by checking a core command is registered
     const commands = await vscode.commands.getCommands();
     assert.ok(

@@ -11,14 +11,6 @@ import {
 } from "../../types/DashboardConstants";
 
 suite("WorkspaceSnapshotService", function () {
-  // Git-backed snapshot tests shell out to real git (init/config/commit) in
-  // `setup`, not just in test bodies. `this.timeout()` inside a single test
-  // callback only extends that test's own runnable — it does not cover the
-  // "before each" hook that runs ahead of it — so the suite-level timeout is
-  // needed to keep `setup` from timing out while the full extension host
-  // suite is probing installed harness CLIs in parallel.
-  this.timeout(10_000);
-
   let workspaceRoot: string;
   let snapshotService: WorkspaceSnapshotService;
 
@@ -249,8 +241,6 @@ suite("WorkspaceSnapshotService", function () {
 // ── Multi-root (multiple repos) ─────────────────────────────────────────────
 
 suite("WorkspaceSnapshotService — multi-root", function () {
-  this.timeout(10_000);
-
   const tempDirs: string[] = [];
   let snapshotService: WorkspaceSnapshotService;
 

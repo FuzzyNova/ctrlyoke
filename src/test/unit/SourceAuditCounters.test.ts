@@ -163,6 +163,43 @@ function isAllowedWebviewToastCall(
   );
 }
 
+interface ParsedProductionSource {
+  sourceFile: ts.SourceFile;
+  relativeFile: string;
+}
+
+/**
+ * Parsing every production `.ts`/`.tsx` in the repository is by far the
+ * expensive part of this file, and each of the cases below differs only in the
+ * predicate it applies to the result. Parsing once and reusing the ASTs turns
+ * three full-repo passes into one — which is what kept these cases inside the
+ * suite's time budget under full-suite load.
+ */
+let parsedProductionSources:
+  | { repoRoot: string; sources: ParsedProductionSource[] }
+  | undefined;
+
+function getParsedProductionSources(
+  repoRoot: string
+): ParsedProductionSource[] {
+  if (parsedProductionSources?.repoRoot === repoRoot) {
+    return parsedProductionSources.sources;
+  }
+
+  const sources = findProductionSourceFiles(repoRoot).map((filePath) => ({
+    sourceFile: ts.createSourceFile(
+      filePath,
+      fs.readFileSync(filePath, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+      filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    ),
+    relativeFile: path.relative(repoRoot, filePath).split(path.sep).join("/"),
+  }));
+  parsedProductionSources = { repoRoot, sources };
+  return sources;
+}
+
 function collectCallSites(
   repoRoot: string,
   predicate: (node: ts.CallExpression) => boolean,
@@ -174,21 +211,9 @@ function collectCallSites(
 ): SourceAuditSite[] {
   const sites: SourceAuditSite[] = [];
 
-  for (const filePath of findProductionSourceFiles(repoRoot)) {
-    const source = fs.readFileSync(filePath, "utf8");
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-    );
-
-    const relativeFile = path
-      .relative(repoRoot, filePath)
-      .split(path.sep)
-      .join("/");
-
+  for (const { sourceFile, relativeFile } of getParsedProductionSources(
+    repoRoot
+  )) {
     function visit(node: ts.Node): void {
       if (
         ts.isCallExpression(node) &&
@@ -240,10 +265,6 @@ suite("source audit counters", () => {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
   test("holds the direct show*Message boundary and reusable baselines", function () {
-    // Full-repo TypeScript AST parse; default 2000ms mocha timeout is too
-    // tight under CPU contention (e.g. running as a ctrlyoke script step
-    // while the extension host is also busy orchestrating the workflow).
-    this.timeout(10_000);
     const sites = collectCallSites(repoRoot, isVscodeWindowMessageCall);
     const boundaryFiles =
       FEEDBACK_SOURCE_AUDIT_BASELINES.directMessage.boundaryFiles;
@@ -271,7 +292,6 @@ suite("source audit counters", () => {
   });
 
   test("holds the adapter-mediated host UI baseline", function () {
-    this.timeout(10_000);
     const sites = collectCallSites(repoRoot, isAdapterUiCall);
     assertShrinkOnly(
       "Adapter-mediated host UI",
@@ -281,7 +301,6 @@ suite("source audit counters", () => {
   });
 
   test("holds the host-aware webview toast baseline", function () {
-    this.timeout(10_000);
     const sites = collectCallSites(
       repoRoot,
       isDirectToastCall,

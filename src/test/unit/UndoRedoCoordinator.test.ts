@@ -21,8 +21,6 @@ import type {
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 suite("UndoRedoCoordinator", function () {
-  this.timeout(10_000);
-
   function git(cwd: string, ...args: string[]): string {
     return execFileSync("git", ["-C", cwd, ...args], {
       encoding: "utf8",

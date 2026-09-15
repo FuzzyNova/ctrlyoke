@@ -29,10 +29,11 @@ import type { RunSummaryRecord } from "./OutputHistoryManager";
  *
  * Three mechanisms, each covering the others' gap:
  *
- * 1. **Write-through invalidation** for in-process writes, hooked at the two
- *    single writers of the cached files — `writeWorkingFileAtomicTo` in
- *    `WorkingFileManager` and `TimelineRecorder.writeManifestDirect`. Precise
- *    and immediate. Hook new writers there, never at the mutation handler:
+ * 1. **Write-through invalidation** for in-process writes, hooked at the
+ *    writers of the cached files — `writeWorkingFileAtomicTo` in
+ *    `WorkingFileManager`, `writeWorkingFileAtomic` in
+ *    `RunContinuationService`, and `TimelineRecorder.writeManifestDirect`.
+ *    Precise and immediate. Hook new writers there, never at the mutation handler:
  *    the executor's per-step `_runtime` writes never reach `invalidateRunViews`.
  * 2. **Stamp validation on read** (below), the only mechanism that can see a
  *    write from another process — the CLI binary, the MCP server, the hosted
