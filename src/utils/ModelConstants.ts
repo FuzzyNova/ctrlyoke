@@ -32,15 +32,13 @@
  */
 export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-5",
+  "claude-fable-5.1",
   "claude-fable-5",
   "claude-opus-5",
   "claude-opus-4.8",
   "claude-opus-4.8-fast",
   "claude-opus-4.7",
   "claude-sonnet-4.6",
-  "claude-opus-4.6",
-  "claude-sonnet-4.5",
-  "claude-opus-4.5",
   "claude-haiku-4.5",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
@@ -50,11 +48,12 @@ export const COPILOT_CLI_MODEL_IDS = [
   "gpt-5.4-mini",
   "gpt-5.3-codex",
   "gpt-5-mini",
+  "mai-code-1.1-flash",
   "mai-code-1-flash-picker",
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-3.1-pro-preview",
   "grok-4.5",
   "kimi-k3",
   "kimi-k2.7-code",
@@ -70,15 +69,13 @@ export const COPILOT_CLI_MODEL_IDS = [
  */
 export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
   "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-fable-5.1": "Claude Fable 5.1",
   "claude-fable-5": "Claude Fable 5",
   "claude-opus-5": "Claude Opus 5",
   "claude-opus-4.8": "Claude Opus 4.8",
   "claude-opus-4.8-fast": "Claude Opus 4.8 Fast",
   "claude-opus-4.7": "Claude Opus 4.7",
   "claude-sonnet-4.6": "Claude Sonnet 4.6",
-  "claude-opus-4.6": "Claude Opus 4.6",
-  "claude-sonnet-4.5": "Claude Sonnet 4.5",
-  "claude-opus-4.5": "Claude Opus 4.5",
   "claude-haiku-4.5": "Claude Haiku 4.5",
   "gpt-5.6-sol": "GPT 5.6 Sol",
   "gpt-5.6-terra": "GPT 5.6 Terra",
@@ -88,11 +85,12 @@ export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
   "gpt-5.4-mini": "GPT 5.4 Mini",
   "gpt-5.3-codex": "GPT 5.3 Codex",
   "gpt-5-mini": "GPT 5 Mini",
+  "mai-code-1.1-flash": "Mai Code 1.1 Flash",
   "mai-code-1-flash-picker": "Mai Code 1 Flash Picker",
+  "gemini-3.8-flash": "Gemini 3.8 Flash",
   "gemini-3.7-flash": "Gemini 3.7 Flash",
   "gemini-3.6-flash": "Gemini 3.6 Flash",
   "gemini-3.5-flash": "Gemini 3.5 Flash",
-  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
   "grok-4.5": "Grok 4.5",
   "kimi-k3": "Kimi K3",
   "kimi-k2.7-code": "Kimi K2.7 Code",
@@ -136,6 +134,7 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  * See: https://docs.openai.com/codex
  */
 export const CODEX_CLI_MODELS = [
+  "gpt-6-astra",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
   "gpt-5.6-luna",
@@ -148,6 +147,7 @@ export const CODEX_CLI_MODELS = [
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-6-astra": "GPT 6 Astra",
   "gpt-5.6-sol": "GPT 5.6 Sol",
   "gpt-5.6-terra": "GPT 5.6 Terra",
   "gpt-5.6-luna": "GPT 5.6 Luna",
@@ -348,15 +348,15 @@ export function getQwenContextWindowSize(_modelId: string): number {
  * Command: npm run sync-models -- --discover
  */
 export const ANTIGRAVITY_CLI_MODELS = [
+  "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low",
   "gemini-3.7-flash-high",
   "gemini-3.7-flash-medium",
   "gemini-3.7-flash-low",
   "gemini-3.6-flash-high",
   "gemini-3.6-flash-medium",
   "gemini-3.6-flash-low",
-  "gemini-3.5-flash-high",
-  "gemini-3.5-flash-medium",
-  "gemini-3.5-flash-low",
   "gemini-3.1-pro-high",
   "gemini-3.1-pro-low",
   "claude-sonnet-4-6",
@@ -371,15 +371,15 @@ export const ANTIGRAVITY_CLI_MODELS = [
  * `-thinking` ID suffix — that asymmetry is agy's, not ours.
  */
 export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-3.8-flash-high": "Gemini 3.8 Flash (High)",
+  "gemini-3.8-flash-medium": "Gemini 3.8 Flash (Medium)",
+  "gemini-3.8-flash-low": "Gemini 3.8 Flash (Low)",
   "gemini-3.7-flash-high": "Gemini 3.7 Flash (High)",
   "gemini-3.7-flash-medium": "Gemini 3.7 Flash (Medium)",
   "gemini-3.7-flash-low": "Gemini 3.7 Flash (Low)",
   "gemini-3.6-flash-high": "Gemini 3.6 Flash (High)",
   "gemini-3.6-flash-medium": "Gemini 3.6 Flash (Medium)",
   "gemini-3.6-flash-low": "Gemini 3.6 Flash (Low)",
-  "gemini-3.5-flash-high": "Gemini 3.5 Flash (High)",
-  "gemini-3.5-flash-medium": "Gemini 3.5 Flash (Medium)",
-  "gemini-3.5-flash-low": "Gemini 3.5 Flash (Low)",
   "gemini-3.1-pro-high": "Gemini 3.1 Pro (High)",
   "gemini-3.1-pro-low": "Gemini 3.1 Pro (Low)",
   "claude-sonnet-4-6": "Claude Sonnet 4.6 (Thinking)",

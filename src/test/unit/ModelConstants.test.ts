@@ -46,7 +46,7 @@ suite("ModelConstants", () => {
 
   suite("isKnownCopilotModel", () => {
     test("returns true for known model", () => {
-      assert.strictEqual(isKnownCopilotModel("claude-sonnet-4.5"), true);
+      assert.strictEqual(isKnownCopilotModel(COPILOT_CLI_MODEL_IDS[0]), true);
     });
 
     test("returns false for unknown model", () => {
