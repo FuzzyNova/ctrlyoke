@@ -277,6 +277,12 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
 
   test("passing preCondition with default onPass continues into the prompt", async () => {
     harness = createExecutionHarness(workspace);
+    const scriptOutputs: Array<{
+      output: { source?: string; scriptVerdict?: { outcome: string } };
+    }> = [];
+    harness.instance.onTargetScriptOutput((data) => {
+      scriptOutputs.push(data);
+    });
     await harness.instance.loadPromptFile(
       await writeWorkflow({
         preCondition: { script: PASSING_SCRIPT },
@@ -289,6 +295,19 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       harness.integration.sentPrompts,
       ["step 1"],
       "default onPass is continue — the prompt must still execute"
+    );
+    const preconditionOutput = scriptOutputs.find(
+      ({ output }) =>
+        output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
+        output.scriptVerdict !== undefined
+    );
+    assert.ok(
+      preconditionOutput,
+      "the CLI script emitter must receive the verdict"
+    );
+    assert.strictEqual(
+      preconditionOutput.output.scriptVerdict?.outcome,
+      "passed"
     );
 
     const eventsPath = (

@@ -2816,6 +2816,27 @@ export const SCRIPT_OUTPUT_SOURCES = {
   WORKTREE_SETUP: "worktreeSetup",
 } as const;
 
+/**
+ * Human labels for each script output source.
+ *
+ * These are load-bearing, not cosmetic: `WorkflowExecutor` passes them as the
+ * `label` to `formatVerdictSummary()` when emitting a condition's one-line
+ * status message, and the headless CLI rebuilds that exact same string from a
+ * script output's `source` to recognize and collapse the duplicate (see the
+ * `onTargetScriptOutput` subscription in `cli.ts`). If the two sides ever
+ * disagree the CLI silently prints every verdict twice, so both must read the
+ * label from here rather than repeating the literal.
+ */
+export const SCRIPT_SOURCE_LABELS: Record<
+  (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES],
+  string
+> = {
+  script: "Script step",
+  preCondition: "Pre-condition",
+  endCondition: "End condition",
+  worktreeSetup: "Worktree setup",
+};
+
 /** Scope values for templates stored in user or workspace state. */
 export const TEMPLATE_SCOPES = {
   USER: "user",
