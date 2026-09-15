@@ -11,7 +11,6 @@ import type {
 import {
   generateOwnerToken,
   isProcessAlive,
-  isOwnerStale,
   type ProcessLivenessCheck,
 } from "../../utils/LockSafetyPrimitives";
 import {
@@ -103,15 +102,15 @@ function isParticipantLive(
   processLivenessCheck: ProcessLivenessCheck
 ): boolean {
   if (participant.via === COORDINATION_PARTICIPANT_VIA.MCP) {
+    // PID liveness alone, not isOwnerStale's heartbeat-staleness half: unlike
+    // runner locks/execution leases, nothing heartbeats a coordination
+    // participant on a timer (HEARTBEAT_INTERVAL_MS) — lastHeartbeat only
+    // advances when the participant happens to call a coordination tool, so a
+    // quiet-but-alive agent would otherwise go "stale" after STALE_HEARTBEAT_MS
+    // (30s) and be wrongly reaped, per Decision 2 of
+    // EXECUTION_ROOT_COORDINATION_PLAN.md ("PID first, TTL only as a backstop").
     return (
-      participant.pid !== undefined &&
-      participant.lastHeartbeat !== undefined &&
-      !isOwnerStale(
-        participant.pid,
-        participant.lastHeartbeat,
-        now,
-        processLivenessCheck
-      )
+      participant.pid !== undefined && processLivenessCheck(participant.pid)
     );
   }
 
