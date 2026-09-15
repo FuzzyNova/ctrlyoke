@@ -63,15 +63,20 @@ npm install -g @openai/codex
 
 #### Qwen CLI
 
-Qwen CLI is an npm package:
+Qwen CLI is an npm package (`@qwen-code/qwen-code`):
 
 ```bash
 # Check current version
 qwen --version
 
 # Update to latest
-qwen update
+npm install -g @qwen-code/qwen-code@latest
 ```
+
+**Note**: `qwen update` only _checks_ for an update and prints the npm install
+command above — it does not install the update itself (confirmed 2026-09-15).
+Run the `npm install -g` command directly rather than relying on `qwen update`
+to apply the change.
 
 #### OpenCode CLI
 
@@ -105,18 +110,23 @@ agy update
 
 **Frequency**: When new Copilot/Claude/Codex/Gemini models are released
 
-Model lists split into two tracks with very different levels of automation. Copilot CLI
-models are fully scriptable; everything else is inherently manual because the vendor CLI
-has no scriptable "list models" command. ctrlyoke does not query VS Code's Language Model
-API or support a chat harness — every model list here is a CLI-facing constant.
+Model lists split into three tracks with different levels of automation. Copilot CLI and
+Antigravity CLI models are fully scriptable; Codex/Claude models are inherently manual
+because those vendor CLIs have no scriptable "list models" command; Qwen and OpenCode
+resolve their model list at runtime, so their `ModelConstants.ts` entries are fallback-only
+and rarely need hand updates. ctrlyoke does not query VS Code's Language Model API or
+support a chat harness — every model list here is a CLI-facing constant.
 
-#### 2a. Copilot CLI models — fully automated
+#### 2a. Copilot CLI + Antigravity CLI models — fully automated
 
-`COPILOT_CLI_MODEL_IDS` comes straight from `copilot help config`, which is a plain CLI
-command. This can be run headlessly with no manual step at all:
+`COPILOT_CLI_MODEL_IDS` comes straight from `copilot help config`, and
+`ANTIGRAVITY_CLI_MODELS`/`ANTIGRAVITY_CLI_MODEL_LABELS` come straight from `agy models`
+(the only source that gives verbatim display labels for Antigravity) — both are plain CLI
+commands that can be run headlessly with no manual step at all:
 
 ```bash
-npm run sync-models:discover   # updates COPILOT_CLI_MODEL_IDS in ModelConstants.ts
+npm run sync-models:discover   # updates COPILOT_CLI_MODEL_IDS and
+                                # ANTIGRAVITY_CLI_MODELS/ANTIGRAVITY_CLI_MODEL_LABELS
 npm run sync-models            # auto-derives COPILOT_CLI_MODEL_LABELS, propagates to
                                 # package.json + workflow-schema.json
 ```
@@ -125,7 +135,7 @@ Or just run `npm run chores -- --task sync-models`, which does both automaticall
 
 #### 2b. Codex / Claude CLI models — inherently manual
 
-None of these have a scriptable model-list command to discover from:
+Neither has a scriptable model-list command to discover from:
 
 - **Codex CLI**: the model list only surfaces via the interactive `/model` slash command
   inside a session — there's no headless `codex <flag>` equivalent to `copilot help config`.
@@ -136,7 +146,15 @@ When these change, update `CODEX_CLI_MODELS` or `CLAUDE_CLI_MODELS`
 in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs, then run
 `npm run sync-models` to propagate the change.
 
-#### 2c. Model pricing — fully automated, no hand-maintained table
+#### 2c. Qwen / OpenCode CLI models — resolved at runtime, no chore needed
+
+`QWEN_CLI_MODELS` (fallback list is read from `~/.qwen/settings.json` `modelProviders` at
+runtime) and `OPENCODE_CLI_FALLBACK_MODELS` (real list comes from `opencode models`,
+user-specific) are both fallback-only constants in `ModelConstants.ts`. Do not hand-maintain
+a full model list for either — `sync-models` reports their current fallback entry counts for
+visibility but does not (and should not) rewrite them.
+
+#### 2d. Model pricing — fully automated, no hand-maintained table
 
 `src/utils/ModelPricing.ts` has **no hand-typed price table for any harness.** Every harness
 (Copilot, Claude, Codex, OpenCode, Qwen, Antigravity) is priced by looking the model up in a
@@ -297,6 +315,16 @@ Keep dependencies up-to-date and secure.
    npm run format
    ```
 
+   **Note**: A Prettier version bump can shift its output slightly, making
+   `format:check` flag files that were already clean under the old version —
+   this is expected and `npm run format` fixes it. Watch for a rarer
+   Prettier markdown bug (confirmed 2026-09-15): nested content (e.g. a
+   table) inside a numbered list item can be non-idempotent — each
+   `--write` pass re-indents it further instead of converging. If
+   `format:check` still flags a file immediately after `--write` ran on it,
+   diff it before trusting the output; `git checkout -- <file>` to discard
+   the drift rather than re-running `--write` on it again.
+
 5. **Update TypeScript and VS Code types**:
 
    ```bash
@@ -414,7 +442,7 @@ npm run chores -- --task check-all
 - `sync-models` - Discover Copilot CLI models (`copilot help config`), auto-derive their
   display labels, and sync the model registry to `package.json`/schema
 - `sync-model-pricing` - Re-download the models.dev registry snapshot used to price every
-  harness's models (see section 2c)
+  harness's models (see section 2d)
 - `update-clis` - Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
   via their native updaters
 - `check-clis` - Check installed CLI tool versions

@@ -166,7 +166,7 @@ async function checkCliUpdates() {
   logInfo("  - Copilot CLI:     copilot update");
   logInfo("  - Claude CLI:      claude upgrade");
   logInfo("  - Codex CLI:       npm install -g @openai/codex");
-  logInfo("  - Qwen CLI:        qwen update");
+  logInfo("  - Qwen CLI:        npm install -g @qwen-code/qwen-code@latest");
   logInfo("  - OpenCode CLI:    opencode upgrade");
   logInfo("  - Antigravity CLI: agy update");
   logWarning("Copilot and Claude use native installers, not npm");
@@ -226,15 +226,16 @@ async function updateClis() {
 
   console.log();
 
-  // Qwen CLI - native updater
+  // Qwen CLI - npm package; `qwen update` only checks and prints the npm
+  // command below rather than installing it, so install directly instead.
   const qwenInstalled = await checkCliInstalled("qwen", "Qwen CLI");
   if (qwenInstalled) {
-    logInfo("Updating Qwen CLI...");
+    logInfo("Updating Qwen CLI via npm...");
     try {
-      await runCommand("qwen", ["update"]);
+      await runCommand("npm", ["install", "-g", "@qwen-code/qwen-code@latest"]);
       logSuccess("Qwen CLI updated");
     } catch {
-      logWarning("Qwen CLI update may have failed");
+      logWarning("Qwen CLI update failed");
     }
   }
 
@@ -340,7 +341,7 @@ async function runAllChecks() {
 
   try {
     logInfo("Checking TypeScript types...");
-    await runCommand("npm", ["run", "check-types"]);
+    await runCommand("npm", ["run", "typecheck"]);
 
     console.log();
     logInfo("Running linter...");
