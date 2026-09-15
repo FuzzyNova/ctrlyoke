@@ -653,12 +653,15 @@ button .codicon {
      - Race conditions where a resize makes a panel briefly cross the
        collapse threshold while animation is still in progress
 
-   The cy-panels-animating class is added for ~250ms only when the user
-   explicitly clicks a collapse/expand button (see utils/panelAnimation.ts).
+   The cy-panels-animating class is added only for the duration of an
+   explicit, user-triggered layout change (see utils/panelAnimation.ts), which
+   also overrides the duration/easing below when it has to match another
+   animation — the properties drawer's slide, for instance.
    Drag resize needs no animation — the mouse movement IS the animation.
    ============================================================================ */
 .cy-panels-animating [data-panel] {
-  transition: flex-grow 200ms ease-in-out;
+  transition: flex-grow var(--cy-panel-animation-duration, 200ms)
+    var(--cy-panel-animation-easing, ease-in-out);
 }
 
 /* ============================================================================

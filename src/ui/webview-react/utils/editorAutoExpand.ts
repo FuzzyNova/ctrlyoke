@@ -3,6 +3,7 @@ import type {
   GroupImperativeHandle,
   PanelImperativeHandle,
 } from "react-resizable-panels";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /**
  * Geometry for growing the editor panel beyond the size the user dragged it to.
@@ -11,8 +12,8 @@ import type {
  * typing auto-expand (`CodeMirrorEditor` overflow events consumed by
  * `App.tsx`) and the prompt-properties drawer, which expands the editor so its
  * properties are visible on a short editor panel. Both resolve an absolute
- * editor height and apply it through the center split's percentage layout, and
- * both are bounded by `EDITOR_AUTO_EXPAND_MAX_FRACTION`.
+ * editor height and apply it through the center split's percentage layout,
+ * and neither ever exceeds `EDITOR_AUTO_EXPAND_MAX_FRACTION` of the split.
  */
 
 /** CustomEvent `CodeMirrorEditor` emits when its content over/under-flows the editor viewport. */
@@ -40,11 +41,36 @@ export interface EditorOverflowDetail {
 }
 
 /**
- * Share of the combined output+editor height the editor may be grown to
- * without the user asking. Typing auto-expand treats it as a ceiling and the
- * properties drawer as its target, so both land on the same height.
+ * Share of the combined output+editor height typing auto-expand may grow the
+ * editor to. Also the ceiling on the drawer expansion below, so a long prompt
+ * can still hold the panel taller than the drawer asks for.
  */
 export const EDITOR_AUTO_EXPAND_MAX_FRACTION = 0.6;
+
+/**
+ * Share of that same height the properties drawer expands the editor to.
+ * Deliberately short of the typing ceiling: enough to read the properties
+ * without the drawer swallowing the output pane behind it.
+ */
+export const DRAWER_EXPANSION_FRACTION = 0.5;
+
+/**
+ * Duration and easing of the drawer's own slide — `transition-transform
+ * duration-300` in `PropertiesDrawer.tsx`, plus Tailwind's default timing
+ * function. The editor panel is resized over the same pair so the drawer
+ * reads as pushing the panel open instead of following a snap; change them
+ * together or the two halves visibly drift apart.
+ */
+export const DRAWER_EXPANSION_ANIMATION_MS = 300;
+export const DRAWER_EXPANSION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+/**
+ * How long after starting that animation a panel measurement is still the
+ * transition's intermediate height rather than its destination. Panels report
+ * their size from `offsetHeight` through a ResizeObserver, so every frame of
+ * the animation reaches `onResize` and none of them is the real size.
+ */
+export const DRAWER_EXPANSION_SETTLE_MS = DRAWER_EXPANSION_ANIMATION_MS + 50;
 
 /** Panel ids of the output/editor vertical split, per layout. */
 export const CENTER_PANEL_IDS = {
@@ -90,15 +116,29 @@ export function measureCenterSplit(
   return { editorPx, totalPx };
 }
 
-/**
- * Highest editor height auto-expansion may reach. Never below `basePx` — a
- * user who dragged the editor past the fraction keeps their own size.
- */
+/** Never below `basePx` — a user who dragged the editor past the fraction keeps their size. */
+function expansionHeightPx(
+  totalPx: number,
+  basePx: number,
+  fraction: number
+): number {
+  return Math.max(basePx, totalPx * fraction);
+}
+
+/** Highest editor height typing auto-expansion may reach. */
 export function editorAutoExpandCeilingPx(
   totalPx: number,
   basePx: number
 ): number {
-  return Math.max(basePx, totalPx * EDITOR_AUTO_EXPAND_MAX_FRACTION);
+  return expansionHeightPx(totalPx, basePx, EDITOR_AUTO_EXPAND_MAX_FRACTION);
+}
+
+/** Editor height the properties drawer expands to when it opens. */
+export function drawerExpansionTargetPx(
+  totalPx: number,
+  basePx: number
+): number {
+  return expansionHeightPx(totalPx, basePx, DRAWER_EXPANSION_FRACTION);
 }
 
 /**
@@ -148,4 +188,21 @@ export function applyEditorHeightPx(
   }
   window.dispatchEvent(new CustomEvent(EDITOR_REMEASURE_EVENT));
   return true;
+}
+
+/**
+ * `applyEditorHeightPx`, but transitioned over the drawer's own slide so the
+ * two move as one. Without it the panel jumps to its new height before the
+ * drawer has started sliding, which reads as two unrelated animations.
+ */
+export function animateEditorHeightPx(
+  handles: CenterSplitHandles,
+  editorPx: number,
+  totalPx: number
+): boolean {
+  triggerPanelAnimation({
+    durationMs: DRAWER_EXPANSION_ANIMATION_MS,
+    easing: DRAWER_EXPANSION_EASING,
+  });
+  return applyEditorHeightPx(handles, editorPx, totalPx);
 }

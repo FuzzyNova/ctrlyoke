@@ -27,12 +27,17 @@ import { useSettingsStore } from "@store/settingsStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
 import {
+  animateEditorHeightPx,
   applyEditorHeightPx,
   CENTER_PANEL_IDS,
   clampEditorHeightPx,
+  drawerExpansionTargetPx,
+  DRAWER_EXPANSION_ANIMATION_MS,
+  DRAWER_EXPANSION_SETTLE_MS,
   editorAutoExpandCeilingPx,
   EDITOR_OVERFLOW_CAUSES,
   EDITOR_OVERFLOW_EVENT,
+  EDITOR_REMEASURE_EVENT,
   measureCenterSplit,
   type CenterSplitHandles,
   type EditorOverflowDetail,
@@ -141,6 +146,12 @@ function App() {
     floorPx: number;
     restorePx: number;
   } | null>(null);
+  // Timestamp the drawer's animated resize stops lying about its height.
+  // Panels report their size from `offsetHeight` through a ResizeObserver, so
+  // every frame of the transition reaches `onResize` — and persisting any of
+  // those intermediate heights as the user's base size is how an animated
+  // expansion would eat the height it was supposed to hand back.
+  const expansionSettledAtRef = useRef(0);
 
   /** A resizable center split plus the sizes expansion decisions need. */
   type EditorExpansionContext = CenterSplitHandles & {
@@ -245,33 +256,54 @@ function App() {
 
   // ── Properties-drawer expansion ──────────────────────────────────────────────
   // The drawer covers the editor panel, so on a short panel it shows only a
-  // sliver of the properties. Opening it grows the editor to the same ceiling
-  // typing auto-expand uses; closing it hands the previous height back. It
-  // never shrinks the panel — an editor already taller than the ceiling is
-  // left exactly as it is.
+  // sliver of the properties. Opening it grows the editor to
+  // `DRAWER_EXPANSION_FRACTION` of the split over the drawer's own slide, so
+  // the drawer reads as pushing the panel open; closing it hands the previous
+  // height back. It never shrinks the panel — an editor already taller than
+  // that is left exactly as it is.
   const propertiesDrawerOpen = useUiStore((s) => s.propertiesDrawerOpen);
   useEffect(() => {
     const context = editorExpansionContextRef.current();
+    // A re-toggle inside the animation window measures a height that is
+    // neither where the panel started nor where it is headed. The accumulator
+    // is the trustworthy reading there, because it was set to the destination.
+    const isMidAnimation = Date.now() < expansionSettledAtRef.current;
+
+    // The panel is still mid-transition when `applyEditorHeightPx`'s own
+    // remeasure fires, so ask CodeMirror for one more once it has landed.
+    const scheduleSettledRemeasure = () => {
+      const timer = window.setTimeout(
+        () => window.dispatchEvent(new CustomEvent(EDITOR_REMEASURE_EVENT)),
+        DRAWER_EXPANSION_ANIMATION_MS
+      );
+      return () => window.clearTimeout(timer);
+    };
 
     if (propertiesDrawerOpen) {
       // Already holding the panel open — a re-render, not a fresh open.
       if (drawerExpansionRef.current) return;
       if (!context) return;
       const { basePx, editorPx, totalPx } = context;
+      const currentPx = isMidAnimation
+        ? basePx + editorAutoExpandPxRef.current
+        : editorPx;
       const targetPx = Math.max(
-        editorPx,
-        editorAutoExpandCeilingPx(totalPx, basePx)
+        currentPx,
+        drawerExpansionTargetPx(totalPx, basePx)
       );
-      drawerExpansionRef.current = { floorPx: targetPx, restorePx: editorPx };
-      if (targetPx - editorPx < 1) return;
+      drawerExpansionRef.current = { floorPx: targetPx, restorePx: currentPx };
+      if (!isMidAnimation && targetPx - editorPx < 1) return;
 
       const previousExpandPx = editorAutoExpandPxRef.current;
       editorAutoExpandPxRef.current = targetPx - basePx;
-      if (!applyEditorHeightPx(context, targetPx, totalPx)) {
+      expansionSettledAtRef.current = Date.now() + DRAWER_EXPANSION_SETTLE_MS;
+      if (!animateEditorHeightPx(context, targetPx, totalPx)) {
         editorAutoExpandPxRef.current = previousExpandPx;
         drawerExpansionRef.current = null;
+        expansionSettledAtRef.current = 0;
+        return;
       }
-      return;
+      return scheduleSettledRemeasure();
     }
 
     const expansion = drawerExpansionRef.current;
@@ -287,8 +319,10 @@ function App() {
     // onResize reads this as an expansion resize and leaves the user's
     // persisted base size alone.
     editorAutoExpandPxRef.current = targetPx - basePx;
-    if (Math.abs(targetPx - editorPx) < 1) return;
-    applyEditorHeightPx(context, targetPx, totalPx);
+    if (!isMidAnimation && Math.abs(targetPx - editorPx) < 1) return;
+    expansionSettledAtRef.current = Date.now() + DRAWER_EXPANSION_SETTLE_MS;
+    animateEditorHeightPx(context, targetPx, totalPx);
+    return scheduleSettledRemeasure();
   }, [propertiesDrawerOpen]);
 
   // Mobile overlay closing animation state.
@@ -693,10 +727,11 @@ function App() {
                       const basePx = mobile.lastMobileSizes.current.editor;
                       const autoExpectedPx =
                         basePx + editorAutoExpandPxRef.current;
-                      const isAutoExpandResize =
-                        editorAutoExpandPxRef.current > 0 &&
-                        Math.abs(px - autoExpectedPx) < 3;
-                      if (!isAutoExpandResize) {
+                      const isExpansionResize =
+                        Date.now() < expansionSettledAtRef.current ||
+                        (editorAutoExpandPxRef.current > 0 &&
+                          Math.abs(px - autoExpectedPx) < 3);
+                      if (!isExpansionResize) {
                         mobile.lastMobileSizes.current.editor = px;
                         useUiStore
                           .getState()
@@ -941,11 +976,12 @@ function App() {
                         const basePx = desktop.lastDesktopSizes.current.editor;
                         const autoExpectedPx =
                           basePx + editorAutoExpandPxRef.current;
-                        const isAutoExpandResize =
-                          editorAutoExpandPxRef.current > 0 &&
-                          Math.abs(px - autoExpectedPx) < 3;
+                        const isExpansionResize =
+                          Date.now() < expansionSettledAtRef.current ||
+                          (editorAutoExpandPxRef.current > 0 &&
+                            Math.abs(px - autoExpectedPx) < 3);
                         if (
-                          !isAutoExpandResize &&
+                          !isExpansionResize &&
                           desktop.lastDesktopSizes.current.editor !== px
                         ) {
                           desktop.lastDesktopSizes.current.editor = px;

@@ -501,6 +501,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   return (
     <div
       ref={drawerRef}
+      /* duration-300: App.tsx grows the editor panel over the same duration
+         and easing (DRAWER_EXPANSION_ANIMATION_MS / _EASING) so the panel
+         moves with this slide rather than snapping ahead of it. */
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-panel h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : ""
       }`}

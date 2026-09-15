@@ -1,14 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   GroupImperativeHandle,
   Layout,
   PanelImperativeHandle,
 } from "react-resizable-panels";
 import {
+  animateEditorHeightPx,
   applyEditorHeightPx,
   CENTER_PANEL_IDS,
   centerSplitPercentages,
   clampEditorHeightPx,
+  drawerExpansionTargetPx,
+  DRAWER_EXPANSION_ANIMATION_MS,
+  DRAWER_EXPANSION_EASING,
+  DRAWER_EXPANSION_FRACTION,
+  DRAWER_EXPANSION_SETTLE_MS,
   editorAutoExpandCeilingPx,
   EDITOR_AUTO_EXPAND_MAX_FRACTION,
   EDITOR_REMEASURE_EVENT,
@@ -50,7 +56,7 @@ function createSplit(
 }
 
 describe("editorAutoExpandCeilingPx", () => {
-  it("caps expansion at the shared fraction of the output+editor height", () => {
+  it("caps typing expansion at its fraction of the output+editor height", () => {
     expect(editorAutoExpandCeilingPx(1000, 180)).toBe(
       1000 * EDITOR_AUTO_EXPAND_MAX_FRACTION
     );
@@ -59,6 +65,26 @@ describe("editorAutoExpandCeilingPx", () => {
   it("never returns less than the user's own panel height", () => {
     // A user who dragged the editor past the fraction keeps their size.
     expect(editorAutoExpandCeilingPx(1000, 800)).toBe(800);
+  });
+});
+
+describe("drawerExpansionTargetPx", () => {
+  it("opens the editor to the drawer's share of the split", () => {
+    expect(drawerExpansionTargetPx(1000, 180)).toBe(
+      1000 * DRAWER_EXPANSION_FRACTION
+    );
+  });
+
+  it("never returns less than the user's own panel height", () => {
+    expect(drawerExpansionTargetPx(1000, 800)).toBe(800);
+  });
+
+  it("stays within what typing auto-expand is allowed to reach", () => {
+    // The drawer target doubles as a floor on the typing path, so a target
+    // above the typing ceiling would pin the panel above its own cap.
+    expect(DRAWER_EXPANSION_FRACTION).toBeLessThanOrEqual(
+      EDITOR_AUTO_EXPAND_MAX_FRACTION
+    );
   });
 });
 
@@ -143,5 +169,42 @@ describe("applyEditorHeightPx", () => {
     const { handles } = createSplit(700, 300);
     handles.groupRef.current = null;
     expect(applyEditorHeightPx(handles, 600, 1000)).toBe(false);
+  });
+});
+
+describe("animateEditorHeightPx", () => {
+  afterEach(() => {
+    document.documentElement.classList.remove("cy-panels-animating");
+    document.documentElement.style.removeProperty(
+      "--cy-panel-animation-duration"
+    );
+    document.documentElement.style.removeProperty(
+      "--cy-panel-animation-easing"
+    );
+  });
+
+  it("resizes over the drawer's own duration and easing", () => {
+    const setLayout = vi.fn((layout: Layout) => layout);
+    const { handles } = createSplit(700, 300, setLayout);
+
+    expect(animateEditorHeightPx(handles, 500, 1000)).toBe(true);
+
+    const root = document.documentElement;
+    expect(root.classList.contains("cy-panels-animating")).toBe(true);
+    expect(root.style.getPropertyValue("--cy-panel-animation-duration")).toBe(
+      `${DRAWER_EXPANSION_ANIMATION_MS}ms`
+    );
+    expect(root.style.getPropertyValue("--cy-panel-animation-easing")).toBe(
+      DRAWER_EXPANSION_EASING
+    );
+    expect(setLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a settle window that outlasts the transition", () => {
+    // Panel sizes are read from offsetHeight, so every frame of the
+    // transition is a wrong answer until it has finished.
+    expect(DRAWER_EXPANSION_SETTLE_MS).toBeGreaterThan(
+      DRAWER_EXPANSION_ANIMATION_MS
+    );
   });
 });
