@@ -104,6 +104,34 @@ function isTerminalExecutionState(state: ExecutionState): boolean {
   );
 }
 
+/** Identity stamped on every streamed-events timeline draft. */
+interface StreamedEventsDraftIdentity {
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+  /** Timestamp of the first delta in the batch, so ordering stays truthful. */
+  timestampMs: number;
+}
+
+/**
+ * Single source for the streamed-events timeline draft, shared by the live
+ * streaming buffer and `recordFollowUpResponse`. A history load turns exactly
+ * this event into the activity entries the output pane replays, and those
+ * entries supersede the attempt's aggregate — so a producer of streamed events
+ * that skips this draft is how a burst renders live and then disappears.
+ */
+function createCliOutputEventsAppendedDraft(
+  identity: StreamedEventsDraftIdentity,
+  events: CliEvent[]
+): WorkflowTimelineEventDraft {
+  return {
+    eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
+    ...identity,
+    payload: { events },
+  };
+}
+
 /**
  * One run's summary plus the manifest's own lifecycle state, which the resolved
  * summary may have overridden with the working file's. Exported only so
@@ -615,7 +643,20 @@ export class OutputHistoryManager {
     ]);
   }
 
-  /** Persist asynchronous post-completion activity before mutable runtime text is updated. */
+  /**
+   * Persist asynchronous post-completion activity before mutable runtime text is
+   * updated.
+   *
+   * `events` are written as a real streaming-activity batch alongside the
+   * marker, not merely counted by it. The marker payload is deliberately
+   * content-free, and the merged attempt aggregate is *not* a place a follow-up
+   * burst can live alone: `mapOrderedHistoryEntriesToMessages` renders an
+   * attempt from its activity entries whenever any exist and drops the
+   * aggregate they stand in for, so a burst that reached only
+   * `structured.events` rendered live and then vanished on the next history
+   * load. The caller passes the same divider-prefixed batch it merges into the
+   * aggregate, so both views agree on where the follow-up boundary is.
+   */
   async recordFollowUpResponse(
     historyFilePath: string,
     target: OutputExecutionTarget,
@@ -624,18 +665,21 @@ export class OutputHistoryManager {
     responseText: string,
     events: CliEvent[],
     contextWindow: { used: number; size: number } | undefined,
-    definitionContext?: DefinitionRevisionContext
+    definitionContext?: DefinitionRevisionContext,
+    phase?: ExecutionPhase
   ): Promise<void> {
     if (!historyFilePath) {
       return;
     }
-    await this.timelineRecorder.appendEvents(historyFilePath, [
+    const timestampMs = Date.now();
+    const drafts: WorkflowTimelineEventDraft[] = [
       {
         eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
-        timestampMs: Date.now(),
+        timestampMs,
         target,
         runIndex,
         attemptIndex,
+        phase,
         definitionRevision: definitionContext?.definitionRevision ?? 1,
         payload: {
           responseTextLength: responseText.length,
@@ -643,7 +687,17 @@ export class OutputHistoryManager {
           contextWindow,
         },
       },
-    ]);
+    ];
+    if (events.length > 0) {
+      drafts.push(
+        createCliOutputEventsAppendedDraft(
+          { target, runIndex, attemptIndex, phase, timestampMs },
+          events
+        )
+      );
+    }
+    // One appendEvents call so the marker and its events share a write.
+    await this.timelineRecorder.appendEvents(historyFilePath, drafts);
   }
 
   /** Write one coalesced batch of streamed deltas to the timeline. */
@@ -668,11 +722,7 @@ export class OutputHistoryManager {
       });
     }
     if (flush.events) {
-      drafts.push({
-        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
-        ...shared,
-        payload: { events: flush.events },
-      });
+      drafts.push(createCliOutputEventsAppendedDraft(shared, flush.events));
     }
 
     try {

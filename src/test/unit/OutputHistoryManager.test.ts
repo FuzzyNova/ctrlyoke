@@ -452,7 +452,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(events, []);
   });
 
-  test("serializes the normalized attempt lifecycle without duplicating large follow-up payloads", async () => {
+  test("serializes the normalized attempt lifecycle and records follow-up content once, as replayable activity", async () => {
     const { filePath } = await initTestRun(manager, tempWorkspace, "wf-events");
     const target = {
       kind: FINAL_STEP_PHASES.FINAL_STEP,
@@ -616,6 +616,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED,
         TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED,
         TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
         TIMELINE_EVENT_TYPES.RUN_TERMINATED,
       ]
@@ -651,17 +652,43 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       });
     }
 
+    // The marker stays content-free, but the events themselves must land in a
+    // replayable streamed-events batch: history load renders an attempt from
+    // its activity entries and drops the aggregate they stand in for, so a
+    // follow-up recorded only as counts vanished on the next reload.
+    const followUpActivity = events[13];
+    assert.strictEqual(
+      followUpActivity?.eventType,
+      TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+    );
+    if (
+      followUpActivity?.eventType ===
+      TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
+    ) {
+      assert.deepStrictEqual(followUpActivity.target, target);
+      assert.strictEqual(followUpActivity.runIndex, 3);
+      assert.strictEqual(followUpActivity.attemptIndex, 2);
+      assert.deepStrictEqual(followUpActivity.payload.events, [
+        {
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: 120,
+          data: { text: largeFollowUp },
+        },
+      ]);
+    }
+
     const rawEvents = await fs.readFile(
       path.join(path.dirname(filePath), TIMELINE_STORAGE_FILES.EVENTS),
       "utf8"
     );
-    assert.ok(
-      !rawEvents.includes(largeFollowUp),
-      "follow-up metadata must not duplicate a large response/event payload"
+    assert.strictEqual(
+      rawEvents.split(largeFollowUp).length - 1,
+      1,
+      "follow-up content belongs in the streamed-events batch only, never duplicated into the marker"
     );
     assert.deepStrictEqual(
-      JSON.parse(rawEvents.trim().split(/\r?\n/)[14] ?? "{}"),
-      events[14]
+      JSON.parse(rawEvents.trim().split(/\r?\n/)[15] ?? "{}"),
+      events[15]
     );
 
     const manifest = await recorder.readManifest(filePath);

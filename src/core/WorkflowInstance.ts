@@ -148,6 +148,7 @@ import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
+import { getCliEntryKey } from "./orchestration/OutputHistoryTimelineAdapter";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
@@ -372,6 +373,8 @@ export class WorkflowInstance {
   };
   /** Events that arrive in the monitor-to-session-watcher handoff window. */
   private readonly pendingSessionActivityEvents = new Map<string, CliEvent[]>();
+  /** Per-attempt tail of follow-up persistence; see `enqueueFollowUpPersist`. */
+  private readonly followUpPersistQueue = new Map<string, Promise<void>>();
   private readonly pendingSessionActivityIntegrations = new Map<
     string,
     { integration: HarnessIntegration; sessionId: string | undefined }
@@ -3681,6 +3684,7 @@ export class WorkflowInstance {
     this.lastCompletedActivityTarget = undefined;
     this.pendingSessionActivityEvents.clear();
     this.pendingSessionActivityIntegrations.clear();
+    this.followUpPersistQueue.clear();
   }
 
   private getActivityIntegrationId(integration?: HarnessIntegration): string {
@@ -3846,14 +3850,120 @@ export class WorkflowInstance {
       (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
     );
 
-    // Follow-up output is persisted to the timeline before it enters the small
-    // active-only cache. Prior-context consumers always resolve the timeline.
     const followUpText = extractTextFromEvents({ events: contentEvents });
-    const historyFilePath = this.resolveHistoryFilePath();
     const latestContextWindowSync = [...events]
       .reverse()
       .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
       ?.data as ContextWindowSyncData | undefined;
+
+    await this.enqueueFollowUpPersist(target, runIndex, attemptIndex, () =>
+      this.persistResumedSessionActivity(
+        target,
+        runIndex,
+        attemptIndex,
+        contentEvents,
+        followUpText,
+        latestContextWindowSync
+          ? {
+              used: latestContextWindowSync.used,
+              size: latestContextWindowSync.size,
+            }
+          : undefined
+      )
+    );
+  }
+
+  /**
+   * Serialize one attempt's follow-up persistence.
+   * `handleSessionActivityResumed` is invoked fire-and-forget from watcher
+   * callbacks, and `persistResumedSessionActivity` is a read-modify-write over
+   * the attempt's stored aggregate (resolve -> merge -> save) with awaits in
+   * between. Overlapping bursts would each merge onto the *pre-burst*
+   * aggregate, so the later save would drop the earlier burst's events —
+   * observed as a follow-up's closing message missing from the newest
+   * `cliOutputRecorded` while an earlier one still had it.
+   */
+  private enqueueFollowUpPersist(
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    work: () => Promise<void>
+  ): Promise<void> {
+    const key = getCliEntryKey(target, runIndex, attemptIndex);
+    const tail = (this.followUpPersistQueue.get(key) ?? Promise.resolve()).then(
+      work
+    );
+    // The stored tail never rejects, so one failed burst cannot poison the
+    // chain for the bursts queued behind it.
+    const guarded = tail.catch(() => undefined);
+    this.followUpPersistQueue.set(key, guarded);
+    void guarded.then(() => {
+      if (this.followUpPersistQueue.get(key) === guarded) {
+        this.followUpPersistQueue.delete(key);
+      }
+    });
+    return tail;
+  }
+
+  /**
+   * Persist one follow-up burst: the timeline activity batch the output pane
+   * replays on reload, the mutable working-file response text, and the merged
+   * attempt aggregate. Always runs inside `enqueueFollowUpPersist`.
+   */
+  private async persistResumedSessionActivity(
+    target: OutputExecutionTarget,
+    runIndex: number,
+    attemptIndex: number,
+    contentEvents: CliEvent[],
+    followUpText: string,
+    contextWindow: { used: number; size: number } | undefined
+  ): Promise<void> {
+    const historyFilePath = this.resolveHistoryFilePath();
+
+    // The stored aggregate decides whether this burst opens with the one-time
+    // follow-up divider, so it has to be read before anything is written.
+    let existingOutput: CliOutput | undefined;
+    if (historyFilePath) {
+      try {
+        existingOutput = (
+          await this.outputHistoryManager
+            .getRunOutputResolver()
+            .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
+        )?.output;
+      } catch (error) {
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to resolve attempt for resumed session activity:`,
+          error
+        );
+      }
+    }
+
+    const existingEvents = existingOutput?.structured?.events ?? [];
+    const hasFollowUpDivider = existingEvents.some(
+      (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+    );
+    // Insert the divider at most once per step/attempt/run — it marks the
+    // boundary between the step's original output and its follow-up activity,
+    // so later batches from the same follow-up burst just append past it. With
+    // no stored aggregate there is nothing to divide from, matching the live
+    // store's `computeStreamingEventsToMerge`.
+    const eventsToAppend: CliEvent[] =
+      contentEvents.length > 0 && existingOutput && !hasFollowUpDivider
+        ? [
+            {
+              type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+              timestamp: Date.now(),
+              data: { resumedAt: Date.now() } as FollowUpResumedData,
+            },
+            ...contentEvents,
+          ]
+        : contentEvents;
+
+    // Follow-up output is persisted to the timeline before it enters the small
+    // active-only cache. Prior-context consumers always resolve the timeline.
+    // `eventsToAppend` — not `contentEvents` — is what gets recorded, so the
+    // activity entries a history load replays carry the same divider the
+    // aggregate merge below does.
     if (historyFilePath) {
       try {
         await this.outputHistoryManager.recordFollowUpResponse(
@@ -3862,13 +3972,8 @@ export class WorkflowInstance {
           runIndex,
           attemptIndex,
           followUpText,
-          contentEvents,
-          latestContextWindowSync
-            ? {
-                used: latestContextWindowSync.used,
-                size: latestContextWindowSync.size,
-              }
-            : undefined,
+          eventsToAppend,
+          contextWindow,
           this.getDefinitionRevisionContext()
         );
       } catch (error) {
@@ -3892,66 +3997,40 @@ export class WorkflowInstance {
       }
     }
 
-    if (!historyFilePath) {
+    if (!historyFilePath || !existingOutput) {
       return;
     }
     try {
-      const existing = await this.outputHistoryManager
-        .getRunOutputResolver()
-        .resolveAttempt(historyFilePath, target, runIndex, attemptIndex);
-      if (!existing?.output) {
-        return;
-      }
-
-      const existingEvents = existing.output.structured?.events ?? [];
-      const hasFollowUpDivider = existingEvents.some(
-        (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-      );
-      // Insert the divider at most once per step/attempt/run — it marks the
-      // boundary between the step's original output and its follow-up activity,
-      // so later batches from the same follow-up burst just append past it.
-      const eventsToAppend: CliEvent[] =
-        contentEvents.length > 0 && !hasFollowUpDivider
-          ? [
-              {
-                type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-                timestamp: Date.now(),
-                data: { resumedAt: Date.now() } as FollowUpResumedData,
-              },
-              ...contentEvents,
-            ]
-          : contentEvents;
-
       const merged: CliOutput = {
-        ...existing.output,
+        ...existingOutput,
         // Mirror PromptQueue.appendPromptResponseText's concatenation so the
         // persisted timeline response (read by prior-context resolution, see
         // RunOutputResolver.resolvePriorContextItems) stays in sync with the
         // mutable working-file cache — otherwise $previous/$all/$step:N
         // silently drop follow-up activity that fired after the step's Stop
         // hook but before the next step read prior context.
-        response: existing.output.response + followUpText,
-        structured: existing.output.structured
+        response: existingOutput.response + followUpText,
+        structured: existingOutput.structured
           ? {
-              ...existing.output.structured,
+              ...existingOutput.structured,
               events: [...existingEvents, ...eventsToAppend],
             }
           : undefined,
         tokens:
-          latestContextWindowSync && existing.output.tokens
+          contextWindow && existingOutput.tokens
             ? {
-                ...existing.output.tokens,
-                contextWindowUsed: latestContextWindowSync.used,
-                contextWindowSize: latestContextWindowSync.size,
+                ...existingOutput.tokens,
+                contextWindowUsed: contextWindow.used,
+                contextWindowSize: contextWindow.size,
               }
-            : existing.output.tokens,
+            : existingOutput.tokens,
         // timestampMs is the attempt's *start* time (see WorkflowExecutor's
         // finalization), so re-deriving elapsed from it naturally folds in
         // follow-up time without needing a separately tracked baseline.
         elapsed:
-          existing.output.timestampMs != null
-            ? (Date.now() - existing.output.timestampMs) / 1000
-            : existing.output.elapsed,
+          existingOutput.timestampMs != null
+            ? (Date.now() - existingOutput.timestampMs) / 1000
+            : existingOutput.elapsed,
       };
       await this.outputHistoryManager.saveExecutionOutput(
         historyFilePath,

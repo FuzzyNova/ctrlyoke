@@ -20,6 +20,7 @@ import {
   EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   PARALLEL_GROUP_ADMISSION,
   STEP_STATUS,
@@ -729,6 +730,141 @@ suite("WorkflowInstance session activity forwarding", () => {
       assert.ok(
         entry.cliOutput.elapsed >= 5,
         `expected elapsed to be refreshed to at least the original 5s, got ${entry.cliOutput.elapsed}`
+      );
+
+      // The merged aggregate alone is not enough to render a follow-up on
+      // reload: `mapOrderedHistoryEntriesToMessages` renders an attempt from
+      // its activity entries whenever any exist and drops the aggregate they
+      // stand in for. A follow-up recorded only into `structured.events`
+      // therefore rendered live and then disappeared on the next history load,
+      // so each burst must also persist a replayable streamed-events batch —
+      // carrying the same one-time divider the aggregate merge decided on.
+      const followUpActivity = (history.activityEntries ?? []).filter(
+        (activity: any) =>
+          activity.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
+          activity.target.kind === FINAL_STEP_PHASES.QUEUE &&
+          activity.target.stepIndex === 0
+      );
+      assert.deepStrictEqual(
+        followUpActivity.map((activity: any) =>
+          (activity.events ?? []).map((e: any) => e.type)
+        ),
+        [
+          [
+            CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+            CLI_EVENT_TYPES.USER_STEER,
+            CLI_EVENT_TYPES.TEXT,
+          ],
+          [CLI_EVENT_TYPES.USER_STEER],
+        ]
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  test("serializes overlapping follow-up bursts so neither burst's events are lost", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-session-activity-race-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      const platform = new MockPlatform();
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const historyInit = await initTestRun(
+        instance.outputHistoryManager,
+        tempWorkspace,
+        "wf-session-activity-race"
+      );
+      (instance as any).activeHistoryFilePath = historyInit.filePath;
+
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      await instance.outputHistoryManager.saveExecutionOutput(
+        historyInit.filePath,
+        target,
+        [
+          {
+            prompt: "do the thing",
+            response: "done",
+            structured: {
+              events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+              metadata: {},
+            },
+            elapsed: 5,
+            isStreaming: false,
+            timestampMs: Date.now() - 5000,
+            attemptIndex: 0,
+            runIndex: 0,
+          } as any,
+        ]
+      );
+
+      (instance as any).lastCompletedActivityTarget = {
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+      };
+
+      // Every caller invokes this handler fire-and-forget, so two bursts can be
+      // in flight at once. Persisting one is a read-modify-write over the
+      // stored aggregate, so without serialization both merge onto the same
+      // pre-burst aggregate and the later save drops the earlier burst.
+      await Promise.all([
+        (instance as any).handleSessionActivityResumed([
+          {
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: " first." },
+          },
+        ]),
+        (instance as any).handleSessionActivityResumed([
+          {
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: " second." },
+          },
+        ]),
+      ]);
+
+      const history = await instance.outputHistoryManager.loadHistory(
+        historyInit.filePath
+      );
+      const entry = history.orderedEntries.find(
+        (e: any) =>
+          e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          "target" in e &&
+          e.target.kind === FINAL_STEP_PHASES.QUEUE &&
+          e.target.stepIndex === 0
+      ) as any;
+      assert.ok(entry, "expected a persisted CLI history entry for step 0");
+
+      assert.deepStrictEqual(
+        (entry.cliOutput.structured?.events ?? []).map((e: any) => e.type),
+        [
+          CLI_EVENT_TYPES.TEXT,
+          CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+          CLI_EVENT_TYPES.TEXT,
+          CLI_EVENT_TYPES.TEXT,
+        ]
+      );
+      assert.strictEqual(entry.cliOutput.response, "done first. second.");
+      // Exactly one divider, even though both bursts read the aggregate.
+      assert.strictEqual(
+        (entry.cliOutput.structured?.events ?? []).filter(
+          (e: any) => e.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+        ).length,
+        1
       );
     } finally {
       await instance?.outputHistoryManager.flushPendingIndexRefresh();

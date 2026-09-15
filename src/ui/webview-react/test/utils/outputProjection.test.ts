@@ -332,6 +332,104 @@ describe("outputProjection", () => {
     ).toHaveLength(0);
   });
 
+  // A follow-up burst that arrives after an attempt completed is only visible
+  // on reload if it was persisted as its own activity entry. The aggregate's
+  // `structured.events` is not a fallback: activities supersede the aggregate
+  // of their identity, so a burst recorded only there rendered live and then
+  // vanished — the shape this pair of cases pins down.
+  describe("post-completion follow-up activity", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const followUpEvents = [
+      { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: { resumedAt: 3000 } },
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "/commit" } },
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "Committed as 4af641d9" } },
+    ];
+    const orderedEntries = [
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        cliOutput: {
+          prompt: "do the thing",
+          response: "done",
+          structured: {
+            // The merged aggregate holds the whole attempt: its original
+            // stream plus every follow-up burst appended past the divider.
+            events: [
+              { type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } },
+              ...followUpEvents,
+            ],
+            metadata: {},
+          },
+          elapsed: 12,
+          isStreaming: false,
+          timestampMs: 1000,
+        },
+        timestampMs: 1000,
+        sequence: 1,
+      },
+    ];
+    const originalStreamActivity = {
+      timestampMs: 1000,
+      sequence: 2,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+      events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+    };
+
+    it("never falls back to a superseded aggregate's own events", () => {
+      const messages = mapOrderedHistoryEntriesToMessages(orderedEntries, [
+        originalStreamActivity,
+      ]);
+
+      // The aggregate is superseded by its activity, so its extra events are
+      // unreachable — this is why the extension must persist the burst.
+      expect(
+        messages.flatMap((message) =>
+          (message.activityEvents ?? []).map((event) => event.type)
+        )
+      ).toEqual([CLI_EVENT_TYPES.TEXT]);
+      expect(
+        messages.filter((message) => message.isActivity !== true)
+      ).toHaveLength(0);
+    });
+
+    it("renders the follow-up once it is persisted as its own activity", () => {
+      const messages = mapOrderedHistoryEntriesToMessages(orderedEntries, [
+        originalStreamActivity,
+        {
+          timestampMs: 3000,
+          sequence: 3,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: followUpEvents,
+        },
+      ]);
+
+      expect(
+        messages.flatMap((message) =>
+          (message.activityEvents ?? []).map((event) => event.type)
+        )
+      ).toEqual([
+        CLI_EVENT_TYPES.TEXT,
+        CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+        CLI_EVENT_TYPES.USER_STEER,
+        CLI_EVENT_TYPES.TEXT,
+      ]);
+      // The follow-up slice still reads its stats/tokens from the aggregate it
+      // supersedes, so the attempt's footer stays correct.
+      expect(messages[messages.length - 1]?.aggregate).toMatchObject({
+        response: "done",
+        elapsed: 12,
+      });
+    });
+  });
+
   it("carries the attempt's prompt and command onto its activity messages", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const messages = mapOrderedHistoryEntriesToMessages(
