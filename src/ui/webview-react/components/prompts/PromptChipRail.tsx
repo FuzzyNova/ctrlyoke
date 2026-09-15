@@ -47,6 +47,7 @@ import {
   getStepAccentClass,
   getStepKindIconClass,
   isExecutionBusy,
+  isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
@@ -280,6 +281,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     steps: prompts,
     parallelGroups,
     currentStep,
+    activeStepIndices,
     executionState,
     finalStep,
     finalStepStatus,
@@ -544,6 +546,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
             {prompts.slice(0, currentStep).map((prompt, i) => {
               const status = getPromptStatus(prompt, i);
               const contextPct = getContextPct(i);
+              const isExecuting = isStepExecuting(
+                executionState,
+                i,
+                currentStep,
+                activeStepIndices
+              );
               return (
                 <ChipContent
                   key={i}
@@ -552,10 +560,10 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                   status={status}
                   contextPct={contextPct}
                   stepColor={getChipStepColor(prompt, i, status)}
-                  isExecuting={false}
+                  isExecuting={isExecuting}
                   showPauseBoundaryBefore={false}
                   isScript={isScriptStep(prompt)}
-                  tooltip={buildChipTooltip(prompt, i, status, false)}
+                  tooltip={buildChipTooltip(prompt, i, status, isExecuting)}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {
@@ -591,6 +599,14 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
               const status = getPromptStatus(prompt, index);
               const contextPct = getContextPct(index);
               const slotNumber = index + 1;
+              // Not `isCurrentStep`: every live member of a parallel group is
+              // executing, and only the anchor sits at `currentStep`.
+              const isExecuting = isStepExecuting(
+                executionState,
+                index,
+                currentStep,
+                activeStepIndices
+              );
               // Only an in-flight step is locked; PAUSED stops at a step
               // boundary, so the current chip is the next PENDING step.
               const isExecutionTargetLocked =
@@ -609,17 +625,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                   status={status}
                   contextPct={contextPct}
                   stepColor={getChipStepColor(prompt, index, status)}
-                  isExecuting={isRunning && isCurrentStep}
+                  isExecuting={isExecuting}
                   showPauseBoundaryBefore={
                     isPaused && currentStep > 0 && visualIdx === 0
                   }
                   isScript={isScriptStep(prompt)}
-                  tooltip={buildChipTooltip(
-                    prompt,
-                    index,
-                    status,
-                    isRunning && isCurrentStep
-                  )}
+                  tooltip={buildChipTooltip(prompt, index, status, isExecuting)}
                   onChipClick={() => handleStepClick(index)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {

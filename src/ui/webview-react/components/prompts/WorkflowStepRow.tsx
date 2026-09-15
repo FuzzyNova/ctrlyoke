@@ -212,6 +212,59 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
 
 WorkflowStepRow.displayName = "WorkflowStepRow";
 
+/**
+ * The chrome every step row in the panel sits in: the identity rail, the slot
+ * number column, the running outline, and an optional pause boundary above it.
+ *
+ * All three row call sites render through this — the sortable pending row, the
+ * panel's settled rows, and a parallel group's members. What they did *not*
+ * share was invisible until it was a bug: the running outline lived only in
+ * the sortable wrapper, so a group member still executing behind the
+ * done/pending boundary was drawn with no outline at all.
+ */
+export function WorkflowStepRowFrame({
+  index,
+  slotNumber,
+  status,
+  stepColor,
+  isCurrent,
+  showPauseBoundaryBefore = false,
+  bodyRef,
+  bodyStyle,
+  children,
+}: {
+  index: number;
+  slotNumber: number;
+  status: StepStatus;
+  stepColor: string | undefined;
+  isCurrent: boolean;
+  showPauseBoundaryBefore?: boolean;
+  bodyRef?: (node: HTMLElement | null) => void;
+  bodyStyle?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="relative flex items-stretch"
+      data-workflow-step-index={index}
+    >
+      {showPauseBoundaryBefore && <PauseBoundary />}
+      {/* Keep the identity rail separate from the consistently sized number column. */}
+      <div
+        className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
+        style={stepColor ? { backgroundColor: stepColor } : undefined}
+      />
+      <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
+        {slotNumber}
+      </div>
+      {isCurrent && <ExecutingStepHighlight />}
+      <div ref={bodyRef} style={bodyStyle} className="relative flex-1 min-w-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export type SortableWrapperProps = Omit<
   WorkflowStepRowProps,
   "dragHandleProps"
@@ -258,27 +311,22 @@ export const SortableWorkflowStepWrapper = React.memo(
       groupMembers: stepItemProps.colorGroupMembers,
     });
     return (
-      <div
-        className="relative flex items-stretch"
-        data-workflow-step-index={stepItemProps.index}
+      <WorkflowStepRowFrame
+        index={stepItemProps.index}
+        slotNumber={slotNumber}
+        status={stepItemProps.status}
+        stepColor={stepColor}
+        isCurrent={stepItemProps.isCurrent}
+        showPauseBoundaryBefore={showPauseBoundaryBefore}
+        bodyRef={setNodeRef}
+        bodyStyle={style}
       >
-        {showPauseBoundaryBefore && <PauseBoundary />}
-        <div
-          className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(stepItemProps.status)}`}
-          style={stepColor ? { backgroundColor: stepColor } : undefined}
+        <WorkflowStepRow
+          {...stepItemProps}
+          slotNumber={slotNumber}
+          dragHandleProps={disabled ? undefined : { listeners, attributes }}
         />
-        <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-          {slotNumber}
-        </div>
-        {stepItemProps.isCurrent && <ExecutingStepHighlight />}
-        <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
-          <WorkflowStepRow
-            {...stepItemProps}
-            slotNumber={slotNumber}
-            dragHandleProps={disabled ? undefined : { listeners, attributes }}
-          />
-        </div>
-      </div>
+      </WorkflowStepRowFrame>
     );
   }
 );

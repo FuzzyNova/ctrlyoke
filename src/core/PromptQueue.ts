@@ -1182,14 +1182,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
   }
 
-  getSettledCount(): number {
-    return this.state.steps.reduce(
-      (count, step) =>
-        step._runtime?.completedAt !== undefined ? count + 1 : count,
-      0
-    );
-  }
-
   /**
    * Get execution progress
    */

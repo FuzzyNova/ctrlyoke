@@ -1100,6 +1100,61 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("never broadcasts a progress boundary inside a running parallel group", async () => {
+    const queue = new PromptQueue();
+    const integrations = new Map<number, MockHarnessIntegration>();
+    for (const [stepIndex, delay] of [40, 5].entries()) {
+      const integration = new MockHarnessIntegration(undefined, false);
+      integration.onSend = async () => {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return { responseText: `step-${stepIndex}` };
+      };
+      integrations.set(stepIndex, integration);
+    }
+    queue.loadPrompts({
+      steps: [{ prompt: "slow" }, { prompt: "fast" }],
+      parallelGroups: [
+        {
+          id: "progress",
+          startIndex: 0,
+          endIndex: 1,
+          failFast: false,
+        },
+      ],
+    });
+
+    const broadcasts: number[] = [];
+    const context = makeParallelContext(integrations);
+    context.dashboardProvider = {
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateProgress: (current: number) => {
+        broadcasts.push(current);
+      },
+      updateCliStreamingChunk: () => {},
+      updateCliOutput: () => {},
+      updateExecutionCompleted: () => {},
+      updateFinalStepStatus: () => {},
+      updateStatusMessage: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+    } as any;
+
+    await makeExecutor(queue).execute(integrations.get(0)!, context);
+
+    // `PROGRESS_UPDATE.current` is the dashboard's done/pending boundary, not a
+    // count of finished steps. The fast member settling first must not move it
+    // to 1: the steps panel would then own half the group in each section, with
+    // no container left to draw it in.
+    assert.ok(broadcasts.length > 0);
+    assert.deepStrictEqual(
+      broadcasts.filter((current) => current !== 0 && current !== 2),
+      []
+    );
+    assert.strictEqual(broadcasts[broadcasts.length - 1], 2);
+  });
+
   test("failFast cancels running siblings and never launches waiting members", async () => {
     const queue = new PromptQueue();
     const admissions: Array<

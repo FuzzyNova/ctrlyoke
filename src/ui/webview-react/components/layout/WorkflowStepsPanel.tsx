@@ -9,7 +9,6 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
   MCP_SERVER_IDS,
-  STEP_COLOR_MODES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -41,6 +40,7 @@ import { PromptChipRail } from "../prompts/PromptChipRail";
 import { PauseBoundary } from "../prompts/ExecutingStepHighlight";
 import {
   WorkflowStepRow,
+  WorkflowStepRowFrame,
   SortableWorkflowStepWrapper,
 } from "../prompts/WorkflowStepRow";
 import {
@@ -73,15 +73,11 @@ import {
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { ExitButton } from "../shared";
 import {
-  getStepAccentClass,
   isExecutionBusy,
+  isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
-import { getParallelGroupForStep } from "../../utils/outputRows";
-import {
-  resolveStepColor,
-  type StepColorGroupMember,
-} from "../../utils/stepColor";
+import { resolveStepColor } from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -178,6 +174,32 @@ export function resolvePendingDropTarget(
   };
 }
 
+/**
+ * The parallel group, if any, that the done/pending boundary runs through:
+ * its anchor has settled but at least one member has not.
+ *
+ * A group is one container and is drawn whole, so this state has to resolve to
+ * one section or the other. It resolves to the done section, at the group's own
+ * anchor — `ParallelGroupPanel` already dims per member (`index < currentStep`)
+ * and offers each one the rewind/forward start-position direction that matches
+ * its side of the boundary, so the whole group stays readable there while the
+ * pending list below keeps starting at a step it genuinely owns.
+ *
+ * This is reachable without a run: `Set Start Position` onto a group's second
+ * member rewinds to exactly here. It is deliberately *not* reachable while a
+ * group is executing — `PromptQueue` holds `currentIndex` at the anchor until
+ * the group closes, and `WorkflowExecutor.broadcastProgress` publishes that
+ * index rather than a count of settled steps.
+ */
+export function straddlingParallelGroup(
+  currentStep: number,
+  parallelGroups: readonly ParallelGroupDefinition[]
+): ParallelGroupDefinition | undefined {
+  return parallelGroups.find(
+    (group) => group.startIndex < currentStep && currentStep <= group.endIndex
+  );
+}
+
 export function buildPendingDragState(
   steps: WorkflowStep[],
   currentStep: number,
@@ -190,15 +212,17 @@ export function buildPendingDragState(
       .filter((group) => group.startIndex >= currentStep)
       .map((group) => [group.startIndex, group])
   );
+  // Every grouped index, not just the ones in a pending container. A group
+  // whose anchor already settled (`startIndex < currentStep <= endIndex`) is
+  // drawn whole by the done section — see `straddlingParallelGroup` — so its
+  // still-pending members must not also appear as loose pending rows here.
   const groupedIndices = new Set(
-    parallelGroups
-      .filter((group) => group.startIndex >= currentStep)
-      .flatMap((group) =>
-        Array.from(
-          { length: group.endIndex - group.startIndex + 1 },
-          (_, offset) => group.startIndex + offset
-        )
+    parallelGroups.flatMap((group) =>
+      Array.from(
+        { length: group.endIndex - group.startIndex + 1 },
+        (_, offset) => group.startIndex + offset
       )
+    )
   );
 
   for (let index = currentStep; index < steps.length; index++) {
@@ -1050,8 +1074,19 @@ const WorkflowStepsPanelInner: React.FC<{
   const reorderableStepCount = executionOwnsCurrentStep
     ? steps.length - currentStep - 1
     : steps.length - currentStep;
+  // A reorder payload is slice-relative to `currentStep` and has to cover every
+  // step from there on (`PromptQueue.reorderPendingPrompts`). While a group
+  // straddles the boundary its unfinished members live in a container the
+  // pending list does not own, so no drag here can describe a valid payload —
+  // and that group's topology is locked in this state anyway.
+  const straddlingGroup = useMemo(
+    () => straddlingParallelGroup(currentStep, parallelGroups),
+    [currentStep, parallelGroups]
+  );
   const canReorder =
-    executionState !== EXECUTION_STATES.CANCELLING && reorderableStepCount > 1;
+    executionState !== EXECUTION_STATES.CANCELLING &&
+    reorderableStepCount > 1 &&
+    !straddlingGroup;
   const [pendingDragState, setPendingDragState] = useState<PendingDragState>(
     () => buildPendingDragState(steps, currentStep, parallelGroups)
   );
@@ -1543,16 +1578,17 @@ const WorkflowStepsPanelInner: React.FC<{
               const doneStepCount = currentStep;
               return steps.slice(0, doneStepCount).map((step, sliceIdx) => {
                 const index = sliceIdx;
+                // Any group anchored in the done range renders here as one
+                // container, including a group the boundary runs through (see
+                // `straddlingParallelGroup`) — its still-pending members are
+                // drawn inside it rather than as loose rows further down.
                 const group = parallelGroups.find(
-                  (candidate) =>
-                    candidate.startIndex === index &&
-                    candidate.endIndex < doneStepCount
+                  (candidate) => candidate.startIndex === index
                 );
                 if (group) return renderParallelGroup(group);
                 if (
                   parallelGroups.some(
                     (candidate) =>
-                      candidate.endIndex < doneStepCount &&
                       index > candidate.startIndex &&
                       index <= candidate.endIndex
                   )
@@ -1574,93 +1610,64 @@ const WorkflowStepsPanelInner: React.FC<{
                     executionState
                   ) ||
                   (isExecutionBusy(executionState) && index === currentStep);
-                // A group only renders through ParallelGroupPanel once every
-                // member is done. While it is still finishing, its completed
-                // members fall through to this branch, so the group context has
-                // to be supplied here too — otherwise a member resolves to its
-                // bare harness colour here while the output pane, which always
-                // has the group, resolves the same step to a tie-break colour.
-                const colorGroup = getParallelGroupForStep(
-                  parallelGroups,
-                  index
-                );
-                const colorGroupMembers: StepColorGroupMember[] | undefined =
-                  globalSettings.stepColorMode === STEP_COLOR_MODES.HARNESS &&
-                  colorGroup
-                    ? steps
-                        .slice(colorGroup.startIndex, colorGroup.endIndex + 1)
-                        .map((member, offsetInGroup) => ({
-                          step: member,
-                          harnessId: getStepHarnessModel(
-                            member,
-                            getPromptStatus(
-                              member,
-                              colorGroup.startIndex + offsetInGroup
-                            )
-                          ).harnessId,
-                          offsetInGroup,
-                        }))
-                    : undefined;
+                // No group context to resolve: every grouped step, settled or
+                // not, is rendered by `ParallelGroupPanel` above.
                 const stepColor = resolveStepColor({
                   step,
                   harnessId: getStepHarnessModel(step, status).harnessId,
                   stepIndex: index,
                   stepColorMode: globalSettings.stepColorMode,
                   settings: globalSettings.harnessColors,
-                  group: colorGroup,
-                  offsetInGroup: colorGroup
-                    ? index - colorGroup.startIndex
-                    : undefined,
-                  groupMembers: colorGroupMembers,
                 });
                 return (
-                  <div
+                  <WorkflowStepRowFrame
                     key={`step-${index}-${step.name || ""}`}
-                    className="relative flex items-stretch"
-                    data-workflow-step-index={index}
+                    index={index}
+                    slotNumber={slotNumber}
+                    status={status}
+                    stepColor={stepColor}
+                    isCurrent={isStepExecuting(
+                      executionState,
+                      index,
+                      currentStep,
+                      activeStepIndices
+                    )}
                   >
-                    {/* Keep the identity rail separate from the consistently sized number column. */}
-                    <div
-                      className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
-                      style={
-                        stepColor ? { backgroundColor: stepColor } : undefined
+                    <WorkflowStepRow
+                      step={step}
+                      stepColorMode={globalSettings.stepColorMode}
+                      harnessColorSettings={globalSettings.harnessColors}
+                      index={index}
+                      slotNumber={slotNumber}
+                      currentStep={currentStep}
+                      executionState={executionState}
+                      status={status}
+                      retryState={retryState}
+                      latestOutput={latestOutput}
+                      liveContextWindow={liveContextWindow?.[index]}
+                      isCurrent={isStepExecuting(
+                        executionState,
+                        index,
+                        currentStep,
+                        activeStepIndices
+                      )}
+                      isSelected={isSelected}
+                      canSetStartPosition={canChangeStartPosition}
+                      startPositionDirection="rewind"
+                      setPositionTarget={index}
+                      isExecutionTargetLocked={isExecutionTargetLocked}
+                      hideBorderBottom={
+                        sliceIdx === doneStepCount - 1 &&
+                        doneStepCount < steps.length
                       }
+                      dimmed
+                      getStepHarnessModel={getStepHarnessModel}
+                      getStepOverrides={getStepOverrides}
+                      onStepClick={handleStepClick}
+                      onSetStartPosition={handleSetStartPosition}
+                      onOpenContextMenu={openContextMenu}
                     />
-                    <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-                      {slotNumber}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <WorkflowStepRow
-                        step={step}
-                        stepColorMode={globalSettings.stepColorMode}
-                        harnessColorSettings={globalSettings.harnessColors}
-                        index={index}
-                        slotNumber={slotNumber}
-                        currentStep={currentStep}
-                        executionState={executionState}
-                        status={status}
-                        retryState={retryState}
-                        latestOutput={latestOutput}
-                        liveContextWindow={liveContextWindow?.[index]}
-                        isCurrent={false}
-                        isSelected={isSelected}
-                        canSetStartPosition={canChangeStartPosition}
-                        startPositionDirection="rewind"
-                        setPositionTarget={index}
-                        isExecutionTargetLocked={isExecutionTargetLocked}
-                        hideBorderBottom={
-                          sliceIdx === doneStepCount - 1 &&
-                          doneStepCount < steps.length
-                        }
-                        dimmed
-                        getStepHarnessModel={getStepHarnessModel}
-                        getStepOverrides={getStepOverrides}
-                        onStepClick={handleStepClick}
-                        onSetStartPosition={handleSetStartPosition}
-                        onOpenContextMenu={openContextMenu}
-                      />
-                    </div>
-                  </div>
+                  </WorkflowStepRowFrame>
                 );
               });
             })()}
@@ -1679,76 +1686,85 @@ const WorkflowStepsPanelInner: React.FC<{
                 strategy={verticalListSortingStrategy}
               >
                 {(() => {
-                  let pendingOffset = 0;
-                  return pendingDragState.order.map((containerId) => {
-                    const container = pendingDragState.containers[containerId];
-                    if (!container) return null;
-                    if (container.groupId) {
-                      pendingOffset += container.items.length;
-                      const group = parallelGroups.find(
-                        (candidate) => candidate.id === container.groupId
-                      );
-                      return group ? renderParallelGroup(group, true) : null;
-                    }
+                  return pendingDragState.order.map(
+                    (containerId, orderIndex) => {
+                      const container =
+                        pendingDragState.containers[containerId];
+                      if (!container) return null;
+                      if (container.groupId) {
+                        const group = parallelGroups.find(
+                          (candidate) => candidate.id === container.groupId
+                        );
+                        return group ? renderParallelGroup(group, true) : null;
+                      }
 
-                    const id = container.items[0];
-                    if (!id) return null;
-                    const index = absoluteIndexFromStepDragId(id);
-                    const step = steps[index];
-                    if (!step) return null;
-                    const visualIdx = pendingOffset++;
-                    const isCurrentStep = visualIdx === 0;
-                    const status = getPromptStatus(step, index);
-                    const retryState = retryStates[index];
-                    const latestOutput = getLatestOutput(index);
-                    const isCurrent = isRunning && isCurrentStep;
-                    const isSelected =
-                      selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
-                      selectionTarget.index === index;
-                    const setPositionTarget = currentStep + visualIdx;
-                    const slotNumber = currentStep + visualIdx + 1;
-                    const isExecutionTargetLocked =
-                      isStepExecutionLocked(
-                        step,
+                      const id = container.items[0];
+                      if (!id) return null;
+                      const index = absoluteIndexFromStepDragId(id);
+                      const step = steps[index];
+                      if (!step) return null;
+                      // Absolute, never derived from the row's position in the
+                      // list: the pending order skips the members of a group the
+                      // boundary runs through, so a positional slot number would
+                      // renumber every row below it.
+                      const isCurrentStep = index === currentStep;
+                      const status = getPromptStatus(step, index);
+                      const retryState = retryStates[index];
+                      const latestOutput = getLatestOutput(index);
+                      const isCurrent = isStepExecuting(
+                        executionState,
                         index,
                         currentStep,
-                        executionState
-                      ) ||
-                      (isExecutionBusy(executionState) && isCurrentStep);
-                    return (
-                      <SortableWorkflowStepWrapper
-                        key={id}
-                        id={id}
-                        disabled={!canReorder || isExecutionTargetLocked}
-                        slotNumber={slotNumber}
-                        showPauseBoundaryBefore={
-                          isPaused && currentStep > 0 && visualIdx === 0
-                        }
-                        step={step}
-                        index={index}
-                        stepColorMode={globalSettings.stepColorMode}
-                        currentStep={currentStep}
-                        executionState={executionState}
-                        status={status}
-                        retryState={retryState}
-                        latestOutput={latestOutput}
-                        liveContextWindow={liveContextWindow?.[index]}
-                        isCurrent={isCurrent}
-                        isSelected={isSelected}
-                        canSetStartPosition={
-                          canChangeStartPosition && !isCurrentStep
-                        }
-                        startPositionDirection="forward"
-                        setPositionTarget={setPositionTarget}
-                        isExecutionTargetLocked={isExecutionTargetLocked}
-                        getStepHarnessModel={getStepHarnessModel}
-                        getStepOverrides={getStepOverrides}
-                        onStepClick={handleStepClick}
-                        onSetStartPosition={handleSetStartPosition}
-                        onOpenContextMenu={openContextMenu}
-                      />
-                    );
-                  });
+                        activeStepIndices
+                      );
+                      const isSelected =
+                        selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
+                        selectionTarget.index === index;
+                      const setPositionTarget = index;
+                      const slotNumber = index + 1;
+                      const isExecutionTargetLocked =
+                        isStepExecutionLocked(
+                          step,
+                          index,
+                          currentStep,
+                          executionState
+                        ) ||
+                        (isExecutionBusy(executionState) && isCurrentStep);
+                      return (
+                        <SortableWorkflowStepWrapper
+                          key={id}
+                          id={id}
+                          disabled={!canReorder || isExecutionTargetLocked}
+                          slotNumber={slotNumber}
+                          showPauseBoundaryBefore={
+                            isPaused && currentStep > 0 && orderIndex === 0
+                          }
+                          step={step}
+                          index={index}
+                          stepColorMode={globalSettings.stepColorMode}
+                          currentStep={currentStep}
+                          executionState={executionState}
+                          status={status}
+                          retryState={retryState}
+                          latestOutput={latestOutput}
+                          liveContextWindow={liveContextWindow?.[index]}
+                          isCurrent={isCurrent}
+                          isSelected={isSelected}
+                          canSetStartPosition={
+                            canChangeStartPosition && !isCurrentStep
+                          }
+                          startPositionDirection="forward"
+                          setPositionTarget={setPositionTarget}
+                          isExecutionTargetLocked={isExecutionTargetLocked}
+                          getStepHarnessModel={getStepHarnessModel}
+                          getStepOverrides={getStepOverrides}
+                          onStepClick={handleStepClick}
+                          onSetStartPosition={handleSetStartPosition}
+                          onOpenContextMenu={openContextMenu}
+                        />
+                      );
+                    }
+                  );
                 })()}
                 {showPendingTail && <PendingTailDropSlot />}
               </SortableContext>

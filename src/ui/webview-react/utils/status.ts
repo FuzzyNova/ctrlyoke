@@ -239,6 +239,30 @@ export function isWorkflowRunning(state: ExecutionState): boolean {
 }
 
 /**
+ * Whether a step is one of the steps the backend is executing *right now*.
+ *
+ * `activeStepIndices` is the authoritative set and can hold several indices at
+ * once (every live member of a parallel group), so it wins wherever it is
+ * populated; `currentStep` is only the fallback for a run that has not
+ * published one. This is deliberately the same rule `usePromptStatus` uses to
+ * resolve the RUNNING *status*, and every surface that paints a running
+ * affordance — step rows, a group's member rows, the collapsed chip rail —
+ * must share it. When they disagreed, the step wearing the running outline was
+ * the one showing a completed check.
+ */
+export function isStepExecuting(
+  state: ExecutionState,
+  index: number,
+  currentStep: number,
+  activeStepIndices: readonly number[]
+): boolean {
+  if (!isWorkflowRunning(state)) return false;
+  return activeStepIndices.length > 0
+    ? activeStepIndices.includes(index)
+    : index === currentStep;
+}
+
+/**
  * Check if a workflow is in an active/in-progress state.
  * Returns true for RUNNING, PAUSING, or PAUSED.
  * Use for: active-workflow dropdown, prompt counters, message routing guards.

@@ -1190,7 +1190,7 @@ export class WorkflowExecutor {
             error
           );
         }
-        this.broadcastSettledProgress(context);
+        this.broadcastProgress(context);
         if (
           groupOutcome.stopped &&
           this.getRuntime().status === EXECUTION_STATES.CANCELLING &&
@@ -1589,7 +1589,7 @@ export class WorkflowExecutor {
   ): Promise<void> {
     await this.promptQueue.persistStepOutcome(outcome);
     await this.settleCoordinationParticipant(outcome.target, context);
-    this.broadcastSettledProgress(context);
+    this.broadcastProgress(context);
   }
 
   private async settleCoordinationParticipant(
@@ -1608,11 +1608,20 @@ export class WorkflowExecutor {
     }
   }
 
-  private broadcastSettledProgress(context: WorkflowExecutionContext): void {
-    context.dashboardProvider?.updateProgress(
-      this.promptQueue.getSettledCount(),
-      this.promptQueue.getProgress().total
-    );
+  /**
+   * `PROGRESS_UPDATE.current` is the dashboard's `currentStep` — the boundary
+   * between settled and pending work — and never a count of finished steps.
+   * A live parallel group deliberately holds `currentIndex` at its anchor
+   * until every member settles (`reconcileGroupOutcomes`), so broadcasting the
+   * settled *count* from here moved that boundary into the middle of a running
+   * group: the steps panel then had no container left to draw the group in and
+   * painted the running outline on whichever member the moved boundary landed
+   * on — a step showing a completed check. Always publish the queue's own
+   * `currentIndex`, exactly like every other `updateProgress` call site.
+   */
+  private broadcastProgress(context: WorkflowExecutionContext): void {
+    const progress = this.promptQueue.getProgress();
+    context.dashboardProvider?.updateProgress(progress.current, progress.total);
   }
 
   private async commitSequentialOutcome(
@@ -1622,7 +1631,7 @@ export class WorkflowExecutor {
     const settlement =
       await this.promptQueue.commitStepOutcomeAndAdvance(outcome);
     await this.settleCoordinationParticipant(outcome.target, context);
-    this.broadcastSettledProgress(context);
+    this.broadcastProgress(context);
 
     // A promotion committed while the sequential target was running owns the
     // target's outcome as a group member. Leave currentIndex at the group's

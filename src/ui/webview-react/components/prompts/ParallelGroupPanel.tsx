@@ -15,17 +15,14 @@ import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
   WorkflowStepRow,
+  WorkflowStepRowFrame,
   SortableWorkflowStepWrapper,
   type StepContextMenuRequest,
   type StepHarnessModel,
 } from "./WorkflowStepRow";
 import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
-import {
-  getStepAccentClass,
-  isWorkflowActive,
-  isWorkflowRunning,
-} from "@utils/status";
+import { isStepExecuting, isWorkflowActive } from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
@@ -231,10 +228,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
     }))
   );
   const isStepActive = (index: number): boolean =>
-    isWorkflowRunning(executionState) &&
-    (activeStepIndices.length > 0
-      ? activeStepIndices.includes(index)
-      : index === currentStep);
+    isStepExecuting(executionState, index, currentStep, activeStepIndices);
 
   return (
     <section
@@ -355,59 +349,51 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                 groupMembers: colorGroupMembers,
               });
               return (
-                <div
+                <WorkflowStepRowFrame
                   key={index}
-                  className="relative flex items-stretch"
-                  data-workflow-step-index={index}
+                  index={index}
+                  slotNumber={index + 1}
+                  status={memberStatus}
+                  stepColor={stepColor}
+                  isCurrent={isStepActive(index)}
                 >
-                  <div
-                    className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(memberStatus)}`}
-                    style={
-                      stepColor ? { backgroundColor: stepColor } : undefined
+                  <WorkflowStepRow
+                    step={step}
+                    index={index}
+                    slotNumber={index + 1}
+                    currentStep={currentStep}
+                    executionState={executionState}
+                    status={memberStatus}
+                    retryState={retryStates[index]}
+                    latestOutput={getLatestOutput(index)}
+                    liveContextWindow={liveContextWindow[index]}
+                    isCurrent={isStepActive(index)}
+                    isSelected={selectedIndex === index}
+                    canSetStartPosition={canSetStartPosition}
+                    startPositionDirection={
+                      index < currentStep ? "rewind" : "forward"
                     }
+                    setPositionTarget={index}
+                    isExecutionTargetLocked={isStepExecutionLocked(
+                      step,
+                      index,
+                      currentStep,
+                      executionState
+                    )}
+                    hideBorderBottom={offset === displayedMembers.length - 1}
+                    dimmed={index < currentStep}
+                    colorGroup={group}
+                    colorGroupMembers={colorGroupMembers}
+                    offsetInGroup={offset}
+                    stepColorMode={stepColorMode}
+                    harnessColorSettings={harnessColorSettings}
+                    getStepHarnessModel={getStepHarnessModel}
+                    getStepOverrides={getStepOverrides}
+                    onStepClick={onStepClick}
+                    onSetStartPosition={onSetStartPosition}
+                    onOpenContextMenu={onOpenContextMenu}
                   />
-                  <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <WorkflowStepRow
-                      step={step}
-                      index={index}
-                      slotNumber={index + 1}
-                      currentStep={currentStep}
-                      executionState={executionState}
-                      status={memberStatus}
-                      retryState={retryStates[index]}
-                      latestOutput={getLatestOutput(index)}
-                      liveContextWindow={liveContextWindow[index]}
-                      isCurrent={isStepActive(index)}
-                      isSelected={selectedIndex === index}
-                      canSetStartPosition={canSetStartPosition}
-                      startPositionDirection={
-                        index < currentStep ? "rewind" : "forward"
-                      }
-                      setPositionTarget={index}
-                      isExecutionTargetLocked={isStepExecutionLocked(
-                        step,
-                        index,
-                        currentStep,
-                        executionState
-                      )}
-                      hideBorderBottom={offset === displayedMembers.length - 1}
-                      dimmed={index < currentStep}
-                      colorGroup={group}
-                      colorGroupMembers={colorGroupMembers}
-                      offsetInGroup={offset}
-                      stepColorMode={stepColorMode}
-                      harnessColorSettings={harnessColorSettings}
-                      getStepHarnessModel={getStepHarnessModel}
-                      getStepOverrides={getStepOverrides}
-                      onStepClick={onStepClick}
-                      onSetStartPosition={onSetStartPosition}
-                      onOpenContextMenu={onOpenContextMenu}
-                    />
-                  </div>
-                </div>
+                </WorkflowStepRowFrame>
               );
             }
           )

@@ -354,7 +354,10 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     expect(
       boundary.closest('[data-workflow-chip-index="1"]')
     ).toBeInTheDocument();
-    expect(boundary).toHaveClass("inset-y-0", "left-0", "w-[2px]");
+    // Horizontal, like the expanded panel's: the chip's left edge already
+    // belongs to its identity colour bar, which a vertical boundary painted
+    // over in yellow.
+    expect(boundary).toHaveClass("inset-x-0", "top-0", "h-[2px]");
   });
 
   it("renders the execution highlight without measured inline geometry", () => {
@@ -1083,6 +1086,100 @@ describe("WorkflowStepsPanel pending drag collision detection", () => {
     });
   });
 });
+describe("WorkflowStepsPanel parallel group boundaries", () => {
+  const group = {
+    id: "group-boundary",
+    startIndex: 0,
+    endIndex: 1,
+    failFast: false,
+  };
+
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("outlines the member that is still running, not the one at the boundary", () => {
+    // The state a run reached when one member of a live group settled first
+    // and the boundary was published as the settled count: step 2 is done,
+    // step 1 is still going, and `currentStep` sits between them. The panel
+    // outlined whichever step it found at `currentStep`, which is how the row
+    // showing a completed check ended up wearing the running outline — and how
+    // the group container disappeared on the way.
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "still running" }, { prompt: "settled first" }],
+      parallelGroups: [group],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      activeStepIndices: [0],
+      results: [
+        { status: STEP_STATUS.RUNNING },
+        { status: STEP_STATUS.COMPLETED },
+      ],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen
+        .getByTestId("executing-step-highlight")
+        .closest("[data-workflow-step-index]")
+    ).toHaveAttribute("data-workflow-step-index", "0");
+    expect(
+      screen.getByTestId(`parallel-group-${group.id}`)
+    ).toBeInTheDocument();
+  });
+
+  it("draws a group the done/pending boundary runs through as one container", () => {
+    // Reachable without a run: `Set Start Position` onto a group's second
+    // member leaves the anchor settled and the rest pending. Split across the
+    // two sections the group had no container at all and simply vanished.
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "settled member" },
+        { prompt: "pending member" },
+        { prompt: "after the group" },
+      ],
+      parallelGroups: [group],
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    const container = screen.getByTestId(`parallel-group-${group.id}`);
+    expect(within(container).getByText("settled member")).toBeInTheDocument();
+    expect(within(container).getByText("pending member")).toBeInTheDocument();
+    // The step below the group keeps its own slot number — the pending list
+    // skips the group's members rather than renumbering from the boundary.
+    expect(
+      screen.getByText("after the group").closest("[data-workflow-step-index]")
+    ).toHaveAttribute("data-workflow-step-index", "2");
+  });
+
+  it("keeps a group the boundary runs through out of the pending drag order", () => {
+    const state = buildPendingDragState(
+      [
+        { prompt: "settled member" },
+        { prompt: "pending member" },
+        { prompt: "after the group" },
+      ],
+      1,
+      [group]
+    );
+
+    // No container for the group (its anchor is behind the boundary) and no
+    // loose row for its pending member either: a reorder payload is relative
+    // to `currentStep` and could not describe half a container.
+    expect(state.order).toEqual(["step-pending-2"]);
+  });
+});
+
 describe("WorkflowStepsPanel identity rails", () => {
   beforeEach(() => {
     resetStores();
@@ -1100,10 +1197,11 @@ describe("WorkflowStepsPanel identity rails", () => {
   }
 
   it("applies group tie-break colors to a completed member of an unfinished parallel group", () => {
-    // ParallelGroupPanel only takes over once every member is done, so a group
-    // that is still running renders its finished members through the panel's
-    // own completed-step branch. That branch must still supply group context,
-    // or the same step is coloured differently here than in the output pane.
+    // A group is drawn as one container from its anchor, wherever the
+    // done/pending boundary happens to sit, so its members always resolve
+    // their colour with group context — the same context the output pane has.
+    // Without it the same step reads as a bare harness colour in one pane and
+    // a tie-break colour in the other.
     const group = {
       id: "group-identity-rails",
       startIndex: 0,

@@ -275,7 +275,10 @@ suite("PromptQueue State Machine Tests", () => {
         const claim = await queue.claimStepById(removedId, 123, workspace);
         assert.strictEqual(claim.status, STEP_CLAIM_OUTCOMES.MISSING);
         assert.strictEqual(queue.getState().steps.length, 1);
-        assert.strictEqual(queue.getSettledCount(), 0);
+        assert.strictEqual(
+          queue.getState().steps[0]._runtime?.completedAt,
+          undefined
+        );
         assert.strictEqual(
           queue.getState().steps[0]._runtime?.startedAt,
           undefined
