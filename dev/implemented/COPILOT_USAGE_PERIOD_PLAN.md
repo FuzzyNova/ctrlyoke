@@ -326,21 +326,21 @@ first would leave a step that cannot compile or be tested on its own.
 - [x] Record pre/post `out/extension.js`, `out/mcp-server.js`, and `out/cli.js`
       sizes in this document.
 
-      Production bundle sizes (bytes; measured after a clean production build):
+  Production bundle sizes (bytes; measured after a clean production build):
 
-      | Bundle | Before dependency | After dependency | Temporary proof import |
-      | --- | ---: | ---: | ---: |
-      | `out/extension.js` | 5,364,924 | 5,364,924 | 5,421,181 |
-      | `out/mcp-server.js` | 827,129 | 827,129 | 882,994 |
-      | `out/cli.js` | 3,920,897 | 3,920,897 | 3,976,691 |
+  | Bundle              | Before dependency | After dependency | Temporary proof import |
+  | ------------------- | ----------------: | ---------------: | ---------------------: |
+  | `out/extension.js`  |         5,364,924 |        5,364,924 |              5,421,181 |
+  | `out/mcp-server.js` |           827,129 |          827,129 |                882,994 |
+  | `out/cli.js`        |         3,920,897 |        3,920,897 |              3,976,691 |
 
-      “Before dependency” was measured with `npm run build:extension` at the
-      Phase 2 starting commit. “After dependency” was measured with the
-      throwaway import removed. The temporary proof build retained the import
-      so the transport implementation was present in every target; the
-      development `npm run compile:extension` also succeeded and included all
-      three transport symbols in all three bundles. The temporary import was
-      then removed.
+  “Before dependency” was measured with `npm run build:extension` at the
+  Phase 2 starting commit. “After dependency” was measured with the
+  throwaway import removed. The temporary proof build retained the import
+  so the transport implementation was present in every target; the
+  development `npm run compile:extension` also succeeded and included all
+  three transport symbols in all three bundles. The temporary import was
+  then removed.
 
 - [x] Add a production-build assertion that no `@github/copilot-*` platform
       runtime or native Copilot binary is packaged. Assert against

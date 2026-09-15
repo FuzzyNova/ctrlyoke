@@ -324,12 +324,20 @@ Keep dependencies up-to-date and secure.
    **Note**: A Prettier version bump can shift its output slightly, making
    `format:check` flag files that were already clean under the old version —
    this is expected and `npm run format` fixes it. Watch for a rarer
-   Prettier markdown bug (confirmed 2026-09-15): nested content (e.g. a
-   table) inside a numbered list item can be non-idempotent — each
-   `--write` pass re-indents it further instead of converging. If
-   `format:check` still flags a file immediately after `--write` ran on it,
-   diff it before trusting the output; `git checkout -- <file>` to discard
-   the drift rather than re-running `--write` on it again.
+   Prettier (3.9.6, confirmed 2026-09-15) markdown bug: a **second
+   block-level element inside a `- [ ]`/`- [x]` list item** (a paragraph or
+   table that starts after a blank line, as opposed to a wrapped line of
+   the item's own text) is non-idempotent when authored at the "aligned"
+   6-space indent under a checkbox marker — each `--write` pass re-indents
+   it further instead of converging. The fix (already applied to the two
+   files that had this, `dev/implemented/COPILOT_USAGE_PERIOD_PLAN.md` and
+   `dev/implemented/WORKFLOW_CONTEXT_MENU_PLAN.md`) is to author that
+   second block at **2-space** indent instead of 6 — Prettier's own
+   canonical width for list-item continuation content, which it reprints
+   stably. If `format:check` still flags a file immediately after
+   `--write` ran on it, don't keep re-running `--write` (the indent just
+   keeps growing); `git checkout -- <file>` to discard the drift, then
+   dedent the offending block to 2 spaces by hand.
 
 5. **Commit changes**:
    ```bash

@@ -535,12 +535,12 @@ the UI that consumes it.
 - [x] **Duplicate Workflow…** has joined this menu on all four surfaces now
       that the shared clone service exists. This plan adds no cloning code.
 
-      It slots above the Copy item with its own divider, and it is the reason
-      run-panel rows are in scope here: it is the only item whose usefulness
-      depends on naming one specific historical run. Its target address is the
-      descriptor's `address` field unchanged — no new descriptor fields.
-      **Fork as New Workflow… is not coming**; that plan collapsed the two
-      commands into one.
+  It slots above the Copy item with its own divider, and it is the reason
+  run-panel rows are in scope here: it is the only item whose usefulness
+  depends on naming one specific historical run. Its target address is the
+  descriptor's `address` field unchanged — no new descriptor fields.
+  **Fork as New Workflow… is not coming**; that plan collapsed the two
+  commands into one.
 
 ---
 
