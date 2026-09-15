@@ -131,7 +131,7 @@ suite("ExecutionRootCoordination", function () {
     assert.deepStrictEqual(folded.claims, []);
   });
 
-  test("reaps dead and heartbeat-stale MCP participants", () => {
+  test("reaps only pid-dead MCP participants, not merely heartbeat-stale ones", () => {
     const value = participant("mcp");
     const entries = [join(value, 1), claim(value, ["src/a.ts"], 2)];
 
@@ -142,12 +142,18 @@ suite("ExecutionRootCoordination", function () {
       }).claims.length,
       0
     );
+    // A quiet-but-alive MCP participant has no heartbeat ticker of its own —
+    // lastHeartbeat only advances when it calls a coordination tool — so a
+    // heartbeat gap past STALE_HEARTBEAT_MS must not reap a live pid. This is
+    // the exact scenario Decision 2 of EXECUTION_ROOT_COORDINATION_PLAN.md
+    // promises to handle correctly ("thinks for twenty minutes, keeps its
+    // claim, because its process is still there").
     assert.strictEqual(
       foldCoordinationEntries(entries, {
         now: 1_000 + STALE_HEARTBEAT_MS + 1,
         processLivenessCheck: () => true,
       }).claims.length,
-      0
+      1
     );
   });
 
@@ -226,6 +232,48 @@ suite("ExecutionRootCoordination", function () {
       assert.strictEqual(denied.granted.length, 0);
       assert.strictEqual(denied.denied[0].owner.label, "orchestrator");
       assert.strictEqual(denied.denied[0].owner.attested, true);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("a live-pid MCP claim survives compaction and stays exclusive past the heartbeat-stale window", async () => {
+    const root = await tempDirectory();
+    try {
+      let now = 10_000;
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => now,
+        processLivenessCheck: () => true,
+      });
+      const owner = await registry.registerParticipant({
+        kind: "external",
+        label: "Codex CLI runner",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      assert.deepStrictEqual(
+        (await owner.claim(["manual-test/foo.yaml"])).granted,
+        ["manual-test/foo.yaml"]
+      );
+
+      // The owner goes quiet (no tool call, so no heartbeat refresh) for
+      // longer than STALE_HEARTBEAT_MS while its process stays alive. A
+      // second participant then appends to the board, which re-runs
+      // compaction over the whole board.
+      now += STALE_HEARTBEAT_MS + 10_000;
+      const contender = await registry.registerParticipant({
+        kind: "external",
+        label: "someone else",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+
+      const folded = await registry.fold();
+      assert.strictEqual(folded.claims.length, 1);
+      assert.strictEqual(folded.claims[0].path, "manual-test/foo.yaml");
+      assert.strictEqual(folded.claims[0].owner.participantId, owner.participantId);
+
+      const denied = await contender.claim(["manual-test/foo.yaml"]);
+      assert.strictEqual(denied.granted.length, 0);
+      assert.strictEqual(denied.denied[0].owner.participantId, owner.participantId);
     } finally {
       await removeDirectory(root);
     }
