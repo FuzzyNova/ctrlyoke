@@ -8,6 +8,7 @@ import {
   type OutputScrollAlignment,
   type OutputScrollAnchorMode,
 } from "@root/types/DashboardConstants";
+import { WebviewLog } from "./logger";
 
 export interface ViewportRowAnchor {
   rowKey: string;
@@ -121,10 +122,33 @@ export function captureViewportRowAnchor(
     mode === OUTPUT_SCROLL_ANCHOR_MODES.CENTER_POINT
       ? Math.min(Math.max(viewportCenter, anchorRect.top), anchorRect.bottom)
       : anchorRect.top;
+  const offsetTop = anchorRect.top - containerRect.top;
+
+  // TEMP DEBUG (scroll-to-top investigation — remove after diagnosis, grep
+  // "[scroll-debug]"). Always-on trace, not gated by the performance
+  // profiler, so it shows up in a production install's trace log (see
+  // dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md for enabling that).
+  // When no rendered row's top sits inside the viewport — routine once a
+  // scroll-seek placeholder or a real diff/tool-call block is taller than the
+  // pane — this falls back to the nearest-by-center row, whose top can sit
+  // far outside [0, viewport height] (see the comment above on bestVisibleTop).
+  // That becomes a ROW target's viewportOffsetPx, and
+  // resolveScrollTopForTarget's restore math clamps to >= 0 — a candidate
+  // mechanism for the pane snapping to the very top.
+  if (mode === OUTPUT_SCROLL_ANCHOR_MODES.VISIBLE_TOP && !bestVisibleTop) {
+    WebviewLog.trace(
+      "[scroll-debug] captureViewportRowAnchor: no row top in viewport, using center-distance fallback",
+      {
+        rowKey: anchorElement.dataset.rowKey ?? null,
+        offsetTop,
+        viewportHeight: containerRect.height,
+      }
+    );
+  }
 
   return {
     rowKey: anchorElement.dataset.rowKey ?? "",
-    offsetTop: anchorRect.top - containerRect.top,
+    offsetTop,
     rowOffsetPx: anchorPoint - anchorRect.top,
     viewportOffsetTop: anchorPoint - containerRect.top,
   };

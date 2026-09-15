@@ -18,6 +18,7 @@ import {
   isProfilingEnabled,
   logProfilerEvent,
 } from "@utils/performanceProfiler";
+import { WebviewLog } from "@utils/logger";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_SCROLL_ANCHOR_MODES,
@@ -226,28 +227,56 @@ export function useOutputScrollTarget({
         const scrollRect = scrollElement.getBoundingClientRect();
         const rowRect = renderedTarget.getBoundingClientRect();
         const observedOffsetPx = rowRect.top - scrollRect.top;
+        const rawTop =
+          scrollElement.scrollTop + observedOffsetPx - target.viewportOffsetPx;
+        const top = clamp(rawTop, 0, maxScroll);
+        // TEMP DEBUG (scroll-to-top investigation — remove after diagnosis,
+        // grep "[scroll-debug]"). Always-on trace, not gated by the
+        // performance profiler, so it shows up in a production install's
+        // trace log. Fires only when the clamp actually changed the value —
+        // i.e. the anchor-lock wanted a scrollTop outside [0, maxScroll],
+        // which for rawTop < 0 is exactly the "snapped to the top" symptom.
+        if (top !== rawTop) {
+          WebviewLog.trace(
+            "[scroll-debug] resolveScrollTopForTarget clamped (rendered row)",
+            {
+              rawTop,
+              clampedTop: top,
+              maxScroll,
+              scrollTop: scrollElement.scrollTop,
+              observedOffsetPx,
+              viewportOffsetPx: target.viewportOffsetPx,
+              rowKey: target.rowKey,
+            }
+          );
+        }
         return {
-          top: clamp(
-            scrollElement.scrollTop +
-              observedOffsetPx -
-              target.viewportOffsetPx,
-            0,
-            maxScroll
-          ),
+          top,
           resolved: true,
           observedOffsetPx,
         };
       }
 
       let rowStart: number | undefined;
+      let rowStartSource: "measurementsCache" | "rowLayout" | null = null;
       for (const measurement of rowVirtualizer.measurementsCache) {
         if (measurement != null && String(measurement.key) === target.rowKey) {
           rowStart = measurement.start;
+          rowStartSource = "measurementsCache";
           break;
         }
       }
-      rowStart ??= rowLayout.rowStartsByKey.get(target.rowKey);
       if (rowStart == null) {
+        rowStart = rowLayout.rowStartsByKey.get(target.rowKey);
+        if (rowStart != null) {
+          rowStartSource = "rowLayout";
+        }
+      }
+      if (rowStart == null) {
+        WebviewLog.trace(
+          "[scroll-debug] resolveScrollTopForTarget: row not rendered and not in any layout model",
+          { rowKey: target.rowKey, maxScroll }
+        );
         return { top: maxScroll, resolved: false };
       }
 
@@ -260,12 +289,30 @@ export function useOutputScrollTarget({
           scrollElement.getBoundingClientRect().top
         : 0;
 
+      const rawTop = rowContainerOffset + rowStart - target.viewportOffsetPx;
+      const top = clamp(rawTop, 0, maxScroll);
+      // TEMP DEBUG (scroll-to-top investigation — remove after diagnosis,
+      // grep "[scroll-debug]"). Same always-on trace as above, for the
+      // unrendered-row fallback path. `rowStartSource` distinguishes a stale
+      // measurementsCache hit (checked first) from the rowLayout estimate.
+      if (top !== rawTop) {
+        WebviewLog.trace(
+          "[scroll-debug] resolveScrollTopForTarget clamped (unrendered row fallback)",
+          {
+            rawTop,
+            clampedTop: top,
+            maxScroll,
+            rowContainerOffset,
+            rowStart,
+            rowStartSource,
+            viewportOffsetPx: target.viewportOffsetPx,
+            rowKey: target.rowKey,
+          }
+        );
+      }
+
       return {
-        top: clamp(
-          rowContainerOffset + rowStart - target.viewportOffsetPx,
-          0,
-          maxScroll
-        ),
+        top,
         resolved: true,
       };
     },
@@ -428,6 +475,20 @@ export function useOutputScrollTarget({
 
       const previous = scrollElement.scrollTop;
       const appliedDelta = resolved.top - previous;
+      // TEMP DEBUG (scroll-to-top investigation — remove after diagnosis,
+      // grep "[scroll-debug]"). Always-on trace, not gated by the
+      // performance profiler, flagging the exact reported symptom: the pane
+      // snapping from a real scroll position down to (near) the very top.
+      if (resolved.top <= 1 && previous > 200) {
+        WebviewLog.trace("[scroll-debug] applyScrollTarget: jump to top", {
+          phase,
+          previousScrollTop: previous,
+          resolvedTop: resolved.top,
+          resolvedResolved: resolved.resolved,
+          observedOffsetPx: resolved.observedOffsetPx,
+          target,
+        });
+      }
       if (Math.abs(appliedDelta) >= 1) {
         isProgrammaticScrollRef.current = true;
         scrollElement.scrollTop = resolved.top;
