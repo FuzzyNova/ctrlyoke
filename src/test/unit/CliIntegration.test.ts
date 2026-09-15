@@ -1510,7 +1510,13 @@ suite("CliIntegration", () => {
     return integration.sendPrompt({ prompt: "continue" });
   }
 
-  test("spawns a sibling without killing the live PTY when the model changes", async () => {
+  // Sibling terminals come from WorkflowInstance handing an incompatible prompt
+  // its own integration (see "selects same-harness integrations by spawn
+  // identity"), so a retained PTY never reaches this coordinator at all. Once a
+  // live PTY *is* on this coordinator it must always be retired, whatever the
+  // replacement resumes: the coordinator tracks one `currentPtySession` and
+  // overwrites it on spawn, so skipping the kill strands the process.
+  test("retires a live PTY whose session the replacement does not resume", async () => {
     const integration = createTestIntegration();
     const lifecycle: string[] = [];
     (integration as any).executionRunner.getLastInteractiveContext = () =>
@@ -1528,12 +1534,12 @@ suite("CliIntegration", () => {
         await sendInteractiveWithLivePty(
           integration,
           createResolvedProperties({ model: "new-model" }),
-          undefined,
+          "session-unrelated",
           lifecycle
         ),
         true
       );
-      assert.deepStrictEqual(lifecycle, ["spawn"]);
+      assert.deepStrictEqual(lifecycle, ["kill", "spawn"]);
     } finally {
       integration.dispose();
     }
@@ -1573,7 +1579,11 @@ suite("CliIntegration", () => {
     }
   });
 
-  test("never kills a live PTY for resumeSession false", async () => {
+  // A `resumeSession: false` prompt is given a fresh integration upstream (see
+  // "always creates a fresh integration when resumeSession is false"), so in
+  // production its coordinator has no live PTY and nothing is killed. If one is
+  // live here anyway, it still belongs to this coordinator and must be retired.
+  test("retires a live PTY on its own coordinator for a fresh-session replacement", async () => {
     const integration = createTestIntegration();
     const lifecycle: string[] = [];
     (integration as any).executionRunner.getLastInteractiveContext = () =>
@@ -1594,7 +1604,38 @@ suite("CliIntegration", () => {
         ),
         true
       );
-      assert.deepStrictEqual(lifecycle, ["spawn"]);
+      assert.deepStrictEqual(lifecycle, ["kill", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  // The headless path is where the session-id predicate is correct: the new
+  // process is a separate owner, so the interactive PTY survives unless the
+  // resume would take over the session it already owns.
+  test("leaves the interactive PTY alone when a headless step resumes another session", async () => {
+    const integration = createTestIntegration();
+    let killed = false;
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        killed = true;
+        return "pty-existing";
+      };
+
+    try {
+      await (integration as any).retireInteractivePtyBeforeHeadlessResume({
+        resolvedSessionId: "session-unrelated",
+        resolvedProperties: createResolvedProperties(),
+      });
+      assert.strictEqual(killed, false);
+
+      await (integration as any).retireInteractivePtyBeforeHeadlessResume({
+        resolvedSessionId: "session-existing",
+        resolvedProperties: createResolvedProperties(),
+      });
+      assert.strictEqual(killed, true);
     } finally {
       integration.dispose();
     }

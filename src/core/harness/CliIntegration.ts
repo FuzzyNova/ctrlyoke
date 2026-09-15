@@ -1206,14 +1206,23 @@ export class CliIntegration extends HarnessIntegration {
         "[CliIntegration] Inject mode unavailable — falling back to restart mode"
       );
       await this.retireInteractivePtyForRestartFallback();
-    } else if (
-      isInteractive &&
-      this.transportCoordinator.hasLivePtySession() &&
-      this.doesInteractivePtyOwnSession(session)
-    ) {
+    } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
       // Inject mode was preemptively skipped (settings changed, resumeSession: false,
-      // etc.) and the new spawn would resume the live PTY's session. Gracefully signal
+      // etc.) but a live PTY from the previous step is still running. Gracefully signal
       // it before spawning a fresh one so the CLI TUI can clean up.
+      //
+      // Deliberately unconditional, rather than gated on the session-id conflict
+      // check used before a headless resume. `hasLivePtySession()` reports this
+      // integration's *own* coordinator, which tracks exactly one
+      // `currentPtySession` and overwrites it on the next spawn
+      // (`CliTransportCoordinator.spawn`). Declining to retire here would leave the
+      // old PTY referenced by nothing — `terminateCurrentPtySession`,
+      // `writeToSession`, steer routing and `cancel()` all reach only
+      // `currentPtySession` — so the process would survive until the extension host
+      // exits. Sibling terminals are produced by the spawn-identity cache keys in
+      // `WorkflowInstance`, which hand an incompatible prompt its own integration
+      // and coordinator; a terminal worth retaining therefore never reaches this
+      // branch at all.
       await this.retireInteractivePtyForRestartFallback();
     }
 
@@ -1420,6 +1429,12 @@ export class CliIntegration extends HarnessIntegration {
    * Returns true only when a new resume would take over the session owned by
    * the retained interactive PTY. Fresh-session prompts never conflict with
    * that PTY, even if their resolver carried an old or explicit session ID.
+   *
+   * This is the predicate for the *headless* path, where the new process is a
+   * separate owner and the interactive PTY can legitimately stay alive. It is
+   * not safe on the interactive restart path, which replaces the PTY on this
+   * integration's own coordinator — see the unconditional retirement in
+   * `sendPrompt`.
    */
   private doesInteractivePtyOwnSession(session: CliExecutionSession): boolean {
     if (session.resolvedProperties?.resumeSession === false) {

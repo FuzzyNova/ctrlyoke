@@ -90,9 +90,11 @@ sibling.**
   collide. It is over-broad rather than missing — it satisfies rule 1 by killing everything,
   which is exactly what this plan removes.
 
-So the work is **narrowing the existing unconditional teardown to the session-id comparison
-`retireInteractivePtyBeforeHeadlessResume` already performs**, and extracting that comparison
-so both paths share one predicate.
+The original plan was to narrow that unconditional teardown to the same session-id comparison
+and share one predicate between both paths. **That turned out to be unsafe on the interactive
+path, and was reverted during review** — see **The interactive restart path stays
+unconditional** below. The predicate was still extracted (`doesInteractivePtyOwnSession`), but
+it governs the headless path alone.
 
 ---
 
@@ -252,6 +254,34 @@ rewrite (`WorkflowExecutor.ts:2089-2103`) has expanded granted secret _values_ i
 `hooks[].env`, so the serialized identity contains plaintext secrets. Hashing is what makes the
 key safe to hold in a `Map`, write to `Log`, or put in a message payload later. Log
 `harness`, `model`, and the hash — never the payload.
+
+### The interactive restart path stays unconditional
+
+Rule 1 reads as a session-level conflict check, and on the headless path it is one: that
+process is a _separate owner_, so the retained interactive PTY may legitimately stay alive
+unless the resume would take over the session it already holds. That is exactly what
+`doesInteractivePtyOwnSession` decides.
+
+**The interactive restart path is not the same shape, and must not share the gate.**
+`hasLivePtySession()` there reports _this integration's own_ `CliTransportCoordinator`, which
+tracks exactly one `currentPtySession` and overwrites it on the next spawn. Declining to
+retire would leave the previous PTY referenced by nothing —
+`terminateCurrentPtySession`, `writeToSession`, steer routing and `cancel()` all reach only
+`currentPtySession` — so the process would outlive the run and survive integration disposal,
+dying only with the extension host. The user would be left with an invisible harness process
+and no way to close it.
+
+Gating that branch on the session-id predicate therefore traded one bug for a worse one, and
+it reached the cases that matter: a prompt reusing its integration (same spawn identity,
+`resumeSession: true`) whose inject is refused for a _non-identity_ reason — inject mode
+disabled globally, a missing `spawnedWith` snapshot, an explicit `sessionId` naming a
+different session, or an unresolved `resolvedSessionId`.
+
+So the branch keeps its unconditional teardown. **Nothing is lost**, because the retention this
+plan is about is delivered entirely by the cache keys: an incompatible prompt gets its own
+integration and coordinator, whose `hasLivePtySession()` is false, so a terminal worth keeping
+never reaches this branch. Rule 2 (`resumeSession: false` never kills) holds the same way —
+those prompts always allocate a fresh integration upstream.
 
 ### Which terminal does a later step inject into?
 
@@ -414,14 +444,15 @@ causes _more_; Stage 2 now keys compatible integration caches with that hash.
 
 1. Thread `ResolvedProperties` through `getIntegrationForPrompt` and re-key the caches,
    including the `activeIntegration` short-circuit.
-2. Narrow the teardown to the session-id conflict predicate.
+2. Extract the session-id conflict predicate for the headless path.
 3. Delete the webview harness-eviction block.
 
 **These three cannot be split, and the order within the stage matters.** Re-keying the
-sequential integrations first gives every differing spawn identity its own coordinator, so
-narrowing teardown cannot orphan a live PTY. The interactive restart path now kills only when
-the new resume would take over the live PTY's session; model changes and fresh sessions spawn
-siblings, while same-session resumes still kill, await exit, and then spawn. The webview now
+sequential integrations first gives every differing spawn identity its own coordinator, which
+is what lets a model change or a fresh session spawn a sibling instead of replacing a
+terminal. The interactive restart path still retires unconditionally, for the reason recorded
+in **The interactive restart path stays unconditional**; the extracted predicate governs the
+headless path, where it also now declines to kill for `resumeSession: false`. The webview
 keeps every started terminal until an explicit close message, so it no longer guesses which
 same-harness tab the backend intended to retain.
 
@@ -438,11 +469,13 @@ added; `CliTransportCoordinator` still owns exactly one PTY per integration.
   `skills` does not. Plus the invariant that ties the two consumers together: equal
   `spawnIdentityHash` implies `getInjectIncompatibilityReason` reports no field change.
 - `src/test/unit/CliIntegration.test.ts` — extends the existing `inject compatibility` suite:
-  a model change spawns a sibling without killing the live PTY; a same-session resume kills
-  first and awaits exit before spawning; `resumeSession: false` never kills; a `secrets` change
-  no longer injects.
+  a `secrets` change no longer injects; an absent-vs-null `mcpServers` does. Plus the
+  coordinator invariant: a live PTY on this coordinator is retired before its replacement
+  spawns whatever that replacement resumes, a same-session resume awaits exit before spawning,
+  and the headless path leaves the interactive PTY alone when it resumes another session.
 - `src/test/unit/WorkflowInstance.test.ts` — two same-harness different-model steps produce
-  two integrations and two live sessions; a third step with step 1's spawn identity injects
-  into step 1's session, not step 2's.
+  two integrations; a third step with step 1's spawn identity resolves back to step 1's
+  integration; `resumeSession: false` allocates a fresh one every time. This is the suite that
+  proves sibling retention, since the restart path itself no longer decides it.
 - `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` — same-harness
   `TERMINAL_STARTED` no longer removes the prior session.
