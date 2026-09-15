@@ -277,7 +277,8 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
+    | { merge: boolean; keep: boolean }
+    | undefined;
   /** Used only to look up another lease owner's display name for lease-conflict errors. */
   private readonly lineageRepository = new WorkflowLineageRepository();
 
@@ -428,17 +429,28 @@ export class WorkflowInstance {
   private lastRunIntegrations: HarnessIntegration[] = [];
 
   /**
-   * Live integrations saved across workflow runs when inject mode is active, keyed by
-   * the same harness ID used in executionIntegrations (e.g. "copilot-cli", "claude-cli").
-   * One entry per harness that completed a prompt with an active PTY session. A multi-harness
-   * workflow (prompt 1 = copilot-cli, prompt 2 = claude-cli) produces two entries, so the
-   * next run can inject into whichever harness its first prompt targets.
+   * Live integrations retained between `startWorkflowExecution` passes when
+   * inject mode is active, keyed by the same harness ID used in
+   * executionIntegrations (e.g. "copilot-cli", "claude-cli"). One entry per
+   * harness that completed a prompt with an active PTY session. A multi-harness
+   * workflow (prompt 1 = copilot-cli, prompt 2 = claude-cli) produces two
+   * entries, so the next pass can inject into whichever harness its first
+   * prompt targets.
    *
-   * Instead of disposing these integrations at the end of a run (which would sever the PTY
-   * connection), WorkflowInstance holds them here. On the next run they are re-inserted into
-   * executionIntegrations so createIntegrationForMode returns the correct live instance — the
-   * PTY and lastInteractiveContext from the previous run are fully intact.
-   * Each entry is removed and disposed when its PTY process exits.
+   * **This retention never crosses a RunRef.** "Pass" here means another
+   * `startWorkflowExecution` call on the *same* run — appending a prompt to a
+   * completed workflow and continuing it, which is what keeps the TUI alive so
+   * the appended prompt injects instead of restarting. A new RunRef (Re-run,
+   * restart-from-beginning) disposes every entry first via
+   * `closeRetainedTerminalsForFreshRun`, so a fresh run never inherits a
+   * terminal or a conversation from the previous one.
+   *
+   * Instead of disposing these integrations at the end of a pass (which would
+   * sever the PTY connection), WorkflowInstance holds them here. On the next
+   * pass they are re-inserted into executionIntegrations so
+   * createIntegrationForMode returns the correct live instance — the PTY and
+   * lastInteractiveContext are fully intact. Each entry is removed and disposed
+   * when its PTY process exits.
    */
   private readonly liveInjectIntegrations = new Map<
     string,
@@ -3647,6 +3659,7 @@ export class WorkflowInstance {
     }
 
     this.syncCurrentPromptFileFromQueue();
+    this.syncParallelGroupTerminalSessions(insertion.stepIndex);
     if (this.dashboardSink) {
       const updatedState = this.promptQueue.getState();
       this.dashboardSink.updateStepsExtended(
@@ -3657,6 +3670,69 @@ export class WorkflowInstance {
         this.id,
         updatedState.parallelGroups,
         runtimePromotionUndoSuppressed
+      );
+    }
+  }
+
+  /**
+   * Back-fill `parallelGroupId` onto PTY sessions whose step joined a group
+   * *after* their terminal was already live.
+   *
+   * An ad-hoc promotion (Run in Parallel against a sequentially running step)
+   * groups a step whose TUI already announced itself with
+   * `parallelGroupId: undefined`. The webview keeps same-harness terminals
+   * apart by that field alone (`hooks/terminalMessageHandlers.ts`
+   * TERMINAL_STARTED reconciliation), so without this back-fill the joining
+   * member's session evicts the promoted step's still-running terminal — the
+   * user watches the step they were already invested in disappear.
+   *
+   * Mutating the `PtySession` matters as much as the broadcast: reconnect
+   * replay (`TerminalMessageHandlers.reconnectPanel`,
+   * `replayTerminalSessionsTo`) re-derives the payload from the session, so a
+   * broadcast-only fix would come undone on the next webview reload.
+   */
+  private syncParallelGroupTerminalSessions(stepIndex: number): void {
+    const ptyManager = getPtyProcessManager();
+    if (!ptyManager) {
+      return;
+    }
+    const group = this.promptQueue
+      .getState()
+      .parallelGroups.find(
+        (candidate) =>
+          stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
+      );
+    if (!group) {
+      return;
+    }
+
+    for (const session of ptyManager.getSessionsForWorkflow(this.id)) {
+      if (
+        session.status !== TERMINAL_SESSION_STATUS.RUNNING ||
+        session.parallelGroupId === group.id ||
+        session.stepIndex < group.startIndex ||
+        session.stepIndex > group.endIndex
+      ) {
+        continue;
+      }
+      session.parallelGroupId = group.id;
+      const terminalStartedMessage: TerminalStartedMessage = {
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId: session.workflowId,
+        sessionId: session.id,
+        stepName: session.stepName,
+        stepIndex: session.stepIndex,
+        kind: session.kind,
+        promptNumber: session.promptNumber,
+        harnessId: session.harnessId,
+        parallelGroupId: group.id,
+        shellKind: session.shellKind,
+        controllerClientId: session.controllerClientId,
+      };
+      ptyPostMessage(terminalStartedMessage);
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] Adopted PTY session ${session.id.slice(0, 8)} ` +
+          `(step ${session.stepIndex}) into parallel group ${group.id}`
       );
     }
   }
@@ -5440,9 +5516,11 @@ export class WorkflowInstance {
         }, HEARTBEAT_INTERVAL_MS);
       }
 
-      // Re-insert all live integrations saved from the previous run (inject mode with PTY
-      // still alive) into executionIntegrations so createIntegrationForMode finds and returns
-      // the correct one. This keeps each PTY connection and lastInteractiveContext intact,
+      // Re-insert all live integrations saved from the previous execution pass
+      // (inject mode with PTY still alive) into executionIntegrations so
+      // createIntegrationForMode finds and returns the correct one. "Pass" is
+      // deliberate: this never spans a RunRef — a new run disposes every entry
+      // first via closeRetainedTerminalsForFreshRun. This keeps each PTY connection and lastInteractiveContext intact,
       // enabling immediate inject regardless of which harness the next prompt targets.
       // Any remaining liveInjectIntegrations entries that weren't consumed by
       // createIntegrationForMode() above are restored here. This covers entry

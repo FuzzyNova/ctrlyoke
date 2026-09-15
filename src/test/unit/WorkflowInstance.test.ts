@@ -20,6 +20,7 @@ import {
   EXECUTION_PHASES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  MESSAGE_TYPES,
   OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   PARALLEL_GROUP_ADMISSION,
@@ -2163,6 +2164,98 @@ suite("WorkflowInstance append-and-continue", () => {
         { id: "group-1", startIndex: 0, endIndex: 2, failFast: false },
       ]);
     } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
+  // Regression: an ad-hoc promotion groups a step whose TUI is already live, so
+  // that PTY was announced with `parallelGroupId: undefined`. The webview keeps
+  // same-harness terminals apart by that field alone, so without the back-fill
+  // the joining member's TERMINAL_STARTED evicted the promoted step's terminal.
+  test("runParallel adopts the promoted step's live PTY session into the new group", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-parallel-pty-")
+    );
+    const posted: any[] = [];
+    const ptyManager = initPtyProcessManager((msg) => posted.push(msg));
+    try {
+      const instance = new WorkflowInstance(
+        new MockPlatform(),
+        undefined,
+        new MockIntegrationFactory(new MockPlatform()),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const runningSession = new PtySession(
+        "promoted-session",
+        instance.id,
+        "anchor",
+        0,
+        "ai-cli",
+        new MockPty(),
+        1,
+        HARNESS_IDS.CLAUDE_CLI
+      );
+      // A session for a step outside the new group must be left alone.
+      const unrelatedSession = new PtySession(
+        "unrelated-session",
+        instance.id,
+        "later step",
+        7,
+        "ai-cli",
+        new MockPty(),
+        8,
+        HARNESS_IDS.CLAUDE_CLI
+      );
+      ptyManager.getSessionsForWorkflow = () => [
+        runningSession,
+        unrelatedSession,
+      ];
+
+      const steps: PromptStep[] = [{ prompt: "anchor" }];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "parallel-promote-pty",
+        steps,
+        tempWorkspace
+      );
+      instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+      await startQueueExecution(instance);
+      instance.promptQueue.getState().steps[0]._runtime = {
+        stepId: "anchor-id",
+        startedAt: Date.now(),
+      };
+      (instance as any).workflowExecutor.joinRunningParallelGroup =
+        async () => ({ accepted: true });
+
+      posted.length = 0;
+      await instance.executeEphemeralPrompt(
+        "parallel member",
+        {},
+        ACTION_TYPES.RUN_PARALLEL
+      );
+
+      const groupId = instance.promptQueue.getState().parallelGroups[0]?.id;
+      assert.ok(groupId);
+      assert.strictEqual(runningSession.parallelGroupId, groupId);
+      assert.strictEqual(unrelatedSession.parallelGroupId, undefined);
+
+      const adoption = posted.filter(
+        (msg) =>
+          msg?.type === MESSAGE_TYPES.TERMINAL_STARTED &&
+          msg.sessionId === runningSession.id
+      );
+      assert.strictEqual(adoption.length, 1);
+      assert.strictEqual(adoption[0].parallelGroupId, groupId);
+      assert.strictEqual(adoption[0].stepIndex, 0);
+      assert.strictEqual(adoption[0].harnessId, HARNESS_IDS.CLAUDE_CLI);
+      assert.strictEqual(
+        posted.some((msg) => msg?.sessionId === unrelatedSession.id),
+        false
+      );
+    } finally {
+      ptyManager.dispose();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
   });
