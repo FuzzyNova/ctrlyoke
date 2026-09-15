@@ -107,7 +107,7 @@ function runFormatterScript(body: string): string {
     [
       "-e",
       `const { CliTerminalFormatter } = require(${requirePath("cli", "CliTerminalFormatter.js")});
-const { CLI_EVENT_TYPES } = require(${requirePath("types", "DashboardConstants.js")});
+const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS, SCRIPT_OUTPUT_SOURCES } = require(${requirePath("types", "DashboardConstants.js")});
 ${body}`,
     ],
     { encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } }
@@ -162,6 +162,284 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("⚙ queue:append"));
     assert.ok(output.includes('{"prompt":"terminal parameter output"}'));
     assert.ok(output.includes("⎿  terminal result output"));
+  });
+
+  test("renders ask-user-question prompts, options, and resolution", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.INITIATED,
+    questions: [{
+      question: "Which deployment target?",
+      options: [
+        { label: "Staging", description: "Shared test environment" },
+        { label: "Production", description: "Live environment" },
+      ],
+    }],
+  },
+});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.COMPLETED,
+    questions: [{
+      question: "Which deployment target?",
+      options: [{ label: "Staging" }, { label: "Production" }],
+      answer: "Staging",
+    }],
+  },
+});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    status: OPERATION_STATUS.FAILED,
+    questions: [{ question: "Continue?", options: [] }],
+    declined: { reason: "rejected" },
+  },
+});`
+    );
+
+    assert.ok(output.includes("Asked 1 question"));
+    assert.ok(output.includes("Which deployment target?"));
+    assert.ok(output.includes("Staging"));
+    assert.ok(output.includes("Answered 1 question"));
+    assert.ok(output.includes("Answer: Staging"));
+    assert.ok(output.includes("Question declined"));
+    assert.ok(output.includes("⎿ Question declined"));
+  });
+
+  test("truncates ask-user-question preview art with a notice", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  data: {
+    questions: [{
+      question: "Choose a layout",
+      options: [{
+        label: "Grid",
+        preview: Array.from({ length: 10 }, (_, index) => "preview line " + index).join("\\n"),
+      }],
+    }],
+  },
+});`
+    );
+
+    assert.ok(output.includes("preview line 7"));
+    assert.ok(!output.includes("preview line 8"));
+    assert.ok(output.includes("… 2 more lines"));
+  });
+
+  test("renders compaction details and truncates its summary with a notice", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.COMPACTION,
+  data: {
+    trigger: COMPACTION_TRIGGERS.AUTO,
+    preTokens: 12000,
+    postTokens: 2400,
+    summary: Array.from({ length: 10 }, (_, index) => "summary line " + index).join("\\n"),
+  },
+});`
+    );
+
+    assert.ok(output.includes("Conversation compacted (auto)"));
+    assert.ok(output.includes("12,000 → 2,400 tokens"));
+    assert.ok(output.includes("summary line 7"));
+    assert.ok(!output.includes("summary line 8"));
+    assert.ok(output.includes("… 2 more lines"));
+  });
+
+  test("renders a follow-up-resumed divider", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+  data: { resumedAt: 0 },
+});`
+    );
+
+    assert.ok(output.includes("Follow-up resumed"));
+  });
+
+  test("renders pass, fail, and errored script verdicts", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+  response: "ok",
+  elapsed: 0.012,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "stdout",
+    expected: "ok",
+    actual: "ok",
+    actualSource: "stdout",
+    exitCode: 0,
+    outcome: "passed",
+    matchRule: "exact",
+    action: "continue",
+    durationMs: 12,
+  },
+}, { stepIndex: 0, stepName: "pre-condition", key: "pass" });
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+  response: "bad",
+  elapsed: 0.034,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "stdout",
+    expected: "ok",
+    actual: "bad",
+    actualSource: "stdout",
+    exitCode: 1,
+    outcome: "failed",
+    matchRule: "substring",
+    action: "retry",
+    actionDetail: "retry 1 of 3",
+    durationMs: 34,
+  },
+}, { stepIndex: 1, stepName: "end-condition", key: "fail" });
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+  response: "spawn failed",
+  elapsed: 0.056,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "exitCode",
+    actual: "",
+    actualSource: "exitCode",
+    outcome: "errored",
+    matchRule: "none",
+    action: "stopWorkflow",
+    durationMs: 56,
+    timedOut: true,
+    error: "spawn failed",
+  },
+}, { stepIndex: 2, stepName: "worktree-setup", key: "error" });`);
+
+    assert.ok(output.includes("Passed"));
+    assert.ok(output.includes("Failed"));
+    assert.ok(output.includes("Errored"));
+    assert.ok(output.includes("Compare: Stdout"));
+    assert.ok(output.includes("Expected: ok"));
+    assert.ok(output.includes("Actual: bad"));
+    assert.ok(output.includes("Matched by: substring"));
+    assert.ok(output.includes("Action: retry (retry 1 of 3)"));
+    assert.ok(output.includes("Timed out: yes"));
+    assert.ok(output.includes("Error: spawn failed"));
+  });
+
+  test("bounds streamed script output with an explicit notice", () => {
+    const output = runFormatterScript(`
+const chunk = Array.from({ length: 240 }, (_, index) => "line " + index + "\\n").join("");
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "check.sh" }, { stepIndex: 0, stepName: "script", key: "bounded" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "bounded" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: chunk, elapsed: 0, isStreaming: false, scriptVerdict: { compareSource: "stdout", actual: "ok", actualSource: "stdout", outcome: "passed", matchRule: "exact", action: "continue", durationMs: 1 } }, { stepIndex: 0, stepName: "script", key: "bounded" });`);
+
+    assert.ok(output.includes("line 199"));
+    assert.ok(!output.includes("line 200"));
+    assert.ok(output.includes("script output truncated"));
+    assert.ok(output.includes("more lines"));
+  });
+
+  test("labels condition, worktree-setup, and ordinary script headers", () => {
+    const output = runFormatterScript(`
+const verdict = { compareSource: "exitCode", actual: "0", actualSource: "exitCode", outcome: "passed", matchRule: "exitCode", action: "continue", durationMs: 1 };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "build", key: "pre" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.END_CONDITION, response: "ok", elapsed: 0, isStreaming: false, attemptIndex: 1, scriptVerdict: verdict }, { stepIndex: 0, stepName: "build", key: "end" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "setup", key: "setup" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "script", key: "script" });`);
+
+    assert.ok(output.includes("[Pre-condition] build"));
+    assert.ok(output.includes("[End condition retry 2] build"));
+    assert.ok(output.includes("[Worktree setup] setup"));
+    assert.ok(output.includes("[Script step] script"));
+  });
+
+  test("labels final-step loop iterations", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderFinalStepLabel(2);`
+    );
+
+    assert.ok(output.includes("Final Step Loop 3"));
+  });
+
+  test("shows per-attempt harness and model with a bounded prompt preview", () => {
+    const output = runFormatterScript(`
+const prompt = Array.from({ length: 25 }, (_, index) => "prompt line " + index).join("\\n");
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "override", promptText: prompt, attemptIndex: 1, runIndex: 0, harness: "claude-cli", model: "claude-sonnet-4.5" });`);
+
+    assert.ok(output.includes("Harness: claude-cli"));
+    assert.ok(output.includes("Model: claude-sonnet-4.5"));
+    assert.ok(output.includes("prompt line 19"));
+    assert.ok(!output.includes("prompt line 20"));
+    assert.ok(
+      output.includes("… 5 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+  });
+
+  test("adds full-record notices to diff, MCP parameter, and tool-result truncation", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FILE_EDIT,
+  data: { path: "large.ts", status: OPERATION_STATUS.COMPLETED, oldContent: "", newContent: Array.from({ length: 70 }, (_, index) => "added " + index).join("\\n") },
+});
+const long = "x".repeat(150);
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: { server: "queue", tool: "append", parameters: { value: long } } });
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.TOOL_RESULT, data: { result: { success: true, output: long } } });`);
+
+    assert.ok(
+      output.includes("… 10 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+    assert.ok(
+      (output.match(/more characters \(see \.ctrlyoke/g) ?? []).length >= 2
+    );
+  });
+
+  test("renders parallel-group tally transitions, including a failed branch", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderParallelGroupHeader({ id: "research", startIndex: 0, endIndex: 1, failFast: false }, 2);
+CliTerminalFormatter.renderParallelGroupProgress("research", 1, 0, 0);
+CliTerminalFormatter.renderParallelGroupProgress("research", 1, 1, 0);
+CliTerminalFormatter.renderParallelGroupProgress("research", 0, 1, 1);`);
+
+    assert.ok(output.includes("Parallel group research — 2 member(s)"));
+    assert.ok(
+      output.includes("Parallel group research: 1 running · 0 done · 0 failed")
+    );
+    assert.ok(
+      output.includes("Parallel group research: 1 running · 1 done · 0 failed")
+    );
+    assert.ok(
+      output.includes("Parallel group research: 0 running · 1 done · 1 failed")
+    );
+  });
+
+  test("renders the closing retry-attempt aggregate", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderAttemptGroupSummary("compile", 3, 12.75);`
+    );
+
+    assert.ok(output.includes("↻ compile: 3 attempts · 12.75s total"));
+  });
+
+  test("keeps a single non-parallel, non-retried prompt byte-for-byte unchanged", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "single", promptText: "do work", attemptIndex: 0, runIndex: 0 });
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "single", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "harness run" });`);
+
+    assert.strictEqual(
+      output,
+      [
+        "",
+        "─".repeat(52),
+        "│ Step 1/1 — single",
+        "│ do work",
+        "",
+        "│ $ harness run",
+        "",
+        "",
+      ].join("\n")
+    );
   });
 
   test("keeps category labels exhaustive", () => {

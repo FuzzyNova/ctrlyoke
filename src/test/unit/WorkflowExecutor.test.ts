@@ -493,6 +493,97 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("starts a promoted member beside the anchor that is still running", async () => {
+    const queue = new PromptQueue();
+    const anchor = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const siblingStarted = deferred();
+    const anchorRelease = deferred();
+    let siblingStartedBeforeAnchorSettled = false;
+
+    anchor.onSend = async () => {
+      const insertion = await queue.promoteStepToParallelGroup(
+        0,
+        { prompt: "promoted-sibling" },
+        { failFast: false }
+      );
+      const join = await executor.joinRunningParallelGroup(insertion.stepIndex);
+      assert.strictEqual(join.accepted, true);
+      // The anchor is deliberately still in flight here. If the sibling only
+      // runs after the anchor settles, this await never resolves.
+      await siblingStarted.promise;
+      siblingStartedBeforeAnchorSettled = true;
+      await anchorRelease.promise;
+      return { responseText: "anchor" };
+    };
+    sibling.onSend = async () => {
+      siblingStarted.resolve();
+      anchorRelease.resolve();
+      return { responseText: "sibling" };
+    };
+
+    queue.loadPrompts({ steps: [{ prompt: "anchor" }] });
+
+    await executor.execute(
+      anchor,
+      makeParallelContext(
+        new Map([
+          [0, anchor],
+          [1, sibling],
+        ])
+      )
+    );
+
+    assert.strictEqual(siblingStartedBeforeAnchorSettled, true);
+    assert.deepStrictEqual(anchor.sentPrompts, ["anchor"]);
+    assert.deepStrictEqual(sibling.sentPrompts, ["promoted-sibling"]);
+    assert.strictEqual(queue.getState().currentIndex, 2);
+    assert.deepStrictEqual(
+      queue
+        .getState()
+        .steps.map((step) => step._runtime?.completedAt !== undefined),
+      [true, true]
+    );
+    assert.strictEqual(queue.getActiveParallelGroupRuntime(), undefined);
+  });
+
+  test("rejects a promoted join once the fan-out width is 1", async () => {
+    const queue = new PromptQueue();
+    const anchor = new MockHarnessIntegration(undefined, false);
+    const sibling = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeParallelContext(
+      new Map([
+        [0, anchor],
+        [1, sibling],
+      ])
+    );
+    context.dynamicQueueConfig = {
+      ...context.dynamicQueueConfig,
+      maxParallelSteps: 1,
+    };
+    let accepted: boolean | undefined;
+    anchor.onSend = async () => {
+      const insertion = await queue.promoteStepToParallelGroup(
+        0,
+        { prompt: "promoted-sibling" },
+        { failFast: false }
+      );
+      accepted = (await executor.joinRunningParallelGroup(insertion.stepIndex))
+        .accepted;
+      return { responseText: "anchor" };
+    };
+
+    queue.loadPrompts({ steps: [{ prompt: "anchor" }] });
+    await executor.execute(anchor, context);
+
+    // Width 1 cannot deliver concurrency, so the member is accepted but left
+    // for the queue loop to run after the anchor settles.
+    assert.strictEqual(accepted, true);
+    assert.deepStrictEqual(sibling.sentPrompts, ["promoted-sibling"]);
+  });
+
   test("reconciles watcher members once when an in-process join races the merge", async () => {
     const queue = new PromptQueue();
     const first = new MockHarnessIntegration(undefined, false);

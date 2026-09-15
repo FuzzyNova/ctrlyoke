@@ -898,7 +898,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     handleBackToWorkflowList,
   ]);
 
-  // Switch to a loaded workflow
+  // Switch to a loaded (running/paused) workflow
   const handleSwitchWorkflow = useCallback(
     (workflowId: string) => {
       const workflow = effectiveLoadedWorkflows.find(
@@ -909,10 +909,32 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         useWorkflowStore.getState().clearHistoryOutputs();
         useUiStore.getState().clearHistoryView();
       }
-      vscode.postMessage({
-        type: MESSAGE_TYPES.SWITCH_WORKFLOW,
-        workflowId,
-      });
+      // Route through the same addressed load as handleSelectWorkflow (recent
+      // list) rather than the raw instance-id SWITCH_WORKFLOW message, so
+      // switching to a running/paused workflow gets the same optimistic header
+      // rename, "Loading …" overlay, and interaction block that switching to a
+      // completed one already gets from WorkflowSwitchOverlay — previously this
+      // path never set pendingRunViewSwitch, so the overlay never appeared.
+      // Falls back to the legacy message when a summary has no workflowKey yet
+      // (shouldn't happen for a real running instance, but keeps this safe).
+      if (workflow?.workflowKey) {
+        const address: WorkflowViewAddress = workflow.runRef
+          ? {
+              workflowKey: workflow.workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+              runRef: workflow.runRef,
+            }
+          : {
+              workflowKey: workflow.workflowKey,
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+            };
+        navigateToWorkflowAddress(vscode, address, workflow.workflowName);
+      } else {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+          workflowId,
+        });
+      }
       closeDropdown();
       closeFullscreenDrawers();
     },

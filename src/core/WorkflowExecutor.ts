@@ -43,12 +43,14 @@ import {
   COMPARE_SOURCES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
   FAILURE_KINDS,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
+  getEffectiveParallelGroupWidth,
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
@@ -216,6 +218,13 @@ export interface WorkflowExecutionContext {
     stepName: string;
     chunk: string;
   }) => void;
+  /** Fires script command/output updates with the execution target that produced them. */
+  onScriptOutput?: (target: OutputExecutionTarget, output: CliOutput) => void;
+  /** Fires completed script output, including the structured verdict. */
+  onScriptCompletedOutput?: (
+    target: OutputExecutionTarget,
+    output: CliOutput
+  ) => void;
   outputHistoryManager?: OutputHistoryManager;
   /** Run-owned redactor populated only with values resolved during execution. */
   secretRedactor?: RunSecretRedactor;
@@ -395,6 +404,29 @@ export class WorkflowExecutor {
     | undefined;
   private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
   /**
+   * The context and snapshot strategy of the execution currently draining the
+   * queue. An ad-hoc promotion arrives from outside the loop and needs both to
+   * start the promoted group's run beside the in-flight anchor.
+   */
+  private activeExecution:
+    | {
+        readonly context: WorkflowExecutionContext;
+        readonly snapshotStrategy: "git" | "filesystem" | undefined;
+      }
+    | undefined;
+  /**
+   * A group run started by an ad-hoc promotion while its anchor was still
+   * executing sequentially. The sequential settlement consumes it; it is never
+   * re-created by the queue loop for the same group.
+   */
+  private promotedParallelGroupRun:
+    | {
+        readonly groupId: string;
+        readonly run: ParallelGroupRun<WorkflowExecutionContext>;
+        readonly outcome: Promise<ParallelGroupOutcome>;
+      }
+    | undefined;
+  /**
    * A sequential step can become a group's started anchor while it is still
    * executing. Keep its captured before-state until the promoted group has
    * settled so the group snapshot retains the original undo boundary.
@@ -472,247 +504,254 @@ export class WorkflowExecutor {
     this.logWorkflowStart(context, this.promptQueue.getProgress().total);
 
     const snapshotStrategy = await this.selectSnapshotStrategy(context);
+    // Published for the duration of the drain so an out-of-loop admission
+    // (Run in Parallel / an MCP live join) can start a promoted group's run
+    // with the same context and snapshot strategy the loop would have used.
+    this.activeExecution = { context, snapshotStrategy };
+    try {
+      await this.initializeFinalStepRuntime(context);
 
-    await this.initializeFinalStepRuntime(context);
+      const getFinalStep = () => this.promptQueue.getWorkflowFile().finalStep;
 
-    const getFinalStep = () => this.promptQueue.getWorkflowFile().finalStep;
+      const initialFinalStep = getFinalStep();
 
-    const initialFinalStep = getFinalStep();
-
-    // Only skip the queue drain and go straight to the finalStep when resuming
-    // a run that was interrupted mid-finalStep AND there are no pending queue
-    // items waiting to run. If there are pending items (e.g. an ephemeral
-    // prompt was appended to a completed workflow), drain the queue first so
-    // the new prompts are not skipped.
-    let runFinalStepFirst =
-      !!initialFinalStep &&
-      this.promptQueue.getFinalStepRuntime()?.phase ===
-        FINAL_STEP_PHASES.FINAL_STEP &&
-      !this.promptQueue.hasNext();
-    while (true) {
-      if (!runFinalStepFirst) {
-        while (this.promptQueue.hasNext()) {
-          const state = this.promptQueue.getState();
-          if (
-            await this.checkExecutionTimeLimit(
-              context.dynamicQueueConfig,
-              state.currentIndex,
-              this.promptQueue.getProgress().total
-            )
-          ) {
-            break;
-          }
-          const group = state.parallelGroups.find((candidate) => {
-            if (candidate.startIndex === state.currentIndex) {
-              return true;
-            }
-            // A sequential anchor advances currentIndex when it settles. If
-            // it was promoted while in flight, resume at the next unsettled
-            // member but keep the group's original start boundary.
-            return (
-              state.currentIndex > candidate.startIndex &&
-              state.currentIndex <= candidate.endIndex &&
-              state.steps
-                .slice(candidate.startIndex, state.currentIndex)
-                .every((step) => step._runtime?.completedAt !== undefined)
-            );
-          });
-          if (group) {
-            const groupOutcome = await this.executeParallelGroup(
-              group,
-              context,
-              snapshotStrategy
-            );
+      // Only skip the queue drain and go straight to the finalStep when resuming
+      // a run that was interrupted mid-finalStep AND there are no pending queue
+      // items waiting to run. If there are pending items (e.g. an ephemeral
+      // prompt was appended to a completed workflow), drain the queue first so
+      // the new prompts are not skipped.
+      let runFinalStepFirst =
+        !!initialFinalStep &&
+        this.promptQueue.getFinalStepRuntime()?.phase ===
+          FINAL_STEP_PHASES.FINAL_STEP &&
+        !this.promptQueue.hasNext();
+      while (true) {
+        if (!runFinalStepFirst) {
+          while (this.promptQueue.hasNext()) {
+            const state = this.promptQueue.getState();
             if (
-              groupOutcome.paused ||
-              groupOutcome.stopped ||
-              groupOutcome.terminalFailure
+              await this.checkExecutionTimeLimit(
+                context.dynamicQueueConfig,
+                state.currentIndex,
+                this.promptQueue.getProgress().total
+              )
             ) {
               break;
             }
-            continue;
-          }
+            const group = state.parallelGroups.find((candidate) => {
+              if (candidate.startIndex === state.currentIndex) {
+                return true;
+              }
+              // A sequential anchor advances currentIndex when it settles. If
+              // it was promoted while in flight, resume at the next unsettled
+              // member but keep the group's original start boundary.
+              return (
+                state.currentIndex > candidate.startIndex &&
+                state.currentIndex <= candidate.endIndex &&
+                state.steps
+                  .slice(candidate.startIndex, state.currentIndex)
+                  .every((step) => step._runtime?.completedAt !== undefined)
+              );
+            });
+            if (group) {
+              const groupOutcome = await this.executeParallelGroup(
+                group,
+                context,
+                snapshotStrategy
+              );
+              if (
+                groupOutcome.paused ||
+                groupOutcome.stopped ||
+                groupOutcome.terminalFailure
+              ) {
+                break;
+              }
+              continue;
+            }
 
-          const target: ExecutionTarget = {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: state.currentIndex,
-          };
-          const prompt = state.steps[state.currentIndex];
-          const stepId = prompt?._runtime?.stepId;
-          if (!stepId) {
-            throw new Error(
-              `Cannot dispatch queue step ${state.currentIndex}: missing stepId`
+            const target: ExecutionTarget = {
+              kind: FINAL_STEP_PHASES.QUEUE,
+              stepIndex: state.currentIndex,
+            };
+            const prompt = state.steps[state.currentIndex];
+            const stepId = prompt?._runtime?.stepId;
+            if (!stepId) {
+              throw new Error(
+                `Cannot dispatch queue step ${state.currentIndex}: missing stepId`
+              );
+            }
+            const claim = await this.promptQueue.claimStepById(
+              stepId,
+              Date.now(),
+              context.executionWorkspace.stateRoot
             );
-          }
-          const claim = await this.promptQueue.claimStepById(
-            stepId,
-            Date.now(),
-            context.executionWorkspace.stateRoot
-          );
-          if (claim.status === STEP_CLAIM_OUTCOMES.MISSING) {
-            continue;
-          }
-          if (claim.status !== STEP_CLAIM_OUTCOMES.CLAIMED) {
-            throw new Error(
-              `Cannot dispatch step ${stepId}: claim ${claim.status}`
+            if (claim.status === STEP_CLAIM_OUTCOMES.MISSING) {
+              continue;
+            }
+            if (claim.status !== STEP_CLAIM_OUTCOMES.CLAIMED) {
+              throw new Error(
+                `Cannot dispatch step ${stepId}: claim ${claim.status}`
+              );
+            }
+            const outcome = await this.executeWithSnapshot(
+              { ...target, stepIndex: claim.stepIndex },
+              claim.step,
+              context,
+              snapshotStrategy
             );
-          }
-          const outcome = await this.executeWithSnapshot(
-            { ...target, stepIndex: claim.stepIndex },
-            claim.step,
-            context,
-            snapshotStrategy
-          );
-          const shouldContinue = await this.commitSequentialOutcome(
-            outcome,
-            context
-          );
+            const shouldContinue = await this.commitSequentialOutcome(
+              outcome,
+              context
+            );
 
-          if (!shouldContinue) {
-            break;
+            if (!shouldContinue) {
+              break;
+            }
           }
         }
-      }
 
-      runFinalStepFirst = false;
+        runFinalStepFirst = false;
 
-      const statusAfterQueue = runtime.status;
-      // Resume can race the short unwind after a confirmed pause. If it does,
-      // keep using this execution loop instead of skipping the remaining queue.
-      if (
-        statusAfterQueue === EXECUTION_STATES.RUNNING &&
-        this.promptQueue.hasNext()
-      ) {
-        continue;
-      }
-      if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
-        break;
-      }
-
-      const currentFinalStep = getFinalStep();
-      if (!currentFinalStep) {
-        break;
-      }
-      if (
-        await this.checkExecutionTimeLimit(
-          context.dynamicQueueConfig,
-          this.promptQueue.getState().currentIndex,
-          this.promptQueue.getProgress().total
-        )
-      ) {
-        break;
-      }
-
-      // Initialize runtime if a final step was added after execution started
-      if (!this.promptQueue.getFinalStepRuntime()) {
-        await this.setFinalStepRuntime(context, {
-          phase: FINAL_STEP_PHASES.QUEUE,
-          loopCount: 0,
-        });
-      }
-
-      const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
-      const loopIndex = finalStepRuntime?.loopCount ?? 0;
-      const queueSizeBefore = this.promptQueue.getState().steps.length;
-
-      await this.setFinalStepRuntime(context, {
-        phase: FINAL_STEP_PHASES.FINAL_STEP,
-        loopCount: loopIndex,
-        status: STEP_STATUS.RUNNING,
-        startedAt: Date.now(),
-      });
-
-      const finalTarget: ExecutionTarget = {
-        kind: FINAL_STEP_PHASES.FINAL_STEP,
-        loopIndex,
-      };
-      const finalOutcome = await this.executeWithSnapshot(
-        finalTarget,
-        currentFinalStep,
-        context,
-        snapshotStrategy
-      );
-      await this.settleCoordinationParticipant(finalOutcome.target, context);
-      const shouldContinue =
-        finalOutcome.status === PROMPT_TERMINAL_STATUS.COMPLETED;
-
-      if (!shouldContinue) {
-        if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
-          runtime.fail();
-          await this.promptQueue.commitRuntimeTransition();
-        } else if (
-          finalOutcome.status === PROMPT_TERMINAL_STATUS.CANCELLED &&
-          runtime.status === EXECUTION_STATES.CANCELLING
+        const statusAfterQueue = runtime.status;
+        // Resume can race the short unwind after a confirmed pause. If it does,
+        // keep using this execution loop instead of skipping the remaining queue.
+        if (
+          statusAfterQueue === EXECUTION_STATES.RUNNING &&
+          this.promptQueue.hasNext()
         ) {
-          runtime.confirmStopped();
-          await this.promptQueue.commitRuntimeTransition();
+          continue;
         }
-        await this.persistInterruptedFinalStepRuntime(context);
-        break;
-      }
-
-      const statusAfterFinal = runtime.status;
-      if (
-        statusAfterFinal === EXECUTION_STATES.STOPPED ||
-        statusAfterFinal === EXECUTION_STATES.CANCELLING ||
-        statusAfterFinal === EXECUTION_STATES.ERROR
-      ) {
-        await this.persistInterruptedFinalStepRuntime(context);
-        break;
-      }
-
-      const queueSizeAfter = this.promptQueue.getState().steps.length;
-      if (queueSizeAfter > queueSizeBefore) {
-        const hitQueueSizeLimit = await this.checkQueueSizeLimit(
-          context.dynamicQueueConfig,
-          queueSizeAfter
-        );
-        if (hitQueueSizeLimit) {
+        if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
           break;
         }
 
-        await this.setFinalStepRuntime(context, {
-          phase: FINAL_STEP_PHASES.QUEUE,
-          loopCount: loopIndex + 1,
-          status: STEP_STATUS.COMPLETED,
-          startedAt:
-            this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
-          completedAt: Date.now(),
-        });
-
+        const currentFinalStep = getFinalStep();
+        if (!currentFinalStep) {
+          break;
+        }
         if (
-          await this.confirmPauseAndStop(
-            "[WorkflowExecutor] Workflow paused after final step appended queue work"
+          await this.checkExecutionTimeLimit(
+            context.dynamicQueueConfig,
+            this.promptQueue.getState().currentIndex,
+            this.promptQueue.getProgress().total
           )
         ) {
           break;
         }
 
-        continue;
-      }
+        // Initialize runtime if a final step was added after execution started
+        if (!this.promptQueue.getFinalStepRuntime()) {
+          await this.setFinalStepRuntime(context, {
+            phase: FINAL_STEP_PHASES.QUEUE,
+            loopCount: 0,
+          });
+        }
 
-      await this.setFinalStepRuntime(context, {
-        phase: FINAL_STEP_PHASES.FINAL_STEP,
-        loopCount: loopIndex,
-        status: STEP_STATUS.COMPLETED,
-        startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt,
-        completedAt: Date.now(),
-      });
+        const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+        const loopIndex = finalStepRuntime?.loopCount ?? 0;
+        const queueSizeBefore = this.promptQueue.getState().steps.length;
 
-      if (
-        await this.confirmPauseAndStop(
-          "[WorkflowExecutor] Workflow paused after final step"
-        )
-      ) {
+        await this.setFinalStepRuntime(context, {
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopCount: loopIndex,
+          status: STEP_STATUS.RUNNING,
+          startedAt: Date.now(),
+        });
+
+        const finalTarget: ExecutionTarget = {
+          kind: FINAL_STEP_PHASES.FINAL_STEP,
+          loopIndex,
+        };
+        const finalOutcome = await this.executeWithSnapshot(
+          finalTarget,
+          currentFinalStep,
+          context,
+          snapshotStrategy
+        );
+        await this.settleCoordinationParticipant(finalOutcome.target, context);
+        const shouldContinue =
+          finalOutcome.status === PROMPT_TERMINAL_STATUS.COMPLETED;
+
+        if (!shouldContinue) {
+          if (finalOutcome.status === PROMPT_TERMINAL_STATUS.FAILED) {
+            runtime.fail();
+            await this.promptQueue.commitRuntimeTransition();
+          } else if (
+            finalOutcome.status === PROMPT_TERMINAL_STATUS.CANCELLED &&
+            runtime.status === EXECUTION_STATES.CANCELLING
+          ) {
+            runtime.confirmStopped();
+            await this.promptQueue.commitRuntimeTransition();
+          }
+          await this.persistInterruptedFinalStepRuntime(context);
+          break;
+        }
+
+        const statusAfterFinal = runtime.status;
+        if (
+          statusAfterFinal === EXECUTION_STATES.STOPPED ||
+          statusAfterFinal === EXECUTION_STATES.CANCELLING ||
+          statusAfterFinal === EXECUTION_STATES.ERROR
+        ) {
+          await this.persistInterruptedFinalStepRuntime(context);
+          break;
+        }
+
+        const queueSizeAfter = this.promptQueue.getState().steps.length;
+        if (queueSizeAfter > queueSizeBefore) {
+          const hitQueueSizeLimit = await this.checkQueueSizeLimit(
+            context.dynamicQueueConfig,
+            queueSizeAfter
+          );
+          if (hitQueueSizeLimit) {
+            break;
+          }
+
+          await this.setFinalStepRuntime(context, {
+            phase: FINAL_STEP_PHASES.QUEUE,
+            loopCount: loopIndex + 1,
+            status: STEP_STATUS.COMPLETED,
+            startedAt:
+              this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
+            completedAt: Date.now(),
+          });
+
+          if (
+            await this.confirmPauseAndStop(
+              "[WorkflowExecutor] Workflow paused after final step appended queue work"
+            )
+          ) {
+            break;
+          }
+
+          continue;
+        }
+
+        await this.setFinalStepRuntime(context, {
+          phase: FINAL_STEP_PHASES.FINAL_STEP,
+          loopCount: loopIndex,
+          status: STEP_STATUS.COMPLETED,
+          startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt,
+          completedAt: Date.now(),
+        });
+
+        if (
+          await this.confirmPauseAndStop(
+            "[WorkflowExecutor] Workflow paused after final step"
+          )
+        ) {
+          break;
+        }
+
         break;
       }
 
-      break;
+      Log.info("[WorkflowExecutor] Workflow execution complete");
+      await this.finalizeWorkflowExecution();
+      this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
+    } finally {
+      this.activeExecution = undefined;
     }
-
-    Log.info("[WorkflowExecutor] Workflow execution complete");
-    await this.finalizeWorkflowExecution();
-    this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
   }
 
   private async preflightGroup(
@@ -850,6 +889,17 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     snapshotStrategy: "git" | "filesystem" | undefined
   ): Promise<ParallelGroupOutcome> {
+    // An ad-hoc promotion already started this group beside its anchor. Reuse
+    // that run instead of forking a second coordinator for the same group.
+    const promoted = this.takePromotedParallelGroupRun(group.id);
+    if (promoted) {
+      return this.finishParallelGroupRun(
+        promoted.run,
+        promoted.outcome,
+        group,
+        context
+      );
+    }
     const preflight = await this.preflightGroup(group, context);
     let groupBeforeState: RawWorkspaceState | undefined;
     const state = this.promptQueue.getState();
@@ -927,14 +977,66 @@ export class WorkflowExecutor {
       group.id,
       PARALLEL_GROUP_ADMISSION.ACCEPTING
     );
-    const groupRun = new ParallelGroupRun<WorkflowExecutionContext>({
+    const groupRun = this.createParallelGroupRun({
+      group,
+      context,
+      snapshotStrategy,
+      pendingIds,
+      initialOutcomes,
+      admissionTargets,
+      effectiveWidth: preflight.effectiveWidth,
+      groupBeforeState,
+    });
+    this.activeParallelGroupRun = groupRun;
+    this.activeParallelGroupPreflightMembers = new Map(
+      preflight.members.map((member) => [member.stepIndex, member])
+    );
+    return this.finishParallelGroupRun(
+      groupRun,
+      groupRun.run(),
+      group,
+      context
+    );
+  }
+
+  /**
+   * Build the coordinator for one active parallel group. Both the queue loop
+   * and an ad-hoc promotion construct their run here so admission, dispatch,
+   * settlement, and join behave identically however the group came to exist.
+   */
+  private createParallelGroupRun(options: {
+    readonly group: ParallelGroupDefinition;
+    readonly context: WorkflowExecutionContext;
+    readonly snapshotStrategy: "git" | "filesystem" | undefined;
+    readonly pendingIds: readonly string[];
+    readonly initialOutcomes: ReadonlyMap<string, StepExecutionOutcome>;
+    readonly admissionTargets: ReadonlyMap<string, number>;
+    readonly effectiveWidth: number;
+    readonly groupBeforeState: RawWorkspaceState | undefined;
+    readonly adoptedMemberIds?: readonly string[];
+    /** Reservations held by members this run did not dispatch itself. */
+    readonly adoptedReservations?: () => readonly ParallelGroupPreflightMember[];
+  }): ParallelGroupRun<WorkflowExecutionContext> {
+    const {
+      group,
+      context,
+      snapshotStrategy,
+      pendingIds,
+      initialOutcomes,
+      admissionTargets,
+      groupBeforeState,
+    } = options;
+    return new ParallelGroupRun<WorkflowExecutionContext>({
       group,
       pendingIds,
       initialOutcomes,
-      effectiveWidth: preflight.effectiveWidth,
+      effectiveWidth: options.effectiveWidth,
       context,
       snapshotStrategy,
       groupBeforeState,
+      ...(options.adoptedMemberIds
+        ? { adoptedMemberIds: options.adoptedMemberIds }
+        : {}),
       resolveStepById: (stepId) => {
         const stepIndex = this.promptQueue
           .getState()
@@ -970,13 +1072,13 @@ export class WorkflowExecutor {
             `Cannot preflight parallel group ${group.id}: group is missing from the current definition`
           );
         }
-        return this.preflightGroupMember(
-          liveGroup,
-          step,
-          stepIndex,
-          context,
-          runningMembers
-        );
+        return this.preflightGroupMember(liveGroup, step, stepIndex, context, [
+          // A member adopted from the sequential path holds a live session and
+          // integration this run never reserved, so its reservation has to be
+          // supplied explicitly or a joiner could collide with it.
+          ...(options.adoptedReservations?.() ?? []),
+          ...runningMembers,
+        ]);
       },
       executeMember: async (
         target,
@@ -1058,13 +1160,23 @@ export class WorkflowExecutor {
           "[WorkflowExecutor] Workflow paused after parallel group members settled"
         ).then(() => undefined),
     });
-    this.activeParallelGroupRun = groupRun;
-    this.activeParallelGroupPreflightMembers = new Map(
-      preflight.members.map((member) => [member.stepIndex, member])
-    );
-    const anchorSnapshotId = state.steps[group.startIndex]?._runtime?.stepId;
+  }
+
+  /**
+   * Await one group run to completion and apply the run-level consequences.
+   * Shared by the queue loop and by the sequential settlement that consumes a
+   * run started early by an ad-hoc promotion.
+   */
+  private async finishParallelGroupRun(
+    groupRun: ParallelGroupRun<WorkflowExecutionContext>,
+    runOutcome: Promise<ParallelGroupOutcome>,
+    group: ParallelGroupDefinition,
+    context: WorkflowExecutionContext
+  ): Promise<ParallelGroupOutcome> {
+    const anchorSnapshotId =
+      this.promptQueue.getState().steps[group.startIndex]?._runtime?.stepId;
     try {
-      const groupOutcome = await groupRun.run();
+      const groupOutcome = await runOutcome;
       if (!groupOutcome.paused) {
         // The promoted anchor's held before-state has now been consumed as the
         // group snapshot. Release it here rather than leaving a workspace
@@ -1100,7 +1212,171 @@ export class WorkflowExecutor {
         this.activeParallelGroupRun = undefined;
         this.activeParallelGroupPreflightMembers = undefined;
       }
+      if (this.promotedParallelGroupRun?.run === groupRun) {
+        this.promotedParallelGroupRun = undefined;
+      }
     }
+  }
+
+  private takePromotedParallelGroupRun(groupId: string) {
+    const promoted = this.promotedParallelGroupRun;
+    if (!promoted || promoted.groupId !== groupId) {
+      return undefined;
+    }
+    this.promotedParallelGroupRun = undefined;
+    return promoted;
+  }
+
+  /**
+   * Start the coordinator for a group created by an ad-hoc promotion, with the
+   * still-executing sequential anchor adopted as a member.
+   *
+   * Without this the new member would sit pending until the anchor settled and
+   * the queue loop re-entered the group, which defeats the point of "run this
+   * beside the step that is running now". The sequential settlement hands the
+   * anchor's outcome to this run (`commitSequentialOutcome`) and then awaits it.
+   *
+   * A rejection here leaves the group untouched — `executeEphemeralParallelPrompt`
+   * rolls the member back — and never fails the anchor.
+   */
+  private async startPromotedParallelGroupRun(
+    group: ParallelGroupDefinition,
+    anchorIndex: number,
+    memberIndex: number
+  ): Promise<ParallelGroupJoinResult> {
+    const active = this.activeExecution;
+    const state = this.promptQueue.getState();
+    const anchor = state.steps[anchorIndex];
+    const anchorId = anchor?._runtime?.stepId;
+    const member = state.steps[memberIndex];
+    const memberId = member?._runtime?.stepId;
+    if (!anchor || !anchorId || !member || !memberId) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${memberIndex + 1} is missing its stable identity.`,
+      };
+    }
+    if (member.enabled === false) {
+      return {
+        accepted: false,
+        diagnostic: `Step ${memberIndex + 1} is disabled and cannot run in parallel.`,
+      };
+    }
+    // Without a live execution context there is nothing to attach a run to.
+    // Accept the member anyway: the queue loop still starts the promoted group
+    // once the anchor settles, which is strictly better than rejecting it.
+    if (!active) {
+      return { accepted: true };
+    }
+    const effectiveWidth = getEffectiveParallelGroupWidth(
+      active.context.dynamicQueueConfig.maxParallelSteps,
+      active.context.parallelGroupFanOutEnabled
+    );
+    if (effectiveWidth <= 1) {
+      return { accepted: true };
+    }
+
+    // The anchor is mid-flight: resolving it again must not mint a second
+    // integration for a target that already owns one, so its reservation is
+    // resolved without `ensureIsolatedIntegration`. It exists only so the new
+    // member's preflight can see the session the anchor is holding.
+    let anchorReservation: ParallelGroupPreflightMember;
+    try {
+      const { ensureIsolatedIntegration: _ignored, ...preflightOptions } =
+        this.getParallelGroupPreflightOptions(group, active.context);
+      anchorReservation = (
+        await preflightParallelGroupMember({
+          ...preflightOptions,
+          step: anchor,
+          stepIndex: anchorIndex,
+        })
+      ).member;
+    } catch (error: unknown) {
+      return {
+        accepted: false,
+        diagnostic: `Parallel-group promotion failed to resolve the running step: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+    const liveAnchorSessionId = anchor._runtime?.sessionId;
+    if (typeof liveAnchorSessionId === "string") {
+      anchorReservation = {
+        ...anchorReservation,
+        resolvedSessionId: liveAnchorSessionId,
+      };
+    }
+
+    let preflight: ParallelGroupMemberPreflightResult;
+    try {
+      preflight = await this.preflightGroupMember(
+        group,
+        member,
+        memberIndex,
+        active.context,
+        [anchorReservation]
+      );
+    } catch (error: unknown) {
+      await this.releaseRejectedParallelGroupMemberResources(
+        active.context,
+        memberIndex
+      );
+      return {
+        accepted: false,
+        diagnostic: `Parallel step ${memberIndex + 1} failed preflight: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+    if (preflight.issues.length > 0) {
+      await this.releaseRejectedParallelGroupMemberResources(
+        active.context,
+        memberIndex
+      );
+      return { accepted: false, diagnostic: preflight.failureMessage };
+    }
+
+    const groupRun = this.createParallelGroupRun({
+      group,
+      context: active.context,
+      snapshotStrategy: active.snapshotStrategy,
+      pendingIds: [memberId],
+      initialOutcomes: new Map<string, StepExecutionOutcome>(),
+      admissionTargets: new Map([[memberId, memberIndex]]),
+      effectiveWidth,
+      // The anchor's own before-state is the group's before-state: it was
+      // captured before any sibling existed (PARALLEL_STEPS_PLAN Decision 8).
+      groupBeforeState:
+        this.pendingSequentialSnapshotBeforeStates.get(anchorId),
+      adoptedMemberIds: [anchorId],
+      adoptedReservations: () =>
+        this.promptQueue
+          .getState()
+          .steps.find((candidate) => candidate._runtime?.stepId === anchorId)
+          ?._runtime?.completedAt === undefined
+          ? [anchorReservation]
+          : [],
+    });
+    this.activeParallelGroupRun = groupRun;
+    this.activeParallelGroupPreflightMembers = new Map([
+      [anchorIndex, anchorReservation],
+      [memberIndex, preflight.member],
+    ]);
+    const outcome = groupRun.run();
+    // The sequential settlement is what awaits this; keep the rejection from
+    // surfacing as an unhandled promise in the meantime.
+    outcome.catch(() => undefined);
+    this.promotedParallelGroupRun = {
+      groupId: group.id,
+      run: groupRun,
+      outcome,
+    };
+    Log.info(
+      `[WorkflowExecutor] Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}: ` +
+        `step ${memberIndex + 1} joined the promoted group beside running step ${anchorIndex + 1} ` +
+        `(effective width ${effectiveWidth})`
+    );
+    return { accepted: true };
   }
 
   public joinRunningParallelGroup(
@@ -1128,8 +1404,8 @@ export class WorkflowExecutor {
     if (!groupRun) {
       // An ad-hoc promotion happens while the anchor is still in the
       // sequential execution path, so there is no ParallelGroupRun object to
-      // admit into yet. The persisted accepting projection is the handoff;
-      // the normal loop starts the just-created group after the anchor settles.
+      // admit into yet. Start one that adopts the in-flight anchor, so the new
+      // member runs beside it instead of waiting for it to settle.
       const state = this.promptQueue.getState();
       const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
       const promotedGroup = state.parallelGroups.find(
@@ -1147,7 +1423,11 @@ export class WorkflowExecutor {
         anchor._runtime.completedAt === undefined &&
         state.steps[stepIndex]?._runtime?.startedAt === undefined
       ) {
-        return { accepted: true };
+        return this.startPromotedParallelGroupRun(
+          promotedGroup,
+          state.currentIndex,
+          stepIndex
+        );
       }
       if (
         activeRuntime &&
@@ -1357,6 +1637,29 @@ export class WorkflowExecutor {
           ? this.promptQueue.getState().steps[outcome.target.stepIndex]
               ?._runtime?.stepId
           : undefined;
+      // A promotion that started its own run adopted this target. Hand it the
+      // outcome and let that run finish here, so the queue loop never forks a
+      // second coordinator for a group that is already live.
+      const promoted = this.takePromotedParallelGroupRun(
+        settlement.promotedGroup.id
+      );
+      if (promoted && stepId) {
+        await promoted.run.settleAdoptedMember(stepId, outcome);
+        const groupOutcome = await this.finishParallelGroupRun(
+          promoted.run,
+          promoted.outcome,
+          settlement.promotedGroup,
+          context
+        );
+        return !(
+          groupOutcome.paused ||
+          groupOutcome.stopped ||
+          groupOutcome.terminalFailure
+        );
+      }
+      if (promoted) {
+        this.promotedParallelGroupRun = promoted;
+      }
       if (stepId) {
         this.activeParallelGroupRun?.reconcileMembers([stepId]);
       }
@@ -1636,7 +1939,8 @@ export class WorkflowExecutor {
           timestampMs: Date.now(),
           onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
-          statusLabel: "Pre-condition",
+          statusLabel:
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
           timeoutMs: resolvedPreCondition.timeout,
           vars: workflowFileForPre.vars,
           secretNames: preSecretNames,
@@ -1662,7 +1966,7 @@ export class WorkflowExecutor {
             context,
             target,
             this.getSignedStepIndex(target),
-            "Pre-condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
             preResult,
             preErrorBehavior,
             attemptIndex
@@ -1690,7 +1994,7 @@ export class WorkflowExecutor {
           await this.trackConditionResult(
             context,
             target,
-            "Pre-condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
             preReport.verdict,
             STATUS_MESSAGE_SEVERITY.WARNING
           );
@@ -2301,7 +2605,7 @@ export class WorkflowExecutor {
         timestampMs,
         onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
         onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        statusLabel: "Script step",
+        statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
         timeoutMs: timeout,
         vars: this.promptQueue.getWorkflowFile().vars,
         secretNames,
@@ -2330,7 +2634,7 @@ export class WorkflowExecutor {
           context,
           target,
           signedStepIndex,
-          "Script step",
+          SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
           evalResult,
           errorBehavior,
           attemptIndex,
@@ -2347,7 +2651,7 @@ export class WorkflowExecutor {
         await this.trackConditionResult(
           context,
           target,
-          "Script step",
+          SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP],
           report.verdict,
           STATUS_MESSAGE_SEVERITY.ERROR
         );
@@ -3344,7 +3648,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         missingScriptResult,
         errorBehavior,
         attemptIndex,
@@ -3392,7 +3696,7 @@ export class WorkflowExecutor {
       onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
       actionForErrored: this.getErrorConditionAction(errorBehavior),
-      statusLabel: "End condition",
+      statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
       timeoutMs: endCondition.timeout,
       vars,
       secretNames,
@@ -3417,7 +3721,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         evaluationResult,
         errorBehavior,
         attemptIndex,
@@ -3428,7 +3732,7 @@ export class WorkflowExecutor {
     await this.trackConditionResult(
       context,
       target,
-      "End condition",
+      SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
       endReport.verdict,
       STATUS_MESSAGE_SEVERITY.ERROR
     );
@@ -3463,7 +3767,8 @@ export class WorkflowExecutor {
           onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
           actionForErrored: this.getErrorConditionAction(errorBehavior),
-          statusLabel: "End condition",
+          statusLabel:
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
           timeoutMs: condition.timeout,
           vars,
           secretNames,
@@ -3481,7 +3786,7 @@ export class WorkflowExecutor {
           await this.trackConditionResult(
             context,
             target,
-            "End condition",
+            SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
             retryVerdict,
             STATUS_MESSAGE_SEVERITY.ERROR
           );
@@ -3509,7 +3814,7 @@ export class WorkflowExecutor {
         context,
         target,
         signedStepIndex ?? this.getSignedStepIndex(target),
-        "End condition",
+        SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
         result.errorResult,
         errorBehavior,
         result.errorAttemptIndex ?? attemptIndex,

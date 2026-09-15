@@ -38,6 +38,35 @@ describe("usePromptStatus", () => {
     );
   });
 
+  // A run-view snapshot clears activeStepIndices and reports the in-flight
+  // step as SENT. Before this was normalized, promoting a running step into an
+  // ad-hoc parallel group swapped its play glyph for the "sent" arrow, because
+  // the group branch returned the recorded status untouched.
+  it("shows a group's in-flight anchor as running when SENT is all that is recorded", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "promoted.ctrlyoke.yaml",
+      steps: [{ prompt: "anchor" }, { prompt: "promoted" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 0,
+      activeStepIndices: [],
+      parallelGroups: [
+        { id: "ad-hoc", startIndex: 0, endIndex: 1, failFast: false },
+      ],
+    });
+    useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.SENT);
+    useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.PENDING);
+
+    const { result } = renderHook(() => usePromptStatus());
+    const getStatus = result.current;
+
+    expect(getStatus(useWorkflowStore.getState().steps[0], 0)).toBe(
+      STEP_STATUS.RUNNING
+    );
+    expect(getStatus(useWorkflowStore.getState().steps[1], 1)).toBe(
+      STEP_STATUS.PENDING
+    );
+  });
+
   // An in-flight failure advances currentStep past the step that failed, so
   // the error icon belongs on currentStep - 1. The recorded FAILED status is
   // the only thing that distinguishes this from a pre-flight failure at

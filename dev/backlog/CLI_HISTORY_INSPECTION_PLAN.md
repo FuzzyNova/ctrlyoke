@@ -115,7 +115,7 @@ already use — and render each event as it's read (no need to materialize the w
 `stream()` is an `AsyncGenerator` for exactly this reason).
 
 Rendering should reuse `CliTerminalFormatter`, extended by
-[`CLI_OUTPUT_PARITY_PLAN.md`](CLI_OUTPUT_PARITY_PLAN.md), rather than inventing a second formatter:
+[`CLI_OUTPUT_PARITY_PLAN.md`](../implemented/CLI_OUTPUT_PARITY_PLAN.md), rather than inventing a second formatter:
 a historical dump and a live headless run should look the same. Concretely, add a small adapter
 that maps `RunOutputResolverEvent` kinds onto the same render calls `cli.ts`'s live subscriptions
 already make —`ATTEMPT_STARTED` → `renderPromptHeader`-equivalent, `STREAMING_EVENTS`/`OUTPUT` →
@@ -161,7 +161,7 @@ Options:
 - `--no-color` (matches other commands' convention).
 
 Non-goals for a first pass: interactive paging (the user can pipe to `less`/`more` themselves),
-re-rendering a *live* (`RUNNING`) run's in-progress output (this command reads a settled
+re-rendering a _live_ (`RUNNING`) run's in-progress output (this command reads a settled
 `events.jsonl`; a live run should be watched via a second `ctrlyoke run` subscription or the
 dashboard, not this command — though reading a currently-running run's history up to "now" is
 harmless and should not be specially blocked either).
@@ -241,9 +241,11 @@ wiring around existing ones):
   `cli-binary.instructions.md`/`cli.ts:304`). Document this difference clearly in `--help` output
   and in user-facing docs so `history show --json` isn't mistaken for `validate`'s single-blob
   convention.
-- **Dependency on `CLI_OUTPUT_PARITY_PLAN.md`.** `history show`'s formatted-text mode is most
-  valuable once that plan's richer `SCRIPT_VERDICT`/`ASK_USER_QUESTION`/`COMPACTION` rendering
-  exists, so the same renderer serves both live and historical output. It is not, however, a hard
-  prerequisite (see the "does not need to wait" note above) — `history show` could ship first with
+- **Dependency on `CLI_OUTPUT_PARITY_PLAN.md` — now satisfied.** That plan is implemented (see
+  `dev/implemented/CLI_OUTPUT_PARITY_PLAN.md`), so the richer
+  `SCRIPT_VERDICT`/`ASK_USER_QUESTION`/`COMPACTION` rendering `history show`'s formatted-text mode
+  wants already exists in `CliTerminalFormatter`, and the same renderer can serve both live and
+  historical output. It was never a hard prerequisite (see the "does not need to wait" note
+  above) — `history show` could ship first with
   today's `CliTerminalFormatter` and pick up the richer rendering for free whenever the parity plan
   lands, as long as both share one formatter module rather than diverging into two.

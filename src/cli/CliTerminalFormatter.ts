@@ -15,20 +15,35 @@ import type {
   ToolCall,
   ToolResultData,
   UnifiedDiffHunk,
+  AskUserQuestionData,
+  AskUserQuestionDeclined,
+  CompactionData,
+  FollowUpResumedData,
 } from "../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  COMPARE_SOURCES,
+  COMPARE_SOURCE_LABELS,
   OPERATION_STATUS,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
+  SCRIPT_MATCH_RULE_NONE,
+  SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
+  SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
+  type HarnessId,
 } from "../types/DashboardConstants";
+import type { ScriptVerdict } from "../types/CtrlYokeTypes";
+import type { CliOutput } from "../types/WebviewMessageTypes";
+import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import type {
   PromptCompleteData,
   PromptStartData,
 } from "../core/WorkflowInstance";
+import type { ParallelGroupDefinition } from "../types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import {
   formatTokenBreakdown,
@@ -44,11 +59,103 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
+/** Maximum prompt lines shown in the terminal's bounded preview. */
+const MAX_PREVIEW_LINES = 20;
+const MAX_EVENT_DETAIL_LINES = 8;
+const MAX_EVENT_DETAIL_LINE_LENGTH = 200;
+const MAX_SCRIPT_OUTPUT_LINES = 200;
+const MAX_SCRIPT_OUTPUT_CHARS = 20_000;
+const MAX_SCRIPT_VERDICT_FIELD_LINES = 20;
+const MAX_SCRIPT_VERDICT_FIELD_CHARS = 4_000;
+const EVENTS_LOG_PATH_HINT = ".ctrlyoke/.runs/…/events.jsonl";
+const SCRIPT_OUTPUT_BORDER = "#c878ff";
+const ASK_USER_QUESTION_DECLINE_LABELS = {
+  clarify: "Asked to clarify",
+  rejected: "Question declined",
+} as const satisfies Record<AskUserQuestionDeclined["reason"], string>;
+
+const SCRIPT_MATCH_RULE_LABELS: Record<ScriptVerdict["matchRule"], string> = {
+  exitCode: "exit code",
+  exact: "exact",
+  boolean: "boolean",
+  numericGte: "numeric ≥",
+  substring: "substring",
+  [SCRIPT_MATCH_RULE_NONE]: "no match",
+};
+
+interface ScriptStreamingState {
+  shownChars: number;
+  shownLines: number;
+  totalChars: number;
+  totalLines: number;
+  endsWithNewline: boolean;
+}
+
+function countOutputLines(text: string): number {
+  if (!text) return 0;
+  return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}
+
+function formatTruncationNotice(detail: string): string {
+  return `… ${detail} (see ${EVENTS_LOG_PATH_HINT})`;
+}
+
+function truncateEventText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)} ${formatTruncationNotice(
+    `${text.length - maxChars} more characters`
+  )}`;
+}
+
+function scriptOutputLabel(output: CliOutput): string | undefined {
+  return output.source === undefined
+    ? undefined
+    : SCRIPT_SOURCE_LABELS[output.source];
+}
+
+function scriptHeaderLabel(output: CliOutput): string | undefined {
+  const label = scriptOutputLabel(output);
+  if (!label) return undefined;
+  return output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
+    (output.attemptIndex ?? 0) > 0
+    ? `${label} retry ${(output.attemptIndex ?? 0) + 1}`
+    : label;
+}
+
+function scriptCompareLabel(verdict: ScriptVerdict): string {
+  const actualSource =
+    verdict.actualSource === COMPARE_SOURCES.EXIT_CODE
+      ? "exit code"
+      : verdict.actualSource;
+  return verdict.compareSource === COMPARE_SOURCES.AUTO
+    ? `auto → ${actualSource}`
+    : COMPARE_SOURCE_LABELS[verdict.compareSource];
+}
+
+function scriptOutcomePresentation(outcome: ScriptVerdict["outcome"]): {
+  icon: string;
+  label: string;
+  color: (text: string) => string;
+} {
+  if (outcome === SCRIPT_VERDICT_OUTCOMES.PASSED) {
+    return { icon: "✔", label: "Passed", color: chalk.green };
+  }
+  if (outcome === SCRIPT_VERDICT_OUTCOMES.FAILED) {
+    return { icon: "✖", label: "Failed", color: chalk.red };
+  }
+  return { icon: "⚠", label: "Errored", color: chalk.yellow };
+}
 
 export interface CliOutputTarget {
   stepIndex: number;
   stepName: string;
   key?: string;
+}
+
+/** Prompt-header details resolved by the CLI from the active workflow runtime. */
+export interface CliPromptHeaderData extends PromptStartData {
+  harness?: HarnessId;
+  model?: string;
 }
 
 const DIFF_LINE_TYPES = {
@@ -182,9 +289,68 @@ function renderDiffBlock(data: FileEditData): void {
 
   if (remaining > 0) {
     console.log(
-      chalk.dim(`  … ${remaining} more line${remaining !== 1 ? "s" : ""}`)
+      chalk.dim(
+        `  ${formatTruncationNotice(`${remaining} more line${remaining !== 1 ? "s" : ""}`)}`
+      )
     );
   }
+}
+
+function writeEventLine(
+  content: string,
+  border: (text: string) => string = chalk.cyan
+): void {
+  console.log(`${border("│")} ${content}`);
+}
+
+/** Write bounded secondary event detail with an explicit truncation notice. */
+function writeBoundedEventDetail(
+  text: string,
+  maxLines: number,
+  indentation: string,
+  border: (text: string) => string = chalk.cyan
+): void {
+  const lines = text.split(/\r?\n/);
+  const displayedLines = lines.slice(0, maxLines);
+
+  for (const line of displayedLines) {
+    if (line.length > MAX_EVENT_DETAIL_LINE_LENGTH) {
+      writeEventLine(
+        chalk.dim(
+          `${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`
+        ),
+        border
+      );
+      writeEventLine(
+        chalk.dim(
+          `${indentation}${formatTruncationNotice(`${line.length - MAX_EVENT_DETAIL_LINE_LENGTH} more characters`)}`
+        ),
+        border
+      );
+    } else {
+      writeEventLine(chalk.dim(`${indentation}${line}`), border);
+    }
+  }
+
+  const remaining = lines.length - displayedLines.length;
+  if (remaining > 0) {
+    writeEventLine(
+      chalk.dim(
+        `${indentation}${formatTruncationNotice(`${remaining} more line${remaining !== 1 ? "s" : ""}`)}`
+      ),
+      border
+    );
+  }
+}
+
+function formatAskUserQuestionCount(count: number): string {
+  return `${count} question${count === 1 ? "" : "s"}`;
+}
+
+function formatAskUserQuestionDecline(
+  declined: AskUserQuestionDeclined
+): string {
+  return ASK_USER_QUESTION_DECLINE_LABELS[declined.reason];
 }
 
 // ---- Main formatter ----
@@ -194,6 +360,53 @@ function renderDiffBlock(data: FileEditData): void {
  * Used by the standalone ctrlyoke CLI to stream structured output to stdout.
  */
 export class CliTerminalFormatter {
+  /** Renders the live start marker for one workflow parallel group. */
+  static renderParallelGroupHeader(
+    group: ParallelGroupDefinition,
+    memberCount: number
+  ): void {
+    console.log();
+    console.log(
+      chalk.bold(`Parallel group ${group.id} — ${memberCount} member(s)`)
+    );
+  }
+
+  /** Renders the current live branch tally for one workflow parallel group. */
+  static renderParallelGroupProgress(
+    groupId: string,
+    running: number,
+    completed: number,
+    failed: number
+  ): void {
+    console.log(
+      chalk.dim(
+        `  Parallel group ${groupId}: ${running} running · ${completed} done · ${failed} failed`
+      )
+    );
+  }
+
+  /** Renders the collapsed aggregate for a step's retry attempts. */
+  static renderAttemptGroupSummary(
+    stepName: string,
+    attemptCount: number,
+    totalElapsed: number
+  ): void {
+    console.log();
+    console.log(
+      chalk.dim(
+        `↻ ${stepName}: ${attemptCount} attempts · ${totalElapsed}s total`
+      )
+    );
+  }
+
+  /** Renders the caption that starts one finalStep loop in the terminal stream. */
+  static renderFinalStepLabel(loopIndex: number): void {
+    console.log();
+    console.log(
+      `${chalk.blue("│")} ${chalk.dim(`Final Step Loop ${loopIndex + 1}`)}`
+    );
+  }
+
   /** Render a complete, redacted dry-run snapshot with diagnostics first. */
   static renderExecutionPreview(
     preview: WorkflowExecutionPreview,
@@ -326,6 +539,9 @@ export class CliTerminalFormatter {
     }
   >();
 
+  private static _scriptStreaming = new Map<string, ScriptStreamingState>();
+  private static _scriptHeaders = new Set<string>();
+
   private static targetKey(target?: CliOutputTarget): string {
     return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
   }
@@ -335,6 +551,216 @@ export class CliTerminalFormatter {
     process.stdout.write(
       chalk.dim(`[${target.stepIndex + 1} ${target.stepName}] `)
     );
+  }
+
+  /**
+   * Returns the exact one-line status summary emitted by the script reporter.
+   * The CLI uses it to collapse that status into the richer verdict block.
+   */
+  static getScriptVerdictStatusSummary(output: CliOutput): string | undefined {
+    const verdict = output.scriptVerdict;
+    const label = scriptOutputLabel(output);
+    return verdict && label ? formatVerdictSummary(label, verdict) : undefined;
+  }
+
+  /** Renders the command, bounded streamed output, and completed script verdict. */
+  static renderScriptOutput(output: CliOutput, target: CliOutputTarget): void {
+    const sourceLabel = scriptOutputLabel(output);
+    if (!sourceLabel) return;
+
+    const key = CliTerminalFormatter.targetKey(target);
+    const border = chalk.hex(SCRIPT_OUTPUT_BORDER)("│");
+    const headerKey = `${key}:${output.runIndex ?? 0}:${output.attemptIndex ?? 0}:${output.source}`;
+    if (!CliTerminalFormatter._scriptHeaders.has(headerKey)) {
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      console.log(
+        `${border} ${chalk.bold(`[${scriptHeaderLabel(output) ?? sourceLabel}]`)}${target.stepName ? ` ${target.stepName}` : ""}`
+      );
+      CliTerminalFormatter._scriptHeaders.add(headerKey);
+    }
+    let state = CliTerminalFormatter._scriptStreaming.get(key);
+
+    if (output.isStreaming) {
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      if (output.cliCommand !== undefined) {
+        console.log(`${border} ${chalk.dim("$ " + output.cliCommand)}`);
+        console.log();
+      }
+      if (output.response) {
+        if (!state) {
+          state = {
+            shownChars: 0,
+            shownLines: 0,
+            totalChars: 0,
+            totalLines: 0,
+            endsWithNewline: true,
+          };
+          CliTerminalFormatter._scriptStreaming.set(key, state);
+          console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+        }
+        CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
+      }
+      return;
+    }
+
+    if (!state && output.response) {
+      state = {
+        shownChars: 0,
+        shownLines: 0,
+        totalChars: 0,
+        totalLines: 0,
+        endsWithNewline: true,
+      };
+      CliTerminalFormatter._scriptStreaming.set(key, state);
+      CliTerminalFormatter.flushStreamingBuffer(target);
+      console.log(`${border} ${chalk.dim(`${sourceLabel} output:`)}`);
+      CliTerminalFormatter.writeBoundedScriptChunk(output.response, state);
+    }
+
+    if (state) {
+      const totalText = output.response;
+      state.totalChars = Math.max(state.totalChars, totalText.length);
+      state.totalLines = Math.max(
+        state.totalLines,
+        countOutputLines(totalText)
+      );
+      if (!state.endsWithNewline) process.stdout.write("\n");
+      const omittedLines = Math.max(0, state.totalLines - state.shownLines);
+      const omittedChars = Math.max(0, state.totalChars - state.shownChars);
+      if (omittedLines > 0 || omittedChars > 0) {
+        const omitted = [
+          omittedLines > 0 ? `${omittedLines} more lines` : "",
+          omittedChars > 0 ? `${omittedChars} more characters` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+        console.log(
+          `${border} ${chalk.yellow(formatTruncationNotice(`script output truncated: ${omitted}`))}`
+        );
+      }
+    }
+
+    if (output.scriptVerdict) {
+      CliTerminalFormatter.renderScriptVerdict(
+        output.scriptVerdict,
+        sourceLabel,
+        border
+      );
+    }
+    CliTerminalFormatter._scriptStreaming.delete(key);
+    CliTerminalFormatter._scriptHeaders.delete(headerKey);
+  }
+
+  private static writeBoundedScriptChunk(
+    chunk: string,
+    state: ScriptStreamingState
+  ): void {
+    state.totalChars += chunk.length;
+    state.totalLines += countOutputLines(chunk);
+
+    const remainingChars = Math.max(
+      0,
+      MAX_SCRIPT_OUTPUT_CHARS - state.shownChars
+    );
+    const remainingLines = Math.max(
+      0,
+      MAX_SCRIPT_OUTPUT_LINES - state.shownLines
+    );
+    if (remainingChars === 0 || remainingLines === 0) return;
+
+    let visible = chunk.slice(0, remainingChars);
+    const visibleLines = countOutputLines(visible);
+    if (visibleLines > remainingLines) {
+      const pieces = visible.split("\n");
+      visible = pieces.slice(0, remainingLines).join("\n");
+    }
+    if (!visible) return;
+
+    process.stdout.write(visible);
+    state.shownChars += visible.length;
+    state.shownLines += countOutputLines(visible);
+    state.endsWithNewline = visible.endsWith("\n");
+  }
+
+  private static renderScriptVerdict(
+    verdict: ScriptVerdict,
+    sourceLabel: string,
+    border: string
+  ): void {
+    const presentation = scriptOutcomePresentation(verdict.outcome);
+    const summary = formatVerdictSummary(sourceLabel, verdict);
+    console.log(
+      `${border} ${presentation.color(`${presentation.icon} ${presentation.label}`)} ${chalk.dim(`— ${summary}`)}`
+    );
+    console.log(`${border}   Compare: ${scriptCompareLabel(verdict)}`);
+    CliTerminalFormatter.writeBoundedScriptField(
+      "Expected",
+      verdict.expected ?? "exit code 0 (no `returns` set)",
+      border
+    );
+    CliTerminalFormatter.writeBoundedScriptField(
+      "Actual",
+      verdict.actual || "∅",
+      border
+    );
+    console.log(
+      `${border}   Matched by: ${SCRIPT_MATCH_RULE_LABELS[verdict.matchRule]}`
+    );
+    console.log(
+      `${border}   Result: ${presentation.label}${verdict.timedOut ? " (timed out)" : ""}`
+    );
+    console.log(
+      `${border}   Action: ${verdict.action}${verdict.actionDetail ? ` (${verdict.actionDetail})` : ""}`
+    );
+    console.log(
+      `${border}   Exit code: ${verdict.exitCode === undefined ? "—" : verdict.exitCode}`
+    );
+    console.log(
+      `${border}   Duration: ${(verdict.durationMs / 1000).toFixed(1)}s`
+    );
+    console.log(`${border}   Timed out: ${verdict.timedOut ? "yes" : "no"}`);
+    if (verdict.error) {
+      CliTerminalFormatter.writeBoundedScriptField(
+        "Error",
+        verdict.error,
+        border,
+        chalk.red
+      );
+    }
+    console.log();
+  }
+
+  private static writeBoundedScriptField(
+    label: string,
+    value: string,
+    border: string,
+    color: (text: string) => string = (text) => text
+  ): void {
+    const charLimited = value.slice(0, MAX_SCRIPT_VERDICT_FIELD_CHARS);
+    const lines = charLimited.split("\n");
+    const visibleLines = lines.slice(0, MAX_SCRIPT_VERDICT_FIELD_LINES);
+    const visible = visibleLines.join("\n");
+    const omittedLines = Math.max(
+      0,
+      value.split("\n").length - visibleLines.length
+    );
+    const omittedChars = Math.max(0, value.length - visible.length);
+    const firstLine = visibleLines[0] ?? "";
+    console.log(`${border}   ${label}: ${color(firstLine)}`);
+    for (const line of visibleLines.slice(1)) {
+      console.log(`${border}     ${color(line)}`);
+    }
+    if (omittedLines > 0 || omittedChars > 0) {
+      const omitted = [
+        omittedLines > 0 ? `${omittedLines} more lines` : "",
+        omittedChars > 0 ? `${omittedChars} more characters` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.log(
+        `${border}     ${chalk.yellow(formatTruncationNotice(omitted))}`
+      );
+    }
   }
 
   /**
@@ -543,7 +969,7 @@ export class CliTerminalFormatter {
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
           const params = data.parameters
-            ? JSON.stringify(data.parameters).slice(0, 80)
+            ? truncateEventText(JSON.stringify(data.parameters), 80)
             : "";
           console.log(
             chalk.magenta("⚙ " + data.server + ":" + data.tool) +
@@ -551,8 +977,8 @@ export class CliTerminalFormatter {
           );
           if (data.result) {
             const text = data.result.success
-              ? (data.result.output?.substring(0, 100) ?? "Success")
-              : (data.result.error?.substring(0, 200) ?? "Failed");
+              ? truncateEventText(data.result.output ?? "Success", 100)
+              : truncateEventText(data.result.error ?? "Failed", 200);
             const color = data.result.success ? chalk.dim : chalk.red;
             console.log(color("  ⎿  " + text));
           }
@@ -576,7 +1002,7 @@ export class CliTerminalFormatter {
         const data = event.data as ToolCall;
         if (data.name) {
           const params = data.parameters
-            ? JSON.stringify(data.parameters).slice(0, 80)
+            ? truncateEventText(JSON.stringify(data.parameters), 80)
             : "";
           console.log(
             chalk.yellow("⚙ " + data.name) +
@@ -584,8 +1010,8 @@ export class CliTerminalFormatter {
           );
           if (data.result) {
             const text = data.result.success
-              ? (data.result.output?.substring(0, 100) ?? "Success")
-              : (data.result.error?.substring(0, 200) ?? "Failed");
+              ? truncateEventText(data.result.output ?? "Success", 100)
+              : truncateEventText(data.result.error ?? "Failed", 200);
             const color = data.result.success ? chalk.dim : chalk.red;
             console.log(color("  ⎿  " + text));
           }
@@ -598,14 +1024,128 @@ export class CliTerminalFormatter {
         CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as ToolResultData;
         if (data.result?.output) {
-          const truncated =
-            data.result.output.length > 100
-              ? data.result.output.slice(0, 100) + "…"
-              : data.result.output;
-          console.log(chalk.dim("  ⎿  " + truncated));
+          console.log(
+            chalk.dim("  ⎿  " + truncateEventText(data.result.output, 100))
+          );
         }
         break;
       }
+
+      case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as AskUserQuestionData;
+        const heading = data.declined
+          ? formatAskUserQuestionDecline(data.declined)
+          : data.status === OPERATION_STATUS.COMPLETED
+            ? `Answered ${formatAskUserQuestionCount(data.questions.length)}`
+            : `Asked ${formatAskUserQuestionCount(data.questions.length)}`;
+        writeEventLine(chalk.bold(heading));
+
+        for (const [questionIndex, question] of data.questions.entries()) {
+          if (questionIndex > 0) writeEventLine(chalk.dim("────────"));
+          const header = question.header
+            ? chalk.dim(` [${question.header}]`)
+            : "";
+          const selectedOption = question.options.find(
+            (option) => option.label === question.answer
+          );
+          const questionLines = question.question.split(/\r?\n/);
+          writeEventLine(`${questionLines[0]}${header}`);
+          for (const line of questionLines.slice(1)) {
+            writeEventLine(chalk.dim(`  ${line}`));
+          }
+
+          for (const option of question.options) {
+            const selected = option.label === question.answer;
+            const marker = selected ? chalk.green("✓") : chalk.dim("○");
+            const description = option.description
+              ? chalk.dim(` — ${option.description}`)
+              : "";
+            writeEventLine(`  ${marker} ${option.label}${description}`);
+            if (option.preview) {
+              writeBoundedEventDetail(
+                option.preview,
+                MAX_EVENT_DETAIL_LINES,
+                "    ",
+                chalk.cyan
+              );
+            }
+          }
+
+          if (question.answerPreview && !selectedOption?.preview) {
+            writeBoundedEventDetail(
+              question.answerPreview,
+              MAX_EVENT_DETAIL_LINES,
+              "    "
+            );
+          }
+
+          if (question.answer !== undefined) {
+            writeEventLine(chalk.dim(`  ⎿ Answer: ${question.answer}`));
+          }
+          if (question.notes) {
+            writeEventLine(chalk.dim(`  ⎿ Note: ${question.notes}`));
+          }
+        }
+
+        if (data.declined) {
+          writeEventLine(
+            chalk.red(`  ⎿ ${formatAskUserQuestionDecline(data.declined)}`)
+          );
+          if (data.declined.feedback) {
+            writeBoundedEventDetail(
+              data.declined.feedback,
+              MAX_EVENT_DETAIL_LINES,
+              "    "
+            );
+          }
+        }
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.COMPACTION: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as CompactionData;
+        const tokenInfo =
+          data.preTokens !== undefined && data.postTokens !== undefined
+            ? ` — ${data.preTokens.toLocaleString()} → ${data.postTokens.toLocaleString()} tokens`
+            : data.preTokens !== undefined
+              ? ` — ${data.preTokens.toLocaleString()} tokens compacted`
+              : "";
+        writeEventLine(
+          chalk.dim(`Conversation compacted (${data.trigger})${tokenInfo}`),
+          chalk.magenta
+        );
+        if (data.summary) {
+          writeBoundedEventDetail(
+            data.summary,
+            MAX_EVENT_DETAIL_LINES,
+            "  ",
+            chalk.magenta
+          );
+        }
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as FollowUpResumedData;
+        const timestamp = data.resumedAt
+          ? new Date(data.resumedAt).toLocaleTimeString()
+          : "";
+        writeEventLine(
+          chalk.dim(
+            `── Follow-up resumed${timestamp ? ` (${timestamp})` : ""}`
+          ),
+          chalk.blue
+        );
+        break;
+      }
+
+      // USER_STEER is display-only and CONTEXT_WINDOW_SYNC is invisible on both
+      // sides, so these event types are intentionally left unhandled.
     }
   }
 
@@ -614,7 +1154,7 @@ export class CliTerminalFormatter {
    * Called twice per attempt: first without cliCommand (show header + prompt),
    * then with cliCommand (show the harness command being run).
    */
-  static renderPromptHeader(data: PromptStartData): void {
+  static renderPromptHeader(data: CliPromptHeaderData): void {
     const {
       stepIndex,
       stepName,
@@ -657,8 +1197,16 @@ export class CliTerminalFormatter {
       );
     }
 
-    // Show up to 5 lines of the prompt as a preview
-    const MAX_PREVIEW_LINES = 5;
+    if (data.harness) {
+      console.log(
+        `${border} ${chalk.dim("Harness: ")}${chalk.yellow(data.harness)}`
+      );
+    }
+    if (data.model) {
+      console.log(`${border} ${chalk.dim("Model: ")}${chalk.dim(data.model)}`);
+    }
+
+    // Show a bounded prompt preview; the complete prompt remains in events.jsonl.
     const lines = promptText.trimEnd().split("\n");
     const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
     const truncated = lines.length > MAX_PREVIEW_LINES;
@@ -666,7 +1214,13 @@ export class CliTerminalFormatter {
       console.log(`${border} ${chalk.dim(line)}`);
     }
     if (truncated) {
-      console.log(`${border} ${chalk.dim("…")}`);
+      console.log(
+        `${border} ${chalk.dim(
+          formatTruncationNotice(
+            `${lines.length - previewLines.length} more lines`
+          )
+        )}`
+      );
     }
     console.log();
   }

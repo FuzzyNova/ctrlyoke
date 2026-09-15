@@ -76,6 +76,7 @@ import {
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
+  SCRIPT_SOURCE_LABELS,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -488,6 +489,14 @@ export class WorkflowInstance {
   /** Fires plain-text output with the execution target that produced it. */
   public readonly onTargetStreamingChunk =
     this._targetedStreamingChunkEmitter.event;
+
+  private readonly _targetedScriptOutputEmitter = new TypedEmitter<{
+    target: OutputExecutionTarget;
+    output: CliOutput;
+  }>();
+  /** Fires script command/output updates with the execution target that produced them. */
+  public readonly onTargetScriptOutput =
+    this._targetedScriptOutputEmitter.event;
 
   private readonly _responseCompleteEmitter = new TypedEmitter<string>();
   /** Fires the final plain-text response from the active execution integration. */
@@ -4490,6 +4499,10 @@ export class WorkflowInstance {
         this._targetedStreamingEventsEmitter.fire(data),
       onTargetStreamingChunk: (data) =>
         this._targetedStreamingChunkEmitter.fire(data),
+      onScriptOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
+      onScriptCompletedOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
       snapshotService: new WorkspaceSnapshotService(),
       onSnapshotCaptured: (target, snapshot) => {
         self.dashboardSink?.sendStepUndoDataUpdated(
@@ -4950,6 +4963,10 @@ export class WorkflowInstance {
               outputHistoryManager: this.outputHistoryManager,
               getDefinitionRevisionContext: () =>
                 this.getDefinitionRevisionContext(),
+              onScriptOutput: (target, output) =>
+                this._targetedScriptOutputEmitter.fire({ target, output }),
+              onScriptCompletedOutput: (target, output) =>
+                this._targetedScriptOutputEmitter.fire({ target, output }),
             } satisfies ScriptExecutionReporterContext,
             source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
             properties: {
@@ -4965,7 +4982,8 @@ export class WorkflowInstance {
             onPass: CONDITION_ACTIONS.CONTINUE,
             onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
             actionForErrored: CONDITION_ACTIONS.STOP_WORKFLOW,
-            statusLabel: "Worktree setup",
+            statusLabel:
+              SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP],
             emitStatus: false,
             vars: args.vars,
             evaluate: async (onOutput): Promise<EvaluationResult> => {

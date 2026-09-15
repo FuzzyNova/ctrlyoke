@@ -47,6 +47,15 @@ export interface ParallelGroupRunOptions<TContext extends object> {
   readonly group: ParallelGroupDefinition;
   readonly pendingIds: readonly string[];
   readonly initialOutcomes?: ReadonlyMap<string, StepExecutionOutcome>;
+  /**
+   * Members that are already executing outside this run and must not be
+   * dispatched by it. An ad-hoc promotion creates a group around a step the
+   * sequential loop is still executing; that anchor is adopted so the group
+   * can start its new members immediately instead of waiting for the anchor
+   * to settle. Each adopted member holds a worker slot and keeps the drain
+   * loop alive until `settleAdoptedMember` reports its outcome.
+   */
+  readonly adoptedMemberIds?: readonly string[];
   readonly effectiveWidth: number;
   readonly context: TContext;
   readonly snapshotStrategy: "git" | "filesystem" | undefined;
@@ -139,11 +148,16 @@ export class ParallelGroupRun<TContext extends object> {
   private runStarted = false;
   private admissionOpen = true;
   private admissionClosePromise?: Promise<void>;
+  private readonly adopted = new Set<string>();
+  private adoptionWaiter?: { promise: Promise<void>; resolve: () => void };
 
   constructor(private readonly options: ParallelGroupRunOptions<TContext>) {
     this.pendingIds = [...options.pendingIds];
     for (const [stepId, outcome] of options.initialOutcomes ?? []) {
       this.outcomes.set(stepId, outcome);
+    }
+    for (const stepId of options.adoptedMemberIds ?? []) {
+      this.adopted.add(stepId);
     }
   }
 
@@ -167,6 +181,41 @@ export class ParallelGroupRun<TContext extends object> {
     return this.admissionOpen;
   }
 
+  /** Members executing outside this run that it is still waiting on. */
+  public get adoptedMemberIds(): readonly string[] {
+    return [...this.adopted];
+  }
+
+  /**
+   * Fold in the settlement of a member this run adopted rather than
+   * dispatched. The path that owns the adopted member — the sequential loop
+   * running a promoted anchor — has already persisted the outcome, released
+   * its resources, and captured the group snapshot, so this only records the
+   * result, applies the group's fail-fast policy, and wakes the drain loop.
+   */
+  public async settleAdoptedMember(
+    stepId: string,
+    outcome: StepExecutionOutcome
+  ): Promise<boolean> {
+    if (!this.adopted.delete(stepId)) {
+      return false;
+    }
+    this.outcomes.set(stepId, outcome);
+    this.releaseAdoptionWaiter();
+
+    if (
+      outcome.status === PROMPT_TERMINAL_STATUS.FAILED &&
+      outcome.terminalFailure !== false &&
+      this.options.group.failFast &&
+      !this.failFastTriggered
+    ) {
+      this.failFastTriggered = true;
+      await this.closeAdmission();
+      await this.cancelRunning();
+    }
+    return true;
+  }
+
   /**
    * Enqueue a late member, starting it immediately when a worker slot is free.
    * A saturated pool intentionally accepts the member and lets the drain loop
@@ -179,7 +228,8 @@ export class ParallelGroupRun<TContext extends object> {
       this.shouldStopDispatching() ||
       this.pendingIds.includes(stepId) ||
       this.running.has(stepId) ||
-      this.outcomes.has(stepId)
+      this.outcomes.has(stepId) ||
+      this.adopted.has(stepId)
     ) {
       return false;
     }
@@ -254,7 +304,8 @@ export class ParallelGroupRun<TContext extends object> {
             isKnownMember: (stepId) =>
               this.pendingIds.includes(stepId) ||
               this.running.has(stepId) ||
-              this.outcomes.has(stepId),
+              this.outcomes.has(stepId) ||
+              this.adopted.has(stepId),
             reconcileMembers: (stepIds) => this.reconcileMembers(stepIds),
           });
           if (!reconciliation.joined) {
@@ -332,24 +383,51 @@ export class ParallelGroupRun<TContext extends object> {
 
     while (
       this.activeWorkers > 0 ||
-      this.nextPending < this.pendingIds.length
+      this.nextPending < this.pendingIds.length ||
+      this.adopted.size > 0
     ) {
       if (this.isPaused()) {
         await this.closeAdmission();
-        if (this.activeWorkers === 0) return;
+        if (this.isDrained()) return;
       } else if (this.shouldStopDispatching()) {
         await this.closeAdmission();
         await this.cancelRunning();
         await this.cancelRemainingPending();
       } else if (this.activeWorkers === 0) {
         this.startAvailableWorkers();
-        if (this.activeWorkers === 0) return;
+        if (this.isDrained()) return;
       }
 
-      if (this.workerPromises.size > 0) {
-        await Promise.all(this.workerPromises);
+      const outstanding: Promise<unknown>[] = [...this.workerPromises];
+      // An adopted member settles from outside this run, so its waiter is the
+      // only thing that can wake the drain once no worker of our own is alive.
+      if (this.adopted.size > 0) {
+        outstanding.push(this.adoptionSettled());
       }
+      if (outstanding.length === 0) return;
+      await Promise.all(outstanding);
     }
+  }
+
+  private isDrained(): boolean {
+    return this.activeWorkers === 0 && this.adopted.size === 0;
+  }
+
+  private adoptionSettled(): Promise<void> {
+    if (!this.adoptionWaiter) {
+      let resolve!: () => void;
+      const promise = new Promise<void>((settle) => {
+        resolve = settle;
+      });
+      this.adoptionWaiter = { promise, resolve };
+    }
+    return this.adoptionWaiter.promise;
+  }
+
+  private releaseAdoptionWaiter(): void {
+    const waiter = this.adoptionWaiter;
+    this.adoptionWaiter = undefined;
+    waiter?.resolve();
   }
 
   private startAvailableWorkers(): void {
@@ -376,8 +454,12 @@ export class ParallelGroupRun<TContext extends object> {
     this.workerPromises.add(workerPromise);
   }
 
+  /**
+   * Adopted members occupy fan-out slots this run does not own, so they are
+   * subtracted before deciding how many workers may dispatch concurrently.
+   */
   private effectiveWorkerWidth(): number {
-    return Math.max(1, this.options.effectiveWidth);
+    return Math.max(1, this.options.effectiveWidth - this.adopted.size);
   }
 
   private closeAdmission(): Promise<void> {

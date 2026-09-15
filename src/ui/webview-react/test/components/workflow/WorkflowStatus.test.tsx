@@ -980,6 +980,67 @@ describe("WorkflowStatus — loaded state", () => {
         {
           id: "workflow-running",
           workflowKey: "running-switch" as never,
+          runRef: "run-2026-07-20T12-00-00-000Z" as never,
+          workflowName: "Running Switch Target",
+          filePath: "/path/running-switch.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+        } as never,
+      ],
+    });
+    render(<WorkflowStatus />);
+
+    await user.click(screen.getByRole("button", { name: /Show workflows/i }));
+    const runningRow = document.querySelector(".running-workflow-item")!;
+    await user.click(
+      within(runningRow as HTMLElement).getByRole("button", {
+        name: /^Running Switch Target\b/,
+      })
+    );
+
+    // Switching to a running/paused workflow is routed through the same
+    // addressed run-view loader as the recent-workflows list (rather than the
+    // raw instance-id SWITCH_WORKFLOW message), so it drives
+    // pendingRunViewSwitch / WorkflowSwitchOverlay exactly like a switch to a
+    // completed workflow does.
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.LOAD_RUN_VIEW,
+        address: {
+          workflowKey: "running-switch",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-07-20T12-00-00-000Z",
+        },
+        requestId: expect.any(String),
+      })
+    );
+    expect(useUiStore.getState().pendingRunViewSwitch).toEqual(
+      expect.objectContaining({
+        workflowName: "Running Switch Target",
+        address: {
+          workflowKey: "running-switch",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2026-07-20T12-00-00-000Z",
+        },
+      })
+    );
+    expect(useUiStore.getState().globalSettingsOpen).toBe(false);
+    expect(useUiStore.getState().isHistorySearchOpen).toBe(false);
+  });
+
+  it("falls back to the legacy SWITCH_WORKFLOW message when a loaded workflow has no workflowKey", async () => {
+    const user = userEvent.setup();
+    // resetUi() deliberately leaves pendingRunViewSwitch alone (see the "run
+    // navigation" describe block below), so clear it explicitly — otherwise a
+    // prior test's unresolved switch leaks in and this assertion fails on
+    // stale state rather than this test's own (lack of a) navigation.
+    useUiStore.setState({
+      activeWorkflowId: "workflow-other",
+      pendingRunViewSwitch: null,
+      loadedWorkflows: [
+        {
+          id: "workflow-running",
           workflowName: "Running Switch Target",
           filePath: "/path/running-switch.yaml",
           executionState: EXECUTION_STATES.RUNNING,
@@ -1002,8 +1063,7 @@ describe("WorkflowStatus — loaded state", () => {
       type: MESSAGE_TYPES.SWITCH_WORKFLOW,
       workflowId: "workflow-running",
     });
-    expect(useUiStore.getState().globalSettingsOpen).toBe(false);
-    expect(useUiStore.getState().isHistorySearchOpen).toBe(false);
+    expect(useUiStore.getState().pendingRunViewSwitch).toBeNull();
   });
 
   it("shows no pinned running region when nothing is running", async () => {
