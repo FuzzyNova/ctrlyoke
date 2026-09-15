@@ -130,7 +130,7 @@ function ChipContent({
       title={tooltip}
       aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
     >
-      {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
+      {showPauseBoundaryBefore && <PauseBoundary />}
       {isExecuting && (
         <ExecutingStepHighlight
           borderClassName="border"
@@ -223,7 +223,7 @@ function FinalStepChip({
       title="Final Step — right-click for options"
       aria-label="Final step"
     >
-      {showPauseBoundaryBefore && <PauseBoundary orientation="vertical" />}
+      {showPauseBoundaryBefore && <PauseBoundary />}
       {/* Left status border bar */}
       <div
         data-final-step-identity-bar
