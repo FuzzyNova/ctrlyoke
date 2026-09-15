@@ -1117,6 +1117,11 @@ describe("WorkflowStepsPanel identity rails", () => {
       { prompt: "after the group" },
     ];
 
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      stepColorMode: STEP_COLOR_MODES.UNIQUE,
+    });
+
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
       steps,

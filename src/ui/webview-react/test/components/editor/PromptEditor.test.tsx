@@ -805,6 +805,15 @@ describe("PromptEditor — prompt secret grants", () => {
 });
 
 describe("PromptEditor — script-step properties", () => {
+  beforeEach(() => {
+    // The step-color field only renders when step colors are enabled;
+    // default them on so color-editing tests don't depend on leftover
+    // state from whichever test ran before them.
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.UNIQUE);
+  });
+
   function prepareScriptEditor(properties = {}) {
     useEditorStore.setState({
       selectionTarget: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
