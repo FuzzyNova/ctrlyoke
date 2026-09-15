@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LocalTextInput } from "../shared/LocalInputs";
 import {
+  CUSTOM_SHELL_OPTION,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
   UI_PLATFORMS,
@@ -47,7 +48,7 @@ const WINDOWS_SHELL_OPTIONS = [
     label: "Git Bash",
   },
   { value: "C:\\Windows\\System32\\wsl.exe", label: "WSL" },
-  { value: "__custom__", label: "Custom path..." },
+  { value: CUSTOM_SHELL_OPTION, label: "Custom path..." },
 ];
 
 function FontStepper({
@@ -256,10 +257,12 @@ export function TerminalSection({
               <CustomSelect
                 id="terminal-shell"
                 value={
-                  showCustomShell ? "__custom__" : terminal.shellExecutable
+                  showCustomShell
+                    ? CUSTOM_SHELL_OPTION
+                    : terminal.shellExecutable
                 }
                 onChange={(v) => {
-                  if (v === "__custom__") {
+                  if (v === CUSTOM_SHELL_OPTION) {
                     setShowCustomShell(true);
                     return;
                   }

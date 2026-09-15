@@ -289,17 +289,32 @@ shared editor already rendering all three variants
 (`scriptStep`/`preCondition`/`endCondition`) for every consumer
 (`WorkflowPropertiesPanel.tsx`, `PropertiesDrawer.tsx`, `PromptEditor.tsx`,
 `DefaultsValidationPage.tsx`). Add `shell?: string;` to the shared
-`ScriptConditionValue` interface, and a text input paired with the existing
+`ScriptConditionValue` interface, and a control paired with the existing
 Timeout row (same half-width pattern used for Timeout/Max Retries and
-Timeout/Execution Mode), with empty-string-clears-to-`undefined` local-state
-handling matching the existing `returnsInput`/`timeoutInput` fields. Because
-`update()` spreads `{ ...v, ...patch }` and every consumer already forwards
-the editor's `onChange` payload generically, no changes are needed at the four
-call sites beyond whatever prop plumbing each already does for the rest of
-`ScriptConditionValue`.
+Timeout/Execution Mode). Because `update()` spreads `{ ...v, ...patch }` and
+every consumer already forwards the editor's `onChange` payload generically, no
+changes are needed at the four call sites beyond whatever prop plumbing each
+already does for the rest of `ScriptConditionValue`.
 
-Placeholder/help text: `"Auto (terminal.shellExecutable, or platform default)"`,
-mirroring the Settings page's own `shellExecutable` description.
+**Shipped as a picker, not a bare text field** (follow-up to the original
+free-text control). The row is a `CustomSelect` over
+`shellChoicesForPlatform()` (`src/utils/ShellCatalog.ts`) with an `Auto` entry
+for "inherit `terminal.shellExecutable`, else platform default" and a
+`CUSTOM_SHELL_OPTION` entry that reveals the free-text path input, mirroring
+the Settings page's own shell picker. Two rules keep an authored value intact
+when the file is opened on another OS (`shellSelectOptions.ts`):
+
+- A recognized shell this platform does not list (`zsh` on Windows, or the same
+  shell spelled `/bin/zsh`) is **added to the list as the selected option** and
+  carries a `shellWarning()` notice — never rewritten or dropped.
+- An unrecognized executable (a custom absolute path) opens the free-text input
+  instead, since the dropdown cannot meaningfully label it.
+
+Feedback follows `DROPDOWN_VALIDATION_STYLING_PLAN.md`: the platform-availability
+notice is a yellow warning (informational — the value is still correct on the
+machine it was authored for), while a multi-line script pinned to `cmd` is the
+red error severity, reusing `getShellInvocationError()` so the authoring UI
+states exactly what execution would have failed with.
 
 **Save-path allowlist (found in review).** Adding the field to the editor is
 not sufficient on its own: `WorkflowSerializer.buildCleanWorkflow` strips a

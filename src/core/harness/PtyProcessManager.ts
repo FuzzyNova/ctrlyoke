@@ -5,10 +5,10 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
+import { resolveShellKind, shellDisplayName } from "../../utils/ShellCatalog";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
-  SHELL_TYPES,
   TERMINAL_SESSION_STATUS,
   type SessionKind,
   type ShellKind,
@@ -72,43 +72,6 @@ export function resolveWindowsShell(): string {
   }
   Log.debug(`[PtyProcessManager] Windows shell resolved: ${_windowsShell}`);
   return _windowsShell;
-}
-
-/**
- * Extract a human-readable shell name from a full executable path.
- * e.g. "C:\Program Files\PowerShell\7\pwsh.exe" → "pwsh"
- *      "/bin/bash" → "bash"
- */
-function shellDisplayName(shellPath: string): string {
-  const base = shellPath.split(/[/\\]/).pop() ?? shellPath;
-  return base.replace(/\.exe$/i, "");
-}
-
-/**
- * Map a shell executable path to a ShellKind discriminant used by the UI
- * to pick the appropriate terminal icon.
- */
-export function resolveShellKind(shellPath: string): ShellKind {
-  const name = shellDisplayName(shellPath).toLowerCase();
-  if (/^pwsh([.-]|$)/.test(name)) return SHELL_KINDS.PWSH;
-  if (name.startsWith("powershell")) return SHELL_KINDS.POWERSHELL;
-  if (name === SHELL_TYPES.ZSH) return SHELL_KINDS.ZSH;
-  if (name === SHELL_TYPES.BASH) return SHELL_KINDS.BASH;
-  if (name === SHELL_TYPES.FISH) return SHELL_KINDS.FISH;
-  if (name === SHELL_TYPES.CMD) return SHELL_KINDS.CMD;
-  if (name === SHELL_TYPES.WSL) return SHELL_KINDS.WSL;
-  if (name === SHELL_TYPES.NU || name === SHELL_TYPES.NUSHELL) {
-    return SHELL_KINDS.NUSHELL;
-  }
-  if (
-    name === SHELL_TYPES.SH ||
-    name === SHELL_TYPES.DASH ||
-    name === SHELL_TYPES.KSH
-  ) {
-    return SHELL_KINDS.SH;
-  }
-  if (name.endsWith("sh")) return SHELL_KINDS.SH;
-  return SHELL_KINDS.BASH;
 }
 
 /**
@@ -181,26 +144,6 @@ export function buildShellWrapArgs(
  */
 export function shellNeedsVerbatimArguments(shellKind: ShellKind): boolean {
   return shellKind === SHELL_KINDS.CMD;
-}
-
-const MULTILINE_SCRIPT_NEWLINE = /\r\n?|\n/;
-
-export const MULTILINE_CMD_SCRIPT_ERROR =
-  "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`.";
-
-/**
- * Return the actionable preflight error for a script/shell combination, if any.
- * Keep this next to shell resolution so headless and PTY execution enforce the
- * same shell-specific script contract.
- */
-export function getShellInvocationError(
-  script: string,
-  shellKind: ShellKind
-): string | undefined {
-  if (shellKind === SHELL_KINDS.CMD && MULTILINE_SCRIPT_NEWLINE.test(script)) {
-    return MULTILINE_CMD_SCRIPT_ERROR;
-  }
-  return undefined;
 }
 
 /**

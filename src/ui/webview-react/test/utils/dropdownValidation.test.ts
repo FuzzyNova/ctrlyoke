@@ -3,9 +3,12 @@ import {
   agentWarning,
   dropdownBorderClass,
   dropdownWarningClass,
+  dropdownWarningIcon,
   modelWarning,
+  shellWarning,
   skillsWarning,
 } from "@utils/dropdownValidation";
+import { UI_PLATFORMS } from "@root/types/DashboardConstants";
 
 const AGENTS = [
   { name: "reviewer", path: "/workspace/.agents/reviewer.agent.md" },
@@ -46,6 +49,25 @@ describe("dropdown validation", () => {
     expect(modelWarning("gpt-5", "codex-cli", [])).toBeNull();
   });
 
+  it("warns only for a pinned shell this platform does not normally have", () => {
+    expect(shellWarning("zsh", UI_PLATFORMS.WINDOWS)).toBe(
+      'Shell "zsh" is not typically available on Windows.'
+    );
+    expect(shellWarning("/bin/zsh", UI_PLATFORMS.WINDOWS)).toBe(
+      'Shell "/bin/zsh" is not typically available on Windows.'
+    );
+    expect(shellWarning("cmd", UI_PLATFORMS.MAC)).toBe(
+      'Shell "cmd" is not typically available on macOS.'
+    );
+    expect(shellWarning("pwsh", UI_PLATFORMS.LINUX)).toBeNull();
+    expect(shellWarning("zsh", UI_PLATFORMS.MAC)).toBeNull();
+    expect(shellWarning(undefined, UI_PLATFORMS.WINDOWS)).toBeNull();
+    // An unrecognized custom path is the user's business, not a warning.
+    expect(
+      shellWarning("C:\\tools\\myshell.exe", UI_PLATFORMS.WINDOWS)
+    ).toBeNull();
+  });
+
   it("uses warning tokens only when a warning is present", () => {
     expect(dropdownBorderClass(null)).toBe("border-dropdown-border");
     expect(dropdownBorderClass("Unavailable")).toBe("border-warning-fg");
@@ -55,5 +77,8 @@ describe("dropdown validation", () => {
     expect(dropdownBorderClass(true, "error")).toBe(
       "border-input-error-border"
     );
+    expect(dropdownWarningClass("Broken", "error")).toBe("text-error-fg");
+    expect(dropdownWarningIcon()).toBe("warning");
+    expect(dropdownWarningIcon("error")).toBe("error");
   });
 });

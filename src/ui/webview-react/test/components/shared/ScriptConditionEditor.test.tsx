@@ -1,6 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ScriptConditionEditor } from "@components/shared/ScriptConditionEditor";
 import { CONDITION_ACTIONS, MESSAGE_TYPES } from "@/types/messages";
 import { END_CONDITION_SCRIPT_TYPES } from "@root/types/DashboardConstants";
@@ -490,7 +496,32 @@ describe("ScriptConditionEditor", () => {
   });
 
   describe("shell override", () => {
-    it("commits a shell override on blur", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function mockPlatform(platform: string, userAgent: string): void {
+      vi.spyOn(window.navigator, "platform", "get").mockReturnValue(platform);
+      vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(userAgent);
+    }
+
+    // Scope option lookup to the shell listbox: several dropdowns in this
+    // editor share option labels (Compare Source also offers "Auto").
+    function chooseShell(label: string): void {
+      const trigger = screen.getByRole("button", { name: "Shell" });
+      fireEvent.click(trigger);
+      const listboxId = trigger.getAttribute("aria-controls");
+      const listbox = listboxId ? document.getElementById(listboxId) : null;
+      if (!listbox) throw new Error("Shell dropdown did not open");
+      const option = within(listbox)
+        .getAllByText(label)
+        .map((element) => element.closest("button"))
+        .find((button): button is HTMLButtonElement => Boolean(button));
+      if (!option) throw new Error(`Shell option not found: ${label}`);
+      fireEvent.click(option);
+    }
+
+    it("commits a shell picked from the dropdown", () => {
       const onChange = vi.fn();
 
       render(
@@ -502,16 +533,14 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      const shell = screen.getByLabelText("Shell");
-      fireEvent.change(shell, { target: { value: "bash" } });
-      fireEvent.blur(shell);
+      chooseShell("bash");
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({ shell: "bash" })
       );
     });
 
-    it("clears a shell override as undefined", () => {
+    it("clears a shell override as undefined when Auto is picked", () => {
       const onChange = vi.fn();
 
       render(
@@ -523,9 +552,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      const shell = screen.getByLabelText("Shell");
-      fireEvent.change(shell, { target: { value: "" } });
-      fireEvent.blur(shell);
+      chooseShell("Auto");
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({ shell: undefined })
@@ -534,7 +561,7 @@ describe("ScriptConditionEditor", () => {
     });
 
     it.each(["scriptStep", "preCondition", "endCondition"] as const)(
-      "%s renders the shell field",
+      "%s renders the shell dropdown, defaulting to Auto",
       (variant) => {
         render(
           <ScriptConditionEditor
@@ -545,24 +572,103 @@ describe("ScriptConditionEditor", () => {
           />
         );
 
-        expect(screen.getByLabelText("Shell")).toHaveAttribute(
-          "placeholder",
-          "Auto (terminal.shellExecutable, or platform default)"
+        expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+          "Auto"
         );
       }
     );
 
-    it("round-trips an existing shell override into the input", () => {
+    it("keeps a shell this platform does not offer selected, and warns about it", () => {
+      mockPlatform("Win32", "Mozilla/5.0 (Windows NT 10.0)");
+
       render(
         <ScriptConditionEditor
           variant="preCondition"
-          value={{ script: "npm test", shell: "/bin/zsh" }}
+          value={{ script: "npm test", shell: "zsh" }}
           onChange={vi.fn()}
           idPrefix="test-pre"
         />
       );
 
-      expect(screen.getByLabelText("Shell")).toHaveValue("/bin/zsh");
+      expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+        "zsh"
+      );
+      expect(
+        screen.getByText('Shell "zsh" is not typically available on Windows.')
+      ).toBeInTheDocument();
+    });
+
+    it("does not warn about a shell this platform does offer", () => {
+      mockPlatform("Win32", "Mozilla/5.0 (Windows NT 10.0)");
+
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test", shell: "pwsh" }}
+          onChange={vi.fn()}
+          idPrefix="test-script"
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+        "pwsh"
+      );
+      expect(screen.queryByText(/not typically available/)).toBeNull();
+    });
+
+    it("warns that a multi-line script cannot run under cmd", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "echo one\necho two", shell: "cmd" }}
+          onChange={vi.fn()}
+          idPrefix="test-script"
+        />
+      );
+
+      expect(
+        screen.getByText(/Multi-line scripts cannot run under cmd/)
+      ).toBeInTheDocument();
+    });
+
+    it("round-trips an unrecognized shell path through the custom path input", () => {
+      const onChange = vi.fn();
+
+      render(
+        <ScriptConditionEditor
+          variant="preCondition"
+          value={{ script: "npm test", shell: "C:\\tools\\myshell.exe" }}
+          onChange={onChange}
+          idPrefix="test-pre"
+        />
+      );
+
+      const custom = screen.getByLabelText("Custom shell path");
+      expect(custom).toHaveValue("C:\\tools\\myshell.exe");
+
+      fireEvent.change(custom, { target: { value: "/opt/other/sh-like" } });
+      fireEvent.blur(custom);
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ shell: "/opt/other/sh-like" })
+      );
+    });
+
+    it("reveals the custom path input when Custom path... is picked", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix="test-script"
+        />
+      );
+
+      expect(screen.queryByLabelText("Custom shell path")).toBeNull();
+
+      chooseShell("Custom path...");
+
+      expect(screen.getByLabelText("Custom shell path")).toBeInTheDocument();
     });
   });
 

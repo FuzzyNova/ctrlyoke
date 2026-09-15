@@ -3442,6 +3442,13 @@ export const UI_PLATFORMS = {
 
 export type UiPlatform = (typeof UI_PLATFORMS)[keyof typeof UI_PLATFORMS];
 
+/** How each detected host OS is named in user-facing text. */
+export const UI_PLATFORM_LABELS: Record<UiPlatform, string> = {
+  [UI_PLATFORMS.WINDOWS]: "Windows",
+  [UI_PLATFORMS.MAC]: "macOS",
+  [UI_PLATFORMS.LINUX]: "Linux",
+};
+
 /** Visual variants supported by shared action buttons. */
 export const BUTTON_VARIANTS = {
   PRIMARY: "primary",
@@ -3495,6 +3502,13 @@ export const INHERIT_DEFAULT_OPTION = "default" as const;
 // NONE OPTION - UI sentinel for explicitly disabled inherited settings
 // ============================================================================
 export const NONE_OPTION = "none" as const;
+
+// ============================================================================
+// CUSTOM SHELL OPTION - Shell-picker sentinel that reveals a free-text path
+// input instead of selecting a shell. Shared by the Terminal settings picker
+// and the per-script `shell` picker so neither invents its own sentinel.
+// ============================================================================
+export const CUSTOM_SHELL_OPTION = "__custom__" as const;
 
 // ============================================================================
 // SCRIPT MATCH RULE NONE - Script verdict sentinel when no rule matched

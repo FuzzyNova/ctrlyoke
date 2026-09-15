@@ -3,7 +3,6 @@ import { spawn } from "child_process";
 import { suite, test } from "mocha";
 import {
   buildShellWrapArgs,
-  getShellInvocationError,
   resolveShellInvocation,
   shellNeedsVerbatimArguments,
   toPtySpawnArgs,
@@ -179,27 +178,6 @@ suite("Shell invocation", () => {
       ]) {
         assert.strictEqual(shellNeedsVerbatimArguments(shellKind), false);
       }
-    });
-  });
-
-  suite("shell script validation", () => {
-    test("rejects multiline scripts for cmd with the per-script fix", () => {
-      const error = getShellInvocationError(
-        "echo first\necho last",
-        SHELL_KINDS.CMD
-      );
-
-      assert.strictEqual(
-        error,
-        "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`."
-      );
-    });
-
-    test("allows single-line cmd scripts", () => {
-      assert.strictEqual(
-        getShellInvocationError("echo one", SHELL_KINDS.CMD),
-        undefined
-      );
     });
   });
 
