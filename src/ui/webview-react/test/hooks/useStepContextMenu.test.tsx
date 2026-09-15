@@ -41,6 +41,7 @@ function TestHarness({
     canPasteStep: true,
     executionState,
     confirmResetOperations: false,
+    confirmDeleteOperations: false,
     totalSteps,
     currentStep,
     pendingRewind,

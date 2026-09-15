@@ -4,6 +4,7 @@ import {
   type StepContextMenuState,
 } from "../components/shared/StepContextMenu";
 import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
+import { DeleteConfirmModal } from "../components/shared/DeleteConfirmModal";
 import { sendMessage } from "./useMessageHandler";
 import {
   EXECUTION_STATES,
@@ -54,6 +55,7 @@ interface UseStepContextMenuOptions {
   canPasteStep: boolean;
   executionState: ExecutionState;
   confirmResetOperations: boolean;
+  confirmDeleteOperations: boolean;
   totalSteps: number;
   currentStep: number;
   pendingRewind?: { fromStepIndex: number };
@@ -108,6 +110,7 @@ export function useStepContextMenu({
   canPasteStep,
   executionState,
   confirmResetOperations,
+  confirmDeleteOperations,
   totalSteps,
   currentStep,
   pendingRewind,
@@ -139,6 +142,20 @@ export function useStepContextMenu({
     null
   );
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(
+    null
+  );
+
+  const handleDeleteStep = useCallback(
+    (index: number) => {
+      if (!confirmDeleteOperations) {
+        sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index });
+        return;
+      }
+      setPendingDeleteIndex(index);
+    },
+    [confirmDeleteOperations]
+  );
 
   const handleSetStartPosition = useCallback(
     (target: number) => {
@@ -414,8 +431,7 @@ export function useStepContextMenu({
             disabledTitle: isExternallyManaged
               ? (externalReadOnlyLabel ?? "Read-only — external workflow")
               : "Cannot delete the currently executing step",
-            onClick: () =>
-              sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: deleteIndex }),
+            onClick: () => handleDeleteStep(deleteIndex),
           },
         ],
       });
@@ -425,6 +441,7 @@ export function useStepContextMenu({
       canPasteStep,
       currentStep,
       executionState,
+      handleDeleteStep,
       handleSetStartPosition,
       isExternallyManaged,
       externalReadOnlyLabel,
@@ -448,6 +465,12 @@ export function useStepContextMenu({
     });
     setSetPositionIndex(null);
   }, [setPositionIndex]);
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (pendingDeleteIndex === null) return;
+    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: pendingDeleteIndex });
+    setPendingDeleteIndex(null);
+  }, [pendingDeleteIndex]);
 
   const contextMenuPortal = contextMenu ? (
     <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
@@ -477,11 +500,24 @@ export function useStepContextMenu({
         })()
       : null;
 
+  const deleteModal =
+    pendingDeleteIndex !== null ? (
+      <DeleteConfirmModal
+        isOpen={true}
+        title="Delete Prompt"
+        message={`Are you sure you want to delete prompt ${pendingDeleteIndex + 1}?`}
+        detail="This action cannot be undone."
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setPendingDeleteIndex(null)}
+      />
+    ) : null;
+
   return {
     openContextMenu,
     handleSetStartPosition,
     contextMenuPortal,
     setPositionModal,
+    deleteModal,
   };
 }
 

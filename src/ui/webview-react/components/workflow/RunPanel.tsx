@@ -74,7 +74,7 @@ interface RunPanelProps {
     target: WorkflowContextMenuTarget,
     opener?: HTMLElement | null
   ) => void;
-  onDeleteRun: (runRef: RunRef) => void;
+  onDeleteRun: (runRef: RunRef, requestConfirmation?: boolean) => void;
   onDeleteAllRuns: () => void;
   /** Row to scroll into view once (the viewed run, when opened via the badge). */
   scrollToKey?: string | null;
@@ -294,7 +294,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   onSelect={() => handleSelect(row)}
                   onDelete={
                     row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-                      ? () => onDeleteRun(row.summary.runRef)
+                      ? () => onDeleteRun(row.summary.runRef, true)
                       : undefined
                   }
                 />

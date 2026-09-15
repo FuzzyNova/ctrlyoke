@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { HarnessIcon } from "../shared/HarnessIcon";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import {
@@ -82,8 +82,6 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
   onSelect,
   onDelete,
 }) => {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-
   const isDraft = row.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
   const summary =
     row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? row.summary : null;
@@ -207,49 +205,20 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
       {/* Delete track is reserved on every row (draft and executing runs can't
           be deleted) so the time column stays aligned down the list. */}
       <RowActionRail>
-        {canDelete &&
-          (confirmingDelete ? (
-            <span className="flex items-center gap-0.5">
-              <button
-                type="button"
-                title="Confirm delete run"
-                aria-label={`Confirm delete ${label}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmingDelete(false);
-                  onDelete?.();
-                }}
-                className="flex h-5 w-5 items-center justify-center rounded text-terminal-ansiRed hover:bg-list-hover-bg"
-              >
-                <Icon name="check" className="text-xs" />
-              </button>
-              <button
-                type="button"
-                title="Cancel"
-                aria-label="Cancel delete run"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmingDelete(false);
-                }}
-                className="flex h-5 w-5 items-center justify-center rounded text-description-fg hover:bg-list-hover-bg"
-              >
-                <Icon name="close" className="text-xs" />
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              title="Delete run"
-              aria-label={`Delete ${label}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmingDelete(true);
-              }}
-              className="flex h-5 w-5 items-center justify-center rounded text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
-            >
-              <Icon name="trash" className="text-xs" />
-            </button>
-          ))}
+        {canDelete && (
+          <button
+            type="button"
+            title="Delete run"
+            aria-label={`Delete ${label}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.();
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-description-fg opacity-0 transition-opacity group-hover:opacity-100 hover:bg-list-hover-bg hover:text-terminal-ansiRed focus-visible:opacity-100"
+          >
+            <Icon name="trash" className="text-xs" />
+          </button>
+        )}
       </RowActionRail>
     </div>
   );
