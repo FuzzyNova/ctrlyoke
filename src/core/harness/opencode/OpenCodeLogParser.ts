@@ -216,8 +216,7 @@ export class OpenCodeLogParser extends BaseLogParser {
   ): { used: number; size: number } | null {
     if (event.type === OPENCODE_EVENT_TYPES.STEP_FINISH) {
       const tokens = (event as Record<string, any>).part?.tokens as
-        | Record<string, any>
-        | undefined;
+        Record<string, any> | undefined;
       if (tokens !== undefined) {
         const total =
           typeof tokens.total === "number" ? tokens.total : undefined;

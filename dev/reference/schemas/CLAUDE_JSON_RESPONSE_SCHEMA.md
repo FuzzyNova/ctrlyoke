@@ -91,10 +91,7 @@ interface MCPServer {
 }
 
 type PermissionMode =
-  | "acceptEdits"
-  | "dangerouslySkipPermissions"
-  | "allowAll"
-  | "custom";
+  "acceptEdits" | "dangerouslySkipPermissions" | "allowAll" | "custom";
 ```
 
 **Field Details**:
@@ -1595,10 +1592,7 @@ interface SystemMessage {
   mcp_servers: Array<{ name: string; status: string }>;
   model: string;
   permissionMode:
-    | "acceptEdits"
-    | "dangerouslySkipPermissions"
-    | "allowAll"
-    | "custom";
+    "acceptEdits" | "dangerouslySkipPermissions" | "allowAll" | "custom";
   slash_commands: string[];
   apiKeySource: string;
   claude_code_version: string;

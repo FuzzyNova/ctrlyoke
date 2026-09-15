@@ -80,15 +80,16 @@ export interface StepOutput {
 Central class for all history I/O. Owned by `FlightPathManager` and shared with `FlightPathWebviewProvider`.
 
 Key methods:
-| Method | Purpose |
-|--------|---------|
-| `initializeRun(workflowId, workingFilePath)` | Creates history file, updates working file's `outputHistory`, prunes old runs |
-| `saveStepOutput(historyFilePath, stepIndex, cliOutputs, statusMessages)` | Writes per-step data after each prompt completes |
-| `finalizeRun(historyFilePath, executionState, runStepCount)` | Sets `completedAt`, `executionState`, `runStepCount` |
-| `loadHistory(historyFilePath)` | Reads and validates a history file for display |
-| `getRunsForWorkflow(workflowId)` | Returns run filenames newest-first |
-| `extractWorkflowId(workingFilePath)` | Strips `.flightpath.json` extension |
-| `getHistoryFilePath(workflowId, fileName)` | Resolves absolute path |
+
+| Method                                                                   | Purpose                                                                       |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `initializeRun(workflowId, workingFilePath)`                             | Creates history file, updates working file's `outputHistory`, prunes old runs |
+| `saveStepOutput(historyFilePath, stepIndex, cliOutputs, statusMessages)` | Writes per-step data after each prompt completes                              |
+| `finalizeRun(historyFilePath, executionState, runStepCount)`             | Sets `completedAt`, `executionState`, `runStepCount`                          |
+| `loadHistory(historyFilePath)`                                           | Reads and validates a history file for display                                |
+| `getRunsForWorkflow(workflowId)`                                         | Returns run filenames newest-first                                            |
+| `extractWorkflowId(workingFilePath)`                                     | Strips `.flightpath.json` extension                                           |
+| `getHistoryFilePath(workflowId, fileName)`                               | Resolves absolute path                                                        |
 
 `initializeRun()` returns `""` if history is disabled (`flightpath.saveOutputHistory = false`). All other methods are no-ops when called with an empty path.
 

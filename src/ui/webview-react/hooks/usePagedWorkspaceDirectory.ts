@@ -31,8 +31,7 @@ export interface PagedWorkspaceDirectoryOptions {
 }
 
 export type PagedWorkspaceDirectoryRequest =
-  | WorkspaceTreePageRequest
-  | WorkspaceTreeRangeRequest;
+  WorkspaceTreePageRequest | WorkspaceTreeRangeRequest;
 
 export type PagedWorkspaceDirectoryFetcher = (
   request: PagedWorkspaceDirectoryRequest,

@@ -145,8 +145,7 @@ export class TemplateManager {
       const parsed = jsYaml.load(content) as Record<string, unknown> | null;
       if (!parsed || typeof parsed !== "object") return { variables: {} };
       const meta = parsed["_templateMeta"] as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       if (!meta || typeof meta !== "object") return { variables: {} };
 
       const result: ParsedTemplateMeta = { variables: {} };

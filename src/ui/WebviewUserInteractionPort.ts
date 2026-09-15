@@ -49,13 +49,11 @@ export class WebviewUserInteractionPort implements UserInteractionPort {
           id: request.id,
           title: request.title,
           description: request.description,
-          items: request.items.map(
-            (item): BatchApprovalItem => ({
-              value: item.value,
-              label: item.label,
-              checked: item.checked,
-            })
-          ),
+          items: request.items.map((item): BatchApprovalItem => ({
+            value: item.value,
+            label: item.label,
+            checked: item.checked,
+          })),
         },
       });
     });

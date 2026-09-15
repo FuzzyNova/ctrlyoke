@@ -465,8 +465,7 @@ export interface IWorkingFileQueueAccess {
 
   /** Durable same-run rewind marker, when the queue is editing a suffix. */
   getPendingRewind?():
-    | { fromStepIndex: number; baseDefinitionRevision: number }
-    | undefined;
+    { fromStepIndex: number; baseDefinitionRevision: number } | undefined;
 
   /** Update a workflow property in cached workflow file */
   updateWorkflowProperty(key: string, value: unknown): void;

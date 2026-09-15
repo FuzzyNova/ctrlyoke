@@ -176,8 +176,7 @@ export interface WorkspaceSearchContentMatch {
 }
 
 export type WorkspaceSearchResult =
-  | WorkspaceSearchFileMatch
-  | WorkspaceSearchContentMatch;
+  WorkspaceSearchFileMatch | WorkspaceSearchContentMatch;
 
 export interface WorkspaceSearchResponse {
   results: WorkspaceSearchResult[];

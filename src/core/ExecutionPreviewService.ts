@@ -300,8 +300,7 @@ export class ExecutionPreviewService {
           );
         },
         finalStepSessionId: preparedWorkflow.finalStep?._runtime?.sessionId as
-          | string
-          | undefined,
+          string | undefined,
       });
       parallelGroupPreflights.push({
         parallelGroupId: group.id,

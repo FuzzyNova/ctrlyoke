@@ -333,11 +333,7 @@ runtime source of truth.
 ```typescript
 type CapabilityFidelity = "exact" | "partial" | "unsupported";
 type CapabilityMechanism =
-  | "native"
-  | "translated-cli"
-  | "workspace-config"
-  | "mixed"
-  | "none";
+  "native" | "translated-cli" | "workspace-config" | "mixed" | "none";
 type CapabilityVerificationStatus = "verified" | "unknown";
 
 interface CapabilityDeclaration {
@@ -481,8 +477,7 @@ interface CompatibilityDiagnostic {
 }
 
 type CompatibilityConsumerTarget =
-  | { kind: "queue"; stepIndex: number }
-  | { kind: "finalStep" };
+  { kind: "queue"; stepIndex: number } | { kind: "finalStep" };
 ```
 
 Use the existing shared constants for target-kind values rather than duplicating

@@ -235,8 +235,7 @@ export const CtrlYokeHook = async (_hookContext: unknown) => {
     }
 
     const info = properties.info as
-      | { id?: unknown; sessionID?: unknown; sessionId?: unknown }
-      | undefined;
+      { id?: unknown; sessionID?: unknown; sessionId?: unknown } | undefined;
     if (typeof info?.id === "string") {
       return info.id;
     }

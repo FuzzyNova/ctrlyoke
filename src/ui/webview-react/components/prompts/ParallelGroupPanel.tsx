@@ -35,12 +35,7 @@ import {
 import { Icon } from "../shared/Icon";
 
 export type ParallelGroupStatus =
-  | "running"
-  | "failed"
-  | "cancelled"
-  | "completed"
-  | "skipped"
-  | "pending";
+  "running" | "failed" | "cancelled" | "completed" | "skipped" | "pending";
 
 type GroupMemberStatus = {
   status: StepStatus;

@@ -18,8 +18,7 @@ import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageT
  * the preview request, so drawer edits are visible before Update is pressed.
  */
 export function getExecutionPreviewEditorSnapshot():
-  | ExecutionPreviewEditorSnapshot
-  | undefined {
+  ExecutionPreviewEditorSnapshot | undefined {
   const editor = useEditorStore.getState();
   const workflow = useWorkflowStore.getState();
   const { selectionTarget } = editor;

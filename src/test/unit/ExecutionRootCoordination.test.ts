@@ -269,11 +269,17 @@ suite("ExecutionRootCoordination", function () {
       const folded = await registry.fold();
       assert.strictEqual(folded.claims.length, 1);
       assert.strictEqual(folded.claims[0].path, "manual-test/foo.yaml");
-      assert.strictEqual(folded.claims[0].owner.participantId, owner.participantId);
+      assert.strictEqual(
+        folded.claims[0].owner.participantId,
+        owner.participantId
+      );
 
       const denied = await contender.claim(["manual-test/foo.yaml"]);
       assert.strictEqual(denied.granted.length, 0);
-      assert.strictEqual(denied.denied[0].owner.participantId, owner.participantId);
+      assert.strictEqual(
+        denied.denied[0].owner.participantId,
+        owner.participantId
+      );
     } finally {
       await removeDirectory(root);
     }

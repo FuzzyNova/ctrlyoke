@@ -169,8 +169,7 @@ function readLineRange(display: unknown): {
   lineEnd?: number;
 } {
   const d = display as
-    | { lineStart?: number; lineEnd?: number; totalLines?: number }
-    | undefined;
+    { lineStart?: number; lineEnd?: number; totalLines?: number } | undefined;
   if (!d || typeof d.lineStart !== "number" || typeof d.lineEnd !== "number") {
     return {};
   }

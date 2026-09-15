@@ -25,14 +25,12 @@ export interface McpTokenCompletionItem extends PlainCompletionItem {
 }
 
 export type SlashTokenCompletionItem =
-  | SkillTokenCompletionItem
-  | McpTokenCompletionItem;
+  SkillTokenCompletionItem | McpTokenCompletionItem;
 
 const MERGED_COMPLETION_KIND = "merged";
 
 type SlashTokenCompletionKind =
-  | CtrlYokeSlashTokenKind
-  | typeof MERGED_COMPLETION_KIND;
+  CtrlYokeSlashTokenKind | typeof MERGED_COMPLETION_KIND;
 
 interface SlashTokenCompletionContext {
   kind: SlashTokenCompletionKind;

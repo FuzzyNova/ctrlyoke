@@ -50,8 +50,7 @@ function removePath(value: unknown, path: RequiredPathSegment[]): void {
   let current = value as Record<string, unknown> | unknown[];
   for (const segment of path.slice(0, -1)) {
     current = current[segment as keyof typeof current] as
-      | Record<string, unknown>
-      | unknown[];
+      Record<string, unknown> | unknown[];
   }
   delete current[path[path.length - 1] as keyof typeof current];
 }

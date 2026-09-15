@@ -670,14 +670,15 @@ const result = await spawn("qwen", [
 - ⚠️ Working example configurations
 
 **Comparison to Claude Code:**
-| Feature | Qwen Code | Claude Code |
-|---------|-----------|-------------|
-| Hook types | 10 lifecycle events | 11+ lifecycle events |
-| Configuration | settings.json | settings.json |
-| Stdin payload | JSON event context | JSON event context |
-| Blocking capability | ✅ (exit code 2) | ✅ (exit code 2) |
-| Mutation capability | ✅ (tool_input) | ✅ (tool_input) |
-| Notification files | ⚠️ Unconfirmed | ✅ `{sessionId}-start.json`, `{sessionId}-stop.json` |
+
+| Feature             | Qwen Code           | Claude Code                                          |
+| ------------------- | ------------------- | ---------------------------------------------------- |
+| Hook types          | 10 lifecycle events | 11+ lifecycle events                                 |
+| Configuration       | settings.json       | settings.json                                        |
+| Stdin payload       | JSON event context  | JSON event context                                   |
+| Blocking capability | ✅ (exit code 2)    | ✅ (exit code 2)                                     |
+| Mutation capability | ✅ (tool_input)     | ✅ (tool_input)                                      |
+| Notification files  | ⚠️ Unconfirmed      | ✅ `{sessionId}-start.json`, `{sessionId}-stop.json` |
 
 **Recommendation:** Hooks ARE production-ready in Qwen Code v0.12.3. However, for FlightPath Phase 1, still use **process exit + log file monitoring** as primary completion detection because:
 

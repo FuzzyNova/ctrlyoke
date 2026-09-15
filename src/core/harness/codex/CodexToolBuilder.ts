@@ -687,10 +687,7 @@ export class CodexToolBuilder {
     ) {
       return initiatedEvents.map((initiatedEvent) => {
         const initiatedData = initiatedEvent.data as
-          | FileEditData
-          | FileWriteData
-          | FileDeleteData
-          | undefined;
+          FileEditData | FileWriteData | FileDeleteData | undefined;
         if (initiatedEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
           const data = initiatedData as FileEditData | undefined;
           // Mutate the shared data object in place (like

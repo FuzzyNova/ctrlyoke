@@ -23,10 +23,7 @@ import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockIns
 import type { StepWithRuntimeStatus } from "../../utils/StepStatusDerivation";
 
 export type ExternalRunWatchFinishReason =
-  | "terminal-working-file"
-  | "lock-deleted"
-  | "lock-stale"
-  | "ownership-changed";
+  "terminal-working-file" | "lock-deleted" | "lock-stale" | "ownership-changed";
 
 /**
  * ExternalRunWatchSession
@@ -64,8 +61,7 @@ export class ExternalRunWatchSession implements vscode.Disposable {
   private lastKnownOutputByStep: Record<number, number> = {};
   private readonly manifestPath: string;
   private workingFileChangeThrottleTimer:
-    | ReturnType<typeof setTimeout>
-    | undefined;
+    ReturnType<typeof setTimeout> | undefined;
   private workingFileChangePendingDuringThrottle = false;
 
   constructor(

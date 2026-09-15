@@ -50,9 +50,9 @@ interface Props {
 }
 
 function cloneDefaultFormat(): StatusLineSegment[] {
-  return DEFAULT_STATUS_LINE_FORMAT.map(
-    (segment): StatusLineSegment => ({ ...segment })
-  );
+  return DEFAULT_STATUS_LINE_FORMAT.map((segment): StatusLineSegment => ({
+    ...segment,
+  }));
 }
 
 function fieldLabel(field: StatusLineFieldId): string {

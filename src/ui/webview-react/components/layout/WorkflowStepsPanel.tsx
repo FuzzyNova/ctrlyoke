@@ -1211,8 +1211,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // Get the latest CLI output for the current final step loop
   const finalStepLatestOutput = useFinalStepLatestOutput();
   const finalStepOutputText = finalStepLatestOutput?.response as
-    | string
-    | undefined;
+    string | undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({

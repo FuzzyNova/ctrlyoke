@@ -244,12 +244,8 @@ One method builds the whole ctrlyoke-owned config object per step:
 
 ```jsonc
 {
-  "permission": {
-    /* from OpenCodeToolPermissionMapper.buildPermissionPolicy */
-  },
-  "mcp": {
-    /* ctrlyoke + user-defined servers */
-  },
+  "permission": {/* from OpenCodeToolPermissionMapper.buildPermissionPolicy */},
+  "mcp": {/* ctrlyoke + user-defined servers */},
   "plugin": ["file:///<extensionPath>/out/scripts/ctrlyoke-opencode-plugin.ts"],
 }
 ```

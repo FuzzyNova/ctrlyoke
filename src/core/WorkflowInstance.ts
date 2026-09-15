@@ -277,8 +277,7 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    | { merge: boolean; keep: boolean }
-    | undefined;
+    { merge: boolean; keep: boolean } | undefined;
   /** Used only to look up another lease owner's display name for lease-conflict errors. */
   private readonly lineageRepository = new WorkflowLineageRepository();
 

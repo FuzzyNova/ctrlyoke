@@ -622,9 +622,7 @@ async function runCommand(
       ...overlay.defaults,
       toolPermissions: {
         mode: options.permissionMode as
-          | "dangerouslyAllowAll"
-          | "allowAll"
-          | "custom",
+          "dangerouslyAllowAll" | "allowAll" | "custom",
       },
     };
   }

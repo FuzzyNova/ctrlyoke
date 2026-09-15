@@ -107,8 +107,7 @@ export class BaseToolBuilder {
             data: {
               command:
                 ((input.command ?? input.cmd ?? input.script) as
-                  | string
-                  | undefined) ?? "",
+                  string | undefined) ?? "",
               workingDir: (input.working_dir ??
                 input.cwd ??
                 input.workingDir) as string | undefined,

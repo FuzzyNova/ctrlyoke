@@ -73,8 +73,7 @@ export class StatusMessageReporter {
   constructor(
     private readonly getDashboard: () => IDashboardSink | undefined,
     private readonly getActiveHistorySink: () =>
-      | { filePath: string; manager: OutputHistoryManager }
-      | undefined,
+      { filePath: string; manager: OutputHistoryManager } | undefined,
     private readonly notifyStatusMessage?: (
       target: WorkflowEventTarget,
       message: string,

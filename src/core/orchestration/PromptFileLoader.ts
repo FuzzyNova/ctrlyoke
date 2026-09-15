@@ -572,9 +572,7 @@ export class PromptFileLoader {
     // sub-fields. null means none — don't seed. A fully-specified
     // object means nothing is missing — don't put anything in defaults.
     const explicitTP = explicitValues.toolPermissions as
-      | Record<string, unknown>
-      | null
-      | undefined;
+      Record<string, unknown> | null | undefined;
     if (explicitTP !== null) {
       const base =
         typeof explicitTP === "object" && explicitTP ? explicitTP : {};

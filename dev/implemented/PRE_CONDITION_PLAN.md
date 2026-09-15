@@ -154,7 +154,7 @@ finalStep:
   harness: claude-cli
   preCondition:
     script: npm test
-    onPass: skipPrompt  # tests pass → skip prompt → loop exits
+    onPass: skipPrompt # tests pass → skip prompt → loop exits
 
 # Gate the fix prompt on tests failing (equivalent via onFail)
 finalStep:
@@ -162,7 +162,7 @@ finalStep:
   harness: claude-cli
   preCondition:
     script: npm test
-    onFail: skipPrompt  # tests fail → skip doesn't fire → prompt runs
+    onFail: skipPrompt # tests fail → skip doesn't fire → prompt runs
     # onPass defaults to "continue", so passing tests run the prompt — NOT what you want here
     # Use the onPass form above for the test-fix loop
 
@@ -177,7 +177,7 @@ steps:
     prompt: Generate API documentation.
     preCondition:
       script: git diff --name-only HEAD | grep -q "src/"
-      onFail: skipPrompt  # skip if no source changes (exit non-zero)
+      onFail: skipPrompt # skip if no source changes (exit non-zero)
 ```
 
 ---

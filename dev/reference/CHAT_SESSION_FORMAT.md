@@ -28,16 +28,12 @@ Session files are the **single source of truth** for Chat responses in FlightPat
   "responderUsername": "GitHub Copilot",
   "responderAvatarIconUri": { "id": "copilot" },
   "initialLocation": "panel",
-  "requests": [
-    /* array of request/response pairs */
-  ],
+  "requests": [/* array of request/response pairs */],
   "creationDate": 1769444619441,
   "lastMessageDate": 1769444653893,
   "customTitle": "Simple greeting request",
   "hasPendingEdits": false,
-  "inputState": {
-    /* current input state */
-  }
+  "inputState": {/* current input state */}
 }
 ```
 
@@ -64,35 +60,21 @@ Each request in the `requests` array contains:
 {
   "requestId": "request_15b5009a-ff7e-4f2c-ac5d-ae2d5612f870",
   "message": {
-    "parts": [
-      /* message parts */
-    ],
+    "parts": [/* message parts */],
     "text": "just say hi please"
   },
   "variableData": {
-    "variables": [
-      /* attached files, instruction files */
-    ]
+    "variables": [/* attached files, instruction files */]
   },
-  "response": [
-    /* array of response items */
-  ],
-  "agent": {
-    /* agent metadata */
-  },
+  "response": [/* array of response items */],
+  "agent": {/* agent metadata */},
   "timestamp": 1769444653892,
   "modelId": "copilot/oswe-vscode-prime",
   "responseId": "response_61a5c3fb-f789-4896-b65f-1379de7413f8",
   "result": {
-    "timings": {
-      /* timing data */
-    },
-    "metadata": {
-      /* tool calls, cache, session info */
-    },
-    "errorDetails": {
-      /* if error occurred */
-    }
+    "timings": {/* timing data */},
+    "metadata": {/* tool calls, cache, session info */},
+    "errorDetails": {/* if error occurred */}
   }
 }
 ```
@@ -251,9 +233,7 @@ The `result` object contains completion status, timings, and metadata:
     },
     "metadata": {
       "codeBlocks": [],
-      "toolCallRounds": [
-        /* see Tool Invocation section */
-      ],
+      "toolCallRounds": [/* see Tool Invocation section */],
       "modelMessageId": "c9864232-ef26-495e-82ed-3130b6d0a639",
       "responseId": "0800af3b-ffc4-4802-968d-2b02d68b0755",
       "sessionId": "5a00eb97-798e-4888-88c9-6d1735d5bf8e",

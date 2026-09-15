@@ -13,11 +13,7 @@ import {
 } from "../../../types/DashboardConstants";
 
 type AntigravityHookKey =
-  | "PreToolUse"
-  | "PostToolUse"
-  | "PreInvocation"
-  | "PostInvocation"
-  | "Stop";
+  "PreToolUse" | "PostToolUse" | "PreInvocation" | "PostInvocation" | "Stop";
 
 export class AntigravityNotificationMonitor
   extends NotificationMonitorBase

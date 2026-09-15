@@ -476,8 +476,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
 
   const finalStepLatestOutput = useFinalStepLatestOutput();
   const finalStepOutputText = finalStepLatestOutput?.response as
-    | string
-    | undefined;
+    string | undefined;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -572,8 +571,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                       ),
                       direction: "rewind",
                       outputText: getLatestOutput(i)?.response as
-                        | string
-                        | undefined,
+                        string | undefined,
                       latestOutput: getLatestOutput(i),
                       runtimeMeta: !isScriptWorkflowStep(prompt)
                         ? prompt._runtime
@@ -632,8 +630,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
                       isExecutionTargetLocked,
                       direction: "forward",
                       outputText: getLatestOutput(index)?.response as
-                        | string
-                        | undefined,
+                        string | undefined,
                       latestOutput: getLatestOutput(index),
                       runtimeMeta: !isScriptWorkflowStep(prompt)
                         ? prompt._runtime

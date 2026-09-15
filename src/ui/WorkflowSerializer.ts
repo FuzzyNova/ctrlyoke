@@ -81,8 +81,7 @@ export class WorkflowSerializer {
     private readonly templateManager: TemplateManager,
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
-      | OutputHistoryManager
-      | undefined,
+      OutputHistoryManager | undefined,
     private readonly workspaceState: vscode.Memento
   ) {}
 
@@ -572,7 +571,7 @@ export class WorkflowSerializer {
       );
       const authoredSteps: Record<string, unknown>[] = [];
 
-      for (let index = 0; index < cleanSteps.length; ) {
+      for (let index = 0; index < cleanSteps.length;) {
         const group = groupsByStart.get(index);
         if (!group) {
           authoredSteps.push(cleanSteps[index]);

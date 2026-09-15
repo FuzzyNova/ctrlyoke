@@ -384,8 +384,7 @@ async function getWindowsCommandMetadata(
       return undefined;
     }
     const parsed = JSON.parse(trimmed) as
-      | WindowsCommandMetadata
-      | WindowsCommandMetadata[];
+      WindowsCommandMetadata | WindowsCommandMetadata[];
     return Array.isArray(parsed) ? parsed[0] : parsed;
   } catch (error) {
     Log.warn(

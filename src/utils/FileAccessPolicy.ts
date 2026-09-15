@@ -7,10 +7,7 @@ import { isPathWithinDirectory } from "./PathSecurity";
  * Folder" action, or block outright.
  */
 type FileAccessReason =
-  | "workspace"
-  | "ownStateRoot"
-  | "trustedExternalRoot"
-  | "outsideTrustedRoots";
+  "workspace" | "ownStateRoot" | "trustedExternalRoot" | "outsideTrustedRoots";
 
 export interface FileAccessDecision {
   allowed: boolean;

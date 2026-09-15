@@ -142,10 +142,7 @@ function getEventKey(event: CliEvent): string | undefined {
     case CLI_EVENT_TYPES.FILE_EDIT:
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const data = event.data as
-        | FileReadData
-        | FileWriteData
-        | FileEditData
-        | FileDeleteData;
+        FileReadData | FileWriteData | FileEditData | FileDeleteData;
       if (
         event.type === CLI_EVENT_TYPES.FILE_READ &&
         "toolCallId" in data &&

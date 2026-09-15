@@ -3,8 +3,7 @@ import { Icon } from "./Icon";
 
 export interface ActionFeedback {
   status:
-    | typeof USER_FEEDBACK_SEVERITY.SUCCESS
-    | typeof USER_FEEDBACK_SEVERITY.ERROR;
+    typeof USER_FEEDBACK_SEVERITY.SUCCESS | typeof USER_FEEDBACK_SEVERITY.ERROR;
   message: string;
 }
 

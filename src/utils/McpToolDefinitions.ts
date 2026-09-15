@@ -37,8 +37,7 @@ export interface McpAppendParallelGroupInput {
 }
 
 export type McpAppendQueueItem =
-  | McpAppendStepInput
-  | McpAppendParallelGroupInput;
+  McpAppendStepInput | McpAppendParallelGroupInput;
 
 export interface McpAppendStepArguments {
   steps: McpAppendQueueItem[];

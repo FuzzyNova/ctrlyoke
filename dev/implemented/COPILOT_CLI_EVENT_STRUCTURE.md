@@ -23,9 +23,7 @@ All events share this base structure:
 ```json
 {
   "type": "event.type.name",
-  "data": {
-    /* event-specific data */
-  },
+  "data": {/* event-specific data */},
   "id": "unique-event-guid",
   "timestamp": "ISO-8601-timestamp",
   "parentId": "parent-event-guid-or-null"

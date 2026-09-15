@@ -98,9 +98,7 @@ All Codex events follow this base structure:
 ```json
 {
   "type": "event_type_name",
-  "payload": {
-    /* event-specific data */
-  },
+  "payload": {/* event-specific data */},
   "timestamp": "ISO-8601-timestamp"
 }
 ```

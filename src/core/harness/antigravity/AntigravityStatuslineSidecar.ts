@@ -99,8 +99,7 @@ export class AntigravityStatuslineSidecar {
   >;
   private readonly onContextWindowUpdate: (used: number, size: number) => void;
   private readonly onProviderUsageUpdate:
-    | ((quota: HarnessQuotaSnapshot) => void)
-    | undefined;
+    ((quota: HarnessQuotaSnapshot) => void) | undefined;
   private readonly watcher: StatuslineSnapshotWatcher<AntigravityStatuslineSnapshot>;
 
   constructor(deps: AntigravityStatuslineSidecarDeps) {

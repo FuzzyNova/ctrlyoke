@@ -172,7 +172,7 @@ For ctrlyoke, we create **self-contained prompt files** that embed the full agen
     <communication_style>Ultra-succinct. Speaks in file paths and AC IDs...</communication_style>
     <principles>The User Story combined with the Story Context XML is the single source of truth...</principles>
   </persona>
-  
+
   <activation>
     1. Load config from .bmad/bmm/config.yaml
     2. Read the story file specified below

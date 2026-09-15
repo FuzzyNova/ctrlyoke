@@ -876,8 +876,7 @@ export class QwenLogParser extends BaseLogParser {
     // Track file path for later correlation with tool_result resultDisplay
     // (resultDisplay.fileName is basename-only).
     const fp = (args.absolute_path ?? args.file_path ?? args.path) as
-      | string
-      | undefined;
+      string | undefined;
     if (fp) {
       callPathMap.set(functionCall.id, fp);
     }

@@ -176,8 +176,7 @@ interface ParsedProductionSource {
  * suite's time budget under full-suite load.
  */
 let parsedProductionSources:
-  | { repoRoot: string; sources: ParsedProductionSource[] }
-  | undefined;
+  { repoRoot: string; sources: ParsedProductionSource[] } | undefined;
 
 function getParsedProductionSources(
   repoRoot: string

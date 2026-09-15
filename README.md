@@ -181,7 +181,7 @@ mcpServers:
     args: [/path/to/db-mcp-server.js]
     env:
       DB_URL: "postgres://localhost/mydb"
-    autoApprove: true   # or a list of tool name patterns
+    autoApprove: true # or a list of tool name patterns
 
 # Disable all MCP injection
 mcpServers: null

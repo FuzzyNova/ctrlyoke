@@ -475,8 +475,7 @@ export class SettingsJsonMcpTracker {
 
       const existingMcp =
         (settings[this.mcpServersProperty] as
-          | Record<string, unknown>
-          | undefined) ?? {};
+          Record<string, unknown> | undefined) ?? {};
       let changed = false;
 
       for (const [name, config] of Object.entries(servers)) {
@@ -567,8 +566,7 @@ export class SettingsJsonMcpTracker {
             await fs.readFile(settingsPath, "utf-8")
           ) as Record<string, unknown>;
           const mcpServers = settings[this.mcpServersProperty] as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           if (mcpServers) {
             for (const name of toRemove) {
               const managedValue = this.managedServerValues.get(name);

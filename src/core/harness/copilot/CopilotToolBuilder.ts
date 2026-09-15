@@ -424,17 +424,13 @@ export class CopilotToolBuilder {
 
     const normalizedArgs = typeof args === "string" ? {} : args;
     const path = (normalizedArgs.path ?? normalizedArgs.file_path) as
-      | string
-      | undefined;
+      string | undefined;
     const oldStr = (normalizedArgs.old_str ?? normalizedArgs.old_string) as
-      | string
-      | undefined;
+      string | undefined;
     const newStr = (normalizedArgs.new_str ?? normalizedArgs.new_string) as
-      | string
-      | undefined;
+      string | undefined;
     const content = (normalizedArgs.content ?? normalizedArgs.file_text) as
-      | string
-      | undefined;
+      string | undefined;
     const command = (normalizedArgs.command ??
       normalizedArgs.cmd ??
       normalizedArgs.script) as string | undefined;

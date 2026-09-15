@@ -4,8 +4,7 @@ import { parseRoute } from "./route";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 export function getReadyPreferredViewAddress():
-  | WorkflowViewAddress
-  | undefined {
+  WorkflowViewAddress | undefined {
   if (isStandalone) {
     return parseRoute(window.location.search).workflow;
   }

@@ -53,12 +53,13 @@ Add `/favicon.svg` and `/app-icon.svg` routes to `FlightPathHostedServer`. Each 
 Update `HOSTED_ICON_PATHS` so the SVG entries point to these dynamic routes (already used in the `<link rel="icon">` and `<link rel="apple-touch-icon">` tags and in the manifest). The PNG paths continue pointing to the static pre-generated files (default colors).
 
 **Coverage:**
-| Client | Result |
-|---|---|
-| Modern browsers (Chrome, Firefox, Safari) | ✅ Colored SVG favicon |
-| iOS 26+ homescreen | ✅ Colored SVG apple-touch-icon |
-| iOS < 26 homescreen | ⚠️ Static PNG (default colors, no customization) |
-| Android PWA | ✅ Manifest SVG icon used |
+
+| Client                                    | Result                                           |
+| ----------------------------------------- | ------------------------------------------------ |
+| Modern browsers (Chrome, Firefox, Safari) | ✅ Colored SVG favicon                           |
+| iOS 26+ homescreen                        | ✅ Colored SVG apple-touch-icon                  |
+| iOS < 26 homescreen                       | ⚠️ Static PNG (default colors, no customization) |
+| Android PWA                               | ✅ Manifest SVG icon used                        |
 
 **Effort:** ~3–4 hours. No new dependencies. Follows the existing pattern of `buildThemeStyleBlock()` and the `/manifest.webmanifest` dynamic route.
 

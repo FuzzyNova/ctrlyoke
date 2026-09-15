@@ -312,8 +312,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /** Return the durable projection for the currently executing parallel group. */
   public getActiveParallelGroupRuntime():
-    | ActiveParallelGroupRuntime
-    | undefined {
+    ActiveParallelGroupRuntime | undefined {
     return this.activeParallelGroupRuntime
       ? { ...this.activeParallelGroupRuntime }
       : undefined;

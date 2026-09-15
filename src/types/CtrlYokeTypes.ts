@@ -880,12 +880,7 @@ export interface ScriptRuntimeOutput {
 }
 
 export type ScriptMatchRule =
-  | "exitCode"
-  | "exact"
-  | "boolean"
-  | "numericGte"
-  | "substring"
-  | "none";
+  "exitCode" | "exact" | "boolean" | "numericGte" | "substring" | "none";
 
 export interface ScriptVerdict {
   compareSource: CompareSource;

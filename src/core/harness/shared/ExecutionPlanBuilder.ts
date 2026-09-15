@@ -58,8 +58,7 @@ export interface ExecutionPlan {
   /** Provider preparation carries the provider-specific MCP application. */
   readonly mcpApplication: CliProviderPreparation;
   readonly effectiveToolPermissions:
-    | ResolvedProperties["toolPermissions"]
-    | undefined;
+    ResolvedProperties["toolPermissions"] | undefined;
   readonly diagnostics: CliProviderPreparation["diagnostics"];
 }
 

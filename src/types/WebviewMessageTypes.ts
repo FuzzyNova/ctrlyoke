@@ -597,8 +597,7 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    | "workbench.action.reloadWindow"
-    | "workbench.action.restartExtensionHost";
+    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {

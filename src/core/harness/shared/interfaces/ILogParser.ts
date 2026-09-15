@@ -33,11 +33,7 @@ export interface BaseCliEvent {
  * - `"other"` — none of the above (default for harnesses with no ambiguity).
  */
 export type UserEventClassification =
-  | "tool-result"
-  | "injected-prompt"
-  | "resume-signal"
-  | "human-steer"
-  | "other";
+  "tool-result" | "injected-prompt" | "resume-signal" | "human-steer" | "other";
 
 /**
  * Interface for CLI harness log parsers

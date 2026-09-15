@@ -105,8 +105,7 @@ type WebviewMessageHandler = (
 type DispatchTable = Map<string, WebviewMessageHandler>;
 
 type WorkflowVariantReply =
-  | WorkflowVariantCreatedMessage
-  | WorkflowVariantFailedMessage;
+  WorkflowVariantCreatedMessage | WorkflowVariantFailedMessage;
 
 interface WorkflowVariantRequestCacheEntry {
   reply: Promise<WorkflowVariantReply>;

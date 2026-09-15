@@ -64,11 +64,12 @@ There is no `oldContent`, `newContent`, or `structuredPatch`.
 - Otherwise → renders file path only (shows the edit happened without diff detail)
 
 **Comparison across harnesses:**
-| Harness | Diff Support |
-|---|---|
-| Claude CLI | ✅ `structuredPatch` with accurate line numbers |
+
+| Harness     | Diff Support                                     |
+| ----------- | ------------------------------------------------ |
+| Claude CLI  | ✅ `structuredPatch` with accurate line numbers  |
 | Copilot CLI | ✅ `oldContent`/`newContent` for diff generation |
-| Codex CLI | ❌ Path and kind only |
+| Codex CLI   | ❌ Path and kind only                            |
 
 ### Future Consideration
 

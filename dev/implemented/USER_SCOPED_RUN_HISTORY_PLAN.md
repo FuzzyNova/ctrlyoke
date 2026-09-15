@@ -639,10 +639,7 @@ and does it invisibly. Add a third, explicit reason instead:
 
 ```ts
 type FileAccessReason =
-  | "workspace"
-  | "ownStateRoot"
-  | "trustedExternalRoot"
-  | "outsideTrustedRoots";
+  "workspace" | "ownStateRoot" | "trustedExternalRoot" | "outsideTrustedRoots";
 ```
 
 Add an explicit `ownStateRoots` option to the pure policy comparator and check it

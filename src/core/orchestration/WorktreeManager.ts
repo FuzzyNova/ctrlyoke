@@ -90,8 +90,7 @@ import {
 } from "../../utils/RuntimeTrustedRootRegistry";
 
 export type WorktreeMode =
-  | typeof WORKTREE_MODES.MANAGED
-  | typeof WORKTREE_MODES.NAMED;
+  typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
 export type WorktreeManagerMode = WorktreeMode;
 export const WORKTREE_ORIGINS = {
   CREATED: "created",

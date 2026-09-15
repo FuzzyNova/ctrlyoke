@@ -37,8 +37,7 @@ const liveQuota: HarnessQuotaSnapshot = {
 class FakeCopilotQuotaReader implements CopilotQuotaReader {
   calls = 0;
   private resolvePending:
-    | ((result: CopilotQuotaProbeResult) => void)
-    | undefined;
+    ((result: CopilotQuotaProbeResult) => void) | undefined;
 
   constructor(private readonly result?: CopilotQuotaProbeResult) {}
 

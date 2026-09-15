@@ -84,13 +84,7 @@ export interface HistorySearchResult {
   executionState: string;
   target: OutputExecutionTarget;
   matchType:
-    | "response"
-    | "file"
-    | "bash"
-    | "status"
-    | "prompt"
-    | "tool"
-    | "diff";
+    "response" | "file" | "bash" | "status" | "prompt" | "tool" | "diff";
   matchSnippet: string;
   matchContext: string; // "Prompt 2", "Final Step Loop 1", etc.
   filePath?: string;

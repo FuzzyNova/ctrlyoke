@@ -76,14 +76,15 @@ interface RegistryEntry {
 **Key:** `${workflowId}:${sessionId}` in a global Map.
 
 **Methods:**
-| Method | What it does |
-|--------|-------------|
-| `create(wf, sid)` | Creates xterm Terminal + FitAddon + div element. Dynamic imports xterm modules. Applies VS Code theme/font. |
-| `attach(wf, sid, container)` | Appends `domEl` to container. On first call, opens terminal + loads WebGL addon. On subsequent calls, moves existing DOM element back. |
-| `detach(wf, sid)` | Removes `domEl` from document. xterm survives in JS heap with all scrollback intact. |
-| `freeze(wf, sid)` | Disposes `onDataDisposable`, sets `frozen=true`. Prevents input routing for ended ai-cli sessions. |
-| `clearAiCliSessions(wf, ids)` | Disposes and deletes entries for ai-cli sessions (called on new run start). |
-| `clearSession(wf, sid)` | Disposes and deletes a single entry (user-close for shell sessions). |
+
+| Method                        | What it does                                                                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `create(wf, sid)`             | Creates xterm Terminal + FitAddon + div element. Dynamic imports xterm modules. Applies VS Code theme/font.                            |
+| `attach(wf, sid, container)`  | Appends `domEl` to container. On first call, opens terminal + loads WebGL addon. On subsequent calls, moves existing DOM element back. |
+| `detach(wf, sid)`             | Removes `domEl` from document. xterm survives in JS heap with all scrollback intact.                                                   |
+| `freeze(wf, sid)`             | Disposes `onDataDisposable`, sets `frozen=true`. Prevents input routing for ended ai-cli sessions.                                     |
+| `clearAiCliSessions(wf, ids)` | Disposes and deletes entries for ai-cli sessions (called on new run start).                                                            |
+| `clearSession(wf, sid)`       | Disposes and deletes a single entry (user-close for shell sessions).                                                                   |
 
 ### 2. `TerminalInstance` (webview, React component)
 

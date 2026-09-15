@@ -167,8 +167,7 @@ suite("mixed-mode workflow execution", () => {
       },
     ] as any[];
     let lastInteractiveContext:
-      | { sessionId: string; spawnedWithSessionId: string }
-      | undefined;
+      { sessionId: string; spawnedWithSessionId: string } | undefined;
 
     const runner = (integration as any).executionRunner as {
       executeInteractive: (session: any) => Promise<boolean>;

@@ -21,8 +21,7 @@ export interface WorkspaceClipboard {
   operation: (typeof CLIPBOARD_OPERATIONS)[keyof typeof CLIPBOARD_OPERATIONS];
   path: string;
   kind:
-    | typeof WORKSPACE_ENTRY_KINDS.FILE
-    | typeof WORKSPACE_ENTRY_KINDS.DIRECTORY;
+    typeof WORKSPACE_ENTRY_KINDS.FILE | typeof WORKSPACE_ENTRY_KINDS.DIRECTORY;
 }
 
 export interface UseWorkspaceExplorerContextMenuOptions {

@@ -424,8 +424,7 @@ export class CodexLogParser extends BaseLogParser {
 
         const functionName = event.payload.name?.toLowerCase() || "";
         const callId = (event.payload.call_id ?? event.payload.id) as
-          | string
-          | undefined;
+          string | undefined;
         const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
           functionName,
           params,
@@ -1527,8 +1526,7 @@ export class CodexLogParser extends BaseLogParser {
     trackingMap: Map<string, CodexTrackedToolCall>
   ): void {
     const changes = payload.changes as
-      | Record<string, { unified_diff?: string; content?: string }>
-      | undefined;
+      Record<string, { unified_diff?: string; content?: string }> | undefined;
     if (!changes) {
       return;
     }
@@ -1578,9 +1576,7 @@ export class CodexLogParser extends BaseLogParser {
     for (const toolInfo of targets) {
       for (const initiatedEvent of toolInfo.initiatedEvents!) {
         const data = initiatedEvent.data as
-          | FileEditData
-          | FileWriteData
-          | undefined;
+          FileEditData | FileWriteData | undefined;
         if (!data?.path) {
           continue;
         }

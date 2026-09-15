@@ -25,8 +25,7 @@ export interface OpenCodeRemoteMcpServer {
 }
 
 export type OpenCodeMcpServer =
-  | OpenCodeLocalMcpServer
-  | OpenCodeRemoteMcpServer;
+  OpenCodeLocalMcpServer | OpenCodeRemoteMcpServer;
 
 export type OpenCodeMcpEntries = Record<string, OpenCodeMcpServer>;
 

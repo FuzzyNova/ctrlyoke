@@ -574,11 +574,7 @@ Branch state and directory state are independent:
 interface WorktreeCompletionResult {
   landingOutcome: "landed" | "no-changes" | "blocked";
   mergeOutcome?:
-    | "fast-forward"
-    | "merge-commit"
-    | "conflict"
-    | "blocked"
-    | "abort-failed";
+    "fast-forward" | "merge-commit" | "conflict" | "blocked" | "abort-failed";
   directoryOutcome: "removed" | "kept" | "remove-failed";
   branchState: "present" | "deleted" | "missing";
   branchName: string;
@@ -865,9 +861,9 @@ so `worktree` validates at the root and is explicitly rejected on every nested
 Supported forms:
 
 ```yaml
-worktree: false                 # explicit no-worktree (overrides the settings default)
-worktree: true                  # managed shorthand
-worktree: ui-work               # named shorthand
+worktree: false # explicit no-worktree (overrides the settings default)
+worktree: true # managed shorthand
+worktree: ui-work # named shorthand
 # omitting `worktree` entirely inherits `defaults.worktree` from settings
 
 worktree:
@@ -1247,11 +1243,7 @@ interface WorkingFileWorktreeRuntime {
   setupOutcome?: "pending" | "running" | "succeeded" | "failed";
   landingOutcome?: "landed" | "no-changes" | "blocked";
   mergeOutcome?:
-    | "fast-forward"
-    | "merge-commit"
-    | "conflict"
-    | "blocked"
-    | "abort-failed";
+    "fast-forward" | "merge-commit" | "conflict" | "blocked" | "abort-failed";
   directoryState: "present" | "removed" | "missing" | "remove-failed";
   branchState: "present" | "deleted" | "missing";
   finalBranchTip?: string;

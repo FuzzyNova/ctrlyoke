@@ -541,8 +541,7 @@ describe("Header execution controls", () => {
   // and leaving slot 2 on a disabled Pause with no way to resume.
   const stalelyLoadedPausingRun = (
     executionState:
-      | typeof EXECUTION_STATES.PAUSING
-      | typeof EXECUTION_STATES.PAUSED
+      typeof EXECUTION_STATES.PAUSING | typeof EXECUTION_STATES.PAUSED
   ) => {
     useUiStore.setState({
       activeWorkflowId: "workflow-instance",

@@ -3062,8 +3062,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
     );
     const ownerToken = WorkflowLockManager.generateOwnerToken();
     let workflowKey:
-      | import("../../types/CtrlYokeTypes").WorkflowKey
-      | undefined;
+      import("../../types/CtrlYokeTypes").WorkflowKey | undefined;
     try {
       const sourceManager = new WorkingFileManager({
         getWorkingFilePath: () => undefined,

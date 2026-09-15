@@ -107,8 +107,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
           } else {
             const current =
               (properties.toolPermissions as
-                | ToolPermissionsOverride
-                | undefined) || {};
+                ToolPermissionsOverride | undefined) || {};
             setProperty("toolPermissions", {
               ...current,
               mode: v as ToolPermissionMode,

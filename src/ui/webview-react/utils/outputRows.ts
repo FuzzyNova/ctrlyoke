@@ -570,8 +570,7 @@ function getEffectiveStepHarness(
   // defaults while viewing a run must not recolor its existing output.
   if (step.type === STEP_TYPES.SCRIPT) return undefined;
   return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
-    | HarnessId
-    | undefined;
+    HarnessId | undefined;
 }
 
 function getStepOutputArtifacts(

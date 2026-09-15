@@ -55,8 +55,7 @@ function findUpdatePropertyMessage(
       (msg as { property?: string }).property === property
   );
   return matches[matches.length - 1]?.[0] as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 }
 
 describe("WorkflowPropertiesPanel — workflow-property persist/reload round trip", () => {

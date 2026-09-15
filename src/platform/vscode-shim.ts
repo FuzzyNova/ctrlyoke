@@ -25,8 +25,7 @@ import * as pathNode from "path";
 // ---------------------------------------------------------------------------
 /** Registered CLI adapter that handles configuration lookups. */
 let _registeredAdapter:
-  | { getConfig<T>(key: string, defaultValue: T): T }
-  | undefined;
+  { getConfig<T>(key: string, defaultValue: T): T } | undefined;
 
 /**
  * Register a CLI adapter so that `workspace.getConfiguration().get(key, default)`

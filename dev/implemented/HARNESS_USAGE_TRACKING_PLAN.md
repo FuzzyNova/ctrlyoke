@@ -357,17 +357,10 @@ Create a normalized usage contract in `src/types/UsageTypes.ts`:
 
 ```typescript
 export type HarnessQuotaSource =
-  | "provider-live"
-  | "provider-log"
-  | "enterprise-api"
-  | "unavailable";
+  "provider-live" | "provider-log" | "enterprise-api" | "unavailable";
 
 export type HarnessUsageWindowKind =
-  | "rolling"
-  | "daily"
-  | "weekly"
-  | "monthly"
-  | "unknown";
+  "rolling" | "daily" | "weekly" | "monthly" | "unknown";
 
 export type HarnessObservedPeriod = "daily" | "weekly" | "monthly";
 

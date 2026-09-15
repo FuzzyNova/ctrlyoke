@@ -270,11 +270,7 @@ The implementation needs a structured failure kind instead of boolean checks:
 
 ```typescript
 export type FailureKind =
-  | "userCancelled"
-  | "processExit"
-  | "harnessError"
-  | "timeout"
-  | "unknown";
+  "userCancelled" | "processExit" | "harnessError" | "timeout" | "unknown";
 ```
 
 Recommended plumbing:

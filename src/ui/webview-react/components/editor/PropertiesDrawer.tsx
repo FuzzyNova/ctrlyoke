@@ -967,9 +967,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     variant={PROMPT_PROPERTIES.PRE_CONDITION}
                     value={
                       properties.preCondition as
-                        | ScriptConditionValue
-                        | null
-                        | undefined
+                        ScriptConditionValue | null | undefined
                     }
                     onChange={(updated) =>
                       setProperty(
@@ -1018,9 +1016,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     hasPreCondition={hasPreCondition}
                     value={
                       properties.endCondition as
-                        | ScriptConditionValue
-                        | null
-                        | undefined
+                        ScriptConditionValue | null | undefined
                     }
                     onChange={(updated) =>
                       setEndCondition(
@@ -1127,8 +1123,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     } else {
                       const current =
                         (properties.toolPermissions as
-                          | ToolPermissionsOverride
-                          | undefined) || {};
+                          ToolPermissionsOverride | undefined) || {};
                       setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                         ...current,
                         mode: v as ToolPermissionMode,
@@ -1192,15 +1187,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           value={(
                             (
                               properties.toolPermissions as
-                                | ToolPermissionsOverride
-                                | undefined
+                                ToolPermissionsOverride | undefined
                             )?.allowedTools ?? []
                           ).join("\n")}
                           onChange={(e) => {
                             const current =
                               (properties.toolPermissions as
-                                | ToolPermissionsOverride
-                                | undefined) || {};
+                                ToolPermissionsOverride | undefined) || {};
                             setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
                               allowedTools: e.target.value.split("\n"),
@@ -1244,15 +1237,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           value={(
                             (
                               properties.toolPermissions as
-                                | ToolPermissionsOverride
-                                | undefined
+                                ToolPermissionsOverride | undefined
                             )?.deniedTools ?? []
                           ).join("\n")}
                           onChange={(e) => {
                             const current =
                               (properties.toolPermissions as
-                                | ToolPermissionsOverride
-                                | undefined) || {};
+                                ToolPermissionsOverride | undefined) || {};
                             setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
                               deniedTools: e.target.value.split("\n"),

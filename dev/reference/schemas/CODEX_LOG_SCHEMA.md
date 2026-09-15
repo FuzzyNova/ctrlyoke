@@ -53,12 +53,13 @@ Codex logs use a **two-level type hierarchy**:
 ```
 
 **Event Type Distribution:**
-| Event Type | Count | Description |
-|------------|-------|-------------|
-| `response_item` | 287 | AI response components (messages, tool calls, reasoning) |
-| `event_msg` | 221 | User/agent messages and token statistics |
-| `turn_context` | 120 | Context for each conversational turn |
-| `session_meta` | 1 | Session initialization metadata |
+
+| Event Type      | Count | Description                                              |
+| --------------- | ----- | -------------------------------------------------------- |
+| `response_item` | 287   | AI response components (messages, tool calls, reasoning) |
+| `event_msg`     | 221   | User/agent messages and token statistics                 |
+| `turn_context`  | 120   | Context for each conversational turn                     |
+| `session_meta`  | 1     | Session initialization metadata                          |
 
 ---
 
@@ -590,10 +591,7 @@ interface CodexLogEvent {
 }
 
 type EventType =
-  | "session_meta"
-  | "turn_context"
-  | "event_msg"
-  | "response_item";
+  "session_meta" | "turn_context" | "event_msg" | "response_item";
 
 type EventPayload =
   | SessionMetaPayload
@@ -656,9 +654,7 @@ interface TruncationPolicy {
 // ============================================================================
 
 type EventMsgPayload =
-  | UserMessagePayload
-  | AgentMessagePayload
-  | TokenCountPayload;
+  UserMessagePayload | AgentMessagePayload | TokenCountPayload;
 
 interface UserMessagePayload {
   type: "user_message";

@@ -2162,9 +2162,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       variant={PROMPT_PROPERTIES.PRE_CONDITION}
                       value={
                         effectivePreCondition as
-                          | ScriptConditionValue
-                          | null
-                          | undefined
+                          ScriptConditionValue | null | undefined
                       }
                       onChange={handlePreConditionChange}
                       narrow={isNarrow}
@@ -2221,9 +2219,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       variant={PROMPT_PROPERTIES.END_CONDITION}
                       value={
                         effectiveEndCondition as
-                          | ScriptConditionValue
-                          | null
-                          | undefined
+                          ScriptConditionValue | null | undefined
                       }
                       onChange={handleEndConditionChange}
                       narrow={isNarrow}

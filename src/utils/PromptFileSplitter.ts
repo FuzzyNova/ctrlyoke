@@ -171,7 +171,7 @@ export class PromptFileSplitter {
       }
 
       let tokenCount = 0;
-      for (let start = 0; start < text.length; ) {
+      for (let start = 0; start < text.length;) {
         let end = Math.min(start + MAX_TOKENIZER_INPUT_CHARS, text.length);
         // Keep a UTF-16 surrogate pair together at an artificial boundary.
         if (
