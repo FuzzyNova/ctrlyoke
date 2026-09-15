@@ -341,6 +341,60 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(output.includes("more lines"));
   });
 
+  test("labels condition, worktree-setup, and ordinary script headers", () => {
+    const output = runFormatterScript(`
+const verdict = { compareSource: "exitCode", actual: "0", actualSource: "exitCode", outcome: "passed", matchRule: "exitCode", action: "continue", durationMs: 1 };
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "build", key: "pre" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.END_CONDITION, response: "ok", elapsed: 0, isStreaming: false, attemptIndex: 1, scriptVerdict: verdict }, { stepIndex: 0, stepName: "build", key: "end" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "setup", key: "setup" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "ok", elapsed: 0, isStreaming: false, scriptVerdict: verdict }, { stepIndex: 0, stepName: "script", key: "script" });`);
+
+    assert.ok(output.includes("[Pre-condition] build"));
+    assert.ok(output.includes("[End condition retry 2] build"));
+    assert.ok(output.includes("[Worktree setup] setup"));
+    assert.ok(output.includes("[Script step] script"));
+  });
+
+  test("labels final-step loop iterations", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderFinalStepLabel(2);`
+    );
+
+    assert.ok(output.includes("Final Step Loop 3"));
+  });
+
+  test("shows per-attempt harness and model with a bounded prompt preview", () => {
+    const output = runFormatterScript(`
+const prompt = Array.from({ length: 25 }, (_, index) => "prompt line " + index).join("\\n");
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "override", promptText: prompt, attemptIndex: 1, runIndex: 0, harness: "claude-cli", model: "claude-sonnet-4.5" });`);
+
+    assert.ok(output.includes("Harness: claude-cli"));
+    assert.ok(output.includes("Model: claude-sonnet-4.5"));
+    assert.ok(output.includes("prompt line 19"));
+    assert.ok(!output.includes("prompt line 20"));
+    assert.ok(
+      output.includes("… 5 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+  });
+
+  test("adds full-record notices to diff, MCP parameter, and tool-result truncation", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FILE_EDIT,
+  data: { path: "large.ts", status: OPERATION_STATUS.COMPLETED, oldContent: "", newContent: Array.from({ length: 70 }, (_, index) => "added " + index).join("\\n") },
+});
+const long = "x".repeat(150);
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: { server: "queue", tool: "append", parameters: { value: long } } });
+CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.TOOL_RESULT, data: { result: { success: true, output: long } } });`);
+
+    assert.ok(
+      output.includes("… 10 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+    assert.ok(
+      (output.match(/more characters \(see \.ctrlyoke/g) ?? []).length >= 2
+    );
+  });
+
   test("renders parallel-group tally transitions, including a failed branch", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderParallelGroupHeader({ id: "research", startIndex: 0, endIndex: 1, failFast: false }, 2);

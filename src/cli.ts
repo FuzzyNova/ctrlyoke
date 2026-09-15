@@ -368,6 +368,45 @@ interface CliAttemptState {
   activeAttemptCompleted: boolean;
 }
 
+function getCliPromptExecutionDetails(
+  instance: WorkflowInstance,
+  stepIndex: number,
+  defaults: Pick<ResolvedCliConfig, "harness" | "model">
+): { harness?: HarnessId; model?: string } {
+  const workflow = instance.promptQueue.getWorkflowFile();
+  const step = instance.promptQueue.getState().steps[stepIndex];
+  const promptStep = step && !isScriptStep(step) ? step : undefined;
+  return {
+    harness:
+      step?._runtime?.harness ??
+      promptStep?.harness ??
+      workflow.harness ??
+      (defaults.harness as HarnessId),
+    model:
+      step?._runtime?.model ??
+      promptStep?.model ??
+      workflow.model ??
+      defaults.model,
+  };
+}
+
+function getCliOutputStepName(
+  instance: WorkflowInstance,
+  target: OutputExecutionTarget
+): string {
+  const workflow = instance.promptQueue.getWorkflowFile();
+  const step =
+    target.kind === FINAL_STEP_PHASES.QUEUE
+      ? instance.promptQueue.getState().steps[target.stepIndex]
+      : workflow.finalStep;
+  if (step?.name?.trim()) return step.name.trim();
+  if (step && isScriptStep(step))
+    return step.script.split(/\s+/)[0] ?? "script";
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `Step ${target.stepIndex + 1}`
+    : `Final Step Loop ${target.loopIndex + 1}`;
+}
+
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
@@ -762,7 +801,28 @@ async function runCommand(
     const pendingScriptStatusMessages = new Map<string, number>();
     const parallelGroups = new Map<string, CliParallelGroupState>();
     const attempts = new Map<number, CliAttemptState>();
+    const renderedFinalStepLabels = new Set<number>();
     let released = false;
+
+    const renderFinalStepLabel = (target: OutputExecutionTarget): void => {
+      if (
+        target.kind !== FINAL_STEP_PHASES.FINAL_STEP ||
+        renderedFinalStepLabels.has(target.loopIndex)
+      ) {
+        return;
+      }
+      renderedFinalStepLabels.add(target.loopIndex);
+      CliTerminalFormatter.renderFinalStepLabel(target.loopIndex);
+    };
+
+    const renderPromptHeader = (
+      data: Parameters<typeof CliTerminalFormatter.renderPromptHeader>[0]
+    ): void => {
+      CliTerminalFormatter.renderPromptHeader({
+        ...data,
+        ...getCliPromptExecutionDetails(instance, data.stepIndex, config),
+      });
+    };
 
     const getParallelGroup = (
       parallelGroupId: string | undefined
@@ -821,6 +881,7 @@ async function runCommand(
       }
       attempts.clear();
       parallelGroups.clear();
+      renderedFinalStepLabels.clear();
       pendingScriptStatusMessages.clear();
     };
 
@@ -848,7 +909,7 @@ async function runCommand(
 
       const state = getParallelGroup(data.parallelGroupId);
       if (!state) {
-        CliTerminalFormatter.renderPromptHeader(data);
+        renderPromptHeader(data);
         return;
       }
       if (!state.started.has(data.stepIndex)) {
@@ -864,9 +925,10 @@ async function runCommand(
       state.completed.delete(data.stepIndex);
       state.failed.delete(data.stepIndex);
       renderParallelGroupProgress(state);
-      CliTerminalFormatter.renderPromptHeader(data);
+      renderPromptHeader(data);
     });
     instance.onTargetScriptOutput((data) => {
+      renderFinalStepLabel(data.target);
       const statusSummary = CliTerminalFormatter.getScriptVerdictStatusSummary(
         data.output
       );
@@ -881,7 +943,7 @@ async function runCommand(
           data.target.kind === FINAL_STEP_PHASES.QUEUE
             ? data.target.stepIndex
             : data.target.loopIndex,
-        stepName: data.output.source ?? "script",
+        stepName: getCliOutputStepName(instance, data.target),
         key:
           data.target.kind === FINAL_STEP_PHASES.QUEUE
             ? `queue:${data.target.stepIndex}`
@@ -889,6 +951,7 @@ async function runCommand(
       });
     });
     instance.onTargetStreamingEvents((data) => {
+      renderFinalStepLabel(data.target);
       CliTerminalFormatter.renderEvents(data.events, {
         stepIndex:
           data.target.kind === FINAL_STEP_PHASES.QUEUE
@@ -902,6 +965,7 @@ async function runCommand(
       } satisfies CliOutputTarget);
     });
     instance.onTargetStreamingChunk((data) => {
+      renderFinalStepLabel(data.target);
       CliTerminalFormatter.renderStreamingChunk(data.chunk, {
         stepIndex:
           data.target.kind === FINAL_STEP_PHASES.QUEUE
