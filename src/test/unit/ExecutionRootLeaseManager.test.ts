@@ -13,8 +13,6 @@ import {
 } from "../../core/orchestration/ExecutionRootLeaseManager";
 
 suite("ExecutionRootLeaseManager", function () {
-  this.timeout(10_000);
-
   async function tempDirectory(name: string): Promise<string> {
     return fs.mkdtemp(path.join(os.tmpdir(), `ctrlyoke-lease-${name}-`));
   }

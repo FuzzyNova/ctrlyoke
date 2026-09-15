@@ -15,8 +15,6 @@ import {
 } from "../../utils/WorktreeUtils";
 
 suite("WorktreeUtils", function () {
-  this.timeout(10_000);
-
   async function makeDirectory(name: string): Promise<string> {
     return fs.mkdtemp(path.join(os.tmpdir(), `ctrlyoke-${name}-`));
   }

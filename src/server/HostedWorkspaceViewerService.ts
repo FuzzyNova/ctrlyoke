@@ -126,7 +126,6 @@ const GIT_TIMEOUT_MS = 10_000;
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
-const SEARCH_MAX_FILES = 5000;
 const SEARCH_MAX_DURATION_MS = 3000;
 const SEARCH_MAX_FILENAME_MATCHES = 30;
 const SEARCH_MAX_CONTENT_MATCHES_PER_FILE = 3;
@@ -365,6 +364,16 @@ export class HostedWorkspaceViewerService {
       runnerHostIdentity
     );
   }
+
+  /**
+   * File-count budget for one search, past which the response is marked
+   * truncated. An instance member rather than a module constant so a test
+   * subclass can shrink it: proving the budget with the real 5000 meant
+   * creating 5001 files per run, which on Windows is slow enough to time the
+   * test out under full-suite load without telling us anything the small
+   * budget does not.
+   */
+  protected readonly searchMaxFiles: number = 5000;
 
   // ── Multi-root helpers ───────────────────────────────────────────────────
   //
@@ -645,7 +654,7 @@ export class HostedWorkspaceViewerService {
     for (const candidate of candidates) {
       if (filenameResults.length >= limit) break;
       if (
-        scannedFiles >= SEARCH_MAX_FILES ||
+        scannedFiles >= this.searchMaxFiles ||
         Date.now() - startedAt >= SEARCH_MAX_DURATION_MS
       ) {
         truncated = true;
@@ -805,7 +814,7 @@ export class HostedWorkspaceViewerService {
     const files: string[] = [];
     let truncated = false;
 
-    while (pending.length > 0 && files.length < SEARCH_MAX_FILES) {
+    while (pending.length > 0 && files.length < this.searchMaxFiles) {
       if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
         truncated = true;
         break;
@@ -824,7 +833,7 @@ export class HostedWorkspaceViewerService {
           truncated = true;
           break;
         }
-        if (files.length >= SEARCH_MAX_FILES) {
+        if (files.length >= this.searchMaxFiles) {
           truncated = true;
           break;
         }
@@ -838,7 +847,7 @@ export class HostedWorkspaceViewerService {
         }
       }
     }
-    if (files.length >= SEARCH_MAX_FILES && pending.length > 0) {
+    if (files.length >= this.searchMaxFiles && pending.length > 0) {
       truncated = true;
     }
     return { files, truncated };

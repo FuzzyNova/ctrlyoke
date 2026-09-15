@@ -30,13 +30,6 @@ import {
 } from "../../utils/GitUtils";
 
 suite("GitUtils.gitRefExists", function () {
-  // Setup shells out to real git (init/config/commit) via execFileSync.
-  // `this.timeout()` in a test callback only extends that test's own
-  // runnable, not the "before each" hook ahead of it, so the timeout needs
-  // to be set at suite level to keep `setup` from timing out while the full
-  // extension host suite is probing installed harness CLIs in parallel.
-  this.timeout(10_000);
-
   let workspaceRoot: string;
 
   function runGit(args: string[]): string {
@@ -232,8 +225,6 @@ suite("GitUtils.gitRefExists", function () {
 });
 
 suite("GitUtils worktree plumbing", function () {
-  this.timeout(10_000);
-
   let workspaceRoot: string;
 
   function runGit(args: string[]): string {
@@ -382,8 +373,6 @@ suite("GitUtils worktree plumbing", function () {
 });
 
 suite("GitUtils.getGitIgnoredFiles", function () {
-  this.timeout(10_000);
-
   const temporaryRoots: string[] = [];
 
   async function createRepo(): Promise<string> {

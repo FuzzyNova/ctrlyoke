@@ -647,8 +647,6 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should return timeout result when script takes too long", async function () {
-      this.timeout(10000); // Extend mocha timeout
-
       // Use a command that sleeps
       const condition = {
         script:

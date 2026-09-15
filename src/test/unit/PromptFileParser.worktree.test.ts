@@ -6,8 +6,6 @@ import {
 } from "../../core/PromptFileParser";
 
 suite("PromptFileParser worktree authoring", function () {
-  this.timeout(10_000);
-
   const parser = new PromptFileParser();
 
   test("resolves authored source from a working file or parsed path", () => {

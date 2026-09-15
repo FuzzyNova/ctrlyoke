@@ -966,11 +966,6 @@ suite("WebviewSettingsSync", () => {
     }
 
     test("should save generated certs to the user ctrlyoke folder when scope is user", async function () {
-      // Real RSA-2048 keygen via selfsigned/node-forge is synchronous and slow;
-      // this test also pays the one-time `import("selfsigned")` cost, so the
-      // default 2000ms mocha timeout is too tight.
-      this.timeout(20_000);
-
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
 
@@ -1074,7 +1069,6 @@ suite("WebviewSettingsSync", () => {
 
     test("should save generated certs to the workspace ctrlyoke folder when scope is workspace", async function () {
       // Real RSA-2048 keygen is synchronous and slow — see the user-scope test above.
-      this.timeout(20_000);
 
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);

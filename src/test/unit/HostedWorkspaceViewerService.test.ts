@@ -24,14 +24,18 @@ import {
   WORKSPACE_ENTRY_KINDS,
 } from "../../types/DashboardConstants";
 
-suite("HostedWorkspaceViewerService", function () {
-  // Most tests here shell out to real git (init/config/commit/clone/push/
-  // fetch) via execFileSync/execFileAsync rather than mocking it. Process-
-  // spawn overhead under full-suite load (this file runs alongside real CLI
-  // discovery calls during extension activation) can intermittently push
-  // individual tests past the default 2000ms mocha timeout.
-  this.timeout(10_000);
+/**
+ * Small enough that "budget exceeded" is a handful of files rather than the
+ * 5001 the production budget would need. The walk's behaviour at the boundary
+ * is the same either way, and the real budget is a plain constant on the class.
+ */
+const BUDGETED_SEARCH_MAX_FILES = 10;
 
+class BudgetedWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override readonly searchMaxFiles = BUDGETED_SEARCH_MAX_FILES;
+}
+
+suite("HostedWorkspaceViewerService", function () {
   const tempRoots: string[] = [];
 
   function createWorkspace(): string {
@@ -1106,11 +1110,11 @@ suite("HostedWorkspaceViewerService", function () {
 
     test("marks the response truncated when the scan file budget is exceeded", async () => {
       const root = createWorkspace();
-      for (let i = 0; i < 5001; i++) {
+      for (let i = 0; i < BUDGETED_SEARCH_MAX_FILES + 1; i++) {
         fs.writeFileSync(path.join(root, `file-${i}.txt`), "contents\n");
       }
 
-      const result = await new HostedWorkspaceViewerService(
+      const result = await new BudgetedWorkspaceViewerService(
         root
       ).searchWorkspace({
         query: "missing",

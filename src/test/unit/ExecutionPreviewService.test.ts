@@ -1020,7 +1020,6 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("computes a deterministic named-worktree directory when no matching checkout exists yet", async function () {
-    this.timeout(20_000);
     const parent = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-worktree-named-")
     );
@@ -1051,7 +1050,6 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("reports the exact directory when the named branch already has a Git worktree checked out", async function () {
-    this.timeout(20_000);
     const parent = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-worktree-exact-")
     );
@@ -1088,7 +1086,6 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("classifies mutations under the worktree's own temp directory as run-local, not shared", async function () {
-    this.timeout(20_000);
     const parent = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-worktree-mutation-")
     );
@@ -1142,7 +1139,6 @@ suite("ExecutionPreviewService", () => {
   });
 
   test("computes a managed-worktree preview without an exact path, noting the run-ID dependency", async function () {
-    this.timeout(20_000);
     const parent = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-worktree-managed-")
     );
