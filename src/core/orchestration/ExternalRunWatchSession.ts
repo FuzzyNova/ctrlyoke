@@ -20,6 +20,7 @@ import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
+import type { StepWithRuntimeStatus } from "../../utils/StepStatusDerivation";
 
 export type ExternalRunWatchFinishReason =
   | "terminal-working-file"
@@ -76,9 +77,15 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     private readonly observer: RunnerHostIdentity,
     /**
      * Called when the working file changes: partial WorkflowSummary update
-     * with the latest currentStep and executionState.
+     * with the latest currentStep and executionState, plus the steps array as
+     * just read from disk. The steps ride along because the caller has to
+     * re-derive per-step statuses on every change (the summary alone carries
+     * only the position), and this read already parsed them.
      */
-    private readonly onUpdate: (summary: Partial<WorkflowSummary>) => void,
+    private readonly onUpdate: (
+      summary: Partial<WorkflowSummary>,
+      steps: readonly StepWithRuntimeStatus[]
+    ) => void,
     /**
      * Called when the run's manifest/events change.
      * Passes the absolute path to the manifest file so the caller can read
@@ -204,20 +211,24 @@ export class ExternalRunWatchSession implements vscode.Disposable {
           executionState?: string;
           tokenTotals?: WorkflowTokenTotals;
         };
-        steps?: unknown[];
+        steps?: StepWithRuntimeStatus[];
       };
 
       const currentIndex = workingFile._runtime?.currentIndex ?? 0;
       const executionState =
         (workingFile._runtime?.executionState as string | undefined) ??
         EXECUTION_STATES.RUNNING;
+      const steps = workingFile.steps ?? [];
 
-      this.onUpdate({
-        currentStep: currentIndex,
-        totalSteps: workingFile.steps?.length ?? 0,
-        executionState: executionState as WorkflowSummary["executionState"],
-        tokenTotals: workingFile._runtime?.tokenTotals,
-      });
+      this.onUpdate(
+        {
+          currentStep: currentIndex,
+          totalSteps: steps.length,
+          executionState: executionState as WorkflowSummary["executionState"],
+          tokenTotals: workingFile._runtime?.tokenTotals,
+        },
+        steps
+      );
       if (
         !ACTIVE_EXECUTION_STATES.has(
           executionState as WorkflowSummary["executionState"]

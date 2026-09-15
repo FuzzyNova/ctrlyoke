@@ -120,6 +120,7 @@ suite("ExternalRunWatchSession", () => {
       );
 
       let update: Record<string, unknown> | undefined;
+      let updateSteps: readonly unknown[] | undefined;
       const session = new ExternalRunWatchSession(
         workingFilePath,
         workflowKey,
@@ -127,8 +128,9 @@ suite("ExternalRunWatchSession", () => {
         workspaceFolderPath,
         makeInspection(workflowKey, runRef),
         observer,
-        (summary) => {
+        (summary, steps) => {
           update = summary as Record<string, unknown>;
+          updateSteps = steps;
         },
         () => {},
         () => {}
@@ -139,6 +141,9 @@ suite("ExternalRunWatchSession", () => {
 
       assert.deepStrictEqual(update?.tokenTotals, tokenTotals);
       assert.strictEqual(update?.currentStep, 1);
+      // The steps ride along so the orchestrator can re-derive per-step
+      // statuses on every change without a second read of the working file.
+      assert.deepStrictEqual(updateSteps, [{ prompt: "step" }]);
     } finally {
       await fs.rm(workspaceFolderPath, { recursive: true, force: true });
     }

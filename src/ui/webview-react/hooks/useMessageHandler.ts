@@ -89,6 +89,7 @@ import type {
   UserFeedbackMessage,
 } from "@root/types/WebviewMessageTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { deriveStepStatusesFromRuntime } from "@root/utils/StepStatusDerivation";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
@@ -2563,23 +2564,12 @@ export function createMessageHandlers(
     // per-step runtime so completed/failed/cancelled/skipped chips still
     // render their status border after loading a run view.
     const currentIndex = runtime?.currentIndex ?? 0;
-    const results = (workingFile.steps ?? []).map(
-      (step: any, index: number) => {
-        const stepRuntime = step._runtime;
-        if (stepRuntime?.completedAt !== undefined) {
-          return {
-            status: stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED,
-          };
-        }
-        if (
-          index === currentIndex &&
-          runtime?.executionState === EXECUTION_STATES.RUNNING
-        ) {
-          return { status: STEP_STATUS.SENT };
-        }
-        return { status: STEP_STATUS.PENDING };
-      }
-    );
+    const results = deriveStepStatusesFromRuntime(
+      workingFile.steps ?? [],
+      currentIndex,
+      runtime?.executionState,
+      STEP_STATUS.SENT
+    ).map((status) => ({ status }));
     // Guard against a requestless snapshot regressing a genuinely live
     // execution state. `readAddressedRunView` reads the run's working file
     // straight off disk, and a snapshot for the same address can be built

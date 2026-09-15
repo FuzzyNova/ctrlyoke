@@ -52,7 +52,6 @@ import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   RUNNER_IDS,
-  STEP_STATUS,
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
@@ -101,6 +100,10 @@ import {
   ExternalRunWatchSession,
   type ExternalRunWatchFinishReason,
 } from "./orchestration/ExternalRunWatchSession";
+import {
+  deriveStepStatusesFromRuntime,
+  type StepWithRuntimeStatus,
+} from "../utils/StepStatusDerivation";
 import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
@@ -339,7 +342,16 @@ export class WorkflowOrchestrator {
   /** Externally managed workflows being watched (keyed by workflowId) */
   private readonly externalRunSessions: Map<
     string,
-    { session: ExternalRunWatchSession; summary: WorkflowSummary }
+    {
+      session: ExternalRunWatchSession;
+      summary: WorkflowSummary;
+      /**
+       * Last per-step statuses broadcast for this run, so working-file changes
+       * can be diffed into STEP_STATUS_CHANGED messages instead of re-sending
+       * every step on every write.
+       */
+      lastStepStatuses: StepStatus[];
+    }
   > = new Map();
   private readonly coordinationWatchSessions = new Map<
     string,
@@ -7015,7 +7027,7 @@ export class WorkflowOrchestrator {
       workspaceFolderPath,
       currentInspection,
       this.runnerHostIdentity,
-      (partialSummary) => {
+      (partialSummary, updatedSteps) => {
         // Merge partial update into stored summary
         const entry = this.externalRunSessions.get(workflowId);
         if (!entry) {
@@ -7029,6 +7041,19 @@ export class WorkflowOrchestrator {
         };
         entry.summary = updatedSummary;
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
+
+        // A summary carries only the position, so without this the dashboard's
+        // per-step statuses stay frozen at whatever the last full-state push
+        // recorded. That is invisible while the run is RUNNING (usePromptStatus
+        // falls back to position) and becomes visible the instant it reaches a
+        // terminal state: the step that actually failed renders with its stale
+        // status and the error badge lands on a later, never-executed step.
+        this.broadcastExternalRunStepStatuses(
+          workflowId,
+          entry,
+          updatedSteps,
+          updatedSummary
+        );
 
         // If the CLI extended the queue, send the new prompts so the WorkflowStepsPanel reflects them
         if (updatedSummary.totalSteps > prevTotalSteps) {
@@ -7069,7 +7094,15 @@ export class WorkflowOrchestrator {
       }
     );
 
-    this.externalRunSessions.set(workflowId, { session, summary });
+    this.externalRunSessions.set(workflowId, {
+      session,
+      summary,
+      lastStepStatuses: deriveStepStatusesFromRuntime(
+        (workingFile.steps as StepWithRuntimeStatus[] | undefined) ?? [],
+        currentIndex,
+        executionState
+      ),
+    });
     await session.start();
 
     // The initial post-watcher read can discover that the run completed during
@@ -7089,6 +7122,40 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Push STEP_STATUS_CHANGED for every step whose derived status moved since
+   * the last broadcast for this external run.
+   *
+   * Diffed rather than re-sent wholesale because the working file is rewritten
+   * on every `_runtime` mutation by an out-of-process writer, and each message
+   * fans out to every connected dashboard client (see
+   * `WORKING_FILE_CHANGE_THROTTLE_MS` in `ExternalRunWatchSession`).
+   */
+  private broadcastExternalRunStepStatuses(
+    workflowId: string,
+    entry: { lastStepStatuses: StepStatus[] },
+    steps: readonly StepWithRuntimeStatus[],
+    summary: WorkflowSummary
+  ): void {
+    const statuses = deriveStepStatusesFromRuntime(
+      steps,
+      summary.currentStep ?? 0,
+      summary.executionState
+    );
+    for (const [index, status] of statuses.entries()) {
+      if (entry.lastStepStatuses[index] === status) {
+        continue;
+      }
+      this.dashboardBroadcastHub.updateStepStatus(
+        index,
+        { state: status },
+        undefined,
+        workflowId
+      );
+    }
+    entry.lastStepStatuses = statuses;
+  }
+
+  /**
    * Send full workflow state to the dashboard when switching to an externally managed workflow.
    * Sends SESSION_RESTORED with the current prompts, then replays all captured outputs.
    * When `sink` is provided, sends only to that single client (per-client replay);
@@ -7099,6 +7166,7 @@ export class WorkflowOrchestrator {
     externalEntry: {
       session: ExternalRunWatchSession;
       summary: WorkflowSummary;
+      lastStepStatuses: StepStatus[];
     },
     sink?: IDashboardSink
   ): Promise<void> {
@@ -7143,29 +7211,15 @@ export class WorkflowOrchestrator {
       );
     }
 
-    // Derive each step's status from its own persisted `_runtime`, mirroring
-    // the RUN_VIEW_LOADED reconstruction in useMessageHandler.ts — never from
-    // position relative to currentIndex alone. `commitStepOutcomeAndAdvance`
-    // advances currentIndex past a step even when that step's outcome is a
-    // terminal failure that stops the workflow, so "i < currentIndex →
-    // completed" mislabels the actually-failed step as COMPLETED. That fools
-    // the dashboard's usePromptStatus stale-failure guard (which only
-    // suppresses painting the error badge on currentIndex when the previous
-    // step's *recorded* status is already FAILED) into painting the error
-    // badge on the next, never-executed step instead.
-    const results = steps.map((step, i) => {
-      const stepRuntime = step._runtime;
-      if (stepRuntime?.completedAt !== undefined) {
-        return { status: stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED };
-      }
-      if (
-        i === currentIndex &&
-        externalEntry.summary.executionState === EXECUTION_STATES.RUNNING
-      ) {
-        return { status: STEP_STATUS.RUNNING };
-      }
-      return { status: STEP_STATUS.PENDING };
-    });
+    const statuses = deriveStepStatusesFromRuntime(
+      steps,
+      currentIndex,
+      externalEntry.summary.executionState
+    );
+    const results = statuses.map((status) => ({ status }));
+    // Keep the diff baseline aligned with what this client now displays, so the
+    // next working-file change sends only what actually moved.
+    externalEntry.lastStepStatuses = statuses;
 
     const fileName = path.basename(workingFilePath);
     const target: IDashboardSink = sink ?? this.dashboardBroadcastHub;
@@ -7409,7 +7463,7 @@ export class WorkflowOrchestrator {
             currentIndex?: number;
             tokenTotals?: WorkflowSummary["tokenTotals"];
           };
-          steps?: unknown[];
+          steps?: StepWithRuntimeStatus[];
           workflowName?: string;
           startedAt?: number;
         };
@@ -7448,6 +7502,22 @@ export class WorkflowOrchestrator {
           externalOwner: undefined, // no longer externally managed
           tokenTotals: workingFile._runtime?.tokenTotals,
         };
+
+        // This — not the working-file watcher — is what delivers a CLI run's
+        // *final* step layout. `handleExternalRunFinished` runs first on the
+        // lock-deleted path and has already removed the session, so the last
+        // `handleWorkingFileChange` finds no entry and its onUpdate returns
+        // early. Without a push here the dashboard keeps whatever per-step
+        // statuses it last had while executionState flips to ERROR, which is
+        // exactly how the error badge ends up on a never-executed step.
+        // Sent before the summary so the terminal state never lands on a stale
+        // step layout.
+        this.broadcastExternalRunStepStatuses(
+          workflowId,
+          entry,
+          workingFile.steps ?? [],
+          finalSummary
+        );
 
         // Update the dashboard: send final state then dismiss from Running section
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(finalSummary);

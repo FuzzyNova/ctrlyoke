@@ -397,8 +397,17 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
           definitionRevision: 1,
           _runtime: { currentIndex: 2, executionState: EXECUTION_STATES.ERROR },
           steps: [
-            { prompt: "ok", _runtime: { completedAt: 1, terminalStatus: STEP_STATUS.COMPLETED } },
-            { prompt: "terminal failure", _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.FAILED } },
+            {
+              prompt: "ok",
+              _runtime: {
+                completedAt: 1,
+                terminalStatus: STEP_STATUS.COMPLETED,
+              },
+            },
+            {
+              prompt: "terminal failure",
+              _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.FAILED },
+            },
             { prompt: "never executes" },
           ],
         })
@@ -427,6 +436,181 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
       assert.strictEqual(results[0].status, STEP_STATUS.COMPLETED);
       assert.strictEqual(results[1].status, STEP_STATUS.FAILED);
       assert.strictEqual(results[2].status, STEP_STATUS.PENDING);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("pushes per-step status changes as a watched external run progresses", () => {
+    // The full-state push only happens when a client switches onto the run, so
+    // without this the dashboard's per-step statuses stay frozen at that
+    // snapshot for the rest of the run. That is invisible while the run is
+    // RUNNING (usePromptStatus falls back to position) and becomes the
+    // "error badge on the wrong row" bug the moment it goes terminal.
+    const calls: Array<{ index: number; state: string; workflowId: string }> =
+      [];
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    internal.dashboardBroadcastHub = {
+      updateStepStatus: (
+        index: number,
+        status: { state: string },
+        _details: unknown,
+        workflowId: string
+      ) => calls.push({ index, state: status.state, workflowId }),
+    };
+
+    // Snapshot the dashboard already has: step 1 done, step 2 in flight.
+    const entry = {
+      lastStepStatuses: [
+        STEP_STATUS.COMPLETED,
+        STEP_STATUS.RUNNING,
+        STEP_STATUS.PENDING,
+        STEP_STATUS.PENDING,
+        STEP_STATUS.PENDING,
+      ] as string[],
+    };
+    // Disk now: steps 2 and 3 completed, step 4 failed terminally, and
+    // currentIndex has already advanced past it.
+    const steps = [
+      { _runtime: { completedAt: 1, terminalStatus: STEP_STATUS.COMPLETED } },
+      { _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.COMPLETED } },
+      { _runtime: { completedAt: 3, terminalStatus: STEP_STATUS.COMPLETED } },
+      { _runtime: { completedAt: 4, terminalStatus: STEP_STATUS.FAILED } },
+      {},
+    ];
+
+    internal.broadcastExternalRunStepStatuses("external-run", entry, steps, {
+      currentStep: 4,
+      executionState: EXECUTION_STATES.ERROR,
+    });
+
+    // Step 1 was already COMPLETED for this client, so it must not be re-sent.
+    assert.deepStrictEqual(calls, [
+      { index: 1, state: STEP_STATUS.COMPLETED, workflowId: "external-run" },
+      { index: 2, state: STEP_STATUS.COMPLETED, workflowId: "external-run" },
+      { index: 3, state: STEP_STATUS.FAILED, workflowId: "external-run" },
+    ]);
+    // The never-executed step 5 stays PENDING — it is the row the error badge
+    // used to land on.
+    assert.deepStrictEqual(entry.lastStepStatuses, [
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.FAILED,
+      STEP_STATUS.PENDING,
+    ]);
+
+    // A second change with nothing new must broadcast nothing at all.
+    calls.length = 0;
+    internal.broadcastExternalRunStepStatuses("external-run", entry, steps, {
+      currentStep: 4,
+      executionState: EXECUTION_STATES.ERROR,
+    });
+    assert.deepStrictEqual(calls, []);
+  });
+
+  test("sends the final step layout when a watched external run finishes", async () => {
+    // The lock-deleted path reaches handleExternalRunFinished *before* the
+    // working file watcher's last change, and it removes the session first —
+    // so that last onUpdate finds no entry and returns early. This is the only
+    // message left that can correct the step layout, and when it didn't, the
+    // dashboard flipped to ERROR still holding the statuses from whenever the
+    // client switched onto the run: the failed step rendered stale and the
+    // error badge landed on the never-executed step after it.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-external-run-finished-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "error showcase",
+          _runtime: { currentIndex: 4, executionState: EXECUTION_STATES.ERROR },
+          steps: [
+            {
+              _runtime: {
+                completedAt: 1,
+                terminalStatus: STEP_STATUS.COMPLETED,
+              },
+            },
+            {
+              _runtime: {
+                completedAt: 2,
+                terminalStatus: STEP_STATUS.COMPLETED,
+              },
+            },
+            {
+              _runtime: {
+                completedAt: 3,
+                terminalStatus: STEP_STATUS.COMPLETED,
+              },
+            },
+            {
+              _runtime: { completedAt: 4, terminalStatus: STEP_STATUS.FAILED },
+            },
+            {},
+          ],
+        })
+      );
+
+      const statusCalls: Array<{ index: number; state: string }> = [];
+      let dismissed = false;
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.dashboardBroadcastHub = {
+        updateStepStatus: (index: number, status: { state: string }) =>
+          statusCalls.push({ index, state: status.state }),
+        notifyWorkflowSummaryUpdated: () => undefined,
+        notifyWorkflowDismissed: () => {
+          dismissed = true;
+        },
+      };
+      internal.saveState = () => undefined;
+      internal.externalRunSessions = new Map([
+        [
+          "external-run",
+          {
+            session: { dispose: () => undefined },
+            summary: {
+              workflowKey: "error-showcase",
+              currentStep: 1,
+              totalSteps: 5,
+              executionState: EXECUTION_STATES.RUNNING,
+            },
+            // What the dashboard was last told: step 2 still in flight.
+            lastStepStatuses: [
+              STEP_STATUS.COMPLETED,
+              STEP_STATUS.RUNNING,
+              STEP_STATUS.PENDING,
+              STEP_STATUS.PENDING,
+              STEP_STATUS.PENDING,
+            ],
+          },
+        ],
+      ]);
+
+      internal.handleExternalRunFinished(
+        "external-run",
+        workingFilePath,
+        "lock-deleted"
+      );
+      // handleExternalRunFinished reads the working file asynchronously.
+      for (let i = 0; i < 100 && !dismissed; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(dismissed, "run should have been dismissed");
+
+      assert.deepStrictEqual(statusCalls, [
+        { index: 1, state: STEP_STATUS.COMPLETED },
+        { index: 2, state: STEP_STATUS.COMPLETED },
+        { index: 3, state: STEP_STATUS.FAILED },
+      ]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

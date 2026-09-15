@@ -191,6 +191,9 @@ function createHost(
     notifyWorkflowDismissed: (workflowId: string) => dismissed.push(workflowId),
     notifyStartupComplete: () => undefined,
     notifyCliPromptsExtended: () => undefined,
+    // An external run's working-file change diffs per-step statuses out to the
+    // dashboard alongside the summary update, so the double needs this too.
+    updateStepStatus: () => undefined,
   };
   internal.context = { workspaceState: { update: async () => undefined } };
   internal.setupRunnerJsonCreateWatcher = () => undefined;
