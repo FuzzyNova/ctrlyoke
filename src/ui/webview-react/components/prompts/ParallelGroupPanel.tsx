@@ -256,7 +256,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
             <Icon name="grabber" className="text-xs" />
           </span>
         )}
-        <Icon name="type-hierarchy" className="text-description-fg" />
+        <Icon name="worktree-compact" className="text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
         </span>

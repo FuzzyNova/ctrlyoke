@@ -267,7 +267,7 @@ export function buildStepGroupingMenuItems({
     return [
       {
         label: "Ungroup parallel steps",
-        icon: "codicon-type-hierarchy-sub",
+        icon: "codicon-ungroup-by-ref-type",
         disabled,
         disabledTitle,
         onClick: () => {
@@ -321,7 +321,7 @@ export function buildStepGroupingMenuItems({
       isBoundaryBusy(neighborIndex);
     items.push({
       label,
-      icon: "codicon-type-hierarchy",
+      icon: "codicon-group-by-ref-type",
       disabled: disabled || itemLocked,
       disabledTitle: disabled
         ? disabledTitle
