@@ -406,9 +406,14 @@ export class WorkflowInstance {
     string,
     HarnessIntegration
   >();
-  /** Integrations that must be fresh and therefore cannot live in the cache. */
-  private readonly uncachedExecutionIntegrations =
-    new Set<HarnessIntegration>();
+  /**
+   * Execution integrations this run owns that no spawn-identity key points at:
+   * provisional ones created before the executor resolved a prompt, and ones
+   * superseded by a newer conversation for the same spawn identity. Their
+   * terminals stay open for the rest of the run — retention is the point — but
+   * no prompt can select them again, so they are never parked for inject.
+   */
+  private readonly unkeyedExecutionIntegrations = new Set<HarnessIntegration>();
   /** Target-keyed integrations used by a future parallel group fan-out. */
   private readonly targetExecutionIntegrations = new Map<
     string,
@@ -1162,11 +1167,11 @@ export class WorkflowInstance {
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
-    for (const integration of this.uncachedExecutionIntegrations) {
+    for (const integration of this.unkeyedExecutionIntegrations) {
       integration.closeTerminal();
       integration.dispose();
     }
-    this.uncachedExecutionIntegrations.clear();
+    this.unkeyedExecutionIntegrations.clear();
     for (const integration of this.targetExecutionIntegrations.values()) {
       integration.closeTerminal();
       integration.dispose();
@@ -4467,9 +4472,9 @@ export class WorkflowInstance {
             undefined,
             resolvedProperties
           );
-          activeIntegrationKey = requiresFreshIntegration
-            ? undefined
-            : integrationKey;
+          // Including the fresh-session case: that integration now owns this
+          // spawn identity, so a later compatible prompt continues its session.
+          activeIntegrationKey = integrationKey;
         }
         if (target) {
           this.registerTargetIntegration(target, currentIntegration);
@@ -4827,8 +4832,9 @@ export class WorkflowInstance {
   /**
    * Every integration this instance could still own a live PTY for, in
    * most-specific-first order: the per-target ones registered by the running
-   * attempt, the target- and harness-keyed execution caches, and the
-   * inject-mode integrations retained between runs.
+   * attempt, the target- and harness-keyed execution caches, the inject-mode
+   * integrations retained between runs, and the unkeyed ones whose terminals
+   * are retained for the rest of the run.
    */
   private *getLivePtyIntegrationCandidates(): Generator<HarnessIntegration> {
     for (const resource of this.activeTargetResources.values()) {
@@ -4839,6 +4845,7 @@ export class WorkflowInstance {
     yield* this.targetExecutionIntegrations.values();
     yield* this.executionIntegrations.values();
     yield* this.liveInjectIntegrations.values();
+    yield* this.unkeyedExecutionIntegrations;
   }
 
   /**
@@ -4914,11 +4921,7 @@ export class WorkflowInstance {
           `[WorkflowInstance] Using harness override: ${harnessOverride}`
         );
       }
-      const targetIntegration = this.integrationFactory.createForExecution(
-        harness,
-        this.executionWorkspace
-      );
-      this.configureExecutionIntegration(targetIntegration);
+      const targetIntegration = this.createExecutionIntegration(harness);
       this.targetExecutionIntegrations.set(targetKey, targetIntegration);
       return targetIntegration;
     }
@@ -4928,16 +4931,22 @@ export class WorkflowInstance {
     // that integration provisional; prompt selection below resolves the exact
     // spawn-identity key before it is used for a prompt.
     if (!resolvedProperties) {
-      return this.createUncachedExecutionIntegration(harness);
-    }
-
-    // A fresh-session prompt must never reuse a cached integration, even when
-    // its other spawn-time properties happen to match a previous prompt.
-    if (!resolvedProperties.resumeSession) {
-      return this.createUncachedExecutionIntegration(harness);
+      return this.createUnkeyedExecutionIntegration(harness);
     }
 
     const integrationKey = this.getSequentialIntegrationKey(resolvedProperties);
+
+    // A fresh-session prompt must never reuse an existing integration, even
+    // when its other spawn-time properties happen to match a previous prompt.
+    // It does, however, become the conversation that spawn identity now names:
+    // the next compatible prompt auto-resumes the session this one is about to
+    // create, so it has to select this integration rather than the superseded
+    // one still holding the older session.
+    if (!resolvedProperties.resumeSession) {
+      const fresh = this.createExecutionIntegration(harness);
+      this.claimSpawnIdentityKey(integrationKey, fresh);
+      return fresh;
+    }
 
     // If a live integration from the previous run is waiting in liveInjectIntegrations,
     // promote it into executionIntegrations immediately — before checking the cache or
@@ -4973,13 +4982,40 @@ export class WorkflowInstance {
     if (harnessOverride) {
       Log.info(`[WorkflowInstance] Using harness override: ${harnessOverride}`);
     }
-    const integration = this.integrationFactory.createForExecution(
-      harness,
-      this.executionWorkspace
-    );
-    this.configureExecutionIntegration(integration);
+    const integration = this.createExecutionIntegration(harness);
     this.executionIntegrations.set(integrationKey, integration);
     return integration;
+  }
+
+  /**
+   * Make `integration` the conversation `integrationKey` names, demoting
+   * whatever held that key. The superseded integration keeps its terminal —
+   * nothing about it conflicts with the new process — but no later prompt can
+   * resolve to it, so ownership moves to the unkeyed set that disposes with the
+   * run.
+   */
+  private claimSpawnIdentityKey(
+    integrationKey: string,
+    integration: HarnessIntegration
+  ): void {
+    const superseded =
+      this.executionIntegrations.get(integrationKey) ??
+      this.liveInjectIntegrations.get(integrationKey);
+    if (superseded && superseded !== integration) {
+      this.executionIntegrations.delete(integrationKey);
+      this.liveInjectIntegrations.delete(integrationKey);
+      if (
+        this.retainedIntegrationArtifactContexts.get(integrationKey)
+          ?.integration === superseded
+      ) {
+        this.retainedIntegrationArtifactContexts.delete(integrationKey);
+      }
+      this.unkeyedExecutionIntegrations.add(superseded);
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] Superseded integration for key ${integrationKey}; its terminal stays open but no longer receives prompts`
+      );
+    }
+    this.executionIntegrations.set(integrationKey, integration);
   }
 
   private getSequentialIntegrationKey(
@@ -4990,15 +5026,21 @@ export class WorkflowInstance {
     )}`;
   }
 
-  private createUncachedExecutionIntegration(
+  private createUnkeyedExecutionIntegration(
     harness: HarnessId
   ): HarnessIntegration {
+    const integration = this.createExecutionIntegration(harness);
+    this.unkeyedExecutionIntegrations.add(integration);
+    return integration;
+  }
+
+  /** Build a configured execution integration without registering it anywhere. */
+  private createExecutionIntegration(harness: HarnessId): HarnessIntegration {
     const integration = this.integrationFactory.createForExecution(
       harness,
       this.executionWorkspace
     );
     this.configureExecutionIntegration(integration);
-    this.uncachedExecutionIntegrations.add(integration);
     return integration;
   }
 
@@ -5691,16 +5733,16 @@ export class WorkflowInstance {
       const executionIntegrationEntries = [
         ...this.executionIntegrations.entries(),
         ...Array.from(
-          this.uncachedExecutionIntegrations,
+          this.unkeyedExecutionIntegrations,
           (execIntegration, index) =>
-            [`uncached:${index}`, execIntegration] as const
+            [`unkeyed:${index}`, execIntegration] as const
         ),
       ];
       for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
-        const isUncachedIntegration =
-          this.uncachedExecutionIntegrations.has(execIntegration);
+        const isUnkeyedIntegration =
+          this.unkeyedExecutionIntegrations.has(execIntegration);
         const retainIntegration =
-          !isUncachedIntegration &&
+          !isUnkeyedIntegration &&
           ((preserveWorktreeReservation &&
             execIntegration.canReuseForInject()) ||
             (!this.executionWorkspace.worktree &&
@@ -5781,7 +5823,7 @@ export class WorkflowInstance {
         }
       }
       this.executionIntegrations.clear();
-      this.uncachedExecutionIntegrations.clear();
+      this.unkeyedExecutionIntegrations.clear();
 
       for (const targetIntegration of this.targetExecutionIntegrations.values()) {
         targetIntegration.closeTerminalGracefully();

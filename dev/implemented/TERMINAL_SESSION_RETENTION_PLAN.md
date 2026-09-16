@@ -119,8 +119,20 @@ guarantee inject compatibility, and unequal ones were always going to spawn sepa
 field list, canonicalization, and digest are decided under **Spawn identity** below, in a
 module both the cache key and the inject predicate read, so the two cannot drift.
 
-`resumeSession: false` steps bypass the cache entirely and always allocate a fresh
-integration, since by definition they must not continue anything.
+`resumeSession: false` steps never _reuse_ a cached integration — by definition they
+must not continue anything — but the fresh integration they allocate does become that
+key's entry, displacing whatever held it. The session such a step opens is the one a
+later compatible prompt auto-resumes (`SessionResolver.autoResumeFromPrevious` scans
+back for the most recent same-harness `_runtime.sessionId`), so the key has to name it.
+The displaced integration keeps its terminal and moves to the unkeyed set that disposes
+with the run; nothing can select it for another prompt.
+
+**Leaving those steps entirely outside the cache shipped first, and was wrong.** The
+displaced entry stayed selectable, so a later resuming prompt picked the _older_
+conversation, arrived with a `resolvedSessionId` that integration did not own, and fell
+through to the unconditional restart branch — killing a retained terminal to re-spawn a
+session already live in a terminal beside it. Three terminals for three steps, and the
+one destroyed was the one nothing was asking for.
 
 **The selection site does not currently receive what the key needs.**
 `getIntegrationForPrompt` is called with `(prompt, resolvedProperties.harness, target)`
@@ -475,7 +487,8 @@ added; `CliTransportCoordinator` still owns exactly one PTY per integration.
   and the headless path leaves the interactive PTY alone when it resumes another session.
 - `src/test/unit/WorkflowInstance.test.ts` — two same-harness different-model steps produce
   two integrations; a third step with step 1's spawn identity resolves back to step 1's
-  integration; `resumeSession: false` allocates a fresh one every time. This is the suite that
-  proves sibling retention, since the restart path itself no longer decides it.
+  integration; `resumeSession: false` allocates a fresh one every time, and that fresh one
+  — not the integration it displaced — is what the next resuming prompt continues. This is
+  the suite that proves sibling retention, since the restart path itself no longer decides it.
 - `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` — same-harness
   `TERMINAL_STARTED` no longer removes the prior session.

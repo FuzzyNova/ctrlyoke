@@ -332,7 +332,71 @@ suite("WorkflowInstance target resources", () => {
       );
 
       assert.notStrictEqual(first, second);
-      assert.strictEqual((instance as any).executionIntegrations.size, 0);
+      // The newest fresh session is the conversation that spawn identity now
+      // names; the one it displaced keeps its terminal but is unselectable.
+      assert.strictEqual((instance as any).executionIntegrations.size, 1);
+      assert.strictEqual(
+        (instance as any).executionIntegrations.get(
+          integrationCacheKey(properties)
+        ),
+        second
+      );
+      assert.ok(
+        (instance as any).unkeyedExecutionIntegrations.has(first),
+        "a superseded integration must still be owned by the run"
+      );
+    } finally {
+      instance.dispose();
+    }
+  });
+
+  // The bug this covers: prompt 2 opens a fresh session, prompt 3 auto-resumes
+  // *that* session, and selecting the pre-fresh integration made prompt 3 kill
+  // prompt 1's terminal to restart on a session it did not own.
+  test("continues a fresh session's integration on the next compatible prompt", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const initial = new MockHarnessIntegration(undefined, false);
+    const context = (instance as any).buildWorkflowExecutionContext(
+      initial,
+      "",
+      undefined
+    );
+    const resuming = createResolvedProperties();
+    const fresh = createResolvedProperties({ resumeSession: false });
+
+    try {
+      const first = context.getIntegrationForPrompt(
+        { name: "step one", prompt: "one" },
+        resuming
+      );
+      const second = context.getIntegrationForPrompt(
+        { name: "step two", prompt: "two" },
+        fresh
+      );
+      const third = context.getIntegrationForPrompt(
+        { name: "step three", prompt: "three" },
+        resuming
+      );
+
+      assert.notStrictEqual(second, first);
+      assert.strictEqual(
+        third,
+        second,
+        "a resuming prompt must continue the newest session for its spawn identity"
+      );
+      assert.ok(
+        (instance as any).unkeyedExecutionIntegrations.has(first),
+        "the superseded terminal must stay owned rather than be reused or dropped"
+      );
     } finally {
       instance.dispose();
     }
