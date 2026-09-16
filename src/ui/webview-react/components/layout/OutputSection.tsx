@@ -52,6 +52,7 @@ import {
   type RunBannerData,
 } from "../output/RunSummaryBanner";
 import { TerminalView } from "../output/TerminalView";
+import { isTerminalSessionInUseByActiveStep } from "@utils/terminalPresentation";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
@@ -1459,9 +1460,11 @@ const OutputSectionInner: React.FC = () => {
   ]);
 
   const terminalCanCloseActiveSession =
-    activeTerminalSession?.kind === SESSION_KINDS.SHELL ||
-    (activeTerminalSession?.kind === SESSION_KINDS.AI_CLI &&
-      !isExecutionActive);
+    activeTerminalSession !== null &&
+    !isTerminalSessionInUseByActiveStep(
+      activeTerminalSession,
+      activeStepIndices
+    );
 
   useEffect(() => {
     WebviewLog.trace(

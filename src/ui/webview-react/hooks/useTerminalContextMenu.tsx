@@ -5,25 +5,22 @@ import {
 } from "../components/shared/StepContextMenu";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { sendMessage } from "./useMessageHandler";
-import {
-  MESSAGE_TYPES,
-  SESSION_KINDS,
-  TERMINAL_SESSION_STATUS,
-} from "../types/messages";
+import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../types/messages";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";
 
 interface UseTerminalContextMenuOptions {
   workflowId: string;
   activeSession: TerminalSession | null;
-  isExecutionActive: boolean;
+  /** True when `activeSession` is the live PTY a currently-running step is driving. */
+  isSessionInUse: boolean;
   onClose: (session: TerminalSession) => void;
 }
 
 export function useTerminalContextMenu({
   workflowId,
   activeSession,
-  isExecutionActive,
+  isSessionInUse,
   onClose,
 }: UseTerminalContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
@@ -35,7 +32,6 @@ export function useTerminalContextMenu({
       const sessionId = activeSession?.id ?? null;
       const isSessionRunning =
         activeSession?.status === TERMINAL_SESSION_STATUS.RUNNING;
-      const isAiCli = activeSession?.kind === SESSION_KINDS.AI_CLI;
 
       // Capture xterm's selection at menu-open time before any click clears it
       const selectedText = sessionId
@@ -48,11 +44,10 @@ export function useTerminalContextMenu({
         ? "No active terminal"
         : "Terminal is not running";
 
-      const closeDisabled = !activeSession || (isAiCli && isExecutionActive);
-      const closeDisabledTitle =
-        isAiCli && isExecutionActive
-          ? "Cannot close a running step terminal"
-          : undefined;
+      const closeDisabled = !activeSession || isSessionInUse;
+      const closeDisabledTitle = isSessionInUse
+        ? "Cannot close a running step terminal"
+        : undefined;
 
       setContextMenu({
         x,
@@ -123,7 +118,7 @@ export function useTerminalContextMenu({
         ],
       });
     },
-    [workflowId, activeSession, isExecutionActive, onClose]
+    [workflowId, activeSession, isSessionInUse, onClose]
   );
 
   const terminalContextMenuPortal = contextMenu ? (
