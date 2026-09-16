@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
@@ -62,8 +56,11 @@ import {
   closestCenter,
   useDroppable,
   type CollisionDetection,
+  type DragCancelEvent,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -77,7 +74,10 @@ import {
   isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
-import { resolveStepColor } from "../../utils/stepColor";
+import {
+  resolveStepColor,
+  type StepColorGroupMember,
+} from "../../utils/stepColor";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -385,65 +385,79 @@ function movePendingDragMemberWithinGroup(
 }
 
 /**
- * Whether a drag crosses a parallel-group boundary — the only case that has to
- * be folded into `dragState` while the pointer is still down.
+ * Resolve the full live preview of the pending list for the current drag,
+ * always computed fresh from the *committed* baseline — never from a
+ * previously computed preview. This is what makes the preview trustworthy at
+ * every frame and at drop: the result for a given (committed, activeId,
+ * overId) triple is always the same, so there is nothing that can drift
+ * across a drag with several crossings the way the old incremental
+ * "fold whatever the last preview produced" approach could.
  *
- * Reordering the rendered list mid-drag is the multi-container pattern, and it
- * is actively harmful for a plain top-level move. There is no `DragOverlay`
- * here, so the dragged row is the real row: dnd-kit keeps it under the pointer
- * by subtracting the delta between the active node's *current* measured rect
- * and the one it measured at drag start. That re-measurement is driven by a
- * `MutationObserver`, and re-ordering the list is exactly such a mutation — so
- * for the frames between the reorder and the measurement landing, the row is
- * drawn a whole row-height away from the cursor and then snaps back. The
- * neighbour is worse off: `SortableContext` re-measures its droppables a render
- * later too, so `verticalListSortingStrategy` briefly indexes the *previous*
- * layout's rects by the *new* order and displaces it by a bogus offset. Whether
- * either excursion is visible depends purely on which frame the observers fire
- * on, which is why the same drag looks smooth once and jumps the next time.
- *
- * `verticalListSortingStrategy` is built to displace a *stationary* list with
- * transforms and have the caller commit the move on drop, so that is what a
- * same-level drag now does (see `resolvePendingDragEnd`). Crossing a group
- * boundary has no transform-only equivalent: `over` is then a member id, which
- * belongs to the group's own nested `SortableContext` and not to the outer
- * one, and an outer `overIndex` of -1 makes dnd-kit drop *every* transform —
- * including the one keeping the dragged row under the cursor. Folding the move
- * in is what puts the row into the context that can still animate it.
- *
- * Dragging a whole group is a plain top-level reorder and never mutates: the
- * group's own id is in the outer items, so the strategy can displace around it.
- *
- * A member over its *own* group's slot is deliberately not a crossing. On drop
- * that means "leave the group and take its slot" (see `movePendingDragItem`),
- * but folding it mid-drag is the bounce half of an oscillation: the fold that
- * put the step into the group pushed its row down past the group header, which
- * is enough for the next collision to resolve to the group's own slot, which
- * folds it straight back out. See `handleDragOver` for why that loop is fatal.
- *
- * The tail slot below a trailing group is a crossing, and has to be: `over` is
- * then an outer id while the row still lives in the group's nested context, so
- * without the fold the row stops following the cursor exactly as it clears the
- * group. It does not bounce the way the group's own slot does, because a fold
- * into a group only ever pushes the group's last member *down* — away from a
- * drag position that had to be below it to reach the tail in the first place.
+ * A step whose own container differs from where it started (it moved across
+ * a container boundary, or reordered within one) is applied with
+ * `movePendingDragMemberWithinGroup` only when it is still hovering *within
+ * its committed group*; every other case — a plain sibling move, a group
+ * crossing in either direction, or a whole-group drag — goes through
+ * `movePendingDragItem` / `movePendingDragContainer`, which already know how
+ * to resolve a cross-container drop.
  */
-export function isParallelGroupDragMove(
-  state: PendingDragState,
+export function computeLivePreviewState(
+  committedState: PendingDragState,
   activeId: string,
   overId: string
-): boolean {
-  if (!isStepDragId(activeId)) return false;
-  const sourceId = findPendingDragContainer(state, activeId);
-  const target = resolvePendingDropTarget(state, overId);
-  if (!sourceId || !target) return false;
-  if (target.kind === PENDING_DROP_TARGET_KINDS.MEMBER) {
-    return target.containerId !== sourceId;
+): PendingDragState {
+  if (!isStepDragId(activeId)) {
+    return movePendingDragContainer(committedState, activeId, overId);
   }
-  return (
-    Boolean(state.containers[sourceId].groupId) &&
-    state.order[target.orderIndex] !== sourceId
-  );
+  const sourceId = findPendingDragContainer(committedState, activeId);
+  const target = resolvePendingDropTarget(committedState, overId);
+  if (!sourceId || !target) return committedState;
+  if (
+    target.kind === PENDING_DROP_TARGET_KINDS.MEMBER &&
+    target.containerId === sourceId
+  ) {
+    return movePendingDragMemberWithinGroup(
+      committedState,
+      sourceId,
+      activeId,
+      overId
+    );
+  }
+  return movePendingDragItem(committedState, activeId, overId);
+}
+
+/**
+ * Every rendered row's live display slot (0-based absolute step index),
+ * keyed by drag id — the single source of truth for both the number shown
+ * next to a row and, via `slotNumber - 1`, a unique-mode identity color. A
+ * plain walk over the preview's containers in order: standalone steps and
+ * parallel-group members are numbered by the same running counter, so two
+ * rows can never land on the same number, and a step that crossed a group
+ * boundary always shows the number matching where it is currently rendered
+ * rather than where it started the drag.
+ *
+ * `baseIndex` is `currentStep` unless a parallel group straddles the
+ * done/pending boundary, in which case its still-pending tail is rendered
+ * elsewhere (see `straddlingParallelGroup`) and excluded from this list
+ * entirely — the walk has to start after it. That case never overlaps with
+ * an active drag: `canReorder` is already false whenever a straddling group
+ * exists, so `state` is always the untouched committed baseline there.
+ */
+export function computeDisplaySlots(
+  state: PendingDragState,
+  baseIndex: number
+): Map<string, number> {
+  const slots = new Map<string, number>();
+  let cursor = baseIndex;
+  for (const containerId of state.order) {
+    const container = state.containers[containerId];
+    if (!container) continue;
+    for (const itemId of container.items) {
+      slots.set(itemId, cursor);
+      cursor += 1;
+    }
+  }
+  return slots;
 }
 
 export type PendingReorderPayload = {
@@ -492,53 +506,21 @@ export function buildPendingReorderPayload(
 }
 
 /**
- * Resolve the outcome of a pending-tail drag, or `undefined` when the drag
- * left the committed topology unchanged.
- *
- * `handleDragOver` has already folded any group crossing into `dragState`, and
- * such a drop lands with the active step and the drop target in the same
- * container. Everything else — a plain top-level reorder, a move inside one
- * parallel group, and dragging a whole group — is applied here, on drop.
- *
- * "Did `dragState` change here?" is therefore the wrong question either way: a
- * drop that merely confirms what `handleDragOver` already applied changes
- * nothing at this point yet still has to be sent. `committedState` (rebuilt
- * from the store) is the only correct baseline.
+ * Resolve the outcome of a drop, or `undefined` when it leaves the committed
+ * topology unchanged. Goes through the exact same `computeLivePreviewState`
+ * every live preview frame already used, against the same `committedState`
+ * baseline — a drop can never apply something different from whatever was
+ * last rendered, which is what a drag with several crossings used to be able
+ * to get wrong.
  */
 export function resolvePendingDragEnd(
-  dragState: PendingDragState,
   committedState: PendingDragState,
   activeId: string,
   overId: string,
   currentStep: number,
   parallelGroups: ParallelGroupDefinition[]
 ): { state: PendingDragState; payload: PendingReorderPayload } | undefined {
-  let nextState = dragState;
-  if (isStepDragId(activeId)) {
-    const sourceId = findPendingDragContainer(nextState, activeId);
-    const target = resolvePendingDropTarget(nextState, overId);
-    // A step whose container already changed was folded in by `handleDragOver`
-    // and is rendered where it will land. Re-running the move against the drop
-    // target it is now sitting next to would advance it one more slot.
-    const wasFoldedIn =
-      sourceId !== findPendingDragContainer(committedState, activeId);
-    if (sourceId && target) {
-      nextState =
-        target.kind === PENDING_DROP_TARGET_KINDS.MEMBER &&
-        target.containerId === sourceId &&
-        !wasFoldedIn
-          ? movePendingDragMemberWithinGroup(
-              nextState,
-              sourceId,
-              activeId,
-              overId
-            )
-          : movePendingDragItem(nextState, activeId, overId);
-    }
-  } else {
-    nextState = movePendingDragContainer(nextState, activeId, overId);
-  }
-
+  const nextState = computeLivePreviewState(committedState, activeId, overId);
   const payload = buildPendingReorderPayload(
     nextState,
     currentStep,
@@ -1089,15 +1071,107 @@ const WorkflowStepsPanelInner: React.FC<{
     executionState !== EXECUTION_STATES.CANCELLING &&
     reorderableStepCount > 1 &&
     !straddlingGroup;
-  const [pendingDragState, setPendingDragState] = useState<PendingDragState>(
-    () => buildPendingDragState(steps, currentStep, parallelGroups)
+
+  const committedDragState = useMemo(
+    () => buildPendingDragState(steps, currentStep, parallelGroups),
+    [currentStep, parallelGroups, steps]
   );
 
-  useEffect(() => {
-    setPendingDragState(
-      buildPendingDragState(steps, currentStep, parallelGroups)
-    );
-  }, [currentStep, parallelGroups, steps]);
+  /**
+   * A locally-applied drop result, shown immediately in place of the (now
+   * stale) committed order until the round trip to the extension host
+   * confirms it — otherwise every drop would flash back to its pre-drop order
+   * for one render while the message is in flight. Cleared whenever fresh
+   * committed data arrives, whether that's this same drop landing or
+   * something else superseding it.
+   *
+   * Cleared during render (React's supported "adjusting state when a prop
+   * changes" pattern), not from a `useEffect`. A drag id embeds the absolute
+   * index it had when `buildPendingDragState` ran (see `stepDragId`), so it is
+   * only meaningful paired with the exact `steps` array it was derived from.
+   * The store's `steps` updates the instant the round trip lands — in the
+   * very same render as `committedDragState` recomputing from it — but an
+   * effect-based clear runs a whole render *later*, after that update has
+   * already committed. For that one render, every row lookup elsewhere in
+   * this component reads the *new* `steps` while still walking the *stale*
+   * optimistic order's ids, so a row can end up rendering a completely
+   * different step than the one whose slot it occupies — the reported
+   * "flash of the old step" before things settle. Clearing synchronously
+   * here means the switch from stale-ids-over-new-steps to
+   * fresh-ids-over-new-steps happens before that render is ever painted.
+   */
+  const [optimisticDragState, setOptimisticDragState] =
+    useState<PendingDragState | null>(null);
+  const [prevCommittedDragState, setPrevCommittedDragState] =
+    useState(committedDragState);
+  if (committedDragState !== prevCommittedDragState) {
+    setPrevCommittedDragState(committedDragState);
+    if (optimisticDragState !== null) {
+      setOptimisticDragState(null);
+    }
+  }
+
+  const baselineDragState = optimisticDragState ?? committedDragState;
+
+  /** The step or group currently being dragged, or `null` when idle. */
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  /** What the pointer is currently over, or `null` before the first measurement. */
+  const [overDragId, setOverDragId] = useState<string | null>(null);
+
+  /**
+   * The dragged row's measured position at drag start, in viewport
+   * coordinates — set once per drag (cheap, low frequency) so the overlay
+   * clone below can render at a fixed `top`/`left` and let its `transform`
+   * (mutated directly on the node, not through state — see
+   * `handleDragOverlayMove`) carry all the per-frame movement.
+   *
+   * This clone exists instead of dnd-kit's own `<DragOverlay>` because that
+   * component is unusable here: its internal `AnimationManager` calls
+   * `React.cloneElement` unconditionally the instant a drag ends (to keep the
+   * previous overlay content mounted for the drop animation), and under the
+   * installed React version that throws `TypeError: reactDispatcher.getOwner
+   * is not a function` — crashing the whole dashboard on *every* drop,
+   * confirmed via manual testing, regardless of `dropAnimation` config (the
+   * clone happens whether or not an animation is configured). There is no
+   * newer `@dnd-kit/core` release that fixes this. Do not swap this back for
+   * `<DragOverlay>` without confirming that incompatibility is gone.
+   */
+  const [dragOverlayRect, setDragOverlayRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const dragOverlayNodeRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * The full live preview of the pending list for the current drag — always
+   * recomputed fresh from `baselineDragState`, never incrementally built on a
+   * previous preview (see `computeLivePreviewState`). This is what every
+   * rendered row's number, color, and container membership is driven from
+   * while idle and while dragging alike.
+   */
+  const previewDragState = useMemo(
+    () =>
+      activeDragId && overDragId
+        ? computeLivePreviewState(baselineDragState, activeDragId, overDragId)
+        : baselineDragState,
+    [baselineDragState, activeDragId, overDragId]
+  );
+
+  /** Absolute 0-based display slot per drag id, from the live preview. */
+  const displaySlots = useMemo(
+    () =>
+      computeDisplaySlots(
+        previewDragState,
+        straddlingGroup ? straddlingGroup.endIndex + 1 : currentStep
+      ),
+    [previewDragState, straddlingGroup, currentStep]
+  );
+
+  const resolveSlotNumber = useCallback(
+    (id: string) => (displaySlots.get(id) ?? 0) + 1,
+    [displaySlots]
+  );
 
   const handleFailFastChange = useCallback(
     (group: (typeof parallelGroups)[number], failFast: boolean) => {
@@ -1153,9 +1227,10 @@ const WorkflowStepsPanelInner: React.FC<{
         containerId={groupDragId(group.id)}
         memberIds={
           isPending
-            ? pendingDragState.containers[groupDragId(group.id)]?.items
+            ? previewDragState.containers[groupDragId(group.id)]?.items
             : undefined
         }
+        resolveSlotNumber={isPending ? resolveSlotNumber : undefined}
         dragDisabled={
           !canReorder ||
           isParallelGroupTopologyLocked(
@@ -1182,7 +1257,8 @@ const WorkflowStepsPanelInner: React.FC<{
       handleSetStartPosition,
       handleStepClick,
       canReorder,
-      pendingDragState,
+      previewDragState,
+      resolveSlotNumber,
       liveContextWindow,
       openContextMenu,
       retryStates,
@@ -1315,88 +1391,134 @@ const WorkflowStepsPanelInner: React.FC<{
   const dragPositionRef = useRef<number | null>(null);
 
   const collisionDetection = useMemo<CollisionDetection>(() => {
-    const detect = pendingDragCollisionDetection(pendingDragState);
+    const detect = pendingDragCollisionDetection(previewDragState);
     return (args) => {
       // `collisionRect` is the drag's *input* position: dnd-kit subtracts the
       // active node's re-measurement delta from the sensor translate, so it
       // resolves to `initialActiveNodeRect + translate` and moves only when a
       // sensor moves. That is the property `handleDragOver` needs and cannot
       // get from its own event — `event.delta` is the modified translate,
-      // which shifts by a row height the instant a fold relocates the row's
-      // DOM node. Recorded during render because collision detection runs in
-      // the render that produces the `over` this drag reacts to; nothing
-      // renders off it.
+      // which shifts by a row height the instant the preview relocates a
+      // row's DOM node. Recorded during render because collision detection
+      // runs in the render that produces the `over` this drag reacts to;
+      // nothing renders off it.
       dragPositionRef.current = args.collisionRect.top;
       return detect(args);
     };
-  }, [pendingDragState]);
+  }, [previewDragState]);
 
   // A trailing parallel group is the only container with no slot below it, so
   // the tail is rendered (and listed) only for that case — everywhere else the
   // last step row's own id already means "drop below everything".
   const showPendingTail =
-    canReorder && hasTrailingPendingGroup(pendingDragState);
+    canReorder && hasTrailingPendingGroup(previewDragState);
   const pendingDragItems = useMemo(
     () =>
       showPendingTail
-        ? [...pendingDragState.order, PENDING_TAIL_DRAG_ID]
-        : pendingDragState.order,
-    [pendingDragState.order, showPendingTail]
+        ? [...previewDragState.order, PENDING_TAIL_DRAG_ID]
+        : previewDragState.order,
+    [previewDragState.order, showPendingTail]
   );
 
-  /** Drag position at which the last group crossing was folded in. */
-  const foldedAtPositionRef = useRef<number | null>(null);
+  /**
+   * Drag position at which `overDragId` was last updated. Every live-preview
+   * recompute reflows the list (a row's DOM node can move between nested
+   * `SortableContext`s), which makes dnd-kit re-measure every droppable
+   * against a drag position that did not move; the new rects can resolve
+   * `over` right back to a different id purely from that reflow, and
+   * `onDragOver` fires on every `over` change. Nothing in that cycle needs the
+   * user to move, so unless it's capped here it spins until React tears the
+   * webview down with "Maximum update depth exceeded" (minified #185). At
+   * most one `overDragId` update per measured position is enough: recomputing
+   * the preview is pure and always starts from the same `baselineDragState`,
+   * so refusing a redundant update never loses anything — `handleDragEnd`
+   * resolves the drop from that same baseline regardless of how many
+   * intermediate positions were skipped.
+   */
+  const lastAppliedPositionRef = useRef<number | null>(null);
 
-  /** Every drag starts and ends with the fold guard disarmed. */
-  const resetFoldGuard = useCallback(() => {
-    foldedAtPositionRef.current = null;
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    lastAppliedPositionRef.current = null;
+    setActiveDragId(String(event.active.id));
+    // `over` isn't known yet at drag start — the first `onDragOver` fires
+    // almost immediately and fills it in; until then the preview falls back
+    // to `baselineDragState` (see `previewDragState`).
+    setOverDragId(null);
+    const initial = event.active.rect.current.initial;
+    setDragOverlayRect(
+      initial
+        ? { top: initial.top, left: initial.left, width: initial.width }
+        : null
+    );
   }, []);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    const activeId = String(event.active.id);
-    const overId = event.over ? String(event.over.id) : undefined;
-    if (!overId) return;
-    // At most one fold per drag position, because a fold can manufacture the
-    // `over` change that triggers the next one. Folding moves the dragged
-    // row's DOM node into (or out of) a group panel, which reflows the list
-    // and makes dnd-kit re-measure every droppable against a drag position
-    // that did not move; the new rects can resolve `over` back to the side the
-    // row just left, and `onDragOver` fires on every `over` change. Nothing in
-    // that cycle needs the user to move, so it spins until React tears the
-    // webview down with "Maximum update depth exceeded" (minified #185).
-    //
-    // Refusing a fold is always safe: it is a preview, and `handleDragEnd`
-    // resolves the same outcome from `committedState` whether or not the
-    // crossing was folded in. `null` means no collision has been measured
-    // (the drag is being driven by a test, or by a sensor that never rendered
-    // one), and never suppresses a fold.
+    const overId = event.over ? String(event.over.id) : null;
     const position = dragPositionRef.current;
-    if (position !== null && position === foldedAtPositionRef.current) return;
-    foldedAtPositionRef.current = position;
-    setPendingDragState((state) =>
-      isParallelGroupDragMove(state, activeId, overId)
-        ? movePendingDragItem(state, activeId, overId)
-        : state
-    );
+    if (position !== null && position === lastAppliedPositionRef.current) {
+      return;
+    }
+    lastAppliedPositionRef.current = position;
+    setOverDragId(overId);
+  }, []);
+
+  /**
+   * Moves the hand-rolled overlay clone by mutating its transform directly on
+   * the DOM node rather than through React state — this fires on every
+   * pointer move, and routing it through `setState` would re-render the
+   * whole panel every frame, reintroducing the jank the live-preview redesign
+   * was meant to remove. See `dragOverlayNodeRef` for why this element exists
+   * at all instead of dnd-kit's own `<DragOverlay>`.
+   */
+  const handleDragOverlayMove = useCallback((event: DragMoveEvent) => {
+    const node = dragOverlayNodeRef.current;
+    if (!node) return;
+    node.style.transform = `translate3d(${event.delta.x}px, ${event.delta.y}px, 0)`;
+  }, []);
+
+  const handleDragCancel = useCallback((_event: DragCancelEvent) => {
+    lastAppliedPositionRef.current = null;
+    setActiveDragId(null);
+    setOverDragId(null);
+    setDragOverlayRect(null);
   }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      foldedAtPositionRef.current = null;
+      // `overDragId` (not `event.over`) is the source of truth for the drop
+      // target. Recomputing the live preview on every `onDragOver` reflows the
+      // list, which makes dnd-kit re-measure every droppable — and at the
+      // exact position where the drag is about to settle, that re-measurement
+      // finds the *dragged row's own* rect has moved (via the reflow) to
+      // where the target used to be, so a second collision pass at the same
+      // position resolves `over` back to the active id itself. That second,
+      // self-referencing pass is always what dnd-kit hands `onDragEnd` —
+      // `overDragId` never picks it up because it is exactly the same
+      // repeated-position bounce `lastAppliedPositionRef` already exists to
+      // reject for the live preview (see its comment). Trusting `event.over`
+      // here made a drop silently no-op whenever the settle-then-release
+      // happened fast enough for that bounce to be the last thing dnd-kit
+      // measured — reproducible on every drop, not just at the ends of the
+      // list, but most visible there because there is nowhere left to
+      // overshoot into that would otherwise re-arm a correct resolution.
+      const overId =
+        overDragId ?? (event.over ? String(event.over.id) : undefined);
+      lastAppliedPositionRef.current = null;
+      setActiveDragId(null);
+      setOverDragId(null);
+      setDragOverlayRect(null);
       const activeId = String(event.active.id);
-      const overId = event.over ? String(event.over.id) : undefined;
       if (!overId) return;
 
       const outcome = resolvePendingDragEnd(
-        pendingDragState,
-        buildPendingDragState(steps, currentStep, parallelGroups),
+        baselineDragState,
         activeId,
         overId,
         currentStep,
         parallelGroups
       );
       if (!outcome) return;
-      setPendingDragState(outcome.state);
+      setOptimisticDragState(outcome.state);
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, outcome.payload);
 
       const editorStore = useEditorStore.getState();
@@ -1404,8 +1526,116 @@ const WorkflowStepsPanelInner: React.FC<{
         editorStore.cancelEdit();
       }
     },
-    [currentStep, parallelGroups, pendingDragState, steps]
+    [baselineDragState, currentStep, overDragId, parallelGroups]
   );
+
+  /**
+   * The floating clone that follows the cursor while dragging — a full clone
+   * of the real row (or, for a whole-group drag, the group's header bar),
+   * reusing the same components and live slot/color resolution as the real
+   * list. This is what decouples the dragged row's cursor-follow motion from
+   * the real list's re-layout: the real row underneath only ever needs its
+   * ordinary `isDragging` fade (already handled by
+   * `SortableWorkflowStepWrapper` / `ParallelGroupPanel`), never to be kept
+   * under the pointer itself.
+   */
+  function renderDragOverlayContent(): React.ReactNode {
+    if (!activeDragId) return null;
+    if (!isStepDragId(activeDragId)) {
+      const group = parallelGroups.find(
+        (candidate) => groupDragId(candidate.id) === activeDragId
+      );
+      if (!group) return null;
+      return (
+        <div className="flex items-center gap-2 rounded border border-panel-border bg-sidebar-bg px-2 py-1.5 text-xs shadow-lg">
+          <Icon name="worktree-compact" className="text-description-fg" />
+          <span className="font-semibold">
+            Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
+          </span>
+        </div>
+      );
+    }
+
+    const index = absoluteIndexFromStepDragId(activeDragId);
+    const step = steps[index];
+    if (!step) return null;
+    const slotNumber = resolveSlotNumber(activeDragId);
+    const status = getPromptStatus(step, index);
+    const harnessModel = getStepHarnessModel(step, status);
+
+    const containerId = findPendingDragContainer(
+      previewDragState,
+      activeDragId
+    );
+    const container = containerId
+      ? previewDragState.containers[containerId]
+      : undefined;
+    const group = container?.groupId
+      ? parallelGroups.find((candidate) => candidate.id === container.groupId)
+      : undefined;
+    let offsetInGroup: number | undefined;
+    let colorGroupMembers: StepColorGroupMember[] | undefined;
+    if (group && container) {
+      offsetInGroup = container.items.indexOf(activeDragId);
+      colorGroupMembers = container.items.map((itemId, offset) => {
+        const memberIndex = absoluteIndexFromStepDragId(itemId);
+        const memberStep = steps[memberIndex];
+        return {
+          step: memberStep,
+          harnessId: getStepHarnessModel(
+            memberStep,
+            getPromptStatus(memberStep, memberIndex)
+          ).harnessId,
+          offsetInGroup: offset,
+        };
+      });
+    }
+    const stepColor = resolveStepColor({
+      step,
+      harnessId: harnessModel.harnessId,
+      stepIndex: slotNumber - 1,
+      group,
+      offsetInGroup,
+      stepColorMode: globalSettings.stepColorMode,
+      settings: globalSettings.harnessColors,
+      groupMembers: colorGroupMembers,
+    });
+
+    return (
+      <div className="overflow-hidden rounded border border-panel-border bg-editor-bg shadow-lg">
+        <WorkflowStepRowFrame
+          index={index}
+          slotNumber={slotNumber}
+          status={status}
+          stepColor={stepColor}
+          isCurrent={false}
+        >
+          <WorkflowStepRow
+            step={step}
+            index={index}
+            slotNumber={slotNumber}
+            currentStep={currentStep}
+            executionState={executionState}
+            status={status}
+            retryState={retryStates[index]}
+            latestOutput={getLatestOutput(index)}
+            liveContextWindow={liveContextWindow?.[index]}
+            isCurrent={false}
+            isSelected={false}
+            canSetStartPosition={false}
+            startPositionDirection="forward"
+            setPositionTarget={index}
+            isExecutionTargetLocked={false}
+            getStepHarnessModel={getStepHarnessModel}
+            getStepOverrides={getStepOverrides}
+            onStepClick={() => {}}
+            onSetStartPosition={() => {}}
+            onOpenContextMenu={() => {}}
+          />
+        </WorkflowStepRowFrame>
+      </div>
+    );
+  }
 
   // In mobile mode (onRequestClose present), disable all collapse interactions —
   // the panel is a full-screen overlay and has its own close button.
@@ -1678,20 +1908,21 @@ const WorkflowStepsPanelInner: React.FC<{
             <DndContext
               sensors={sensors}
               collisionDetection={collisionDetection}
-              onDragStart={resetFoldGuard}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragOverlayMove}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
-              onDragCancel={resetFoldGuard}
+              onDragCancel={handleDragCancel}
             >
               <SortableContext
                 items={pendingDragItems}
                 strategy={verticalListSortingStrategy}
               >
                 {(() => {
-                  return pendingDragState.order.map(
+                  return previewDragState.order.map(
                     (containerId, orderIndex) => {
                       const container =
-                        pendingDragState.containers[containerId];
+                        previewDragState.containers[containerId];
                       if (!container) return null;
                       if (container.groupId) {
                         const group = parallelGroups.find(
@@ -1705,10 +1936,6 @@ const WorkflowStepsPanelInner: React.FC<{
                       const index = absoluteIndexFromStepDragId(id);
                       const step = steps[index];
                       if (!step) return null;
-                      // Absolute, never derived from the row's position in the
-                      // list: the pending order skips the members of a group the
-                      // boundary runs through, so a positional slot number would
-                      // renumber every row below it.
                       const isCurrentStep = index === currentStep;
                       const status = getPromptStatus(step, index);
                       const retryState = retryStates[index];
@@ -1723,7 +1950,11 @@ const WorkflowStepsPanelInner: React.FC<{
                         selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                         selectionTarget.index === index;
                       const setPositionTarget = index;
-                      const slotNumber = index + 1;
+                      // From the live preview's own numbering (see
+                      // `computeDisplaySlots`) — the row's current rendered
+                      // position, not its identity, so it can never collide
+                      // with a neighbour's number mid-drag.
+                      const slotNumber = resolveSlotNumber(id);
                       const isExecutionTargetLocked =
                         isStepExecutionLocked(
                           step,
@@ -1770,6 +2001,22 @@ const WorkflowStepsPanelInner: React.FC<{
                 })()}
                 {showPendingTail && <PendingTailDropSlot />}
               </SortableContext>
+              {activeDragId && dragOverlayRect && (
+                <div
+                  ref={dragOverlayNodeRef}
+                  style={{
+                    position: "fixed",
+                    top: dragOverlayRect.top,
+                    left: dragOverlayRect.left,
+                    width: dragOverlayRect.width,
+                    zIndex: 999,
+                    pointerEvents: "none",
+                    transform: "translate3d(0px, 0px, 0)",
+                  }}
+                >
+                  {renderDragOverlayContent()}
+                </div>
+              )}
             </DndContext>
           </div>
         )}

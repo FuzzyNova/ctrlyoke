@@ -158,6 +158,42 @@ describe("ParallelGroupPanel", () => {
     expect(rails[1]).not.toHaveClass("bg-indicator-success");
   });
 
+  it("uses resolveSlotNumber for members when provided, instead of the group-local offset", () => {
+    render(
+      <ParallelGroupPanel
+        group={group}
+        steps={steps}
+        currentStep={0}
+        executionState={EXECUTION_STATES.IDLE}
+        statuses={[STEP_STATUS.PENDING, STEP_STATUS.PENDING]}
+        retryStates={{}}
+        liveContextWindow={{}}
+        canSetStartPosition
+        memberIds={["step-pending-0", "step-pending-1"]}
+        resolveSlotNumber={(id) => (id === "step-pending-0" ? 7 : 8)}
+        getLatestOutput={() => null}
+        getStepHarnessModel={() => ({
+          harnessId: undefined,
+          harnessLabel: undefined,
+          harnessIsDefault: true,
+          modelLabel: undefined,
+          modelIsDefault: true,
+        })}
+        getStepOverrides={() => []}
+        onStepClick={vi.fn()}
+        onSetStartPosition={vi.fn()}
+        onOpenContextMenu={vi.fn()}
+        onFailFastChange={vi.fn()}
+      />
+    );
+
+    // Not "1"/"2" (group.startIndex + offset + 1) — the caller's resolver wins.
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.queryByText("1")).not.toBeInTheDocument();
+    expect(screen.queryByText("2")).not.toBeInTheDocument();
+  });
+
   it("locks terminal members of an active partially settled group only", () => {
     const terminalStep: WorkflowStep = {
       prompt: "done",

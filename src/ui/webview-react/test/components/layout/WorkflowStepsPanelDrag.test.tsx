@@ -10,13 +10,36 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { PENDING_TAIL_DRAG_ID } from "@utils/dndKit";
 import type { CollisionDetection } from "@dnd-kit/core";
 
-type DragEventLike = { active: { id: string }; over: { id: string } | null };
+type DragEventLike = {
+  active: {
+    id: string;
+    rect?: {
+      current: {
+        initial: { top: number; left: number; width: number } | null;
+        translated: unknown;
+      };
+    };
+  };
+  over: { id: string } | null;
+};
+
+/**
+ * The dragged row's measured rect at drag start — `WorkflowStepsPanel` reads
+ * `active.rect.current.initial` in `onDragStart` to position its hand-rolled
+ * overlay clone (see the comment above `dragOverlayRect` there for why it
+ * doesn't use dnd-kit's own `<DragOverlay>`). `null` is a legitimate value
+ * (unmeasured), matching what real dnd-kit reports in an environment without
+ * layout, same as jsdom here.
+ */
+function mockActive(id: string): DragEventLike["active"] {
+  return { id, rect: { current: { initial: null, translated: null } } };
+}
 
 const postMessage = vi.fn();
 
 const dnd: {
   collisionDetection?: CollisionDetection;
-  onDragStart?: () => void;
+  onDragStart?: (event: DragEventLike) => void;
   onDragOver?: (event: DragEventLike) => void;
   onDragEnd?: (event: DragEventLike) => void;
 } = {};
@@ -33,7 +56,7 @@ vi.mock("@dnd-kit/core", async () => {
     DndContext: (props: {
       children?: ReactNode;
       collisionDetection?: CollisionDetection;
-      onDragStart?: () => void;
+      onDragStart?: (event: DragEventLike) => void;
       onDragOver?: (event: DragEventLike) => void;
       onDragEnd?: (event: DragEventLike) => void;
     }) => {
@@ -127,23 +150,26 @@ describe("WorkflowStepsPanel drag lifecycle", () => {
 
   afterEach(() => cleanup());
 
-  // Re-ordering the list while the pointer is still down is what made the drop
-  // look wrong: with no `DragOverlay` the dragged row is the real row, and
-  // dnd-kit only keeps it under the cursor by re-measuring it after the
-  // mutation — asynchronously — so the row (and its displaced neighbour) got
-  // drawn a row-height out of place until the measurement landed.
-  it("leaves the rendered order alone while a same-level drag is in flight", () => {
+  // Every drag — not just one crossing a group boundary — recomputes a full
+  // live preview on every `dragOver`, via a `DragOverlay` that decouples the
+  // cursor-follow motion from the real list's re-layout. This is what lets a
+  // row's displayed number/color always match its current slot instead of the
+  // identity it started the drag with (see `WorkflowStepsPanel identity
+  // rails` in WorkflowStepsPanel.test.tsx), while still sending nothing until
+  // the drop.
+  it("live-renumbers a same-level drag as soon as it starts", () => {
     render(<WorkflowStepsPanel />);
     expect(renderedOrder()).toEqual([0, 1, 2, 3]);
 
     act(() => {
+      dnd.onDragStart?.({ active: mockActive("step-pending-0"), over: null });
       dnd.onDragOver?.({
         active: { id: "step-pending-0" },
         over: { id: "step-pending-1" },
       });
     });
 
-    expect(renderedOrder()).toEqual([0, 1, 2, 3]);
+    expect(renderedOrder()).toEqual([1, 0, 2, 3]);
     expect(reorderMessages()).toEqual([]);
   });
 
@@ -283,16 +309,17 @@ describe("WorkflowStepsPanel parallel group drag", () => {
     ]);
   });
 
-  // A fold relocates the dragged row's DOM node, which reflows the list and
-  // makes dnd-kit re-measure every droppable against a drag position that never
-  // moved. The new rects can point `over` back at the side the row just left,
-  // and `onDragOver` fires on every `over` change — an unbounded fold/re-measure
-  // cycle that ends as React's "Maximum update depth exceeded" in the webview.
-  it("folds a group crossing at most once per drag position", () => {
+  // Recomputing the live preview reflows the list (a row's DOM node can move
+  // between nested `SortableContext`s), which makes dnd-kit re-measure every
+  // droppable against a drag position that never moved. The new rects can
+  // point `over` back at the side the row just left, and `onDragOver` fires on
+  // every `over` change — an unbounded recompute/re-measure cycle that ends as
+  // React's "Maximum update depth exceeded" in the webview unless capped.
+  it("updates the preview at most once per drag position", () => {
     render(<WorkflowStepsPanel />);
 
     act(() => {
-      dnd.onDragStart?.();
+      dnd.onDragStart?.({ active: mockActive("step-pending-2"), over: null });
       measureDragAt(40);
       dnd.onDragOver?.({
         active: { id: "step-pending-2" },
@@ -301,8 +328,8 @@ describe("WorkflowStepsPanel parallel group drag", () => {
     });
     expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
 
-    // Same drag position, `over` swinging back to a top-level slot: this is the
-    // bounce, and it must not move the row again.
+    // Same drag position, `over` swinging back to a different slot: this is
+    // the bounce, and it must not update the preview again.
     act(() => {
       dnd.onDragOver?.({
         active: { id: "step-pending-2" },
@@ -311,7 +338,10 @@ describe("WorkflowStepsPanel parallel group drag", () => {
     });
     expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
 
-    // A real pointer move re-arms folding.
+    // A real pointer move re-arms the update. Dropping "ccc" onto "ddd"'s slot
+    // takes that slot, pushing "ddd" up to where "ccc" started — the live
+    // preview always reflects what dropping right now would apply, computed
+    // fresh from the committed order rather than layered on the bounce above.
     act(() => {
       measureDragAt(120);
       dnd.onDragOver?.({
@@ -319,17 +349,18 @@ describe("WorkflowStepsPanel parallel group drag", () => {
         over: { id: "step-pending-3" },
       });
     });
-    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
+    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ddd", "ccc"]);
   });
 
-  // The other half of the same oscillation: the fold that put the step into the
-  // group pushes its row down past the group header, which on its own is enough
-  // for the next collision to resolve to the group's own slot.
-  it("does not fold a member back out over its own group's slot", () => {
+  // Dropping directly on a leading group's own slot means "take the group's
+  // slot", pushing the group down — same as a plain step dropped there (see
+  // "moves a step above a leading group..." in WorkflowStepsPanel.test.tsx),
+  // and the live preview reflects that immediately, not just on drop.
+  it("moves a member above its own group when hovering the group's own slot", () => {
     render(<WorkflowStepsPanel />);
 
     act(() => {
-      dnd.onDragStart?.();
+      dnd.onDragStart?.({ active: mockActive("step-pending-2"), over: null });
       dnd.onDragOver?.({
         active: { id: "step-pending-2" },
         over: { id: "step-pending-1" },
@@ -343,7 +374,7 @@ describe("WorkflowStepsPanel parallel group drag", () => {
         over: { id: "group-g1" },
       });
     });
-    expect(renderedPrompts()).toEqual(["aaa", "ccc", "bbb", "ddd"]);
+    expect(renderedPrompts()).toEqual(["ccc", "aaa", "bbb", "ddd"]);
 
     // Dropping there still means "leave the group and take its slot".
     act(() => {
@@ -365,6 +396,7 @@ describe("WorkflowStepsPanel parallel group drag", () => {
     render(<WorkflowStepsPanel />);
 
     act(() => {
+      dnd.onDragStart?.({ active: mockActive("step-pending-2"), over: null });
       dnd.onDragOver?.({
         active: { id: "step-pending-2" },
         over: { id: "step-pending-1" },
@@ -444,7 +476,7 @@ describe("WorkflowStepsPanel trailing parallel group drag", () => {
     expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
 
     act(() => {
-      dnd.onDragStart?.();
+      dnd.onDragStart?.({ active: mockActive("step-pending-0"), over: null });
       measureDragAt(40);
       dnd.onDragOver?.({
         active: { id: "step-pending-0" },
@@ -482,20 +514,21 @@ describe("WorkflowStepsPanel trailing parallel group drag", () => {
     ]);
   });
 
-  // Nothing is folded for an ungrouped step heading straight for the tail: the
-  // sorting strategy displaces a stationary list for a plain top-level move.
+  // An ungrouped step heading straight for the tail never enters the group —
+  // it lands after it — and the live preview shows exactly that immediately,
+  // not just on drop.
   it("sends a tail drop that never entered the group", () => {
     render(<WorkflowStepsPanel />);
 
     act(() => {
-      dnd.onDragStart?.();
+      dnd.onDragStart?.({ active: mockActive("step-pending-1"), over: null });
       measureDragAt(40);
       dnd.onDragOver?.({
         active: { id: "step-pending-1" },
         over: { id: PENDING_TAIL_DRAG_ID },
       });
     });
-    expect(renderedPrompts()).toEqual(["aaa", "bbb", "ccc", "ddd"]);
+    expect(renderedPrompts()).toEqual(["aaa", "ccc", "ddd", "bbb"]);
 
     act(() => {
       dnd.onDragEnd?.({

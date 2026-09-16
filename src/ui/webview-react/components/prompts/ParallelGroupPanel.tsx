@@ -142,6 +142,15 @@ type ParallelGroupPanelProps = {
   dragDisabled?: boolean;
   stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
+  /**
+   * Resolves a member's live display slot number from its drag id. Supplied
+   * by `WorkflowStepsPanel` for the pending/sortable branch, where the whole
+   * list's numbering is computed once from the live drag preview so it can
+   * never diverge from a sibling's. Falls back to the group-local
+   * `group.startIndex + offset` when absent (the static/done-section branch,
+   * which is never part of a live drag).
+   */
+  resolveSlotNumber?: (id: string) => number;
 };
 
 export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
@@ -167,6 +176,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   dragDisabled = false,
   stepColorMode,
   harnessColorSettings,
+  resolveSlotNumber,
 }) => {
   // A group is a sortable sibling of the ungrouped steps around it, so it can
   // be dragged as a unit. Only the pending copy takes part: the done-steps
@@ -300,12 +310,16 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                       executionState
                     )
                   }
-                  // Position within the group's own slots, not the step's
-                  // identity index — mid-drag, a step folded in from outside
-                  // the group keeps its own identity `index` for data lookups,
-                  // but must display the slot it is currently occupying, or the
-                  // number jumps to wherever that step normally lives.
-                  slotNumber={group.startIndex + offset + 1}
+                  // The live preview's own numbering, not the step's identity
+                  // index or a group-local offset — `WorkflowStepsPanel`
+                  // computes one consistent slot map for the whole pending
+                  // list, so a step folded in from outside the group (or a
+                  // sibling displaced by one leaving) always shows the number
+                  // that matches where it's currently rendered.
+                  slotNumber={
+                    resolveSlotNumber?.(memberIds[offset]) ??
+                    group.startIndex + offset + 1
+                  }
                   step={step}
                   index={index}
                   currentStep={currentStep}
@@ -346,19 +360,19 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         ) : (
           displayedMembers.map(
             ({ step, index, status: memberStatus }, offset) => {
+              // Never part of a live drag (this is the done-section render),
+              // so the group-local offset always equals the real position.
+              const slotNumber = group.startIndex + offset + 1;
               const stepColor = resolveStepColor({
                 step,
                 harnessId: getStepHarnessModel(step, memberStatus).harnessId,
-                stepIndex: index,
+                stepIndex: slotNumber - 1,
                 group,
                 offsetInGroup: offset,
                 stepColorMode,
                 settings: harnessColorSettings,
                 groupMembers: colorGroupMembers,
               });
-              // Position within the group's own slots — see the sortable
-              // branch above for why this can't be the step's identity index.
-              const slotNumber = group.startIndex + offset + 1;
               return (
                 <WorkflowStepRowFrame
                   key={index}

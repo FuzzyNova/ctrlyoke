@@ -11,8 +11,9 @@ import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
 import {
   buildPendingDragState,
   buildPendingReorderPayload,
+  computeDisplaySlots,
+  computeLivePreviewState,
   hasTrailingPendingGroup,
-  isParallelGroupDragMove,
   movePendingDragContainer,
   movePendingDragItem,
   pendingDragCollisionDetection,
@@ -700,17 +701,13 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     });
   });
 
-  // A same-level drag leaves the rendered list alone while the pointer is
-  // down (`isParallelGroupDragMove` is false), so drag end both applies the
-  // move and emits it. It also cannot ask whether the *local* state changed:
-  // for an ungrouped step (its own container) a group crossing never does,
-  // and the reorder used to be silently dropped — the list re-ordered on
-  // screen and nothing was sent.
+  // Every drop resolves through the exact same `computeLivePreviewState` a
+  // live preview frame would, applied once against the committed baseline —
+  // there is no separate in-flight state to have drifted from it.
   it("applies and emits a top-level reorder on drop", () => {
     const committed = buildPendingDragState(steps, 0, []);
 
     const outcome = resolvePendingDragEnd(
-      committed,
       committed,
       "step-pending-1",
       "step-pending-2",
@@ -724,52 +721,25 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     });
   });
 
-  it("only folds a drag into the in-flight state when it crosses a group", () => {
+  it("computes the same live preview for a plain sibling move, joining a group, and leaving one", () => {
     const committed = buildPendingDragState(steps, 0, groups);
 
     // Plain sibling reorders, including one that lands beside the group.
     expect(
-      isParallelGroupDragMove(committed, "step-pending-0", "step-pending-3")
-    ).toBe(false);
-    expect(
-      isParallelGroupDragMove(committed, "step-pending-0", "group-group-1")
-    ).toBe(false);
+      computeLivePreviewState(committed, "step-pending-0", "step-pending-3")
+    ).toEqual(movePendingDragItem(committed, "step-pending-0", "step-pending-3"));
     // Joining a group, and leaving one.
     expect(
-      isParallelGroupDragMove(committed, "step-pending-0", "step-pending-2")
-    ).toBe(true);
+      computeLivePreviewState(committed, "step-pending-0", "step-pending-2")
+    ).toEqual(movePendingDragItem(committed, "step-pending-0", "step-pending-2"));
     expect(
-      isParallelGroupDragMove(committed, "step-pending-1", "step-pending-3")
-    ).toBe(true);
-    // Reordering inside the group the step already belongs to, and dragging
-    // the group itself, both stay out of it.
+      computeLivePreviewState(committed, "step-pending-1", "step-pending-3")
+    ).toEqual(movePendingDragItem(committed, "step-pending-1", "step-pending-3"));
+    // Dragging the group itself.
     expect(
-      isParallelGroupDragMove(committed, "step-pending-1", "step-pending-2")
-    ).toBe(false);
-    expect(
-      isParallelGroupDragMove(committed, "group-group-1", "step-pending-3")
-    ).toBe(false);
-  });
-
-  it("does not re-apply a group crossing that dragOver already folded in", () => {
-    const committed = buildPendingDragState(steps, 0, groups);
-    const dragged = movePendingDragItem(
-      committed,
-      "step-pending-0",
-      "step-pending-2"
-    );
-
-    const outcome = resolvePendingDragEnd(
-      dragged,
-      committed,
-      "step-pending-0",
-      "step-pending-2",
-      0,
-      groups
-    );
-
-    expect(outcome?.payload).toEqual(
-      buildPendingReorderPayload(dragged, 0, groups)
+      computeLivePreviewState(committed, "group-group-1", "step-pending-3")
+    ).toEqual(
+      movePendingDragContainer(committed, "group-group-1", "step-pending-3")
     );
   });
 
@@ -779,7 +749,6 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     expect(
       resolvePendingDragEnd(
         committed,
-        committed,
         "step-pending-1",
         "step-pending-1",
         0,
@@ -788,16 +757,47 @@ describe("WorkflowStepsPanel grouped drag model", () => {
     ).toBeUndefined();
   });
 
-  it("emits a payload when a member is dropped into a different group", () => {
-    const committed = buildPendingDragState(steps, 0, groups);
-    const dragged = movePendingDragItem(
+  // The reported bug: a step folded into a group showed its own stale
+  // identity number instead of the slot it now occupies, colliding with a
+  // standalone sibling below the group that still showed *its* stale number.
+  it("renumbers every row consistently, with no collisions, when a step crosses into a group", () => {
+    const sixSteps = [
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+      { prompt: "four" },
+      { prompt: "five" },
+      { prompt: "six" },
+    ];
+    // Group spans steps 1-2 (display "2"-"3"); steps 3, 4, 5 are standalone
+    // siblings below it.
+    const committed = buildPendingDragState(sixSteps, 0, [
+      { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+    ]);
+
+    // Drag the last step (originally "6") into the group, landing on its
+    // first member.
+    const preview = computeLivePreviewState(
       committed,
-      "step-pending-3",
+      "step-pending-5",
       "step-pending-1"
     );
+    const slots = computeDisplaySlots(preview, 0);
+
+    const numbers = [...slots.values()].sort((a, b) => a - b);
+    // Six steps, six distinct sequential slots — no duplicates, no gaps.
+    expect(numbers).toEqual([0, 1, 2, 3, 4, 5]);
+    // The standalone siblings that used to sit below the group (originally
+    // "4" and "5") shift down by one to make room, rather than keeping their
+    // stale numbers and colliding with the group's new size.
+    expect(slots.get("step-pending-3")).toBe(4);
+    expect(slots.get("step-pending-4")).toBe(5);
+  });
+
+  it("emits a payload when a member is dropped into a different group", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
 
     const outcome = resolvePendingDragEnd(
-      dragged,
       committed,
       "step-pending-3",
       "step-pending-1",
@@ -874,21 +874,15 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       });
     });
 
-    // The reported bug. Dragging a step down past a trailing group folds it
-    // into the group on the way, so by the time the pointer clears the last
-    // member the step's container *is* the group — and dropping on the group's
-    // own slot from there put it back above the group, with no way to reach the
-    // other side.
-    it("releases a step it has already absorbed to the slot below it", () => {
+    // The reported bug (in the old incremental-fold model): dragging a step
+    // down past a trailing group and dropping on the tail put it back above
+    // the group instead of below it, because the drop re-applied a move on
+    // top of a preview that had already moved it. Resolving straight from the
+    // committed baseline can't reproduce that class of bug.
+    it("releases a step to the slot below the trailing group when dropped on the tail", () => {
       const committed = buildPendingDragState(steps, 0, trailingGroups);
-      const folded = movePendingDragItem(
-        committed,
-        "step-pending-0",
-        "step-pending-3"
-      );
 
       const outcome = resolvePendingDragEnd(
-        folded,
         committed,
         "step-pending-0",
         PENDING_TAIL_DRAG_ID,
@@ -916,28 +910,19 @@ describe("WorkflowStepsPanel grouped drag model", () => {
       });
     });
 
-    // Folding is what keeps the dragged row animated: `over` is an outer id
-    // while the row still lives in the group's nested sortable context, and
-    // `useSortable` drops every transform when the two disagree.
-    it("counts a member leaving for the tail as a group crossing", () => {
+    it("moves a member leaving for the tail through the live preview the same as a plain step", () => {
       const committed = buildPendingDragState(steps, 0, trailingGroups);
 
       expect(
-        isParallelGroupDragMove(
-          committed,
-          "step-pending-2",
-          PENDING_TAIL_DRAG_ID
-        )
-      ).toBe(true);
-      // An ungrouped step heading for the tail is a plain top-level reorder,
-      // which the sorting strategy animates without any mutation.
+        computeLivePreviewState(committed, "step-pending-2", PENDING_TAIL_DRAG_ID)
+      ).toEqual(
+        movePendingDragItem(committed, "step-pending-2", PENDING_TAIL_DRAG_ID)
+      );
       expect(
-        isParallelGroupDragMove(
-          committed,
-          "step-pending-0",
-          PENDING_TAIL_DRAG_ID
-        )
-      ).toBe(false);
+        computeLivePreviewState(committed, "step-pending-0", PENDING_TAIL_DRAG_ID)
+      ).toEqual(
+        movePendingDragItem(committed, "step-pending-0", PENDING_TAIL_DRAG_ID)
+      );
     });
 
     it("leaves a step already at the tail where it is", () => {

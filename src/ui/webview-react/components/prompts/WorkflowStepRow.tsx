@@ -216,8 +216,8 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
 WorkflowStepRow.displayName = "WorkflowStepRow";
 
 /**
- * The chrome every step row in the panel sits in: the identity rail, the drag
- * handle, the slot number column, the running outline, and an optional pause
+ * The chrome every step row in the panel sits in: the identity rail, the slot
+ * number column, the drag handle, the running outline, and an optional pause
  * boundary above it.
  *
  * All three row call sites render through this — the sortable pending row, the
@@ -226,11 +226,12 @@ WorkflowStepRow.displayName = "WorkflowStepRow";
  * the sortable wrapper, so a group member still executing behind the
  * done/pending boundary was drawn with no outline at all.
  *
- * The drag handle lives here rather than inside `WorkflowStepItem` so it sits
- * at the row's left edge, matching `ParallelGroupPanel`'s group-level handle —
- * `WorkflowStepItem`'s own icon column already stacks the status icon and the
- * set-start-position button, and a handle squeezed in there is what pushed it
- * to the row's right edge in the first place.
+ * The handle column is always reserved at a fixed width, whether or not this
+ * row is draggable (an empty spacer otherwise) — a done row and a pending row
+ * must show the number in exactly the same place, and omitting the column
+ * outright for done rows (rather than leaving it blank) is what used to shift
+ * them out of alignment. It sits to the *right* of the number, not the left,
+ * so the number itself doesn't visually read as the draggable target.
  */
 export function WorkflowStepRowFrame({
   index,
@@ -266,20 +267,22 @@ export function WorkflowStepRowFrame({
         className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
-      {dragHandleProps && (
-        <span
-          className="ml-1 flex w-4 flex-shrink-0 self-stretch items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
-          style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
-          {...dragHandleProps.listeners}
-          {...dragHandleProps.attributes}
-          aria-label="Drag to reorder"
-        >
-          <Icon name="grabber" className="text-xs" />
-        </span>
-      )}
       <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
       </div>
+      <span
+        className={`flex w-3 flex-shrink-0 self-stretch items-center justify-center ${
+          dragHandleProps
+            ? "cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
+            : ""
+        }`}
+        style={dragHandleProps ? DRAG_HANDLE_TOUCH_ACTION_STYLE : undefined}
+        {...(dragHandleProps?.listeners ?? {})}
+        {...(dragHandleProps?.attributes ?? {})}
+        aria-label={dragHandleProps ? "Drag to reorder" : undefined}
+      >
+        {dragHandleProps && <Icon name="grabber" className="text-xs" />}
+      </span>
       {isCurrent && <ExecutingStepHighlight />}
       <div ref={bodyRef} style={bodyStyle} className="relative flex-1 min-w-0">
         {children}
@@ -323,7 +326,11 @@ export const SortableWorkflowStepWrapper = React.memo(
     const stepColor = resolveStepColor({
       step: stepItemProps.step,
       harnessId: harnessModel.harnessId,
-      stepIndex: stepItemProps.index,
+      // Slot-based, not identity-based: `slotNumber` is the row's current
+      // live position (see WorkflowStepsPanel's preview-state numbering), so
+      // a unique-mode color tracks where the step is now, not where it
+      // started the drag.
+      stepIndex: slotNumber - 1,
       group: stepItemProps.colorGroup,
       offsetInGroup: stepItemProps.offsetInGroup,
       stepColorMode: stepItemProps.stepColorMode,
