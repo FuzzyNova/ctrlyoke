@@ -266,13 +266,16 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         >
           {status}
         </span>
-        <label className="ml-auto flex items-center gap-1 text-description-fg">
+        <label
+          className={`ml-auto flex items-center gap-1 text-description-fg ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+          title="Cancel the rest of this group's steps as soon as one fails, instead of letting them finish."
+        >
           <input
             type="checkbox"
             checked={group.failFast}
             disabled={dragDisabled}
             onChange={(event) => onFailFastChange(group, event.target.checked)}
-            aria-label="Fail fast"
+            className={`w-3 h-3 accent-focus-border ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
           />
           fail fast
         </label>

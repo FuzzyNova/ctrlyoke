@@ -115,7 +115,7 @@ describe("ParallelGroupPanel", () => {
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("second")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Fail fast" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "fail fast" }));
     expect(onFailFastChange).toHaveBeenCalledWith(group, false);
   });
 
