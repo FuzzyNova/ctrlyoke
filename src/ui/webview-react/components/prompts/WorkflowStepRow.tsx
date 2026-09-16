@@ -268,7 +268,7 @@ export function WorkflowStepRowFrame({
       />
       {dragHandleProps && (
         <span
-          className="flex-shrink-0 w-4 self-stretch flex items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
+          className="ml-1 flex w-4 flex-shrink-0 self-stretch items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
           style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
           {...dragHandleProps.listeners}
           {...dragHandleProps.attributes}
