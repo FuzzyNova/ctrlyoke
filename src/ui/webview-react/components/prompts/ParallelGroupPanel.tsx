@@ -300,7 +300,12 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                       executionState
                     )
                   }
-                  slotNumber={index + 1}
+                  // Position within the group's own slots, not the step's
+                  // identity index — mid-drag, a step folded in from outside
+                  // the group keeps its own identity `index` for data lookups,
+                  // but must display the slot it is currently occupying, or the
+                  // number jumps to wherever that step normally lives.
+                  slotNumber={group.startIndex + offset + 1}
                   step={step}
                   index={index}
                   currentStep={currentStep}
@@ -351,11 +356,14 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                 settings: harnessColorSettings,
                 groupMembers: colorGroupMembers,
               });
+              // Position within the group's own slots — see the sortable
+              // branch above for why this can't be the step's identity index.
+              const slotNumber = group.startIndex + offset + 1;
               return (
                 <WorkflowStepRowFrame
                   key={index}
                   index={index}
-                  slotNumber={index + 1}
+                  slotNumber={slotNumber}
                   status={memberStatus}
                   stepColor={stepColor}
                   isCurrent={isStepActive(index)}
@@ -363,7 +371,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   <WorkflowStepRow
                     step={step}
                     index={index}
-                    slotNumber={index + 1}
+                    slotNumber={slotNumber}
                     currentStep={currentStep}
                     executionState={executionState}
                     status={memberStatus}
