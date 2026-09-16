@@ -70,15 +70,14 @@ display one.
 ## The rule this plan adopts
 
 **Tear down only to avoid two processes owning one harness session. Otherwise spawn a
-sibling, bounded by a per-workflow cap.**
+sibling.**
 
 1. **Same-session conflict → kill first.** If a live PTY owns the AI session id the new spawn
    is about to `--resume`, terminate it _before_ spawning. Several harnesses reject or corrupt
    a session already open elsewhere. Ordering is load-bearing: kill, await exit, then spawn.
 2. **`resumeSession: false` → never kill.** A fresh session cannot conflict with anything.
-3. **Any other new or non-running session → spawn a sibling**, up to the cap.
-4. **Cap AI terminals per workflow** (default 10). At the cap, evict the oldest evictable
-   session before spawning.
+3. **Any other new or non-running session → spawn a sibling.** Nothing bounds how many
+   sibling terminals a workflow may accumulate; see **No terminal cap** below for why.
 
 ### Rule 1 is only half-implemented today
 
@@ -91,9 +90,11 @@ sibling, bounded by a per-workflow cap.**
   collide. It is over-broad rather than missing — it satisfies rule 1 by killing everything,
   which is exactly what this plan removes.
 
-So the work is **narrowing the existing unconditional teardown to the session-id comparison
-`retireInteractivePtyBeforeHeadlessResume` already performs**, and extracting that comparison
-so both paths share one predicate.
+The original plan was to narrow that unconditional teardown to the same session-id comparison
+and share one predicate between both paths. **That turned out to be unsafe on the interactive
+path, and was reverted during review** — see **The interactive restart path stays
+unconditional** below. The predicate was still extracted (`doesInteractivePtyOwnSession`), but
+it governs the headless path alone.
 
 ---
 
@@ -131,6 +132,18 @@ The other call site, `ensureIsolatedIntegration` (`:827`), already has
 `member.resolvedProperties` in hand, so the wider signature costs it nothing — and it always
 passes a `target`, so it takes the target-keyed branch and never composes a spawn-identity
 key at all.
+
+**Re-keying the caches is necessary but not sufficient — the sequential selection site
+short-circuits them.** `getIntegrationForPrompt` (`WorkflowInstance.ts:4423`) does not consult
+`executionIntegrations` per prompt at all. Outside the target-keyed branch it returns the
+closure-captured `activeIntegration` (bound once at `:5558`) and calls
+`createIntegrationForMode` only when `resolvedHarness !== currentIntegration.getIntegrationMode()`
+— a _harness_ comparison. A same-harness step with a different model therefore reuses the
+active integration no matter how `executionIntegrations` is keyed, and the whole design
+silently no-ops. That comparison must become a spawn-identity comparison: resolve the step's
+`${harness}::${spawnIdentityHash(props)}` key and route through `createIntegrationForMode`
+whenever it differs from the active integration's key. Track the active integration's own key
+alongside it so this stays a string compare rather than a recomputation.
 
 **Ordering at that call site is load-bearing and already correct — do not move it.** By
 `:2109`, `resolvedProperties` has already been through `{{var}}` substitution, MCP
@@ -233,14 +246,42 @@ idiom (`ProjectStatePaths.projectKey`, `WorktreeUtils.createWorktreeDirectoryNam
   pure leaves the door open for the webview to compute the same identity for a "this step opens
   a new terminal" preview — the one place drift would be visible to a user.
 - **It is a cache key, not an integrity boundary.** Nothing authenticates on it and the inputs
-  are the user's own resolved config. 64 bits against the ≤10 live entries the cap allows does
-  not justify a dependency on node.
+  are the user's own resolved config. 64 bits against the handful of live entries one
+  workflow produces does not justify a dependency on node.
 
 **The canonical string is never the key itself and is never logged.** By `:2109` the hooks
 rewrite (`WorkflowExecutor.ts:2089-2103`) has expanded granted secret _values_ into
 `hooks[].env`, so the serialized identity contains plaintext secrets. Hashing is what makes the
 key safe to hold in a `Map`, write to `Log`, or put in a message payload later. Log
 `harness`, `model`, and the hash — never the payload.
+
+### The interactive restart path stays unconditional
+
+Rule 1 reads as a session-level conflict check, and on the headless path it is one: that
+process is a _separate owner_, so the retained interactive PTY may legitimately stay alive
+unless the resume would take over the session it already holds. That is exactly what
+`doesInteractivePtyOwnSession` decides.
+
+**The interactive restart path is not the same shape, and must not share the gate.**
+`hasLivePtySession()` there reports _this integration's own_ `CliTransportCoordinator`, which
+tracks exactly one `currentPtySession` and overwrites it on the next spawn. Declining to
+retire would leave the previous PTY referenced by nothing —
+`terminateCurrentPtySession`, `writeToSession`, steer routing and `cancel()` all reach only
+`currentPtySession` — so the process would outlive the run and survive integration disposal,
+dying only with the extension host. The user would be left with an invisible harness process
+and no way to close it.
+
+Gating that branch on the session-id predicate therefore traded one bug for a worse one, and
+it reached the cases that matter: a prompt reusing its integration (same spawn identity,
+`resumeSession: true`) whose inject is refused for a _non-identity_ reason — inject mode
+disabled globally, a missing `spawnedWith` snapshot, an explicit `sessionId` naming a
+different session, or an unresolved `resolvedSessionId`.
+
+So the branch keeps its unconditional teardown. **Nothing is lost**, because the retention this
+plan is about is delivered entirely by the cache keys: an incompatible prompt gets its own
+integration and coordinator, whose `hasLivePtySession()` is false, so a terminal worth keeping
+never reaches this branch. Rule 2 (`resumeSession: false` never kills) holds the same way —
+those prompts always allocate a fresh integration upstream.
 
 ### Which terminal does a later step inject into?
 
@@ -250,61 +291,42 @@ selection, and the new cache key answers it for free: the step's own spawn ident
 exactly one entry. No picker, no heuristic, no new UI. A step wanting a _specific_
 conversation already has an explicit `sessionId`, honoured at `:613-621`.
 
-### The cap is a webview bound, not a process bound
+### No terminal cap — decided: build nothing
 
-This matters for scoping it correctly, and an earlier revision of this plan got it wrong.
+An earlier revision of this plan added a per-workflow AI terminal cap
+(`terminal.maxSessionsPerWorkflow`, default 10) enforced in `PtyProcessManager.spawnPty`,
+with an eviction order beginning at ended/frozen sessions. **It was removed after the
+chokepoint was checked against the code.** This is a decision, not a deferral.
 
-Running sessions are **already** bounded — a sequential workflow runs one step at a time, a
-group is bounded by `queue.maxParallelSteps` (default 6), and that is equally true of headless
-steps. What this change grows is **non-running** AI terminals: ended/frozen ones and retained
-ones. Those hold **zero processes**.
+`spawnPty` cannot see the sessions that cap was meant to bound. `PtyProcessManager.sessions`
+is live-only — deleted from on PTY exit (`:643`), in `killSession` (`:754`), and in
+`restartShellSession` (`:795`). An ended AI terminal leaves no row there, so the proposed
+first eviction tier ("ended/frozen AI sessions, oldest `spawnedAt` first") could never match,
+and the cap's own count would see only _running_ AI PTYs. Those are already bounded: a
+sequential workflow runs one step at a time, and a group is bounded by
+`queue.maxParallelSteps`. The cap would have been inert against the growth it named, while
+adding a setting that reads like a guarantee.
 
-Their cost is entirely webview-side. `TerminalView.tsx:387-394` mounts _every_ session —
-inactive ones get `invisible`, never unmounted (deliberately: a 0×0 container makes FitAddon
-clamp to 2×1 and push a bogus size to the PTY). So each session is a live xterm holding up to
-`terminal.scrollback` (5000) lines, a **WebGL context** (`terminalRegistry.ts:252-266`), and a
-50KB extension-side `reconnectBuffer`. Browsers hard-cap simultaneous WebGL contexts per page
-(Chrome ~16); past that the oldest are dropped and xterm silently falls back to its DOM
-renderer.
+The growth is real, but it lives entirely in the webview, which the extension does not
+measure. `terminalStore.endSession` keeps an exited session with `COMPLETED`/`FAILED` status
+rather than dropping it; `TerminalView.tsx:387` maps _every_ session (inactive ones get
+`invisible` and are never unmounted — deliberately: a 0×0 container makes FitAddon clamp to
+2×1 and push a bogus size to the PTY); and each entry loads a WebGL addon
+(`terminalRegistry.ts:252-266`). So each retained tab costs up to `terminal.scrollback` (5000)
+lines, a WebGL context, and a 50KB extension-side `reconnectBuffer`.
 
-A client only hydrates `sessions` for the workflow it is _viewing_, so the xterm instances on
-a page are exactly one workflow's sessions. **The per-workflow cap is therefore precisely the
-per-page xterm bound** — which is why it is interactive-only, why it is ~10 rather than ~100,
-and why no global terminal ceiling is needed for this resource.
+That cost is tolerable unbounded. Nothing held here is a process. Browsers already hard-cap
+simultaneous WebGL contexts per page (Chrome ~16) and xterm falls back to its DOM renderer
+past that rather than failing. And the accumulation is bounded in practice by the `RunRef`:
+`closeRetainedTerminalsForFreshRun` (`:1185`) disposes every retained integration and closes
+its terminal before a different `RunRef` starts, and `clearAiCliSessions` clears the rail on
+run start. Reconnect prunes further — `replayTerminalSessionsTo`
+(`WorkflowOrchestrator.ts:1116`) replays only live sessions, so ended tabs already do not
+survive a reload.
 
-New setting:
-
-- `schemas/settings-schema.json` → `terminal.maxSessionsPerWorkflow`
-  (`"type": "integer"`, `"minimum": -1`, `-1` = unlimited per this repo's convention:
-  `maxRetries`, `maxPromptTimeout`, `maxWorkflowExecutionTime`, `runs.maxRuns`,
-  `outputVirtualizationRowThreshold`)
-- `src/types/CtrlYokeSettings.ts` → `TerminalSettings.maxSessionsPerWorkflow`, default `10`
-
-**Not** in `package.json` `contributes.configuration` — that is not a settings surface in this
-repo (see `copilot-instructions.md`); it would be a do-nothing duplicate.
-
-Enforce at `PtyProcessManager.spawnPty` (`:624`), the single chokepoint that already knows
-`workflowId`, `kind`, `harnessId`, and `spawnedAt`.
-
-**Eviction order** — first match wins; the cap counts `SESSION_KINDS.AI_CLI` only:
-
-1. Ended/frozen AI sessions (`status !== RUNNING`), oldest `spawnedAt` first. Pure scrollback.
-2. Running AI sessions **not** owned by an active target, oldest first — retained inject
-   terminals between passes.
-3. Nothing else: **spawn over the cap and log a warning.** Refusing would fail a run the user
-   asked for, and nothing bounded here is a process, so overshoot is cheap.
-
-Never evict a `SESSION_KINDS.SHELL` session (the user may be mid-command), the client's active
-session, or a session whose step is in flight.
-
-`spawnPty` cannot see "owned by an active target" itself. Pass a predicate in rather than
-reaching upward — `WorkflowInstance` tracks this in `activeTargetResources` (`:414`) and
-`getLivePtyIntegrationCandidates` (`:4820`).
-
-Eviction must dispose the owning integration or it will believe it still has a live PTY. The
-seam exists: `execIntegration.onPtySessionEnded(...)` (`:5674`) already removes the entry from
-`liveInjectIntegrations`, cleans up retained artifacts, and disposes. Route eviction through a
-normal kill so that callback fires rather than adding a second teardown path.
+**If tab accumulation is ever actually reported**, fix it in the layer that owns the resource
+— the webview, dropping the oldest already-ended AI tab — not in `spawnPty`, which
+structurally cannot see it.
 
 ### The webview stops guessing
 
@@ -324,6 +346,8 @@ knows the truth.
 
 Each of these was considered and rejected with a reason, not deferred by omission.
 
+- **A per-workflow terminal cap.** Removed from this plan after verification — see **No
+  terminal cap** above for the evidence.
 - **A global terminal ceiling.** Misaimed: it would protect a resource already bounded by
   `maxParallelSteps`, and drawing an interactive/headless line makes no sense when both run
   the same class of harness process. Machine-capacity limiting is a _step admission_ concern,
@@ -337,12 +361,12 @@ Each of these was considered and rejected with a reason, not deferred by omissio
   `closeRetainedTerminalsForFreshRun` (`:1185`) disposes every `liveInjectIntegrations` entry
   and closes its terminal before a different `RunRef` starts; it is called from the
   seed-new-run path (`:1759`) and on restart-from-beginning (`:2095`). Retention is bounded by
-  the `RunRef`, and within it by the cap.
+  the `RunRef`.
 - **Per-session controller arbitration.** Stays per-workflow
   (`PtyProcessManager.workflowRunControllers`, `:460`), documented as v1-acceptable in
-  `PARALLEL_STEPS_PLAN.md`. Forward dependency: if per-session controllers ever land, the
-  cap's "never evict the active session" rule must become "never evict _any client's_ active
-  session", which is a multi-client question.
+  `PARALLEL_STEPS_PLAN.md`. Unchanged here — with several same-harness terminals now live at
+  once, a workflow-scoped controller is simply shared across them, exactly as it already is
+  for parallel siblings.
 - **Changing standalone-CLI behaviour.** It already refuses concurrent interactive sessions
   via `supportsConcurrentInteractiveSessions: false` (`src/cli/CliExecutionMode.ts:38`), a
   host capability rather than a harness one.
@@ -394,15 +418,13 @@ failure.
 
 ## Files
 
-| File                                                            | Change                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/types/ExecutionSpawnIdentity.ts`                           | **New.** `spawnIdentityFields` / `spawnIdentityHash` — the sole source of both the cache key and the inject predicate's field comparison. No imports (see **The digest**).                                                                          |
-| `src/core/harness/CliIntegration.ts`                            | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Replace `getInjectIncompatibilityReason`'s `JSON.stringify` comparisons with `spawnIdentityFields`. |
-| `src/core/WorkflowExecutor.ts`                                  | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite.                                                                                           |
-| `src/core/WorkflowInstance.ts`                                  | Compose cache keys from harness + spawn identity; `resumeSession: false` bypasses the cache. Supply the active-target predicate to the cap.                                                                                                         |
-| `src/core/harness/PtyProcessManager.ts`                         | Cap enforcement and eviction order in `spawnPty`.                                                                                                                                                                                                   |
-| `src/types/CtrlYokeSettings.ts`, `schemas/settings-schema.json` | `terminal.maxSessionsPerWorkflow`, default 10, `-1` unlimited.                                                                                                                                                                                      |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`         | Delete the harness-eviction block.                                                                                                                                                                                                                  |
+| File                                                    | Change                                                                                                                                                                                                                                              |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/ExecutionSpawnIdentity.ts`                   | **New.** `spawnIdentityFields` / `spawnIdentityHash` — the sole source of both the cache key and the inject predicate's field comparison. No imports (see **The digest**).                                                                          |
+| `src/core/harness/CliIntegration.ts`                    | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Replace `getInjectIncompatibilityReason`'s `JSON.stringify` comparisons with `spawnIdentityFields`. |
+| `src/core/WorkflowExecutor.ts`                          | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite.                                                                                           |
+| `src/core/WorkflowInstance.ts`                          | Compose cache keys from harness + spawn identity; make the `getIntegrationForPrompt` selection compare that key rather than the harness; `resumeSession: false` bypasses the cache.                                                                 |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | Delete the harness-eviction block.                                                                                                                                                                                                                  |
 
 No `schemas/workflow-schema.json` change — nothing here is authored per workflow.
 
@@ -410,30 +432,32 @@ No `schemas/workflow-schema.json` change — nothing here is authored per workfl
 
 ## Staging
 
-**Stage 1 — cap + eviction** in `spawnPty`, with the setting. Genuinely inert: today at most
-one AI terminal per harness exists, so there is nothing for the cap to evict. Independently
-testable.
+**Stage 1 — `ExecutionSpawnIdentity`, and the inject predicate rewired onto it — landed.**
+The shared pure module now canonicalizes the eight spawn-time fields and hashes their record
+with 64-bit FNV-1a. `getInjectIncompatibilityReason` compares those canonical field values,
+retaining its existing reasons and adding `secrets`/`ctrlyokeMcpMode`. The tests cover the
+canonicalization and the invariant that the hash and predicate cannot disagree. Folding
+`undefined` into `null` causes _fewer_ restarts, while adding `secrets`/`ctrlyokeMcpMode`
+causes _more_; Stage 2 now keys compatible integration caches with that hash.
 
-**Stage 2 — the behavioural change, as one landing**, in this internal order:
+**Stage 2 — the behavioural change, landed in one commit**, in this internal order:
 
-1. Add `ExecutionSpawnIdentity`, thread `ResolvedProperties` through
-   `getIntegrationForPrompt`, and re-key the caches.
-2. Narrow the teardown to the session-id conflict predicate.
+1. Thread `ResolvedProperties` through `getIntegrationForPrompt` and re-key the caches,
+   including the `activeIntegration` short-circuit.
+2. Extract the session-id conflict predicate for the headless path.
 3. Delete the webview harness-eviction block.
 
-**These cannot be split, and the order within the stage matters.** Narrowing the teardown
-before the re-keying orphans processes: the restart would stop killing the old PTY while the
-same coordinator immediately overwrites `currentPtySession` with the new one, leaving a live
-harness process that no integration references and no code path disposes. Re-keying first is
-what gives the second conversation its own integration and coordinator, so nothing is ever
-orphaned — and it also makes the narrowing mostly redundant in practice, since a differing
-spawn identity now yields a fresh coordinator whose `hasLivePtySession()` is false and which
-therefore never reaches the teardown at all. The narrowing stays because it makes the
-remaining case (an explicit `sessionId` naming a different live session) an intentional kill
-rather than an incidental one.
+**These three cannot be split, and the order within the stage matters.** Re-keying the
+sequential integrations first gives every differing spawn identity its own coordinator, which
+is what lets a model change or a fresh session spawn a sibling instead of replacing a
+terminal. The interactive restart path still retires unconditionally, for the reason recorded
+in **The interactive restart path stays unconditional**; the extracted predicate governs the
+headless path, where it also now declines to kill for `resumeSession: false`. The webview
+keeps every started terminal until an explicit close message, so it no longer guesses which
+same-harness tab the backend intended to retain.
 
-Landing 1 without 3 leaves live PTYs the user cannot see or close, because the webview still
-evicts their tabs by harness.
+Stage 1 and Stage 2 are complete. No per-workflow terminal cap, setting, or eviction logic was
+added; `CliTransportCoordinator` still owns exactly one PTY per integration.
 
 ---
 
@@ -445,14 +469,13 @@ evicts their tabs by harness.
   `skills` does not. Plus the invariant that ties the two consumers together: equal
   `spawnIdentityHash` implies `getInjectIncompatibilityReason` reports no field change.
 - `src/test/unit/CliIntegration.test.ts` — extends the existing `inject compatibility` suite:
-  a model change spawns a sibling without killing the live PTY; a same-session resume kills
-  first and awaits exit before spawning; `resumeSession: false` never kills; a `secrets` change
-  no longer injects.
-- `src/test/unit/PtyProcessManager.test.ts` — eviction order (ended before running, oldest
-  first), shells never evicted, active-target sessions never evicted, over-cap spawn when
-  nothing is evictable logs and proceeds.
+  a `secrets` change no longer injects; an absent-vs-null `mcpServers` does. Plus the
+  coordinator invariant: a live PTY on this coordinator is retired before its replacement
+  spawns whatever that replacement resumes, a same-session resume awaits exit before spawning,
+  and the headless path leaves the interactive PTY alone when it resumes another session.
 - `src/test/unit/WorkflowInstance.test.ts` — two same-harness different-model steps produce
-  two integrations and two live sessions; a third step with step 1's spawn identity injects
-  into step 1's session, not step 2's.
+  two integrations; a third step with step 1's spawn identity resolves back to step 1's
+  integration; `resumeSession: false` allocates a fresh one every time. This is the suite that
+  proves sibling retention, since the restart path itself no longer decides it.
 - `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` — same-harness
   `TERMINAL_STARTED` no longer removes the prior session.

@@ -69,6 +69,10 @@ import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
 import type { ExecutionPreviewHarness } from "../ExecutionPreviewService";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import {
+  SPAWN_IDENTITY_FIELDS,
+  spawnIdentityFields,
+} from "../../types/ExecutionSpawnIdentity";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
@@ -637,27 +641,56 @@ export class CliIntegration extends HarnessIntegration {
       return "resumeSession is false — fresh session required";
     }
 
-    if (curr.model !== prev.model) {
+    const currIdentity = spawnIdentityFields(curr);
+    const prevIdentity = spawnIdentityFields(prev);
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.MODEL] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.MODEL]
+    ) {
       return `model changed (${prev.model} → ${curr.model})`;
     }
 
     if (
-      JSON.stringify(curr.toolPermissions) !==
-      JSON.stringify(prev.toolPermissions)
+      currIdentity[SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.TOOL_PERMISSIONS]
     ) {
       return "toolPermissions changed";
     }
 
-    if (JSON.stringify(curr.hooks) !== JSON.stringify(prev.hooks)) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.HOOKS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.HOOKS]
+    ) {
       return "hooks changed";
     }
 
-    if (JSON.stringify(curr.mcpServers) !== JSON.stringify(prev.mcpServers)) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.MCP_SERVERS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.MCP_SERVERS]
+    ) {
       return "mcpServers changed";
     }
 
-    if ((curr.additionalArgs ?? "") !== (prev.additionalArgs ?? "")) {
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.ADDITIONAL_ARGS]
+    ) {
       return `additionalArgs changed`;
+    }
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.SECRETS] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.SECRETS]
+    ) {
+      return "secrets changed";
+    }
+
+    if (
+      currIdentity[SPAWN_IDENTITY_FIELDS.CTRLYOKE_MCP_MODE] !==
+      prevIdentity[SPAWN_IDENTITY_FIELDS.CTRLYOKE_MCP_MODE]
+    ) {
+      return "ctrlyokeMcpMode changed";
     }
 
     return null;
@@ -1177,6 +1210,19 @@ export class CliIntegration extends HarnessIntegration {
       // Inject mode was preemptively skipped (settings changed, resumeSession: false,
       // etc.) but a live PTY from the previous step is still running. Gracefully signal
       // it before spawning a fresh one so the CLI TUI can clean up.
+      //
+      // Deliberately unconditional, rather than gated on the session-id conflict
+      // check used before a headless resume. `hasLivePtySession()` reports this
+      // integration's *own* coordinator, which tracks exactly one
+      // `currentPtySession` and overwrites it on the next spawn
+      // (`CliTransportCoordinator.spawn`). Declining to retire here would leave the
+      // old PTY referenced by nothing — `terminateCurrentPtySession`,
+      // `writeToSession`, steer routing and `cancel()` all reach only
+      // `currentPtySession` — so the process would survive until the extension host
+      // exits. Sibling terminals are produced by the spawn-identity cache keys in
+      // `WorkflowInstance`, which hand an incompatible prompt its own integration
+      // and coordinator; a terminal worth retaining therefore never reaches this
+      // branch at all.
       await this.retireInteractivePtyForRestartFallback();
     }
 
@@ -1360,16 +1406,8 @@ export class CliIntegration extends HarnessIntegration {
   private async retireInteractivePtyBeforeHeadlessResume(
     session: CliExecutionSession
   ): Promise<void> {
-    const ctx = this.executionRunner.getLastInteractiveContext();
     const resolvedSessionId = session.resolvedSessionId;
-    if (!ctx || !resolvedSessionId) {
-      return;
-    }
-
-    const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
-      (id): id is string => typeof id === "string" && id.length > 0
-    );
-    if (!activeSessionIds.includes(resolvedSessionId)) {
+    if (!this.doesInteractivePtyOwnSession(session)) {
       return;
     }
 
@@ -1385,6 +1423,34 @@ export class CliIntegration extends HarnessIntegration {
         `[CliIntegration] Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
       );
     }
+  }
+
+  /**
+   * Returns true only when a new resume would take over the session owned by
+   * the retained interactive PTY. Fresh-session prompts never conflict with
+   * that PTY, even if their resolver carried an old or explicit session ID.
+   *
+   * This is the predicate for the *headless* path, where the new process is a
+   * separate owner and the interactive PTY can legitimately stay alive. It is
+   * not safe on the interactive restart path, which replaces the PTY on this
+   * integration's own coordinator — see the unconditional retirement in
+   * `sendPrompt`.
+   */
+  private doesInteractivePtyOwnSession(session: CliExecutionSession): boolean {
+    if (session.resolvedProperties?.resumeSession === false) {
+      return false;
+    }
+
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    const resolvedSessionId = session.resolvedSessionId;
+    if (!ctx || !resolvedSessionId) {
+      return false;
+    }
+
+    const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    );
+    return activeSessionIds.includes(resolvedSessionId);
   }
 
   private async persistExecutionOutcome(

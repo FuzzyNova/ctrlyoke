@@ -282,6 +282,34 @@ suite("CliIntegration", () => {
       );
     });
 
+    test("forces a restart when secrets change", () => {
+      const previous = createResolvedProperties({ secrets: ["API_TOKEN"] });
+      const current = createResolvedProperties({ secrets: [] });
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(previous),
+          current,
+          "session-existing"
+        ),
+        "secrets changed"
+      );
+    });
+
+    test("permits inject when mcpServers changes from absent to null", () => {
+      const previous = createResolvedProperties();
+      delete (previous as Partial<ResolvedProperties>).mcpServers;
+
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(previous),
+          createResolvedProperties({ mcpServers: null }),
+          "session-existing"
+        ),
+        null
+      );
+    });
+
     test("forces a restart when the prompt needs parallel-group identity", () => {
       const properties = createResolvedProperties();
 
@@ -1447,6 +1475,170 @@ suite("CliIntegration", () => {
     assert.strictEqual(headlessCalled, true);
     assert.strictEqual(clearedInteractiveContext, true);
     assert.match(retiredReason ?? "", /headless resume of AI session/u);
+  });
+
+  async function sendInteractiveWithLivePty(
+    integration: CliIntegration,
+    resolvedProperties: ResolvedProperties,
+    resolvedSessionId: string | undefined,
+    lifecycle: string[]
+  ): Promise<boolean> {
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties,
+      resolvedSessionId,
+    });
+    (integration as any).initializeExecutionSession = async () => {};
+    (integration as any).resumeSessionActivityWatcher = () => {};
+    (integration as any).shouldUseInjectMode = () => false;
+    (integration as any).transportCoordinator.hasLivePtySession = () => true;
+    (integration as any).executionPlanBuilder.plan = async () => ({
+      resolvedCommand: undefined,
+      args: [],
+      cliArgs: [],
+      mutations: [],
+      providerPreparation: { cliArgs: [], mutations: [], diagnostics: [] },
+      permissionApplication: { diagnostics: [] },
+      mcpApplication: { cliArgs: [], mutations: [], diagnostics: [] },
+      effectiveToolPermissions: undefined,
+      diagnostics: [],
+    });
+    (integration as any).executionPlanBuilder.apply = async () => {};
+    (integration as any).executionRunner.executeInteractive = async () => {
+      lifecycle.push("spawn");
+      return true;
+    };
+    return integration.sendPrompt({ prompt: "continue" });
+  }
+
+  // Sibling terminals come from WorkflowInstance handing an incompatible prompt
+  // its own integration (see "selects same-harness integrations by spawn
+  // identity"), so a retained PTY never reaches this coordinator at all. Once a
+  // live PTY *is* on this coordinator it must always be retired, whatever the
+  // replacement resumes: the coordinator tracks one `currentPtySession` and
+  // overwrites it on spawn, so skipping the kill strands the process.
+  test("retires a live PTY whose session the replacement does not resume", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(
+        createResolvedProperties({ model: "old-model" })
+      );
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ model: "new-model" }),
+          "session-unrelated",
+          lifecycle
+        ),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["kill", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("awaits same-session PTY exit before spawning its replacement", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    let releaseExit!: () => void;
+    const exitComplete = new Promise<void>((resolve) => {
+      releaseExit = resolve;
+    });
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        await exitComplete;
+        lifecycle.push("exit");
+        return "pty-existing";
+      };
+
+    try {
+      const send = sendInteractiveWithLivePty(
+        integration,
+        createResolvedProperties(),
+        "session-existing",
+        lifecycle
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(lifecycle, ["kill"]);
+      releaseExit();
+      assert.strictEqual(await send, true);
+      assert.deepStrictEqual(lifecycle, ["kill", "exit", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  // A `resumeSession: false` prompt is given a fresh integration upstream (see
+  // "always creates a fresh integration when resumeSession is false"), so in
+  // production its coordinator has no live PTY and nothing is killed. If one is
+  // live here anyway, it still belongs to this coordinator and must be retired.
+  test("retires a live PTY on its own coordinator for a fresh-session replacement", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ resumeSession: false }),
+          "session-existing",
+          lifecycle
+        ),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["kill", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  // The headless path is where the session-id predicate is correct: the new
+  // process is a separate owner, so the interactive PTY survives unless the
+  // resume would take over the session it already owns.
+  test("leaves the interactive PTY alone when a headless step resumes another session", async () => {
+    const integration = createTestIntegration();
+    let killed = false;
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        killed = true;
+        return "pty-existing";
+      };
+
+    try {
+      await (integration as any).retireInteractivePtyBeforeHeadlessResume({
+        resolvedSessionId: "session-unrelated",
+        resolvedProperties: createResolvedProperties(),
+      });
+      assert.strictEqual(killed, false);
+
+      await (integration as any).retireInteractivePtyBeforeHeadlessResume({
+        resolvedSessionId: "session-existing",
+        resolvedProperties: createResolvedProperties(),
+      });
+      assert.strictEqual(killed, true);
+    } finally {
+      integration.dispose();
+    }
   });
 
   test("should persist cancelled prompt runtime when a sendPrompt attempt is cancelled", async () => {

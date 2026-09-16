@@ -1163,7 +1163,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     queue.onDidChangeState(() => {
       admissions.push(queue.getActiveParallelGroupRuntime());
     });
-    let releaseSibling: (() => void) | undefined;
+    // Resolve the deferred up front rather than inside onSend: under a loaded
+    // host, failFast can cancel step 1 before its onSend has run, leaving the
+    // resolver unassigned and the sibling's promise permanently pending.
+    let releaseSibling!: () => void;
+    const siblingRelease = new Promise<void>((resolve) => {
+      releaseSibling = resolve;
+    });
     const integrations = new Map<number, MockHarnessIntegration>();
     const failing = new MockHarnessIntegration(undefined, false);
     failing.onSend = async () => {
@@ -1174,9 +1180,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     integrations.set(0, failing);
     const sibling = new MockHarnessIntegration(undefined, false);
     sibling.onSend = async () => {
-      await new Promise<void>((resolve) => {
-        releaseSibling = resolve;
-      });
+      await siblingRelease;
       return { success: false };
     };
     integrations.set(1, sibling);
@@ -1185,7 +1189,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     context.dynamicQueueConfig.maxParallelSteps = 2;
     context.cancelTarget = async (target) => {
       if (target.kind === FINAL_STEP_PHASES.QUEUE && target.stepIndex === 1) {
-        releaseSibling?.();
+        releaseSibling();
       }
       await integrations
         .get(target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : 0)
@@ -2068,8 +2072,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
     const context: WorkflowExecutionContext = {
       ...makeContext(effectiveIntegration),
-      getIntegrationForPrompt: (_prompt, harnessOverride) => {
-        requestedHarnesses.push(harnessOverride);
+      getIntegrationForPrompt: (_prompt, resolvedProperties) => {
+        requestedHarnesses.push(resolvedProperties.harness);
         return effectiveIntegration;
       },
     };
