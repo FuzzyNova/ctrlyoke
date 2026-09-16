@@ -23,6 +23,10 @@ import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import {
+  DRAG_HANDLE_TOUCH_ACTION_STYLE,
+  type WorkflowStepDragHandleProps,
+} from "@utils/dndKit";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -103,6 +107,14 @@ interface WorkflowStepProps {
   };
   /** Right-click context menu handler */
   onContextMenu?: (x: number, y: number) => void;
+  /**
+   * dnd-kit's `listeners`/`attributes` for this row's drag handle, or
+   * `undefined` when the row isn't draggable. Rendered as the trailing item
+   * inside this component's own container (rather than as a separate column
+   * around it) so the handle picks up the same hover background and bottom
+   * border as the rest of the step for free.
+   */
+  dragHandleProps?: WorkflowStepDragHandleProps;
 }
 
 /**
@@ -150,6 +162,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   runtimeMeta,
   isScript = false,
   onContextMenu,
+  dragHandleProps,
 }) => {
   const hideCost = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
@@ -398,6 +411,19 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               </span>
             </div>
           </div>
+        )}
+        {dragHandleProps && (
+          <button
+            type="button"
+            className="flex-shrink-0 w-3 flex items-center justify-center self-stretch cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
+            onClick={(e) => e.stopPropagation()}
+            {...(dragHandleProps.listeners ?? {})}
+            {...dragHandleProps.attributes}
+            aria-label="Drag to reorder"
+          >
+            <Icon name="grabber" className="text-xs" />
+          </button>
         )}
       </div>
     </div>

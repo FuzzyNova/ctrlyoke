@@ -1,4 +1,19 @@
 import type { CSSProperties } from "react";
+import type { DraggableAttributes } from "@dnd-kit/core";
+
+type SyntheticListenerMap = Record<string, Function>;
+
+/**
+ * The pair of dnd-kit props (`useSortable`'s `listeners` + `attributes`) a
+ * drag handle needs. Shared between `WorkflowStepRow` (which sources them
+ * from `useSortable`) and `WorkflowStep` (which spreads them onto the actual
+ * handle element) so the two stay in sync without an import cycle between
+ * those files.
+ */
+export type WorkflowStepDragHandleProps = {
+  listeners: SyntheticListenerMap | undefined;
+  attributes: DraggableAttributes;
+};
 
 /**
  * Style for every dnd-kit drag handle in the dashboard. On touch devices,
