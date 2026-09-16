@@ -1,5 +1,6 @@
 import React, { useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
+import type { DraggableAttributes } from "@dnd-kit/core";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
@@ -22,12 +23,17 @@ import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import { getStepAccentClass } from "@utils/status";
+import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
+import { Icon } from "../shared/Icon";
 
 export type WorkflowStepComponentProps = React.ComponentProps<
   typeof WorkflowStepItem
 >;
-export type WorkflowStepDragHandleProps =
-  WorkflowStepComponentProps["dragHandleProps"];
+type SyntheticListenerMap = Record<string, Function>;
+export type WorkflowStepDragHandleProps = {
+  listeners: SyntheticListenerMap | undefined;
+  attributes: DraggableAttributes;
+};
 
 export type StepHarnessModel = Pick<
   WorkflowStepComponentProps,
@@ -74,7 +80,6 @@ export type WorkflowStepRowProps = {
   offsetInGroup?: number;
   stepColorMode?: StepColorMode;
   harnessColorSettings?: HarnessColorSettings;
-  dragHandleProps?: WorkflowStepDragHandleProps;
   getStepHarnessModel: (
     step: WorkflowStep,
     status: StepStatus
@@ -119,7 +124,6 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     isExecutionTargetLocked,
     hideBorderBottom = false,
     dimmed = false,
-    dragHandleProps,
     getStepHarnessModel,
     getStepOverrides,
     onStepClick,
@@ -204,7 +208,6 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         hideBorderBottom={hideBorderBottom}
         dimmed={dimmed}
         isScript={isScriptStep(step)}
-        dragHandleProps={dragHandleProps}
       />
     );
   }
@@ -213,14 +216,21 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
 WorkflowStepRow.displayName = "WorkflowStepRow";
 
 /**
- * The chrome every step row in the panel sits in: the identity rail, the slot
- * number column, the running outline, and an optional pause boundary above it.
+ * The chrome every step row in the panel sits in: the identity rail, the drag
+ * handle, the slot number column, the running outline, and an optional pause
+ * boundary above it.
  *
  * All three row call sites render through this — the sortable pending row, the
  * panel's settled rows, and a parallel group's members. What they did *not*
  * share was invisible until it was a bug: the running outline lived only in
  * the sortable wrapper, so a group member still executing behind the
  * done/pending boundary was drawn with no outline at all.
+ *
+ * The drag handle lives here rather than inside `WorkflowStepItem` so it sits
+ * at the row's left edge, matching `ParallelGroupPanel`'s group-level handle —
+ * `WorkflowStepItem`'s own icon column already stacks the status icon and the
+ * set-start-position button, and a handle squeezed in there is what pushed it
+ * to the row's right edge in the first place.
  */
 export function WorkflowStepRowFrame({
   index,
@@ -229,6 +239,7 @@ export function WorkflowStepRowFrame({
   stepColor,
   isCurrent,
   showPauseBoundaryBefore = false,
+  dragHandleProps,
   bodyRef,
   bodyStyle,
   children,
@@ -239,13 +250,14 @@ export function WorkflowStepRowFrame({
   stepColor: string | undefined;
   isCurrent: boolean;
   showPauseBoundaryBefore?: boolean;
+  dragHandleProps?: WorkflowStepDragHandleProps;
   bodyRef?: (node: HTMLElement | null) => void;
   bodyStyle?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   return (
     <div
-      className="relative flex items-stretch"
+      className="group/row relative flex items-stretch"
       data-workflow-step-index={index}
     >
       {showPauseBoundaryBefore && <PauseBoundary />}
@@ -254,6 +266,17 @@ export function WorkflowStepRowFrame({
         className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
         style={stepColor ? { backgroundColor: stepColor } : undefined}
       />
+      {dragHandleProps && (
+        <span
+          className="flex-shrink-0 w-4 self-stretch flex items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover/row:opacity-100 transition-opacity"
+          style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
+          {...dragHandleProps.listeners}
+          {...dragHandleProps.attributes}
+          aria-label="Drag to reorder"
+        >
+          <Icon name="grabber" className="text-xs" />
+        </span>
+      )}
       <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
       </div>
@@ -265,10 +288,7 @@ export function WorkflowStepRowFrame({
   );
 }
 
-export type SortableWrapperProps = Omit<
-  WorkflowStepRowProps,
-  "dragHandleProps"
-> & {
+export type SortableWrapperProps = WorkflowStepRowProps & {
   id: string;
   disabled: boolean;
   slotNumber: number;
@@ -318,14 +338,11 @@ export const SortableWorkflowStepWrapper = React.memo(
         stepColor={stepColor}
         isCurrent={stepItemProps.isCurrent}
         showPauseBoundaryBefore={showPauseBoundaryBefore}
+        dragHandleProps={disabled ? undefined : { listeners, attributes }}
         bodyRef={setNodeRef}
         bodyStyle={style}
       >
-        <WorkflowStepRow
-          {...stepItemProps}
-          slotNumber={slotNumber}
-          dragHandleProps={disabled ? undefined : { listeners, attributes }}
-        />
+        <WorkflowStepRow {...stepItemProps} slotNumber={slotNumber} />
       </WorkflowStepRowFrame>
     );
   }

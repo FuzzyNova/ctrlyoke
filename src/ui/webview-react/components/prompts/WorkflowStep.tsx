@@ -5,8 +5,6 @@ import {
 } from "@root/types/DashboardConstants";
 import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
-import type { DraggableAttributes } from "@dnd-kit/core";
-type SyntheticListenerMap = Record<string, Function>;
 import { StatusIcon } from "./StatusIcon";
 import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
@@ -22,7 +20,6 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
-import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
@@ -104,11 +101,6 @@ interface WorkflowStepProps {
     contextWindowSize?: number;
     failureMessage?: string;
   };
-  /** Drag handle props from dnd-kit sortable */
-  dragHandleProps?: {
-    listeners: SyntheticListenerMap | undefined;
-    attributes: DraggableAttributes;
-  };
   /** Right-click context menu handler */
   onContextMenu?: (x: number, y: number) => void;
 }
@@ -156,7 +148,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   dimmed = false,
   liveContextWindow,
   runtimeMeta,
-  dragHandleProps,
   isScript = false,
   onContextMenu,
 }) => {
@@ -407,17 +398,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               </span>
             </div>
           </div>
-        )}
-        {dragHandleProps && (
-          <span
-            className="flex-shrink-0 self-stretch w-4 flex items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
-            {...dragHandleProps.listeners}
-            {...dragHandleProps.attributes}
-            aria-label="Drag to reorder"
-          >
-            <Icon name="grabber" className="text-xs" />
-          </span>
         )}
       </div>
     </div>
