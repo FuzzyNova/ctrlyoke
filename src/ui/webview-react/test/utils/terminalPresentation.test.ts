@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { SHELL_KINDS } from "@/types/messages";
+import { SHELL_KINDS, TERMINAL_SESSION_STATUS } from "@/types/messages";
 import {
   getShellCodiconName,
   getShellCompactLabel,
   inferShellKind,
+  isTerminalSessionInUseByActiveStep,
 } from "@utils/terminalPresentation";
 
 describe("terminalPresentation", () => {
@@ -41,5 +42,52 @@ describe("terminalPresentation", () => {
     expect(inferShellKind(undefined, "dash")).toBe(SHELL_KINDS.SH);
     expect(inferShellKind(undefined, "wsl")).toBe(SHELL_KINDS.WSL);
     expect(inferShellKind(undefined, "nushell")).toBe(SHELL_KINDS.NUSHELL);
+  });
+});
+
+describe("isTerminalSessionInUseByActiveStep", () => {
+  it("is in use when the running session's stepIndex is currently active", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: 2 },
+        [2, 5]
+      )
+    ).toBe(true);
+  });
+
+  it("is not in use when the session's stepIndex is not among the active steps", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: 1 },
+        [2, 5]
+      )
+    ).toBe(false);
+  });
+
+  it("is not in use once the session has ended, even if its stepIndex is still active", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        { status: TERMINAL_SESSION_STATUS.COMPLETED, stepIndex: 2 },
+        [2]
+      )
+    ).toBe(false);
+  });
+
+  it("is never in use for a standalone shell session (stepIndex -1)", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: -1 },
+        [-1]
+      )
+    ).toBe(false);
+  });
+
+  it("is not in use when stepIndex is undefined", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: undefined },
+        [0]
+      )
+    ).toBe(false);
   });
 });

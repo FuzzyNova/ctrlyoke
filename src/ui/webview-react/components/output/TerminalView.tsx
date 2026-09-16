@@ -23,7 +23,6 @@ import { useSettingsStore } from "@store/settingsStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import {
   MESSAGE_TYPES,
-  EXECUTION_STATES,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
 } from "../../types/messages";
@@ -32,7 +31,10 @@ import { TerminalControlBar } from "./TerminalControlBar";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
 import { TerminalSessionIcon } from "./TerminalSessionIcon";
-import { getShellCompactLabel } from "@utils/terminalPresentation";
+import {
+  getShellCompactLabel,
+  isTerminalSessionInUseByActiveStep,
+} from "@utils/terminalPresentation";
 import { WebviewLog } from "@utils/logger";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { Icon } from "../shared/Icon";
@@ -158,10 +160,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const setActiveSession = useTerminalStore((s) => s.setActiveSession);
   const removeSession = useTerminalStore((s) => s.removeSession);
 
-  const executionState = useWorkflowStore((s) => s.executionState);
-  const isWorkflowExecuting =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.CANCELLING;
+  const activeStepIndices = useWorkflowStore((s) => s.activeStepIndices);
 
   const terminalRailCollapsed = useUiStore((s) => s.terminalRailCollapsed);
   const terminalRailSizePx = useUiStore((s) => s.terminalRailSizePx);
@@ -306,11 +305,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     [workflowId, removeSession, setActiveOutputTab]
   );
 
+  const isActiveSessionInUse = activeSession
+    ? isTerminalSessionInUseByActiveStep(activeSession, activeStepIndices)
+    : false;
+
   const { openContextMenu, terminalContextMenuPortal } = useTerminalContextMenu(
     {
       workflowId,
       activeSession,
-      isExecutionActive: isWorkflowExecuting,
+      isSessionInUse: isActiveSessionInUse,
       onClose: handleCloseSession,
     }
   );
@@ -453,7 +456,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                       isActive={session.id === activeSessionId}
                       onClick={() => setActiveSession(workflowId, session.id)}
                       onClose={
-                        !isWorkflowExecuting
+                        !isTerminalSessionInUseByActiveStep(
+                          session,
+                          activeStepIndices
+                        )
                           ? () => handleCloseAiCliSession(session)
                           : undefined
                       }

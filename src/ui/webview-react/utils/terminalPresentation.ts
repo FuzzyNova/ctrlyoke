@@ -1,4 +1,10 @@
-import { SHELL_KINDS, SHELL_TYPES, type ShellKind } from "@/types/messages";
+import {
+  SHELL_KINDS,
+  SHELL_TYPES,
+  TERMINAL_SESSION_STATUS,
+  type ShellKind,
+} from "@/types/messages";
+import type { TerminalSession } from "@store/terminalStore";
 
 function normalizeShellName(name: string | undefined): string | undefined {
   const trimmed = name?.trim().toLowerCase();
@@ -74,6 +80,27 @@ export function getShellCompactLabel(
       return fallback.length <= 4 ? fallback : fallback.slice(0, 4);
     }
   }
+}
+
+/**
+ * A session is closeable unless it is the live PTY a currently-running step is
+ * driving right now. Retention (see TERMINAL_SESSION_RETENTION_PLAN.md) keeps
+ * ai-cli sessions alive beyond the step that spawned them so a later step can
+ * inject into them, so "workflow is executing" is not the right gate — only
+ * *this* session's own `stepIndex` matching one of the steps currently running
+ * means closing it would kill work in progress. Shell sessions always carry
+ * stepIndex -1 (`PtyProcessManager.spawnShell`), so they are never matched here
+ * and stay closeable regardless of execution state — no kind check needed.
+ */
+export function isTerminalSessionInUseByActiveStep(
+  session: Pick<TerminalSession, "status" | "stepIndex">,
+  activeStepIndices: readonly number[]
+): boolean {
+  return (
+    session.status === TERMINAL_SESSION_STATUS.RUNNING &&
+    session.stepIndex !== undefined &&
+    activeStepIndices.includes(session.stepIndex)
+  );
 }
 
 export function getShellCodiconName(
