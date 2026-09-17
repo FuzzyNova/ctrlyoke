@@ -16,6 +16,9 @@ import {
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
+import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
+import { OsCredentialStore } from "./platform/OsCredentialStore";
+import { FallbackSecretStore } from "./platform/FallbackSecretStore";
 import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
   GIT_CHANGE_KINDS,
@@ -210,8 +213,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // License state is extension-host-owned so commands and the status bar
     // share one service instance and update immediately after activation.
+    // Deliberately NOT VsCodeAdapter.getSecretStore(): a license is bound to
+    // the machine, not to one --user-data-dir/profile, so it prefers the OS
+    // credential store (shared by every VS Code profile, the dev host, the
+    // CLI, and the future standalone server — see
+    // dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md) and falls back to
+    // VS Code's own per-profile secret storage only where the OS store is
+    // unreachable (e.g. a remote/Codespaces extension host with no local
+    // keyring). Other secret consumers (managed workflow secrets, server
+    // tokens) keep VsCodeAdapter's profile-scoped store unchanged.
     licenseService = new LicenseService(
-      new VsCodeAdapter(context).getSecretStore(),
+      new FallbackSecretStore(
+        new OsCredentialStore(),
+        new VsCodeSecretStore(context.secrets),
+        (error) =>
+          Log.warn(
+            `[Extension] ctrlyoke: OS credential store unavailable for license storage, falling back to VS Code secret storage: ${error.message}`
+          )
+      ),
       { trialState: context.globalState }
     );
     context.subscriptions.push(licenseService);

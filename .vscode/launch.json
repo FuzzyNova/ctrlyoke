@@ -68,6 +68,7 @@
         "--user-data-dir=${workspaceFolder}/.vscode-dev-tempdir/userdata",
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--disable-extension=fuzzynova.ctrlyoke",
+        "--disable-extension=vscode.github-authentication",
         "${workspaceFolder}/.vscode-dev-tempdir/workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],

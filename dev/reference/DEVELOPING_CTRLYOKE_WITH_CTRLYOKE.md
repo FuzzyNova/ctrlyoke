@@ -248,6 +248,84 @@ file, same value" bucket above — `CTRLYOKE_HOME` does not give the two
 instances different server config. See the next section for what that means
 in practice.
 
+### GitHub sign-out and missing Pro license in the isolated dev host
+
+Two more things `CTRLYOKE_HOME` does **not** isolate, because they never go
+through it in the first place — both are governed entirely by VS Code's own
+`--user-data-dir`, which `CTRLYOKE_HOME` is a separate, ctrlyoke-only concept
+from:
+
+- **The daily driver can get signed out of its GitHub account as soon as the
+  isolated dev host starts, and staying signed out across restarts.** VS
+  Code's built-in GitHub Authentication session/token is stored via the OS
+  keychain under a service name that is **not** scoped per `--user-data-dir`
+  — it's shared by every VS Code instance of the same channel on the
+  machine, a documented, still-open limitation
+  ([microsoft/vscode#290237](https://github.com/microsoft/vscode/issues/290237)).
+  Running the daily driver and the dev host at the same time means two
+  separate processes can independently refresh/rotate that one shared
+  session; whichever one loses the race leaves both signed out. ctrlyoke
+  itself never calls `vscode.authentication` for anything, so the fix is to
+  simply keep the dev host from touching it at all:
+  `scripts/dev-host.mjs` and the `.vscode/launch.json` "Run Extension (Debug,
+  Isolated)" config both pass
+  `--disable-extension=vscode.github-authentication` for this reason — a
+  built-in extension, so it needs its own explicit `--disable-extension`
+  even in the onboarding config's `--disable-extensions` (that flag only
+  disables non-built-in extensions).
+- **The dev host used to start unlicensed, and could never be made to stay
+  licensed for free — fixed.** `LicenseService` was constructed in
+  `extension.ts` with `new VsCodeAdapter(context).getSecretStore()` — i.e.
+  `context.secrets`, VS Code's own encrypted secret storage, which lives
+  inside that instance's `--user-data-dir` and starts empty for any fresh
+  one. Worse: the extension never passed
+  `LicenseServiceOptions.machineFingerprint`, so `LicenseService` always fell
+  back to a random UUID generated once and cached in whichever `secretStore`
+  happened to be active (`LicenseService.ts`'s `getMachineFingerprint()`) —
+  no real hardware-derived machine identity. Every distinct `--user-data-dir`
+  that activated Pro consumed its own separate machine slot on the Keygen
+  license, and onboarding's `resetTempDir: true` wiped that slot's identity
+  on every run.
+
+  A license is bound to the machine, not to one VS Code profile, and the
+  same is eventually true for the CLI and the
+  [standalone server](../active/STANDALONE_SERVER_PLAN.md) — `CliAdapter`
+  already defaults its `SecretStore` to `OsCredentialStore`
+  (`src/platform/OsCredentialStore.ts`), the OS credential vault under a
+  fixed `"ctrlyoke"` service name, shared by every process on the machine
+  regardless of `--user-data-dir`. `extension.ts` now constructs
+  `LicenseService` with a `FallbackSecretStore`
+  (`src/platform/FallbackSecretStore.ts`) preferring `OsCredentialStore` and
+  falling back to `VsCodeSecretStore(context.secrets)` only when the OS
+  store is unreachable (probed once via a real read, memoized for the
+  process lifetime). This makes one Pro activation — and the persisted
+  random-UUID machine fingerprint, now genuinely stable — cover the daily
+  driver, every dev host mode, and eventually the CLI/server, all at once.
+  Deliberately scoped to `LicenseService` only: `VsCodeAdapter.getSecretStore()`
+  itself is untouched, so managed workflow secrets and the server token
+  store keep their current per-profile `context.secrets` scoping.
+
+  Because `OsCredentialStore` shells out to a platform CLI
+  (`security`/`secret-tool`/PowerShell CredMan) per call with no built-in
+  cache, `LicenseService.getEntitlement()` now memoizes its result for
+  `ENTITLEMENT_CACHE_TTL_MS` (60s), invalidated immediately on any mutation
+  (activate/import/refresh/deactivate) — without this, `hasRemoteAccess()`,
+  which the hosted server checks per connection, would spawn a process on
+  every check.
+
+  **Remote/Codespaces caveat, deliberately not solved here**: a remote
+  extension host (SSH, WSL, a Codespaces container) typically has no local
+  keyring daemon to shell out to, so `FallbackSecretStore` correctly falls
+  back to `context.secrets` there — no worse than before. But that doesn't
+  give a Codespace a *persisted, portable* license either: a Codespace is an
+  ephemeral, per-instance container, not "the user's machine," so a
+  machine-locked activation doesn't really apply to it conceptually. ctrlyoke
+  has not been tested in Codespaces/VS Code for the Web at all yet
+  (`package.json` declares no `extensionKind`, so it isn't explicitly
+  restricted from running there). Real Codespaces licensing would likely
+  need an account/sign-in-based entitlement rather than a machine-bound key —
+  out of scope for this fix.
+
 ### Hosted server, and why Playwright automation still works cleanly
 
 With `server.enabled: true`, both instances read the identical

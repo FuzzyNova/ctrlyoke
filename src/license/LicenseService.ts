@@ -45,6 +45,15 @@ export const REMOTE_ACCESS_TRIAL_START_KEY =
   "ctrlyoke.remoteAccessTrialStartedAt";
 /** Allow normal client/server clock skew without weakening the file TTL. */
 export const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+/**
+ * getEntitlement()'s in-memory cache window. Some backing SecretStores (e.g.
+ * OsCredentialStore) shell out to a platform CLI per call, and getEntitlement
+ * is on hot-ish paths (hasRemoteAccess is checked per hosted-server
+ * connection) — without this, every check would spawn a process. A short TTL
+ * bounds how stale a locally-expired/deactivated entitlement can read; any
+ * mutation (activate/import/refresh/deactivate) refreshes the cache immediately.
+ */
+export const ENTITLEMENT_CACHE_TTL_MS = 60 * 1000;
 
 const LICENSE_FILE_ALGORITHMS = {
   PLAIN_ED25519: "base64+ed25519",
@@ -205,6 +214,9 @@ export class LicenseService implements LicenseService {
   private readonly machineFingerprintOption:
     string | (() => Promise<string>) | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
+  private cachedEntitlement:
+    | { readonly value: Entitlement; readonly expiresAt: number }
+    | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
@@ -220,6 +232,17 @@ export class LicenseService implements LicenseService {
   }
 
   async getEntitlement(): Promise<Entitlement> {
+    const cached = this.cachedEntitlement;
+    if (cached && this.now() < cached.expiresAt) {
+      return cached.value;
+    }
+
+    const entitlement = await this.computeEntitlement();
+    this.cacheEntitlement(entitlement);
+    return entitlement;
+  }
+
+  private async computeEntitlement(): Promise<Entitlement> {
     try {
       const cached = await this.readCachedLicense();
       if (!cached) {
@@ -237,6 +260,19 @@ export class LicenseService implements LicenseService {
       // License problems must never interfere with the free product.
       return createFreeEntitlement();
     }
+  }
+
+  private cacheEntitlement(entitlement: Entitlement): void {
+    this.cachedEntitlement = {
+      value: entitlement,
+      expiresAt: this.now() + ENTITLEMENT_CACHE_TTL_MS,
+    };
+  }
+
+  /** Updates the cache with a known-fresh value and notifies listeners. */
+  private setEntitlement(entitlement: Entitlement): void {
+    this.cacheEntitlement(entitlement);
+    this.changes.fire(entitlement);
   }
 
   async isPro(): Promise<boolean> {
@@ -313,7 +349,7 @@ export class LicenseService implements LicenseService {
     }
 
     await this.clearLocalActivation();
-    this.changes.fire(createFreeEntitlement());
+    this.setEntitlement(createFreeEntitlement());
   }
 
   async activateWithKey(key: string): Promise<Entitlement> {
@@ -363,7 +399,7 @@ export class LicenseService implements LicenseService {
       );
 
       await this.cacheOnlineLicense(normalizedKey, blob, license.id, machineId);
-      this.changes.fire(verified.entitlement);
+      this.setEntitlement(verified.entitlement);
       return verified.entitlement;
     } catch (error) {
       if (createdMachine && machineId) {
@@ -392,7 +428,7 @@ export class LicenseService implements LicenseService {
         LICENSE_SOURCE_SECRET_KEY,
         LICENSE_SOURCES.OFFLINE_FILE
       );
-      this.changes.fire(verified.entitlement);
+      this.setEntitlement(verified.entitlement);
       return verified.entitlement;
     } catch {
       // An invalid import must not replace a valid entitlement or break the
@@ -445,7 +481,7 @@ export class LicenseService implements LicenseService {
         LICENSE_SOURCES.ONLINE
       );
       await this.secretStore.store(LICENSE_ID_SECRET_KEY, licenseId);
-      this.changes.fire(refreshed.entitlement);
+      this.setEntitlement(refreshed.entitlement);
     } catch {
       // Refresh is deliberately best-effort. The signed cache and offline grace
       // continue to protect a paying user during a connectivity outage.
@@ -464,7 +500,7 @@ export class LicenseService implements LicenseService {
     }
 
     await this.clearLocalActivation();
-    this.changes.fire(createFreeEntitlement());
+    this.setEntitlement(createFreeEntitlement());
   }
 
   dispose(): void {
