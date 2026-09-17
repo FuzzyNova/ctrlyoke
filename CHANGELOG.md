@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-17
+
 ### Changed
 
 - Save As now creates a portable workflow bundle by copying generated attachments into a sibling
