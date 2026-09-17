@@ -17,6 +17,8 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
+import { CliParseUtils } from "../shared/CliParseUtils";
+import { ANTIGRAVITY_STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
@@ -336,29 +338,19 @@ export class AntigravityCliProvider implements ICliProvider {
     return ["--print", prompt, "--output-format", "stream-json", ...baseArgs];
   }
 
-  /** Extract Antigravity's session ID from the headless JSONL clock stream. */
+  /**
+   * Extract Antigravity's session ID from the headless JSONL clock stream. A
+   * chunk may end mid-record; `parseJsonLines` drops the incomplete line and
+   * the next chunk retries it.
+   */
   extractSessionIdFromStdout(chunk: string): string | undefined {
-    for (const line of chunk.split("\n")) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const event = JSON.parse(line) as {
-          event?: string;
-          conversation_id?: string;
-        };
-        if (
-          event.event === "init" &&
-          typeof event.conversation_id === "string" &&
-          event.conversation_id.length > 0
-        ) {
-          return event.conversation_id;
-        }
-      } catch {
-        // Chunks may contain an incomplete JSONL line; the next chunk retries it.
-      }
-    }
-    return undefined;
+    const event = CliParseUtils.parseJsonLines(chunk).find(
+      (candidate) =>
+        candidate.event === ANTIGRAVITY_STREAM_JSON_EVENTS.INIT &&
+        typeof candidate.conversation_id === "string" &&
+        candidate.conversation_id.length > 0
+    );
+    return event?.conversation_id as string | undefined;
   }
 
   /** Observe stream-json usage without adding a second event-mapping path. */

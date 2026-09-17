@@ -210,6 +210,40 @@ suite("TimelineRecorder", () => {
     }
   });
 
+  test("streams a run whose output contains a raw U+2028 line separator", async () => {
+    // JSON.stringify leaves U+2028/U+2029 unescaped, and Node's readline treats
+    // both as line terminators -- reading events.jsonl that way splits one valid
+    // record into malformed fragments and fails the whole run with
+    // "Unterminated string in JSON". Web-fetched page content hits this.
+    const lineSeparator = String.fromCharCode(0x2028);
+    const response = `compliance summary${lineSeparator}across jurisdictions`;
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, response),
+      createStatusEventDraft(120, "after"),
+    ]);
+
+    const streamed = [];
+    for await (const event of recorder.streamEvents(manifestPath)) {
+      streamed.push(event);
+    }
+
+    assert.strictEqual(streamed.length, 2);
+    assert.strictEqual(
+      streamed[0].eventType,
+      TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED
+    );
+    assert.deepStrictEqual(
+      streamed.map((event) => event.sequence),
+      [1, 2]
+    );
+    assert.deepStrictEqual(
+      streamed,
+      await recorder.readEvents(manifestPath),
+      "streamEvents and readEvents must agree on record boundaries"
+    );
+  });
+
   test("never persists a resolved value in events, manifest, or the session log", async () => {
     const secret = "resolved-value-that-must-not-leak";
     const redactor = new RunSecretRedactor();

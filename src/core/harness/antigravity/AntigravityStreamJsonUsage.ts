@@ -1,3 +1,5 @@
+import { ANTIGRAVITY_STREAM_JSON_EVENTS as STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
+
 /**
  * Normalized usage fields emitted by Antigravity's stream-json protocol.
  * `thinking_tokens` is mapped to the shared reasoning-output concept here so
@@ -19,12 +21,6 @@ export interface AntigravityStreamJsonUsageSnapshot {
 interface JsonRecord {
   [key: string]: unknown;
 }
-
-const STREAM_JSON_EVENTS = {
-  INIT: "init",
-  STEP_UPDATE: "step_update",
-  RESULT: "result",
-} as const;
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);

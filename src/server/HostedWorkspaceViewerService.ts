@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as readline from "readline";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -108,6 +107,7 @@ import {
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
+import { streamFileLines } from "../utils/TextLines";
 import {
   WorkspaceListingSnapshotCache,
   type WorkspaceEntryMetadata,
@@ -890,16 +890,15 @@ export class HostedWorkspaceViewerService {
       return { matches: [], truncated: false };
     }
 
-    const stream = fs.createReadStream(safePath, { encoding: "utf8" });
-    const lines = readline.createInterface({
-      input: stream,
-      crlfDelay: Infinity,
-    });
     const matches: WorkspaceSearchContentMatch[] = [];
     let lineNumber = 0;
     let truncated = false;
     try {
-      for await (const line of lines) {
+      // `streamFileLines` rather than `readline` so the line number reported
+      // here addresses the same line the editor scrolls to: the client renders
+      // the file in CodeMirror, which never breaks on U+2028/U+2029 but does
+      // break on a lone CR. See `TextLines.ts`.
+      for await (const line of streamFileLines(safePath)) {
         lineNumber++;
         if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
           truncated = true;
@@ -921,9 +920,6 @@ export class HostedWorkspaceViewerService {
       }
     } catch {
       return { matches: [], truncated };
-    } finally {
-      lines.close();
-      stream.destroy();
     }
     return { matches, truncated };
   }

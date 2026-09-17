@@ -8,6 +8,7 @@ import {
 import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { splitLines } from "../../utils/TextLines";
 import {
   resolveExecutionRootScope,
   scopeStorageRoot,
@@ -95,8 +96,7 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
     throw error;
   }
 
-  return contents
-    .split(/\r?\n/)
+  return splitLines(contents)
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as CoordinationEntry);
 }

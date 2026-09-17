@@ -10,6 +10,8 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
+import { CliParseUtils } from "../shared/CliParseUtils";
+import { CODEX_STDOUT_EVENT_TYPES } from "./CodexProtocolConstants";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
@@ -208,25 +210,19 @@ export class CodexCliProvider implements ICliProvider {
   }
   readonly headlessSource = HEADLESS_SOURCE_MODES.LOG;
 
-  /** Extract Codex's session ID from the headless JSONL clock stream. */
+  /**
+   * Extract Codex's session ID from the headless JSONL clock stream. A chunk
+   * may end mid-record; `parseJsonLines` drops the incomplete line and the
+   * next chunk retries it.
+   */
   extractSessionIdFromStdout(chunk: string): string | undefined {
-    for (const line of chunk.split("\n")) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const event = JSON.parse(line) as {
-          type?: string;
-          thread_id?: string;
-        };
-        if (event.type === "thread.started" && event.thread_id) {
-          return event.thread_id;
-        }
-      } catch {
-        // Chunks may contain an incomplete JSONL line; the next chunk retries it.
-      }
-    }
-    return undefined;
+    const event = CliParseUtils.parseJsonLines(chunk).find(
+      (candidate) =>
+        candidate.type === CODEX_STDOUT_EVENT_TYPES.THREAD_STARTED &&
+        typeof candidate.thread_id === "string" &&
+        candidate.thread_id.length > 0
+    );
+    return event?.thread_id as string | undefined;
   }
 
   /**

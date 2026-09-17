@@ -14,6 +14,7 @@ import {
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { splitLines } from "../../../utils/TextLines";
 
 /**
  * Abstract base class for CLI harness log parsers
@@ -796,7 +797,7 @@ export abstract class BaseLogParser implements ILogParser {
       }
 
       const content = fs.readFileSync(filePath, "utf-8");
-      const lines = content.split("\n");
+      const lines = splitLines(content);
       const events: BaseCliEvent[] = [];
 
       for (const line of lines) {

@@ -1,4 +1,5 @@
 import { Log } from "../../../utils/Log";
+import { splitLines } from "../../../utils/TextLines";
 import { UnifiedDiffHunk } from "../../../types/CliOutputTypes";
 
 /**
@@ -133,7 +134,7 @@ export class CliParseUtils {
    */
   static parseJsonLines(data: string): any[] {
     const objects: any[] = [];
-    const lines = data.split("\n");
+    const lines = splitLines(data);
 
     for (const line of lines) {
       if (!line.trim()) continue;

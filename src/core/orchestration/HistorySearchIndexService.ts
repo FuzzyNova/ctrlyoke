@@ -1,7 +1,6 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import * as readline from "readline";
 import { Worker } from "worker_threads";
 import {
   type HistorySearchDocument,
@@ -15,6 +14,7 @@ import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
+import { streamFileLines } from "../../utils/TextLines";
 import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
   matchesFilters,
@@ -619,17 +619,8 @@ export class HistorySearchIndexService {
     shardPath: string
   ): Promise<HistorySearchDocument[]> {
     const documents: HistorySearchDocument[] = [];
-    let reader: readline.Interface;
     try {
-      reader = readline.createInterface({
-        input: fs.createReadStream(shardPath, { encoding: "utf8" }),
-        crlfDelay: Infinity,
-      });
-    } catch {
-      return documents;
-    }
-    try {
-      for await (const line of reader) {
+      for await (const line of streamFileLines(shardPath)) {
         if (line.trim().length > 0) {
           documents.push(JSON.parse(line) as HistorySearchDocument);
         }
@@ -640,8 +631,6 @@ export class HistorySearchIndexService {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
       }
-    } finally {
-      reader.close();
     }
     return documents;
   }

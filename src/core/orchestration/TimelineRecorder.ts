@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as readline from "readline";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_SCHEMA_VERSION,
@@ -17,6 +16,7 @@ import {
 } from "../../types/DashboardConstants";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import { withFileLock } from "../../utils/FileLockUtils";
+import { splitLines, streamFileLines } from "../../utils/TextLines";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 
@@ -125,7 +125,7 @@ export class TimelineRecorder {
         return [];
       }
 
-      const lines = content.split(/\r?\n/);
+      const lines = splitLines(content);
       const events: WorkflowTimelineEvent[] = [];
 
       for (let index = 0; index < lines.length; index++) {
@@ -168,29 +168,20 @@ export class TimelineRecorder {
     let pendingParseError: unknown;
 
     try {
-      const lines = readline.createInterface({
-        input: fs.createReadStream(eventsPath, { encoding: "utf8" }),
-        crlfDelay: Infinity,
-      });
-
-      try {
-        for await (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line) {
-            continue;
-          }
-          if (pendingParseError) {
-            throw pendingParseError;
-          }
-          try {
-            yield JSON.parse(line) as WorkflowTimelineEvent;
-          } catch (error) {
-            // Keep consuming so only a malformed trailing line is tolerated.
-            pendingParseError = error;
-          }
+      for await (const rawLine of streamFileLines(eventsPath)) {
+        const line = rawLine.trim();
+        if (!line) {
+          continue;
         }
-      } finally {
-        lines.close();
+        if (pendingParseError) {
+          throw pendingParseError;
+        }
+        try {
+          yield JSON.parse(line) as WorkflowTimelineEvent;
+        } catch (error) {
+          // Keep consuming so only a malformed trailing line is tolerated.
+          pendingParseError = error;
+        }
       }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;

@@ -49,3 +49,14 @@ export const ANTIGRAVITY_TOOL_NAMES = {
   GREP_SEARCH: "grep_search",
   ASK_QUESTION: "ask_question",
 } as const;
+
+/**
+ * `event` values from Antigravity's headless stream-json **stdout**, a separate
+ * vocabulary from the transcript protocol above. Shared by the usage
+ * accumulator and the provider's session-ID extraction so the two cannot drift.
+ */
+export const ANTIGRAVITY_STREAM_JSON_EVENTS = {
+  INIT: "init",
+  STEP_UPDATE: "step_update",
+  RESULT: "result",
+} as const;

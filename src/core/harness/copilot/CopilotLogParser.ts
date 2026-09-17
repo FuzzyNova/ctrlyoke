@@ -21,6 +21,7 @@ import {
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
+import { splitLines } from "../../../utils/TextLines";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   COPILOT_EVENT_TYPES,
@@ -295,7 +296,7 @@ export class CopilotLogParser extends BaseLogParser {
     this.otelReadPosition = currentSize;
 
     const entries: Record<string, any>[] = [];
-    for (const line of buffer.toString("utf8").split("\n")) {
+    for (const line of splitLines(buffer.toString("utf8"))) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
@@ -1463,7 +1464,7 @@ export class CopilotLogParser extends BaseLogParser {
       let currentTokens: number | undefined;
       let tokenLimit: number | undefined;
 
-      for (const line of content.split("\n")) {
+      for (const line of splitLines(content)) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
@@ -1592,7 +1593,7 @@ export class CopilotLogParser extends BaseLogParser {
       let used: number | undefined;
       let size: number | undefined;
 
-      for (const line of content.split("\n")) {
+      for (const line of splitLines(content)) {
         const match = line.match(
           /CompactionProcessor: Utilization [\d.]+% \((\d+)\/(\d+) tokens\)/
         );
