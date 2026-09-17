@@ -1,12 +1,16 @@
 # ctrlyoke Data Processing Agreement
 
-**DRAFT — for attorney review. Not yet effective or published.**
+> **Pending legal review — delete this line before publishing at ctrlyoke.dev/dpa.**
 
 **Processor:** Fuzzy Nova LLC
 
-**Version:** 0.3 (draft)
+**Version:** 1.0
 
-This Data Processing Agreement (the **DPA**) forms part of the [ctrlyoke Enterprise Subscription Terms](https://ctrlyoke.dev/enterprise-terms), the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms), and the applicable Order (collectively, the **Agreement**) between Fuzzy Nova LLC, a Texas limited liability company (**Fuzzy Nova**, **Licensor**, or **Processor**), and the customer identified in the Order (**Customer**). This DPA applies only to the extent Processor processes Customer Personal Data on Customer's behalf in connection with the Enterprise subscription.
+**Version Date:** September 14, 2026
+
+**Effective Date:** As to each Customer, the date that Customer accepts the Enterprise Terms or an Order incorporating this DPA, as described in Section 13.
+
+This Data Processing Agreement (the **DPA**) forms part of the [ctrlyoke Enterprise Subscription Terms](https://ctrlyoke.dev/enterprise-terms) (the **Enterprise Terms**), the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) (the **EULA**), and the applicable Order (collectively, the **Agreement**) between Fuzzy Nova LLC, a Texas limited liability company (**Fuzzy Nova**, **Licensor**, or **Processor**), and the customer identified in the Order (**Customer**). This DPA applies only to the extent Processor processes Customer Personal Data on Customer's behalf in connection with the Enterprise subscription.
 
 ## 1. Definitions
 
@@ -97,7 +101,7 @@ Customer generally authorizes Processor to engage the Sub-processors listed in A
 
 ### (b) Changes and objections
 
-Processor will give Customer at least fourteen (14) days' prior notice by email before authorizing a new or replacement Sub-processor to Process Customer Personal Data. Customer may object during that period on reasonable data-protection grounds. The parties will work in good faith to resolve the objection, including by using a commercially reasonable alternative where available.
+Processor will give Customer at least thirty (30) days' prior notice by email before authorizing a new or replacement Sub-processor to Process Customer Personal Data. Customer may object during that period on reasonable data-protection grounds. The parties will work in good faith to resolve the objection, including by using a commercially reasonable alternative where available.
 
 If the parties cannot resolve the objection, Customer may terminate the affected services by written notice before the new Sub-processor begins Processing. Licensor will refund prepaid fees attributable to the terminated portion of the affected services after the termination date. This termination and refund right is Customer's sole remedy for an unresolved Sub-processor objection.
 
@@ -138,7 +142,7 @@ For a restricted transfer governed by the EU GDPR, the parties enter into and ar
 - Module Two applies where Customer is a Controller and Processor is a Processor.
 - Module Three applies where Customer is a Processor and Processor is a Sub-processor.
 - Clause 7 (docking) applies.
-- In Clause 9, Option 2 (general written authorization) applies, with the fourteen-day notice period in Section 9(b).
+- In Clause 9, Option 2 (general written authorization) applies, with the thirty-day notice period in Section 9(b).
 - The optional language in Clause 11 does not apply.
 - In Clause 17, Option 1 applies and the EU SCCs are governed by the law of Ireland.
 - Under Clause 18, disputes will be resolved by the courts of Ireland.
@@ -159,7 +163,7 @@ The EU SCCs or UK Addendum control over this DPA to the extent of a conflict con
 
 ## 13. Liability, Term, and Priority
 
-The limitations of liability in EULA Section 13 apply in aggregate across the Agreement and this DPA, except to the extent Applicable Data Protection Law or the applicable EU SCCs or UK Addendum prohibit that limitation.
+The limitations of liability in Section 13 of the EULA apply in aggregate across the Agreement and this DPA, except to the extent Applicable Data Protection Law or the applicable EU SCCs or UK Addendum prohibit that limitation.
 
 This DPA takes effect when Customer accepts the Enterprise Terms or an Order incorporating it and remains in effect while Processor Processes Customer Personal Data. If this DPA conflicts with another part of the Agreement concerning Processing of Customer Personal Data, this DPA controls. Section 12(e) governs conflicts involving international-transfer terms.
 
@@ -167,16 +171,16 @@ This DPA takes effect when Customer accepts the Enterprise Terms or an Order inc
 
 ## Annex I — Details of Processing
 
-| Topic                                  | Description                                                                                                                                                                                                                                                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Subject matter**                     | Enterprise license issuance, delivery, activation, verification, renewal, and administration.                                                                                                                                                                                                       |
-| **Duration**                           | For the applicable Subscription Term and the deletion period in Section 8.                                                                                                                                                                                                                          |
-| **Nature and purpose**                 | Receive purchaser and order data from the merchant of record; create and administer an Enterprise license; deliver the license credential to Customer's designated contact; register and validate Customer-authorized machines; renew, suspend, or revoke the license as required by the Agreement. |
-| **Frequency**                          | On purchase and renewal, and intermittently when an Authorized User activates, validates, refreshes, or deactivates a machine or when Customer requests license support.                                                                                                                            |
-| **Categories of Data Subjects**        | Customer's purchasing, billing, licensing, and administrative contacts; Authorized Users who activate or use the Enterprise license.                                                                                                                                                                |
-| **Categories of Personal Data**        | Name; business email address; order and subscription identifiers; license key, license status, and license metadata; pseudonymous machine fingerprint and machine identifier; operating-system platform; IP address and request metadata associated with online license operations.                 |
-| **Sensitive or special-category data** | None intended or permitted. Customer must not submit such data for Processing under the DPA.                                                                                                                                                                                                        |
-| **Retention criteria**                 | Active Subscription Term plus the deletion periods in Section 8; shorter or longer periods may apply where Customer requests deletion or applicable law requires retention.                                                                                                                         |
+| Topic                                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Subject matter**                     | Enterprise license issuance, delivery, activation, verification, renewal, and administration.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Duration**                           | For the applicable Subscription Term and the deletion period in Section 8.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Nature and purpose**                 | Receive purchaser and order data from the merchant of record; create and administer an Enterprise license; deliver the license credential to Customer's designated contact; register and validate Customer-authorized machines; renew, suspend, or revoke the license as required by the Agreement.                                                                                                                                                                                                    |
+| **Frequency**                          | On purchase and renewal, and intermittently when an Authorized User activates, validates, refreshes, or deactivates a machine or when Customer requests license support.                                                                                                                                                                                                                                                                                                                               |
+| **Categories of Data Subjects**        | Customer's purchasing, billing, licensing, and administrative contacts; Authorized Users who activate or use the Enterprise license.                                                                                                                                                                                                                                                                                                                                                                   |
+| **Categories of Personal Data**        | Name; business email address; business address of the contracting entity where provided at checkout; order and subscription identifiers; license key, license status, and license metadata; the terms-acceptance record for the purchase (accepted document versions, acceptance timestamp, order identifier, purchaser email address); pseudonymous machine fingerprint and machine identifier; operating-system platform; IP address and request metadata associated with online license operations. |
+| **Sensitive or special-category data** | None intended or permitted. Customer must not submit such data for Processing under the DPA.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Retention criteria**                 | Active Subscription Term plus the deletion periods in Section 8; shorter or longer periods may apply where Customer requests deletion or applicable law requires retention.                                                                                                                                                                                                                                                                                                                            |
 
 Product telemetry, payment-card data, tax records, general website logs, and ordinary sales or support correspondence are Business Relationship Data or third-party Controller data and are not part of the Processing described in this Annex.
 
@@ -230,4 +234,4 @@ Processor's current measures for Customer Personal Data include:
 
 ---
 
-Copyright © 2026 Fuzzy Nova. All rights reserved.
+Copyright © 2026 Fuzzy Nova LLC. All rights reserved.

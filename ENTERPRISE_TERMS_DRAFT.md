@@ -1,14 +1,16 @@
 # ctrlyoke Enterprise Subscription Terms
 
-**DRAFT — for attorney review. Not yet effective or published.**
+> **Pending legal review — delete this line before publishing at ctrlyoke.dev/enterprise-terms.**
 
 **Licensor:** Fuzzy Nova LLC
 
 **Product:** ctrlyoke Enterprise (annual site-license subscription)
 
-**Version:** 0.3 (draft)
+**Version:** 1.0
 
-**Effective Date:** The date Customer accepts these Enterprise Terms as described in Section 2
+**Version Date:** September 14, 2026
+
+**Effective Date:** As to each Customer, the date that Customer accepts these Enterprise Terms as described in Section 2
 
 ## 1. Agreement and Definitions
 
@@ -16,7 +18,7 @@ These ctrlyoke Enterprise Subscription Terms (the **Enterprise Terms**) suppleme
 
 An **Order** means the applicable checkout record, order form, or invoice identifying the Enterprise subscription. **Customer** means the single legal entity identified in the Order. **Authorized Users** means Customer's employees and officers, and contractors engaged to perform work for Customer, who use the Software in the course of that work. **Subscription Term** means the Initial Term or a Renewal Term described in Section 4.
 
-Capitalized terms not defined in these Enterprise Terms have the meanings given in the EULA.
+Capitalized terms not defined in these Enterprise Terms have the meanings given in the EULA. The version of each document applicable to a purchase is the version in effect on the date of the applicable Order, and Licensor records the accepted document versions as described in the Privacy Policy.
 
 The Order, these Enterprise Terms, the EULA, and the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) (the **DPA**) constitute the agreement between Customer and Licensor concerning the Enterprise subscription (collectively, the **Agreement**). For an Enterprise subscription, this paragraph replaces EULA Section 16(a). If the documents conflict: (a) the DPA controls concerning the processing of Customer Personal Data; (b) an Order signed by Licensor controls concerning transaction-specific commercial terms; (c) these Enterprise Terms control concerning subscription administration; and (d) the EULA otherwise controls concerning Software use and intellectual-property rights. Section 3 of these Enterprise Terms clarifies and controls over EULA Section 6(d) concerning the entities, users, and machines covered by this Enterprise subscription.
 
@@ -89,7 +91,7 @@ Except as required by applicable law or expressly stated in an Order, fees are n
 
 ## 8. Support and Availability
 
-Enterprise subscribers receive priority email support at `support@ctrlyoke.dev`. Unless an Order or support addendum expressly states a service level, support is provided on a commercially reasonable, best-efforts basis, with no guaranteed response or resolution time. Software support, updates, and availability otherwise remain subject to EULA Section 9.
+Enterprise subscribers receive priority email support at `support@ctrlyoke.dev`. Unless an Order or support addendum expressly states a service level, support is provided on a commercially reasonable, best-efforts basis, with no guaranteed response or resolution time. Software support, updates, and availability otherwise remain subject to EULA Section 9. Support is provided in English during Licensor's normal business hours in the United States Central Time zone.
 
 ## 9. Data Protection
 
@@ -119,11 +121,15 @@ The Agreement is the entire agreement between Customer and Licensor regarding th
 
 Licensor may update these Enterprise Terms prospectively. Material changes will not apply during a paid Subscription Term. Licensor will give the billing contact at least thirty (30) days' notice before material changes take effect for a Renewal Term. Renewal after the effective date of the notified terms constitutes acceptance, except where applicable law requires a different form of consent.
 
-### (c) Electronic communications
+### (c) Assignment
+
+EULA Section 16(h) (Assignment) is incorporated into these Enterprise Terms and applies to the Enterprise subscription and any Order. Customer may not assign the subscription except as permitted by that Section, and a permitted assignment does not by itself increase the Authorized Users, entities, or machine activations covered by Section 3.
+
+### (d) Electronic communications
 
 Customer consents to receive contractual, billing, renewal, and service notices electronically at the email address associated with the Order. Notices to Licensor must be sent to the applicable address below. Notices are effective when received, except that cancellation requests are subject to Section 6.
 
-### (d) Contact
+### (e) Contact
 
 Billing and cancellation: `billing@ctrlyoke.dev`
 
@@ -137,4 +143,4 @@ Legal notices: Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 ---
 
-Copyright © 2026 Fuzzy Nova. All rights reserved.
+Copyright © 2026 Fuzzy Nova LLC. All rights reserved.

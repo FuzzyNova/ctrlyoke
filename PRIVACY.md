@@ -2,15 +2,15 @@
 
 **Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
-**Effective Date:** June 26, 2026
-**Last Updated:** September 8, 2026
-**Version:** 1.2
+**Effective Date:** September 14, 2026
+**Last Updated:** September 14, 2026
+**Version:** 1.3
 
 ## 1. Scope
 
-This Privacy Policy explains how Fuzzy Nova collects, uses, discloses, and protects information when you use the ctrlyoke VS Code extension and companion binaries (the **Software**), visit [ctrlyoke.dev](https://ctrlyoke.dev), or contact us for support, sales, billing, or security matters.
+This Privacy Policy explains how Fuzzy Nova LLC (**Fuzzy Nova**, **we**, **us**, or **our**) collects, uses, discloses, and protects information when you use the ctrlyoke VS Code extension and companion binaries (the **Software**), visit [ctrlyoke.dev](https://ctrlyoke.dev), or contact us for support, sales, billing, or security matters.
 
-This Privacy Policy does not cover third-party AI services, tools, or platforms that you connect to through the Software, including GitHub Copilot, Claude, Codex, Gemini, or others. Those services are governed by their own privacy policies and terms.
+This Privacy Policy does not cover the third-party AI coding assistants, services, or model providers that you connect to through the Software, including GitHub Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity CLI. Those tools run on your machine under your own accounts and credentials and send your prompts and code to their own providers. They are governed by their own privacy policies and terms, which you should review before using the Software with a given harness.
 
 ## 2. What We Do Not Collect
 
@@ -23,6 +23,10 @@ The Software is designed to run locally on your machine. Except for the telemetr
 - ctrlyoke workflow session IDs, run IDs, or workflow identifiers
 - agent names, skill names, MCP server IDs, or end-condition script names
 - other user-generated workspace content
+
+The Software's optional remote and LAN dashboard is served directly from your own machine to devices you authorize. Dashboard traffic and workflow content do not route through Fuzzy Nova's infrastructure.
+
+The companion CLI and MCP server binaries do not send telemetry to us. The telemetry described in Section 3.1 is sent only by the VS Code extension.
 
 ## 3. Information We Collect
 
@@ -58,6 +62,8 @@ If you purchase or activate a Pro License, we collect and process the minimum in
 - IP address used during online activation, refresh, or deactivation
 
 License verification is provided through **Keygen**. If you use the offline signed-license file path, activation can be verified locally on your machine without sending activation data to us or Keygen.
+
+The fourteen-day remote-access evaluation trial included with each new installation is tracked by a timestamp stored locally on your machine. Starting or using the trial does not require an account and does not send license or activation data to us or Keygen.
 
 ### 3.3 Purchase and billing data
 
@@ -111,10 +117,10 @@ We use trusted vendors to help operate ctrlyoke. Depending on the service and pr
 | Provider                             | Purpose                                           | Data categories                                                                                                                                                                   |
 | ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Microsoft Azure Application Insights | Telemetry processing                              | Telemetry events; pseudonymous machine and per-launch session identifiers; software, OS, device, and remote-environment metadata; source IP during ingestion and derived location |
-| Keygen                               | License issuance and verification                 | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations        |
+| Keygen LLC                           | License issuance and verification                 | Name and email in license metadata; license key/status; machine identifier and operating system platform; IP address and request metadata during online license operations        |
 | Lemon Squeezy                        | Payments, authorized reseller, merchant of record | Name, email address, billing country, payment and order metadata; Enterprise legal-entity and terms-acceptance data where supported                                               |
-| Resend                               | Transactional email and license-key delivery      | Recipient name and email address, license key, message content, delivery metadata                                                                                                 |
-| Netlify                              | Website and serverless-function hosting           | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                          |
+| Plus Five Five, Inc. (Resend)        | Transactional email and license-key delivery      | Recipient name and email address, license key, message content, delivery metadata                                                                                                 |
+| Netlify, Inc.                        | Website and serverless-function hosting           | Purchase/license provisioning data processed by the webhook; server logs, IP addresses, request metadata                                                                          |
 | Google Workspace                     | Business and support email                        | Email addresses and message content                                                                                                                                               |
 
 We may also disclose information:
@@ -123,6 +129,8 @@ We may also disclose information:
 - to respond to lawful requests and legal process;
 - to protect our rights, users, and the security of the Software;
 - in connection with a merger, acquisition, financing, or sale of assets, subject to appropriate protections.
+
+If you are an Enterprise customer, the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) governs our processing of Customer Personal Data on your behalf and separately identifies the Sub-processors engaged for that processing. We give Enterprise customers at least thirty (30) days' notice before a new or replacement Sub-processor begins processing Customer Personal Data, as described in that agreement.
 
 ## 7. Telemetry Choices
 
@@ -141,8 +149,9 @@ Typical retention periods include:
 - **Purchase records:** retained by us and our payment provider as required for tax, accounting, and legal obligations
 - **Transactional license email:** message and delivery data is retained by Resend under our account settings and its applicable retention practices, currently approximately 30 days
 - **Support email:** retained as needed to resolve inquiries and maintain records of correspondence
+- **Enterprise terms-acceptance records:** retained for the life of the subscription and afterwards as needed for tax, accounting, and evidentiary purposes
 
-Retention periods used by our vendors may differ from our own and may be subject to their policies and configurations.
+Retention periods used by our vendors may differ from our own and may be subject to their policies and configurations. For Enterprise customers, the [ctrlyoke Data Processing Agreement](https://ctrlyoke.dev/dpa) additionally governs return and deletion of Customer Personal Data.
 
 ## 9. International Transfers
 
@@ -173,7 +182,7 @@ We do not sell personal information and do not share personal information for cr
 
 ## 11. Children
 
-ctrlyoke is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under the age of thirteen (13). If you believe a child has provided us personal data, please contact us at `privacy@ctrlyoke.dev`.
+ctrlyoke is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under the age of thirteen (13), or under the higher minimum age set by local law where one applies, such as the age of digital consent under the EU or UK GDPR (between thirteen (13) and sixteen (16), depending on the jurisdiction). If you believe a child has provided us personal data, please contact us at `privacy@ctrlyoke.dev` and we will delete it.
 
 ## 12. Security
 
@@ -181,10 +190,14 @@ We use reasonable administrative, technical, and organizational safeguards desig
 
 ## 13. Changes to This Policy
 
-We may update this Privacy Policy from time to time. If we make material changes, we will update the Last Updated date above and, where appropriate, the Effective Date, and may provide additional notice on [ctrlyoke.dev](https://ctrlyoke.dev) or within the Software.
+We may update this Privacy Policy from time to time. If we make material changes, we will increment the Version number and update the Last Updated date above and, where appropriate, the Effective Date, and may provide additional notice on [ctrlyoke.dev](https://ctrlyoke.dev) or within the Software. The version number lets us record which version of this policy applied to a given Enterprise purchase, as described in Section 3.3.
 
 ## 14. Contact
 
 **Privacy inquiries:** `privacy@ctrlyoke.dev`
-**Business operator:** Fuzzy Nova LLC — `hello@fuzzno.com`
+**Data controller:** Fuzzy Nova LLC, a Texas limited liability company — `hello@fuzzno.com`
 **Postal address:** 5518 Roosevelt Ave, Austin, TX 78756, USA
+
+---
+
+Copyright © 2026 Fuzzy Nova LLC. All rights reserved.

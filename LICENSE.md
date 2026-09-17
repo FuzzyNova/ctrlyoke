@@ -2,8 +2,8 @@
 
 **Licensor:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code Extension and companion binaries
-**Effective Date:** June 26, 2026
-**Version:** 1.1
+**Effective Date:** September 14, 2026
+**Version:** 2.0
 
 ## 0. Acceptance
 
@@ -11,7 +11,7 @@ By installing, accessing, or using the Software, You agree to be bound by this L
 
 ## 1. Definitions
 
-**"Licensor"** means Fuzzy Nova LLC, a Texas limited liability company.
+**"Licensor"**, **"Fuzzy Nova"**, **"we"**, or **"us"** means Fuzzy Nova LLC, a Texas limited liability company.
 
 **"Software"** means the ctrlyoke VS Code extension, the compiled extension binary (VSIX), companion CLI and MCP server binaries, source code made available at the canonical repository, documentation, schemas, templates, and any updates or new versions released by Licensor.
 
@@ -19,11 +19,11 @@ By installing, accessing, or using the Software, You agree to be bound by this L
 
 **"Pro License"** means a license key or signed license file issued by Licensor through its authorized licensing system that unlocks Pro Tier capabilities.
 
-**"Pro Tier"** means the capabilities available only to holders of a valid Pro License, including remote dashboard access, custom execution hooks, air-gapped offline activation, and any future capabilities designated as Pro by Licensor.
+**"Pro Tier"** means the capabilities available only to holders of a valid Pro License, or available during an Evaluation Trial to the extent stated in Section 2(d). Pro Tier capabilities currently include remote and LAN dashboard access, HTTPS and self-signed certificate generation for remote connections, browser and mobile push notifications, air-gapped activation from a signed license file, and custom icon colors, together with any future capabilities designated as Pro by Licensor. Capabilities not designated as Pro remain available under the Free Tier, including workflow execution, custom execution hooks, the MCP and agent managers, the companion CLI and MCP server binaries, and the local and `localhost` dashboard.
 
 **"You"** or **"Your"** means the individual or legal entity exercising rights under this License.
 
-**"Your Organization"** means any legal entity under common control with You, where **control** means ownership of greater than fifty percent (50%) of the outstanding shares or beneficial ownership of such entity.
+**"Your Organization"** means (i) any legal entity that employs or engages You, or for whose benefit You use the Software, and (ii) any legal entity under common control with You or with such an entity, where **control** means ownership of greater than fifty percent (50%) of the outstanding shares or beneficial ownership of such entity. If You use the Software for the benefit of more than one entity, each of them is Your Organization for purposes of Section 3.
 
 **"Compete"** means developing, marketing, offering, or providing a product or service in which the orchestration of multi-step AI coding-assistant workflows through structured files is a primary or substantial feature.
 
@@ -33,9 +33,11 @@ Subject to the terms and conditions of this License, Licensor grants You a limit
 
 (a) **Install and use** the Software for Your internal purposes, including use in the course of personal employment, freelance work, or client engagements;
 
-(b) **Read and fork** the source code for personal evaluation, security review, internal non-redistributed adaptation, or contribution to the canonical repository; and
+(b) **Read and fork** the source code for personal evaluation, security review, internal non-redistributed adaptation, or contribution to the canonical repository;
 
-(c) **Access Pro Tier capabilities** if and only if You hold a valid, unrevoked Pro License for each authorized user using Pro Tier capabilities, subject to any machine activation limits stated at purchase.
+(c) **Access Pro Tier capabilities** if and only if You hold a valid, unrevoked Pro License for each authorized user using Pro Tier capabilities, subject to any machine activation limits stated at purchase; and
+
+(d) **Evaluate Pro Tier capabilities during an Evaluation Trial.** Each new installation of the Software includes a one-time, fourteen (14) day evaluation trial of remote dashboard access (an **Evaluation Trial**), beginning when that capability is first used on that installation. No purchase, payment method, or account registration is required. An Evaluation Trial is offered at Licensor's discretion, extends only to the capabilities Licensor designates for trial, is limited to one trial per installation, and may be modified or discontinued for future installations. Use of Pro Tier capabilities during a valid Evaluation Trial is permitted under Sections 2(c) and 4(c). When an Evaluation Trial ends, Free Tier rights continue and any further use of Pro Tier capabilities requires a valid Pro License. **AN EVALUATION TRIAL IS PROVIDED "AS IS" AND WITHOUT WARRANTY OF ANY KIND, AS FURTHER STATED IN SECTION 12.**
 
 ## 3. Free Tier Eligibility
 
@@ -46,7 +48,7 @@ The Free Tier rights in Section 2(a)–(b) are granted at no charge, subject to 
 The Free Tier is available to:
 
 - individual persons acting in their personal capacity; and
-- organizations whose total annual gross revenue does not exceed ten million US dollars (USD $10,000,000) and who employ fewer than two hundred fifty (250) persons, counting full-time, part-time, and contract workers.
+- organizations whose total annual gross revenue is less than ten million US dollars (USD $10,000,000) and who employ fewer than two hundred fifty (250) persons, counting full-time, part-time, and contract workers.
 
 ### (b) Commercial threshold — Pro License required
 
@@ -55,7 +57,9 @@ If Your Organization's total annual gross revenue meets or exceeds USD $10,000,0
 - the individual user purchasing a personal Pro License; or
 - Your Organization purchasing an enterprise license that covers that user.
 
-Use of the Software under the Free Tier by users at qualifying organizations, without one of these forms of Pro License in place, is not permitted. This threshold is contractual and relies on Your Organization's honest self-assessment. Automated, scripted, and CI/CD pipeline use is permitted under any valid individual or enterprise Pro License.
+Use of the Software under the Free Tier by users at qualifying organizations, without one of these forms of Pro License in place, is not permitted. This threshold is contractual and relies on Your Organization's honest self-assessment. It applies to Your use of the Software regardless of which capabilities You use, including use limited to Free Tier capabilities.
+
+For clarity, automated, scripted, and CI/CD pipeline use of the Software is permitted under the Free Tier and under any valid individual or enterprise Pro License, provided the user or organization on whose behalf the Software runs is itself eligible under this Section 3.
 
 ### (c) Educational use
 
@@ -79,7 +83,7 @@ Use the Software or any material portion of its source code to Compete with the 
 
 ### (c) Circumvent licensing
 
-Circumvent, disable, or defeat the Software's license verification mechanisms, or use Pro Tier capabilities without a valid, unrevoked Pro License.
+Circumvent, disable, or defeat the Software's license verification mechanisms, or use Pro Tier capabilities without either a valid, unrevoked Pro License or an active Evaluation Trial. You may not restart, extend, or obtain more than one Evaluation Trial for the same installation, user, or machine.
 
 ### (d) Offer as a hosted service
 
@@ -91,7 +95,7 @@ Represent that the Software is "open source" or governed by an OSI-approved open
 
 ### (f) Third-party AI service terms
 
-The Software is designed to interface with third-party AI services and tools, including GitHub Copilot, Claude, Codex, Gemini, and others. Your use of those services through the Software remains subject to each service's own terms of use. You are solely responsible for ensuring Your use of the Software complies with the terms and conditions of any third-party AI service You access through it. Licensor is not responsible for changes to third-party service terms that affect Your ability to use the Software with those services.
+The Software is designed to interface with third-party AI coding assistants and the model providers behind them, including GitHub Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, and Antigravity CLI. The Software does not include, and Licensor does not supply, any of those tools, services, models, or the subscriptions or API credits they require; You are responsible for obtaining and maintaining them. Your use of those services through the Software remains subject to each service's own terms of use. You are solely responsible for ensuring Your use of the Software complies with the terms and conditions of any third-party AI service You access through it. Licensor is not responsible for changes to third-party service terms that affect Your ability to use the Software with those services.
 
 ## 5. Source Code and Contributions
 
@@ -127,7 +131,9 @@ Unless otherwise stated at purchase, an individual Pro License is perpetual and 
 
 ### (d) Enterprise license
 
-Enterprise licenses, if offered, cover authorized users within a single legal entity and are issued as annual subscriptions unless otherwise stated in the applicable order form or invoice. Coverage extends to employees, officers, and contractors engaged to perform work for Your Organization, provided their use of the Software is in the course of that work.
+Enterprise licenses cover authorized users within the single legal entity identified in the applicable order form or invoice and are issued as annual subscriptions unless otherwise stated there. Coverage extends to that entity's employees and officers, and to contractors engaged to perform work for it, provided their use of the Software is in the course of that work.
+
+An Enterprise subscription is additionally governed by the ctrlyoke Enterprise Subscription Terms at [ctrlyoke.dev/enterprise-terms](https://ctrlyoke.dev/enterprise-terms) and, to the extent Licensor processes personal data on the customer's behalf, the ctrlyoke Data Processing Agreement at [ctrlyoke.dev/dpa](https://ctrlyoke.dev/dpa). Both are incorporated by reference for an Enterprise subscription, and the Enterprise Subscription Terms control over this Section 6(d) to the extent they conflict with it.
 
 ### (e) Revocation
 
@@ -145,7 +151,13 @@ Pro Licenses are personal to the named licensee and may not be transferred, reso
 
 ## 7. Intellectual Property
 
-The Software and all copies are proprietary to Licensor; title remains with Licensor. No intellectual property rights in the Software are transferred to You by this License, except for the limited rights expressly granted here.
+### (a) Ownership
+
+The Software and all copies are proprietary to Licensor; title remains with Licensor. No intellectual property rights in the Software are transferred to You by this License, except for the limited rights expressly granted here. "ctrlyoke" and "Fuzzy Nova" are marks of Licensor, and this License grants You no right to use them except as reasonably necessary to identify the Software accurately.
+
+### (b) Third-party components
+
+The Software incorporates third-party open-source components licensed to You by their respective licensors under their own terms, not under this License. Those components and their required attributions are identified in the `THIRD_PARTY_NOTICES.md` file distributed with the Software. Where a third-party component's license grants You rights broader than this License with respect to that component, that license controls for that component, and nothing in this License limits any right You have under it.
 
 ## 8. Feedback
 
@@ -157,7 +169,7 @@ Licensor may provide support, updates, bug fixes, or future features at its sole
 
 ## 10. Privacy and Data Processing
 
-Your use of the Software may involve the collection, transmission, storage, or processing of data, including telemetry, license validation data, configuration data, diagnostics, and usage information, as described in Licensor's Privacy Policy at [ctrlyoke.dev/privacy](https://ctrlyoke.dev/privacy) or any successor URL. The Privacy Policy is incorporated by reference into this License.
+Your use of the Software may involve the collection, transmission, storage, or processing of data, including telemetry, license validation data, configuration data, diagnostics, and usage information, as described in Licensor's Privacy Policy at [ctrlyoke.dev/privacy](https://ctrlyoke.dev/privacy) or any successor URL. The Privacy Policy, as updated from time to time, is incorporated by reference into this License. Notwithstanding Section 16(e), the then-current Privacy Policy governs Licensor's processing of that data, and Licensor will identify material changes to it as described in that policy.
 
 ## 11. Patent Rights
 
@@ -185,17 +197,17 @@ This License is effective from the date You first install, use, or access the So
 
 ### (b) Termination for breach
 
-This License terminates automatically and immediately if You materially breach any of its terms and fail to cure such breach within thirty (30) days of written notice, except where immediate termination is permitted under this License. Upon termination You must cease all use and destroy all copies in Your possession or control, except to the extent retention is required by law.
+This License terminates if You materially breach any of its terms and fail to cure the breach within thirty (30) days after written notice from Licensor. A breach of Section 4(a), 4(b), or 4(c) is not curable, and this License terminates immediately upon such a breach without notice. Upon termination You must cease all use and destroy all copies in Your possession or control, except to the extent retention is required by law.
 
 ### (c) Survival
 
-Sections 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 survive termination.
+Sections 4, 5(c), 5(d), 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 survive termination.
 
 ## 16. General
 
 ### (a) Entire agreement
 
-This License is the entire agreement between the parties regarding the Software and supersedes all prior and contemporaneous understandings regarding the Software.
+This License is the entire agreement between the parties regarding the Software and supersedes all prior and contemporaneous understandings regarding the Software. For an Enterprise subscription, the ctrlyoke Enterprise Subscription Terms replace this Section 16(a) and identify the documents that together form the agreement.
 
 ### (b) Governing law; venue
 
@@ -223,6 +235,10 @@ Legal notices: Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 Except for disputes relating to a party's actual or threatened misuse of intellectual property, confidentiality obligations, or claims seeking temporary or preliminary injunctive relief, any dispute, claim, or controversy arising out of or relating to this License or the Software shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules, in Austin, Texas. Judgment on the award may be entered in any court of competent jurisdiction. To the maximum extent permitted by law, You and Licensor waive any right to a jury trial and any right to participate in a class action or class-wide arbitration.
 
+### (h) Assignment
+
+You may not assign or transfer this License or any right under it, by operation of law or otherwise, without Licensor's prior written consent, except that You may assign this License in its entirety to a successor to all or substantially all of Your business or assets, provided that the successor does not Compete with the Software, agrees in writing to be bound by this License, and You notify Licensor within thirty (30) days of the assignment. Licensor may assign this License, in whole or in part, to an affiliate or in connection with a merger, acquisition, reorganization, financing, or sale of all or substantially all of its assets. Any attempted assignment in violation of this Section is void. This License binds and benefits the parties' permitted successors and assigns.
+
 ---
 
-Copyright © 2026 Fuzzy Nova. All rights reserved.
+Copyright © 2026 Fuzzy Nova LLC. All rights reserved.
