@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
@@ -74,6 +73,8 @@ import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   DisposableRegistry,
+  FileWatcher,
+  FileWatcherFactory,
   KeyValueStore,
   StatusBarSink,
 } from "./HostPorts";
@@ -340,6 +341,7 @@ export interface WorkflowOrchestratorDependencies {
   dashboardProvider?: DashboardClient;
   userFeedbackSink: UserFeedbackSink;
   runnerHostIdentity: RunnerHostIdentity;
+  fileWatcherFactory: FileWatcherFactory;
   statusBarSink?: StatusBarSink;
   disposableRegistry: DisposableRegistry;
   workspaceState: KeyValueStore;
@@ -384,7 +386,7 @@ export class WorkflowOrchestrator {
   >();
 
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
-  private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
+  private runnerJsonCreateWatcher?: FileWatcher;
   /** Polling fallback for VS Code builds that do not deliver external recursive events. */
   private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
   /**
@@ -479,6 +481,7 @@ export class WorkflowOrchestrator {
   private readonly platform: PlatformAdapter;
   private readonly statusBarSink?: StatusBarSink;
   private readonly disposableRegistry: DisposableRegistry;
+  private readonly fileWatcherFactory: FileWatcherFactory;
   private readonly workspaceState: KeyValueStore;
   private readonly userFeedbackSink: UserFeedbackSink;
   private readonly runnerHostIdentity: RunnerHostIdentity;
@@ -548,6 +551,7 @@ export class WorkflowOrchestrator {
     this.platform = dependencies.platform;
     this.statusBarSink = dependencies.statusBarSink;
     this.disposableRegistry = dependencies.disposableRegistry;
+    this.fileWatcherFactory = dependencies.fileWatcherFactory;
     this.workspaceState = dependencies.workspaceState;
     this.userFeedbackSink = dependencies.userFeedbackSink;
     this.runnerHostIdentity = dependencies.runnerHostIdentity;
@@ -6764,25 +6768,21 @@ export class WorkflowOrchestrator {
     workspaceFolderPath: string,
     runsRootDir: string
   ): void {
-    const pattern = new vscode.RelativePattern(
-      vscode.Uri.file(runsRootDir),
-      "*/runner.json"
-    );
-    this.runnerJsonCreateWatcher =
-      vscode.workspace.createFileSystemWatcher(pattern);
+    const watcher = this.fileWatcherFactory.create(runsRootDir, "*/runner.json");
+    this.runnerJsonCreateWatcher = watcher;
 
-    this.runnerJsonCreateWatcher.onDidCreate(async (uri) => {
+    watcher.onDidCreate(async (filePath) => {
       Log.debug(
-        `[WorkflowOrchestrator] runner.json created: ${path.basename(uri.fsPath)}`
+        `[WorkflowOrchestrator] runner.json created: ${path.basename(filePath)}`
       );
-      await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
+      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
     });
 
     // Fallback for Windows: atomic file creation via rename (writeFile+rename)
     // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
     // also use atomic rename, so this fires ~5s after CLI start at the latest.
-    this.runnerJsonCreateWatcher.onDidChange(async (uri) => {
-      await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
+    watcher.onDidChange(async (filePath) => {
+      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
     });
 
     // VS Code 1.133 on Windows did not deliver the recursive event for a

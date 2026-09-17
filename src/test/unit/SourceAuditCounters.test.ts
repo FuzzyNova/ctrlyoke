@@ -46,16 +46,16 @@ const ADAPTER_UI_NAMES = new Set([
 
 const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
-// Phase 1 steps 2, 3, 4, 5, 7, and 9 progressively shrink this graph;
+// Phase 1 steps 2, 3, 4, 5, 7, 8, and 9 progressively shrink this graph;
 // later phases remove the remaining downstream VS Code importers.
-// Shrunk from 13 to 9: WorkflowOrchestrator no longer imports the
+// Shrunk from 13 to 8: WorkflowOrchestrator no longer imports the
 // StatusBarManager, VsCodeAdapter, or LicenseService host implementations;
 // those capabilities are injected by extension.ts, and its workspace-folder
-// resolver is now injected as a path callback.
-const vscodeImportersReachableFromOrchestrator = 9;
+// resolver is now injected as a path callback. Its runner watcher is now
+// supplied by the FileWatcherFactory port.
+const vscodeImportersReachableFromOrchestrator = 8;
 
 const vscodeImporterFilesReachableFromOrchestrator = [
-  "src/core/WorkflowOrchestrator.ts",
   "src/core/orchestration/ExecutionRootCoordinationWatchSession.ts",
   "src/core/orchestration/ExternalRunWatchSession.ts",
   "src/core/orchestration/PromptFileWatcher.ts",
@@ -66,8 +66,8 @@ const vscodeImporterFilesReachableFromOrchestrator = [
   "src/utils/ModelRegistry.ts",
 ] as const;
 
-// Phase 1 step 5 removes the orchestrator's direct vscode import.
-const orchestratorDirectVsCodeImports = 1;
+// Phase 1 item 9 removes the orchestrator's direct vscode import.
+const orchestratorDirectVsCodeImports = 0;
 
 // Shrunk from 1 to 0: the orchestrator now accepts project-owned dependencies
 // instead of a VS Code ExtensionContext constructor parameter.

@@ -1,6 +1,7 @@
 # VS Code Dependency Decoupling Plan
 
-**Status (2026-07-29):** Proposed. This is the shared-foundation plan for making
+**Status (2026-09-17):** Proposed overall; Phase 1 is complete. This is the
+shared-foundation plan for making
 `ctrlyoke run` and the future `ctrlyoke server` use a Node-only runtime graph
 instead of depending on the CLI esbuild `vscode-shim`.
 
@@ -395,8 +396,8 @@ Where a per-plan phase number disagrees with a stage here, this table wins.
 | ----: | ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |     0 | Dependency guards + baselines            | This plan, Phase 0 (absorbs Feedback Phase 5) | CI fails on a new `vscode` import in a shared group, a new `show*Message`, or a 20th adapter-UI call                                                                                                                                                                                                                                                                                                                                                              |
 |     1 | Toast queue + `ToastViewport`            | Feedback Phase 1                              | `showToast()` renders; panel shows no duplicate; browser-delivery decision recorded                                                                                                                                                                                                                                                                                                                                                                               |
-|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | **Gate corrected 2026-09-17:** `WorkflowOrchestrator.ts` contains no `vscode` import and no VS Code type in its constructor or public surface, and `new VsCodeAdapter` appears only in `extension.ts`. A _runtime_ "instantiates with no `vscode` module loadable" test is not reachable at this stage — 9 files in the orchestrator's transitive value-import graph still import `vscode` after Phase 1 items 1–7 (measured 2026-09-17 following value imports only), and each is owned by later Phase 1/stage work. That test arrives with Stage 12; the enforceable gate here is the shrink-only import-graph counter from Phase 0 item 3. |
-|     3 | Watcher factory                          | This plan, Phase 2                            | All five sites use the port; create/change/delete/dispose contract tests pass on both impls                                                                                                                                                                                                                                                                                                                                                                       |
+|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | **DONE 2026-09-17.** `WorkflowOrchestrator.ts` contains no `vscode` import and no VS Code type in its constructor or public surface, and `new VsCodeAdapter` appears only in `extension.ts`. The shrink-only audit measures 0 direct orchestrator imports, 8 reachable value-importers, 0 VS Code constructor parameters, 0 `WorkflowInstance` direct imports, and 1 core `VsCodeAdapter` construction. The runtime "instantiates with no `vscode` module loadable" test remains a Stage 12 gate; the 8 remaining reachable importers are owned by Stages 3, 4, 5, and 8. |
+|     3 | Watcher factory                          | This plan, Phase 2                            | All six Phase 2 watcher sites use the port; create/change/delete/dispose contract tests pass on both implementations                                                                                                                                                                                                                                                                                                                                            |
 |     4 | Feedback port + adapter migration        | Feedback Phases 2 and 2.5                     | Adapter-UI counter is 0; no run can block on an unanswerable prompt                                                                                                                                                                                                                                                                                                                                                                                               |
 |     5 | Command UI / domain split                | This plan, Phase 3                            | Domain ops callable headlessly; VS Code pickers confined to command facades                                                                                                                                                                                                                                                                                                                                                                                       |
 |     6 | Reusable router + client-scoped feedback | This plan Phase 4 **∪** Feedback Phase 3      | One router serves both transports; two-tab test proves no cross-client leakage — **partially done:** the Feedback Phase 3 half (client-scoped feedback / Phase 5 item 1 below) landed 2026-07-24 to 2026-08-06 with a passing two-tab test; the Phase 4 half ("one router serves both transports") has not — `WebviewMessageRouter` is still constructed only by `CtrlYokeWebviewProvider.ts`, not reused by a standalone WebSocket server (confirmed 2026-08-11) |
@@ -469,17 +470,17 @@ constructions, and stopped short of the seams that actually hold the `vscode`
 import in place.
 
 The test-first host-boundary guard is now in place in
-`src/test/unit/SourceAuditCounters.test.ts`. Phase 1 items 1–8 landed on
+`src/test/unit/SourceAuditCounters.test.ts`. Phase 1 items 1–9 landed on
 2026-09-17: the orchestrator now accepts a project-owned dependencies object,
 has no `ExtensionContext` field or constructor parameter, and receives its
 platform, status sink, disposable registry, and workspace state store from the
 extension composition root. The guard therefore records
 `orchestratorVsCodeConstructorParams` at 0 and
 `coreVsCodeAdapterConstructions` at 1; the reachable value-import graph
-shrunk from 13 to 9 because the orchestrator no longer reaches
+shrunk from 13 to 8 because the orchestrator no longer reaches
 `StatusBarManager`, `VsCodeAdapter`, or `VsCodeSecretStore`. Its direct
-`vscode` import remains 1 for the watcher and other later Phase 1 work. Step 9
-and later stages remove the remaining importers. The
+`vscode` import is now 0 because the runner watcher is supplied through the
+`FileWatcherFactory` port. Later stages remove the remaining importers. The
 `workflowInstanceDirectVsCodeImports` baseline is already zero and guards
 against regression.
 
@@ -523,25 +524,44 @@ against regression.
    while the picker stays natively rendered under the file-picker carve-out,
    exactly like `ctrlyoke.selectPromptFile`. The orchestrator's two
    non-watcher `vscode.Disposable` wrappers were also replaced with host-neutral
-   disposable handles, leaving the runner watcher as its only retained VS Code
-   dependency. The measured direct-import baseline remains `1` and the
-   transitive importer baseline remains `9`; both still account for the
-   intentionally retained watcher and its dependencies.
-9. **Pulled forward from Phase 2 item 4:** convert the `runner.json` watcher
+   disposable handles. Item 9 removes the remaining direct import.
+9. **DONE 2026-09-17. Pulled forward from Phase 2 item 4:** convert the
+   `runner.json` watcher
    (lines 6743-6757) to the `FileWatcherFactory` contract with a VS Code
    implementation, because it is the orchestrator's last remaining direct
-   `vscode` use. Phase 2 keeps the chokidar implementation and the other six
-   sites. Its polling fallback (`pollRunnerJsonDiscovery`, every 1s) and its
+   `vscode` use. Phase 2 keeps the chokidar implementation and converts its
+   five remaining sites; the completion-layer watcher remains owned by Phase 6.
+   Its polling fallback (`pollRunnerJsonDiscovery`, every 1s) and its
    deliberate `onDidCreate` + `onDidChange` duality must survive the move —
    both exist because VS Code 1.133 on Windows did not deliver recursive
    events below an external `RelativePattern` base.
 
-**Exit gate.** `src/core/WorkflowOrchestrator.ts` contains no `vscode` import
+**DONE 2026-09-17 — Phase 1 complete. Exit-gate evidence:**
+`src/core/WorkflowOrchestrator.ts` contains no `vscode` import
 and no VS Code type in its constructor or public surface; `new VsCodeAdapter`
-appears nowhere outside `extension.ts`. See the Stage 2 row above for why the
+appears nowhere outside `extension.ts`. The source audit records 0 direct
+orchestrator imports and 8 reachable importers. See the Stage 2 row above for why the
 runtime "no `vscode` module loadable" instantiation test is a Stage 12 gate
 rather than this one, and Phase 0 item 3 for the shrink-only counter that
 enforces this stage.
+
+The eight files remaining in the orchestrator's reachable `vscode` set are
+owned by these later stages:
+
+| File | Owning stage |
+| --- | --- |
+| `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts` | Stage 3 — watcher factory |
+| `src/core/orchestration/ExternalRunWatchSession.ts` | Stage 3 — watcher factory |
+| `src/core/orchestration/PromptFileWatcher.ts` | Stage 3 — watcher factory |
+| `src/core/orchestration/WorkflowCommandHandler.ts` | Stage 5 — command UI/domain split |
+| `src/ui/ExternalFileTrustPrompt.ts` | Stage 4 — feedback/interaction ports |
+| `src/utils/AttachmentBuilders.ts` | Stage 8 — utilities and completions |
+| `src/utils/Log.ts` | Stage 8 — injected logging sinks |
+| `src/utils/ModelRegistry.ts` | Stage 8 — model-source aggregation |
+
+Phase 1's gate is specifically the absence of a `vscode` import in
+`WorkflowOrchestrator.ts`; it is not a runtime test that makes the `vscode`
+module unavailable. That broader graph gate belongs to Stage 12.
 
 Do not keep a VS Code-context default constructor: it would preserve the import
 and allow standalone tests to miss hidden construction.
@@ -552,8 +572,8 @@ and allow standalone tests to miss hidden construction.
 2. Inject the factory into `PromptFileWatcher`.
 3. Inject it into `ExternalRunWatchSession` (three watchers) and
    `ExecutionRootCoordinationWatchSession` (one).
-4. ~~Replace the orchestrator `runner.json` watcher.~~ **Moved into Phase 1
-   (item 9) on 2026-09-17** — it is the orchestrator's last direct `vscode`
+4. ~~Replace the orchestrator `runner.json` watcher.~~ **DONE EARLY in Phase 1
+   item 9 on 2026-09-17** — it was the orchestrator's last direct `vscode`
    use, so Phase 1's exit gate cannot be met without it. Phase 2 inherits the
    contract and adds the chokidar implementation.
 5. Test create/change/delete normalization, atomic rename behavior, and

@@ -22,6 +22,7 @@ import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import { RUNNER_IDS, STEP_TYPES } from "../../types/DashboardConstants";
 import type { ActiveExternalLockInspection } from "../../core/orchestration/ExternalExecutionResolver";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import { VsCodeFileWatcherFactory } from "../../platform/VsCodeFileWatcher";
 
 function makeInspection(
   workflowKey: WorkflowKey,
@@ -456,6 +457,11 @@ suite("external watcher patterns", () => {
       orchestrator = Object.create(
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
+      (
+        orchestrator as unknown as {
+          fileWatcherFactory: VsCodeFileWatcherFactory;
+        }
+      ).fileWatcherFactory = new VsCodeFileWatcherFactory();
       (
         orchestrator as unknown as {
           setupRunnerJsonCreateWatcher: (

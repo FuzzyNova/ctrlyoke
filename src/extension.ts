@@ -17,6 +17,7 @@ import {
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
+import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
@@ -372,6 +373,7 @@ export async function activate(context: vscode.ExtensionContext) {
       dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
+      fileWatcherFactory: new VsCodeFileWatcherFactory(),
       statusBarSink,
       disposableRegistry: {
         add: (disposable) => context.subscriptions.push(disposable),
