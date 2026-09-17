@@ -129,7 +129,7 @@ export default defineConfig({
     },
     footer: {
       message: "Source-available under the ctrlyoke Commercial License.",
-      copyright: "Copyright © Fuzzy Nova",
+      copyright: "Copyright © Fuzzy Nova LLC",
     },
   },
 });
