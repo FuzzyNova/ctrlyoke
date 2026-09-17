@@ -215,7 +215,7 @@ files themselves.
 | File                                               | Direct APIs                                                                                                                                                                                                              | Replacement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/completions/CompletionHelpers.ts`             | `findFiles` ×2, `workspaceFolders` ×1, `asRelativePath` ×3, `visibleTextEditors` ×1                                                                                                                                      | Split a Node-capable workspace completion index from VS Code active-editor/SCM enrichment.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `src/core/orchestration/CliWatchSession.ts`        | `createFileSystemWatcher` ×3                                                                                                                                                                                             | Inject a host-neutral watcher factory.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/core/orchestration/ExecutionRootCoordinationWatchSession.ts` (×1) and `src/core/orchestration/ExternalRunWatchSession.ts` (×3) — the file called `CliWatchSession.ts` in the original audit no longer exists under that name (corrected 2026-09-17) | `createFileSystemWatcher` ×4                                                                                                                                                                                             | Inject a host-neutral watcher factory.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `src/core/orchestration/PromptFileLoader.ts`       | `showErrorMessage` ×5                                                                                                                                                                                                    | Inject/scoped user feedback; keep parse errors as returned data where possible.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `src/core/orchestration/PromptFileWatcher.ts`      | `createFileSystemWatcher` ×1                                                                                                                                                                                             | Inject the watcher factory.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `src/core/orchestration/TemplateImporter.ts`       | errors ×4, information ×2, warning ×1, quick pick ×1, document/editor ×2, `workspace.fs` ×5                                                                                                                              | Split import/file operations from VS Code selection/confirmation/opening.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -322,8 +322,12 @@ interface FileWatcherFactory {
 - Node implementation adapts `chokidar`.
 - Callers receive normalized absolute string paths.
 - Watcher ownership/disposal is explicit.
-- The five current watcher sites are `CliWatchSession` ×3,
-  `PromptFileWatcher` ×1, and the orchestrator runner watcher ×1.
+- **Site list corrected 2026-09-17 — there are seven production sites, not
+  five:** `ExternalRunWatchSession` ×3, `ExecutionRootCoordinationWatchSession`
+  ×1, `PromptFileWatcher` ×1, the orchestrator `runner.json` watcher ×1, and
+  `ScriptCommandCompletionHelpers.ts:424` ×1 (a `**/package.json` watcher in
+  the completion layer, which belongs to Phase 6 rather than Phase 2). The
+  orchestrator's site moves in Phase 1; see that phase's item 9.
 
 ### User feedback and interactions
 
@@ -391,7 +395,7 @@ Where a per-plan phase number disagrees with a stage here, this table wins.
 | ----: | ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |     0 | Dependency guards + baselines            | This plan, Phase 0 (absorbs Feedback Phase 5) | CI fails on a new `vscode` import in a shared group, a new `show*Message`, or a 20th adapter-UI call                                                                                                                                                                                                                                                                                                                                                              |
 |     1 | Toast queue + `ToastViewport`            | Feedback Phase 1                              | `showToast()` renders; panel shows no duplicate; browser-delivery decision recorded                                                                                                                                                                                                                                                                                                                                                                               |
-|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | `WorkflowOrchestrator` instantiates with no `vscode` module loadable                                                                                                                                                                                                                                                                                                                                                                                              |
+|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | **Gate corrected 2026-09-17:** `WorkflowOrchestrator.ts` contains no `vscode` import and no VS Code type in its constructor or public surface, and `new VsCodeAdapter` appears only in `extension.ts`. A _runtime_ "instantiates with no `vscode` module loadable" test is not reachable at this stage — 16 files in the orchestrator's transitive value-import graph still import `vscode`, and each is owned by a later stage. That test arrives with Stage 12; the enforceable gate here is the shrink-only import-graph counter from Phase 0 item 3. |
 |     3 | Watcher factory                          | This plan, Phase 2                            | All five sites use the port; create/change/delete/dispose contract tests pass on both impls                                                                                                                                                                                                                                                                                                                                                                       |
 |     4 | Feedback port + adapter migration        | Feedback Phases 2 and 2.5                     | Adapter-UI counter is 0; no run can block on an unanswerable prompt                                                                                                                                                                                                                                                                                                                                                                                               |
 |     5 | Command UI / domain split                | This plan, Phase 3                            | Domain ops callable headlessly; VS Code pickers confined to command facades                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -430,7 +434,13 @@ Notes on the merges:
 2. Add lint/source-audit rules that reject `vscode` imports in shared groups.
 3. Add an explicit temporary allowlist matching this audit. **Still open** —
    this is the `vscode`-import allowlist for items 1–2, which Stage A
-   deliberately did not build.
+   deliberately did not build. **Scheduled 2026-09-17 as the first Phase 1
+   step**, in the form the stage actually needs: a shrink-only
+   transitive-import-graph counter rooted at `WorkflowOrchestrator.ts`
+   (baseline 16 `vscode`-importing files), sitting beside the existing
+   counters in `src/test/unit/SourceAuditCounters.test.ts`. It must ignore
+   `import type` edges, which are erased at runtime — `CliIntegration.ts`
+   reaches `VsCodeAdapter` only that way.
 4. Make the allowlist shrink-only.
 5. Add a bundle/metafile check for the Node server entry graph.
 6. **DONE —** Add a **shrink-only counter for adapter-mediated host UI** —
@@ -451,20 +461,75 @@ This lands before refactoring so the measured baseline cannot grow.
 
 ### Phase 1 — Introduce host composition
 
-1. Replace `WorkflowOrchestrator(context, provider)` with an options/dependencies
-   object containing project-owned interfaces.
-2. Construct one `VsCodeAdapter` in `extension.ts`; remove the five internal
-   `new VsCodeAdapter(...)` calls in `WorkflowOrchestrator.ts` (lines 358, 378,
-   381, 385, 4536). A sixth lives in `TemplateManager.ts:122` and is removed by
-   the `TemplateManager` refactor in Phase 3 — six constructions total, so the
-   "one adapter" invariant is not met until both land.
-3. Remove the shared orchestrator's `ExtensionContext` field.
-4. Inject an optional status sink instead of constructing
-   `StatusBarManager`.
+**Item list re-derived from the current source on 2026-09-17.** The original
+list cited line numbers from an older tree, undercounted the adapter
+constructions, and stopped short of the seams that actually hold the `vscode`
+import in place.
+
+1. Replace
+   `WorkflowOrchestrator(context, dashboardProvider, userFeedbackSink, runnerHostIdentity, licenseService, userInteractionPort)`
+   with a single project-owned dependencies object.
+2. Construct one `VsCodeAdapter` in `extension.ts` and inject it. Shared code
+   constructs **six**, not five — `WorkflowOrchestrator.ts` lines 561, 581,
+   586, 589, 2667, and 6231 (the old 358/378/381/385/4536 no longer exist).
+   A seventh lives in `TemplateManager.ts:135` (not `:122`) and is removed by
+   the Phase 3 `TemplateManager` refactor. Three further throwaway
+   constructions exist only to reach `getSecretStore()` —
+   `extension.ts:1374`, `extension.ts:1498`,
+   `CtrlYokeWebviewProvider.ts:168`. Those are in boundary files and are not
+   blockers, but they should reuse the composition root's instance so "one
+   adapter" is literally true.
+3. Remove the shared orchestrator's `ExtensionContext` field. It has exactly
+   three uses: two of the adapter constructions above, plus
+   `this.context.workspaceState.update("ctrlyoke.loadedWorkflows", [])` at
+   line 1572, which needs a small injected key/value store port.
+4. Inject an optional status sink instead of constructing `StatusBarManager`
+   (line 577). The orchestrator calls only `updateStatusBar()` and `dispose()`
+   on it, and `licenseService` is passed to nothing else — so the sink removes
+   both the `StatusBarManager` and `LicenseService` imports and the
+   `licenseService` constructor parameter. `setHasQueuedStepsContext()`'s
+   `setContext` call (line 6114) belongs on the same sink: it is VS Code
+   chrome, not orchestration.
 5. Use an explicit disposable registry/lifecycle contract instead of pushing
-   shared disposables directly into `context.subscriptions`.
-6. Update `WorkflowInstance` creation to reuse the injected platform and watcher
-   dependencies.
+   shared disposables directly into `context.subscriptions`. There is one such
+   site, at line 607.
+6. `WorkflowInstance` already takes `platform: PlatformAdapter` and
+   `workspaceFolderPath: string | undefined` and imports no `vscode`, so the
+   only change is passing the injected adapter and root at line 6231.
+7. **Replace `currentWorkspaceFolder: vscode.WorkspaceFolder | undefined`**
+   (declared line 455, read at ~45 sites, always as `.uri.fsPath`) with an
+   injected `() => string | undefined` resolver. `platform.getWorkspaceRoot()`
+   is **not** a drop-in substitute: it falls back to `process.cwd()`, whereas
+   this field is `undefined` when no folder is open and roughly a dozen
+   branches depend on that distinction.
+8. Move the orchestrator's remaining direct VS Code calls out:
+   `vscode.workspace.isTrusted` (lines 2820, 6216) → an injected trust
+   predicate whose headless default is `true`;
+   `executeCommand("ctrlyoke.dashboard.focus")` (line 5825) → the
+   already-declared `platform.focusDashboard?.()`; and `showQuickPick` in
+   `resumeSession()` (line 5811) → a thin facade on the existing
+   `ctrlyoke.resumeSession` command (`extension.ts:908`), with the
+   orchestrator exposing `listResumableSessions()` and
+   `resumeSessionFromWorkingFile(filePath)`. That picker selects a working
+   file, so it stays natively rendered under the file-picker carve-out,
+   exactly like `ctrlyoke.selectPromptFile` — it is not a
+   confirmation/approval dialog and the native-vs-built-in-modal policy does
+   not apply to it.
+9. **Pulled forward from Phase 2 item 4:** convert the `runner.json` watcher
+   (lines 6743-6757) to the `FileWatcherFactory` contract with a VS Code
+   implementation, because it is the orchestrator's last remaining direct
+   `vscode` use. Phase 2 keeps the chokidar implementation and the other six
+   sites. Its polling fallback (`pollRunnerJsonDiscovery`, every 1s) and its
+   deliberate `onDidCreate` + `onDidChange` duality must survive the move —
+   both exist because VS Code 1.133 on Windows did not deliver recursive
+   events below an external `RelativePattern` base.
+
+**Exit gate.** `src/core/WorkflowOrchestrator.ts` contains no `vscode` import
+and no VS Code type in its constructor or public surface; `new VsCodeAdapter`
+appears nowhere outside `extension.ts`. See the Stage 2 row above for why the
+runtime "no `vscode` module loadable" instantiation test is a Stage 12 gate
+rather than this one, and Phase 0 item 3 for the shrink-only counter that
+enforces this stage.
 
 Do not keep a VS Code-context default constructor: it would preserve the import
 and allow standalone tests to miss hidden construction.
@@ -473,8 +538,12 @@ and allow standalone tests to miss hidden construction.
 
 1. Add VS Code and chokidar watcher implementations.
 2. Inject the factory into `PromptFileWatcher`.
-3. Inject it into `CliWatchSession` and replace its three watchers.
-4. Replace the orchestrator `runner.json` watcher.
+3. Inject it into `ExternalRunWatchSession` (three watchers) and
+   `ExecutionRootCoordinationWatchSession` (one).
+4. ~~Replace the orchestrator `runner.json` watcher.~~ **Moved into Phase 1
+   (item 9) on 2026-09-17** — it is the orchestrator's last direct `vscode`
+   use, so Phase 1's exit gate cannot be met without it. Phase 2 inherits the
+   contract and adds the chokidar implementation.
 5. Test create/change/delete normalization, atomic rename behavior, and
    disposal.
 
@@ -630,6 +699,12 @@ Only the first is blocking; the rest can be answered inside their stage.
    dependency object. It is the only real exit gate for the stage, and having it
    red from the start prevents the refactor from drifting toward a signature
    that merely compiles. A permanent context-based default remains ruled out.
+   **Amended 2026-09-17:** the test that leads has to be the *static* one — a
+   shrink-only `vscode`-import/graph guard plus a constructor-signature
+   assertion — because a runtime load test cannot pass until Stage 12 (16
+   files in the orchestrator's transitive graph still import `vscode`, all
+   owned by later stages). The test-first ordering is unchanged; only the form
+   of the test is.
 2. **`DashboardHostActions` shape.** The sketch has four methods. Confirm
    against the actual VS Code-only router call sites that this is sufficient and
    that nothing generic (a command-ID passthrough) creeps back in.
