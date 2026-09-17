@@ -46,6 +46,40 @@ const ADAPTER_UI_NAMES = new Set([
 
 const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
+// Phase 1 steps 2, 3, 4, 5, 8, and 9 progressively shrink this graph;
+// later phases remove the remaining downstream VS Code importers.
+const vscodeImportersReachableFromOrchestrator = 13;
+
+const vscodeImporterFilesReachableFromOrchestrator = [
+  "src/core/WorkflowOrchestrator.ts",
+  "src/core/orchestration/ExecutionRootCoordinationWatchSession.ts",
+  "src/core/orchestration/ExternalRunWatchSession.ts",
+  "src/core/orchestration/PromptFileWatcher.ts",
+  "src/core/orchestration/WorkflowCommandHandler.ts",
+  "src/platform/VsCodeAdapter.ts",
+  "src/platform/VsCodeSecretStore.ts",
+  "src/platform/VsCodeWorkspaceRoot.ts",
+  "src/ui/ExternalFileTrustPrompt.ts",
+  "src/ui/StatusBarManager.ts",
+  "src/utils/AttachmentBuilders.ts",
+  "src/utils/Log.ts",
+  "src/utils/ModelRegistry.ts",
+] as const;
+
+// Phase 1 step 5 removes the orchestrator's direct vscode import.
+const orchestratorDirectVsCodeImports = 1;
+
+// Phase 1 step 2 removes the orchestrator's vscode.ExtensionContext
+// constructor parameter.
+const orchestratorVsCodeConstructorParams = 1;
+
+// Already clean; this guard prevents WorkflowInstance.ts from regressing.
+const workflowInstanceDirectVsCodeImports = 0;
+
+// Phase 1 step 2 leaves one construction in TemplateManager.ts; Phase 3
+// removes that final core construction.
+const coreVsCodeAdapterConstructions = 7;
+
 interface SourceAuditSite {
   file: string;
   line: number;
@@ -178,6 +212,10 @@ interface ParsedProductionSource {
 let parsedProductionSources:
   { repoRoot: string; sources: ParsedProductionSource[] } | undefined;
 
+let orchestratorValueImportGraph:
+  | { repoRoot: string; files: readonly ParsedProductionSource[] }
+  | undefined;
+
 function getParsedProductionSources(
   repoRoot: string
 ): ParsedProductionSource[] {
@@ -197,6 +235,211 @@ function getParsedProductionSources(
   }));
   parsedProductionSources = { repoRoot, sources };
   return sources;
+}
+
+function resolveRelativeProductionImport(
+  source: ParsedProductionSource,
+  specifier: string,
+  sourceByPath: ReadonlyMap<string, ParsedProductionSource>
+): ParsedProductionSource | undefined {
+  const basePath = path.resolve(
+    path.dirname(source.sourceFile.fileName),
+    specifier
+  );
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    path.join(basePath, "index.ts"),
+    path.join(basePath, "index.tsx"),
+  ];
+
+  for (const candidate of candidates) {
+    const resolved = sourceByPath.get(path.normalize(candidate));
+    if (resolved) return resolved;
+  }
+
+  return undefined;
+}
+
+function isValueImport(node: ts.ImportDeclaration): boolean {
+  const importClause = node.importClause;
+  if (!importClause || !importClause.isTypeOnly) {
+    if (
+      importClause?.namedBindings &&
+      ts.isNamedImports(importClause.namedBindings) &&
+      importClause.namedBindings.elements.length > 0 &&
+      importClause.namedBindings.elements.every(
+        (specifier) => specifier.isTypeOnly
+      )
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function getOrchestratorValueImportGraph(
+  repoRoot: string
+): readonly ParsedProductionSource[] {
+  if (orchestratorValueImportGraph?.repoRoot === repoRoot) {
+    return orchestratorValueImportGraph.files;
+  }
+
+  const sources = getParsedProductionSources(repoRoot);
+  const sourceByPath = new Map(
+    sources.map((source) => [
+      path.normalize(source.sourceFile.fileName),
+      source,
+    ])
+  );
+  const orchestrator = sources.find(
+    (source) => source.relativeFile === "src/core/WorkflowOrchestrator.ts"
+  );
+  if (!orchestrator) {
+    throw new Error("WorkflowOrchestrator.ts was not found");
+  }
+
+  const reachable = new Set<ParsedProductionSource>([orchestrator]);
+  const pending = [orchestrator];
+  while (pending.length > 0) {
+    const source = pending.pop();
+    if (!source) continue;
+    const currentSource = source;
+
+    function visit(node: ts.Node): void {
+      if (
+        ts.isImportDeclaration(node) &&
+        isValueImport(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.startsWith(".")
+      ) {
+        const imported = resolveRelativeProductionImport(
+          currentSource,
+          node.moduleSpecifier.text,
+          sourceByPath
+        );
+        if (imported && !reachable.has(imported)) {
+          reachable.add(imported);
+          pending.push(imported);
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+
+    visit(source.sourceFile);
+  }
+
+  const files = [...reachable].sort((left, right) =>
+    left.relativeFile.localeCompare(right.relativeFile)
+  );
+  orchestratorValueImportGraph = { repoRoot, files };
+  return files;
+}
+
+function importsVscode(source: ParsedProductionSource): boolean {
+  let found = false;
+  function visit(node: ts.Node): void {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === "vscode"
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source.sourceFile);
+  return found;
+}
+
+function collectDirectVscodeImports(
+  repoRoot: string,
+  relativeFile: string
+): number {
+  const source = getParsedProductionSources(repoRoot).find(
+    (candidate) => candidate.relativeFile === relativeFile
+  );
+  if (!source) throw new Error(`${relativeFile} was not found`);
+
+  let count = 0;
+  function visit(node: ts.Node): void {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === "vscode"
+    ) {
+      count++;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source.sourceFile);
+  return count;
+}
+
+function isVscodeOrExtensionContextType(type: ts.TypeNode): boolean {
+  if (!ts.isTypeReferenceNode(type)) return false;
+
+  const typeName = type.typeName;
+  if (ts.isIdentifier(typeName)) {
+    return typeName.text === "ExtensionContext";
+  }
+
+  return (
+    ts.isQualifiedName(typeName) &&
+    ts.isIdentifier(typeName.left) &&
+    typeName.left.text === "vscode"
+  );
+}
+
+function collectOrchestratorVsCodeConstructorParams(repoRoot: string): number {
+  const source = getParsedProductionSources(repoRoot).find(
+    (candidate) => candidate.relativeFile === "src/core/WorkflowOrchestrator.ts"
+  );
+  if (!source) throw new Error("WorkflowOrchestrator.ts was not found");
+
+  let count = 0;
+  function visit(node: ts.Node): void {
+    if (
+      ts.isClassDeclaration(node) &&
+      node.name?.text === "WorkflowOrchestrator"
+    ) {
+      for (const member of node.members) {
+        if (!ts.isConstructorDeclaration(member)) continue;
+        count += member.parameters.filter(
+          (parameter) =>
+            parameter.type !== undefined &&
+            isVscodeOrExtensionContextType(parameter.type)
+        ).length;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source.sourceFile);
+  return count;
+}
+
+function collectCoreVsCodeAdapterConstructions(repoRoot: string): number {
+  let count = 0;
+  for (const source of getParsedProductionSources(repoRoot)) {
+    if (!source.relativeFile.startsWith("src/core/")) continue;
+
+    function visit(node: ts.Node): void {
+      if (
+        ts.isNewExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "VsCodeAdapter"
+      ) {
+        count++;
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(source.sourceFile);
+  }
+  return count;
 }
 
 function collectCallSites(
@@ -236,6 +479,26 @@ function collectCallSites(
   return sites;
 }
 
+function assertShrinkOnlyCount(
+  label: string,
+  count: number,
+  baseline: number,
+  details = ""
+): void {
+  if (count > baseline) {
+    throw new Error(
+      `${label} count grew from ${baseline} to ${count}. ` + details
+    );
+  }
+
+  if (count < baseline) {
+    throw new Error(
+      `${label} count shrank from ${baseline} to ${count}. ` +
+        `Lower the committed baseline to ${count}.`
+    );
+  }
+}
+
 function assertShrinkOnly(
   label: string,
   sites: SourceAuditSite[],
@@ -260,8 +523,55 @@ function assertShrinkOnly(
   }
 }
 
-suite("source audit counters", () => {
+suite("SourceAuditCounters", () => {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
+
+  test("holds the orchestrator's transitive VS Code import graph baseline", function () {
+    const reachableImporters = getOrchestratorValueImportGraph(repoRoot)
+      .filter(importsVscode)
+      .map((source) => source.relativeFile)
+      .sort();
+
+    assertShrinkOnlyCount(
+      "Orchestrator transitive vscode-importer",
+      reachableImporters.length,
+      vscodeImportersReachableFromOrchestrator,
+      "Update the baseline only when the owning phase removes an importer."
+    );
+    assert.deepStrictEqual(
+      reachableImporters,
+      vscodeImporterFilesReachableFromOrchestrator
+    );
+  });
+
+  test("holds the orchestrator direct VS Code boundary baselines", function () {
+    assertShrinkOnlyCount(
+      "Orchestrator direct vscode import",
+      collectDirectVscodeImports(repoRoot, "src/core/WorkflowOrchestrator.ts"),
+      orchestratorDirectVsCodeImports
+    );
+    assertShrinkOnlyCount(
+      "Orchestrator VS Code constructor parameter",
+      collectOrchestratorVsCodeConstructorParams(repoRoot),
+      orchestratorVsCodeConstructorParams
+    );
+  });
+
+  test("holds the workflow instance direct VS Code import baseline", function () {
+    assertShrinkOnlyCount(
+      "WorkflowInstance direct vscode import",
+      collectDirectVscodeImports(repoRoot, "src/core/WorkflowInstance.ts"),
+      workflowInstanceDirectVsCodeImports
+    );
+  });
+
+  test("holds the core VS Code adapter construction baseline", function () {
+    assertShrinkOnlyCount(
+      "Core VsCodeAdapter construction",
+      collectCoreVsCodeAdapterConstructions(repoRoot),
+      coreVsCodeAdapterConstructions
+    );
+  });
 
   test("holds the direct show*Message boundary and reusable baselines", function () {
     const sites = collectCallSites(repoRoot, isVscodeWindowMessageCall);

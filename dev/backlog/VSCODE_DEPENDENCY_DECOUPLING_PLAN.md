@@ -432,15 +432,17 @@ Notes on the merges:
 
 1. Define shared and VS Code-only path groups.
 2. Add lint/source-audit rules that reject `vscode` imports in shared groups.
-3. Add an explicit temporary allowlist matching this audit. **Still open** —
-   this is the `vscode`-import allowlist for items 1–2, which Stage A
-   deliberately did not build. **Scheduled 2026-09-17 as the first Phase 1
-   step**, in the form the stage actually needs: a shrink-only
-   transitive-import-graph counter rooted at `WorkflowOrchestrator.ts`
-   (baseline 13 `vscode`-importing files, measured 2026-09-17), sitting beside the existing
-   counters in `src/test/unit/SourceAuditCounters.test.ts`. It must ignore
-   `import type` edges, which are erased at runtime — `CliIntegration.ts`
-   reaches `VsCodeAdapter` only that way.
+3. **DONE —** Add an explicit temporary allowlist matching this audit. The
+   shrink-only transitive-import-graph guard rooted at
+   `WorkflowOrchestrator.ts` is in
+   `src/test/unit/SourceAuditCounters.test.ts`, using the named baselines
+   `vscodeImportersReachableFromOrchestrator` (13 files),
+   `orchestratorDirectVsCodeImports` (1),
+   `orchestratorVsCodeConstructorParams` (1),
+   `workflowInstanceDirectVsCodeImports` (0), and
+   `coreVsCodeAdapterConstructions` (7). The graph ignores `import type`
+   edges, which are erased at runtime — `CliIntegration.ts` reaches
+   `VsCodeAdapter` only that way.
 4. Make the allowlist shrink-only.
 5. Add a bundle/metafile check for the Node server entry graph.
 6. **DONE —** Add a **shrink-only counter for adapter-mediated host UI** —
@@ -465,6 +467,15 @@ This lands before refactoring so the measured baseline cannot grow.
 list cited line numbers from an older tree, undercounted the adapter
 constructions, and stopped short of the seams that actually hold the `vscode`
 import in place.
+
+The test-first host-boundary guard is now in place in
+`src/test/unit/SourceAuditCounters.test.ts`. Phase 1 step 2 removes the
+`orchestratorVsCodeConstructorParams` baseline and reduces
+`coreVsCodeAdapterConstructions` from 7 to 1; step 5 removes the
+`orchestratorDirectVsCodeImports` baseline. Steps 2–5, 8, and 9 progressively
+shrink `vscodeImportersReachableFromOrchestrator`; Phase 2 and later stages
+remove the remaining importers. The `workflowInstanceDirectVsCodeImports`
+baseline is already zero and guards against regression.
 
 1. Replace
    `WorkflowOrchestrator(context, dashboardProvider, userFeedbackSink, runnerHostIdentity, licenseService, userInteractionPort)`
