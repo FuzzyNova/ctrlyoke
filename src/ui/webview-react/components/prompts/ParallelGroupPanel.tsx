@@ -190,6 +190,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
     setNodeRef,
     transform,
     transition,
+    isSorting,
     isDragging,
   } = useSortable({
     id: containerId ?? groupDragId(group.id),
@@ -248,7 +249,10 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         transform: transform
           ? `translate3d(0, ${transform.y}px, 0)`
           : undefined,
-        transition,
+        // Only while the drag is in flight — see the matching comment in
+        // `SortableWorkflowStepWrapper` for why a transition that outlives the
+        // drag animates the drop backwards instead of letting it land.
+        transition: isSorting ? transition : undefined,
         opacity: isDragging ? 0.5 : 1,
       }}
       className="group/parallel relative mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"

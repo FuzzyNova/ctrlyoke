@@ -226,6 +226,16 @@ WorkflowStepRow.displayName = "WorkflowStepRow";
  * share was invisible until it was a bug: the running outline lived only in
  * the sortable wrapper, so a group member still executing behind the
  * done/pending boundary was drawn with no outline at all.
+ *
+ * `displacementStyle` is how a drag displacement reaches the rail and number
+ * columns. It has to be applied to each of the three columns *separately*,
+ * never to this wrapper, because the body is the element dnd-kit registers as
+ * a droppable and it measures droppables with `getTransformAgnosticClientRect`
+ * — which inverts an element's **own** computed transform and nothing else. A
+ * transform on the wrapper is an *ancestor* transform to the body, so it stays
+ * baked into `getBoundingClientRect()` and silently shifts every measured rect
+ * the collision rules depend on. Hoisting it here would be the obvious tidy-up
+ * and it would break dragging outright, which is exactly why it is spelled out.
  */
 export function WorkflowStepRowFrame({
   index,
@@ -236,6 +246,7 @@ export function WorkflowStepRowFrame({
   showPauseBoundaryBefore = false,
   bodyRef,
   bodyStyle,
+  displacementStyle,
   children,
 }: {
   index: number;
@@ -246,6 +257,11 @@ export function WorkflowStepRowFrame({
   showPauseBoundaryBefore?: boolean;
   bodyRef?: (node: HTMLElement | null) => void;
   bodyStyle?: React.CSSProperties;
+  /**
+   * The row's current drag displacement (`transform`/`transition` only), also
+   * applied to the rail and number so the whole row travels as one piece.
+   */
+  displacementStyle?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   return (
@@ -257,9 +273,16 @@ export function WorkflowStepRowFrame({
       {/* Keep the identity rail separate from the consistently sized number column. */}
       <div
         className={`w-[2px] flex-shrink-0 self-stretch ${stepColor ? "" : getStepAccentClass(status)}`}
-        style={stepColor ? { backgroundColor: stepColor } : undefined}
+        style={
+          stepColor
+            ? { backgroundColor: stepColor, ...displacementStyle }
+            : displacementStyle
+        }
       />
-      <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
+      <div
+        className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none"
+        style={displacementStyle}
+      >
         {slotNumber}
       </div>
       {isCurrent && <ExecutingStepHighlight />}
@@ -291,13 +314,23 @@ export const SortableWorkflowStepWrapper = React.memo(
       setNodeRef,
       transform,
       transition,
+      isSorting,
       isDragging,
     } = useSortable({ id, disabled });
-    const style = {
+    // The transition is kept only while a drag is actually in flight. dnd-kit
+    // drops `transform` to null the instant the drag ends, and hands back the
+    // 200ms transform transition in that very same render — `getTransition`
+    // falls through to `shouldAnimateLayoutChanges`, which outlives the drag by
+    // ~50ms. The row therefore animates from its discarded displacement back to
+    // the slot the live preview had already put it in: the drop visibly flying
+    // back instead of landing. It is intermittent because that flag hinges on
+    // the item/index bookkeeping of the particular drop. Gating on `isSorting`
+    // leaves the in-drag slide untouched and makes the release itself instant.
+    const displacementStyle = {
       transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
-      transition,
-      opacity: isDragging ? 0.5 : 1,
+      transition: isSorting ? transition : undefined,
     };
+    const style = { ...displacementStyle, opacity: isDragging ? 0.5 : 1 };
     const harnessModel = stepItemProps.getStepHarnessModel(
       stepItemProps.step,
       stepItemProps.status
@@ -326,6 +359,7 @@ export const SortableWorkflowStepWrapper = React.memo(
         showPauseBoundaryBefore={showPauseBoundaryBefore}
         bodyRef={setNodeRef}
         bodyStyle={style}
+        displacementStyle={displacementStyle}
       >
         <WorkflowStepRow
           {...stepItemProps}
