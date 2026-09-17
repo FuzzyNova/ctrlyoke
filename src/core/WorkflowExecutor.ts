@@ -397,11 +397,9 @@ export class WorkflowExecutor {
   private readonly targetExecutionErrors = new Map<string, unknown>();
   private readonly scriptExecutionReporter: ScriptExecutionReporter;
   private activeParallelGroupRun:
-    | ParallelGroupRun<WorkflowExecutionContext>
-    | undefined;
+    ParallelGroupRun<WorkflowExecutionContext> | undefined;
   private activeParallelGroupPreflightMembers:
-    | Map<number, ParallelGroupPreflightMember>
-    | undefined;
+    Map<number, ParallelGroupPreflightMember> | undefined;
   private parallelGroupJoinQueue: Promise<void> = Promise.resolve();
   /**
    * The context and snapshot strategy of the execution currently draining the
@@ -835,8 +833,7 @@ export class WorkflowExecutor {
           }
         ),
       finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
-        | string
-        | undefined,
+        string | undefined,
     };
   }
 
@@ -2214,8 +2211,7 @@ export class WorkflowExecutor {
             : {}),
           secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-            | string
-            | undefined,
+            string | undefined,
         },
         async () => {
           if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -4015,12 +4011,10 @@ export class WorkflowExecutor {
         signedStepIndex !== undefined
       ) {
         context.captureChunk?.(signedStepIndex, chunk);
-        if (
-          !(
-            context.historyFilePath &&
-            context.outputHistoryManager?.hasOutputActivityHandler()
-          )
-        ) {
+        if (!(
+          context.historyFilePath &&
+          context.outputHistoryManager?.hasOutputActivityHandler()
+        )) {
           context.dashboardProvider?.updateCliStreamingChunk(
             signedStepIndex,
             chunk
@@ -4028,12 +4022,10 @@ export class WorkflowExecutor {
         }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepChunk?.(target.loopIndex, chunk);
-        if (
-          !(
-            context.historyFilePath &&
-            context.outputHistoryManager?.hasOutputActivityHandler()
-          )
-        ) {
+        if (!(
+          context.historyFilePath &&
+          context.outputHistoryManager?.hasOutputActivityHandler()
+        )) {
           context.dashboardProvider?.updateFinalStepStreamingChunk(
             target.loopIndex,
             chunk
@@ -4067,12 +4059,10 @@ export class WorkflowExecutor {
         signedStepIndex !== undefined
       ) {
         context.captureEvents?.(signedStepIndex, events);
-        if (
-          !(
-            context.historyFilePath &&
-            context.outputHistoryManager?.hasOutputActivityHandler()
-          )
-        ) {
+        if (!(
+          context.historyFilePath &&
+          context.outputHistoryManager?.hasOutputActivityHandler()
+        )) {
           context.dashboardProvider?.updateCliStreamingEvents(
             signedStepIndex,
             events,
@@ -4083,12 +4073,10 @@ export class WorkflowExecutor {
         }
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepEvents?.(target.loopIndex, events);
-        if (
-          !(
-            context.historyFilePath &&
-            context.outputHistoryManager?.hasOutputActivityHandler()
-          )
-        ) {
+        if (!(
+          context.historyFilePath &&
+          context.outputHistoryManager?.hasOutputActivityHandler()
+        )) {
           context.dashboardProvider?.updateFinalStepStreamingEvents(
             target.loopIndex,
             events,
@@ -4310,8 +4298,7 @@ export class WorkflowExecutor {
             : {}),
           secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-            | string
-            | undefined,
+            string | undefined,
         },
         undefined,
         TIMELINE_ATTEMPT_START_REASONS.RETRY

@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FallbackSecretStore } from "../../platform/FallbackSecretStore";
-import { SecretStoreUnavailableError, type SecretStore } from "../../platform/SecretStore";
+import {
+  SecretStoreUnavailableError,
+  type SecretStore,
+} from "../../platform/SecretStore";
 
 class InMemorySecretStore implements SecretStore {
   callCount = 0;
@@ -103,11 +106,7 @@ suite("FallbackSecretStore", () => {
     const fallback = new InMemorySecretStore();
     const store = new FallbackSecretStore(primary, fallback);
 
-    await Promise.all([
-      store.get("a"),
-      store.get("b"),
-      store.store("c", "1"),
-    ]);
+    await Promise.all([store.get("a"), store.get("b"), store.store("c", "1")]);
 
     assert.strictEqual(primary.probeCount, 1);
   });
