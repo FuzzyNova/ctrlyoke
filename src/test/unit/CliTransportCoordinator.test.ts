@@ -20,6 +20,48 @@ async function resolveCommand(command: string, args: string[]) {
   };
 }
 
+function createHeadlessProvider(): ICliProvider {
+  return {
+    config: {
+      name: "test-cli",
+      displayName: "Test CLI",
+      terminalName: "Test",
+      installHint: "",
+      shouldStreamHeadlessOutput: false,
+    },
+    notificationMonitor: {
+      supportsSessionIdInFilename: true,
+      supportsSessionStart: false,
+      monitorForCompletion: async () => ({ completed: false }),
+      buildHookConfig: () => ({ type: "none" as const }),
+      getNotificationDirectory: () => process.cwd(),
+    },
+    toolPermissionMapper: {},
+    buildCliArgs: async () => [],
+    buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+      ...baseArgs,
+      prompt,
+    ],
+    buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+      promptText,
+      ...baseArgs,
+    ],
+    checkAvailability: async () => true,
+  } as unknown as ICliProvider;
+}
+
+function createHeadlessHostCallbacks() {
+  return {
+    onBeforeInteractiveStart: () => {},
+    onCommandPrepared: () => {},
+    onStreamingChunk: () => {},
+    onStreamingEvents: () => {},
+    onResponseComplete: () => {},
+    onPtyExit: () => {},
+    cleanupTempFiles: async () => {},
+  };
+}
+
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
@@ -216,6 +258,7 @@ line two`,
     let callbackResult:
       { stdout: string; stderr: string; exitCode: number } | undefined;
     const cleanedTempPaths: string[][] = [];
+    let cancelling = false;
 
     const coordinator = new CliTransportCoordinator({
       provider: {
@@ -246,17 +289,23 @@ line two`,
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
-        spawn: async () => ({
-          stdout: '{"partial":true}\n',
-          stderr: "",
-          exitCode: 1,
-        }),
+        spawn: async () => {
+          // The Stop arrives while the process is running, which is the only
+          // way a cancel reaches this branch — a cancel that lands *before* the
+          // spawn is refused outright (see the pre-spawn gate test below).
+          cancelling = true;
+          return {
+            stdout: '{"partial":true}\n',
+            stderr: "",
+            exitCode: 1,
+          };
+        },
         isActive: () => false,
       } as any,
       resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
-        isCancelling: () => true,
+        isCancelling: () => cancelling,
       },
       hostCallbacks: {
         onBeforeInteractiveStart: () => {},
@@ -941,5 +990,128 @@ line two`,
     }
     assert.strictEqual(disposedProcess, true);
     assert.strictEqual(responseCompleted, "Interactive session ended");
+  });
+
+  test("should refuse to spawn when cancellation lands while the log tail starts", async () => {
+    // The gap between preparing a prompt and owning a process is where a Stop
+    // does the most damage: `cancel()` sees no process, so it retires the
+    // workflow instance at once. A spawn after that point belongs to nobody —
+    // it keeps editing the workspace and delivers its completion to whichever
+    // instance is live by then.
+    let spawnCalls = 0;
+    let callbackCalls = 0;
+    let aborted = false;
+    let cancelling = false;
+    const source = {
+      parser: {} as any,
+      mode: "log" as const,
+      logTail: {
+        start: async () => {
+          cancelling = true;
+        },
+        abort: () => {
+          aborted = true;
+        },
+        finish: async () => ({ events: [] }),
+        onStdoutChunk: () => {},
+      } as any,
+    };
+
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {
+        spawn: async () => {
+          spawnCalls += 1;
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => cancelling,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    const success = await coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => {
+        callbackCalls += 1;
+        return true;
+      },
+      undefined,
+      source
+    );
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(
+      spawnCalls,
+      0,
+      "no process may be launched after a stop"
+    );
+    assert.strictEqual(callbackCalls, 0);
+    assert.strictEqual(aborted, true, "the tail's discovery must be aborted");
+  });
+
+  test("should abort the in-flight headless log tail on cancel", async () => {
+    // Session-log discovery retries for minutes and is the one part of a
+    // headless run already working before a process exists, so `cancel()` is
+    // the only thing that can stop it.
+    let aborted = false;
+    let releaseSpawn: () => void = () => {};
+    const spawnBlocked = new Promise<void>((resolve) => {
+      releaseSpawn = resolve;
+    });
+    const source = {
+      parser: {} as any,
+      mode: "log" as const,
+      logTail: {
+        start: async () => {},
+        abort: () => {
+          aborted = true;
+        },
+        finish: async () => ({ events: [] }),
+        onStdoutChunk: () => {},
+      } as any,
+    };
+
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {
+        spawn: async () => {
+          await spawnBlocked;
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    const execution = coordinator.executeHeadless(
+      [],
+      "prompt",
+      [],
+      async () => true,
+      undefined,
+      source
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    // `isActive()` is false here, which is exactly the case that used to leave
+    // discovery running: the caller is told there was no process to kill.
+    const hadActiveProcess = await coordinator.cancel();
+    assert.strictEqual(hadActiveProcess, false);
+    assert.strictEqual(aborted, true);
+
+    releaseSpawn();
+    await execution;
   });
 });

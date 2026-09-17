@@ -290,10 +290,134 @@ suite("HeadlessLogTail", () => {
     });
 
     await tail.start();
+    await waitFor(1);
 
     assert.strictEqual(fake.discoveryArguments.length, 1);
     assert.strictEqual(fake.discoveryArguments[0].sessionId, "resumed-session");
     await tail.finish();
+  });
+
+  test("does not block the spawn on a resumed session's initial read", async () => {
+    // A resumed session's log can only be touched once the harness relaunches,
+    // and Codex's discovery helper insists the file be newer than startTime —
+    // so awaiting the initial read polls out the parser's whole retry budget
+    // (~3 minutes observed) while the caller waits to spawn the very process
+    // that would satisfy it. This test hangs rather than fails on regression:
+    // discovery never resolves until the assertions have run.
+    let discoveryStarted = false;
+    let releaseDiscovery: () => void = () => {};
+    const blockedDiscovery = new Promise<string>((resolve) => {
+      releaseDiscovery = () => resolve("session.log");
+    });
+    const parser = {
+      discoverSessionLog: () => {
+        discoveryStarted = true;
+        return blockedDiscovery;
+      },
+      readNewLines: async () => [],
+      extractTimestamp: () => null,
+      extractSessionId: () => null,
+      extractStructuredEventsFromEvent: () => [],
+    } as unknown as ILogParser;
+
+    const tail = new HeadlessLogTail({
+      parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      resolvedSessionId: "resumed-session",
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    await waitFor(1);
+
+    assert.strictEqual(
+      discoveryStarted,
+      true,
+      "the initial read should still be queued, just not awaited"
+    );
+
+    releaseDiscovery();
+    await tail.finish();
+  });
+
+  test("aborts session-log discovery when the run is abandoned", async () => {
+    // Regression: a stopped run's discovery kept retrying for two minutes past
+    // the workflow instance that owned it, and the process it was waiting for
+    // then launched with no owner — editing the workspace alongside the next
+    // run and delivering its completion to whatever instance was live.
+    const signals: Array<AbortSignal | undefined> = [];
+    const parser = {
+      discoverSessionLog: (
+        _prompt: string,
+        _start: Date,
+        _sessionId?: string,
+        signal?: AbortSignal
+      ) =>
+        new Promise<string | null>((resolve) => {
+          signals.push(signal);
+          signal?.addEventListener("abort", () => resolve(null), {
+            once: true,
+          });
+        }),
+      readNewLines: async () => [],
+      extractTimestamp: () => null,
+      extractSessionId: () => null,
+      extractStructuredEventsFromEvent: () => [],
+    } as unknown as ILogParser;
+
+    const tail = new HeadlessLogTail({
+      parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      resolvedSessionId: "resumed-session",
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    await waitFor(1);
+    assert.strictEqual(signals.length, 1);
+    assert.strictEqual(signals[0]?.aborted, false);
+
+    tail.abort();
+    assert.strictEqual(signals[0]?.aborted, true);
+
+    // finish() must not re-open discovery for an abandoned run, or the abort
+    // buys nothing: the post-exit read would start a fresh retry budget.
+    const result = await tail.finish();
+    assert.strictEqual(signals.length, 1);
+    assert.strictEqual(result.logPath, undefined);
+  });
+
+  test("gives the post-exit read a fresh budget on a normal exit", async () => {
+    const event = { type: "text", text: "after exit" };
+    const fake = createParser({
+      discoveries: [null, "session.log"],
+      reads: [[event]],
+    });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      resolvedSessionId: "resumed-session",
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    await waitFor(1);
+    const result = await tail.finish();
+
+    assert.deepStrictEqual(result.events, [event]);
+    assert.strictEqual(result.logPath, "session.log");
   });
 
   test("does not block process startup while waiting for a stdout session ID", async () => {

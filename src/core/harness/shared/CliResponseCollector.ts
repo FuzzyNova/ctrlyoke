@@ -15,9 +15,43 @@ import { secretRedactionService } from "../../../utils/SecretRedactionService";
 import {
   resolveHeadlessSourceMode,
   type HeadlessLogTail,
+  type HeadlessProcessResult,
 } from "./HeadlessLogTail";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import type { BaseCliEvent } from "./interfaces/ILogParser";
+
+/**
+ * Tokens that make an stderr line a diagnostic rather than chatter. A line
+ * carrying one of these is always kept, whatever else it looks like.
+ */
+const STDERR_DIAGNOSTIC_TOKEN_PATTERN =
+  /\b(?:error|fatal|panic|exception|failed|failure|denied|refused|unauthorized|forbidden|not found|timed out|cannot|unable)\b/iu;
+
+/**
+ * stderr lines that report progress rather than a reason for failure.
+ *
+ * Harness CLIs narrate their own startup on stderr, so a process that was
+ * killed (or died before producing any real diagnostic) often leaves *nothing
+ * but* chatter there — and using it verbatim produced the failure message
+ * "Reading additional input from stdin..." for a process ctrlyoke itself
+ * terminated. This stays a denylist on purpose: an unrecognized stderr line is
+ * assumed diagnostic and kept, because a bare "Process exited with code 1" is
+ * undiagnosable.
+ */
+const STDERR_NOISE_PATTERNS: readonly RegExp[] = [
+  // Codex writes this whenever its stdin is the NUL handle, which is exactly
+  // how every headless harness is spawned (`CliProcessManager`'s
+  // `stdin: "ignore"` default).
+  /^reading additional input from stdin/iu,
+  // Generic progress narration: a trailing ellipsis and no diagnostic token.
+  /\.\.\.$/u,
+];
+
+/** Newest stderr lines kept in a process-exit failure message. */
+const STDERR_FAILURE_MAX_LINES = 8;
+
+/** Character cap on the stderr detail carried in a failure message. */
+const STDERR_FAILURE_MAX_LENGTH = 600;
 
 export interface CliResponseCollectorDeps {
   provider: Pick<
@@ -47,18 +81,16 @@ export interface CollectedHeadlessResponse {
 export class CliResponseCollector {
   constructor(private readonly deps: CliResponseCollectorDeps) {}
 
-  async collectHeadlessResponse(params: {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-    promptForSessionLog: string;
-    executionStartTime: Date;
-    resolvedSessionId?: string;
-    label?: string;
-    model?: string;
-    workspaceRoot?: string;
-    headlessLogTail?: HeadlessLogTail;
-  }): Promise<CollectedHeadlessResponse> {
+  async collectHeadlessResponse(
+    params: HeadlessProcessResult & {
+      promptForSessionLog: string;
+      executionStartTime: Date;
+      resolvedSessionId?: string;
+      label?: string;
+      model?: string;
+      workspaceRoot?: string;
+    }
+  ): Promise<CollectedHeadlessResponse> {
     this.deps.provider.logParser?.setCurrentModel?.(params.model ?? "");
     let parsedOutput = this.parseHeadlessOutput(params);
 
@@ -197,17 +229,37 @@ export class CliResponseCollector {
   }
 
   private getHeadlessFailure(
-    params: { stdout: string; stderr: string; exitCode: number },
+    params: {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+      terminationSignal?: NodeJS.Signals;
+    },
     parsedOutput: UniversalCliOutput
   ): { kind: FailureKind; message: string } | undefined {
     const stderr = sanitizeTerminalOutput(
       secretRedactionService.redactText(params.stderr)
     ).trim();
 
+    // A killed process never reported a reason of its own — the exit code is
+    // synthetic and stderr holds only whatever it happened to be narrating.
+    // Classifying this as a harness failure invites a retry of something that
+    // did not fail on its own terms.
+    if (params.terminationSignal) {
+      return {
+        kind: FAILURE_KINDS.USER_CANCELLED,
+        message: `Harness process was terminated (${params.terminationSignal})`,
+      };
+    }
+
     if (params.exitCode !== 0) {
+      if (stderr) {
+        Log.warn(`[CliResponseCollector] Headless stderr:\n${stderr}`);
+      }
+      const detail = this.summarizeStderr(stderr);
       return {
         kind: FAILURE_KINDS.PROCESS_EXIT,
-        message: stderr || `Process exited with code ${params.exitCode}`,
+        message: detail || `Process exited with code ${params.exitCode}`,
       };
     }
 
@@ -222,6 +274,41 @@ export class CliResponseCollector {
     return this.looksLikeCliInvocationError(stderr)
       ? { kind: FAILURE_KINDS.UNKNOWN, message: stderr }
       : undefined;
+  }
+
+  /**
+   * Reduce stderr to the part that explains a non-zero exit, or nothing.
+   *
+   * Returning `undefined` is a real answer: the caller then reports the exit
+   * code alone, which is more honest than quoting a progress line as the cause
+   * of death. The full stderr is logged either way, so nothing is lost for
+   * diagnosis.
+   */
+  private summarizeStderr(stderr: string): string | undefined {
+    if (!stderr) {
+      return undefined;
+    }
+
+    const diagnosticLines = stderr
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !this.isStderrNoise(line));
+
+    if (diagnosticLines.length === 0) {
+      return undefined;
+    }
+
+    const detail = diagnosticLines.slice(-STDERR_FAILURE_MAX_LINES).join("\n");
+    return detail.length > STDERR_FAILURE_MAX_LENGTH
+      ? `${detail.slice(0, STDERR_FAILURE_MAX_LENGTH)}…`
+      : detail;
+  }
+
+  private isStderrNoise(line: string): boolean {
+    if (STDERR_DIAGNOSTIC_TOKEN_PATTERN.test(line)) {
+      return false;
+    }
+    return STDERR_NOISE_PATTERNS.some((pattern) => pattern.test(line));
   }
 
   private looksLikeCliInvocationError(stderr: string): boolean {

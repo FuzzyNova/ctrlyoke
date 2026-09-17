@@ -230,6 +230,70 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "process crashed");
   });
 
+  test("should classify a killed process as cancellation, not a harness failure", async () => {
+    // Regression: ctrlyoke's own teardown SIGKILLed a running harness, Node
+    // reported exit code null (coalesced to 1), and the step was reported as
+    // "Process exited unexpectedly" with whatever chatter was on stderr as the
+    // reason — inviting a retry of something that never failed on its own.
+    const result = await createCollector(
+      createProvider({ events: [], metadata: {} })
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: "Reading additional input from stdin...",
+      exitCode: 1,
+      terminationSignal: "SIGKILL",
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.USER_CANCELLED);
+    assert.strictEqual(
+      result.failureMessage,
+      "Harness process was terminated (SIGKILL)"
+    );
+  });
+
+  test("should not quote stderr progress chatter as the reason a process exited", async () => {
+    // "Reading additional input from stdin..." is what Codex prints whenever
+    // its stdin is the NUL handle — i.e. on every headless run. It says
+    // nothing about why the process ended, so the exit code is the honest
+    // answer. The full stderr still reaches the log.
+    const result = await createCollector(
+      createProvider({ events: [], metadata: {} })
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: "Reading additional input from stdin...\nWorking...",
+      exitCode: 1,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(result.failureMessage, "Process exited with code 1");
+  });
+
+  test("should keep a diagnostic line that sits among stderr chatter", async () => {
+    const result = await createCollector(
+      createProvider({ events: [], metadata: {} })
+    ).collectHeadlessResponse({
+      stdout: "",
+      stderr: [
+        "Reading additional input from stdin...",
+        "error: model 'nope' is not available",
+        "Shutting down...",
+      ].join("\n"),
+      exitCode: 1,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(
+      result.failureMessage,
+      "error: model 'nope' is not available"
+    );
+  });
+
   test("should redact secret-bearing stderr while keeping the diagnostic", async () => {
     const secret = "Bearer super-secret-token";
     const loggedResponses: string[] = [];

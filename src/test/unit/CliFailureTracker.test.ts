@@ -38,6 +38,24 @@ suite("CliFailureTracker", () => {
     assert.strictEqual(tracker.getLastFailureMessage(), reason);
   });
 
+  test("should not record a terminated process as a process exit", () => {
+    // A killed process's exit code is synthetic (Node reports null), so
+    // treating it as a process exit makes a teardown look retryable.
+    const tracker = new CliFailureTracker();
+
+    const reason = tracker.markUserCancelled(
+      "Harness process was terminated (SIGKILL)"
+    );
+
+    assert.strictEqual(reason, "Harness process was terminated (SIGKILL)");
+    assert.strictEqual(
+      tracker.getLastFailureKind(),
+      FAILURE_KINDS.USER_CANCELLED
+    );
+    assert.strictEqual(tracker.wasLastFailureProcessExit(), false);
+    assert.strictEqual(tracker.getLastFailureMessage(), reason);
+  });
+
   test("should track harness errors and timeouts separately", () => {
     const tracker = new CliFailureTracker();
 

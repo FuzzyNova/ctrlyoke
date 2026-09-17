@@ -18,6 +18,7 @@ import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import {
   HeadlessLogTail,
   resolveHeadlessSourceMode,
+  type HeadlessProcessResult,
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
@@ -39,18 +40,16 @@ interface CliInteractiveStartupCoordinatorLike {
 }
 
 interface CliResponseCollectorLike {
-  collectHeadlessResponse(params: {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-    promptForSessionLog: string;
-    executionStartTime: Date;
-    resolvedSessionId?: string;
-    label?: string;
-    model?: string;
-    workspaceRoot?: string;
-    headlessLogTail?: HeadlessLogTail;
-  }): Promise<CollectedHeadlessResponse>;
+  collectHeadlessResponse(
+    params: HeadlessProcessResult & {
+      promptForSessionLog: string;
+      executionStartTime: Date;
+      resolvedSessionId?: string;
+      label?: string;
+      model?: string;
+      workspaceRoot?: string;
+    }
+  ): Promise<CollectedHeadlessResponse>;
 }
 
 export interface CliExecutionRunnerDeps {
@@ -781,12 +780,7 @@ export class CliExecutionRunner {
     session: CliExecutionSession,
     label: string = "",
     headlessLogTail?: HeadlessLogTail
-  ): (result: {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-    headlessLogTail?: HeadlessLogTail;
-  }) => Promise<boolean> {
+  ): (result: HeadlessProcessResult) => Promise<boolean> {
     const responseCollector = this.deps.factories.createResponseCollector();
 
     return async (result) => {
@@ -805,6 +799,7 @@ export class CliExecutionRunner {
         stdout: result.stdout,
         stderr: result.stderr,
         exitCode: result.exitCode,
+        terminationSignal: result.terminationSignal,
         promptForSessionLog: session.promptForSessionLog,
         executionStartTime: session.executionStartTime,
         resolvedSessionId: session.resolvedSessionId,
@@ -844,6 +839,14 @@ export class CliExecutionRunner {
               collected.failureMessage ||
                 collected.cliResult.error ||
                 "Headless CLI execution timed out"
+            )
+          );
+        } else if (collected.failureKind === FAILURE_KINDS.USER_CANCELLED) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markUserCancelled(
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                "Harness process was terminated"
             )
           );
         } else if (collected.failureKind === FAILURE_KINDS.UNKNOWN) {

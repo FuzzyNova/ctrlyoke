@@ -6,7 +6,10 @@ import {
   SESSION_KINDS,
 } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
-import type { CliProcessManager } from "../../../utils/CliProcessManager";
+import type {
+  CliProcessManager,
+  SpawnResult,
+} from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
@@ -26,6 +29,7 @@ import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes"
 import { CliLogEventPump } from "./CliLogEventPump";
 import {
   HeadlessLogTail,
+  type HeadlessProcessResult,
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 
@@ -87,12 +91,7 @@ export interface CliExecutionTransportCoordinator {
     args: string[],
     promptArgument: string,
     tempFilePaths: string[],
-    executeCallback: (result: {
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-      headlessLogTail?: HeadlessLogTail;
-    }) => Promise<boolean>,
+    executeCallback: (result: HeadlessProcessResult) => Promise<boolean>,
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
@@ -113,6 +112,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   private currentPtySession?: PtySession;
   /** ID of the last PTY spawned — persists after currentPtySession is cleared so inject-fallback suppression can find it. */
   private lastPtySessionId?: string;
+  /**
+   * Log tail of the headless run currently in flight. Held so `cancel()` can
+   * abort its session-log discovery, which is the one piece of a headless
+   * execution that keeps working when there is no process to kill yet.
+   */
+  private activeHeadlessLogTail?: HeadlessLogTail;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
@@ -395,17 +400,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     args: string[],
     promptArgument: string,
     tempFilePaths: string[],
-    executeCallback: (result: {
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-      headlessLogTail?: HeadlessLogTail;
-    }) => Promise<boolean>,
+    executeCallback: (result: HeadlessProcessResult) => Promise<boolean>,
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
     resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[]
   ): Promise<boolean> {
+    this.activeHeadlessLogTail = source?.logTail;
     try {
       if (tempFilePaths.length > 0) {
         Log.info(
@@ -441,6 +442,20 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       if (source?.logTail) {
         await source.logTail.start();
+      }
+
+      // Last gate before the process exists. A Stop that lands between prompt
+      // preparation and here sees no active process, so `cancel()` retires the
+      // workflow instance immediately — spawning anyway produces a harness
+      // process owned by nobody, which keeps editing the workspace and later
+      // delivers its completion to whichever instance happens to be live.
+      if (this.deps.runtimeState.isCancelling()) {
+        Log.info(
+          "[CliTransportCoordinator] Cancelled before spawn — not launching the CLI"
+        );
+        source?.logTail?.abort();
+        await source?.logTail?.finish();
+        return false;
       }
 
       const result = await this.spawnProcess(command.command, command.args, {
@@ -504,6 +519,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       Log.error("[CliTransportCoordinator] Headless execution error", error);
       return false;
     } finally {
+      this.activeHeadlessLogTail = undefined;
       await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
     }
   }
@@ -593,6 +609,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
   }
 
   async cancel(): Promise<boolean> {
+    // Abort first and unconditionally: session-log discovery is the one part of
+    // a headless run that is already working before the process exists, and it
+    // outlives the instance that owns it if nothing stops it. The return value
+    // still reports only on the process, because the caller uses it to decide
+    // whether to wait for a process-exit handler that will never fire here.
+    this.activeHeadlessLogTail?.abort();
+
     if (this.currentPtySession) {
       const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
       if (ptyManager) {
@@ -628,7 +651,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       onStdout?: (chunk: string) => void;
       windowsVerbatimArguments?: boolean;
     } = {}
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  ): Promise<SpawnResult> {
     const headlessEnvOverrides = this.deps.provider.getHeadlessSpawnEnv?.();
     const baseEnv = {
       ...CliProviderUtils.buildProcessEnv(),

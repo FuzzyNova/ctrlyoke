@@ -97,6 +97,18 @@ export class CliFailureTracker {
     return message;
   }
 
+  /**
+   * Record a failure that was a termination rather than a harness fault (the
+   * process was killed). Deliberately does not set `processExitTermination`:
+   * the exit code of a killed process is synthetic, so treating it as a process
+   * exit would make a teardown look like something worth retrying.
+   */
+  markUserCancelled(message: string): string {
+    this.lastFailureKind = FAILURE_KINDS.USER_CANCELLED;
+    this.lastFailureMessage = message;
+    return message;
+  }
+
   markUnknownFailure(message: string): string {
     this.lastFailureKind = FAILURE_KINDS.UNKNOWN;
     this.lastFailureMessage = message;

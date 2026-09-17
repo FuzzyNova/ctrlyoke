@@ -43,6 +43,28 @@ export interface HeadlessLogTailResult {
   logPath?: string;
 }
 
+/**
+ * One headless CLI invocation's terminal state, as it travels from the
+ * transport coordinator to the response collector.
+ *
+ * Single source for the shape: `CliTransportCoordinator` produces it,
+ * `CliExecutionRunner` forwards it, and `CliResponseCollector` classifies it.
+ * Re-declaring it at each hop lets a field be added in one place and silently
+ * dropped in transit at the next.
+ */
+export interface HeadlessProcessResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  /**
+   * Signal that terminated the process, when it was killed rather than exiting
+   * on its own. Present means `exitCode` is synthetic and says nothing about
+   * why the run ended.
+   */
+  terminationSignal?: NodeJS.Signals;
+  headlessLogTail?: HeadlessLogTail;
+}
+
 /** Source selected by the runner for a migrated headless harness. */
 export interface HeadlessStreamingSource {
   parser: ILogParser;
@@ -102,6 +124,14 @@ export class HeadlessLogTail {
   private pendingWork: Promise<void> = Promise.resolve();
   private started = false;
   private finished = false;
+  /**
+   * Cancels the parser's in-flight session-log discovery. Discovery retries for
+   * minutes by design (a harness writes its log asynchronously after launch),
+   * so nothing else can bound it.
+   */
+  private discoveryAbort = new AbortController();
+  /** True once `abort()` ran, distinguishing a cancelled run from a normal exit. */
+  private aborted = false;
 
   constructor(private readonly options: HeadlessLogTailOptions) {
     this.startTime = options.startTime;
@@ -136,11 +166,41 @@ export class HeadlessLogTail {
     // provider log lookup can only see the *previous* run in this workspace
     // (Antigravity's `last_conversations.json` cache is keyed by workspace root
     // with no timestamp), which would latch a stale session for the whole run.
-    // Ticks are driven post-spawn by stdout and the idle poll, so the only safe
-    // initial read is one where the caller already supplied the session ID.
+    // Ticks are driven post-spawn by stdout and the idle poll, so the only
+    // initial read worth attempting is one where the caller already supplied
+    // the session ID.
+    //
+    // That read is deliberately *not* awaited. A resumed session's log can only
+    // be touched once the harness relaunches, and Codex's discovery helper
+    // insists the file's mtime be newer than `startTime` — so a pre-spawn read
+    // polls itself out over the parser's full retry budget (~3 minutes
+    // observed) while the caller waits to spawn the very process that would
+    // satisfy it. Firing it here lets the queued tick win the moment the log
+    // appears, without the spawn waiting on it.
     if (this.sessionId) {
-      await this.enqueueTick("initial read");
+      void this.enqueueTick("initial read");
     }
+  }
+
+  /**
+   * Cancel session-log discovery and stop polling, permanently.
+   *
+   * Called when the run this tails is abandoned (user Stop). Without it a
+   * cancelled run's discovery keeps retrying long after the workflow instance
+   * has been retired, and `finish()` would block on that retry budget before
+   * it could report anything.
+   */
+  abort(): void {
+    if (this.aborted) {
+      return;
+    }
+    this.aborted = true;
+    this.discoveryAbort.abort();
+    if (this.pollHandle) {
+      clearInterval(this.pollHandle);
+      this.pollHandle = undefined;
+    }
+    Log.debug("[HeadlessLogTail] Session-log discovery aborted");
   }
 
   /** Queue a stdout clock tick. Safe to call from a synchronous stream callback. */
@@ -171,8 +231,19 @@ export class HeadlessLogTail {
       this.pollHandle = undefined;
     }
 
+    // Unwind any discovery still retrying against a pre-exit deadline before
+    // waiting on it. A process that died before its log was ever written would
+    // otherwise hold this await for the parser's whole retry budget.
+    this.discoveryAbort.abort();
     await this.pendingWork;
-    await this.enqueueTick("post-exit discovery");
+
+    // The post-exit read gets a fresh budget: the log is now written, so
+    // retrying is exactly the right thing — unless the run was abandoned, in
+    // which case nobody is waiting for its output.
+    if (!this.aborted) {
+      this.discoveryAbort = new AbortController();
+      await this.enqueueTick("post-exit discovery");
+    }
     if (this.logPath) {
       await this.drain();
     }
@@ -240,7 +311,7 @@ export class HeadlessLogTail {
   }
 
   private async discoverLog(): Promise<void> {
-    if (this.logPath) {
+    if (this.logPath || this.aborted) {
       return;
     }
 
@@ -265,11 +336,15 @@ export class HeadlessLogTail {
     }
 
     try {
+      // The signal is what bounds discovery: every parser honours it inside its
+      // retry loop, so a cancelled run stops polling instead of retrying its
+      // way past the workflow it belonged to.
       this.logPath =
         (await this.options.parser.discoverSessionLog(
           this.options.promptText,
           this.startTime,
-          this.sessionId
+          this.sessionId,
+          this.discoveryAbort.signal
         )) ?? undefined;
       if (this.logPath) {
         Log.debug(`[HeadlessLogTail] Session log discovered: ${this.logPath}`);

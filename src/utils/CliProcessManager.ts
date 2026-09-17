@@ -38,6 +38,15 @@ export interface SpawnResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /**
+   * Signal that terminated the process, when it was killed rather than exiting
+   * on its own. Node reports a `null` exit code in that case, which `exitCode`
+   * coalesces to `1` — so without this field a SIGKILL is indistinguishable
+   * from a genuine non-zero exit, and callers report a killed process as a
+   * harness failure (with whatever informational chatter happened to be on
+   * stderr as the reason).
+   */
+  terminationSignal?: NodeJS.Signals;
 }
 
 /**
@@ -57,6 +66,14 @@ export class CliProcessManager {
   private currentProcess?: ChildProcess;
   private killTimeoutId?: NodeJS.Timeout;
   private lastSpawnedCommand?: string;
+  /**
+   * Signals this manager has requested for a child, so `SpawnResult` can report
+   * a kill that Node cannot see. `tree-kill` shells out to `taskkill /F` on
+   * Windows, so the child dies at the hands of another process and Node reports
+   * exit code 1 with no signal — indistinguishable from a genuine failure.
+   * Recording our own request is the portable way to tell the two apart.
+   */
+  private readonly requestedKills = new WeakMap<ChildProcess, NodeJS.Signals>();
 
   constructor(
     private workspaceRoot: string,
@@ -144,20 +161,27 @@ export class CliProcessManager {
       });
 
       // Handle completion
-      child.on("close", (code: number | null) => {
-        cleanupProcessState();
-        if (settled) {
-          return;
-        }
-        settled = true;
-        this.logger?.(`✅ Process exited with code: ${code}`);
+      child.on(
+        "close",
+        (code: number | null, signal: NodeJS.Signals | null) => {
+          cleanupProcessState();
+          if (settled) {
+            return;
+          }
+          settled = true;
+          this.logger?.(
+            `✅ Process exited with code: ${code}` +
+              (signal ? ` (terminated by ${signal})` : "")
+          );
 
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code ?? 1,
-        });
-      });
+          resolve({
+            stdout,
+            stderr,
+            exitCode: code ?? 1,
+            terminationSignal: signal ?? this.requestedKills.get(child),
+          });
+        }
+      );
 
       // Handle timeout
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -201,6 +225,7 @@ export class CliProcessManager {
 
     this.clearKillTimeout();
 
+    this.requestedKills.set(child, "SIGKILL");
     this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
     kill(child.pid, "SIGKILL", (err) => {
       if (err) {
@@ -275,6 +300,7 @@ export class CliProcessManager {
    */
   disposeProcess(): void {
     if (this.currentProcess) {
+      this.requestedKills.set(this.currentProcess, "SIGTERM");
       this.currentProcess.kill();
       this.currentProcess = undefined;
     }
@@ -300,6 +326,7 @@ export class CliProcessManager {
 
     this.clearKillTimeout();
 
+    this.requestedKills.set(child, "SIGTERM");
     this.logger?.(
       "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
     );
@@ -312,6 +339,7 @@ export class CliProcessManager {
     // Escalate to forceful kill after delay if process hasn't exited
     this.killTimeoutId = setTimeout(() => {
       if (this.currentProcess === child && child.pid) {
+        this.requestedKills.set(child, "SIGKILL");
         this.logger?.(
           "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
         );
