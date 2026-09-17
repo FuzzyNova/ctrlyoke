@@ -2,11 +2,11 @@
 
 **DRAFT — for attorney review. Not yet effective or published.**
 
-**Licensor:** Nathan Hickey d/b/a Fuzzy Nova
+**Licensor:** Fuzzy Nova LLC
 
 **Product:** ctrlyoke Enterprise (annual site-license subscription)
 
-**Version:** 0.2 (draft)
+**Version:** 0.3 (draft)
 
 **Effective Date:** The date Customer accepts these Enterprise Terms as described in Section 2
 
@@ -133,7 +133,7 @@ Support: `support@ctrlyoke.dev`
 
 Privacy: `privacy@ctrlyoke.dev`
 
-Legal notices: Nathan Hickey d/b/a Fuzzy Nova, 5518 Roosevelt Ave, Austin, TX 78756, USA
+Legal notices: Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 ---
 

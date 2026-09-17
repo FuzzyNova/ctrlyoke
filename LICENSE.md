@@ -1,9 +1,9 @@
 # ctrlyoke Commercial License
 
-**Licensor:** Nathan Hickey d/b/a Fuzzy Nova
+**Licensor:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code Extension and companion binaries
 **Effective Date:** June 26, 2026
-**Version:** 1.0
+**Version:** 1.1
 
 ## 0. Acceptance
 
@@ -217,7 +217,7 @@ Licensor may update this License for future versions of the Software. The versio
 
 Licensing inquiries: `licensing@ctrlyoke.dev`
 
-Legal notices: Nathan Hickey d/b/a Fuzzy Nova, 5518 Roosevelt Ave, Austin, TX 78756, USA
+Legal notices: Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 ### (g) Dispute resolution; arbitration
 

@@ -2,9 +2,9 @@
 
 **DRAFT — for attorney review. Not yet effective or published.**
 
-**Processor:** Nathan Hickey d/b/a Fuzzy Nova
+**Processor:** Fuzzy Nova LLC
 
-**Version:** 0.2 (draft)
+**Version:** 0.3 (draft)
 
 This Data Processing Agreement (the **DPA**) forms part of the [ctrlyoke Enterprise Subscription Terms](https://ctrlyoke.dev/enterprise-terms), the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms), and the applicable Order (collectively, the **Agreement**) between Nathan Hickey, an individual doing business as Fuzzy Nova (**Fuzzy Nova**, **Licensor**, or **Processor**), and the customer identified in the Order (**Customer**). This DPA applies only to the extent Processor processes Customer Personal Data on Customer's behalf in connection with the Enterprise subscription.
 
@@ -202,7 +202,7 @@ For clarity, Lemon Squeezy is the merchant of record for the purchaser transacti
 
 ### B. Data importer
 
-- **Name and address:** Nathan Hickey d/b/a Fuzzy Nova, 5518 Roosevelt Ave, Austin, TX 78756, USA
+- **Name and address:** Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 - **Contact:** `privacy@ctrlyoke.dev`
 - **Activities relevant to the transfer:** Provision and administration of the ctrlyoke Enterprise subscription as described in Annex I
 - **Role:** Processor (Module Two) or Sub-processor (Module Three)
