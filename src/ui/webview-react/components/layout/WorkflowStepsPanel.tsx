@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
@@ -62,12 +68,9 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
+import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { WebviewLog } from "@utils/logger";
 import { ExitButton } from "../shared";
 import {
   isExecutionBusy,
@@ -92,6 +95,7 @@ import {
   groupDragId,
   isGroupDragId,
   isStepDragId,
+  livePreviewSortingStrategy,
   stepDragId,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
@@ -460,6 +464,32 @@ export function computeLivePreviewState(
 }
 
 /**
+ * One-line rendering of a drag state's topology for the trace log: each
+ * container in order, as the absolute step indices it holds, with a parallel
+ * group's members wrapped in brackets. `0 1 [2,3] 4` is "two loose steps, a
+ * group of two, one more loose step".
+ *
+ * This exists because a drag's correctness is a claim about *order*, and order
+ * is the one thing a screenshot of a drag in progress cannot settle — dnd-kit
+ * paints rows at an offset from where the model has them, so what the user
+ * sees and what will be committed can disagree. Logging the same string at
+ * every preview, at the drop, and again when the round trip lands turns
+ * "it dropped somewhere else" into three comparable lines.
+ */
+export function describePendingDragState(state: PendingDragState): string {
+  return state.order
+    .map((containerId) => {
+      const container = state.containers[containerId];
+      if (!container) return "?";
+      const items = container.items
+        .map((id) => absoluteIndexFromStepDragId(id))
+        .join(",");
+      return container.groupId ? `[${items}]` : items;
+    })
+    .join(" ");
+}
+
+/**
  * Every rendered row's live display slot (0-based absolute step index),
  * keyed by drag id — the single source of truth for both the number shown
  * next to a row and, via `slotNumber - 1`, a unique-mode identity color. A
@@ -602,7 +632,21 @@ export function resolvePendingDragEnd(
  * Dragging a group has the mirror-image problem: its own members sit under the
  * pointer for the entire drag and would be the only collisions ever reported,
  * leaving `overIndex` outside the outer list and killing every transform. A
- * group can only land in a top-level slot anyway, so nothing else is offered.
+ * group can only land in a top-level slot anyway, so `state.order` membership
+ * is what the filter tests — that, and nothing more.
+ *
+ * In particular the dragged container itself stays a candidate, exactly as the
+ * dragged *step* does above. Its own rect is what gives its current slot a
+ * band: `over` resolving to the active id means "the preview already matches
+ * the pointer" (`handleDragOver` ignores it), so the list holds still. Drop it
+ * from the candidates and the home slot becomes unreachable — the only targets
+ * left are the neighbour above and the neighbour below, which at the home
+ * position are equidistant by construction, since a container sits centred
+ * between them. The drag then has no stable middle and flips straight from
+ * "above the previous row" to "below the next one", skipping the slot the user
+ * was aiming for. That is a two-slot jump for one pixel of movement, and it
+ * showed up in the `[StepsDrag]` trace as two layouts alternating for a whole
+ * drag with the committed one never appearing between them.
  */
 export function pendingDragCollisionDetection(
   state: PendingDragState
@@ -612,10 +656,9 @@ export function pendingDragCollisionDetection(
     if (!isStepDragId(activeId)) {
       return closestCenter({
         ...args,
-        droppableContainers: args.droppableContainers.filter((container) => {
-          const id = String(container.id);
-          return id !== activeId && state.order.includes(id);
-        }),
+        droppableContainers: args.droppableContainers.filter((container) =>
+          state.order.includes(String(container.id))
+        ),
       });
     }
 
@@ -1151,6 +1194,29 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const baselineDragState = optimisticDragState ?? committedDragState;
 
+  /**
+   * The layout the last drop applied locally, held until the extension host's
+   * reorder round trip lands so the two can be compared in the trace log. This
+   * is the only part of a drag the webview cannot verify for itself: everything
+   * up to `sendMessage` is a pure function of state it owns, while what comes
+   * back has been through `reorderPendingPrompts` and the group-range rebuild.
+   */
+  const droppedLayoutRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const dropped = droppedLayoutRef.current;
+    if (dropped === null) return;
+    droppedLayoutRef.current = null;
+    const committed = describePendingDragState(committedDragState);
+    WebviewLog.trace(
+      `[StepsDrag] committed layout=${committed} ${
+        committed === dropped
+          ? "(matches drop)"
+          : `(DIFFERS from drop=${dropped})`
+      }`
+    );
+  }, [committedDragState]);
+
   /** The step or group currently being dragged, or `null` when idle. */
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   /** What the pointer is currently over, or `null` before the first measurement. */
@@ -1195,6 +1261,21 @@ const WorkflowStepsPanelInner: React.FC<{
         : baselineDragState,
     [baselineDragState, activeDragId, overDragId]
   );
+
+  /**
+   * Trace the layout the drag is currently previewing. Deliberately keyed on
+   * `previewDragState` rather than fired from `handleDragOver`, so it reports
+   * what was actually *rendered* — the same value every row's number, colour
+   * and container membership came from — rather than what a handler intended.
+   * Logging only ever posts a message, so it cannot feed the preview-recompute
+   * loop the position budget above exists to break.
+   */
+  useEffect(() => {
+    if (!activeDragId) return;
+    WebviewLog.trace(
+      `[StepsDrag] preview active=${activeDragId} over=${overDragId ?? "none"} layout=${describePendingDragState(previewDragState)}`
+    );
+  }, [activeDragId, overDragId, previewDragState]);
 
   /** Absolute 0-based display slot per drag id, from the live preview. */
   const displaySlots = useMemo(
@@ -1569,7 +1650,19 @@ const WorkflowStepsPanelInner: React.FC<{
         currentStep,
         parallelGroups
       );
+      // `applied` is what the drop resolved to and `preview` is what the list
+      // was last rendered from. They are the same pure function of the same
+      // baseline, so a mismatch here means `overDragId` moved between the last
+      // render and the release; if instead they agree while the *screen*
+      // disagreed, the model was right all along and a transform was painting
+      // rows away from their slots.
+      WebviewLog.trace(
+        `[StepsDrag] drop active=${activeId} over=${overId} preview=${describePendingDragState(previewDragState)} applied=${
+          outcome ? describePendingDragState(outcome.state) : "no-change"
+        }`
+      );
       if (!outcome) return;
+      droppedLayoutRef.current = describePendingDragState(outcome.state);
       setOptimisticDragState(outcome.state);
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, outcome.payload);
 
@@ -1578,7 +1671,13 @@ const WorkflowStepsPanelInner: React.FC<{
         editorStore.cancelEdit();
       }
     },
-    [baselineDragState, currentStep, overDragId, parallelGroups]
+    [
+      baselineDragState,
+      currentStep,
+      overDragId,
+      parallelGroups,
+      previewDragState,
+    ]
   );
 
   /**
@@ -1968,7 +2067,7 @@ const WorkflowStepsPanelInner: React.FC<{
             >
               <SortableContext
                 items={pendingDragItems}
-                strategy={verticalListSortingStrategy}
+                strategy={livePreviewSortingStrategy}
               >
                 {(() => {
                   return previewDragState.order.map(

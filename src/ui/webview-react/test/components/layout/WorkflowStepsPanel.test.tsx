@@ -13,13 +13,18 @@ import {
   buildPendingReorderPayload,
   computeDisplaySlots,
   computeLivePreviewState,
+  describePendingDragState,
   hasTrailingPendingGroup,
   movePendingDragContainer,
   movePendingDragItem,
   pendingDragCollisionDetection,
   resolvePendingDragEnd,
 } from "@components/layout/WorkflowStepsPanel";
-import { PENDING_TAIL_DRAG_ID } from "@utils/dndKit";
+import {
+  PENDING_TAIL_DRAG_ID,
+  livePreviewSortingStrategy,
+} from "@utils/dndKit";
+import { verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -1059,7 +1064,11 @@ describe("WorkflowStepsPanel pending drag collision detection", () => {
   it("offers a dragged group only top-level slots, never its own members", () => {
     // The group's members sit under the pointer for the whole drag; reporting
     // one would put `over` outside the outer list and kill every transform.
-    expect(firstCollisionFor("group-group-1", 30)).toBe("step-pending-2");
+    // Its own container id is offered though — that is what gives the slot it
+    // already occupies a band to rest in.
+    expect(firstCollisionFor("group-group-1", 30)).toBe("group-group-1");
+    // Far below every member, the following step wins on distance.
+    expect(firstCollisionFor("group-group-1", 200)).toBe("step-pending-2");
   });
 
   describe("with the group at the end of the list", () => {
@@ -1127,7 +1136,13 @@ describe("WorkflowStepsPanel pending drag collision detection", () => {
     it("never offers the tail to a dragged group", () => {
       // A group reaches every slot through its top-level neighbours, so the
       // tail would only be a second id for a position it can already take.
-      expect(trailingCollisionFor("group-group-1", 240)).toBe("step-pending-1");
+      expect(trailingCollisionFor("group-group-1", 240)).not.toBe(
+        PENDING_TAIL_DRAG_ID
+      );
+      // Here the group's own slot is the nearest — it is already last, and its
+      // own rect is what lets it rest there instead of being forced onto a
+      // neighbour (see the settling suite below).
+      expect(trailingCollisionFor("group-group-1", 240)).toBe("group-group-1");
     });
   });
 
@@ -1489,5 +1504,238 @@ describe("WorkflowStepsPanel identity rails", () => {
     expect(
       document.querySelector('[data-workflow-step-index="1"] > div:first-child')
     ).toHaveStyle(`background-color: ${getUniqueStepColor(1)}`);
+  });
+});
+
+describe("WorkflowStepsPanel drag layout tracing", () => {
+  const steps = [
+    { prompt: "one" },
+    { prompt: "two" },
+    { prompt: "three" },
+    { prompt: "four" },
+  ];
+  const groups = [
+    { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+  ];
+
+  it("renders the committed topology with a group's members bracketed", () => {
+    expect(describePendingDragState(buildPendingDragState(steps, 0, []))).toBe(
+      "0 1 2 3"
+    );
+    expect(
+      describePendingDragState(buildPendingDragState(steps, 0, groups))
+    ).toBe("0 [1,2] 3");
+  });
+
+  it("describes where a group drag actually lands", () => {
+    const next = movePendingDragContainer(
+      buildPendingDragState(steps, 0, groups),
+      "group-group-1",
+      "step-pending-0"
+    );
+    // The group took the first slot, so the step it passed is now below it.
+    expect(describePendingDragState(next)).toBe("[1,2] 0 3");
+  });
+});
+
+describe("WorkflowStepsPanel sorting strategy", () => {
+  // The state above, after the group has been dragged into the first slot:
+  // the model is `[group] step step`, and the panel has already re-rendered
+  // the list in that order, so index 0 is the group and index 1 is the step
+  // it moved past.
+  const groupRect = {
+    top: 0,
+    left: 0,
+    right: 100,
+    bottom: 300,
+    width: 100,
+    height: 300,
+  };
+  const stepRect = {
+    top: 300,
+    left: 0,
+    right: 100,
+    bottom: 360,
+    width: 100,
+    height: 60,
+  };
+  const args = {
+    activeIndex: 0,
+    overIndex: 1,
+    index: 1,
+    rects: [groupRect, stepRect, { ...stepRect, top: 360, bottom: 420 }],
+    activeNodeRect: groupRect,
+  };
+
+  it("would otherwise paint the step back above the group it sits below", () => {
+    // Why the panel cannot use a built-in strategy: it displaces the step by
+    // the whole dragged group's height, which is the move the live preview has
+    // already made for real. The step is painted at or above the group's top —
+    // the opposite order from the one the drop will commit, which is exactly
+    // the "preview showed it below, it landed above" report.
+    const displaced = verticalListSortingStrategy(args);
+    expect(displaced).not.toBeNull();
+    expect(stepRect.top + displaced!.y).toBeLessThanOrEqual(groupRect.top);
+  });
+
+  it("leaves every sibling where the live preview rendered it", () => {
+    expect(livePreviewSortingStrategy(args)).toBeNull();
+    expect(livePreviewSortingStrategy({ ...args, index: 2 })).toBeNull();
+    // Including the dragged container's own slot — the drag source is
+    // displaced by `shouldDisplaceDragSource`, which never consults this.
+    expect(livePreviewSortingStrategy({ ...args, index: 0 })).toBeNull();
+  });
+});
+
+describe("WorkflowStepsPanel group drag settling", () => {
+  // The reported layout: two loose steps, a two-member group, then four more
+  // loose steps — `0 1 [2,3] 4 5 6 7`.
+  const steps = Array.from({ length: 8 }, (_, index) => ({
+    prompt: `step ${index}`,
+  }));
+  const groups = [
+    { id: "group-1", startIndex: 2, endIndex: 3, failFast: false },
+  ];
+  const state = buildPendingDragState(steps, 0, groups);
+  const HOME = "0 1 [2,3] 4 5 6 7";
+  /** The group starts at this offset; a drag begins with translate 0. */
+  const HOME_TOP = 120;
+
+  const ROW = 60;
+  const HEADER = 30;
+  const GROUP = HEADER + ROW * 2;
+
+  function rect(top: number, height: number) {
+    return {
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 100,
+      width: 100,
+      height,
+    };
+  }
+
+  /** Lay the previewed containers out top to bottom, the way the panel does. */
+  function layout(preview: ReturnType<typeof buildPendingDragState>) {
+    const measured = new Map<string, ReturnType<typeof rect>>();
+    let y = 0;
+    for (const containerId of preview.order) {
+      const container = preview.containers[containerId];
+      if (!container) continue;
+      if (container.groupId) {
+        measured.set(
+          containerId,
+          rect(y, HEADER + ROW * container.items.length)
+        );
+        y += HEADER;
+        for (const item of container.items) {
+          measured.set(item, rect(y, ROW));
+          y += ROW;
+        }
+        continue;
+      }
+      measured.set(containerId, rect(y, ROW));
+      y += ROW;
+    }
+    return measured;
+  }
+
+  /**
+   * Walk the dragged group down the list one small step at a time, running the
+   * panel's real feedback loop: collisions are resolved against the *previewed*
+   * layout (which the preview physically re-renders, so everything is
+   * re-measured every time it changes), and `handleDragOver`'s rule that
+   * `over === activeId` means "the preview already matches the pointer" keeps
+   * the previous target rather than applying a self-drop.
+   *
+   * `collisionRect` is the group's rect as dnd-kit reports it — the position it
+   * had at drag start plus the pointer translate, which is the one quantity in
+   * a drag that moves only on real input.
+   */
+  function walk(tops: number[]) {
+    let over: string | null = null;
+    return tops.map((top) => {
+      const preview =
+        over === null
+          ? state
+          : computeLivePreviewState(state, "group-group-1", over);
+      const measured = layout(preview);
+      const collisions = pendingDragCollisionDetection(preview)({
+        active: { id: "group-group-1" },
+        collisionRect: rect(top, GROUP),
+        droppableRects: measured,
+        droppableContainers: [...measured.keys()].map((id) => ({ id })),
+        pointerCoordinates: null,
+      } as never);
+      const first = collisions[0] ? String(collisions[0].id) : undefined;
+      if (first !== undefined && first !== "group-group-1") {
+        over = first;
+      }
+      return describePendingDragState(
+        over === null
+          ? state
+          : computeLivePreviewState(state, "group-group-1", over)
+      );
+    });
+  }
+
+  /** Drag positions from where the group starts (translate 0) downward. */
+  const DOWNWARD = Array.from(
+    { length: 35 },
+    (_, index) => HOME_TOP + index * 10
+  );
+
+  it("gives the group's own slot a band instead of a knife-edge", () => {
+    // Without its own rect among the candidates the only targets are the rows
+    // either side, and at the home position those are equidistant by
+    // construction — so one pixel of movement flipped the group from above the
+    // previous row to below the next one, and the slot it actually occupies
+    // was never previewed at all. The trace from the report showed exactly two
+    // layouts alternating for a whole drag, with the committed one absent from
+    // every line.
+    expect(
+      walk([HOME_TOP, HOME_TOP + 20, HOME_TOP + 40, HOME_TOP + 50])
+    ).toEqual([HOME, HOME, HOME, HOME]);
+  });
+
+  it("advances one slot at a time, never two", () => {
+    const slots = walk(DOWNWARD).map((layout) =>
+      layout.split(" ").findIndex((entry) => entry.startsWith("["))
+    );
+    for (const [index, slot] of slots.entries()) {
+      if (index === 0) continue;
+      expect(slot - slots[index - 1]).toBeGreaterThanOrEqual(0);
+      expect(slot - slots[index - 1]).toBeLessThanOrEqual(1);
+    }
+    // And it really travels, or the assertion above is vacuous.
+    expect(slots[0]).toBe(2);
+    expect(slots[slots.length - 1]).toBe(6);
+  });
+
+  it("lets every slot it passes through hold still", () => {
+    // The report could only land between two rows by dragging "very very
+    // slowly". Every layout the walk produces must survive several
+    // consecutive positions, so none of them is a knife-edge.
+    const layouts = walk(DOWNWARD);
+    const runs = layouts.reduce<Array<{ layout: string; length: number }>>(
+      (accumulated, layout) => {
+        const last = accumulated[accumulated.length - 1];
+        if (last?.layout === layout) last.length += 1;
+        else accumulated.push({ layout, length: 1 });
+        return accumulated;
+      },
+      []
+    );
+    for (const run of runs) {
+      expect(run.length).toBeGreaterThan(1);
+    }
+    expect(runs.map((run) => run.layout)).toEqual([
+      HOME,
+      "0 1 4 [2,3] 5 6 7",
+      "0 1 4 5 [2,3] 6 7",
+      "0 1 4 5 6 [2,3] 7",
+      "0 1 4 5 6 7 [2,3]",
+    ]);
   });
 });

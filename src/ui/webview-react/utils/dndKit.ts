@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
+import type { SortingStrategy } from "@dnd-kit/sortable";
 
 type SyntheticListenerMap = Record<string, Function>;
 
@@ -74,3 +75,35 @@ export function isGroupDragId(id: string): boolean {
  * the list could only ever land above it — or be absorbed into it.
  */
 export const PENDING_TAIL_DRAG_ID = "pending-tail";
+
+/**
+ * The steps panel's sorting strategy: displace *siblings* not at all.
+ *
+ * A dnd-kit strategy exists to fake a reorder with transforms while the DOM
+ * holds still. `WorkflowStepsPanel` does the reorder for real — it recomputes
+ * a live preview and re-renders the list in its dragged order every time the
+ * target changes — so a strategy transform applies the same move a second
+ * time, and the two are not merely redundant: they point opposite ways. With
+ * the preview already showing `[group] step`, the strategy hands that step
+ * `-activeNodeRect.height`, and for a *group* drag that height is the whole
+ * group, so the step is painted back above it. The list then reads `step
+ * [group]` while the model says `[group] step`, and the drop — which is a pure
+ * function of the model — lands the group a slot above where the screen
+ * promised. `describePendingDragState`'s trace lines are how that is told
+ * apart from a genuine model bug: preview, drop and committed all agree while
+ * the screen disagreed.
+ *
+ * Only the strategy is neutralised. Two things deliberately stay:
+ * - `useSortable`'s `transform` for the *dragged* item, which never goes
+ *   through the strategy at all (with no dnd-kit `<DragOverlay>` mounted it
+ *   comes from `shouldDisplaceDragSource` as the raw pointer translate). That
+ *   is what keeps the dragged row and group panel under the cursor.
+ * - the layout animation, which is `useDerivedTransform`'s FLIP, computed from
+ *   `ignoreTransform: true` measurements of where the row actually moved. It
+ *   is driven by the DOM reorder, not by this strategy, so rows still slide.
+ *
+ * Neutralising it cannot move a collision: droppables are measured with
+ * `getTransformAgnosticClientRect`, which inverts each element's own computed
+ * transform, and every transform here sits on the droppable node itself.
+ */
+export const livePreviewSortingStrategy: SortingStrategy = () => null;

@@ -1,9 +1,5 @@
 import React, { useMemo } from "react";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import {
   STEP_STATUS,
   type ExecutionState,
@@ -29,6 +25,7 @@ import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
   absoluteIndexFromStepDragId,
   groupDragId,
+  livePreviewSortingStrategy,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
 
@@ -300,7 +297,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         {memberIds ? (
           <SortableContext
             items={memberIds}
-            strategy={verticalListSortingStrategy}
+            strategy={livePreviewSortingStrategy}
           >
             {displayedMembers.map(
               ({ step, index, status: memberStatus }, offset) => (
