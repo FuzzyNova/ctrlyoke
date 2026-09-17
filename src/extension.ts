@@ -365,7 +365,10 @@ export async function activate(context: vscode.ExtensionContext) {
       vscodeUserFeedbackSink,
       browserUserFeedbackSink,
     ]);
+    // The orchestrator only ever calls the StatusBarSink surface, so disposal
+    // stays with the composition root that constructed the implementation.
     const statusBarSink = new StatusBarManager(context, licenseService);
+    context.subscriptions.push(statusBarSink);
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
       workspaceFolderPathResolver: () =>

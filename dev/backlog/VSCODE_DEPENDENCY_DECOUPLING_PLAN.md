@@ -437,7 +437,7 @@ Notes on the merges:
    shrink-only transitive-import-graph guard rooted at
    `WorkflowOrchestrator.ts` is in
    `src/test/unit/SourceAuditCounters.test.ts`, using the named baselines
-   `vscodeImportersReachableFromOrchestrator` (10 files),
+   `vscodeImportersReachableFromOrchestrator` (8 files, down from 13),
    `orchestratorDirectVsCodeImports` (1),
    `orchestratorVsCodeConstructorParams` (0),
    `workflowInstanceDirectVsCodeImports` (0), and
@@ -736,10 +736,10 @@ Only the first is blocking; the rest can be answered inside their stage.
    assertion — because a runtime load test cannot pass until Stage 12 (16
    files in the orchestrator's transitive graph still import `vscode`, all
    owned by later stages). The test-first ordering is unchanged; only the form
-   of the test is. The measured baseline is 10 value-importers; an unfiltered
-   scan says 16, because the three completion helpers are reached only through
-   a `import type` edge from `WebviewMessageTypes.ts` and are erased at
-   runtime.
+   of the test is. The baseline measured before Phase 1 was 13 value-importers,
+   and Phase 1 left it at 8; an unfiltered scan said 16, because the three
+   completion helpers are reached only through an `import type` edge from
+   `WebviewMessageTypes.ts` and are erased at runtime.
 2. **`DashboardHostActions` shape.** The sketch has four methods. Confirm
    against the actual VS Code-only router call sites that this is sufficient and
    that nothing generic (a command-ID passthrough) creeps back in.
@@ -754,14 +754,18 @@ Only the first is blocking; the rest can be answered inside their stage.
 
 ## Acceptance Criteria
 
-- `WorkflowOrchestrator` and `WorkflowInstance` have no `vscode` import or
-  `ExtensionContext` dependency.
+- **DONE 2026-09-17 —** `WorkflowOrchestrator` and `WorkflowInstance` have no
+  `vscode` import or `ExtensionContext` dependency, enforced by the
+  `orchestratorDirectVsCodeImports` / `workflowInstanceDirectVsCodeImports` /
+  `orchestratorVsCodeConstructorParams` baselines.
 - **DONE 2026-08-02 —** `PlatformAdapter` no longer declares `log`, `warn`,
   `error`, `showProgress`, or `showChoice`, and the adapter-mediated host-UI
   counter is zero.
 - No reusable code path can block execution on a prompt whose headless behavior
   is undefined.
-- The five watcher sites use the project watcher contract.
+- All seven watcher sites use the project watcher contract. The orchestrator's
+  landed in Phase 1; Phase 2 owns five more, and the completion-layer watcher
+  belongs to Phase 6.
 - Shared dashboard routing and services have no direct VS Code commands,
   window, workspace, URI, or editor dependencies.
 - One router implementation serves VS Code postMessage and WebSocket

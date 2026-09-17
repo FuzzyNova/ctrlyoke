@@ -10,9 +10,6 @@ import {
   type LicenseService,
 } from "../license/LicenseService";
 
-/**
- * Detailed status from harness integration
- */
 interface StatusBarView {
   text: string;
   tooltip: string;
