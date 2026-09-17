@@ -1,6 +1,6 @@
 # Stream Chunk Boundary Plan
 
-**Status:** Issue 1 done; issues 2–3 queued — verified against the code
+**Status:** Issues 1 and 3 done; issue 2 queued — verified against the code
 2026-09-17, staged as four steps
 (see "Sequencing")
 **Priority:** P2 (P1 for issue 1, which is silent data corruption)
@@ -9,7 +9,7 @@ on U+2028`) introduced `src/utils/TextLines.ts` and single-sourced _where a line
 ends_. This doc covers the other half of that survey: what happens at a **read
 boundary**, which that commit deliberately did not touch.
 `.github/instructions/utils.instructions.md` carries the durable rule from the
-first half; nothing here is recorded there yet because none of it is built.
+first half; issue 3 now uses the shared boundary helper described here.
 
 ## The problem in one sentence
 
@@ -126,6 +126,11 @@ be limited to the streaming view only.
 
 ### 3. `CopilotLogParser`'s OTel reader has neither a decoder nor a pending-line buffer
 
+**Done:** Added `splitCompleteLines`, a per-file pending-line buffer, and a
+`StringDecoder` to the OTel reader. The new state resets on every
+`setOtelFilePath()` and on truncation/rotation, so records split across polls
+are completed exactly once without leaking between prompts.
+
 `src/core/harness/copilot/CopilotLogParser.ts:282-303`
 
 A byte-offset tail read (`otelReadPosition`) that advances to `currentSize`
@@ -162,7 +167,7 @@ That is the single missing piece. Four call sites collapse onto it:
 | `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-453`) | correct; `pendingLogText` + `StringDecoder`    |
 | `AntigravityTranscriptReader` (`:185-194`)                  | correct; `pendingText` + per-state decoder     |
 | `AntigravityStreamJsonUsage` (`:133-146`)                   | correct; `incompleteLine` + explicit `flush()` |
-| `CopilotLogParser` OTel (`:282-303`)                        | **missing entirely** — issue 3                 |
+| `CopilotLogParser` OTel (`:282-303`)                        | fixed; pending tail + per-file `StringDecoder` |
 
 The two correct ones are the reference implementations.
 `AntigravityStreamJsonUsage.flush()` is the affordance the other two lack an
@@ -194,10 +199,10 @@ Staged as four steps, each independently committable:
    Single-source the pattern in a small helper and convert `ModelRegistry` and
    `DevCommands` onto it. No harness parser changes. Verifiable with a unit test
    that feeds a split multi-byte sequence through the chunk callback.
-2. **`splitCompleteLines` + issue 3.** Add the helper to `TextLines.ts` and
-   convert the Copilot OTel reader — the broken one — to it, giving it both the
-   pending-line buffer and the `StringDecoder` it lacks. `setOtelFilePath` resets
-   `otelReadPosition`, so it must reset the new state too.
+2. **Done — `splitCompleteLines` + issue 3.** Added the helper to
+   `TextLines.ts` and converted the Copilot OTel reader — the broken one — to
+   it, giving it both the pending-line buffer and the `StringDecoder` it lacked.
+   `setOtelFilePath` and truncation/rotation reset the new state too.
 3. **Converge the correct readers** (`BaseLogParser.readNewEntries`,
    `AntigravityTranscriptReader`, `AntigravityStreamJsonUsageAccumulator`) onto
    `splitCompleteLines`. Pure refactor, no behaviour change — safe but not

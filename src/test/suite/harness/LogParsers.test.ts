@@ -2800,6 +2800,78 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("should retain a JSONL record split across polls and parse it once", async () => {
+      const filePath = createTempJsonlFile([]);
+      const event = {
+        type: "span",
+        name: "chat gpt-5.4",
+        attributes: {
+          "gen_ai.usage.input_tokens": 1000,
+          "gen_ai.usage.output_tokens": 10,
+          description: "split across a UTF-8 boundary 😀",
+        },
+        events: [usageInfoEvent(1200, 128000)],
+      };
+      const content = JSON.stringify(event) + "\n";
+      const emojiByteStart = Buffer.from(content, "utf8").indexOf(
+        Buffer.from("😀", "utf8")
+      );
+
+      try {
+        parser.setOtelFilePath(filePath);
+        fs.writeFileSync(
+          filePath,
+          Buffer.from(content, "utf8").subarray(0, emojiByteStart + 1)
+        );
+        assert.strictEqual(await parser.pollOtelContextWindow(), null);
+
+        fs.appendFileSync(
+          filePath,
+          Buffer.from(content, "utf8").subarray(emojiByteStart + 1)
+        );
+        assert.deepStrictEqual(await parser.pollOtelContextWindow(), {
+          used: 1200,
+          size: 128000,
+        });
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 1000);
+        assert.strictEqual(await parser.pollOtelContextWindow(), null);
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 1000);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should clear a pending OTel line when the path changes", async () => {
+      const firstPath = createTempJsonlFile([]);
+      const secondEvent = {
+        type: "span",
+        name: "chat gpt-5.4",
+        attributes: {
+          "gen_ai.usage.input_tokens": 2000,
+          "gen_ai.usage.output_tokens": 20,
+        },
+        events: [usageInfoEvent(2200, 128000)],
+      };
+      const secondPath = createTempJsonlFile([secondEvent]);
+      const firstHalf = JSON.stringify({ type: "span", name: "chat " });
+
+      try {
+        parser.setOtelFilePath(firstPath);
+        fs.writeFileSync(firstPath, firstHalf, "utf8");
+        assert.strictEqual(await parser.pollOtelContextWindow(), null);
+
+        parser.setOtelFilePath(secondPath);
+        assert.deepStrictEqual(await parser.pollOtelContextWindow(), {
+          used: 2200,
+          size: 128000,
+        });
+        assert.strictEqual(parser.getFinalOtelUsage()?.inputTokens, 2000);
+      } finally {
+        cleanupTempFile(firstPath);
+        cleanupTempFile(secondPath);
+      }
+    });
+
     test("should reset all state when the OTel path is cleared (parser instance reuse across prompts)", async () => {
       const filePath = createTempJsonlFile([
         {
