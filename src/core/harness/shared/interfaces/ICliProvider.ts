@@ -141,8 +141,9 @@ export interface ICliProvider {
   readonly headlessSource?: HeadlessSourceMode;
 
   /**
-   * Convert headless stdout into the event vocabulary understood by this
-   * provider's log parser.
+   * Convert one complete headless stdout record into the event vocabulary
+   * understood by this provider's log parser. CliTransportCoordinator buffers
+   * raw transport chunks, so this pure hook is never given a partial record.
    *
    * A provider implementing this method is stdout-sourced: the returned
    * events are passed through the log parser's response mapping. This method

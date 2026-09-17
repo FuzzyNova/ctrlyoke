@@ -28,6 +28,7 @@ import {
   HeadlessLogTail,
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
+import { splitCompleteLines } from "../../../utils/TextLines";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -438,6 +439,36 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
             })
           : undefined;
+      let pendingStdout = "";
+
+      const processStdoutRecords = (records: readonly string[]): void => {
+        if (!stdoutEventPump || !source?.parseStdout) {
+          return;
+        }
+
+        for (const record of records) {
+          const events = source.parseStdout(record);
+          for (const event of events) {
+            stdoutEventPump.processEvent(event);
+          }
+        }
+      };
+
+      const processStdoutChunk = (chunk: string): void => {
+        const result = splitCompleteLines(pendingStdout + chunk);
+        pendingStdout = result.remainder;
+        processStdoutRecords(result.lines);
+      };
+
+      const flushStdout = (): void => {
+        if (pendingStdout.length === 0) {
+          return;
+        }
+
+        const record = pendingStdout;
+        pendingStdout = "";
+        processStdoutRecords([record]);
+      };
 
       if (source?.logTail) {
         await source.logTail.start();
@@ -465,16 +496,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                 source?.mode === HEADLESS_SOURCE_MODES.STDOUT &&
                 stdoutEventPump
               ) {
-                const events = source.parseStdout?.(chunk) ?? [];
-                for (const event of events) {
-                  stdoutEventPump.processEvent(event);
-                }
+                processStdoutChunk(chunk);
               } else {
                 this.deps.hostCallbacks.onStreamingChunk(chunk);
               }
             }
           : undefined,
       });
+
+      // A process may finish with one valid record that has no trailing line
+      // break. Emit it before any completion callback or log-tail finalization.
+      flushStdout();
 
       if (source?.logTail) {
         await source.logTail.finish();

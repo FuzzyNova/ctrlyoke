@@ -1,8 +1,7 @@
 # Stream Chunk Boundary Plan
 
-**Status:** Issues 1 and 3 done; step 3 convergence done; issue 2 queued —
-verified against the code 2026-09-17, staged as four steps
-(see "Sequencing")
+**Status:** Complete — issues 1, 2, and 3 resolved; step 3 convergence done
+(verified against the code 2026-09-17; see "Sequencing")
 **Priority:** P2 (P1 for issue 1, which is silent data corruption)
 **Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
 on U+2028`) introduced `src/utils/TextLines.ts` and single-sourced _where a line
@@ -124,6 +123,26 @@ observed.** Confirm it against a real capture before sizing the fix — if the
 live pump and the final parse both feed the same timeline event, the impact may
 be limited to the streaming view only.
 
+**Investigation (2026-09-17):** The run storage resolved to the
+`stream-chunk-boundary-plan-2026-09-17T19-54-45-109` lineage and its
+`run-2026-09-17T19-55-08-812Z` run under the configured runs root. Its
+`manifest.json` and `events.jsonl` contain both
+the per-attempt `cliOutputRecorded` aggregates and the
+`cliOutputEventsAppended` activity batches. The webview projection does exactly
+what the rule says: once activity entries exist, it renders those and drops the
+aggregate they replace. The capture has no raw stdout or independent expected
+event sequence, so it does **not** prove that a particular live event was
+dropped and then vanished on reload. It therefore narrows the original claim
+from an observed consequence to an unobserved but confirmed failure mechanism:
+an incomplete activity stream would still mask the intact aggregate on reload.
+The live loss is wrong either way, so issue 2 remains necessary.
+
+Claude's available real project capture is newline-delimited JSON, consistent
+with the `--output-format stream-json` records consumed here; the parser also
+handles concatenated objects and balanced braces. Whole records therefore work
+without threading its `remainder` through the provider, and no change to
+`ClaudeCliProvider` is needed.
+
 ### 3. `CopilotLogParser`'s OTel reader has neither a decoder nor a pending-line buffer
 
 **Done:** Added `splitCompleteLines`, a per-file pending-line buffer, and a
@@ -162,11 +181,11 @@ export function splitCompleteLines(content: string): {
 
 That is the single missing piece. Four call sites collapse onto it:
 
-| Site                                                        | Current shape                                                    |
-| ----------------------------------------------------------- | --------------------------------------------------------------- |
-| `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-447`) | `splitCompleteLines` + `pendingLogText` + `StringDecoder`       |
-| `AntigravityTranscriptReader` (`:186-204`)                  | `splitCompleteLines` + `pendingText` + per-state decoder        |
-| `AntigravityStreamJsonUsage` (`:133-147`)                   | `splitCompleteLines` + `incompleteLine` + explicit `flush()`    |
+| Site                                                        | Current shape                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-447`) | `splitCompleteLines` + `pendingLogText` + `StringDecoder`      |
+| `AntigravityTranscriptReader` (`:186-204`)                  | `splitCompleteLines` + `pendingText` + per-state decoder       |
+| `AntigravityStreamJsonUsage` (`:133-147`)                   | `splitCompleteLines` + `incompleteLine` + explicit `flush()`   |
 | `CopilotLogParser` OTel (`:299-320`)                        | `splitCompleteLines` + pending tail + per-file `StringDecoder` |
 
 Before convergence, the two correct readers were the reference implementations.
@@ -215,19 +234,18 @@ Staged as four steps, each independently committable:
    line boundary in these three readers; this is the one observable difference
    from their former `/\r?\n/` splitting and is covered by the stream-usage
    regression test.
-4. **Issue 2 last**, and only after confirming the reload consequence above
-   against a real capture. It is the change most likely to perturb live
-   streaming behaviour, and `harness-cli-providers.instructions.md` documents how
-   sensitive these paths are to timing. Two details confirmed while verifying
-   this plan: `CliLogEventPump.processEvent` does no de-duplication, so flushing
-   the accumulator's tail after the spawn resolves emits that last record exactly
-   once; and the LOG-mode sibling path has the same boundary exposure for a
-   different reason — `HeadlessLogTail.captureSessionId` runs
+4. **Done — issue 2.** `CliTransportCoordinator` owns one
+   `splitCompleteLines` accumulator per spawn, passes only complete records to
+   the pure stdout parsers, and flushes an unterminated tail before the
+   completion callback. `CliLogEventPump.processEvent` does no de-duplication,
+   so the flushed record is emitted exactly once. The provider tests cover
+   Copilot, Claude, and OpenCode across split records, multi-record chunks,
+   unterminated tails, and consecutive spawns. The LOG-mode sibling path still
+   has a separate boundary exposure: `HeadlessLogTail.captureSessionId` runs
    `extractSessionIdFromStdout` against one raw chunk at a time, so a session ID
-   split across chunks is simply not matched (it recovers only because
-   `CliResponseCollector` re-runs the same extractor over the full accumulated
-   stdout afterwards). Worth a look while the accumulator is being added; not a
-   reason to expand this step.
+   split across chunks is not matched until `CliResponseCollector` recovers it
+   from full stdout. That remains follow-up work because fixing it requires a
+   second accumulator in the log-tail path.
 
 ## Deliberately not in scope
 
