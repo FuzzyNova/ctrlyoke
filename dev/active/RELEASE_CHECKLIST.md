@@ -2,7 +2,7 @@
 
 **Created:** June 19, 2026 (as `FlightPath Release Checklist`)
 **Rewritten:** August 25, 2026 — consolidated into the single canonical, ctrlyoke-branded release checklist.
-**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) are fully configured — Lemon Squeezy's identity verification cleared September 7, 2026. Extension-side `LicenseService` implementation (Phase 6) is DONE. Attorney sign-off on the EULA also landed September 7, 2026, which unblocked Marketplace publish (Phase 9). Phase 14 (repo visibility flip) cleared every pre-flip gate the same day — entropy-based secret scan clean, Issues/PRs/tags skim clean, all vendor + Microsoft/Azure DevOps accounts MFA-hardened — and is now ready to execute whenever Nathan chooses to trigger the actual toggle. Phase 13's CI/release automation and GitHub public-contribution scaffolding (pre-push hook, full-suite + release workflows, `CONTRIBUTING.md`/`SECURITY.md`/issue+PR templates) were also built September 7, 2026. The largest remaining blockers now are Phase 8 (screenshots/demo GIF, final package inspection) and generating the `VSCE_PAT` Azure DevOps token so `release.yml` can actually publish.
+**Status:** Business/domain cutover is DONE. Pro-licensing vendor accounts (Keygen, Lemon Squeezy) are fully configured — Lemon Squeezy's identity verification cleared September 7, 2026. Extension-side `LicenseService` implementation (Phase 6) is DONE. Attorney sign-off on the EULA also landed September 7, 2026, which unblocked Marketplace publish (Phase 9). Phase 14 (repo visibility flip) cleared every pre-flip gate the same day — entropy-based secret scan clean, Issues/PRs/tags skim clean, all vendor + Microsoft/Azure DevOps accounts MFA-hardened — and is now ready to execute whenever Nathan chooses to trigger the actual toggle. Phase 13's CI/release automation and GitHub public-contribution scaffolding (pre-push hook, full-suite + release workflows, `CONTRIBUTING.md`/`SECURITY.md`/issue+PR templates) were also built September 7, 2026. Phase 7's self-serve Enterprise legal (`DPA.md`, `ENTERPRISE_TERMS.md`, `TRUST_PAGE.md`) cleared attorney review and went live on `ctrlyoke.dev` September 17, 2026, alongside the signed IP Assignment Agreement (see [`LLC_FORMATION_GUIDE.md`](../backlog/LLC_FORMATION_GUIDE.md) §7). The largest remaining blockers now are Phase 8 (screenshots/demo GIF, final package inspection) and generating the `VSCE_PAT` Azure DevOps token so `release.yml` can actually publish.
 **Purpose:** the one place to look for "what's left before `ctrlyoke` ships" — product release, vendor/licensing setup with exact click-by-click steps, legal, and launch verification.
 
 > **This document supersedes [`RELEASE_PLAN.md`](RELEASE_PLAN.md) and [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md).** Both are kept as historical record (their content described real work, most of it now done) but are no longer the place to look for open items — that's here. [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) remains the engineering design doc for `LicenseService`; this checklist is the execution tracker. [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) is left untouched as a FlightPath-era generic how-to-use-`vsce` reference — its mechanics (package/login/publish commands) are still accurate, just still branded FlightPath; Phase 9 below has the ctrlyoke-branded equivalent commands.
@@ -298,11 +298,11 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          telemetry disclosure — telemetry implementation is a high-priority
          pre-attorney-review dependency and will be present before these files
          are sent.
-   - [ ] These three together are what let a buyer's legal team self-serve their
+   - [x] These three together are what let a buyer's legal team self-serve their
          review without a custom MSA — the entire point of keeping this zero-touch
          (§1.7.1). Skipping any one of them risks pulling every enterprise deal
          into a manual sales/legal cycle.
-   - [ ] **Before sending to the attorney:** finish the telemetry implementation;
+   - [x] **Before sending to the attorney:** finish the telemetry implementation;
          use VS Code's telemetry trace to verify every custom and library-added
          field against `PRIVACY.md`; confirm Azure's 90-day retention and default
          IP-masking configuration; add `telemetry.json` for inspectable event
@@ -317,14 +317,18 @@ subscription.order_id` and stamps `metadata.lsSubscriptionId` onto it,
          configure a 30-day annual renewal notice (Lemon Squeezy's built-in
          reminder is only seven days); and verify the cancellation path and legal
          links in a live-mode checkout.
-   - [ ] **Still open:** attorney review of all three drafts and `PRIVACY.md` v1.1
-         (same Phase 7 attorney who signed off on `LICENSE.md`/`PRIVACY.md`),
-         including whether `LICENSE.md` should receive a conforming update from
-         the DBA-only "Fuzzy Nova" name to "Nathan Hickey d/b/a Fuzzy Nova";
-         renaming the three `*_DRAFT.md` files to their final names and wiring
-         them into `ctrlyoke.dev` as pages (`/enterprise-terms`, `/dpa`, `/trust`)
+   - [x] **Done September 17, 2026:** attorney review of all three drafts and
+         `PRIVACY.md` v1.1 complete and approved (same Phase 7 attorney who signed
+         off on `LICENSE.md`/`PRIVACY.md`). `LICENSE.md` already named
+         **Fuzzy Nova LLC**, not the DBA, so no conforming update was needed there.
+         The three drafts were renamed to their final filenames — `DPA.md`,
+         `ENTERPRISE_TERMS.md`, `TRUST_PAGE.md` — and wired into `ctrlyoke.dev` as
+         `landing/src/pages/dpa.astro`, `enterprise-terms.astro`, and `trust.astro`,
          the same way `terms.astro`/`privacy.astro` render
-         `LICENSE.md`/`PRIVACY.md` today via `import { Content } from "..."`.
+         `LICENSE.md`/`PRIVACY.md` via `import { Content } from "..."`. The site
+         nav/footer link to all three; `pricing.astro` gained a real Enterprise
+         tier card ($5,000/yr) and links to the Trust page, Enterprise Terms, and
+         DPA for buyer security/legal review.
 
 6. **PO fallback**
    - [ ] `sales@ctrlyoke.dev` already exists (Phase 3) — confirm it's monitored.
@@ -579,8 +583,8 @@ Confirm:
 
 - [x] Publisher `fuzzynova` confirmed, item id `fuzzynova.ctrlyoke` reserved (published-then-unpublished during the cutover).
 - [x] Generate/verify an Azure DevOps PAT with Marketplace **Manage** scope (see [`RELEASE_GUIDE.md`](../implemented/RELEASE_GUIDE.md) §"Create a Personal Access Token" — mechanics unchanged, just ignore the FlightPath naming in that doc). Done September 8, 2026 — set as the `VSCE_PAT` GitHub repo secret, which `release.yml` reads directly; the `vsce login`/interactive-paste flow below is only needed for a manual local publish, not the CI path.
-- [ ] `npx vsce login fuzzynova`
-- [ ] `npm run package && npx vsce publish` (or `npx vsce publish --packagePath ctrlyoke-0.1.0.vsix`)
+- [x] `npx vsce login fuzzynova`
+- [x] `npm run package && npx vsce publish` (or `npx vsce publish --packagePath ctrlyoke-0.1.0.vsix`) — done; listing is live on the Marketplace, currently set to unpublished/private visibility since public release hasn't been announced yet.
 - [ ] Post-publish: confirm listing loads, README renders, CHANGELOG tab shows `0.1.0`, install into a clean profile, run one workflow.
 - [ ] Flip `LAUNCHED = true` and set the real `CHECKOUT_URL` in `landing/src/config.ts` only after Phase 5 checkout is verified end-to-end **and Phase 7's DataRep EU/EEA + UK appointments are effective and published in the Privacy Policy**. If launching without those appointments, geo-block EU/EEA/UK sales and do not intentionally monitor people there until counsel confirms the Article 27 position.
 

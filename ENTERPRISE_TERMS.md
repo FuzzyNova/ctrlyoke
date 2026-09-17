@@ -1,7 +1,5 @@
 # ctrlyoke Enterprise Subscription Terms
 
-> **Pending legal review — delete this line before publishing at ctrlyoke.dev/enterprise-terms.**
-
 **Licensor:** Fuzzy Nova LLC
 
 **Product:** ctrlyoke Enterprise (annual site-license subscription)

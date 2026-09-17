@@ -1,7 +1,5 @@
 # ctrlyoke Data Processing Agreement
 
-> **Pending legal review — delete this line before publishing at ctrlyoke.dev/dpa.**
-
 **Processor:** Fuzzy Nova LLC
 
 **Version:** 1.0

@@ -1,7 +1,5 @@
 # Trust & Security
 
-> **Pending legal and security review — delete this line before publishing at ctrlyoke.dev/trust.**
-
 **Last updated:** September 17, 2026
 
 ctrlyoke is built by **Fuzzy Nova LLC**, a Texas limited liability company, and is designed local-first. This page explains what that means in practice, what data we do and don't handle, who we rely on to run the business, and how to reach us. It's meant to let your security or legal team review ctrlyoke without a call — if you need something this page doesn't answer, email `security@ctrlyoke.dev` or `privacy@ctrlyoke.dev`.
