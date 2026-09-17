@@ -2,7 +2,7 @@
 
 > **Pending legal and security review — delete this line before publishing at ctrlyoke.dev/trust.**
 
-**Last updated:** September 14, 2026
+**Last updated:** September 17, 2026
 
 ctrlyoke is built by **Fuzzy Nova LLC**, a Texas limited liability company, and is designed local-first. This page explains what that means in practice, what data we do and don't handle, who we rely on to run the business, and how to reach us. It's meant to let your security or legal team review ctrlyoke without a call — if you need something this page doesn't answer, email `security@ctrlyoke.dev` or `privacy@ctrlyoke.dev`.
 
@@ -58,7 +58,7 @@ Each provider is disclosed in our [Privacy Policy](https://ctrlyoke.dev/privacy)
 
 ## Distribution and code review
 
-ctrlyoke ships through the official VS Code Marketplace. The Marketplace signs published extensions, and VS Code verifies the package signature at installation to check package integrity and source. The source code is available at our [canonical GitHub repository](https://github.com/FuzzyNova/ctrlyoke) under a source-available commercial license (see [Terms](https://ctrlyoke.dev/terms)); you may inspect it and make an internal, non-redistributed copy as permitted by that license to verify our data-handling claims. ctrlyoke is source-available, not open source. Third-party open-source components shipped with the extension, and their licenses, are listed in `THIRD_PARTY_NOTICES.md` in that repository.
+ctrlyoke ships through the official VS Code Marketplace. The Marketplace signs published extensions, and VS Code verifies the package signature at installation to check package integrity and source. The source code is available at our [canonical GitHub repository](https://github.com/FuzzyNova/ctrlyoke) under a source-available commercial license (see [Terms](https://ctrlyoke.dev/terms)); you may inspect it, use GitHub's built-in fork functionality, and make an internal, non-redistributed copy as permitted by that license to verify our data-handling claims. ctrlyoke is source-available, not open source. Third-party open-source components shipped with the extension, and their licenses, are listed in `THIRD_PARTY_NOTICES.md` in that repository.
 
 ## Reporting a vulnerability
 

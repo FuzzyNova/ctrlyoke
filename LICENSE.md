@@ -2,12 +2,14 @@
 
 **Licensor:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code Extension and companion binaries
-**Effective Date:** September 14, 2026
-**Version:** 2.0
+**Effective Date:** September 17, 2026
+**Version:** 2.1
 
 ## 0. Acceptance
 
-By installing, accessing, or using the Software, You agree to be bound by this License. If You are accepting this License on behalf of an entity, You represent and warrant that You have authority to bind that entity, and **You** refers to that entity.
+Please read this License carefully, including the binding-arbitration and class-action-waiver provisions in Section 16(g).
+
+You accept this License by affirmatively clicking or selecting an acceptance control that links to it, by completing a purchase after receiving conspicuous notice of and a link to it, or by installing, activating, accessing, or using the Software after receiving notice of and a reasonable opportunity to review it. If You do not agree, do not install, activate, access, or use the Software. If You accept this License on behalf of an entity, You represent and warrant that You have authority to bind that entity, and **You** refers to that entity.
 
 ## 1. Definitions
 
@@ -75,7 +77,7 @@ You may not, and may not permit others to:
 
 ### (a) Redistribute
 
-Distribute, sublicense, sell, transfer, publish, or otherwise make the Software, in source or compiled form, available to any third party, except that contributions may be submitted to the canonical repository as described in Section 5.
+Distribute, sublicense, sell, transfer, publish, or otherwise make the Software, in source or compiled form, available to any third party, except that You may (i) create and maintain a publicly visible fork solely through the canonical repository host's built-in forking functionality, subject to Section 5(b), and (ii) submit contributions to the canonical repository as described in Section 5. A permitted public fork does not authorize You to publish releases, packages, binaries, or other standalone distributions from that fork.
 
 ### (b) Compete
 
@@ -105,7 +107,7 @@ Licensor makes the Software's source code available at its canonical public repo
 
 ### (b) Forking
 
-You may fork the repository solely for personal evaluation, security review, internal non-redistributed adaptation, or contribution preparation. Any fork remains subject to this License, may not be publicly redistributed except as part of a permitted contribution to the canonical repository, and may not be used to Compete.
+You may fork the repository solely for personal evaluation, security review, internal non-redistributed adaptation, or contribution preparation. A fork created through the canonical repository host's built-in forking functionality may remain publicly visible to the extent the host requires. Any fork remains subject to this License, may not be distributed outside that hosted fork or used to publish releases, packages, or binaries except as part of a permitted contribution to the canonical repository, and may not be used to Compete.
 
 ### (c) Contributions
 
@@ -183,7 +185,7 @@ If You initiate patent litigation alleging that the Software or any portion of i
 
 ## 13. Limitation of Liability
 
-**TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES, INCLUDING LOSS OF USE, DATA, OR PROFITS; BUSINESS INTERRUPTION; OR PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE OR THE USE OF THE SOFTWARE, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. LICENSOR'S TOTAL CUMULATIVE LIABILITY ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE SHALL NOT EXCEED THE AMOUNTS PAID BY YOU TO LICENSOR IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM, OR USD $100 IF NO AMOUNTS HAVE BEEN PAID.**
+**TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES, INCLUDING LOSS OF USE, DATA, OR PROFITS; BUSINESS INTERRUPTION; OR PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE OR THE USE OF THE SOFTWARE, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. LICENSOR'S TOTAL CUMULATIVE LIABILITY ARISING OUT OF OR IN CONNECTION WITH THIS LICENSE SHALL NOT EXCEED THE GREATER OF (I) THE AMOUNTS PAID BY YOU TO LICENSOR IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM OR (II) USD $100. NOTHING IN THIS LICENSE EXCLUDES OR LIMITS LIABILITY TO THE EXTENT IT CANNOT LAWFULLY BE EXCLUDED OR LIMITED.**
 
 ## 14. Export Controls
 
@@ -211,7 +213,7 @@ This License is the entire agreement between the parties regarding the Software 
 
 ### (b) Governing law; venue
 
-This License is governed by the laws of the State of Texas, USA, without regard to conflict-of-law rules. Subject to the dispute resolution provision below, any permitted court proceeding shall be brought exclusively in the state or federal courts located in Austin, Texas, and the parties consent to personal jurisdiction and venue there.
+This License is governed by the laws of the State of Texas, USA, without regard to conflict-of-law rules. Subject to the dispute resolution provision below, any permitted court proceeding shall be brought exclusively in the state or federal courts located in Austin, Texas, and the parties consent to personal jurisdiction and venue there. If You are a consumer, this choice of law and venue does not deprive You of any non-waivable protections of the law of Your usual residence or any right to bring a proceeding in another forum that applicable law does not permit You to waive.
 
 ### (c) Severability
 
@@ -233,7 +235,15 @@ Legal notices: Fuzzy Nova LLC, 5518 Roosevelt Ave, Austin, TX 78756, USA
 
 ### (g) Dispute resolution; arbitration
 
-Except for disputes relating to a party's actual or threatened misuse of intellectual property, confidentiality obligations, or claims seeking temporary or preliminary injunctive relief, any dispute, claim, or controversy arising out of or relating to this License or the Software shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules, in Austin, Texas. Judgment on the award may be entered in any court of competent jurisdiction. To the maximum extent permitted by law, You and Licensor waive any right to a jury trial and any right to participate in a class action or class-wide arbitration.
+**PLEASE READ THIS SECTION CAREFULLY. EXCEPT FOR THE LIMITED EXCEPTIONS BELOW, IT REQUIRES INDIVIDUAL BINDING ARBITRATION AND WAIVES JURY TRIALS AND CLASS PROCEEDINGS.**
+
+Before starting arbitration, the claimant must send the other party written notice describing the claim and requested relief and allow thirty (30) days for an informal resolution. Notices to Licensor must be sent to the legal-notice address in Section 16(f), with a copy to `licensing@ctrlyoke.dev`.
+
+Except for (i) an individual claim eligible to be brought in small-claims court, (ii) a dispute relating to a party's actual or threatened misuse of intellectual property or breach of confidentiality obligations, or (iii) a claim seeking temporary or preliminary injunctive relief, any dispute, claim, or controversy arising out of or relating to this License or the Software shall be resolved by individual binding arbitration administered by the American Arbitration Association (**AAA**) under its Commercial Arbitration Rules, or its Consumer Arbitration Rules if AAA determines that those rules apply. The Federal Arbitration Act governs the interpretation and enforcement of this Section. The arbitration will take place in Austin, Texas, except that a consumer claimant may participate remotely or from the county of the claimant's residence when required by the applicable AAA rules or law. Judgment on the award may be entered in any court of competent jurisdiction.
+
+**TO THE MAXIMUM EXTENT PERMITTED BY LAW, YOU AND LICENSOR WAIVE ANY RIGHT TO A JURY TRIAL AND AGREE THAT EACH MAY BRING CLAIMS AGAINST THE OTHER ONLY IN AN INDIVIDUAL CAPACITY, NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS, COLLECTIVE, CONSOLIDATED, OR REPRESENTATIVE PROCEEDING. THE ARBITRATOR MAY AWARD RELIEF ONLY TO THE INDIVIDUAL PARTY SEEKING RELIEF AND ONLY TO THE EXTENT NECESSARY TO RESOLVE THAT PARTY'S INDIVIDUAL CLAIM.**
+
+You may opt out of the arbitration requirement and class-action waiver in this Section by sending written notice to `licensing@ctrlyoke.dev` within thirty (30) days after You first accept this License. The notice must identify You, state that You opt out of Section 16(g), and provide the email address or other information reasonably sufficient to identify Your purchase or license, if any. Opting out does not affect the remaining provisions of this License. If a final decision holds a particular limitation in this Section unenforceable as to a particular claim or request for relief, that claim or request will be severed and may proceed in court, while the remaining claims will be arbitrated.
 
 ### (h) Assignment
 

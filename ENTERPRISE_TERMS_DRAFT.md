@@ -8,7 +8,7 @@
 
 **Version:** 1.0
 
-**Version Date:** September 14, 2026
+**Version Date:** September 17, 2026
 
 **Effective Date:** As to each Customer, the date that Customer accepts these Enterprise Terms as described in Section 2
 
@@ -30,7 +30,7 @@ The Enterprise subscription is offered for business and organizational use, not 
 
 Customer accepts these Enterprise Terms by either:
 
-- completing checkout after being presented with conspicuous notice of, and links to, these Enterprise Terms, the EULA, the Privacy Policy, and the DPA; or
+- affirmatively selecting an acceptance checkbox or button and completing checkout after being presented with conspicuous notice of, and links to, these Enterprise Terms, the EULA, the Privacy Policy, and the DPA; or
 - signing or otherwise accepting an Order that incorporates these Enterprise Terms.
 
 The individual accepting on Customer's behalf represents and warrants that the individual has authority to bind Customer. If the individual lacks that authority, the individual must not complete the purchase.
