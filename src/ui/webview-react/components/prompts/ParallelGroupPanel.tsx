@@ -1,9 +1,5 @@
 import React, { useMemo } from "react";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import {
   STEP_STATUS,
   type ExecutionState,
@@ -23,12 +19,17 @@ import {
 import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
 import { StatusIcon } from "./StatusIcon";
-import { getStatusLabel, isStepExecuting, isWorkflowActive } from "@utils/status";
+import {
+  getStatusLabel,
+  isStepExecuting,
+  isWorkflowActive,
+} from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
   absoluteIndexFromStepDragId,
   groupDragId,
+  livePreviewSortingStrategy,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
 
@@ -184,14 +185,10 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   // branch renders this panel outside the `DndContext` entirely, where dnd-kit
   // falls back to its inert default context.
   const isSortable = memberIds !== undefined && !dragDisabled;
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  // `transform`/`transition` are deliberately discarded — the panel's live
+  // preview already renders this group in its dragged slot, and the floating
+  // clone is what follows the cursor. See `livePreviewSortingStrategy`.
+  const { attributes, listeners, setNodeRef, isDragging } = useSortable({
     id: containerId ?? groupDragId(group.id),
     disabled: !isSortable,
   });
@@ -244,13 +241,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   return (
     <section
       ref={setNodeRef}
-      style={{
-        transform: transform
-          ? `translate3d(0, ${transform.y}px, 0)`
-          : undefined,
-        transition,
-        opacity: isDragging ? 0.5 : 1,
-      }}
+      style={{ opacity: isDragging ? 0.5 : 1 }}
       className="group/parallel relative mx-1 my-1 overflow-hidden rounded border border-panel-border bg-sidebar-bg"
       data-testid={`parallel-group-${group.id}`}
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
@@ -296,7 +287,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         {memberIds ? (
           <SortableContext
             items={memberIds}
-            strategy={verticalListSortingStrategy}
+            strategy={livePreviewSortingStrategy}
           >
             {displayedMembers.map(
               ({ step, index, status: memberStatus }, offset) => (
