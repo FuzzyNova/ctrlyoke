@@ -418,6 +418,22 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             className="flex-shrink-0 w-3 flex items-center justify-center self-stretch cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
             style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
             onClick={(e) => e.stopPropagation()}
+            // Dragging/long-pressing the handle must never surface the row's
+            // context menu. A real right-click on the handle is one source,
+            // but on Windows a touch/pen press-and-hold — the same gesture
+            // used to start a touch drag — also dispatches a genuine
+            // `contextmenu` DOM event at the handle before any drag movement
+            // is detected. Stopping it here (rather than only in the row's
+            // onContextMenu) keeps it from ever reaching that handler.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            // Prevents a touch press on the handle from also starting the
+            // row's own long-press timer (see useLongPress) — that timer
+            // opens the context menu directly in JS, independent of the
+            // native contextmenu event suppressed above.
+            onTouchStart={(e) => e.stopPropagation()}
             {...(dragHandleProps.listeners ?? {})}
             {...dragHandleProps.attributes}
             aria-label="Drag to reorder"
