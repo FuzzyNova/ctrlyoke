@@ -5,6 +5,7 @@ import {
   AntigravityTranscriptEntry,
   isAntigravityTranscriptEntry,
 } from "./AntigravityTranscriptTypes";
+import { splitCompleteLines } from "../../../utils/TextLines";
 
 /** Bytes of the file head retained to detect a same-path rewrite. */
 const PREFIX_BYTE_LENGTH = 128;
@@ -183,15 +184,8 @@ export class AntigravityTranscriptReader {
     }
 
     state.pendingText += state.decoder.write(buffer);
-
-    const lines = state.pendingText.split(/\r?\n/);
-    const hasTrailingNewline = /\r?\n$/.test(state.pendingText);
-    if (hasTrailingNewline) {
-      lines.pop();
-      state.pendingText = "";
-    } else {
-      state.pendingText = lines.pop() ?? "";
-    }
+    const { lines, remainder } = splitCompleteLines(state.pendingText);
+    state.pendingText = remainder;
 
     const records: AntigravityTranscriptRecord[] = [];
     for (const rawLine of lines) {

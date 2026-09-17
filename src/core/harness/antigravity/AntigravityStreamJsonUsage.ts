@@ -1,4 +1,5 @@
 import { ANTIGRAVITY_STREAM_JSON_EVENTS as STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
+import { splitCompleteLines } from "../../../utils/TextLines";
 
 /**
  * Normalized usage fields emitted by Antigravity's stream-json protocol.
@@ -131,8 +132,8 @@ export class AntigravityStreamJsonUsageAccumulator {
 
   ingest(chunk: string): void {
     this.incompleteLine += chunk;
-    const lines = this.incompleteLine.split(/\r?\n/);
-    this.incompleteLine = lines.pop() ?? "";
+    const { lines, remainder } = splitCompleteLines(this.incompleteLine);
+    this.incompleteLine = remainder;
 
     for (const line of lines) {
       this.ingestLine(line);

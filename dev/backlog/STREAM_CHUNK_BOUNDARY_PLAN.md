@@ -1,7 +1,7 @@
 # Stream Chunk Boundary Plan
 
-**Status:** Issues 1 and 3 done; issue 2 queued — verified against the code
-2026-09-17, staged as four steps
+**Status:** Issues 1 and 3 done; step 3 convergence done; issue 2 queued —
+verified against the code 2026-09-17, staged as four steps
 (see "Sequencing")
 **Priority:** P2 (P1 for issue 1, which is silent data corruption)
 **Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
@@ -162,14 +162,14 @@ export function splitCompleteLines(content: string): {
 
 That is the single missing piece. Four call sites collapse onto it:
 
-| Site                                                        | Today                                          |
-| ----------------------------------------------------------- | ---------------------------------------------- |
-| `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-453`) | correct; `pendingLogText` + `StringDecoder`    |
-| `AntigravityTranscriptReader` (`:185-194`)                  | correct; `pendingText` + per-state decoder     |
-| `AntigravityStreamJsonUsage` (`:133-146`)                   | correct; `incompleteLine` + explicit `flush()` |
-| `CopilotLogParser` OTel (`:282-303`)                        | fixed; pending tail + per-file `StringDecoder` |
+| Site                                                        | Current shape                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------- |
+| `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-447`) | `splitCompleteLines` + `pendingLogText` + `StringDecoder`       |
+| `AntigravityTranscriptReader` (`:186-204`)                  | `splitCompleteLines` + `pendingText` + per-state decoder        |
+| `AntigravityStreamJsonUsage` (`:133-147`)                   | `splitCompleteLines` + `incompleteLine` + explicit `flush()`    |
+| `CopilotLogParser` OTel (`:299-320`)                        | `splitCompleteLines` + pending tail + per-file `StringDecoder` |
 
-The two correct ones are the reference implementations.
+Before convergence, the two correct readers were the reference implementations.
 `AntigravityStreamJsonUsage.flush()` is the affordance the other two lack an
 explicit equivalent of, and any shared helper has to keep it: a stream that ends
 without a trailing newline still has one real record pending.
@@ -203,13 +203,18 @@ Staged as four steps, each independently committable:
    `TextLines.ts` and converted the Copilot OTel reader — the broken one — to
    it, giving it both the pending-line buffer and the `StringDecoder` it lacked.
    `setOtelFilePath` and truncation/rotation reset the new state too.
-3. **Converge the correct readers** (`BaseLogParser.readNewEntries`,
+3. **Done — converge the correct readers** (`BaseLogParser.readNewEntries`,
    `AntigravityTranscriptReader`, `AntigravityStreamJsonUsageAccumulator`) onto
    `splitCompleteLines`. Pure refactor, no behaviour change — safe but not
    urgent, hence after the bug fixes. `BaseLogParser`'s trailing-line policy
    (try to parse the tail, retain it only if parsing proves it incomplete) is a
    real behavioural difference from the other two and must survive the
-   conversion.
+   conversion. All four incremental readers now share the boundary helper;
+   their buffering and malformed-line policies remain local. Because the
+   helper follows `LINE_BREAK_PATTERN`, the conversion also makes a lone CR a
+   line boundary in these three readers; this is the one observable difference
+   from their former `/\r?\n/` splitting and is covered by the stream-usage
+   regression test.
 4. **Issue 2 last**, and only after confirming the reload consequence above
    against a real capture. It is the change most likely to perturb live
    streaming behaviour, and `harness-cli-providers.instructions.md` documents how

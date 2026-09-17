@@ -14,7 +14,7 @@ import {
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
-import { splitLines } from "../../../utils/TextLines";
+import { splitCompleteLines, splitLines } from "../../../utils/TextLines";
 
 /**
  * Abstract base class for CLI harness log parsers
@@ -415,12 +415,7 @@ export abstract class BaseLogParser implements ILogParser {
       // instead of advancing past it permanently.
       const content = this.pendingLogText + this.logDecoder.write(buffer);
       this.pendingLogText = "";
-      const lines = content.split(/\r?\n/);
-      const hasTrailingNewline = /\r?\n$/.test(content);
-      const trailingLine = hasTrailingNewline ? undefined : lines.pop();
-      if (hasTrailingNewline) {
-        lines.pop();
-      }
+      const { lines, remainder } = splitCompleteLines(content);
 
       const entries: BaseCliEvent[] = [];
       for (const line of lines) {
@@ -444,12 +439,12 @@ export abstract class BaseLogParser implements ILogParser {
       // A valid final JSON value does not require a newline (for example a
       // completed static log fixture). Only retain the tail when parsing proves
       // that the writer has not finished it yet.
-      const trailingText = trailingLine?.trim();
+      const trailingText = remainder.trim();
       if (trailingText) {
         try {
           entries.push(JSON.parse(trailingText) as BaseCliEvent);
         } catch {
-          this.pendingLogText = trailingLine!;
+          this.pendingLogText = remainder;
         }
       }
 
