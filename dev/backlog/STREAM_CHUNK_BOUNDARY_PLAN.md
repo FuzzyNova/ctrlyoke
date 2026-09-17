@@ -1,6 +1,7 @@
 # Stream Chunk Boundary Plan
 
-**Status:** Queued — verified against the code 2026-09-17, staged as four steps
+**Status:** Issue 1 done; issues 2–3 queued — verified against the code
+2026-09-17, staged as four steps
 (see "Sequencing")
 **Priority:** P2 (P1 for issue 1, which is silent data corruption)
 **Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
@@ -30,6 +31,13 @@ hand-rolled.
 ## The three issues
 
 ### 1. `CliProcessManager` decodes each stdout chunk independently — corrupts multi-byte characters
+
+**Done:** Added `src/utils/StreamTextDecoder.ts` and converted both streams in
+`src/utils/CliProcessManager.spawn()`, `src/utils/ModelRegistry.ts`'s
+`execWithClosedStdin()`, and `src/dev/DevCommands.ts` to use it. The helper
+flushes trailing partial UTF-8 sequences explicitly at successful process
+close, and `CliProcessManager` forwards a non-empty stdout flush to
+`onStdout`. Coverage is in `src/test/unit/StreamTextDecoder.test.ts`.
 
 `src/utils/CliProcessManager.ts:108-119` (stdout) and `:117-119` (stderr)
 

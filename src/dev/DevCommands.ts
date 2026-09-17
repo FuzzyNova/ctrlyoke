@@ -26,6 +26,7 @@ import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { attachStreamTextDecoder } from "../utils/StreamTextDecoder";
 
 export type DevDashboardAction =
   | "buildExtension"
@@ -143,8 +144,7 @@ async function runNpmBuild(
     });
     let settled = false;
 
-    child.stdout.on("data", (data: Buffer) => {
-      const chunk = data.toString();
+    const handleStdout = (chunk: string) => {
       stdout += chunk;
       appendBuildLog("stdout", chunk);
       postMessage({
@@ -152,10 +152,9 @@ async function runNpmBuild(
         stream: "stdout",
         chunk,
       });
-    });
+    };
 
-    child.stderr.on("data", (data: Buffer) => {
-      const chunk = data.toString();
+    const handleStderr = (chunk: string) => {
       stderr += chunk;
       appendBuildLog("stderr", chunk);
       postMessage({
@@ -163,13 +162,17 @@ async function runNpmBuild(
         stream: "stderr",
         chunk,
       });
-    });
+    };
+
+    const flushStdout = attachStreamTextDecoder(child.stdout, handleStdout);
+    const flushStderr = attachStreamTextDecoder(child.stderr, handleStderr);
 
     child.on("error", (error) => {
       if (settled) {
         return;
       }
       settled = true;
+      // Do not flush here: this path rejects the process output.
       stderr += error.message;
       const durationMs = Date.now() - startedAt;
       const result: DevBuildResult = {
@@ -198,6 +201,8 @@ async function runNpmBuild(
         return;
       }
       settled = true;
+      handleStdout(flushStdout());
+      handleStderr(flushStderr());
       const durationMs = Date.now() - startedAt;
       const success = exitCode === 0;
       const result: DevBuildResult = {
