@@ -89,8 +89,10 @@ export function getShellCompactLabel(
  * inject into them, so "workflow is executing" is not the right gate — only
  * *this* session's own `stepIndex` matching one of the steps currently running
  * means closing it would kill work in progress. Shell sessions always carry
- * stepIndex -1 (`PtyProcessManager.spawnShell`), so they are never matched here
- * and stay closeable regardless of execution state — no kind check needed.
+ * stepIndex -1 (`PtyProcessManager.spawnShell`), so they must never match here
+ * and stay closeable regardless of execution state — checked explicitly since
+ * finalStep targets also encode as negative indices and could otherwise land
+ * in activeStepIndices.
  */
 export function isTerminalSessionInUseByActiveStep(
   session: Pick<TerminalSession, "status" | "stepIndex">,
@@ -99,6 +101,7 @@ export function isTerminalSessionInUseByActiveStep(
   return (
     session.status === TERMINAL_SESSION_STATUS.RUNNING &&
     session.stepIndex !== undefined &&
+    session.stepIndex !== -1 &&
     activeStepIndices.includes(session.stepIndex)
   );
 }
