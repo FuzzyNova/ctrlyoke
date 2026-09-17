@@ -422,6 +422,54 @@ describe("WorkflowStepsPanel parallel group drag", () => {
     ]);
   });
 
+  // The reported bug: a step dragged to the *first* slot of a parallel group
+  // snapped back instead of landing. Once the live preview folds the row in,
+  // the row is rendered at that slot — so the pointer is now over the dragged
+  // row's own droppable and dnd-kit reports `over` as the active id. Read as a
+  // drop target that resolves to the untouched committed baseline, i.e. the
+  // row jumping back out of the group to where the drag began. It bites the
+  // first slot hardest on an upward drag, where the previewed row lands
+  // squarely under the pointer and every frame cancelled the one before it.
+  it("keeps the preview folded in when the dragged row is reported as its own target", () => {
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.({ active: mockActive("step-pending-2"), over: null });
+      measureDragAt(40);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-0" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["ccc", "aaa", "bbb", "ddd"]);
+
+    // A real pointer move (so the repeated-position guard is not what rejects
+    // this) that resolves back to the dragged row itself.
+    act(() => {
+      measureDragAt(48);
+      dnd.onDragOver?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-2" },
+      });
+    });
+    expect(renderedPrompts()).toEqual(["ccc", "aaa", "bbb", "ddd"]);
+
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-2" },
+        over: { id: "step-pending-2" },
+      });
+    });
+
+    expect(reorderMessages()).toEqual([
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [2, 0, 1, 3],
+        pendingGroups: [{ id: "g1", start: 0, end: 2, failFast: false }],
+      }),
+    ]);
+  });
+
   it("renders no tail slot when the group does not end the list", () => {
     render(<WorkflowStepsPanel />);
     expect(screen.queryByTestId("pending-tail-drop-slot")).toBeNull();

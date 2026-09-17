@@ -90,6 +90,7 @@ import {
   PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
   groupDragId,
+  isGroupDragId,
   isStepDragId,
   stepDragId,
 } from "@utils/dndKit";
@@ -126,15 +127,31 @@ const PENDING_DROP_TARGET_KINDS = {
  * only ever be absorbed into it.
  *
  * `PENDING_TAIL_DRAG_ID` is the one id that is not a container: it is the slot
- * past the end of `order`, which exists because a group's own id can only ever
- * mean the position it already occupies. That is enough for a *leading* group
- * — taking its slot is what "above it" means — but leaves a *trailing* group
- * with no slot below it at all.
+ * past the end of `order`, which exists because a *trailing* group would
+ * otherwise have no slot below it at all.
+ *
+ * A step drag can only ever reach a group's own id through
+ * `pendingDragCollisionDetection`'s "above the first member" re-point (the
+ * group's panel-spanning rect is kept out of `closestCenter` entirely), so
+ * that id has exactly one meaning: **insert immediately before this group**.
+ * It carries `beforeContainerId` to say so, because plain `orderIndex` is
+ * `arrayMove` semantics — "take the slot this container currently holds",
+ * which lands *after* the group for a downward drag and *before* it for an
+ * upward one. Direction-dependence is wrong for a target the pointer chose
+ * geometrically, and it was what sent a step dragged down onto a group's
+ * header all the way past the group instead of parking it above.
  */
 type PendingDropTarget =
   | {
       kind: typeof PENDING_DROP_TARGET_KINDS.SIBLING;
       orderIndex: number;
+      /**
+       * When set, the drop means "immediately before this container" rather
+       * than "take `orderIndex`". Resolved against the order the dragged item
+       * has already been removed from, so it reads the same in both drag
+       * directions.
+       */
+      beforeContainerId?: string;
     }
   | {
       kind: typeof PENDING_DROP_TARGET_KINDS.MEMBER;
@@ -154,8 +171,13 @@ export function resolvePendingDropTarget(
   }
   if (state.containers[overId]) {
     const orderIndex = state.order.indexOf(overId);
-    return orderIndex < 0
-      ? undefined
+    if (orderIndex < 0) return undefined;
+    return state.containers[overId].groupId
+      ? {
+          kind: PENDING_DROP_TARGET_KINDS.SIBLING,
+          orderIndex,
+          beforeContainerId: overId,
+        }
       : { kind: PENDING_DROP_TARGET_KINDS.SIBLING, orderIndex };
   }
   const ownerId = findPendingDragContainer(state, overId);
@@ -326,8 +348,19 @@ export function movePendingDragItem(
         : Math.min(target.itemIndex, destination.items.length);
     destination.items.splice(insertIndex, 0, activeId);
   } else {
+    // `beforeContainerId` is resolved against the *post-removal* order so it
+    // means the same thing whichever way the drag came from. It can be missing
+    // when the dragged step was the second-to-last member of that very group
+    // and taking it out dissolved the group; the remaining member has then
+    // inherited the group's slot, so the pre-mutation `orderIndex` is still
+    // exactly "before it".
+    const beforeIndex = target.beforeContainerId
+      ? next.order.indexOf(target.beforeContainerId)
+      : -1;
     next.order.splice(
-      Math.min(target.orderIndex, next.order.length),
+      beforeIndex >= 0
+        ? beforeIndex
+        : Math.min(target.orderIndex, next.order.length),
       0,
       activeId
     );
@@ -541,24 +574,30 @@ export function resolvePendingDragEnd(
  * `closestCenter`, with two corrections a nested sortable needs.
  *
  * A parallel group registers one droppable spanning the whole panel *and* one
- * per member row inside it. Because a member's centre is always nearer to the
- * dragged row than the enclosing panel's centre is, plain `closestCenter` can
- * never report the group itself — so every drag over a group resolved to "into
- * this group", and a step could not be placed above a group sitting at the top
- * of the list. A collision on a member whose dragged centre lies outside the
- * members' own band — over the header, or past the last row — is re-pointed at
- * the group, which is both a real top-level slot and, being in the outer
- * `items`, one the sorting strategy can animate around. Only a group that is
- * first or last in the list needs this; anywhere else the neighbouring step is
- * already the nearer collision.
+ * per member row inside it, and the panel's rect is not the neutral outer box
+ * it looks like: it covers the header as well as the members, so its centre
+ * sits roughly half a header-height *above* the middle of the member band —
+ * which for any group lands it right around the first member's lower half.
+ * Left in `closestCenter`'s candidates it therefore beats the first member on
+ * distance across most of that member's own row, and a group id means "beside
+ * this group", so a step aimed at the group's first slot was pulled straight
+ * back out of it. That is why every group container is filtered out here for a
+ * step drag: a group's own slot is only ever reachable through the explicit
+ * geometric rule below, never by winning on distance.
  *
- * Past the last row of a *trailing* group the re-point goes to the tail slot
- * instead, because the group's own slot means "above the group" there: the
- * group keeps its position in `order` when a step leaves it, so inserting at
- * that position puts the step in front of it. The tail is the only id that
- * says "after everything". It is kept out of `closestCenter`'s own candidates
- * and injected only by this rule, so it cannot poach the lower half of the
- * last member row — which is still a perfectly good place to join the group.
+ * That rule is the header: a collision on a member while the dragged centre is
+ * still *above* the first member's top is re-pointed at the group, which means
+ * "insert immediately before it" (see `resolvePendingDropTarget`). Everything
+ * from the first member's top downwards belongs to the members themselves, one
+ * clean band each.
+ *
+ * Past the last row of a *trailing* group the re-point goes to the tail slot,
+ * the only id that says "after everything". It is kept out of `closestCenter`'s
+ * own candidates and injected only by this rule, so it cannot poach the lower
+ * half of the last member row — which is still a perfectly good place to join
+ * the group. No other group needs a rule there: once the dragged centre clears
+ * the last member's bottom it is inside the next container's own rect, whose
+ * rows are nearer collisions than that last member is.
  *
  * Dragging a group has the mirror-image problem: its own members sit under the
  * pointer for the entire drag and would be the only collisions ever reported,
@@ -582,9 +621,10 @@ export function pendingDragCollisionDetection(
 
     const collisions = closestCenter({
       ...args,
-      droppableContainers: args.droppableContainers.filter(
-        (container) => String(container.id) !== PENDING_TAIL_DRAG_ID
-      ),
+      droppableContainers: args.droppableContainers.filter((container) => {
+        const id = String(container.id);
+        return id !== PENDING_TAIL_DRAG_ID && !isGroupDragId(id);
+      }),
     });
     const overId = collisions[0] ? String(collisions[0].id) : undefined;
     if (!overId) return collisions;
@@ -602,13 +642,11 @@ export function pendingDragCollisionDetection(
     if (centerY < firstMemberRect.top) {
       return [{ id: target.containerId }, ...collisions];
     }
-    if (centerY >= lastMemberRect.bottom) {
-      const isTrailingGroup =
-        state.order[state.order.length - 1] === target.containerId;
-      return [
-        { id: isTrailingGroup ? PENDING_TAIL_DRAG_ID : target.containerId },
-        ...collisions,
-      ];
+    if (
+      centerY >= lastMemberRect.bottom &&
+      state.order[state.order.length - 1] === target.containerId
+    ) {
+      return [{ id: PENDING_TAIL_DRAG_ID }, ...collisions];
     }
     return collisions;
   };
@@ -1454,6 +1492,20 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const overId = event.over ? String(event.over.id) : null;
+    // The dragged row is rendered by the live preview at the slot the preview
+    // put it in, so once it has moved at all, the pointer is sitting on top of
+    // the row's *own* droppable and `over` resolves to the active id. That is
+    // not a drop target: it says the preview already matches the pointer, so
+    // the only correct response is to leave it alone. Feeding it through would
+    // make `computeLivePreviewState` resolve a self-drop and fall back to the
+    // untouched committed baseline — the row snapping out of wherever it was
+    // previewed and back to where the drag began. It is worst on an upward
+    // drag into a parallel group, where the previewed row lands squarely under
+    // the pointer, so every other frame cancelled the one before it and the
+    // first member slot could never be held long enough to drop onto.
+    // The drag position is deliberately *not* recorded for this case: nothing
+    // was applied, so a real target arriving at the same position still may.
+    if (overId !== null && overId === String(event.active.id)) return;
     const position = dragPositionRef.current;
     if (position !== null && position === lastAppliedPositionRef.current) {
       return;
