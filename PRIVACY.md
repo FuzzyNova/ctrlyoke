@@ -1,10 +1,10 @@
 # Privacy Policy
 
-**Controller:** Nathan Hickey d/b/a Fuzzy Nova
+**Controller:** Fuzzy Nova LLC
 **Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
 **Effective Date:** June 26, 2026
 **Last Updated:** September 8, 2026
-**Version:** 1.1
+**Version:** 1.2
 
 ## 1. Scope
 
@@ -186,5 +186,5 @@ We may update this Privacy Policy from time to time. If we make material changes
 ## 14. Contact
 
 **Privacy inquiries:** `privacy@ctrlyoke.dev`
-**Business operator:** Nathan Hickey d/b/a Fuzzy Nova — `hello@fuzzno.com`
+**Business operator:** Fuzzy Nova LLC — `hello@fuzzno.com`
 **Postal address:** 5518 Roosevelt Ave, Austin, TX 78756, USA

@@ -6,7 +6,7 @@
 
 **Version:** 0.3 (draft)
 
-This Data Processing Agreement (the **DPA**) forms part of the [ctrlyoke Enterprise Subscription Terms](https://ctrlyoke.dev/enterprise-terms), the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms), and the applicable Order (collectively, the **Agreement**) between Nathan Hickey, an individual doing business as Fuzzy Nova (**Fuzzy Nova**, **Licensor**, or **Processor**), and the customer identified in the Order (**Customer**). This DPA applies only to the extent Processor processes Customer Personal Data on Customer's behalf in connection with the Enterprise subscription.
+This Data Processing Agreement (the **DPA**) forms part of the [ctrlyoke Enterprise Subscription Terms](https://ctrlyoke.dev/enterprise-terms), the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms), and the applicable Order (collectively, the **Agreement**) between Fuzzy Nova LLC, a Texas limited liability company (**Fuzzy Nova**, **Licensor**, or **Processor**), and the customer identified in the Order (**Customer**). This DPA applies only to the extent Processor processes Customer Personal Data on Customer's behalf in connection with the Enterprise subscription.
 
 ## 1. Definitions
 

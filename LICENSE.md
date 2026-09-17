@@ -11,7 +11,7 @@ By installing, accessing, or using the Software, You agree to be bound by this L
 
 ## 1. Definitions
 
-**"Licensor"** means Nathan Hickey, an individual doing business as Fuzzy Nova.
+**"Licensor"** means Fuzzy Nova LLC, a Texas limited liability company.
 
 **"Software"** means the ctrlyoke VS Code extension, the compiled extension binary (VSIX), companion CLI and MCP server binaries, source code made available at the canonical repository, documentation, schemas, templates, and any updates or new versions released by Licensor.
 
