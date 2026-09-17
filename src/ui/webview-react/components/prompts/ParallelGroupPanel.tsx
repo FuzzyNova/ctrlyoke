@@ -22,7 +22,8 @@ import {
 } from "./WorkflowStepRow";
 import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
-import { isStepExecuting, isWorkflowActive } from "@utils/status";
+import { StatusIcon } from "./StatusIcon";
+import { getStatusLabel, isStepExecuting, isWorkflowActive } from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
@@ -255,29 +256,19 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
     >
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
-        {isSortable && (
-          <span
-            className="-ml-0.5 flex w-4 flex-shrink-0 cursor-grab items-center justify-center text-description-fg opacity-0 transition-opacity hover:text-foreground active:cursor-grabbing group-hover/parallel:opacity-100"
-            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
-            {...listeners}
-            {...attributes}
-            aria-label="Drag to reorder parallel group"
-          >
-            <Icon name="grabber" className="text-xs" />
-          </span>
-        )}
         <Icon name="worktree-compact" className="text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
         </span>
         <span
-          className="rounded bg-editor-bg px-1.5 py-0.5 uppercase tracking-wide text-description-fg"
+          className="flex items-center"
           data-testid="parallel-group-status"
+          title={getStatusLabel(status as StepStatus)}
         >
-          {status}
+          <StatusIcon status={status as StepStatus} />
         </span>
         <label
-          className={`ml-auto flex items-center gap-1 text-description-fg ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+          className={`flex items-center gap-1 text-description-fg ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
           title="Cancel the rest of this group's steps as soon as one fails, instead of letting them finish."
         >
           <input
@@ -289,6 +280,17 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
           />
           fail fast
         </label>
+        {isSortable && (
+          <span
+            className="ml-auto flex w-4 flex-shrink-0 cursor-grab items-center justify-center text-description-fg opacity-0 transition-opacity hover:text-foreground active:cursor-grabbing group-hover/parallel:opacity-100"
+            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
+            {...listeners}
+            {...attributes}
+            aria-label="Drag to reorder parallel group"
+          >
+            <Icon name="grabber" className="text-xs" />
+          </span>
+        )}
       </header>
       <div>
         {memberIds ? (

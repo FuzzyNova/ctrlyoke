@@ -109,8 +109,9 @@ describe("ParallelGroupPanel", () => {
     expect(
       screen.queryByText("runs sequentially in this build")
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("parallel-group-status")).toHaveTextContent(
-      "pending"
+    expect(screen.getByTestId("parallel-group-status")).toHaveAttribute(
+      "title",
+      "Pending"
     );
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("second")).toBeInTheDocument();
