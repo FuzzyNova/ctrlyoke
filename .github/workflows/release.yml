@@ -45,7 +45,10 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        # v2 declares node20, which GitHub Actions no longer runs as of the September 2025
+        # Node 20 deprecation -- it gets force-run on node24 and fails asset upload with
+        # "Error creating asset temp dir". v3 declares node24 and doesn't hit this.
+        uses: softprops/action-gh-release@v3
         with:
           body_path: release-notes.md
           files: ctrlyoke-*.vsix
