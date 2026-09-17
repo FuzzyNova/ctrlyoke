@@ -381,6 +381,7 @@ export async function activate(context: vscode.ExtensionContext) {
           await context.workspaceState.update(key, value);
         },
       },
+      isWorkspaceTrusted: () => vscode.workspace.isTrusted,
       userInteractionPort: webviewProvider.getUserInteractionPort(),
     });
 
@@ -922,7 +923,34 @@ function registerCommands(
   const resumeSessionCommand = vscode.commands.registerCommand(
     "ctrlyoke.resumeSession",
     async () => {
-      await workflowOrchestrator.resumeSession();
+      try {
+        const sessions = await workflowOrchestrator.listResumableSessions();
+        if (sessions.length === 0) {
+          return;
+        }
+
+        const selected = await vscode.window.showQuickPick(sessions, {
+          placeHolder: "Select a session to resume",
+          matchOnDescription: true,
+          matchOnDetail: true,
+        });
+
+        if (selected) {
+          await workflowOrchestrator.resumeSessionFromWorkingFile(
+            selected.filePath
+          );
+        }
+      } catch (error) {
+        Log.error(
+          "[Extension] ctrlyoke: Failed to resume session:",
+          error as Error
+        );
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `Failed to resume session: ${getErrorMessage(error)}`
+        );
+      }
     }
   );
 

@@ -46,7 +46,7 @@ const ADAPTER_UI_NAMES = new Set([
 
 const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
-// Phase 1 steps 2, 3, 4, 5, 8, and 9 progressively shrink this graph;
+// Phase 1 steps 2, 3, 4, 5, 7, and 9 progressively shrink this graph;
 // later phases remove the remaining downstream VS Code importers.
 // Shrunk from 13 to 9: WorkflowOrchestrator no longer imports the
 // StatusBarManager, VsCodeAdapter, or LicenseService host implementations;

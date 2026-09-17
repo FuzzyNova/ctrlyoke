@@ -165,14 +165,9 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
   suite("WorkflowOrchestrator workflow-root approval", () => {
     const originalPending =
       ConfigurationUtils.getPendingWorkflowExternalFileRoots;
-    const originalTrusted = vscode.workspace.isTrusted;
 
     teardown(() => {
       ConfigurationUtils.getPendingWorkflowExternalFileRoots = originalPending;
-      Object.defineProperty(vscode.workspace, "isTrusted", {
-        configurable: true,
-        value: originalTrusted,
-      });
     });
 
     function createApprovalHarness() {
@@ -198,6 +193,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
       };
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
       internal.currentWorkspaceFolderPath = "C:\\workspace";
+      internal.workspaceTrustPredicate = () => true;
       internal.viewerRegistry = new Map([["browser:1", "workflow-instance"]]);
       internal.instances = new Map([["workflow-instance", instance]]);
       internal.retiredInstances = new Map();
@@ -206,10 +202,6 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 
     test("prompts only the active workflow client and publishes its pending state", async () => {
       const { orchestrator, port, sent, requests } = createApprovalHarness();
-      Object.defineProperty(vscode.workspace, "isTrusted", {
-        configurable: true,
-        value: true,
-      });
       ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
         "C:\\external",
       ];
@@ -234,6 +226,25 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
           pendingRoots: ["C:\\external"],
         },
       ]);
+    });
+
+    test("does not prompt when the host reports an untrusted workspace", async () => {
+      const { orchestrator, internal, port, requests } =
+        createApprovalHarness();
+      internal.workspaceTrustPredicate = () => false;
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
+        "C:\\external",
+      ];
+
+      const pending =
+        await orchestrator.approvePendingWorkflowExternalRootsForClient(
+          "browser:1",
+          undefined,
+          port
+        );
+
+      assert.deepStrictEqual(pending, ["C:\\external"]);
+      assert.strictEqual(requests.length, 0);
     });
 
     test("blocks the panel Run path while workflow roots remain pending", async () => {
@@ -745,6 +756,100 @@ suite("WorkflowOrchestrator active queue context key", () => {
     } finally {
       vscode.commands.executeCommand = originalExecuteCommand;
     }
+  });
+});
+
+suite("WorkflowOrchestrator session command facade", () => {
+  test("reports the no-workspace early exit without discovering sessions", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const feedback: Array<{ message: string }> = [];
+    let discovered = false;
+
+    internal.userFeedbackSink = {
+      notify: (message: { message: string }) => feedback.push(message),
+    };
+    internal.workspaceSessionManager = {
+      discoverSessions: async () => {
+        discovered = true;
+        return [];
+      },
+    };
+
+    const sessions = await orchestrator.listResumableSessions();
+
+    assert.deepStrictEqual(sessions, []);
+    assert.strictEqual(discovered, false);
+    assert.deepStrictEqual(
+      feedback.map(({ message }) => message),
+      ["No workspace folder open"]
+    );
+  });
+
+  test("returns the session metadata produced by the session manager", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const sessions = [
+      {
+        label: "✓ workflow",
+        description: "1/1 completed",
+        detail: "Started: now",
+        filePath: "/workspace/.ctrlyoke/.runs/workflow/run/workflow.json",
+      },
+    ];
+    let requestedRoot: string | undefined;
+
+    internal.currentWorkspaceFolderPath = "/workspace";
+    internal.workspaceSessionManager = {
+      discoverSessions: async (workspaceRoot: string) => {
+        requestedRoot = workspaceRoot;
+        return sessions;
+      },
+    };
+
+    assert.deepStrictEqual(
+      await orchestrator.listResumableSessions(),
+      sessions
+    );
+    assert.strictEqual(requestedRoot, "/workspace");
+  });
+
+  test("restores the selected working file before focusing the dashboard", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const calls: string[] = [];
+    const filePath = "/workspace/.ctrlyoke/.runs/workflow/run/workflow.json";
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.storedPanelSend = undefined;
+    internal.createWorkflowForClient = async (
+      _send: unknown,
+      clientId: string
+    ) => {
+      calls.push(`create:${clientId}`);
+    };
+    internal.getActiveInstance = () => ({
+      restoreWorkflowFromWorkingFile: async (selectedPath: string) => {
+        calls.push(`restore:${selectedPath}`);
+      },
+    });
+    internal.platform = {
+      focusDashboard: () => calls.push("focus"),
+    };
+
+    await orchestrator.resumeSessionFromWorkingFile(filePath);
+
+    assert.deepStrictEqual(calls, [
+      `create:${PANEL_CLIENT_ID}`,
+      `restore:${filePath}`,
+      "focus",
+    ]);
   });
 });
 

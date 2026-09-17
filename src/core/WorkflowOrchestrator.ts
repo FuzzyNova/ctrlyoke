@@ -343,8 +343,16 @@ export interface WorkflowOrchestratorDependencies {
   statusBarSink?: StatusBarSink;
   disposableRegistry: DisposableRegistry;
   workspaceState: KeyValueStore;
+  /**
+   * Resolves the host's current workspace-trust state. Headless hosts are
+   * trusted by default because they have no VS Code trust lifecycle.
+   */
+  isWorkspaceTrusted?: () => boolean;
   userInteractionPort?: UserInteractionPort;
 }
+
+export type ResumableSession =
+  Awaited<ReturnType<WorkspaceSessionManager["discoverSessions"]>>[number];
 
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
@@ -475,6 +483,7 @@ export class WorkflowOrchestrator {
   private readonly userFeedbackSink: UserFeedbackSink;
   private readonly runnerHostIdentity: RunnerHostIdentity;
   private readonly userInteractionPort: UserInteractionPort;
+  private readonly workspaceTrustPredicate?: () => boolean;
   private readonly currentWorkspaceFolderPath: string | undefined;
 
   // Harness integrations — created once at startup
@@ -542,6 +551,8 @@ export class WorkflowOrchestrator {
     this.workspaceState = dependencies.workspaceState;
     this.userFeedbackSink = dependencies.userFeedbackSink;
     this.runnerHostIdentity = dependencies.runnerHostIdentity;
+    this.workspaceTrustPredicate =
+      dependencies.isWorkspaceTrusted ?? (() => true);
     this.userInteractionPort =
       dependencies.userInteractionPort ?? new NullUserInteractionPort();
 
@@ -959,10 +970,10 @@ export class WorkflowOrchestrator {
    */
   onDidChangeActiveQueueState(
     listener: (state: QueueState | undefined) => void
-  ): vscode.Disposable {
+  ): { dispose(): void } {
     const emitter = this.getActiveQueueStateChangedEmitter();
     const subscription = emitter.event(listener);
-    return new vscode.Disposable(() => subscription.dispose());
+    return { dispose: () => subscription.dispose() };
   }
 
   /** Return the current queue state for the panel's active workflow, if any. */
@@ -975,12 +986,12 @@ export class WorkflowOrchestrator {
    * The initial value is set immediately because a newly-created queue may not
    * emit a state change before the first context menu is opened.
    */
-  registerActiveQueueContextKey(): vscode.Disposable {
+  registerActiveQueueContextKey(): { dispose(): void } {
     const subscription = this.onDidChangeActiveQueueState((state) => {
       this.setHasQueuedStepsContext(state);
     });
     this.setHasQueuedStepsContext(this.getActiveQueueState());
-    return new vscode.Disposable(() => subscription.dispose());
+    return { dispose: () => subscription.dispose() };
   }
 
   /**
@@ -2840,7 +2851,7 @@ export class WorkflowOrchestrator {
         workflowIdentity,
         requestedRoots
       );
-      if (vscode.workspace.isTrusted) {
+      if (this.workspaceTrustPredicate?.() ?? true) {
         await promptBatchApprovalForPendingWorkflowExternalRoots(
           workspaceRoot,
           workflowSourcePath,
@@ -5807,14 +5818,14 @@ export class WorkflowOrchestrator {
   // Orchestrator-level workflow operations
   // ─────────────────────────────────────────────────────────────────────────
 
-  async resumeSession(): Promise<void> {
+  async listResumableSessions(): Promise<ResumableSession[]> {
     if (!this.currentWorkspaceFolderPath) {
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
         "No workspace folder open"
       );
-      return;
+      return [];
     }
 
     try {
@@ -5828,46 +5839,43 @@ export class WorkflowOrchestrator {
           USER_FEEDBACK_SEVERITY.INFO,
           "No previous sessions found. Run a workflow first to create a session."
         );
-        return;
+        return [];
       }
 
-      const selected = await vscode.window.showQuickPick(sessions, {
-        placeHolder: "Select a session to resume",
-        matchOnDescription: true,
-        matchOnDetail: true,
-      });
-
-      if (selected) {
-        try {
-          // Create a fresh instance so the resumed workflow is parallel to any running ones
-          const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-          await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
-          await this.getActiveInstance().restoreWorkflowFromWorkingFile(
-            selected.filePath
-          );
-          await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
-          Log.info(`[WorkflowOrchestrator] Resumed session: ${selected.label}`);
-        } catch (loadError) {
-          Log.error(
-            "[WorkflowOrchestrator] Failed to load session:",
-            loadError as Error
-          );
-          notifyUserFeedback(
-            this.userFeedbackSink,
-            USER_FEEDBACK_SEVERITY.ERROR,
-            `Failed to load session: ${getErrorMessage(loadError)}`
-          );
-        }
-      }
+      return sessions;
     } catch (error) {
       Log.error(
-        "[WorkflowOrchestrator] Failed to resume session:",
+        "[WorkflowOrchestrator] Failed to discover resumable sessions:",
         error as Error
       );
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
         `Failed to resume session: ${getErrorMessage(error)}`
+      );
+      return [];
+    }
+  }
+
+  async resumeSessionFromWorkingFile(filePath: string): Promise<void> {
+    try {
+      // Create a fresh instance so the resumed workflow is parallel to any running ones
+      const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+      await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
+      await this.getActiveInstance().restoreWorkflowFromWorkingFile(filePath);
+      this.platform.focusDashboard?.();
+      Log.info(
+        `[WorkflowOrchestrator] Resumed session from working file: ${filePath}`
+      );
+    } catch (loadError) {
+      Log.error(
+        "[WorkflowOrchestrator] Failed to load session:",
+        loadError as Error
+      );
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.ERROR,
+        `Failed to load session: ${getErrorMessage(loadError)}`
       );
     }
   }
@@ -6233,7 +6241,7 @@ export class WorkflowOrchestrator {
     workflow: PromptFile,
     workspaceRoot: string
   ): Promise<void> {
-    if (!vscode.workspace.isTrusted) {
+    if (!(this.workspaceTrustPredicate?.() ?? true)) {
       return;
     }
     await promptBatchApprovalForPendingWorkspaceSecretGrants(
