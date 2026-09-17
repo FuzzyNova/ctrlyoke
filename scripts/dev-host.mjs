@@ -276,6 +276,12 @@ async function start(mode) {
     `--user-data-dir=${mode.userDataDir}`,
     `--extensionDevelopmentPath=${REPO_ROOT}`,
     "--disable-extension=fuzzynova.ctrlyoke",
+    // Built-in GitHub auth session/token state is stored via the OS keychain
+    // under a service name that is NOT scoped per --user-data-dir, so a
+    // second instance sharing that keychain entry can race the daily
+    // driver's session and sign both out. ctrlyoke never calls
+    // vscode.authentication itself, so it's safe to disable outright here.
+    "--disable-extension=vscode.github-authentication",
   ];
   if (mode.disableExtensions) args.unshift("--disable-extensions");
   args.push(mode.workspace);

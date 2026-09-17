@@ -16,6 +16,7 @@ import {
   LICENSE_FILE_TTL_MS,
   LICENSE_SOURCES,
   LICENSE_SOURCE_SECRET_KEY,
+  ENTITLEMENT_CACHE_TTL_MS,
   REMOTE_ACCESS_TRIAL_START_KEY,
   type LicenseTrialStateStore,
   LicenseActivationLimitError,
@@ -42,6 +43,15 @@ class InMemorySecretStore implements SecretStore {
 
   keys(): Thenable<string[]> {
     return Promise.resolve([...this.values.keys()]);
+  }
+}
+
+class CountingSecretStore extends InMemorySecretStore {
+  getCalls = 0;
+
+  override get(key: string): Thenable<string | undefined> {
+    this.getCalls++;
+    return super.get(key);
   }
 }
 
@@ -713,6 +723,46 @@ suite("LicenseService", () => {
       await secrets.get(LICENSE_MACHINE_ID_SECRET_KEY),
       undefined
     );
+  });
+
+  test("caches getEntitlement and skips re-reading the store within the TTL", async () => {
+    const secrets = new CountingSecretStore();
+    await cache(secrets, await createLicenseFile());
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    let clock = NOW;
+    const service = new LicenseService(secrets, {
+      now: () => clock,
+      publicKeyHex: verificationKeyHex,
+    });
+
+    assert.strictEqual((await service.getEntitlement()).tier, "pro");
+    const readsAfterFirst = secrets.getCalls;
+    assert.ok(readsAfterFirst > 0);
+
+    assert.strictEqual((await service.getEntitlement()).tier, "pro");
+    assert.strictEqual(
+      secrets.getCalls,
+      readsAfterFirst,
+      "a call within the TTL should not re-read the store"
+    );
+
+    clock += ENTITLEMENT_CACHE_TTL_MS + 1;
+    await service.getEntitlement();
+    assert.ok(
+      secrets.getCalls > readsAfterFirst,
+      "a call after the TTL expires should re-read the store"
+    );
+  });
+
+  test("invalidates the cache immediately on deactivate", async () => {
+    const secrets = new InMemorySecretStore();
+    await cache(secrets, await createLicenseFile());
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    const service = createService(secrets);
+
+    assert.strictEqual(await service.isPro(), true);
+    await service.deactivate();
+    assert.strictEqual(await service.isPro(), false);
   });
 });
 
