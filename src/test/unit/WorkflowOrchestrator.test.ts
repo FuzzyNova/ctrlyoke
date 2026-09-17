@@ -65,7 +65,7 @@ function createLineageBindingHarness() {
   const internal = orchestrator as any;
   const boundKey = "bound" as never;
 
-  internal.currentWorkspaceFolder = { uri: { fsPath: path.join("/", "ws") } };
+  internal.currentWorkspaceFolderPath = path.join("/", "ws");
   internal.instances = new Map<string, unknown>([
     [
       "instance-bound",
@@ -197,9 +197,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
         getQueueState: () => ({ status: "idle" }),
       };
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-      internal.currentWorkspaceFolder = {
-        uri: { fsPath: "C:\\workspace" },
-      };
+      internal.currentWorkspaceFolderPath = "C:\\workspace";
       internal.viewerRegistry = new Map([["browser:1", "workflow-instance"]]);
       internal.instances = new Map([["workflow-instance", instance]]);
       internal.retiredInstances = new Map();
@@ -828,11 +826,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
     let settledWith: string | null | undefined;
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: {
-        fsPath: options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws"),
-      },
-    };
+    internal.currentWorkspaceFolderPath = options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws");
     internal.runnerHostIdentity = {
       runner: RUNNER_IDS.VSCODE,
       hostInstanceId: "observer-host",
@@ -1115,7 +1109,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     };
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = { uri: { fsPath: "C:\\dev\\ctrlyoke" } };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.viewerRegistry = new Map([[clientId, workflowId]]);
     internal.viewAddressRegistry = new Map([[clientId, address]]);
     internal.viewMessageSinks = new Map();
@@ -1155,7 +1149,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.strictEqual(
       (sent[snapshotIndex] as { runDirectory?: string }).runDirectory,
       WorkflowPaths.runDir(
-        internal.currentWorkspaceFolder.uri.fsPath,
+        internal.currentWorkspaceFolderPath,
         workflowKey,
         runRef
       )
@@ -1781,7 +1775,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
@@ -1936,7 +1930,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.externalRunSessions = new Map();
       // The requester (the run-navigation panel's client) is viewing an
@@ -2054,7 +2048,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map([
         [
           "instance-1",
@@ -2120,9 +2114,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     internal.viewerRegistry = new Map<string, string | null>();
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\ctrlyoke" },
-    };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () =>
         "C:\\dev\\ctrlyoke\\.ctrlyoke\\.runs\\recent-2026-07-20T10-30-00\\run-2026-07-20T10-31-00-000Z\\workflow.ctrlyoke.json",
@@ -2161,9 +2153,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       [PANEL_CLIENT_ID, "panel-workflow-id"],
     ]);
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\ctrlyoke" },
-    };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () => undefined,
     };
@@ -2272,7 +2262,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const operations: string[] = [];
       const sent: Array<{ type?: string }> = [];
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2437,7 +2427,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       );
       await writeRunTimeline(workspace, workflowKey, runRef, "completed");
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2539,7 +2529,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const bound: string[] = [];
       const received = new Map<string, Record<string, unknown>>();
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2646,7 +2636,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const sent: Array<Record<string, unknown>> = [];
       await writeRunTimeline(workspace, workflowKey, runRef, "running");
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2711,7 +2701,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       let bindCalls = 0;
       let resolveCalls = 0;
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
       internal.bindClientToAddressedLineage = async () => {
@@ -2887,7 +2877,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([
         ["client-a", "source-instance"],
@@ -3005,7 +2995,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
       let expectedRevision: number | undefined;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", "execution-instance"]]);
       internal.viewAddressRegistry = new Map([
@@ -3136,7 +3126,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", retained.id]]);
       internal.viewAddressRegistry = new Map([
@@ -3228,7 +3218,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
@@ -3351,7 +3341,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
@@ -3417,7 +3407,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map([["client-a", "unrelated-instance"]]);
       internal.viewAddressRegistry = new Map([
         [
@@ -3668,7 +3658,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.currentWorkspaceFolderPath = workspace;
     internal.runnerHostIdentity = runnerHostIdentity;
     internal.instances = new Map();
     internal.retiredInstances = new Map();
@@ -4036,7 +4026,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
@@ -4146,7 +4136,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
@@ -4230,7 +4220,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.viewAddressRegistry = new Map([
         [
@@ -4355,7 +4345,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.viewAddressRegistry = new Map([
         [
@@ -4476,7 +4466,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.externalRunSessions = new Map();
@@ -4608,7 +4598,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.currentWorkspaceFolderPath = workspace;
     internal.instances = new Map(instance ? [["active", instance]] : []);
     internal.retiredInstances = new Map();
     internal.externalRunSessions = new Map();
@@ -5080,7 +5070,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.externalRunSessions = new Map();
@@ -5889,7 +5879,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     const runRef = "run-2026-07-30T14-00-00-000Z" as never;
 
     internal.platform = new MockPlatform(os.tmpdir());
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.instances = new Map();
     internal.retiredInstances = new Map();
     internal.viewerRegistry = new Map();
@@ -5951,7 +5941,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     const internal = orchestrator as any;
 
     internal.platform = new MockPlatform(os.tmpdir());
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.instances = new Map();
     internal.retiredInstances = new Map();
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -6080,7 +6070,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewAddressRegistry = new Map([
         ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
@@ -6164,7 +6154,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.viewAddressRegistry = new Map([["client-a", null]]);
 
     assert.strictEqual(await orchestrator.getViewIdentity("client-a"), null);

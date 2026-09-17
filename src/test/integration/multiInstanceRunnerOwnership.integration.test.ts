@@ -173,7 +173,7 @@ function createHost(
     onDecision: (decision: unknown) => decisions.push(decision),
   }) as HostHarness["resolver"];
 
-  internal.currentWorkspaceFolder = { uri: { fsPath: workspaceRoot } };
+  internal.currentWorkspaceFolderPath = workspaceRoot;
   internal.runnerHostIdentity = identity;
   internal.instances = new Map();
   internal.retiredInstances = new Map();

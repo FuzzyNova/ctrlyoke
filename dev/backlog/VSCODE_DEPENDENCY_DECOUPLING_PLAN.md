@@ -505,12 +505,14 @@ against regression.
 6. **DONE 2026-09-17.** Pass the injected `PlatformAdapter` to
    `WorkflowInstance`; its signature and VS Code-free implementation remain
    unchanged.
-7. **Replace `currentWorkspaceFolder: vscode.WorkspaceFolder | undefined`**
-   (declared line 455, read at ~45 sites, always as `.uri.fsPath`) with an
-   injected `() => string | undefined` resolver. `platform.getWorkspaceRoot()`
-   is **not** a drop-in substitute: it falls back to `process.cwd()`, whereas
-   this field is `undefined` when no folder is open and roughly a dozen
-   branches depend on that distinction.
+7. **DONE 2026-09-17.** Replace `currentWorkspaceFolder:
+   vscode.WorkspaceFolder | undefined` (declared line 455, read at ~45 sites,
+   always as `.uri.fsPath`) with an injected `() => string | undefined`
+   resolver. The resolver is sampled once during construction, preserving the
+   previous field's semantics. `platform.getWorkspaceRoot()` is **not** a
+   drop-in substitute: it falls back to `process.cwd()`, whereas this field is
+   `undefined` when no folder is open and roughly a dozen branches depend on
+   that distinction.
 8. Move the orchestrator's remaining direct VS Code calls out:
    `vscode.workspace.isTrusted` (lines 2820, 6216) → an injected trust
    predicate whose headless default is `true`;

@@ -48,10 +48,11 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
 // Phase 1 steps 2, 3, 4, 5, 8, and 9 progressively shrink this graph;
 // later phases remove the remaining downstream VS Code importers.
-// Shrunk from 13 to 10: WorkflowOrchestrator no longer imports the
+// Shrunk from 13 to 9: WorkflowOrchestrator no longer imports the
 // StatusBarManager, VsCodeAdapter, or LicenseService host implementations;
-// those capabilities are injected by extension.ts.
-const vscodeImportersReachableFromOrchestrator = 10;
+// those capabilities are injected by extension.ts, and its workspace-folder
+// resolver is now injected as a path callback.
+const vscodeImportersReachableFromOrchestrator = 9;
 
 const vscodeImporterFilesReachableFromOrchestrator = [
   "src/core/WorkflowOrchestrator.ts",
@@ -59,7 +60,6 @@ const vscodeImporterFilesReachableFromOrchestrator = [
   "src/core/orchestration/ExternalRunWatchSession.ts",
   "src/core/orchestration/PromptFileWatcher.ts",
   "src/core/orchestration/WorkflowCommandHandler.ts",
-  "src/platform/VsCodeWorkspaceRoot.ts",
   "src/ui/ExternalFileTrustPrompt.ts",
   "src/utils/AttachmentBuilders.ts",
   "src/utils/Log.ts",

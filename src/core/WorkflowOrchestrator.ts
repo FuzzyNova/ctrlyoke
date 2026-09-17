@@ -143,7 +143,6 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
-import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import {
   DashboardBroadcastHub,
   type DashboardClient,
@@ -333,6 +332,11 @@ interface AddressedRunView {
 
 export interface WorkflowOrchestratorDependencies {
   platform: PlatformAdapter;
+  /**
+   * Resolves the workspace folder path. The orchestrator samples this once
+   * during construction to preserve the previous workspace-folder semantics.
+   */
+  workspaceFolderPathResolver: () => string | undefined;
   dashboardProvider?: DashboardClient;
   userFeedbackSink: UserFeedbackSink;
   runnerHostIdentity: RunnerHostIdentity;
@@ -471,7 +475,7 @@ export class WorkflowOrchestrator {
   private readonly userFeedbackSink: UserFeedbackSink;
   private readonly runnerHostIdentity: RunnerHostIdentity;
   private readonly userInteractionPort: UserInteractionPort;
-  private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
+  private readonly currentWorkspaceFolderPath: string | undefined;
 
   // Harness integrations — created once at startup
   private readonly copilotCliIntegration: CliIntegration;
@@ -554,13 +558,14 @@ export class WorkflowOrchestrator {
     }
     // Workspace — the folder matching the resolved `.ctrlyoke` root
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
-    this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
-    if (this.currentWorkspaceFolder) {
+    this.currentWorkspaceFolderPath =
+      dependencies.workspaceFolderPathResolver();
+    if (this.currentWorkspaceFolderPath) {
       this.ensureCoordinationWatchSession(
-        this.currentWorkspaceFolder.uri.fsPath
+        this.currentWorkspaceFolderPath
       );
       this.harnessUsageService = new HarnessUsageService(
-        this.currentWorkspaceFolder.uri.fsPath,
+        this.currentWorkspaceFolderPath,
         undefined,
         undefined,
         (snapshots) => this.dashboardBroadcastHub.updateHarnessUsage(snapshots),
@@ -574,7 +579,7 @@ export class WorkflowOrchestrator {
         }
       );
       this.workspaceStatsService = new WorkspaceStatsService(
-        this.currentWorkspaceFolder.uri.fsPath
+        this.currentWorkspaceFolderPath
       );
     }
 
@@ -1327,10 +1332,10 @@ export class WorkflowOrchestrator {
 
     const ownershipResolution = await this.resolveExternalExecutionForPath(
       filePath,
-      this.currentWorkspaceFolder?.uri.fsPath ?? ""
+      this.currentWorkspaceFolderPath ?? ""
     );
     if (
-      this.currentWorkspaceFolder &&
+      this.currentWorkspaceFolderPath &&
       this.shouldDeclineUntrackedOwnership(filePath, ownershipResolution)
     ) {
       return;
@@ -1471,7 +1476,7 @@ export class WorkflowOrchestrator {
       return true;
     }
 
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     if (!workspaceFolderPath) {
       return false;
     }
@@ -1629,9 +1634,9 @@ export class WorkflowOrchestrator {
         this.antigravityCliIntegration.initialize(),
       ]);
 
-      if (this.currentWorkspaceFolder) {
+      if (this.currentWorkspaceFolderPath) {
         await this.workspaceSessionManager.discoverPromptFiles(
-          this.currentWorkspaceFolder.uri.fsPath
+          this.currentWorkspaceFolderPath
         );
         // Must run after harness init and before auto-load so stale RUNNING files
         // are normalized and external-run workflows are registered.
@@ -1724,7 +1729,7 @@ export class WorkflowOrchestrator {
    */
   async handleInitializeWorkspace(): Promise<void> {
     const workspaceRoot =
-      this.pendingInitWorkspaceRoot ?? this.currentWorkspaceFolder?.uri.fsPath;
+      this.pendingInitWorkspaceRoot ?? this.currentWorkspaceFolderPath;
 
     if (!workspaceRoot) {
       Log.warn(
@@ -1853,7 +1858,7 @@ export class WorkflowOrchestrator {
     try {
       if (
         ConfigurationUtils.shouldAutoLoadRecentSession() &&
-        this.currentWorkspaceFolder
+        this.currentWorkspaceFolderPath
       ) {
         const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
         const panelViewed = panelViewedId
@@ -1904,14 +1909,14 @@ export class WorkflowOrchestrator {
         Log.debug("[startup] Triggering auto-load of recent session");
 
         await this.workspaceSessionManager.autoLoadRecentSession(
-          this.currentWorkspaceFolder.uri.fsPath,
+          this.currentWorkspaceFolderPath,
           async (workingFilePath: string) => {
             // Skip auto-loading only when the resolver proves this working file is
             // actively managed externally. A self-owned or indeterminate lock must
             // stay on this host's local execution path.
             const resolution = await this.resolveExternalExecutionForPath(
               workingFilePath,
-              this.currentWorkspaceFolder!.uri.fsPath
+              this.currentWorkspaceFolderPath!
             );
             if (
               resolution.kind ===
@@ -2278,7 +2283,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     if (!workspaceFolderPath || !entry.summary.workingFilePath) {
       Log.warn(
         `[WorkflowOrchestrator] stopExternalRunSession: no active external run for workflowId="${workflowId}"`
@@ -2329,7 +2334,7 @@ export class WorkflowOrchestrator {
     const entry = this.externalRunSessions.get(workflowId);
     if (!entry) return "unavailable";
 
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     const workflowKey = entry.summary.workflowKey;
     if (!workspaceFolderPath || !workflowKey) return "unavailable";
 
@@ -2539,7 +2544,7 @@ export class WorkflowOrchestrator {
     // tab state fall back to the actual most recently modified workflow, not
     // whatever the panel happened to load earlier in the session.
     if (!viewedId && clientId !== this.PANEL_CLIENT_ID) {
-      const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+      const workspaceFolderPath = this.currentWorkspaceFolderPath;
       if (workspaceFolderPath) {
         const mostRecentWorkingFilePath =
           await this.workspaceSessionManager.getMostRecentWorkingFilePath(
@@ -2780,7 +2785,7 @@ export class WorkflowOrchestrator {
    */
   async getViewSourceDefinitionPath(clientId: string): Promise<string | null> {
     const address = this.getViewAddress(clientId);
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!address || !workspaceRoot) {
       return null;
     }
@@ -2805,7 +2810,7 @@ export class WorkflowOrchestrator {
     port: UserInteractionPort = this.userInteractionPort,
     notify = true
   ): Promise<string[]> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     // Panel resolution goes through getInstanceForClient (equivalent to
     // getActiveInstance() for the panel — see its fallback order) rather than
     // getActiveInstance() directly, so this stays on the one seam every other
@@ -2896,7 +2901,7 @@ export class WorkflowOrchestrator {
   }
 
   private getPendingWorkflowExternalRootsForClient(clientId: string): string[] {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     // See approvePendingWorkflowExternalRootsForClient for why the panel
     // branch goes through getInstanceForClient rather than getActiveInstance().
     const instance =
@@ -2953,7 +2958,7 @@ export class WorkflowOrchestrator {
    */
   getViewFilePath(clientId: string): string | null {
     const address = this.getViewAddress(clientId);
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!address || !workspaceRoot) {
       return null;
     }
@@ -3003,7 +3008,7 @@ export class WorkflowOrchestrator {
   private async buildViewIdentityForAddress(
     address: WorkflowViewAddress
   ): Promise<WorkflowViewIdentityMessage | null> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       return null;
     }
@@ -3294,7 +3299,7 @@ export class WorkflowOrchestrator {
     definitionRollback?: DefinitionRollbackInvalidation,
     announceReplayBoundary = false
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -3347,7 +3352,7 @@ export class WorkflowOrchestrator {
     if (targets.length === 0) {
       return;
     }
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -3453,7 +3458,7 @@ export class WorkflowOrchestrator {
   ): void {
     const { workingFile } = view;
     const executionRunRef = this.findExecutionRunRef(address.workflowKey);
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     this.getViewAddressRegistry().set(clientId, address);
     this.getViewMessageSinks().set(clientId, send);
     const snapshot: RunViewLoadedMessage = {
@@ -3573,7 +3578,7 @@ export class WorkflowOrchestrator {
     send: (message: unknown) => void,
     requestId: string
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -3635,7 +3640,7 @@ export class WorkflowOrchestrator {
           `viewing: ${WorkflowOrchestrator.describeViewAddress(viewed)})`
       );
     }
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -3763,7 +3768,7 @@ export class WorkflowOrchestrator {
   }
 
   private requireWorkspaceRoot(): string {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -3917,7 +3922,7 @@ export class WorkflowOrchestrator {
     // Check for a proven external execution before creating a VS Code instance
     // (Entry Point 2). A live lock owned by this host, an indeterminate lock,
     // or a stale watch entry must remain on the local execution path.
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     if (workflowId && workspaceFolderPath) {
       const resolution = await this.resolveExternalExecutionForPath(
         filePath,
@@ -4562,7 +4567,7 @@ export class WorkflowOrchestrator {
       throw new Error("Start position must be a non-negative integer");
     }
     this.assertViewedRunAddress(address, clientId, "Set start position");
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
     }
@@ -4703,7 +4708,7 @@ export class WorkflowOrchestrator {
   ): Promise<{ runRef: RunRef }> {
     await this.assertNoPendingWorkflowExternalRoots(clientId);
     this.assertViewedRunAddress(address, clientId, "Re-run");
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
     if (this.findExecutionRunRef(address.workflowKey)) {
       throw new Error(
@@ -4859,7 +4864,7 @@ export class WorkflowOrchestrator {
     ) {
       throw new Error("Run no longer targets this client's viewed draft");
     }
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
     const descriptor = await this.lineageRepository.readDescriptor(
       workspaceRoot,
@@ -5108,7 +5113,7 @@ export class WorkflowOrchestrator {
     pendingRewindOnThisRun: boolean;
   }> {
     this.assertViewedRunAddress(address, clientId, "Continuation");
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
 
     const descriptor = await this.lineageRepository.readDescriptor(
@@ -5274,7 +5279,7 @@ export class WorkflowOrchestrator {
       }
   > {
     this.assertViewedRunAddress(address, clientId, "Discard continuation");
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
     const result = await WorkingFileManager.discardPendingRewind(
       workspaceRoot,
@@ -5302,7 +5307,7 @@ export class WorkflowOrchestrator {
     definitionRevision: number,
     workingFile: WorkingFile
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
     await new OutputHistoryManager(workspaceRoot).commitDefinitionRevision(
       WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef),
@@ -5340,7 +5345,7 @@ export class WorkflowOrchestrator {
         address.runRef === runRef
     );
     if (targets.length === 0) return;
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) return;
     let workingFile: WorkingFile;
     try {
@@ -5382,7 +5387,7 @@ export class WorkflowOrchestrator {
         address.runRef === runRef
     );
     if (targets.length === 0) return;
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) return;
 
     try {
@@ -5476,7 +5481,7 @@ export class WorkflowOrchestrator {
     if (this.findExecutionRunRef(address.workflowKey) === address.runRef) {
       throw new Error("Cannot delete an executing run");
     }
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
@@ -5561,7 +5566,7 @@ export class WorkflowOrchestrator {
     send: (message: unknown) => void,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) throw new Error("No workspace folder is open");
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
@@ -5803,7 +5808,7 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   async resumeSession(): Promise<void> {
-    if (!this.currentWorkspaceFolder) {
+    if (!this.currentWorkspaceFolderPath) {
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
@@ -5814,7 +5819,7 @@ export class WorkflowOrchestrator {
 
     try {
       const sessions = await this.workspaceSessionManager.discoverSessions(
-        this.currentWorkspaceFolder.uri.fsPath
+        this.currentWorkspaceFolderPath
       );
 
       if (sessions.length === 0) {
@@ -6048,7 +6053,7 @@ export class WorkflowOrchestrator {
         ? this.getActiveInstance()
         : this.getBoundInstance(clientId);
     const executionRoot =
-      instance?.getExecutionRoot() ?? this.currentWorkspaceFolder?.uri.fsPath;
+      instance?.getExecutionRoot() ?? this.currentWorkspaceFolderPath;
     if (!executionRoot) {
       throw new Error("No workspace execution root is available");
     }
@@ -6251,7 +6256,7 @@ export class WorkflowOrchestrator {
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
-      this.currentWorkspaceFolder?.uri.fsPath,
+      this.currentWorkspaceFolderPath,
       true,
       true,
       this.compatibilityRegistry,
@@ -6585,7 +6590,7 @@ export class WorkflowOrchestrator {
    * Called during initialize() after harness initialization.
    */
   private async setupExternalRunWatching(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     if (!workspaceFolderPath) {
       return;
     }
@@ -6695,7 +6700,7 @@ export class WorkflowOrchestrator {
 
   /** Read-only activation report for managed and user-owned Git worktrees. */
   private async discoverWorktreesOnActivation(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workspaceFolderPath = this.currentWorkspaceFolderPath;
     if (!workspaceFolderPath) return;
     this.activationWorktreeOwnership = undefined;
 
@@ -7447,7 +7452,7 @@ export class WorkflowOrchestrator {
     // from the current lock after removing the old session so an active
     // successor can be watched without inheriting the old owner's cleanup.
     if (reason === "ownership-changed") {
-      const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+      const workspaceFolderPath = this.currentWorkspaceFolderPath;
       const workflowKey = entry.summary.workflowKey;
       if (workspaceFolderPath && workflowKey) {
         void this.restartExternalRunWatchSession(

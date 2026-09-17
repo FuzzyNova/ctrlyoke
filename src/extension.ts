@@ -12,6 +12,7 @@ import { ContextMenuReferenceCommands } from "./completions/ContextMenuReference
 import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
 import {
   getVsCodeWorkspaceRoot,
+  getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
@@ -366,6 +367,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const statusBarSink = new StatusBarManager(context, licenseService);
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
+      workspaceFolderPathResolver: () =>
+        getVsCodeWorkspaceFolder()?.uri.fsPath,
       dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
