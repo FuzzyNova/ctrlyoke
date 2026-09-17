@@ -473,6 +473,77 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 - [x] Effective-date placeholders (`[DATE]`) replaced with real dates.
 - [x] **Final attorney sign-off** on the custom commercial EULA text — approved September 7, 2026. (`LICENSE_DRAFT.md` no longer exists as a separate file; it was merged straight into `LICENSE.md`, which already carries a real effective date and no placeholder text.)
 - [x] `package.json#license` → already reads `SEE LICENSE IN LICENSE.md` — verified live September 7, 2026, no change needed now that the EULA is final.
+- [ ] **Appoint DataRep as the EU/EEA and UK GDPR Article 27 representative
+      before intentionally offering paid plans in those markets or enabling
+      telemetry for users there.** This is a sales/monitoring launch gate, not a
+      requirement to hire two lawyers: DataRep supplies the EU appointment
+      through its Irish entity and the separate UK appointment through DataRep
+      UK under one service. Current plan and purchase procedure (verified
+      September 17, 2026):
+  1. Start with DataRep's [free representative
+     consultation](https://www.datarep.com/consultation/) and send them links or
+     copies of `PRIVACY.md` and, if useful, `DPA_DRAFT.md`. Ask them to confirm in
+     writing that Fuzzy Nova LLC's planned EU/EEA and UK sales plus routine
+     product telemetry require both appointments, and that the selected package
+     expressly includes both legal mandates. Do not rely only on a checkout-page
+     description.
+  2. If DataRep confirms the current facts, buy its [Small Company — No
+     Sensitive Data package](https://www.datarep.com/product/small-company-package/),
+     currently **€150/year** for no more than **1,000 EU/EEA/UK data subjects**.
+     DataRep's [current service page](https://www.datarep.com/service/eu-gdpr-article-27-representative-service/)
+     says the UK appointment is included at no extra cost. Count identifiable
+     prospects, website/license users, support and sales
+     correspondents, and telemetry subjects — not only paying customers. If the
+     real count or data categories do not meet those limits, buy the package
+     DataRep recommends instead.
+  3. Complete DataRep's one-page questionnaire with the exact controller name
+     **Fuzzy Nova LLC**, Texas address, `privacy@ctrlyoke.dev`, product/website
+     description, countries targeted, data-subject estimate, processing/data
+     categories, retention, transfers, and vendors. Use the final Privacy Policy
+     and the processing inventory in the DPA annexes as inputs, but answer from
+     actual production behavior. Disclose any changed or special-category data
+     rather than selecting the cheaper tier on assumption.
+  4. Before considering this done, obtain and retain privately (do not commit
+     contracts or account credentials) the executed EU and UK appointment
+     letters/certificates, effective and renewal dates, exact legal entity names,
+     postal addresses, email/web-form details, chosen EU contact country, request
+     forwarding/SLA instructions, and the wording DataRep requires customers to
+     publish. Confirm `privacy@ctrlyoke.dev` is monitored. Maintain the Article 30
+     record of processing DataRep must be able to provide to authorities; the
+     representative is a contact point, not an outsourced compliance program or
+     DPO.
+  5. **Immediately after the appointments become effective, update the legal
+     documents from DataRep's executed paperwork — never guess the entity or
+     contact details:**
+     - In `PRIVACY.md`, increment the version and `Last Updated` date and add a
+       clearly labelled **EU/EEA representative** and **UK representative** under
+       Section 14 (`Contact`). For each, reproduce DataRep's exact legal entity
+       name, postal address, email/web request route, covered territory, and
+       instructions for data subjects and supervisory authorities. Keep Fuzzy
+       Nova's controller identity and `privacy@ctrlyoke.dev` alongside them.
+     - In `TRUST_PAGE_DRAFT.md` (or the final `TRUST_PAGE.md` if it has already
+       been renamed), add the two representative contacts to `## Contact` and a
+       short, factual statement in `## Compliance posture`; update its date. Do
+       not list DataRep in the infrastructure-vendor table merely because it is
+       the statutory representative.
+     - Do **not** add DataRep automatically to `DPA_DRAFT.md`'s Customer Personal
+       Data Sub-processor list: the Article 27 appointment supports Fuzzy Nova's
+       own statutory obligations and is not, by itself, Customer-directed
+       processing under the DPA. `LICENSE.md` and
+       `ENTERPRISE_TERMS_DRAFT.md` likewise need no representative clause unless
+       DataRep or reviewing counsel identifies a specific reason. If the
+       appointment changes any actual data flow, update every affected document
+       and the DPA annexes consistently.
+     - Render `/privacy` and `/trust` locally, verify all representative links and
+       line breaks, search the repository for stale privacy version/contact text,
+       and include the appointment details in the pending attorney-review packet.
+       The website already imports the canonical Markdown; do not create a second
+       hand-maintained copy of either document.
+  6. At least eight weeks before annual expiry, verify the data-subject count,
+     data categories, countries, breaches, and processing changes; complete
+     DataRep's renewal questionnaire and renew or upgrade without a coverage gap.
+     Revisit the tier earlier when approaching 1,000 relevant people or whenever
+     processing changes materially.
 - [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
 - [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
 
@@ -511,7 +582,7 @@ Confirm:
 - [ ] `npx vsce login fuzzynova`
 - [ ] `npm run package && npx vsce publish` (or `npx vsce publish --packagePath ctrlyoke-0.1.0.vsix`)
 - [ ] Post-publish: confirm listing loads, README renders, CHANGELOG tab shows `0.1.0`, install into a clean profile, run one workflow.
-- [ ] Flip `LAUNCHED = true` and set the real `CHECKOUT_URL` in `landing/src/config.ts` (only after Phase 5 checkout is verified end-to-end).
+- [ ] Flip `LAUNCHED = true` and set the real `CHECKOUT_URL` in `landing/src/config.ts` only after Phase 5 checkout is verified end-to-end **and Phase 7's DataRep EU/EEA + UK appointments are effective and published in the Privacy Policy**. If launching without those appointments, geo-block EU/EEA/UK sales and do not intentionally monitor people there until counsel confirms the Article 27 position.
 
 ---
 
@@ -881,6 +952,7 @@ public**.
 | Live-mode LS webhook (separate from test-mode one)                         | OPEN                  | Phase 5.3 step 6 — create once Nathan flips Test mode off in the LS dashboard                                                                                                                                                                                                                                                                                                                                     |
 | **`LicenseService` implementation**                                        | **DONE**              | Phase 6 — implementation, gate sites, trial, docs, and unlicensed free-path production review complete; QR scanning deferred                                                                                                                                                                                                                                                                                      |
 | Attorney sign-off on final EULA                                            | DONE                  | Phase 7 — approved September 7, 2026                                                                                                                                                                                                                                                                                                                                                                              |
+| EU/EEA + UK Article 27 representatives (DataRep)                           | OPEN — SALES GATE     | Phase 7 — purchase the confirmed dual appointment before EU/EEA/UK sales or monitoring, publish the exact executed contact details in `PRIVACY.md`, and renew annually                                                                                                                                                                                                                                            |
 | Screenshots + demo GIF                                                     | OPEN                  | Phase 8 — now unblocked, Phase 6 UI is final                                                                                                                                                                                                                                                                                                                                                                      |
 | Final `vsce ls` package inspection                                         | OPEN                  | Phase 8 — run right before publish                                                                                                                                                                                                                                                                                                                                                                                |
 | Marketplace publish                                                        | OPEN — unblocked      | Phase 9 — remaining work is Phase 8 packaging/screenshots, not a legal or licensing gate anymore                                                                                                                                                                                                                                                                                                                  |
