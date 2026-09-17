@@ -55,7 +55,6 @@ import {
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
-  VSCODE_CONTEXT_KEYS,
   WORKTREE_EDIT_KINDS,
   WORKTREE_BRANCH_STATES,
   WORKTREE_MODES,
@@ -74,6 +73,11 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
+  DisposableRegistry,
+  KeyValueStore,
+  StatusBarSink,
+} from "./HostPorts";
+import type {
   CliOutput,
   ActiveTerminalWorkflowRef,
   RunViewLoadedMessage,
@@ -84,8 +88,6 @@ import type {
   TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
-import { StatusBarManager } from "../ui/StatusBarManager";
-import type { LicenseService } from "../license/LicenseService";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -137,7 +139,7 @@ import {
   type WorktreeSyncResult,
 } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
-import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import { notifyUserFeedback } from "./UserFeedbackSink";
@@ -162,7 +164,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
  * Manages the registry of WorkflowInstance objects and owns resources that
  * are shared or orchestrator-scoped:
  *   - Four harness integrations (created once, shared for Phase 1)
- *   - StatusBarManager
+ *   - injected host services
  *   - WorkflowCommandHandler
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
@@ -329,6 +331,17 @@ interface AddressedRunView {
   isSystemGenerated: boolean;
 }
 
+export interface WorkflowOrchestratorDependencies {
+  platform: PlatformAdapter;
+  dashboardProvider?: DashboardClient;
+  userFeedbackSink: UserFeedbackSink;
+  runnerHostIdentity: RunnerHostIdentity;
+  statusBarSink?: StatusBarSink;
+  disposableRegistry: DisposableRegistry;
+  workspaceState: KeyValueStore;
+  userInteractionPort?: UserInteractionPort;
+}
+
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
@@ -451,7 +464,13 @@ export class WorkflowOrchestrator {
   private readonly workspaceStatsService?: WorkspaceStatsService;
   private readonly integrationFactory: IntegrationFactory;
   private readonly compatibilityRegistry: HarnessCapabilityRegistry;
-  private readonly statusBarManager: StatusBarManager;
+  private readonly platform: PlatformAdapter;
+  private readonly statusBarSink?: StatusBarSink;
+  private readonly disposableRegistry: DisposableRegistry;
+  private readonly workspaceState: KeyValueStore;
+  private readonly userFeedbackSink: UserFeedbackSink;
+  private readonly runnerHostIdentity: RunnerHostIdentity;
+  private readonly userInteractionPort: UserInteractionPort;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
 
   // Harness integrations — created once at startup
@@ -512,14 +531,16 @@ export class WorkflowOrchestrator {
    */
   private startupPanelViewedId: string | null = null;
 
-  constructor(
-    private readonly context: vscode.ExtensionContext,
-    dashboardProvider: DashboardClient | undefined,
-    private readonly userFeedbackSink: UserFeedbackSink,
-    private readonly runnerHostIdentity: RunnerHostIdentity,
-    licenseService?: LicenseService,
-    private readonly userInteractionPort: UserInteractionPort = new NullUserInteractionPort()
-  ) {
+  constructor(dependencies: WorkflowOrchestratorDependencies) {
+    this.platform = dependencies.platform;
+    this.statusBarSink = dependencies.statusBarSink;
+    this.disposableRegistry = dependencies.disposableRegistry;
+    this.workspaceState = dependencies.workspaceState;
+    this.userFeedbackSink = dependencies.userFeedbackSink;
+    this.runnerHostIdentity = dependencies.runnerHostIdentity;
+    this.userInteractionPort =
+      dependencies.userInteractionPort ?? new NullUserInteractionPort();
+
     // Create the startup auto-load promise — browser clients await this instead
     // of registering pending callbacks, eliminating the startup race condition.
     this.startupAutoLoadSettled = new Promise((resolve) => {
@@ -528,8 +549,8 @@ export class WorkflowOrchestrator {
 
     this.viewerRegistry.set(this.PANEL_CLIENT_ID, null);
 
-    if (dashboardProvider) {
-      this.dashboardBroadcastHub.addClient(dashboardProvider);
+    if (dependencies.dashboardProvider) {
+      this.dashboardBroadcastHub.addClient(dependencies.dashboardProvider);
     }
     // Workspace — the folder matching the resolved `.ctrlyoke` root
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
@@ -558,7 +579,7 @@ export class WorkflowOrchestrator {
     }
 
     this.integrationFactory = new IntegrationFactory(
-      new VsCodeAdapter(context),
+      this.platform,
       this.userFeedbackSink,
       this.harnessUsageService?.getProviderUsageIngestPort()
     );
@@ -573,20 +594,18 @@ export class WorkflowOrchestrator {
     this.antigravityCliIntegration =
       this.integrationFactory.createAntigravityCli();
 
-    // Status bar — a single item rendering traversal state plus license tier
-    this.statusBarManager = new StatusBarManager(context, licenseService);
-
+    // Status updates are delegated to the optional host-owned status sink.
     // Shared parsers / orchestration helpers
     this.promptFileParser = new PromptFileParser(
-      new VsCodeAdapter(context),
+      this.platform,
       this.userFeedbackSink
     );
     this.workspaceSessionManager = new WorkspaceSessionManager(
       this.promptFileParser,
-      new VsCodeAdapter(context)
+      this.platform
     );
     this.endConditionEvaluator = new EndConditionEvaluator(
-      new VsCodeAdapter(context)
+      this.platform
     );
     this.workflowCommandHandler = new WorkflowCommandHandler(
       this.userFeedbackSink
@@ -604,7 +623,7 @@ export class WorkflowOrchestrator {
     ];
     for (const [harnessId, integration] of allIntegrations) {
       const installHint = integration.getInstallHint();
-      context.subscriptions.push(
+      this.disposableRegistry.add(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
             Log.trace(
@@ -1569,7 +1588,7 @@ export class WorkflowOrchestrator {
    * an empty array to clear any stale data left by earlier versions.
    */
   async saveState(): Promise<void> {
-    await this.context.workspaceState.update("ctrlyoke.loadedWorkflows", []);
+    await this.workspaceState.update("ctrlyoke.loadedWorkflows", []);
   }
 
   /**
@@ -2664,7 +2683,6 @@ export class WorkflowOrchestrator {
     }
 
     const workspaceRoot = this.requireWorkspaceRoot();
-    const platform = new VsCodeAdapter(this.context);
     const previewSourcePath = sourcePath ?? state?.workingFilePath;
     const outputHistoryManager = this.getOutputHistoryManager();
     const historyFilePath =
@@ -2681,17 +2699,17 @@ export class WorkflowOrchestrator {
       getHarness: (harnessId, executionWorkspace) =>
         this.getExecutionPreviewHarness(harnessId, executionWorkspace),
       workspaceRoot,
-      workspaceRoots: platform.getWorkspaceRoots(),
+      workspaceRoots: this.platform.getWorkspaceRoots(),
       approvedExternalRoots:
-        platform.getApprovedExternalFileRoots?.(workspaceRoot),
-      namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
-      extensionPath: platform.getExtensionPath(),
+        this.platform.getApprovedExternalFileRoots?.(workspaceRoot),
+      namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
+      extensionPath: this.platform.getExtensionPath(),
       hostCanProvidePty: true,
       supportsConcurrentInteractiveSessions: true,
       cwd: workspaceRoot,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
-      secretStore: platform.getSecretStore?.(),
+      secretStore: this.platform.getSecretStore?.(),
       resolvePriorContextItems: createPriorContextResolver({
         workspaceRoot,
         historyFilePath,
@@ -5939,7 +5957,8 @@ export class WorkflowOrchestrator {
     }
     this.polledRunnerJsonMtimes.clear();
 
-    this.statusBarManager.dispose();
+    // The extension owns the injected status sink. Its StatusBarManager is
+    // registered with context.subscriptions at construction time.
     this.endConditionEvaluator.dispose();
     this.compatibilityRegistry.dispose();
     // Cancels any in-flight provider quota probe so its subprocess cannot
@@ -6111,11 +6130,7 @@ export class WorkflowOrchestrator {
   }
 
   private setHasQueuedStepsContext(state: QueueState | undefined): void {
-    void vscode.commands.executeCommand(
-      "setContext",
-      VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
-      (state?.steps.length ?? 0) > 0
-    );
+    this.statusBarSink?.setHasQueuedStepsContext((state?.steps.length ?? 0) > 0);
   }
 
   private isWorkflowViewedByAnyClient(workflowId: string): boolean {
@@ -6228,7 +6243,7 @@ export class WorkflowOrchestrator {
    */
   private buildWorkflowInstance(): WorkflowInstance {
     const instance = new WorkflowInstance(
-      new VsCodeAdapter(this.context),
+      this.platform,
       this.dashboardBroadcastHub as IDashboardSink,
       this.integrationFactory,
       (harnessOverride?: HarnessId) =>
@@ -6558,7 +6573,7 @@ export class WorkflowOrchestrator {
     const activeInstance = this.getActiveInstance();
     const state = activeInstance.getQueueState();
     const harnessStatus = this.getDefaultIntegration().getDetailedStatus();
-    this.statusBarManager.updateStatusBar(state, harnessStatus);
+    this.statusBarSink?.updateStatusBar(state, harnessStatus);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

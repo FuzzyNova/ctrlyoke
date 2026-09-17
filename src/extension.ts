@@ -86,6 +86,7 @@ import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import { LicenseService, LICENSE_TIERS } from "./license/LicenseService";
 import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
+import { StatusBarManager } from "./ui/StatusBarManager";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -171,6 +172,7 @@ export async function activate(context: vscode.ExtensionContext) {
     hostInstanceId: crypto.randomUUID(),
     pid: process.pid,
   };
+  const platform = new VsCodeAdapter(context);
 
   try {
     // Initialize config service with file-based backends BEFORE Log.initialize()
@@ -361,14 +363,23 @@ export async function activate(context: vscode.ExtensionContext) {
       vscodeUserFeedbackSink,
       browserUserFeedbackSink,
     ]);
-    workflowOrchestrator = new WorkflowOrchestrator(
-      context,
-      webviewProvider,
+    const statusBarSink = new StatusBarManager(context, licenseService);
+    workflowOrchestrator = new WorkflowOrchestrator({
+      platform,
+      dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
-      licenseService,
-      webviewProvider.getUserInteractionPort()
-    );
+      statusBarSink,
+      disposableRegistry: {
+        add: (disposable) => context.subscriptions.push(disposable),
+      },
+      workspaceState: {
+        update: async (key, value) => {
+          await context.workspaceState.update(key, value);
+        },
+      },
+      userInteractionPort: webviewProvider.getUserInteractionPort(),
+    });
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup
     // behind an init prompt. Must be set before initialize() so the check is in
@@ -570,7 +581,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register commands
-    registerCommands(context, runnerHostIdentity);
+    registerCommands(context, runnerHostIdentity, platform);
 
     // Show the Getting Started walkthrough once, on first activation after install.
     if (!context.globalState.get<boolean>(GETTING_STARTED_SHOWN_KEY)) {
@@ -588,7 +599,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 function registerCommands(
   context: vscode.ExtensionContext,
-  runnerHostIdentity: RunnerHostIdentity
+  runnerHostIdentity: RunnerHostIdentity,
+  platform: VsCodeAdapter
 ) {
   const reportCommandError = (message: string): void => {
     notifyUserFeedback(
@@ -1371,7 +1383,7 @@ function registerCommands(
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
-        new VsCodeAdapter(context).getSecretStore()
+        platform.getSecretStore()
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
@@ -1495,7 +1507,7 @@ function registerCommands(
     "ctrlyoke.regenerateServerToken",
     async () => {
       await new ServerTokenStore(
-        new VsCodeAdapter(context).getSecretStore()
+        platform.getSecretStore()
       ).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,

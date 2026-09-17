@@ -48,7 +48,10 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
 // Phase 1 steps 2, 3, 4, 5, 8, and 9 progressively shrink this graph;
 // later phases remove the remaining downstream VS Code importers.
-const vscodeImportersReachableFromOrchestrator = 13;
+// Shrunk from 13 to 10: WorkflowOrchestrator no longer imports the
+// StatusBarManager, VsCodeAdapter, or LicenseService host implementations;
+// those capabilities are injected by extension.ts.
+const vscodeImportersReachableFromOrchestrator = 10;
 
 const vscodeImporterFilesReachableFromOrchestrator = [
   "src/core/WorkflowOrchestrator.ts",
@@ -56,11 +59,8 @@ const vscodeImporterFilesReachableFromOrchestrator = [
   "src/core/orchestration/ExternalRunWatchSession.ts",
   "src/core/orchestration/PromptFileWatcher.ts",
   "src/core/orchestration/WorkflowCommandHandler.ts",
-  "src/platform/VsCodeAdapter.ts",
-  "src/platform/VsCodeSecretStore.ts",
   "src/platform/VsCodeWorkspaceRoot.ts",
   "src/ui/ExternalFileTrustPrompt.ts",
-  "src/ui/StatusBarManager.ts",
   "src/utils/AttachmentBuilders.ts",
   "src/utils/Log.ts",
   "src/utils/ModelRegistry.ts",
@@ -69,16 +69,16 @@ const vscodeImporterFilesReachableFromOrchestrator = [
 // Phase 1 step 5 removes the orchestrator's direct vscode import.
 const orchestratorDirectVsCodeImports = 1;
 
-// Phase 1 step 2 removes the orchestrator's vscode.ExtensionContext
-// constructor parameter.
-const orchestratorVsCodeConstructorParams = 1;
+// Shrunk from 1 to 0: the orchestrator now accepts project-owned dependencies
+// instead of a VS Code ExtensionContext constructor parameter.
+const orchestratorVsCodeConstructorParams = 0;
 
 // Already clean; this guard prevents WorkflowInstance.ts from regressing.
 const workflowInstanceDirectVsCodeImports = 0;
 
-// Phase 1 step 2 leaves one construction in TemplateManager.ts; Phase 3
-// removes that final core construction.
-const coreVsCodeAdapterConstructions = 7;
+// Shrunk from 7 to 1: six orchestrator constructions moved to the extension
+// composition root; TemplateManager remains for Phase 3.
+const coreVsCodeAdapterConstructions = 1;
 
 interface SourceAuditSite {
   file: string;

@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { QueueState, EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import { HarnessStatus } from "../core/HarnessIntegration";
+import type { HarnessDetailedStatus, StatusBarSink } from "../core/HostPorts";
+import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import {
   LICENSE_SOURCES,
   LICENSE_TIERS,
@@ -11,14 +13,6 @@ import {
 /**
  * Detailed status from harness integration
  */
-export interface HarnessDetailedStatus {
-  initializationStatus: HarnessStatus;
-  isReady: boolean;
-  message: string;
-  pollingAttempts?: number;
-  maxPollingAttempts?: number;
-}
-
 interface StatusBarView {
   text: string;
   tooltip: string;
@@ -31,7 +25,7 @@ interface StatusBarView {
  * two previous displays — the compass status and the license key indicator —
  * live in one place instead of on opposite sides of the window.
  */
-export class StatusBarManager implements vscode.Disposable {
+export class StatusBarManager implements vscode.Disposable, StatusBarSink {
   private readonly statusBarItem: vscode.StatusBarItem;
   private readonly entitlementSubscription: vscode.Disposable | undefined;
   private readonly showLicense: boolean;
@@ -157,6 +151,14 @@ export class StatusBarManager implements vscode.Disposable {
 
     this.baseView = { text, tooltip, backgroundColor };
     this.render();
+  }
+
+  setHasQueuedStepsContext(hasQueuedSteps: boolean): void {
+    void vscode.commands.executeCommand(
+      "setContext",
+      VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
+      hasQueuedSteps
+    );
   }
 
   /**

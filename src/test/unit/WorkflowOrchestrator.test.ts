@@ -16,6 +16,7 @@ import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWat
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
 import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
+import { MockPlatform } from "../helpers/mockHarness";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -700,6 +701,15 @@ suite("WorkflowOrchestrator active queue context key", () => {
 
     const originalExecuteCommand = vscode.commands.executeCommand;
     const updates: Array<{ key: string; value: boolean }> = [];
+    internal.statusBarSink = {
+      updateStatusBar: () => undefined,
+      setHasQueuedStepsContext: (hasQueuedSteps: boolean) => {
+        updates.push({
+          key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
+          value: hasQueuedSteps,
+        });
+      },
+    };
     vscode.commands.executeCommand = (async (
       command: string,
       ...args: unknown[]
@@ -3673,7 +3683,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     };
     internal.setViewedWorkflowId = () => undefined;
     internal.replayWorkflowStateTo = async () => undefined;
-    internal.context = { workspaceState: { update: async () => undefined } };
+    internal.workspaceState = { update: async () => undefined };
     return { orchestrator, internal };
   }
 
@@ -5878,7 +5888,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     const workflowKey = "failed-start-lineage" as never;
     const runRef = "run-2026-07-30T14-00-00-000Z" as never;
 
-    internal.context = {};
+    internal.platform = new MockPlatform(os.tmpdir());
     internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
     internal.instances = new Map();
     internal.retiredInstances = new Map();
@@ -5940,7 +5950,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
 
-    internal.context = {};
+    internal.platform = new MockPlatform(os.tmpdir());
     internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
     internal.instances = new Map();
     internal.retiredInstances = new Map();

@@ -195,7 +195,7 @@ function createHost(
     // dashboard alongside the summary update, so the double needs this too.
     updateStepStatus: () => undefined,
   };
-  internal.context = { workspaceState: { update: async () => undefined } };
+  internal.workspaceState = { update: async () => undefined };
   internal.setupRunnerJsonCreateWatcher = () => undefined;
   internal.lineageRepository = {
     listLineageKeys: async () => [WORKFLOW_KEY],

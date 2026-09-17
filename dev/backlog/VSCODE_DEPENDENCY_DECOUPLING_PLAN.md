@@ -395,7 +395,7 @@ Where a per-plan phase number disagrees with a stage here, this table wins.
 | ----: | ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |     0 | Dependency guards + baselines            | This plan, Phase 0 (absorbs Feedback Phase 5) | CI fails on a new `vscode` import in a shared group, a new `show*Message`, or a 20th adapter-UI call                                                                                                                                                                                                                                                                                                                                                              |
 |     1 | Toast queue + `ToastViewport`            | Feedback Phase 1                              | `showToast()` renders; panel shows no duplicate; browser-delivery decision recorded                                                                                                                                                                                                                                                                                                                                                                               |
-|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | **Gate corrected 2026-09-17:** `WorkflowOrchestrator.ts` contains no `vscode` import and no VS Code type in its constructor or public surface, and `new VsCodeAdapter` appears only in `extension.ts`. A _runtime_ "instantiates with no `vscode` module loadable" test is not reachable at this stage — 13 files in the orchestrator's transitive value-import graph still import `vscode` (measured 2026-09-17 following value imports only), and each is owned by a later stage. That test arrives with Stage 12; the enforceable gate here is the shrink-only import-graph counter from Phase 0 item 3. |
+|     2 | Host composition (orchestrator options)  | This plan, Phase 1                            | **Gate corrected 2026-09-17:** `WorkflowOrchestrator.ts` contains no `vscode` import and no VS Code type in its constructor or public surface, and `new VsCodeAdapter` appears only in `extension.ts`. A _runtime_ "instantiates with no `vscode` module loadable" test is not reachable at this stage — 10 files in the orchestrator's transitive value-import graph still import `vscode` after Phase 1 items 1–6 (measured 2026-09-17 following value imports only), and each is owned by later Phase 1/stage work. That test arrives with Stage 12; the enforceable gate here is the shrink-only import-graph counter from Phase 0 item 3. |
 |     3 | Watcher factory                          | This plan, Phase 2                            | All five sites use the port; create/change/delete/dispose contract tests pass on both impls                                                                                                                                                                                                                                                                                                                                                                       |
 |     4 | Feedback port + adapter migration        | Feedback Phases 2 and 2.5                     | Adapter-UI counter is 0; no run can block on an unanswerable prompt                                                                                                                                                                                                                                                                                                                                                                                               |
 |     5 | Command UI / domain split                | This plan, Phase 3                            | Domain ops callable headlessly; VS Code pickers confined to command facades                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -436,11 +436,11 @@ Notes on the merges:
    shrink-only transitive-import-graph guard rooted at
    `WorkflowOrchestrator.ts` is in
    `src/test/unit/SourceAuditCounters.test.ts`, using the named baselines
-   `vscodeImportersReachableFromOrchestrator` (13 files),
+   `vscodeImportersReachableFromOrchestrator` (10 files),
    `orchestratorDirectVsCodeImports` (1),
-   `orchestratorVsCodeConstructorParams` (1),
+   `orchestratorVsCodeConstructorParams` (0),
    `workflowInstanceDirectVsCodeImports` (0), and
-   `coreVsCodeAdapterConstructions` (7). The graph ignores `import type`
+   `coreVsCodeAdapterConstructions` (1). The graph ignores `import type`
    edges, which are erased at runtime — `CliIntegration.ts` reaches
    `VsCodeAdapter` only that way.
 4. Make the allowlist shrink-only.
@@ -469,44 +469,42 @@ constructions, and stopped short of the seams that actually hold the `vscode`
 import in place.
 
 The test-first host-boundary guard is now in place in
-`src/test/unit/SourceAuditCounters.test.ts`. Phase 1 step 2 removes the
-`orchestratorVsCodeConstructorParams` baseline and reduces
-`coreVsCodeAdapterConstructions` from 7 to 1; step 5 removes the
-`orchestratorDirectVsCodeImports` baseline. Steps 2–5, 8, and 9 progressively
-shrink `vscodeImportersReachableFromOrchestrator`; Phase 2 and later stages
-remove the remaining importers. The `workflowInstanceDirectVsCodeImports`
-baseline is already zero and guards against regression.
+`src/test/unit/SourceAuditCounters.test.ts`. Phase 1 items 1–6 landed on
+2026-09-17: the orchestrator now accepts a project-owned dependencies object,
+has no `ExtensionContext` field or constructor parameter, and receives its
+platform, status sink, disposable registry, and workspace state store from the
+extension composition root. The guard therefore records
+`orchestratorVsCodeConstructorParams` at 0 and
+`coreVsCodeAdapterConstructions` at 1; the reachable value-import graph
+shrunk from 13 to 10 because the orchestrator no longer reaches
+`StatusBarManager`, `VsCodeAdapter`, or `VsCodeSecretStore`. Its direct
+`vscode` import remains 1 for the watcher and other later Phase 1 work. Steps
+8 and 9 and later stages remove the remaining importers. The
+`workflowInstanceDirectVsCodeImports` baseline is already zero and guards
+against regression.
 
-1. Replace
+1. **DONE 2026-09-17.** Replace
    `WorkflowOrchestrator(context, dashboardProvider, userFeedbackSink, runnerHostIdentity, licenseService, userInteractionPort)`
-   with a single project-owned dependencies object.
-2. Construct one `VsCodeAdapter` in `extension.ts` and inject it. Shared code
-   constructs **six**, not five — `WorkflowOrchestrator.ts` lines 561, 581,
-   586, 589, 2667, and 6231 (the old 358/378/381/385/4536 no longer exist).
-   A seventh lives in `TemplateManager.ts:135` (not `:122`) and is removed by
-   the Phase 3 `TemplateManager` refactor. Three further throwaway
-   constructions exist only to reach `getSecretStore()` —
-   `extension.ts:1374`, `extension.ts:1498`,
-   `CtrlYokeWebviewProvider.ts:168`. Those are in boundary files and are not
-   blockers, but they should reuse the composition root's instance so "one
-   adapter" is literally true.
-3. Remove the shared orchestrator's `ExtensionContext` field. It has exactly
-   three uses: two of the adapter constructions above, plus
-   `this.context.workspaceState.update("ctrlyoke.loadedWorkflows", [])` at
-   line 1572, which needs a small injected key/value store port.
-4. Inject an optional status sink instead of constructing `StatusBarManager`
-   (line 577). The orchestrator calls only `updateStatusBar()` and `dispose()`
-   on it, and `licenseService` is passed to nothing else — so the sink removes
-   both the `StatusBarManager` and `LicenseService` imports and the
-   `licenseService` constructor parameter. `setHasQueuedStepsContext()`'s
-   `setContext` call (line 6114) belongs on the same sink: it is VS Code
-   chrome, not orchestration.
-5. Use an explicit disposable registry/lifecycle contract instead of pushing
-   shared disposables directly into `context.subscriptions`. There is one such
-   site, at line 607.
-6. `WorkflowInstance` already takes `platform: PlatformAdapter` and
-   `workspaceFolderPath: string | undefined` and imports no `vscode`, so the
-   only change is passing the injected adapter and root at line 6231.
+   with a single project-owned `WorkflowOrchestratorDependencies` object.
+2. **DONE 2026-09-17.** Construct one `VsCodeAdapter` in `extension.ts` and
+   inject it into the orchestrator and its shared collaborators. The two
+   extension-only `getSecretStore()` calls now reuse that instance. The six
+   orchestrator constructions are gone; `TemplateManager.ts` and
+   `CtrlYokeWebviewProvider.ts` remain explicitly owned by later/out-of-scope
+   work.
+3. **DONE 2026-09-17.** Remove the shared orchestrator's `ExtensionContext`
+   field and replace its workspace-state write with the injected
+   `KeyValueStore` port.
+4. **DONE 2026-09-17.** Inject an optional `StatusBarSink`; move queue context
+   updates onto that sink, remove the orchestrator's `StatusBarManager` and
+   `LicenseService` dependencies, and leave status-bar disposal with
+   `extension.ts` through `context.subscriptions`.
+5. **DONE 2026-09-17.** Use the injected `DisposableRegistry` for the
+   orchestrator's harness-status subscriptions; `extension.ts` adapts it to
+   `context.subscriptions`.
+6. **DONE 2026-09-17.** Pass the injected `PlatformAdapter` to
+   `WorkflowInstance`; its signature and VS Code-free implementation remain
+   unchanged.
 7. **Replace `currentWorkspaceFolder: vscode.WorkspaceFolder | undefined`**
    (declared line 455, read at ~45 sites, always as `.uri.fsPath`) with an
    injected `() => string | undefined` resolver. `platform.getWorkspaceRoot()`
@@ -715,7 +713,7 @@ Only the first is blocking; the rest can be answered inside their stage.
    assertion — because a runtime load test cannot pass until Stage 12 (16
    files in the orchestrator's transitive graph still import `vscode`, all
    owned by later stages). The test-first ordering is unchanged; only the form
-   of the test is. The measured baseline is 13 value-importers; an unfiltered
+   of the test is. The measured baseline is 10 value-importers; an unfiltered
    scan says 16, because the three completion helpers are reached only through
    a `import type` edge from `WebviewMessageTypes.ts` and are erased at
    runtime.
