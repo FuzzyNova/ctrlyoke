@@ -187,6 +187,10 @@ describe("LicenseSection", () => {
     });
     render(<LicenseSection />);
 
+    const status = screen.getByRole("region", { name: "License status" });
+    expect(within(status).getAllByText("Enterprise")).toHaveLength(2);
+    expect(within(status).queryByText("Pro")).not.toBeInTheDocument();
+
     expect(
       screen.queryByRole("heading", { name: "Activated machines" })
     ).not.toBeNull();

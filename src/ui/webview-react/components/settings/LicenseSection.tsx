@@ -67,6 +67,7 @@ export function LicenseSection() {
   }, []);
 
   const isEnterprise = licenseAccess.isEnterprise === true;
+  const tierLabel = isEnterprise ? "Enterprise" : licenseAccess.isPro ? "Pro" : "Free";
   const showMachines =
     !isEnterprise &&
     (activationLimit ||
@@ -171,11 +172,11 @@ export function LicenseSection() {
 
   const statusDetails = useMemo(
     () => [
-      ["Tier", licenseAccess.isPro ? "Pro" : "Free"],
+      ["Tier", tierLabel],
       ["Source", source],
       ["Expiry", expiry],
     ],
-    [expiry, licenseAccess.isPro, source]
+    [expiry, source, tierLabel]
   );
 
   return (
@@ -213,7 +214,7 @@ export function LicenseSection() {
           <span
             className={`rounded px-2 py-0.5 text-xs font-semibold ${licenseAccess.isPro ? "bg-pro-brand text-white" : "border border-panel-border text-description-fg"}`}
           >
-            {licenseAccess.isPro ? "Pro" : "Free"}
+            {tierLabel}
           </span>
         </div>
         <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">

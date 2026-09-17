@@ -229,13 +229,18 @@ export class StatusBarManager implements vscode.Disposable {
 
   private getLicenseText(): string {
     const tierLabel =
-      this.entitlement.tier === LICENSE_TIERS.PRO ? "Pro" : "Free";
+      this.entitlement.tier === LICENSE_TIERS.PRO
+        ? this.entitlement.isEnterprise
+          ? "Enterprise"
+          : "Pro"
+        : "Free";
     return `$(key) ${tierLabel}`;
   }
 
   private getLicenseTooltip(): string {
     if (this.entitlement.tier === LICENSE_TIERS.PRO) {
-      return `ctrlyoke Pro license — ${formatEntitlementDetails(
+      const tierName = this.entitlement.isEnterprise ? "Enterprise" : "Pro";
+      return `ctrlyoke ${tierName} license — ${formatEntitlementDetails(
         this.entitlement
       )}`;
     }
