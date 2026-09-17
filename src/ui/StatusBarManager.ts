@@ -48,7 +48,7 @@ export class StatusBarManager implements vscode.Disposable {
   ) {
     this.showLicense = licenseService !== undefined;
     this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
+      vscode.StatusBarAlignment.Right,
       100
     );
     this.statusBarItem.command = "ctrlyoke.openPanel";
