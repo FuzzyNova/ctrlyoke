@@ -285,16 +285,19 @@ export const SortableWorkflowStepWrapper = React.memo(
     showPauseBoundaryBefore = false,
     ...stepItemProps
   }: SortableWrapperProps) {
-    const { attributes, listeners, setNodeRef, isDragging } = useSortable({
-      id,
-      disabled,
-    });
-    // `transform`/`transition` are deliberately discarded: the steps panel's
-    // live preview already re-renders the list in its dragged order, so the
-    // row is where dnd-kit would be transforming it to — and this frame puts
-    // a transform on the body alone, which would tear the row away from its
-    // own rail and slot number. See `livePreviewSortingStrategy`.
-    const style = { opacity: isDragging ? 0.5 : 1 };
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id, disabled });
+    const style = {
+      transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
     const harnessModel = stepItemProps.getStepHarnessModel(
       stepItemProps.step,
       stepItemProps.status

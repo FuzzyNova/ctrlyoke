@@ -62,7 +62,11 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { ExitButton } from "../shared";
 import {
@@ -88,7 +92,6 @@ import {
   groupDragId,
   isGroupDragId,
   isStepDragId,
-  livePreviewSortingStrategy,
   stepDragId,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
@@ -650,16 +653,12 @@ export function pendingDragCollisionDetection(
 }
 
 /**
- * The drop slot below a trailing parallel group — a plain droppable, and
- * deliberately *not* one of the enclosing `SortableContext`'s items.
- *
- * It used to be listed there because `useSortable` throws away every transform
- * the moment `over` is not one of the context's own items, which once froze
- * the dragged row the instant the pointer cleared the group. This panel no
- * longer positions anything from those transforms (see
- * `livePreviewSortingStrategy`), so membership would buy nothing: a
- * `SortableContext`'s `items` feed `activeIndex`/`overIndex`, and those only
- * ever reach the strategy and the layout animation.
+ * The drop slot below a trailing parallel group. Its id has to be listed in the
+ * enclosing `SortableContext` as well as registered as a droppable:
+ * `useSortable` throws away *every* transform — including the one keeping the
+ * dragged row under the cursor — the moment `over` is not one of the context's
+ * own items, so a droppable the outer list has never heard of would freeze the
+ * drag the instant the pointer cleared the group.
  */
 const PendingTailDropSlot: React.FC = () => {
   const { setNodeRef } = useDroppable({ id: PENDING_TAIL_DRAG_ID });
@@ -1451,6 +1450,13 @@ const WorkflowStepsPanelInner: React.FC<{
   // last step row's own id already means "drop below everything".
   const showPendingTail =
     canReorder && hasTrailingPendingGroup(previewDragState);
+  const pendingDragItems = useMemo(
+    () =>
+      showPendingTail
+        ? [...previewDragState.order, PENDING_TAIL_DRAG_ID]
+        : previewDragState.order,
+    [previewDragState.order, showPendingTail]
+  );
 
   /**
    * Drag position at which `overDragId` was last updated. Every live-preview
@@ -1961,8 +1967,8 @@ const WorkflowStepsPanelInner: React.FC<{
               onDragCancel={handleDragCancel}
             >
               <SortableContext
-                items={previewDragState.order}
-                strategy={livePreviewSortingStrategy}
+                items={pendingDragItems}
+                strategy={verticalListSortingStrategy}
               >
                 {(() => {
                   return previewDragState.order.map(

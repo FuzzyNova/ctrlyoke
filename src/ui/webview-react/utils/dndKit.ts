@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
-import type { SortingStrategy } from "@dnd-kit/sortable";
 
 type SyntheticListenerMap = Record<string, Function>;
 
@@ -75,29 +74,3 @@ export function isGroupDragId(id: string): boolean {
  * the list could only ever land above it — or be absorbed into it.
  */
 export const PENDING_TAIL_DRAG_ID = "pending-tail";
-
-/**
- * The sorting strategy for every `SortableContext` in the steps panel: no
- * displacement at all, ever.
- *
- * dnd-kit's built-in strategies exist to fake a reorder with transforms while
- * the DOM stays put. The steps panel does the opposite — it recomputes a live
- * preview and physically re-renders the list in its new order every time the
- * drop target changes (see `computeLivePreviewState`), so the rows are
- * *already* where the strategy would be trying to move them. Layering a
- * transform on top double-counts the move, and in this layout it does so
- * visibly wrong: `WorkflowStepRowFrame` puts the transform on the row's body
- * only, so a displaced row's identity rail and slot number stay behind at the
- * untransformed position while its content flies somewhere else entirely.
- * Dragging a parallel group past a step was the worst case — the step's body
- * jumped a whole group-height while its number sat inside the group's rail.
- *
- * The same reasoning rules out `useSortable`'s `transform`/`transition` for
- * the dragged row itself: with no dnd-kit `<DragOverlay>` mounted (this panel
- * has its own clone — see `dragOverlayRect` in `WorkflowStepsPanel`),
- * `useSortable` displaces the drag source by the raw pointer translate, which
- * the strategy never sees. Consumers must therefore ignore both values, not
- * merely install this strategy; `transition` is what turned the discarded
- * transforms into a visible fly-back-and-forth on every drop.
- */
-export const livePreviewSortingStrategy: SortingStrategy = () => null;
