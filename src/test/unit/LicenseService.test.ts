@@ -55,6 +55,22 @@ class CountingSecretStore extends InMemorySecretStore {
   }
 }
 
+/** Stands in for a credential store that rejects one key's write. */
+class RejectingSecretStore extends InMemorySecretStore {
+  constructor(
+    private readonly rejectedKey: string,
+    private readonly reason: string
+  ) {
+    super();
+  }
+
+  override store(key: string, value: string): Thenable<void> {
+    return key === this.rejectedKey
+      ? Promise.reject(new Error(this.reason))
+      : super.store(key, value);
+  }
+}
+
 class InMemoryTrialState implements LicenseTrialStateStore {
   private readonly values = new Map<string, unknown>();
 
@@ -752,6 +768,82 @@ suite("LicenseService", () => {
       secrets.getCalls > readsAfterFirst,
       "a call after the TTL expires should re-read the store"
     );
+  });
+
+  test("blames local storage, not the network, when caching the license fails", async () => {
+    // Windows CredMan rejects a blob over 2560 bytes, so a multi-KB signed
+    // license file used to fail here and surface as "check your internet
+    // connection" — the one message that is certainly wrong at this point.
+    const secrets = new RejectingSecretStore(
+      LICENSE_FILE_SECRET_KEY,
+      "CredWrite failed with Win32 error 1783 for a 6000-byte blob."
+    );
+    const file = await createLicenseFile();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NO_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_PRO_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machine: new Response(JSON.stringify({ data: { id: "machine-123" } }), {
+        status: 201,
+      }),
+      checkout: new Response(file, { status: 200 }),
+    });
+    const service = createService(secrets, {
+      fetch,
+      machineFingerprint: "fingerprint-123",
+    });
+
+    await assert.rejects(
+      service.activateWithKey("live-key"),
+      (error: unknown) =>
+        error instanceof Error &&
+        /could not save it to this machine's credential store/.test(
+          error.message
+        ) &&
+        error.cause instanceof Error &&
+        /Win32 error 1783/.test(error.cause.message)
+    );
+
+    // The machine slot must still be released, or a retry burns another one.
+    assert.strictEqual(
+      calls.filter((call) => call.method === "DELETE").length,
+      1
+    );
+    assert.strictEqual((await service.getEntitlement()).tier, "free");
+  });
+
+  test("reports a failed license-file import instead of claiming success", async () => {
+    const secrets = new RejectingSecretStore(
+      LICENSE_FILE_SECRET_KEY,
+      "CredWrite failed with Win32 error 1783 for a 6000-byte blob."
+    );
+    const service = createService(secrets);
+
+    await assert.rejects(
+      service.importLicenseFile(await createLicenseFile()),
+      /could not save it to this machine's credential store/
+    );
+  });
+
+  test("treats an unverifiable license-file import as a no-op", async () => {
+    const secrets = new InMemorySecretStore();
+    await cache(secrets, await createLicenseFile());
+    const service = createService(secrets);
+
+    const entitlement = await service.importLicenseFile("not-a-license-file");
+
+    assert.strictEqual(entitlement.tier, "pro");
   });
 
   test("invalidates the cache immediately on deactivate", async () => {

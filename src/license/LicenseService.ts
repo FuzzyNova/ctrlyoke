@@ -187,8 +187,14 @@ class KeygenApiError extends Error {
 }
 
 class UserFacingLicenseError extends Error {
-  constructor(message: string) {
+  constructor(message: string, cause?: unknown) {
     super(message);
+    if (cause !== undefined) {
+      Object.defineProperty(this, "cause", {
+        configurable: true,
+        value: cause,
+      });
+    }
     this.name = "UserFacingLicenseError";
   }
 }
@@ -215,8 +221,7 @@ export class LicenseService implements LicenseService {
     string | (() => Promise<string>) | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
   private cachedEntitlement:
-    | { readonly value: Entitlement; readonly expiresAt: number }
-    | undefined;
+    { readonly value: Entitlement; readonly expiresAt: number } | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
@@ -398,7 +403,22 @@ export class LicenseService implements LicenseService {
         normalizedKey
       );
 
-      await this.cacheOnlineLicense(normalizedKey, blob, license.id, machineId);
+      // The license is already valid and the machine already activated at this
+      // point, so a failure here is local storage, never connectivity — say so
+      // rather than sending the caller off to check their network.
+      try {
+        await this.cacheOnlineLicense(
+          normalizedKey,
+          blob,
+          license.id,
+          machineId
+        );
+      } catch (error) {
+        throw new UserFacingLicenseError(
+          "ctrlyoke verified the Pro license but could not save it to this machine's credential store.",
+          error
+        );
+      }
       this.setEntitlement(verified.entitlement);
       return verified.entitlement;
     } catch (error) {
@@ -410,32 +430,44 @@ export class LicenseService implements LicenseService {
   }
 
   async importLicenseFile(blob: string): Promise<Entitlement> {
+    let normalizedBlob: string;
+    let verified: VerifiedLicense;
     try {
-      const normalizedBlob = blob.trim();
+      normalizedBlob = blob.trim();
       if (!normalizedBlob) {
         throw new Error("A license file is required");
       }
 
       const licenseKey = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
-      const verified = await this.verifyCachedLicense(
+      verified = await this.verifyCachedLicense(
         normalizedBlob,
         LICENSE_SOURCES.OFFLINE_FILE,
         licenseKey
       );
-
-      await this.secretStore.store(LICENSE_FILE_SECRET_KEY, normalizedBlob);
-      await this.secretStore.store(
-        LICENSE_SOURCE_SECRET_KEY,
-        LICENSE_SOURCES.OFFLINE_FILE
-      );
-      this.setEntitlement(verified.entitlement);
-      return verified.entitlement;
     } catch {
       // An invalid import must not replace a valid entitlement or break the
       // free product. Re-read the existing cache so a failed import is a
       // no-op from the caller's perspective.
       return this.getEntitlement();
     }
+
+    // The file verified, so a failure past this point is local storage, not a
+    // bad license — reporting it as an import success would strand the user
+    // with an entitlement that vanishes on the next read.
+    try {
+      await this.secretStore.store(LICENSE_FILE_SECRET_KEY, normalizedBlob);
+      await this.secretStore.store(
+        LICENSE_SOURCE_SECRET_KEY,
+        LICENSE_SOURCES.OFFLINE_FILE
+      );
+    } catch (error) {
+      throw new UserFacingLicenseError(
+        "ctrlyoke verified the license file but could not save it to this machine's credential store.",
+        error
+      );
+    }
+    this.setEntitlement(verified.entitlement);
+    return verified.entitlement;
   }
 
   async refresh(): Promise<void> {
@@ -852,7 +884,8 @@ function toActivationError(
     );
   }
   return new UserFacingLicenseError(
-    "ctrlyoke could not activate the Pro license right now. Check your internet connection and try again."
+    "ctrlyoke could not activate the Pro license right now. Check your internet connection and try again.",
+    error
   );
 }
 

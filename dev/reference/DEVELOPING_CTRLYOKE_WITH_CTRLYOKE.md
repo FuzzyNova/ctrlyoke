@@ -313,11 +313,25 @@ from:
   which the hosted server checks per connection, would spawn a process on
   every check.
 
+  **The switch immediately broke activation on Windows, and the fix is in
+  `OsCredentialStore`.** `CredWrite` caps a credential blob at 2560 bytes —
+  1280 UTF-16 characters — and a signed Keygen license file is several KB, so
+  `cacheOnlineLicense` stored the license _key_ fine and then failed on the
+  license _file_. The service's `catch` mapped that to "check your internet
+  connection" (the one thing that was certainly working, since the checkout had
+  just succeeded), the machine slot was released, and nothing reached the log.
+  `WindowsCredentialBackend` now splits an over-long value across `<key>`,
+  `<key>#1`, … with the count in `<key>#count`; short values stay a single
+  plain credential. See `platform.instructions.md` for the limit itself — the
+  lesson for licensing is that a `SecretStore` swap changes the _size_ contract
+  too, not just the scope, and `LicenseService` now reports a local save
+  failure as a local save failure with the cause attached.
+
   **Remote/Codespaces caveat, deliberately not solved here**: a remote
   extension host (SSH, WSL, a Codespaces container) typically has no local
   keyring daemon to shell out to, so `FallbackSecretStore` correctly falls
   back to `context.secrets` there — no worse than before. But that doesn't
-  give a Codespace a *persisted, portable* license either: a Codespace is an
+  give a Codespace a _persisted, portable_ license either: a Codespace is an
   ephemeral, per-instance container, not "the user's machine," so a
   machine-locked activation doesn't really apply to it conceptually. ctrlyoke
   has not been tested in Codespaces/VS Code for the Web at all yet

@@ -11,7 +11,8 @@ import type {
   LicenseActionResultMessage,
   LicenseMachinesUpdatedMessage,
 } from "../types/WebviewMessageTypes";
-import { getErrorMessage } from "../utils/ErrorUtils";
+import { getErrorChainMessage, getErrorMessage } from "../utils/ErrorUtils";
+import { Log } from "../utils/Log";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
 /** The license-service surface needed by dashboard license actions. */
@@ -150,6 +151,11 @@ export class LicenseSettingsHandlers {
     action: string,
     error: unknown
   ): void {
+    // The single funnel for every failed license action. License errors are
+    // deliberately vague to the user, so the cause chain only survives here.
+    Log.error(
+      `[LicenseSettingsHandlers] ${action} failed: ${getErrorChainMessage(error)}`
+    );
     this.sendResult(ctx, {
       action:
         error instanceof LicenseActivationLimitError
