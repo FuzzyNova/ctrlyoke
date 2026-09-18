@@ -64,8 +64,7 @@ suite("AntigravityStreamJsonUsage", () => {
     const accumulator = new AntigravityStreamJsonUsageAccumulator();
     const checkpoint =
       '{"event":"step_update","step_update":{"step_type":"checkpoint","usage":{"input_tokens":1}}}';
-    const result =
-      '{"event":"result","result":{"usage":{"output_tokens":2}}}';
+    const result = '{"event":"result","result":{"usage":{"output_tokens":2}}}';
 
     accumulator.ingest(`${checkpoint}\r`);
     accumulator.ingest(`${result}\n`);

@@ -114,8 +114,7 @@ class TestExecution implements WorkflowStartupExecutionPort {
   readonly integration = new MockHarnessIntegration(undefined, false);
 
   currentPromptFile():
-    | { filePath: string; promptFile: PromptFile }
-    | undefined {
+    { filePath: string; promptFile: PromptFile } | undefined {
     return this.currentPrompt;
   }
 

@@ -75,8 +75,7 @@ export type WorkflowStartupContextPort = Omit<
   ) => Promise<string | undefined>;
   readonly getSecretRedactor: () => WorkflowExecutionContext["secretRedactor"];
   readonly getMcpToolSkillContext: () =>
-    | Partial<McpToolSkillRunContext>
-    | undefined;
+    Partial<McpToolSkillRunContext> | undefined;
   readonly createPriorContextResolver: (
     historyFilePath: string
   ) => WorkflowExecutionContext["resolvePriorContextItems"];
@@ -122,8 +121,7 @@ export type WorkflowStartupStatusPort = Pick<
 
 export interface WorkflowStartupExecutionPort {
   readonly currentPromptFile: () =>
-    | { filePath: string; promptFile: PromptFile }
-    | undefined;
+    { filePath: string; promptFile: PromptFile } | undefined;
   readonly getAuthoritativeExecutionState: () => QueueState["status"];
   readonly closeRetainedTerminalsForFreshRun: () => Promise<void>;
   readonly syncCurrentPromptFileFromQueue: (filePath?: string) => void;

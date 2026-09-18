@@ -20,7 +20,10 @@ import {
   type RunLifecycleViewPort,
 } from "../../core/orchestration/RunLifecycleService";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
-import type { UserFeedback, UserFeedbackSink } from "../../core/UserFeedbackSink";
+import type {
+  UserFeedback,
+  UserFeedbackSink,
+} from "../../core/UserFeedbackSink";
 
 const workflowKey = "lifecycle-test" as WorkflowKey;
 const runRef = "run-2026-09-17T00-00-00-000Z" as RunRef;
@@ -221,12 +224,13 @@ suite("RunLifecycleService continuation validation", () => {
     );
 
     await assert.rejects(
-      () => service.validateExplicitContinuationTarget(
-        { workflowKey, runRef },
-        1,
-        1,
-        "panel"
-      ),
+      () =>
+        service.validateExplicitContinuationTarget(
+          { workflowKey, runRef },
+          1,
+          1,
+          "panel"
+        ),
       /Continuation no longer targets this client's viewed run/
     );
   });
@@ -241,12 +245,13 @@ suite("RunLifecycleService continuation validation", () => {
     );
 
     await assert.rejects(
-      () => service.validateExplicitContinuationTarget(
-        { workflowKey, runRef },
-        1,
-        1,
-        "panel"
-      ),
+      () =>
+        service.validateExplicitContinuationTarget(
+          { workflowKey, runRef },
+          1,
+          1,
+          "panel"
+        ),
       /Descriptor revision conflict: expected 1, found 2/
     );
   });
@@ -269,12 +274,13 @@ suite("RunLifecycleService continuation validation", () => {
     );
 
     await assert.rejects(
-      () => service.validateExplicitContinuationTarget(
-        { workflowKey, runRef },
-        1,
-        1,
-        "panel"
-      ),
+      () =>
+        service.validateExplicitContinuationTarget(
+          { workflowKey, runRef },
+          1,
+          1,
+          "panel"
+        ),
       /This workflow has a draft or pending continuation/
     );
   });
@@ -284,19 +290,22 @@ suite("RunLifecycleService continuation validation", () => {
     const views = new FakeViews();
     registry.instances.set(
       "other",
-      new FakeInstance(queueState(EXECUTION_STATES.PAUSED, "run-other" as RunRef))
+      new FakeInstance(
+        queueState(EXECUTION_STATES.PAUSED, "run-other" as RunRef)
+      )
     );
     const service = new RunLifecycleService(
       createHost(registry, views, new FakeLineageRepository(descriptor()))
     );
 
     await assert.rejects(
-      () => service.validateExplicitContinuationTarget(
-        { workflowKey, runRef },
-        1,
-        1,
-        "panel"
-      ),
+      () =>
+        service.validateExplicitContinuationTarget(
+          { workflowKey, runRef },
+          1,
+          1,
+          "panel"
+        ),
       /Another run in this workflow lineage is executing/
     );
   });

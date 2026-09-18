@@ -20,7 +20,11 @@ import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
 import { StatusIcon } from "./StatusIcon";
 import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
-import { getStatusLabel, isStepExecuting, isWorkflowActive } from "@utils/status";
+import {
+  getStatusLabel,
+  isStepExecuting,
+  isWorkflowActive,
+} from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,

@@ -143,7 +143,10 @@ export class RunnerLockCoordinator {
           ownerToken
         ).catch(() => {});
       }
-      this.port.getExecutionLease()?.updateHeartbeat().catch(() => {});
+      this.port
+        .getExecutionLease()
+        ?.updateHeartbeat()
+        .catch(() => {});
     }, HEARTBEAT_INTERVAL_MS);
   }
 

@@ -3,10 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import {
-  EXECUTION_STATES,
-  RUNNER_IDS,
-} from "../../types/DashboardConstants";
+import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
 import type {
   QueueState,
   RunnerHostIdentity,
@@ -103,7 +100,10 @@ suite("RunnerLockCoordinator", () => {
       const acquired = await readWorkflowLock(workspaceRoot, workflowKey);
       assert.ok(acquired);
       assert.notStrictEqual(acquired.ownerToken, staleLock.ownerToken);
-      assert.strictEqual(acquired.hostInstanceId, host.runnerHostIdentity.hostInstanceId);
+      assert.strictEqual(
+        acquired.hostInstanceId,
+        host.runnerHostIdentity.hostInstanceId
+      );
 
       await coordinator.releaseRunnerLock();
       assert.strictEqual(coordinator.ownsLock(), false);

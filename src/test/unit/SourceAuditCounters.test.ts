@@ -213,8 +213,7 @@ let parsedProductionSources:
   { repoRoot: string; sources: ParsedProductionSource[] } | undefined;
 
 let orchestratorValueImportGraph:
-  | { repoRoot: string; files: readonly ParsedProductionSource[] }
-  | undefined;
+  { repoRoot: string; files: readonly ParsedProductionSource[] } | undefined;
 
 function getParsedProductionSources(
   repoRoot: string

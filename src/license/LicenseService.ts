@@ -223,13 +223,10 @@ export class LicenseService implements LicenseService {
   private readonly publicKeyHex: string;
   private readonly request: typeof fetch;
   private readonly machineFingerprintOption:
-    | string
-    | (() => Promise<string>)
-    | undefined;
+    string | (() => Promise<string>) | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
   private cachedEntitlement:
-    | { readonly value: Entitlement; readonly expiresAt: number }
-    | undefined;
+    { readonly value: Entitlement; readonly expiresAt: number } | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 

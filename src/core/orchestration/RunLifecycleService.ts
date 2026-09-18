@@ -23,10 +23,7 @@ import {
   WORKTREE_EDIT_KINDS,
 } from "../../types/DashboardConstants";
 import type { DefinitionRollbackInvalidation } from "./RunViewPublisher";
-import {
-  notifyUserFeedback,
-  type UserFeedbackSink,
-} from "../UserFeedbackSink";
+import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { buildDefinitionSnapshot } from "../WorkflowStepSanitizer";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { getErrorMessage } from "../../utils/ErrorUtils";
@@ -40,7 +37,10 @@ export interface RunLifecycleRegistryPort {
   getRetiredInstances(): Map<string, RunLifecycleInstancePort>;
   getViewAddressRegistry(): Map<string, WorkflowViewAddress | null>;
   getViewMessageSinks(): Map<string, (message: unknown) => void>;
-  getLineageExecutionOwners(): Map<WorkflowKey, { instanceId: string; promoted: boolean }>;
+  getLineageExecutionOwners(): Map<
+    WorkflowKey,
+    { instanceId: string; promoted: boolean }
+  >;
   getInstanceForClient(clientId: string): RunLifecycleInstancePort;
   setViewedWorkflowId(clientId: string, workflowId: string | null): void;
 }
@@ -123,7 +123,9 @@ export interface RunLifecycleServiceHost {
   readonly getUserFeedbackSink: () => UserFeedbackSink;
   readonly getInstanceForClient: (clientId: string) => RunLifecycleInstancePort;
   readonly getStoredPanelSend: () => ((message: unknown) => void) | undefined;
-  readonly assertNoPendingWorkflowExternalRoots: (clientId: string) => Promise<void>;
+  readonly assertNoPendingWorkflowExternalRoots: (
+    clientId: string
+  ) => Promise<void>;
   readonly buildWorkflowInstance: () => RunLifecycleInstancePort;
   readonly replayWorkflowStateTo: (
     workflowId: string,
@@ -593,7 +595,10 @@ export class RunLifecycleService {
       appended.definitionRevision,
       () => this.switchClientToPreparedExecution(instance, clientId)
     );
-    await this.host.views.invalidateRunViews(address.workflowKey, address.runRef);
+    await this.host.views.invalidateRunViews(
+      address.workflowKey,
+      address.runRef
+    );
     return {
       definitionRevision: appended.definitionRevision,
       descriptorRevision: appended.descriptorRevision,
@@ -635,7 +640,10 @@ export class RunLifecycleService {
       expectedDefinitionRevision,
       () => this.switchClientToPreparedExecution(instance, clientId)
     );
-    await this.host.views.invalidateRunViews(address.workflowKey, address.runRef);
+    await this.host.views.invalidateRunViews(
+      address.workflowKey,
+      address.runRef
+    );
   }
 
   async validateExplicitContinuationTarget(
@@ -845,10 +853,13 @@ export class RunLifecycleService {
           kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: remaining[0].runRef,
         }
-      : { workflowKey: address.workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-    const targets = [...this.host.registry.getViewAddressRegistry().entries()].filter(
-      ([, candidate]) => candidate?.workflowKey === address.workflowKey
-    );
+      : {
+          workflowKey: address.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        };
+    const targets = [
+      ...this.host.registry.getViewAddressRegistry().entries(),
+    ].filter(([, candidate]) => candidate?.workflowKey === address.workflowKey);
     const displacedAViewer = targets.some(
       ([, currentAddress]) =>
         currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
@@ -921,9 +932,9 @@ export class RunLifecycleService {
           runRef: remaining[0].runRef,
         }
       : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-    const targets = [...this.host.registry.getViewAddressRegistry().entries()].filter(
-      ([, candidate]) => candidate?.workflowKey === workflowKey
-    );
+    const targets = [
+      ...this.host.registry.getViewAddressRegistry().entries(),
+    ].filter(([, candidate]) => candidate?.workflowKey === workflowKey);
     await Promise.all(
       targets.map(async ([targetClientId, currentAddress]) => {
         const targetAddress =

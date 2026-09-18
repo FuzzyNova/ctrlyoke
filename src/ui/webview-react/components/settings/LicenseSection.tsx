@@ -67,7 +67,11 @@ export function LicenseSection() {
   }, []);
 
   const isEnterprise = licenseAccess.isEnterprise === true;
-  const tierLabel = isEnterprise ? "Enterprise" : licenseAccess.isPro ? "Pro" : "Free";
+  const tierLabel = isEnterprise
+    ? "Enterprise"
+    : licenseAccess.isPro
+      ? "Pro"
+      : "Free";
   const showMachines =
     !isEnterprise &&
     (activationLimit ||

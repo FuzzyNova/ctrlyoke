@@ -371,8 +371,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarSink);
     workflowOrchestrator = new WorkflowOrchestrator({
       platform,
-      workspaceFolderPathResolver: () =>
-        getVsCodeWorkspaceFolder()?.uri.fsPath,
+      workspaceFolderPathResolver: () => getVsCodeWorkspaceFolder()?.uri.fsPath,
       dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
@@ -1542,9 +1541,7 @@ function registerCommands(
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
     "ctrlyoke.regenerateServerToken",
     async () => {
-      await new ServerTokenStore(
-        platform.getSecretStore()
-      ).regenerate();
+      await new ServerTokenStore(platform.getSecretStore()).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });

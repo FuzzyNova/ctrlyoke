@@ -848,7 +848,6 @@ suite("WorkflowInstance replay classification", () => {
   });
 });
 
-
 suite("WorkflowInstance runtime transitions", () => {
   test("getSummary reports the workflow-level harness instead of a step override", async () => {
     const platform = new MockPlatform();

@@ -149,7 +149,11 @@ export class SessionActivityRecorder {
       return;
     }
     this.pendingSessionActivityEvents.delete(sessionKey);
-    void this.handleSessionActivityResumed(pendingEvents, integration, sessionId);
+    void this.handleSessionActivityResumed(
+      pendingEvents,
+      integration,
+      sessionId
+    );
   }
 
   beginActivityTargetCapture(

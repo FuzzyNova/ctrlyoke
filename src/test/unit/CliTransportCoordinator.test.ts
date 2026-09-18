@@ -155,8 +155,7 @@ const stdoutProviderFactories: ReadonlyArray<{
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
-      | { promptArgument: string; cliCommand: string }
-      | undefined;
+      { promptArgument: string; cliCommand: string } | undefined;
     const streamedChunks: string[] = [];
     const cleanedTempPaths: string[][] = [];
 
@@ -396,8 +395,7 @@ line two`,
 
   test("should parse partial headless output when cancellation is requested", async () => {
     let callbackResult:
-      | { stdout: string; stderr: string; exitCode: number }
-      | undefined;
+      { stdout: string; stderr: string; exitCode: number } | undefined;
     const cleanedTempPaths: string[][] = [];
     let cancelling = false;
 

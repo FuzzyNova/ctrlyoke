@@ -41,7 +41,7 @@ loop 0, 1, 2, ….
 `src/core/WorkflowExecutor.ts:2531-2534`): the terminal's `stepIndex` is `signedStepIndex`, from
 `getSignedStepIndex()` (`src/core/orchestration/StatusMessageReporter.ts:51-65`), which returns
 `-(loopIndex + 1)` for a final-step attempt. This convention was built for the dashboard
-status-message/timeline system, which *does* need loop granularity (retry displays, pre/end-condition
+status-message/timeline system, which _does_ need loop granularity (retry displays, pre/end-condition
 reporting, timeline attempts), and is used at a dozen-plus call sites throughout `WorkflowExecutor.ts`.
 Negative values let callers detect "this is a final-step event" with `< 0` alone.
 
@@ -57,12 +57,12 @@ causing the next version of this bug somewhere else that keys off raw `stepIndex
 ## Non-goals
 
 - Rewriting the dashboard status-message/timeline system's use of `getSignedStepIndex` wholesale. That
-  convention is deliberate, well-established, and correctly loop-aware — it is a *design*, unlike the
+  convention is deliberate, well-established, and correctly loop-aware — it is a _design_, unlike the
   `promptIndex`-as-terminal-stepIndex reuse, which was incidental.
 - Redesigning final-step loop UI beyond what's needed to show "final step is running" on the running
   list row. Per-loop detail (loop 2 of N) already exists in the open-workflow view
   (`finalStepPhase`/`finalStepLoopCount` in `workflowStore.ts`) and is out of scope here.
-- Changing the *recent* (non-running) row's display. `WorkflowRowLayout`/`RunningWorkflowItem` cover
+- Changing the _recent_ (non-running) row's display. `WorkflowRowLayout`/`RunningWorkflowItem` cover
   the running list only; a completed lineage's last-run summary is a separate data path
   (`RecentWorkflow`) not touched by this plan unless a later phase decides otherwise.
 
@@ -77,7 +77,7 @@ causing the next version of this bug somewhere else that keys off raw `stepIndex
 `getSignedStepIndex(target)` instead of `workflowContext.promptIndex`, matching what
 `spawnScriptPty` already does. Leave `workflowContext.promptIndex` itself untouched — it has
 legitimate array-index consumers (`promptNumber`, `routePromptDiagnostics`) that must keep the
-"one past the end" semantics. This only touches the *terminal session's own* `stepIndex` field.
+"one past the end" semantics. This only touches the _terminal session's own_ `stepIndex` field.
 Smaller diff; reuses plumbing that already exists everywhere else. Loses nothing, since AI-harness
 final-step sessions apparently don't currently need per-loop terminal identity (one continuous PTY
 spans the whole final step today) — confirm this assumption holds before adopting.
@@ -152,7 +152,7 @@ add fields the UI won't use.)
 - Add a `workflowStepProgressLabel(summary)`-style helper beside `workflowDisplayStep`
   (`src/types/CtrlYokeTypes.ts:1208-1215`, same file, same single-source spirit) that returns the
   existing `"7/10"` shape normally and something like `"Final step"` when `finalStepRunning` is true,
-  so every caller of `workflowDisplayStep` for *display* text (today just
+  so every caller of `workflowDisplayStep` for _display_ text (today just
   `RunningWorkflowItem.tsx:242-246`, plus the accessible-name string at `:121-122`) goes through one
   function instead of each row kind growing its own final-step conditional.
 - **Conflict to resolve**: `WorkflowRowLayout`'s `metaBadge` slot (`WorkflowRowLayout.tsx:49-59`) looks

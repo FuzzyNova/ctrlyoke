@@ -547,8 +547,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
             isCurrentStep,
             isExecutionTargetLocked,
             direction: index < currentStep ? "rewind" : "forward",
-            outputText: getLatestOutput(index)?.response as
-              string | undefined,
+            outputText: getLatestOutput(index)?.response as string | undefined,
             latestOutput: getLatestOutput(index),
             runtimeMeta: !isScriptWorkflowStep(prompt)
               ? prompt._runtime
