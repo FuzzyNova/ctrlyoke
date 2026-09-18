@@ -14,7 +14,6 @@ import type {
 import { workflowDisplayStep } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
-  PANEL_CLIENT_ID,
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   type HarnessId,
@@ -153,16 +152,12 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
   private readonly externallyCreatedInstanceIds = new Set<string>();
   private readonly announcedExternalWorkflowIds = new Set<string>();
 
-  constructor(private readonly host?: WorkflowInstanceRegistryHost) {
-    this.viewerRegistry.set(this.host?.panelClientId ?? PANEL_CLIENT_ID, null);
+  constructor(private readonly host: WorkflowInstanceRegistryHost) {
+    this.viewerRegistry.set(this.host.panelClientId, null);
   }
 
   private get panelClientId(): string {
-    return this.host?.panelClientId ?? PANEL_CLIENT_ID;
-  }
-
-  hasHost(): boolean {
-    return this.host !== undefined;
+    return this.host.panelClientId;
   }
 
   getInstances(): Map<string, WorkflowInstance> {
@@ -211,11 +206,6 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
   async createWorkflow(
     filePath?: string
   ): Promise<WorkflowInstance | undefined> {
-    if (!this.host) {
-      throw new Error(
-        "WorkflowInstanceRegistry host is required to create a workflow"
-      );
-    }
     const currentPanelId = this.getViewedWorkflowId(this.panelClientId);
     Log.debug(
       `[WorkflowOrchestrator] createWorkflow: filePath="${filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
@@ -344,8 +334,8 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
       this.externallyCreatedInstanceIds.delete(workflowId);
       this.announcedExternalWorkflowIds.delete(workflowId);
     }
-    this.host?.dashboardBroadcast.notifyWorkflowDismissed(workflowId);
-    void this.host?.saveState();
+    this.host.dashboardBroadcast.notifyWorkflowDismissed(workflowId);
+    void this.host.saveState();
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
@@ -434,7 +424,8 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
     if (prepared) return prepared;
     if (live.length > 0) return live[0];
     const activeTerminalOwnerIds = new Set(
-      (this.host?.getActiveTerminalWorkflowRefs() ?? [])
+      this.host
+        .getActiveTerminalWorkflowRefs()
         .filter((ref) => ref.workflowKey === workflowKey)
         .map((ref) => ref.workflowId)
     );
@@ -562,11 +553,6 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
   }
 
   buildWorkflowInstanceForHost(): WorkflowInstance {
-    if (!this.host) {
-      throw new Error(
-        "WorkflowInstanceRegistry host is required to build an instance"
-      );
-    }
     const host = this.host;
     const instance = new WorkflowInstance(
       host.platform,

@@ -2,6 +2,7 @@ import { suite, test } from "mocha";
 import * as assert from "assert";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
+import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceRegistryHost";
 import {
   EXECUTION_STATES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -37,7 +38,9 @@ function fakeInstance(
 
 suite("WorkflowInstanceRegistry", () => {
   test("keeps a client's viewer and address registries synchronized", () => {
-    const registry = new WorkflowInstanceRegistry();
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
     const instance = fakeInstance(
       "instance-a",
       "lineage-a",
@@ -47,7 +50,10 @@ suite("WorkflowInstanceRegistry", () => {
     registry.registerClient("client-a");
 
     registry.setViewedWorkflowId("client-a", instance.id);
-    assert.deepStrictEqual(registry.getViewedWorkflowId("client-a"), instance.id);
+    assert.deepStrictEqual(
+      registry.getViewedWorkflowId("client-a"),
+      instance.id
+    );
     assert.deepStrictEqual(registry.getViewAddressRegistry().get("client-a"), {
       workflowKey: "lineage-a",
       kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
@@ -59,7 +65,9 @@ suite("WorkflowInstanceRegistry", () => {
   });
 
   test("adopts the instance's new lineage identity for its bound clients", () => {
-    const registry = new WorkflowInstanceRegistry();
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
     const instance = fakeInstance(
       "instance-a",
       "lineage-a",
@@ -93,7 +101,9 @@ suite("WorkflowInstanceRegistry", () => {
   });
 
   test("chooses an executing resident over an idle or retired duplicate", () => {
-    const registry = new WorkflowInstanceRegistry();
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
     const live = fakeInstance(
       "live-instance",
       "lineage-a",
@@ -114,7 +124,9 @@ suite("WorkflowInstanceRegistry", () => {
   });
 
   test("retiring and promoting an instance keep the registries disjoint", () => {
-    const registry = new WorkflowInstanceRegistry();
+    const registry = new WorkflowInstanceRegistry(
+      new TestWorkflowInstanceRegistryHost()
+    );
     const instance = fakeInstance(
       "instance-a",
       "lineage-a",

@@ -245,7 +245,7 @@ export class WorkflowOrchestrator {
   private workflowInstanceRegistryInstance?: WorkflowInstanceRegistry;
   private get workflowInstanceRegistry(): WorkflowInstanceRegistry {
     return (this.workflowInstanceRegistryInstance ??=
-      new WorkflowInstanceRegistry());
+      this.createWorkflowInstanceRegistry());
   }
   private set workflowInstanceRegistry(value: WorkflowInstanceRegistry) {
     this.workflowInstanceRegistryInstance = value;
@@ -257,6 +257,92 @@ export class WorkflowOrchestrator {
   }
   private set runViewPublisher(value: RunViewPublisher) {
     this.runViewPublisherInstance = value;
+  }
+
+  /** Builds the instance registry with this orchestrator as its host. */
+  private createWorkflowInstanceRegistry(): WorkflowInstanceRegistry {
+    // Every member reads through `this` at call time rather than capturing the
+    // field's value here: the orchestrator's collaborators are replaceable
+    // seams, and a captured reference would pin the registry to whichever
+    // object happened to exist when it was built.
+    const orchestrator = this;
+    return new WorkflowInstanceRegistry({
+      get platform() {
+        return orchestrator.platform;
+      },
+      get dashboardSink() {
+        return orchestrator.dashboardBroadcastHub as IDashboardSink;
+      },
+      get dashboardBroadcast() {
+        return orchestrator.dashboardBroadcastHub;
+      },
+      get integrationFactory() {
+        return orchestrator.integrationFactory;
+      },
+      resolveDetectorIntegration: (harnessOverride) =>
+        this.resolveDetectorIntegration(harnessOverride),
+      propagateWorkflowNameToIntegrations: (name) =>
+        this.propagateWorkflowNameToIntegrations(name),
+      updateStatusBar: () => this.updateStatusBar(),
+      get currentWorkspaceFolderPath() {
+        return orchestrator.currentWorkspaceFolderPath;
+      },
+      get compatibilityRegistry() {
+        return orchestrator.compatibilityRegistry;
+      },
+      get userFeedbackSink() {
+        return orchestrator.userFeedbackSink;
+      },
+      getHarnessUsageSnapshots: () =>
+        this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
+      refreshHarnessUsage: async (harnessId) => {
+        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
+      },
+      approveSecretGrantsForWorkflow: (workflow, workspaceRoot) =>
+        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
+      get runnerHostIdentity() {
+        return orchestrator.runnerHostIdentity;
+      },
+      get panelClientId() {
+        return orchestrator.PANEL_CLIENT_ID;
+      },
+      getStoredPanelSend: () => this.storedPanelSend,
+      replayWorkflowStateTo: (workflowId, send, clientId) =>
+        this.replayWorkflowStateTo(workflowId, send, clientId),
+      approvePendingWorkflowExternalRootsForClient: (
+        clientId,
+        send,
+        port,
+        promptUser
+      ) =>
+        this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          send,
+          port,
+          promptUser
+        ),
+      emitWorkflowExternalRootsApprovalState: (
+        clientId,
+        workflowId,
+        pendingRoots,
+        send
+      ) =>
+        this.emitWorkflowExternalRootsApprovalState(
+          clientId,
+          workflowId,
+          pendingRoots,
+          send
+        ),
+      saveState: () => this.saveState(),
+      ensureCoordinationWatchSession: (executionRoot) =>
+        this.ensureCoordinationWatchSession(executionRoot),
+      getActiveWorkflowId: () => this.getActiveWorkflowId(),
+      fireActiveQueueStateChanged: (state) =>
+        this.getActiveQueueStateChangedEmitter().fire(state),
+      getActiveQueueState: () => this.getActiveQueueState(),
+      getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
+      syncExecutingRunViews: (instance) => this.syncExecutingRunViews(instance),
+    });
   }
 
   private createRunViewPublisher(): RunViewPublisher {
@@ -280,7 +366,8 @@ export class WorkflowOrchestrator {
 
   private runLifecycleServiceInstance?: RunLifecycleService;
   private get runLifecycleService(): RunLifecycleService {
-    return (this.runLifecycleServiceInstance ??= this.createRunLifecycleService());
+    return (this.runLifecycleServiceInstance ??=
+      this.createRunLifecycleService());
   }
 
   private createRunLifecycleService(): RunLifecycleService {
@@ -607,65 +694,7 @@ export class WorkflowOrchestrator {
       this.userFeedbackSink
     );
 
-    this.workflowInstanceRegistry = new WorkflowInstanceRegistry({
-      platform: this.platform,
-      dashboardSink: this.dashboardBroadcastHub as IDashboardSink,
-      dashboardBroadcast: this.dashboardBroadcastHub,
-      integrationFactory: this.integrationFactory,
-      resolveDetectorIntegration: (harnessOverride) =>
-        this.resolveDetectorIntegration(harnessOverride),
-      propagateWorkflowNameToIntegrations: (name) =>
-        this.propagateWorkflowNameToIntegrations(name),
-      updateStatusBar: () => this.updateStatusBar(),
-      currentWorkspaceFolderPath: this.currentWorkspaceFolderPath,
-      compatibilityRegistry: this.compatibilityRegistry,
-      userFeedbackSink: this.userFeedbackSink,
-      getHarnessUsageSnapshots: () =>
-        this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
-      refreshHarnessUsage: async (harnessId) => {
-        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
-      },
-      approveSecretGrantsForWorkflow: (workflow, workspaceRoot) =>
-        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
-      runnerHostIdentity: this.runnerHostIdentity,
-      panelClientId: this.PANEL_CLIENT_ID,
-      getStoredPanelSend: () => this.storedPanelSend,
-      replayWorkflowStateTo: (workflowId, send, clientId) =>
-        this.replayWorkflowStateTo(workflowId, send, clientId),
-      approvePendingWorkflowExternalRootsForClient: (
-        clientId,
-        send,
-        port,
-        promptUser
-      ) =>
-        this.approvePendingWorkflowExternalRootsForClient(
-          clientId,
-          send,
-          port,
-          promptUser
-        ),
-      emitWorkflowExternalRootsApprovalState: (
-        clientId,
-        workflowId,
-        pendingRoots,
-        send
-      ) =>
-        this.emitWorkflowExternalRootsApprovalState(
-          clientId,
-          workflowId,
-          pendingRoots,
-          send
-        ),
-      saveState: () => this.saveState(),
-      ensureCoordinationWatchSession: (executionRoot) =>
-        this.ensureCoordinationWatchSession(executionRoot),
-      getActiveWorkflowId: () => this.getActiveWorkflowId(),
-      fireActiveQueueStateChanged: (state) =>
-        this.getActiveQueueStateChangedEmitter().fire(state),
-      getActiveQueueState: () => this.getActiveQueueState(),
-      getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
-      syncExecutingRunViews: (instance) => this.syncExecutingRunViews(instance),
-    });
+    this.workflowInstanceRegistry = this.createWorkflowInstanceRegistry();
 
     this.runViewPublisher = this.createRunViewPublisher();
 
@@ -781,12 +810,6 @@ export class WorkflowOrchestrator {
    * idle instance to dispose here the way the normal "make active" path does.
    */
   public createExternalWorkflowInstance(): WorkflowInstance {
-    if (!this.workflowInstanceRegistry.hasHost()) {
-      const instance = this.buildWorkflowInstance();
-      this.instances.set(instance.id, instance);
-      this.externallyCreatedInstanceIds.add(instance.id);
-      return instance;
-    }
     return this.workflowInstanceRegistry.createExternalWorkflowInstance();
   }
 
@@ -797,131 +820,7 @@ export class WorkflowOrchestrator {
   private async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
-    const registry = this.workflowInstanceRegistry;
-    if (!registry.hasHost() && _filePath) {
-      const existing = [...this.instances.values()].find(
-        (workflow) => workflow.filePath === _filePath
-      );
-      const existingStatus = existing?.getQueueState().status;
-      if (
-        existing &&
-        (existingStatus === EXECUTION_STATES.RUNNING ||
-          existingStatus === EXECUTION_STATES.PAUSING ||
-          existingStatus === EXECUTION_STATES.PAUSED)
-      ) {
-        const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-        await this.replayWorkflowStateTo(
-          existing.id,
-          panelSend,
-          this.PANEL_CLIENT_ID
-        );
-        return existing;
-      }
-    }
     return this.workflowInstanceRegistry.createWorkflow(_filePath);
-    /*
-    const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    Log.debug(
-      `[WorkflowOrchestrator] createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
-    );
-    // ── Duplicate detection: only running/paused instances are in the Map ──
-    if (_filePath) {
-      const existing = [...this.instances.values()].find(
-        (w) => w.filePath === _filePath
-      );
-      if (existing) {
-        const existingStatus = existing.getQueueState().status;
-        if (
-          existingStatus === EXECUTION_STATES.RUNNING ||
-          existingStatus === EXECUTION_STATES.PAUSING ||
-          existingStatus === EXECUTION_STATES.PAUSED
-        ) {
-          Log.info(
-            `[WorkflowOrchestrator] createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
-          );
-          // The running-instance policy is to reuse the existing workflow.
-          // Keep this safe default explicit now that the native choice prompt
-          // is no longer allowed to override it from a shared core path.
-          const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-          await this.replayWorkflowStateTo(
-            existing.id,
-            panelSend,
-            this.PANEL_CLIENT_ID
-          );
-          return existing;
-        }
-      }
-    }
-
-    // Dispose/deactivate the current panel-viewed instance if applicable
-    const retiredInstance = currentPanelId
-      ? this.retiredInstances.get(currentPanelId)
-      : null;
-    const currentViewed = currentPanelId
-      ? (this.instances.get(currentPanelId) ?? retiredInstance)
-      : null;
-    if (retiredInstance) {
-      Log.debug(
-        `[WorkflowOrchestrator] createWorkflow: disposing retired viewedInstance inst:${retiredInstance.id.slice(0, 8)}`
-      );
-      retiredInstance.dispose();
-      this.retiredInstances.delete(currentPanelId!);
-    } else if (currentViewed) {
-      const viewedStatus = currentViewed.getQueueState().status;
-      const isIdle =
-        viewedStatus !== EXECUTION_STATES.RUNNING &&
-        viewedStatus !== EXECUTION_STATES.PAUSING &&
-        viewedStatus !== EXECUTION_STATES.PAUSED;
-      if (isIdle) {
-        Log.debug(
-          `[WorkflowOrchestrator] createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
-        );
-        currentViewed.dispose();
-        this.instances.delete(currentPanelId!);
-      } else {
-        // It is running/paused — keep it in the registry but do not deactivate
-        Log.debug(
-          `[WorkflowOrchestrator] createWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
-        );
-      }
-    }
-
-    const instance = this.buildWorkflowInstance();
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    this.instances.set(instance.id, instance);
-    let pendingWorkflowExternalRoots: string[] = [];
-    if (_filePath) {
-      await instance.loadPromptFile(_filePath);
-      pendingWorkflowExternalRoots =
-        await this.approvePendingWorkflowExternalRootsForClient(
-          this.PANEL_CLIENT_ID,
-          undefined,
-          undefined,
-          false
-        );
-    }
-
-    // Deliver full state to the panel via per-client replay (sends ACTIVE_WORKFLOW_CHANGED first,
-    // then SESSION_RESTORED with current state). If the panel is not yet connected, it will
-    // receive the state when it connects via the READY → handleClientReady path.
-    if (this.storedPanelSend) {
-      await this.replayWorkflowStateTo(
-        instance.id,
-        this.storedPanelSend,
-        this.PANEL_CLIENT_ID
-      );
-    }
-    if (_filePath && this.storedPanelSend) {
-      this.emitWorkflowExternalRootsApprovalState(
-        this.PANEL_CLIENT_ID,
-        instance.id,
-        pendingWorkflowExternalRoots,
-        this.storedPanelSend
-      );
-    }
-
-    return instance;
-    */
   }
 
   /**
@@ -943,57 +842,10 @@ export class WorkflowOrchestrator {
    */
   public promoteInstanceToLive(instance: WorkflowInstance): boolean {
     return this.workflowInstanceRegistry.promoteInstanceToLive(instance);
-    /*
-    this.instances.set(instance.id, instance);
-    return this.retiredInstances.delete(instance.id);
-    */
   }
 
   private retireWorkflow(workflowId: string): void {
     this.workflowInstanceRegistry.retireWorkflow(workflowId);
-    /*
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.debug(
-        `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
-      );
-      return;
-    }
-
-    const isViewed = this.isWorkflowViewedByAnyClient(workflowId);
-    const ptyManager = getPtyProcessManager();
-    const activePtySessions = ptyManager
-      ? ptyManager
-          .getSessionsForWorkflow(workflowId)
-          .filter((s) => s.status === TERMINAL_SESSION_STATUS.RUNNING)
-      : [];
-    const hasActivePty = activePtySessions.length > 0;
-    Log.debug(
-      `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.getSummary().workflowName || "(empty)"}\" ` +
-        `status=${instance.getQueueState().status}, isViewed=${isViewed}, hasActivePty=${hasActivePty}(${activePtySessions.length}), remaining=${this.instances.size - 1}`
-    );
-    this.instances.delete(workflowId);
-
-    if (isViewed || hasActivePty) {
-      // Keep in retiredInstances if a client is still viewing it OR if PTY sessions remain
-      // alive. In the latter case, the user may switch back to this workflow and expect to
-      // see (and interact with) the still-running terminal. Each client's entry is cleaned
-      // up when the client switches away or disconnects; PTY-only entries are cleaned up
-      // when the last PTY session exits (via onExit → replayWorkflowStateTo finding 0 sessions
-      // → no TERMINAL_STARTED sent → TerminalInstance unmount → nothing holds the entry).
-      this.retiredInstances.set(workflowId, instance);
-    } else {
-      // Background workflow completed silently with no active terminals — dispose immediately.
-      instance.dispose();
-      this.externallyCreatedInstanceIds.delete(workflowId);
-      this.announcedExternalWorkflowIds.delete(workflowId);
-    }
-
-    // Remove from the Running Workflows section in the dashboard.
-    this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-
-    void this.saveState();
-    */
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
@@ -2402,12 +2254,6 @@ export class WorkflowOrchestrator {
 
   /** Build a fresh workflow instance, register it, and make it the client's viewed workflow. */
   private registerNewInstance(clientId: string): WorkflowInstance {
-    if (!this.workflowInstanceRegistry.hasHost()) {
-      const instance = this.buildWorkflowInstance();
-      this.instances.set(instance.id, instance);
-      this.setViewedWorkflowId(clientId, instance.id);
-      return instance;
-    }
     return this.workflowInstanceRegistry.registerNewInstance(clientId);
   }
 
@@ -3962,8 +3808,8 @@ export class WorkflowOrchestrator {
     | {
         kind: typeof WORKTREE_EDIT_KINDS.REWIND;
         definitionRevision: number;
-      descriptorRevision: number;
-    }
+        descriptorRevision: number;
+      }
   > {
     return this.runLifecycleService.setStartPositionAtRun(
       address,
@@ -4103,8 +3949,8 @@ export class WorkflowOrchestrator {
         discarded: true;
         hasSuffixEdits: boolean;
         definitionRevision: number;
-      descriptorRevision: number;
-    }
+        descriptorRevision: number;
+      }
   > {
     return this.runLifecycleService.discardContinuationAtRun(
       address,
@@ -4633,46 +4479,7 @@ export class WorkflowOrchestrator {
     clientId: string,
     workflowId: string | null
   ): void {
-    const registry = this.workflowInstanceRegistry;
-    const wasUnwired = !registry.hasHost();
-    registry.setViewedWorkflowId(clientId, workflowId);
-    if (wasUnwired && clientId === this.PANEL_CLIENT_ID) {
-      this.getActiveQueueStateChangedEmitter().fire(this.getActiveQueueState());
-    }
-    /*
-    const prev = this.viewerRegistry.get(clientId);
-    this.viewerRegistry.set(clientId, workflowId);
-    if (prev !== workflowId) {
-      // The address must follow the instance this client now edits; keeping the
-      // previous workflow's address would point every addressed guard, and every
-      // lineage-scoped command, at a workflow the client no longer has open.
-      const adopted = workflowId
-        ? (this.instances.get(workflowId) ??
-          this.retiredInstances.get(workflowId))
-        : undefined;
-      this.workflowInstanceRegistry.getViewAddressRegistry().set(
-        clientId,
-        lineageAddressOf(adopted?.getQueueState())
-      );
-      const prevInRetired = prev ? this.retiredInstances.has(prev) : false;
-      const prevStillViewed = prev
-        ? this.isWorkflowViewedByAnyClient(prev)
-        : false;
-      Log.debug(
-        `[setViewedWorkflowId] clientId=${clientId.slice(0, 12)} ` +
-          `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
-          `inst:${workflowId?.slice(0, 8) ?? "null"}`
-      );
-
-      if (clientId === this.PANEL_CLIENT_ID) {
-        this.getActiveQueueStateChangedEmitter().fire(
-          this.getActiveQueueState()
-        );
-      }
-    }
-  }
-
-    */
+    this.workflowInstanceRegistry.setViewedWorkflowId(clientId, workflowId);
   }
 
   private getActiveQueueStateChangedEmitter(): TypedEmitter<
@@ -4693,14 +4500,6 @@ export class WorkflowOrchestrator {
     return this.workflowInstanceRegistry.isWorkflowViewedByAnyClient(
       workflowId
     );
-    /*
-    for (const viewed of this.viewerRegistry.values()) {
-      if (viewed === workflowId) return true;
-    }
-    return false;
-  }
-
-    */
   }
 
   /**
@@ -4713,82 +4512,10 @@ export class WorkflowOrchestrator {
    */
   registerClient(clientId: string, send?: (message: unknown) => void): void {
     this.workflowInstanceRegistry.registerClient(clientId, send);
-    /*
-    if (!this.viewerRegistry.has(clientId)) {
-      this.viewerRegistry.set(clientId, null);
-    }
-    const viewAddresses = this.workflowInstanceRegistry.getViewAddressRegistry();
-    if (!viewAddresses.has(clientId)) {
-      viewAddresses.set(clientId, null);
-    }
-    if (send) {
-      this.workflowInstanceRegistry.getViewMessageSinks().set(clientId, send);
-    }
-  }
-
-    */
   }
 
   unregisterClient(clientId: string): void {
     this.workflowInstanceRegistry.unregisterClient(clientId);
-    /*
-    const workflowId = this.getViewedWorkflowId(clientId);
-    const ptyManager = getPtyProcessManager();
-    const ptyCount =
-      workflowId && ptyManager
-        ? ptyManager.getSessionsForWorkflow(workflowId).length
-        : 0;
-    Log.debug(
-      `[unregisterClient] clientId=${clientId.slice(0, 12)} ` +
-        `was viewing inst:${workflowId?.slice(0, 8) ?? "null"} ` +
-        `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false}, activePty=${ptyCount})`
-    );
-    this.viewerRegistry.delete(clientId);
-    this.workflowInstanceRegistry.getViewAddressRegistry().delete(clientId);
-    this.workflowInstanceRegistry.getViewMessageSinks().delete(clientId);
-
-    if (!workflowId) return;
-
-    // If the workflow is in retiredInstances and no other client views it, consider disposal.
-    if (
-      this.retiredInstances.has(workflowId) &&
-      !this.isWorkflowViewedByAnyClient(workflowId)
-    ) {
-      // Don't dispose while PTY sessions are still running. The instance must remain in
-      // retiredInstances so a reconnecting viewer (e.g. browser page refresh) can find it
-      // by workflowId and receive TERMINAL_STARTED for the still-live sessions.
-      // Cleanup happens on the next unregisterClient call after those sessions have ended.
-      if (ptyCount > 0) {
-        Log.debug(
-          `[unregisterClient] keeping retired inst:${workflowId.slice(0, 8)} — ` +
-            `${ptyCount} active PTY session(s) still running`
-        );
-        return;
-      }
-      Log.debug(
-        `[unregisterClient] disposing retired inst:${workflowId.slice(0, 8)} — no viewers, no active PTY sessions`
-      );
-      this.retiredInstances.get(workflowId)?.dispose();
-      this.retiredInstances.delete(workflowId);
-      return;
-    }
-
-    // If the workflow is a live idle instance and no other client views it, dispose and remove
-    const instance = this.instances.get(workflowId);
-    if (instance && !this.isWorkflowViewedByAnyClient(workflowId)) {
-      const status = instance.getQueueState().status;
-      const isIdle =
-        status !== EXECUTION_STATES.RUNNING &&
-        status !== EXECUTION_STATES.PAUSING &&
-        status !== EXECUTION_STATES.PAUSED;
-      if (isIdle) {
-        instance.dispose();
-        this.instances.delete(workflowId);
-      }
-    }
-  }
-
-    */
   }
 
   /**
@@ -4815,246 +4542,7 @@ export class WorkflowOrchestrator {
    * Construct a new WorkflowInstance wired to this orchestrator's integrations.
    */
   private buildWorkflowInstance(): WorkflowInstance {
-    const registry = this.workflowInstanceRegistry;
-    if (registry.hasHost()) {
-      return registry.buildWorkflowInstanceForHost();
-    }
-    const instance = new WorkflowInstance(
-      this.platform,
-      this.dashboardBroadcastHub as IDashboardSink,
-      this.integrationFactory,
-      (harnessOverride?: HarnessId) =>
-        this.resolveDetectorIntegration(harnessOverride),
-      (name: string | undefined) =>
-        this.propagateWorkflowNameToIntegrations(name),
-      () => this.updateStatusBar(),
-      this.currentWorkspaceFolderPath,
-      true,
-      true,
-      this.compatibilityRegistry,
-      this.userFeedbackSink,
-      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
-      async (harnessId) => {
-        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
-      },
-      (workflow, workspaceRoot) =>
-        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
-      this.runnerHostIdentity
-    );
-    instance.promptQueue.onDidChangeState((state) => {
-      const summary = instance.getSummary();
-      const inRegistry = this.instances.has(instance.id);
-      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
-        instance.id
-      );
-      const needsExternalAnnounce =
-        isExternallyCreated &&
-        !this.announcedExternalWorkflowIds.has(instance.id);
-      if (
-        (state.status === EXECUTION_STATES.RUNNING ||
-          state.status === EXECUTION_STATES.PAUSING ||
-          state.status === EXECUTION_STATES.PAUSED) &&
-        (!inRegistry || needsExternalAnnounce)
-      ) {
-        if (needsExternalAnnounce) {
-          this.announcedExternalWorkflowIds.add(instance.id);
-        }
-        this.promoteInstanceToLive(instance);
-        this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
-      }
-      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
-      if (
-        state.status === EXECUTION_STATES.RUNNING ||
-        state.status === EXECUTION_STATES.ERROR ||
-        state.status === EXECUTION_STATES.STOPPED ||
-        state.status === EXECUTION_STATES.COMPLETED
-      ) {
-        this.syncExecutingRunViews(instance);
-      }
-      if (
-        inRegistry &&
-        (state.status === EXECUTION_STATES.COMPLETED ||
-          state.status === EXECUTION_STATES.ERROR ||
-          state.status === EXECUTION_STATES.STOPPED)
-      ) {
-        this.retireWorkflow(instance.id);
-      }
-    });
-    return instance;
-    /*
-    const instance = new WorkflowInstance(
-      this.platform,
-      this.dashboardBroadcastHub as IDashboardSink,
-      this.integrationFactory,
-      (harnessOverride?: HarnessId) =>
-        this.resolveDetectorIntegration(harnessOverride),
-      (name: string | undefined) =>
-        this.propagateWorkflowNameToIntegrations(name),
-      () => this.updateStatusBar(),
-      this.currentWorkspaceFolderPath,
-      true,
-      true,
-      this.compatibilityRegistry,
-      this.userFeedbackSink,
-      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
-      (harnessId) =>
-        this.harnessUsageService?.refreshHarnessUsage(harnessId) ??
-        Promise.resolve(),
-      (workflow, workspaceRoot) =>
-        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
-      this.runnerHostIdentity
-    );
-
-    Log.debug(
-      `[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`
-    );
-
-    // Tracks the lineage identity this instance last reported, so the address
-    // registry is refreshed on the transition rather than on every state change.
-    let lastLineageIdentity = "";
-
-    // Broadcast summary updates whenever this instance's execution state changes.
-    // This covers both active and inactive workflows so the multi-workflow list
-    // stays in sync regardless of which workflow is currently displayed.
-    instance.promptQueue.onDidChangeState((state) => {
-      this.ensureCoordinationWatchSession(instance.getExecutionRoot());
-      if (this.getActiveWorkflowId() === instance.id) {
-        this.getActiveQueueStateChangedEmitter().fire(state);
-      }
-
-      const summary = instance.getSummary();
-      const inRegistry = this.instances.has(instance.id);
-
-      const lineageIdentity = `${state.workflowKey ?? ""}|${state.runRef ?? ""}`;
-      if (lineageIdentity !== lastLineageIdentity) {
-        lastLineageIdentity = lineageIdentity;
-        this.adoptInstanceLineageAddress(instance, state);
-      }
-
-      Log.debug(
-        `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
-          `inRegistry=${inRegistry} registrySize=${this.instances.size} ` +
-          `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
-      );
-
-      // Mark this instance's lineageExecutionOwners claim (if any) promoted the
-      // first time it actually reaches an execution-owner state. Until this
-      // fires, a terminal status on the claimed instance is leftover from its
-      // *previous* run (e.g. continuing an already-COMPLETED run reuses that
-      // same retired instance) and must not be read as this claim being spent
-      // — see `findInstanceForLineage` and `LineageExecutionClaim`.
-      if (state.workflowKey && isExecutionOwnerState(state.status)) {
-        const owners = this.getLineageExecutionOwners();
-        const claim = owners.get(state.workflowKey);
-        if (claim && claim.instanceId === instance.id && !claim.promoted) {
-          owners.set(state.workflowKey, { ...claim, promoted: true });
-        }
-      }
-
-      // Register in the running/paused registry whenever this instance enters
-      // RUNNING or PAUSED and is not already tracked.  Using the registry
-      // membership check (rather than a one-shot closure flag) lets a retired
-      // instance be re-registered if the user restarts it from the dashboard.
-      // Doing this here (rather than eagerly in executeWorkflow) guarantees
-      // that getWorkflowSummaries() never returns an IDLE workflow and that
-      // notifyWorkflowAdded() always fires with an accurate RUNNING/PAUSED
-      // state — eliminating the race condition where a GET_WORKFLOWS_LIST
-      // request processed before the runtime entered RUNNING would return an
-      // IDLE summary that the webview filter drops, incorrectly clearing
-      // loadedWorkflows.
-      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
-        instance.id
-      );
-      const needsExternalAnnounce =
-        isExternallyCreated &&
-        !this.announcedExternalWorkflowIds.has(instance.id);
-      if (
-        (state.status === EXECUTION_STATES.RUNNING ||
-          state.status === EXECUTION_STATES.PAUSING ||
-          state.status === EXECUTION_STATES.PAUSED) &&
-        (!inRegistry || needsExternalAnnounce)
-      ) {
-        if (needsExternalAnnounce) {
-          this.announcedExternalWorkflowIds.add(instance.id);
-        }
-        const wasRetired = this.promoteInstanceToLive(instance);
-        Log.debug(
-          `[onDidChangeState] registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
-            `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})` +
-            (wasRetired ? " — removed stale retiredInstances entry" : "")
-        );
-        this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
-
-        // If the panel is currently viewing a blank placeholder (no steps, no working file)
-        // and this workflow was started outside the normal panel launch path (inRegistry=false),
-        // auto-update viewerRegistry so subsequent executeEphemeralPrompt and retireWorkflow
-        // calls resolve to this running instance instead of the blank placeholder.
-        // Externally-created background instances (e.g. commit-message generation) are
-        // excluded — they must never hijack a client's displayed workflow, only announce
-        // their existence in the Running-workflows list.
-        const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-        if (!isExternallyCreated && panelViewedId !== instance.id) {
-          const panelViewed = panelViewedId
-            ? (this.instances.get(panelViewedId) ??
-              this.retiredInstances.get(panelViewedId))
-            : null;
-          const panelSummary = panelViewed?.getSummary();
-          const panelViewedIsBlank =
-            !panelViewed ||
-            (!panelSummary?.workingFilePath &&
-              (panelSummary?.totalSteps ?? 0) === 0);
-          if (panelViewedIsBlank) {
-            this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-            Log.debug(
-              `[onDidChangeState] auto-switched panel viewerRegistry to running inst:${instance.id.slice(0, 8)} (panel had blank placeholder)`
-            );
-          }
-        }
-      }
-
-      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
-
-      // A draft is promoted to a RunRef immediately before execution starts.
-      // Rebind clients viewing that instance from the draft snapshot to the
-      // executing run so subsequent dashboard property edits address and
-      // persist to the same run working file as the executor.
-      //
-      // Terminal states matter for the same reason and are not redundant: a run
-      // start that throws after the promotion published its run (harness
-      // unavailable, lock contention, timeline init) never reaches RUNNING, and
-      // the draft those clients are addressing was deleted by that promotion.
-      // Without this they are stranded on a file that no longer exists, while
-      // the definition they spent the session building sits in the promoted run
-      // nothing has pointed them at.
-      if (
-        state.status === EXECUTION_STATES.RUNNING ||
-        state.status === EXECUTION_STATES.ERROR ||
-        state.status === EXECUTION_STATES.STOPPED ||
-        state.status === EXECUTION_STATES.COMPLETED
-      ) {
-        this.syncExecutingRunViews(instance);
-      }
-
-      // Auto-retire when a workflow completes, errors, or stops.
-      // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
-      // sent synchronously above, so there's nothing to wait for.
-      // Guard with inRegistry — workflows restored from disk in a terminal
-      // state are never in this.instances, so there is nothing to retire.
-      if (
-        inRegistry &&
-        (state.status === EXECUTION_STATES.COMPLETED ||
-          state.status === EXECUTION_STATES.ERROR ||
-          state.status === EXECUTION_STATES.STOPPED)
-      ) {
-        Log.debug(
-          `[onDidChangeState] inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
-        );
-        this.retireWorkflow(instance.id);
-      }
-    });
-
-    return instance;
-    */
+    return this.workflowInstanceRegistry.buildWorkflowInstanceForHost();
   }
 
   /**
@@ -5099,7 +4587,9 @@ export class WorkflowOrchestrator {
       ) {
         continue;
       }
-      this.workflowInstanceRegistry.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry
+        .getViewAddressRegistry()
+        .set(clientId, address);
     }
   }
 
@@ -5149,7 +4639,9 @@ export class WorkflowOrchestrator {
       // asynchronous, the draft this client is addressing is already gone, and
       // RUNNING is emitted repeatedly — an unmoved address would send a fresh
       // snapshot on every one of them.
-      this.workflowInstanceRegistry.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry
+        .getViewAddressRegistry()
+        .set(clientId, address);
       const send =
         this.workflowInstanceRegistry.getViewMessageSinks().get(clientId) ??
         (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);

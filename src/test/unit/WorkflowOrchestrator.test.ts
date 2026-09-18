@@ -13,12 +13,14 @@ import type {
   FileWatcherFactory,
   KeyValueStore,
 } from "../../core/HostPorts";
-import type { UserFeedback, UserFeedbackSink } from "../../core/UserFeedbackSink";
+import type {
+  UserFeedback,
+  UserFeedbackSink,
+} from "../../core/UserFeedbackSink";
 import type { QueueState } from "../../types/CtrlYokeTypes";
 import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
-import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -100,12 +102,14 @@ function createTestOrchestrator(
     workspaceState: new TestWorkspaceState(),
     ...overrides,
   });
-  const internal = orchestrator as any;
-  // Keep focused façade tests free to replace the parent construction seam.
-  // The production constructor uses a hosted registry; these tests exercise
-  // the façade with narrow instance doubles and therefore use the real
-  // registry's hostless mode instead.
-  internal.workflowInstanceRegistryInstance = new WorkflowInstanceRegistry();
+  // The orchestrator's own constructor already wires a hosted registry, so
+  // these façade tests exercise the same construction seam production uses.
+  // The lazy collaborators are cleared so they rebuild against whatever fields
+  // an individual test overrides after construction.
+  const internal = orchestrator as unknown as {
+    runViewPublisherInstance?: unknown;
+    runLifecycleServiceInstance?: unknown;
+  };
   internal.runViewPublisherInstance = undefined;
   internal.runLifecycleServiceInstance = undefined;
   return orchestrator;
@@ -4007,7 +4011,9 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       getSummary: () => ({ workflowName: "Spin-off" }),
       getQueueState: () => ({ status: EXECUTION_STATES.IDLE }),
     };
-    internal.buildWorkflowInstance = () => {
+    // Instance construction is owned by the registry, so that is the seam a
+    // test must replace to hand back a double.
+    internal.workflowInstanceRegistry.buildWorkflowInstanceForHost = () => {
       events.push("register");
       return newInstance;
     };
