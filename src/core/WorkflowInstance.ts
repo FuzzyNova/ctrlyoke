@@ -51,7 +51,6 @@ import {
   DEFAULT_WORKFLOW_NAME,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
-  OUTPUT_HISTORY_KINDS,
   PARALLEL_GROUP_ADMISSION,
   getEffectiveParallelGroupWidth,
   QUEUE_POSITION,
@@ -63,7 +62,6 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
-  CONTEXT_RESOLUTION_FAILURE_MODES,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
@@ -76,7 +74,6 @@ import {
   WORKFLOW_TELEMETRY_OUTCOMES,
   WORKTREE_MODES,
   type ActionType,
-  type ExecutionMode,
   type QueuePosition,
   type WorkflowTelemetryOutcome,
 } from "../types/DashboardConstants";
@@ -140,14 +137,16 @@ import {
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
-import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder";
 import { RunnerLockCoordinator } from "./orchestration/RunnerLockCoordinator";
+import {
+  WorkflowStartupPipeline,
+  type WorkflowStartupPipelinePort,
+} from "./orchestration/WorkflowStartupPipeline";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
-import { preflightWorkflowSecrets } from "../utils/SecretResolver";
 import {
   RunSecretRedactor,
   secretRedactionService,
@@ -160,7 +159,10 @@ import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { spawnIdentityHash } from "../types/ExecutionSpawnIdentity";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import type { OutputExecutionTarget, UndoExecutionTarget } from "../types/OutputHistoryTypes";
+import type {
+  OutputExecutionTarget,
+  UndoExecutionTarget,
+} from "../types/OutputHistoryTypes";
 import {
   OutputCaptureBuffer,
   type OutputCaptureCallbacks,
@@ -168,7 +170,6 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
-import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -264,9 +265,8 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
-  /** Used only to look up another lease owner's display name for lease-conflict errors. */
-  private readonly lineageRepository = new WorkflowLineageRepository();
+    | { merge: boolean; keep: boolean }
+    | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -1680,6 +1680,114 @@ export class WorkflowInstance {
   // Execution
   // ─────────────────────────────────────────────────────────────────────────
 
+  private createWorkflowStartupPipelinePort(): WorkflowStartupPipelinePort {
+    return {
+      id: this.id,
+      platform: this.platform,
+      workspaceFolderPath: this.workspaceFolderPath,
+      dashboardSink: this.dashboardSink,
+      userFeedbackSink: this.userFeedbackSink,
+      queue: this.promptQueue,
+      history: this.outputHistoryManager,
+      status: this.statusMessageReporter,
+      failRuntime: () => {
+        this.workflowRuntime.fail();
+      },
+      getDetectorIntegration: (harnessOverride) =>
+        this.getDetectorIntegration(harnessOverride),
+      analyzeWorkflowCompatibility: (workflow) =>
+        this.analyzeWorkflowCompatibility(workflow),
+      approveSecretGrants: this.approveSecretGrants,
+      getHarnessUsageSnapshots: this.getHarnessUsageSnapshots,
+      hostCanProvidePty: this.hostCanProvidePty,
+      execution: {
+        currentPromptFile: () => this.currentPromptFile,
+        getAuthoritativeExecutionState: () =>
+          this.getAuthoritativeExecutionState(),
+        closeRetainedTerminalsForFreshRun: () =>
+          this.closeRetainedTerminalsForFreshRun(),
+        syncCurrentPromptFileFromQueue: (filePath) =>
+          this.syncCurrentPromptFileFromQueue(filePath),
+        setExecutionRunRef: (runRef) => {
+          this.executionRunRef = runRef;
+        },
+        clearOutputBuffers: () => this.clearOutputBuffers(),
+        prepareExecutionWorktree: (historyFilePath) =>
+          this.prepareExecutionWorktree(historyFilePath),
+        createIntegrationForMode: (modeOverride) =>
+          this.createIntegrationForMode(modeOverride),
+        startWorkflowExecution: (
+          integration,
+          historyFilePath,
+          workingFilePath,
+          targetRunIndices
+        ) =>
+          this.startWorkflowExecution(
+            integration,
+            historyFilePath,
+            workingFilePath,
+            targetRunIndices
+          ),
+        reportMissingAssetWarning: (missingDirectories) =>
+          this.reportMissingAssetWarning(missingDirectories),
+        getMissingAssetDirectories: () =>
+          this.promptFileLoader.getLastMissingAssetDirectories(),
+        getMissingAssetDedupeKey: (missingDirectories) =>
+          this.getMissingAssetDedupeKey(missingDirectories),
+        getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+        getResolvedHistoryFilePath: () => this.resolveHistoryFilePath(),
+        getActiveHistoryFilePath: () => this.activeHistoryFilePath,
+        setActiveHistoryFilePath: (filePath) => {
+          this.activeHistoryFilePath = filePath;
+        },
+        startPending: () => this.startPending,
+        reportCompatibilityDiagnostics: (diagnostics) =>
+          this.reportCompatibilityDiagnostics(diagnostics),
+        cacheHistoricalStepOutput: (stepIndex, outputs, retry) =>
+          this.outputCaptureBuffer.cacheHistoricalStepOutput(
+            stepIndex,
+            [...outputs],
+            retry
+          ),
+        getStepBufferSize: () => this.outputCaptureBuffer.stepBufferSize,
+        computeTargetRunIndices: (historyFilePath, isContinuation) =>
+          this.computeTargetRunIndices(historyFilePath, isContinuation),
+        warnBeforeWorkflowStart: (
+          queueState,
+          workflow,
+          modeOverride,
+          restartFromBeginning
+        ) =>
+          this.warnBeforeWorkflowStart(
+            queueState,
+            workflow,
+            modeOverride,
+            restartFromBeginning
+          ),
+        describeExecutionFailure: (error) =>
+          this.describeExecutionFailure(error),
+      },
+      worktree: {
+        getResolution: () => this.worktreeResolution,
+        setResolution: (resolution) => {
+          this.worktreeResolution = resolution;
+        },
+        getActiveWorktree: () => this.activeWorktree,
+        clearActiveWorktree: () => {
+          this.activeWorktree = undefined;
+        },
+        getExecutionLease: () => this.executionLease,
+        clearExecutionLease: () => {
+          this.executionLease = undefined;
+        },
+        manager: this.worktreeManager,
+        ensureRunnerLock: (workingFilePath) =>
+          this.ensureRunnerLock(workingFilePath),
+        releaseRunnerLock: () => this.releaseRunnerLock(),
+      },
+    };
+  }
+
   /**
    * Executes a run already allocated and written by `WorkingFileManager.seedNewRun`
    * (Re-run / CLI `rerun`) — a brand-new `RunRef` whose definition was seeded from an
@@ -1820,698 +1928,17 @@ export class WorkflowInstance {
     prePromotedFreshStart: boolean = false,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
-    if (!this.currentPromptFile) {
-      const queueState = this.promptQueue.getState();
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] executeLoadedPromptFile: currentPromptFile is null — ` +
-          `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
-          `prompts=${queueState.steps.length}, status=${this.getAuthoritativeExecutionState()}`
-      );
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        "warning",
-        "No prompt file loaded. Use 'Change' button to select a file first."
-      );
-      return;
-    }
-
-    const { filePath } = this.currentPromptFile;
-
-    const prevQueueState = this.promptQueue.getState();
-    const prevExecutionState = this.getAuthoritativeExecutionState();
-    // Only COMPLETED workflows count as having "completed" steps for append-continuation.
-    const prevCompletedCount =
-      prevExecutionState === EXECUTION_STATES.COMPLETED
-        ? this.promptQueue.getCompletedCount()
-        : 0;
-
-    const { promptFile } = this.currentPromptFile;
-    const fileName = path.basename(filePath);
-
-    const filePromptCount = promptFile.steps?.length ?? 0;
-    // Count pending (never-run) prompts in the queue. Newly appended prompts are
-    // PENDING; prompts that ran but were cancelled/skipped are CANCELLED. Using
-    // pendingCount instead of (filePromptCount > prevCompletedCount) prevents a
-    // false-positive when a completed workflow has cancelled prompts: e.g. 3 prompts
-    // where 1 was cancelled → completedCount=2, filePromptCount=3, but no PENDING
-    // prompts exist, so this is a restart, not an append continuation.
-    const pendingCount = prevQueueState.results.filter(
-      (r) => r.status === STEP_STATUS.PENDING
-    ).length;
-    const isAppendContinuation =
-      !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
-
-    // Detect stop → rewind → Run scenario: the queue is IDLE but already has
-    // a partial run in progress (currentIndex > 0). This happens when the
-    // user stopped a workflow, moved the start position past the cancelled
-    // step (a nonzero rewind), and then pressed Run instead of Resume. We
-    // want to reuse the existing history file rather than starting a fresh run.
-    const isIdleContinuation =
-      !continueFromCurrent &&
-      !isAppendContinuation &&
-      prevExecutionState === EXECUTION_STATES.IDLE &&
-      prevQueueState.currentIndex > 0;
-
-    Log.debug(
-      `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
-        `prevQueueStatus=${prevExecutionState}, prevCompletedCount=${prevCompletedCount}, ` +
-        `pendingCount=${pendingCount}, filePromptCount=${filePromptCount}, ` +
-        `isAppendContinuation=${isAppendContinuation}, isIdleContinuation=${isIdleContinuation}`
+    const pipeline = new WorkflowStartupPipeline({
+      ...this.createWorkflowStartupPipelinePort(),
+      onPrepared,
+    });
+    await pipeline.execute(
+      modeOverride,
+      continueFromCurrent,
+      preinitializedHistoryFilePath,
+      prePromotedFreshStart
     );
-
-    // Declared outside try so the catch block can finalize history on early errors
-    // (errors thrown before startWorkflowExecution, which has its own finally block).
-    let historyFilePath = preinitializedHistoryFilePath;
-    // The run *this call* promoted, if any. Publishing a run deletes the
-    // lineage's draft, so from that moment the run is the only thing the user's
-    // definition lives in and the only address a client can be sent to — the
-    // catch below has to be able to name it even when the throw beat
-    // `historyFilePath` being resolved. Never read the queue's `runRef` for
-    // this: on a later run's failed start that still holds the *previous*,
-    // legitimately completed run.
-    let promotedRunRef: RunRef | undefined;
-    let worktreeNotice: string | undefined;
-    let missingSecretNames: string[] = [];
-
-    // A genuinely fresh run (not a step continuation, append, or idle-rewind
-    // resume) starts a new compatibility-reporting window so this run's
-    // applicable warnings are reported at least once, even if the previous
-    // run already reported the identical fact.
-    if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation) {
-      const missingAssetDirectories =
-        this.promptFileLoader.getLastMissingAssetDirectories();
-      const missingAssetDedupeKey =
-        missingAssetDirectories.length > 0
-          ? this.getMissingAssetDedupeKey(missingAssetDirectories)
-          : undefined;
-      this.statusMessageReporter.resetDedupeState(
-        missingAssetDedupeKey ? [missingAssetDedupeKey] : []
-      );
-    }
-
-    try {
-      Log.info(
-        `[executeLoadedPromptFile] ctrlyoke: Executing loaded prompt file: ${filePath}`
-      );
-
-      const workflow = this.promptQueue.getWorkflowFile();
-      await this.approveSecretGrants?.(
-        workflow,
-        this.platform.getWorkspaceRoot()
-      );
-      missingSecretNames = await preflightWorkflowSecrets(
-        workflow,
-        this.platform,
-        this.platform.getWorkspaceRoot(),
-        process.env,
-        {
-          failOnMissing:
-            ConfigurationUtils.getContextResolutionFailureMode() ===
-            CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
-        }
-      );
-
-      this.worktreeResolution = await resolveWorktreeForWorkspace(
-        this.promptQueue.getWorkflowFile().worktree,
-        ConfigurationUtils.getDefaultWorktree(),
-        this.platform.getNamedWorkspaceRoots()
-      );
-      worktreeNotice = this.worktreeResolution.notice;
-
-      // Compatibility is authoritative at execution time. Resolve only the
-      // consumers that exist in the current queue/definition so a workflow
-      // default never stands in for a step-level harness override.
-      const compatibilityDiagnostics = await this.analyzeWorkflowCompatibility({
-        ...this.promptQueue.getWorkflowFile(),
-        steps: this.promptQueue.getState().steps,
-      });
-      const compatibilityErrors = compatibilityDiagnostics.filter(
-        (diagnostic) =>
-          diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-      );
-      if (compatibilityErrors.length > 0) {
-        // Report here (rather than after EXECUTION_STARTED, like the success
-        // path below) because this early-return means EXECUTION_STARTED is
-        // never sent at all — nothing will ever reset the dashboard's runtime
-        // state to make room for it otherwise.
-        this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
-        Log.error(
-          "[executeLoadedPromptFile] ctrlyoke: Compatibility preflight failed:",
-          compatibilityErrors.map((diagnostic) => diagnostic.message).join(" ")
-        );
-        this.workflowRuntime.fail();
-        await this.promptQueue.commitRuntimeTransition();
-        return;
-      }
-
-      // Pre-flight: use the DETECTOR singleton (already initialized at startup).
-      // If the harness is still initializing or polling, wait until it settles
-      // (up to 35 s — enough to cover the six-provider polling window).
-      // If it ends up unavailable, surface the error in the webview and bail.
-      const preflightHarness = PropertyResolver.resolveHarnessValue(
-        modeOverride,
-        this.currentPromptFile?.promptFile?.harness
-      );
-      const detectedIntegration = this.getDetectorIntegration(preflightHarness);
-      let detailedStatus = detectedIntegration.getDetailedStatus();
-
-      if (
-        detailedStatus.initializationStatus === HarnessStatus.Initializing ||
-        detailedStatus.initializationStatus === HarnessStatus.Waiting
-      ) {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
-        );
-        await new Promise<void>((resolve) => {
-          let settled = false;
-          const settle = () => {
-            if (!settled) {
-              settled = true;
-              subscription.dispose();
-              clearTimeout(timer);
-              resolve();
-            }
-          };
-          const subscription = detectedIntegration.onDidChangeStatus(settle);
-          const timer = setTimeout(settle, 35_000);
-        });
-        detailedStatus = detectedIntegration.getDetailedStatus();
-      }
-
-      if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
-        const errorMessage = detailedStatus.message || "Harness is unavailable";
-        Log.error(
-          `[executeLoadedPromptFile] ctrlyoke: Harness not ready: ${errorMessage}`
-        );
-        const preflightStepCount = this.promptQueue.getState().steps.length;
-        if (this.dashboardSink && preflightStepCount > 0) {
-          this.dashboardSink.updateExecutionStarted(
-            this.id,
-            fileName,
-            preflightStepCount
-          );
-          this.dashboardSink.updateCliOutput(0, {
-            prompt: "",
-            response: "",
-            elapsed: 0,
-            errorMessage,
-          });
-        }
-        this.workflowRuntime.fail();
-        await this.promptQueue.commitRuntimeTransition();
-        if (historyFilePath) {
-          await this.outputHistoryManager.finalizeRun(
-            historyFilePath,
-            EXECUTION_STATES.ERROR,
-            preflightStepCount,
-            this.promptQueue.getState().totalExecutionTime
-          );
-        }
-        return;
-      }
-
-      const executionState = this.getAuthoritativeExecutionState();
-      const isRestartFromBeginning =
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        (executionState === EXECUTION_STATES.COMPLETED ||
-          executionState === EXECUTION_STATES.PAUSED ||
-          executionState === EXECUTION_STATES.STOPPED ||
-          executionState === EXECUTION_STATES.ERROR);
-
-      this.warnBeforeWorkflowStart(
-        prevQueueState,
-        promptFile,
-        modeOverride,
-        isRestartFromBeginning
-      );
-
-      if (isRestartFromBeginning) {
-        await this.closeRetainedTerminalsForFreshRun();
-      }
-
-      if (!continueFromCurrent && !isAppendContinuation) {
-        if (isRestartFromBeginning) {
-          Log.info(
-            `[executeLoadedPromptFile] ctrlyoke: Queue in ${executionState} state, restarting from beginning`
-          );
-          await this.promptQueue.restart();
-        }
-      } else if (isAppendContinuation) {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
-        );
-        if (executionState === EXECUTION_STATES.IDLE) {
-          await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
-        }
-      } else {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Continuing from current position (append mode), preserving history`
-        );
-      }
-
-      const currentQueueState = this.promptQueue.getState();
-      const totalSteps = currentQueueState.steps.length;
-      const currentStep =
-        currentQueueState.steps[currentQueueState.currentIndex];
-      const executionMode: ExecutionMode | undefined = currentStep
-        ? PropertyResolver.resolveExecutionMode(
-            currentStep,
-            this.promptQueue.getWorkflowFile(),
-            { hostCanProvidePty: this.hostCanProvidePty }
-          )
-        : undefined;
-
-      let workingFilePath = currentQueueState.workingFilePath ?? "";
-      const workflowKey = currentQueueState.workflowKey;
-      if (
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        !isIdleContinuation &&
-        !prePromotedFreshStart &&
-        workflowKey
-      ) {
-        const runWorkspaceRoot =
-          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot() ?? "";
-        const startedAt = Date.now();
-        const promoted = await this.promptQueue.promoteToNewRun(
-          runWorkspaceRoot,
-          startedAt
-        );
-        if (promoted) {
-          workingFilePath = promoted.workingFilePath;
-          promotedRunRef = promoted.runRef;
-          this.syncCurrentPromptFileFromQueue(promoted.workingFilePath);
-          this.executionRunRef = promoted.runRef;
-          const historyInit = await this.outputHistoryManager.initializeRunAt(
-            workflowKey,
-            promoted.runRef,
-            promoted.runDir,
-            promoted.runId,
-            startedAt,
-            [],
-            this.getDefinitionRevisionContext().definition
-          );
-          if (!historyInit.filePath) {
-            throw new Error(
-              `Failed to initialize timeline for promoted run ${workflowKey}/${promoted.runRef}`
-            );
-          }
-          historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-            workflowKey,
-            promoted.runRef
-          );
-        }
-      } else if (isAppendContinuation && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error(
-            "Append continuation requires an explicit promoted run"
-          );
-        }
-        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-          workflowKey,
-          runRef
-        );
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Reusing explicit history file for append continuation: ${historyFilePath}`
-        );
-
-        // Cache historical step outputs in completedStepOutputs so they can be
-        // replayed by sendFullStateToDashboard() when the user switches away and
-        // back to this workflow mid-execution.  Without this, completedStepOutputs
-        // is empty for steps that ran in the previous VS Code session, and
-        // switching back shows only the currently-running step's output.
-        if (historyFilePath) {
-          try {
-            const history =
-              await this.outputHistoryManager.loadHistory(historyFilePath);
-
-            const cliEntriesByStep = new Map<
-              number,
-              Array<{ cliOutput: CliOutput; attemptIndex: number }>
-            >();
-            for (const entry of history.orderedEntries) {
-              if (
-                entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-                entry.target.kind === FINAL_STEP_PHASES.QUEUE
-              ) {
-                const stepIndex = (
-                  entry.target as {
-                    kind: typeof FINAL_STEP_PHASES.QUEUE;
-                    stepIndex: number;
-                  }
-                ).stepIndex;
-                const arr = cliEntriesByStep.get(stepIndex) ?? [];
-                arr.push({
-                  cliOutput: entry.cliOutput,
-                  attemptIndex: entry.attemptIndex,
-                });
-                cliEntriesByStep.set(stepIndex, arr);
-              }
-            }
-
-            for (let i = 0; i < prevCompletedCount; i++) {
-              const entries = cliEntriesByStep.get(i);
-              if (entries && entries.length > 0) {
-                const cliOutputs = entries.map((e) => e.cliOutput);
-                const maxAttemptIndex = Math.max(
-                  ...entries.map((e) => e.attemptIndex)
-                );
-                this.outputCaptureBuffer.cacheHistoricalStepOutput(
-                  i,
-                  cliOutputs,
-                  maxAttemptIndex > 0
-                    ? {
-                        currentRetry: maxAttemptIndex,
-                        maxRetries: maxAttemptIndex,
-                      }
-                    : undefined
-                );
-              }
-            }
-            Log.debug(
-              `[inst:${this.id.slice(0, 8)}] Cached ${this.outputCaptureBuffer.stepBufferSize} historical step(s) for replay on workflow switch`
-            );
-          } catch (error) {
-            Log.warn(
-              `[inst:${this.id.slice(0, 8)}] Failed to cache historical step outputs for replay: ${error}`
-            );
-          }
-        }
-      } else if (continueFromCurrent && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error("Continuation requires an explicit promoted run");
-        }
-        historyFilePath =
-          historyFilePath ||
-          this.outputHistoryManager.getHistoryFilePath(workflowKey, runRef);
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
-        );
-      } else if (isIdleContinuation && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error(
-            "Idle continuation requires an explicit promoted run"
-          );
-        }
-        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-          workflowKey,
-          runRef
-        );
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
-        );
-      }
-
-      // Identity is settled (queue state names the run this call is about to
-      // execute) — safe for a caller to move its client onto it now, before
-      // the potentially long-running step loop below even starts.
-      await onPrepared?.();
-
-      // The runner lock must precede any worktree discovery or mutation. The
-      // same lock is reused by startWorkflowExecution below.
-      await this.ensureRunnerLock(workingFilePath);
-
-      if (
-        this.dashboardSink &&
-        totalSteps > 0 &&
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        !isIdleContinuation
-      ) {
-        Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
-        );
-        this.clearOutputBuffers();
-        this.dashboardSink.updateExecutionStarted(
-          this.id,
-          fileName,
-          totalSteps,
-          undefined,
-          undefined,
-          undefined,
-          executionMode
-        );
-      }
-
-      await this.prepareExecutionWorktree(historyFilePath);
-
-      // Create the execution integration only after the execution workspace
-      // has been remapped to the resolved worktree.
-      const integration = this.createIntegrationForMode(modeOverride);
-
-      if (this.dashboardSink && totalSteps > 0) {
-        if (continueFromCurrent || isIdleContinuation) {
-          const currentIndex = currentQueueState.currentIndex;
-          const willInject = integration.canReuseForInject();
-          Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
-          );
-          if (willInject) {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              currentIndex,
-              true,
-              executionMode
-            );
-          } else {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              currentIndex,
-              undefined,
-              executionMode
-            );
-          }
-        } else if (isAppendContinuation) {
-          const willInject = integration.canReuseForInject();
-          Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
-          );
-          if (willInject) {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              prevCompletedCount,
-              true,
-              executionMode
-            );
-          } else {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              prevCompletedCount,
-              undefined,
-              executionMode
-            );
-          }
-        }
-      }
-
-      // Reported only now, after EXECUTION_STARTED has already gone out: a
-      // fresh (non-continuation) start makes the dashboard wipe its live
-      // status-message feed to make room for the new run (see
-      // EXECUTION_STARTED's webview handler). Reporting any earlier races
-      // that reset — the diagnostic lands, then gets discarded a message
-      // later — so the warning silently never appears live, only resurfacing
-      // once the run ends and history is reloaded from disk.
-      this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
-      this.reportMissingAssetWarning(
-        this.promptFileLoader.getLastMissingAssetDirectories()
-      );
-
-      if (missingSecretNames.length > 0) {
-        const missingSecretNotice = `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(
-          ", "
-        )}.`;
-        const timestampMs = Date.now();
-        const stepIndex = currentQueueState.currentIndex;
-        this.statusMessageReporter.report(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          missingSecretNotice,
-          STATUS_MESSAGE_SEVERITY.WARNING,
-          { timestampMs }
-        );
-      }
-
-      if (worktreeNotice && historyFilePath) {
-        await this.promptQueue.updateWorktreeNotice(worktreeNotice);
-        const timestampMs = Date.now();
-        const stepIndex = currentQueueState.currentIndex;
-        this.statusMessageReporter.report(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          worktreeNotice,
-          STATUS_MESSAGE_SEVERITY.WARNING,
-          { timestampMs }
-        );
-      }
-
-      if (totalSteps > 0) {
-        const currentIndex = currentQueueState.currentIndex;
-        integration.setWorkflowProgress(currentIndex + 1, totalSteps);
-      }
-      const targetRunIndices = await this.computeTargetRunIndices(
-        historyFilePath,
-        continueFromCurrent || isAppendContinuation || isIdleContinuation
-      );
-      Log.debug(
-        `[WorkflowInstance] [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
-      );
-      await this.startWorkflowExecution(
-        integration,
-        historyFilePath,
-        workingFilePath || undefined,
-        targetRunIndices
-      );
-    } catch (error) {
-      Log.error(
-        "[executeLoadedPromptFile] Failed to execute prompt file:",
-        error
-      );
-      const failureMessage = getErrorMessage(error);
-      const failedStepIndex =
-        this.promptQueue.finalizeFailedInFlightPrompt(failureMessage);
-      // Report before flipping the workflow to ERROR. This setup/startup path
-      // never reaches the attempt state machine, so it is the only chance to
-      // tell the dashboard which step failed — and `finalizeFailedInFlightPrompt`
-      // has already advanced `currentIndex` past it, so a dashboard that never
-      // hears about it can only guess, and guesses one row too far.
-      if (failedStepIndex !== undefined) {
-        this.dashboardSink?.updateStepStatus(failedStepIndex, {
-          state: STEP_STATUS.FAILED,
-          message: failureMessage,
-        });
-      }
-      this.workflowRuntime.fail();
-      await this.promptQueue.commitRuntimeTransition();
-      // Worktree provisioning can succeed before integration construction or
-      // history startup fails. That path never enters startWorkflowExecution's
-      // finally block, so settle it here or setup/early-run edits would be
-      // stranded outside the managed landing barrier.
-      if (
-        !this.startPending &&
-        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED
-      ) {
-        const worktree = this.activeWorktree;
-        this.worktreeManager.releaseRuntimeTrust(worktree);
-        await this.worktreeManager
-          .completeManagedRun(worktree, {
-            merge: this.worktreeResolution.config?.merge === true,
-            keep: this.worktreeResolution.config?.keep === true,
-            artifactsClean: true,
-          })
-          .catch((settlementError) =>
-            Log.error(
-              `[inst:${this.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
-              settlementError
-            )
-          );
-        this.executionLease = undefined;
-        this.activeWorktree = undefined;
-      }
-      // Setup can fail before startWorkflowExecution enters its finally block;
-      // release the lineage lock here so the blocked worktree can be retried
-      // explicitly by the user.
-      if (!this.startPending) {
-        await this.releaseRunnerLock().catch((lockError) =>
-          Log.warn(
-            "[executeLoadedPromptFile] Failed to release runner lock after setup failure:",
-            lockError
-          )
-        );
-      }
-      // Finalize the history run if it was initialized before the error occurred
-      // (errors thrown between initializeRun and startWorkflowExecution; the latter
-      // has its own finally block that handles finalization for errors within execution).
-      //
-      // A run promoted by this call must be finalized even when the throw came
-      // from `initializeRunAt` itself, before `historyFilePath` was resolved:
-      // the run directory is already published (and the draft already deleted),
-      // and its staged manifest says RUNNING. Left that way the lineage shows a
-      // permanently executing run that retention never prunes, and the header
-      // offers neither Resume nor "Run" for the one address the user's
-      // definition now lives at.
-      // The lineage *key* is stable across a promotion (only the RunRef moves),
-      // so reading it from the queue here still names the run promoted above.
-      const failedRunKey = this.promptQueue.getState().workflowKey;
-      const runToFinalize =
-        historyFilePath ||
-        (promotedRunRef && failedRunKey
-          ? this.outputHistoryManager.getHistoryFilePath(
-              failedRunKey,
-              promotedRunRef
-            )
-          : "");
-      if (runToFinalize) {
-        await this.outputHistoryManager
-          .finalizeRun(
-            runToFinalize,
-            EXECUTION_STATES.ERROR,
-            this.promptQueue.getProgress().total,
-            this.promptQueue.getState().totalExecutionTime
-          )
-          .catch((err) =>
-            Log.warn(
-              "[executeLoadedPromptFile] Failed to finalize history run on early error:",
-              err
-            )
-          );
-      }
-      const executionFailureMessage =
-        await this.describeExecutionFailure(error);
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        "error",
-        `ctrlyoke: Execution failed: ${executionFailureMessage}`
-      );
-      const executionFailureStatusMessage = `Execution failed: ${executionFailureMessage}`;
-      const executionFailureTimestampMs = Date.now();
-      const executionFailureStepIndex =
-        this.promptQueue.getState().currentIndex;
-      const resolvedHistoryFilePath = this.resolveHistoryFilePath();
-      if (runToFinalize && runToFinalize !== resolvedHistoryFilePath) {
-        // This early-failure path can finalize the promoted run before the
-        // active-history field is assigned. Temporarily point the reporter at
-        // the exact run that was finalized rather than silently changing the
-        // row's destination.
-        const previousActiveHistoryFilePath = this.activeHistoryFilePath;
-        this.activeHistoryFilePath = runToFinalize;
-        this.statusMessageReporter.report(
-          {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: executionFailureStepIndex,
-          },
-          executionFailureStatusMessage,
-          STATUS_MESSAGE_SEVERITY.ERROR,
-          { timestampMs: executionFailureTimestampMs }
-        );
-        this.activeHistoryFilePath = previousActiveHistoryFilePath;
-      } else {
-        this.statusMessageReporter.report(
-          {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: executionFailureStepIndex,
-          },
-          executionFailureStatusMessage,
-          STATUS_MESSAGE_SEVERITY.ERROR,
-          { timestampMs: executionFailureTimestampMs }
-        );
-      }
-    }
   }
-
   /**
    * Pause current execution.
    */
@@ -3738,7 +3165,10 @@ export class WorkflowInstance {
     integration?: HarnessIntegration,
     target?: WorkflowAttemptTarget
   ): void {
-    this.sessionActivityRecorder.beginActivityTargetCapture(integration, target);
+    this.sessionActivityRecorder.beginActivityTargetCapture(
+      integration,
+      target
+    );
   }
 
   private getExecutionTargetRunKey(
@@ -3769,75 +3199,17 @@ export class WorkflowInstance {
     historyFilePath: string,
     isContinuation: boolean
   ): Promise<Map<string, number>> {
-    if (!historyFilePath || !isContinuation) {
-      return new Map();
-    }
-
-    const rerunTargets: OutputExecutionTarget[] = [];
-    const state = this.promptQueue.getState();
-
-    for (
-      let stepIndex = state.currentIndex;
-      stepIndex < state.steps.length;
-      stepIndex++
-    ) {
-      rerunTargets.push({
-        kind: FINAL_STEP_PHASES.QUEUE,
-        stepIndex,
-      });
-    }
-
-    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
-    if (
-      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
-      !this.promptQueue.hasNext()
-    ) {
-      rerunTargets.push({
-        kind: FINAL_STEP_PHASES.FINAL_STEP,
-        loopIndex: finalStepRuntime.loopCount,
-      });
-    }
-
-    if (rerunTargets.length === 0) {
-      return new Map();
-    }
-
-    const targetKeys = new Set(
-      rerunTargets.map((target) => this.getExecutionTargetRunKey(target))
-    );
-
-    return this.outputHistoryManager.findNextRunIndexByTarget(
-      historyFilePath,
-      targetKeys
-    );
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).computeTargetRunIndices(historyFilePath, isContinuation);
   }
-
   /** Advance a completed final-step loop before it is reached again in this run. */
   private async prepareFinalStepContinuation(
     historyFilePath: string
   ): Promise<void> {
-    const runtime = this.promptQueue.getFinalStepRuntime();
-    if (
-      !runtime ||
-      runtime.phase !== FINAL_STEP_PHASES.FINAL_STEP ||
-      (runtime.status !== STEP_STATUS.COMPLETED &&
-        runtime.status !== STEP_STATUS.SKIPPED)
-    ) {
-      return;
-    }
-    const history =
-      await this.outputHistoryManager.loadHistory(historyFilePath);
-    let maxLoopIndex = runtime.loopCount;
-    for (const entry of history.orderedEntries) {
-      if (
-        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        maxLoopIndex = Math.max(maxLoopIndex, entry.target.loopIndex);
-      }
-    }
-    await this.promptQueue.prepareFinalStepContinuation(maxLoopIndex + 1);
-    this.syncCurrentPromptFileFromQueue();
+    await new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).prepareFinalStepContinuation(historyFilePath);
   }
 
   private warnBeforeWorkflowStart(
@@ -3846,64 +3218,14 @@ export class WorkflowInstance {
     modeOverride: HarnessId | undefined,
     restartFromBeginning: boolean
   ): void {
-    if (
-      !ConfigurationUtils.shouldTrackHarnessUsage() ||
-      !this.getHarnessUsageSnapshots
-    ) {
-      return;
-    }
-
-    const startIndex = restartFromBeginning ? 0 : queueState.currentIndex;
-    const queuedAttempts = queueState.steps
-      .slice(startIndex)
-      .filter((step, offset): step is PromptStep => {
-        if (step.enabled === false || isScriptStep(step)) return false;
-        const absoluteIndex = startIndex + offset;
-        if (restartFromBeginning) return true;
-        const status = queueState.results[absoluteIndex]?.status;
-        return (
-          status !== STEP_STATUS.COMPLETED &&
-          status !== STEP_STATUS.CANCELLED &&
-          status !== STEP_STATUS.FAILED &&
-          status !== STEP_STATUS.SKIPPED
-        );
-      })
-      .map((step) => ({
-        harnessId: PropertyResolver.resolveHarnessValue(
-          step.harness,
-          modeOverride ?? workflow.harness
-        ),
-      }));
-
-    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
-    const finalStep = workflow.finalStep;
-    const finalStepStillQueued =
-      finalStep !== undefined &&
-      finalStep.enabled !== false &&
-      !isScriptStep(finalStep) &&
-      (restartFromBeginning ||
-        !finalStepRuntime ||
-        finalStepRuntime.phase === FINAL_STEP_PHASES.QUEUE ||
-        (finalStepRuntime.status !== STEP_STATUS.COMPLETED &&
-          finalStepRuntime.status !== STEP_STATUS.SKIPPED));
-    if (finalStepStillQueued && finalStep) {
-      queuedAttempts.push({
-        harnessId: PropertyResolver.resolveHarnessValue(
-          finalStep.harness,
-          modeOverride ?? workflow.harness
-        ),
-      });
-    }
-
-    const settings = ConfigurationUtils.getHarnessUsageSettings();
-    const warning = buildUsageSelectionWarning({
-      queuedAttempts,
-      snapshots: this.getHarnessUsageSnapshots(),
-      warningPercentUsed: settings.warningPercentUsed,
-    });
-    if (warning) {
-      notifyUserFeedback(this.userFeedbackSink, "warning", warning.message);
-    }
+    new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).warnBeforeWorkflowStart(
+      queueState,
+      workflow,
+      modeOverride,
+      restartFromBeginning
+    );
   }
 
   /**
@@ -4811,7 +4133,9 @@ export class WorkflowInstance {
     if (error instanceof ExecutionLeaseConflictError) {
       return this.describeLeaseConflict(error);
     }
-    return getErrorMessage(error);
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).describeExecutionFailure(error);
   }
 
   /**
@@ -4826,30 +4150,9 @@ export class WorkflowInstance {
   private async describeLeaseConflict(
     error: ExecutionLeaseConflictError
   ): Promise<string> {
-    const owner = error.conflict.lease;
-    const ageSeconds = Math.max(0, Math.floor(error.conflict.ageMs / 1000));
-    const ageLabel =
-      ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`;
-
-    const ownerDescriptor = await this.lineageRepository
-      .tryReadDescriptor(owner.stateRoot, owner.workflowKey as WorkflowKey)
-      .catch(() => undefined);
-    const ownerName =
-      ownerDescriptor?.workflowName?.trim() || owner.workflowKey;
-
-    const config = this.worktreeResolution.config;
-    const target =
-      config?.mode === WORKTREE_MODES.NAMED
-        ? `named worktree "${config.branch}"`
-        : owner.mode === "exclusive-worktree"
-          ? "this worktree"
-          : "this execution directory";
-
-    return (
-      `Can't start — "${ownerName}" is still holding the lease on ${target} ` +
-      `(started ${ageLabel} ago). Close its live harness session or wait ` +
-      `for it to finish, then run this workflow again.`
-    );
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).describeLeaseConflict(error);
   }
 
   private async prepareExecutionWorktree(

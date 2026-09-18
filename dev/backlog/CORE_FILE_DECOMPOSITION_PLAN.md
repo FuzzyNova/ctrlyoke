@@ -528,7 +528,7 @@ one line — deviations, deferrals, or a reassessment outcome.
 | Test-double retirement               | ✅ Done     | this commit | Final count: 0 `Object.create` uses in `WorkflowOrchestrator.test.ts`; all three defensive accessors removed.                                                                                                                   |
 | §5.4 `ExecutionWorkspaceProvisioner` | ⏸ Deferred | 7e2e7799 | Reassessment measured 23 non-owned `this.` members after §5.3; above the ~15 gate, so no extraction was forced and no smaller cohesive sub-cluster was found.                                                                 |
 | §4.4 `RunLifecycleService`           | ✅ Done     | 5d13126e | Extracted addressed lifecycle decisions behind `WorkflowOrchestrator` delegations; 49 `Object.create` uses remain. Hosted smoke started/stopped cleanly; continue/rewind/delete browser actions were not exercised because Playwright was unavailable. |
-| §5.1 `ExecutionStartupPipeline`      | Not started | —        | Split across two sessions: phase extraction, then context/startup + failure invariants.                                                                                                                                     |
+| §5.1 `ExecutionStartupPipeline`      | ✅ 9a Done | this commit | Extracted the seven startup phases, run-scoped fields, and intact failure finalizer; 9b remains for execution context/startup and failure-invariant decomposition.                                                               |
 
 **Optional, not scheduled:** the `EphemeralPromptRunner` filler noted in §5.4
 (~340 lines, region 3427–3750) remains available but is not on the critical path
