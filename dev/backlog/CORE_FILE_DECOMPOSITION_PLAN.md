@@ -373,12 +373,26 @@ early as a warm-up for §5.1.
 `executionWorkspace`, `executionWorkspaceIdentity`,
 `retainedIntegrationArtifactContexts`, `executionLease`.
 
-**Caveat — this is the loosest of the four.** Measured, the cluster reaches ~31
-distinct members, including `releaseRunnerLock`, `stopStopRequestPolling` and
-`workflowRuntime`. Do §5.3 first so the lock calls become a collaborator call
-rather than a private one; if the remaining reach is still above ~15 after that,
-**stop and reassess** rather than forcing it. A collaborator that needs 30
-callbacks is worse than the method it replaced.
+**Caveat — this is the loosest of the four.** Measured after §5.3 landed, the
+candidate methods still reach **23** distinct `this.` members that would not move
+with them: `_targetedScriptOutputEmitter`, `dashboardSink`,
+`defaultExecutionWorkspace`, `endConditionEvaluator`, `endConditionHandler`,
+`getDefinitionRevisionContext`, `id`, `liveInjectIntegrations`,
+`outputHistoryManager`, `platform`, `promptQueue`, `releaseRunnerLock`,
+`reportCompatibilityDiagnostics`, `runnerLockCoordinator`,
+`statusMessageReporter`, `stopRunnerLockHeartbeat`, `stopStopRequestPolling`,
+`userFeedbackSink`, `workflowExecutor`, `workflowName`, `workflowRuntime`,
+`workspaceFolderPath`, and `worktreeManager`. The seven proposed moved fields
+and the candidate methods' internal calls are excluded from that count.
+
+Because the remaining reach is still above ~15, this phase was **deferred after
+reassessment** on 2026-09-17. The lock methods are now collaborator-backed, but
+the worktree cluster still needs too many unrelated execution, integration,
+reporting, and workspace callbacks. No smaller cohesive sub-cluster was worth
+extracting independently: the cleanup and settlement methods share the same
+worktree/lease/integration state and splitting them would only scatter the
+critical lifecycle. Reassess after another cohesive state owner has reduced the
+surface; do not force a 23-callback collaborator.
 
 **Risk: medium-high.** Managed-worktree bugs strand user work in an unmerged
 checkout.
@@ -512,7 +526,7 @@ one line — deviations, deferrals, or a reassessment outcome.
 | §4.2 `WorkflowInstanceRegistry`      | ✅ Done     | 643db76b | Extracted instance lifecycle, lineage selection, viewer/address registries, and external-instance announcement state; 55 legacy `Object.create` doubles remain.                                                             |
 | §4.3 `RunViewPublisher`              | ✅ Done     | 713845fb | Extracted addressed-view reads, identity/revision publication, invalidation, and focused tests. Smoke: hosted dashboard served HTTP 200; browser/revision interaction was not exercised because Playwright was unavailable. |
 | Test-double retirement               | In progress | —        | 49 `Object.create` uses remain in `WorkflowOrchestrator.test.ts`; the three defensive accessors remain as planned.                                                                                                          |
-| §5.4 `ExecutionWorkspaceProvisioner` | Not started | —        | Has a stop-and-reassess gate; record the outcome here either way.                                                                                                                                                           |
+| §5.4 `ExecutionWorkspaceProvisioner` | ⏸ Deferred |  pending  | Reassessment measured 23 non-owned `this.` members after §5.3; above the ~15 gate, so no extraction was forced and no smaller cohesive sub-cluster was found.                                                                 |
 | §4.4 `RunLifecycleService`           | Not started | —        |                                                                                                                                                                                                                             |
 | §5.1 `ExecutionStartupPipeline`      | Not started | —        | Split across two sessions: phase extraction, then context/startup + failure invariants.                                                                                                                                     |
 
