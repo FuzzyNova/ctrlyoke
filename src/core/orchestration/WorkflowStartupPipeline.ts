@@ -1,5 +1,6 @@
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
+import type { WorkflowExecutionContext } from "../WorkflowExecutor";
 import { isScriptStep } from "../../types/CtrlYokeTypes";
 import type { PromptQueue } from "../PromptQueue";
 import type { OutputHistoryManager } from "./OutputHistoryManager";
@@ -43,6 +44,45 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { buildUsageSelectionWarning } from "../harness/shared/usage/UsageSelectionAssist";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
+import type { McpToolSkillRunContext } from "../../types/WorkflowContextTypes";
+import type { WorkflowAttemptTarget } from "../../types/CtrlYokeTypes";
+
+export type WorkflowStartupContextPort = Omit<
+  WorkflowExecutionContext,
+  | "dashboardProvider"
+  | "getIntegrationForPrompt"
+  | "historyFilePath"
+  | "workingFilePath"
+  | "targetRunIndices"
+> & {
+  readonly getDashboardProvider: () => IDashboardSink | undefined;
+  readonly createIntegrationForMode: (
+    harnessOverride?: HarnessId,
+    target?: WorkflowAttemptTarget,
+    resolvedProperties?: ResolvedProperties
+  ) => HarnessIntegration;
+  readonly getSequentialIntegrationKey: (
+    properties: ResolvedProperties
+  ) => string;
+  readonly registerTargetIntegration: (
+    target: WorkflowAttemptTarget,
+    integration: HarnessIntegration
+  ) => void;
+  readonly isTargetInParallelGroup: (target: WorkflowAttemptTarget) => boolean;
+  readonly getHarnessReadinessError: (
+    harnessId: HarnessId
+  ) => Promise<string | undefined>;
+  readonly getSecretRedactor: () => WorkflowExecutionContext["secretRedactor"];
+  readonly getMcpToolSkillContext: () =>
+    | Partial<McpToolSkillRunContext>
+    | undefined;
+  readonly createPriorContextResolver: (
+    historyFilePath: string
+  ) => WorkflowExecutionContext["resolvePriorContextItems"];
+  readonly platform: PlatformAdapter;
+  readonly isCli: boolean;
+};
 
 export type WorkflowStartupQueuePort = Pick<
   PromptQueue,
@@ -131,6 +171,38 @@ export interface WorkflowStartupExecutionPort {
     restartFromBeginning: boolean
   ) => void;
   readonly describeExecutionFailure?: (error: unknown) => Promise<string>;
+  readonly context?: WorkflowStartupContextPort;
+  readonly lifecycle?: WorkflowStartupLifecyclePort;
+}
+
+export interface WorkflowStartupLifecyclePort {
+  readonly isStartPending: () => boolean;
+  readonly beginExecution: (historyFilePath: string) => void;
+  readonly getRunIdentity: () => {
+    readonly workflowKey: WorkflowKey | undefined;
+    readonly runRef: RunRef | undefined;
+    readonly lockWorkspaceRoot: string | undefined;
+  };
+  readonly acquireExecutionLease: (
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    lockWorkspaceRoot: string,
+    workingFilePath: string | undefined
+  ) => Promise<void>;
+  readonly ownsExecutionReservation: () => boolean;
+  readonly startRunnerLockHeartbeat: (
+    lockWorkspaceRoot: string,
+    workflowKey: WorkflowKey
+  ) => void;
+  readonly restoreRetainedIntegrations: () => Promise<void>;
+  readonly executeWorkflow: (
+    integration: HarnessIntegration,
+    context: WorkflowExecutionContext
+  ) => Promise<void>;
+  readonly settleExecution: (options: {
+    readonly historyFilePath: string;
+    readonly workingFilePath: string | undefined;
+  }) => Promise<void>;
 }
 
 export interface WorkflowStartupWorktreePort {
@@ -141,7 +213,9 @@ export interface WorkflowStartupWorktreePort {
   readonly getExecutionLease: () => ExecutionLeaseHandle | undefined;
   readonly clearExecutionLease: () => void;
   readonly manager: WorkflowStartupWorktreeManagerPort;
-  readonly ensureRunnerLock: (workingFilePath: string) => Promise<void>;
+  readonly ensureRunnerLock: (
+    workingFilePath: string | undefined
+  ) => Promise<void>;
   readonly releaseRunnerLock: () => Promise<void>;
 }
 
@@ -256,12 +330,7 @@ export class WorkflowStartupPipeline {
       if (!(await this.preflightCompatibility())) {
         return;
       }
-      if (
-        !(await this.ensureHarnessReadiness(
-          modeOverride,
-          fileName
-        ))
-      ) {
+      if (!(await this.ensureHarnessReadiness(modeOverride, fileName))) {
         return;
       }
 
@@ -280,6 +349,173 @@ export class WorkflowStartupPipeline {
     } catch (error) {
       await this.finalizeFailure(error);
     }
+  }
+
+  async startWorkflowExecution(
+    integration?: HarnessIntegration,
+    historyFilePath: string = this.port.execution.getResolvedHistoryFilePath(),
+    workingFilePath?: string,
+    targetRunIndices?: Map<string, number>
+  ): Promise<void> {
+    const lifecycle = this.port.execution.lifecycle;
+    const contextPort = this.port.execution.context;
+    if (!lifecycle || !contextPort) {
+      throw new Error("Workflow startup lifecycle is not configured");
+    }
+    if (lifecycle.isStartPending()) {
+      Log.debug(
+        `[inst:${this.port.id.slice(0, 8)}] Workflow start already pending, skipping duplicate start request`
+      );
+      return;
+    }
+
+    lifecycle.beginExecution(historyFilePath);
+    const { workflowKey, runRef, lockWorkspaceRoot } =
+      lifecycle.getRunIdentity();
+    let activeIntegration: HarnessIntegration | undefined;
+
+    try {
+      await this.port.worktree.ensureRunnerLock(workingFilePath);
+      if (workflowKey && runRef && lockWorkspaceRoot) {
+        await lifecycle.acquireExecutionLease(
+          workflowKey,
+          runRef,
+          lockWorkspaceRoot,
+          workingFilePath
+        );
+      }
+      if (
+        lifecycle.ownsExecutionReservation() &&
+        lockWorkspaceRoot &&
+        workflowKey
+      ) {
+        lifecycle.startRunnerLockHeartbeat(lockWorkspaceRoot, workflowKey);
+      }
+
+      await lifecycle.restoreRetainedIntegrations();
+      activeIntegration =
+        integration ?? contextPort.createIntegrationForMode(undefined);
+      contextPort.registerTargetIntegration(
+        {
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: this.port.queue.getState().currentIndex,
+        },
+        activeIntegration
+      );
+
+      Log.debug(
+        `[inst:${this.port.id.slice(0, 8)}] startWorkflowExecution: historyFilePath="${historyFilePath}"`
+      );
+      if (!historyFilePath && workflowKey && runRef) {
+        Log.error(
+          `[inst:${this.port.id.slice(0, 8)}] startWorkflowExecution: no history file for promoted run ` +
+            `${workflowKey}/${runRef} — timeline and manifest writes will be skipped for this execution`
+        );
+      }
+
+      await lifecycle.executeWorkflow(
+        activeIntegration,
+        this.buildWorkflowExecutionContext(
+          activeIntegration,
+          historyFilePath,
+          workingFilePath,
+          targetRunIndices
+        )
+      );
+    } finally {
+      await lifecycle.settleExecution({ historyFilePath, workingFilePath });
+    }
+  }
+
+  buildWorkflowExecutionContext(
+    activeIntegration: HarnessIntegration,
+    historyFilePath: string,
+    workingFilePath: string | undefined,
+    targetRunIndices?: Map<string, number>,
+    targetKeyedExecution: boolean = false
+  ): WorkflowExecutionContext {
+    const contextPort = this.port.execution.context;
+    if (!contextPort) {
+      throw new Error("Workflow execution context is not configured");
+    }
+    let currentIntegration = activeIntegration;
+    let activeIntegrationKey: string | undefined;
+    const {
+      getDashboardProvider,
+      createIntegrationForMode,
+      getSequentialIntegrationKey,
+      registerTargetIntegration,
+      isTargetInParallelGroup,
+      platform,
+      isCli,
+      ...baseContext
+    } = contextPort;
+    const self = this;
+
+    return {
+      ...baseContext,
+      get dashboardProvider() {
+        return getDashboardProvider();
+      },
+      historyFilePath,
+      workingFilePath: workingFilePath || undefined,
+      mcpToolSkillContext: {
+        mcpServerPath: path.join(
+          platform.getExtensionPath(),
+          "out",
+          "mcp-server.js"
+        ),
+        workspaceRoot: contextPort.executionWorkspace.stateRoot,
+        executionRoot: contextPort.executionWorkspace.executionRoot,
+        workingFilePath: workingFilePath || undefined,
+        ...contextPort.getMcpToolSkillContext(),
+      },
+      secretRedactor: contextPort.getSecretRedactor(),
+      resolvePriorContextItems:
+        contextPort.createPriorContextResolver(historyFilePath),
+      shouldShowCliCommand: isCli || contextPort.shouldShowCliCommand,
+      targetRunIndices,
+      targetKeyedExecution,
+      getIntegrationForPrompt: (
+        prompt: PromptStep,
+        resolvedProperties: ResolvedProperties,
+        target?: WorkflowAttemptTarget
+      ) => {
+        const targetIsGrouped = target
+          ? isTargetInParallelGroup(target)
+          : false;
+        if (target && (targetKeyedExecution || targetIsGrouped)) {
+          const targetIntegration = createIntegrationForMode(
+            resolvedProperties.harness,
+            target,
+            resolvedProperties
+          );
+          registerTargetIntegration(target, targetIntegration);
+          return targetIntegration;
+        }
+
+        const integrationKey = getSequentialIntegrationKey(resolvedProperties);
+        const requiresFreshIntegration = !resolvedProperties.resumeSession;
+        if (
+          requiresFreshIntegration ||
+          activeIntegrationKey !== integrationKey
+        ) {
+          Log.info(
+            `[inst:${self.port.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} selecting spawn identity ${resolvedProperties.harness}::${integrationKey.slice(-16)}; retaining incompatible terminals`
+          );
+          currentIntegration = createIntegrationForMode(
+            resolvedProperties.harness,
+            undefined,
+            resolvedProperties
+          );
+          activeIntegrationKey = integrationKey;
+        }
+        if (target) {
+          registerTargetIntegration(target, currentIntegration);
+        }
+        return currentIntegration;
+      },
+    };
   }
 
   classifyContinuation(
@@ -521,41 +757,10 @@ export class WorkflowStartupPipeline {
       !prePromotedFreshStart &&
       workflowKey
     ) {
-      const runWorkspaceRoot =
-        this.port.workspaceFolderPath ??
-        this.port.platform.getWorkspaceRoot() ??
-        "";
-      const startedAt = Date.now();
-      const promoted = await this.port.queue.promoteToNewRun(
-        runWorkspaceRoot,
-        startedAt
+      workingFilePath = await this.promoteFreshRun(
+        workflowKey,
+        workingFilePath
       );
-      if (promoted) {
-        workingFilePath = promoted.workingFilePath;
-        this.promotedRunRef = promoted.runRef;
-        this.port.execution.syncCurrentPromptFileFromQueue(
-          promoted.workingFilePath
-        );
-        this.port.execution.setExecutionRunRef(promoted.runRef);
-        const historyInit = await this.port.history.initializeRunAt(
-          workflowKey,
-          promoted.runRef,
-          promoted.runDir,
-          promoted.runId,
-          startedAt,
-          [],
-          this.port.execution.getDefinitionRevisionContext().definition
-        );
-        if (!historyInit.filePath) {
-          throw new Error(
-            `Failed to initialize timeline for promoted run ${workflowKey}/${promoted.runRef}`
-          );
-        }
-        this.historyFilePath = this.port.history.getHistoryFilePath(
-          workflowKey,
-          promoted.runRef
-        );
-      }
     } else if (classification.isAppendContinuation && workflowKey) {
       const runRef = currentQueueState.runRef;
       if (!runRef) {
@@ -911,6 +1116,47 @@ export class WorkflowStartupPipeline {
     );
   }
 
+  private async promoteFreshRun(
+    workflowKey: WorkflowKey,
+    workingFilePath: string
+  ): Promise<string> {
+    const runWorkspaceRoot =
+      this.port.workspaceFolderPath ??
+      this.port.platform.getWorkspaceRoot() ??
+      "";
+    const startedAt = Date.now();
+    const promoted = await this.port.queue.promoteToNewRun(
+      runWorkspaceRoot,
+      startedAt
+    );
+    if (!promoted) return workingFilePath;
+
+    this.promotedRunRef = promoted.runRef;
+    this.port.execution.syncCurrentPromptFileFromQueue(
+      promoted.workingFilePath
+    );
+    this.port.execution.setExecutionRunRef(promoted.runRef);
+    const historyInit = await this.port.history.initializeRunAt(
+      workflowKey,
+      promoted.runRef,
+      promoted.runDir,
+      promoted.runId,
+      startedAt,
+      [],
+      this.port.execution.getDefinitionRevisionContext().definition
+    );
+    if (!historyInit.filePath) {
+      throw new Error(
+        `Failed to initialize timeline for promoted run ${workflowKey}/${promoted.runRef}`
+      );
+    }
+    this.historyFilePath = this.port.history.getHistoryFilePath(
+      workflowKey,
+      promoted.runRef
+    );
+    return promoted.workingFilePath;
+  }
+
   private getExecutionTargetRunKey(
     target: OutputExecutionTarget
   ): `queue:${number}` | `final:${number}` {
@@ -967,79 +1213,59 @@ export class WorkflowStartupPipeline {
     }
   }
 
-  private async finalizeFailure(error: unknown): Promise<void> {
-    Log.error(
-      "[executeLoadedPromptFile] Failed to execute prompt file:",
-      error
-    );
-    const failureMessage = getErrorMessage(error);
+  public finalizeFailedStepBeforeStatusFlip(
+    failureMessage: string
+  ): number | undefined {
     const failedStepIndex =
       this.port.queue.finalizeFailedInFlightPrompt(failureMessage);
-    // Report before flipping the workflow to ERROR. This setup/startup path
-    // never reaches the attempt state machine, so it is the only chance to
-    // tell the dashboard which step failed — and `finalizeFailedInFlightPrompt`
-    // has already advanced `currentIndex` past it, so a dashboard that never
-    // hears about it can only guess, and guesses one row too far.
     if (failedStepIndex !== undefined) {
       this.port.dashboardSink?.updateStepStatus(failedStepIndex, {
         state: STEP_STATUS.FAILED,
         message: failureMessage,
       });
     }
-    this.port.failRuntime();
-    await this.port.queue.commitRuntimeTransition();
-    // Worktree provisioning can succeed before integration construction or
-    // history startup fails. That path never enters startWorkflowExecution's
-    // finally block, so settle it here or setup/early-run edits would be
-    // stranded outside the managed landing barrier.
+    return failedStepIndex;
+  }
+
+  public async settleProvisionedWorktreeAfterEarlyFailure(): Promise<void> {
     if (
-      !this.port.execution.startPending?.() &&
-      this.port.worktree.getActiveWorktree()?.mode === WORKTREE_MODES.MANAGED
+      this.port.execution.startPending?.() ||
+      this.port.worktree.getActiveWorktree()?.mode !== WORKTREE_MODES.MANAGED
     ) {
-      const worktree = this.port.worktree.getActiveWorktree();
-      if (worktree) {
-        this.port.worktree.manager.releaseRuntimeTrust(worktree);
-        await this.port.worktree.manager
-          .completeManagedRun(worktree, {
-            merge: this.port.worktree.getResolution().config?.merge === true,
-            keep: this.port.worktree.getResolution().config?.keep === true,
-            artifactsClean: true,
-          })
-          .catch((settlementError) =>
-            Log.error(
-              `[inst:${this.port.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
-              settlementError
-            )
-          );
-        this.port.worktree.clearExecutionLease();
-        this.port.worktree.clearActiveWorktree();
-      }
+      return;
     }
-    // Setup can fail before startWorkflowExecution enters its finally block;
-    // release the lineage lock here so the blocked worktree can be retried
-    // explicitly by the user.
-    if (!this.port.execution.startPending?.()) {
-      await this.port.worktree
-        .releaseRunnerLock()
-        .catch((lockError) =>
-          Log.warn(
-            "[executeLoadedPromptFile] Failed to release runner lock after setup failure:",
-            lockError
-          )
-        );
-    }
-    // Finalize the history run if it was initialized before the error occurred
-    // (errors thrown between initializeRun and startWorkflowExecution; the latter
-    // has its own finally block that handles finalization for errors within
-    // execution).
-    //
-    // A run promoted by this call must be finalized even when the throw came
-    // from initializeRunAt itself, before historyFilePath was resolved:
-    // the run directory is already published (and the draft already deleted),
-    // and its staged manifest says RUNNING. Left that way the lineage shows a
-    // permanently executing run that retention never prunes, and the header
-    // offers neither Resume nor "Run" for the one address the user's
-    // definition now lives at.
+    const worktree = this.port.worktree.getActiveWorktree();
+    if (!worktree) return;
+    this.port.worktree.manager.releaseRuntimeTrust(worktree);
+    await this.port.worktree.manager
+      .completeManagedRun(worktree, {
+        merge: this.port.worktree.getResolution().config?.merge === true,
+        keep: this.port.worktree.getResolution().config?.keep === true,
+        artifactsClean: true,
+      })
+      .catch((settlementError) =>
+        Log.error(
+          `[inst:${this.port.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
+          settlementError
+        )
+      );
+    this.port.worktree.clearExecutionLease();
+    this.port.worktree.clearActiveWorktree();
+  }
+
+  public async releaseLineageLockAfterEarlyFailure(): Promise<void> {
+    if (this.port.execution.startPending?.()) return;
+    await this.port.worktree
+      .releaseRunnerLock()
+      .catch((lockError) =>
+        Log.warn(
+          "[executeLoadedPromptFile] Failed to release runner lock after setup failure:",
+          lockError
+        )
+      );
+  }
+
+  public async finalizePromotedRunAfterEarlyFailure(): Promise<string> {
     const failedRunKey = this.port.queue.getState().workflowKey;
     const runToFinalize =
       this.historyFilePath ||
@@ -1049,21 +1275,35 @@ export class WorkflowStartupPipeline {
             this.promotedRunRef
           )
         : "");
-    if (runToFinalize) {
-      await this.port.history
-        .finalizeRun(
-          runToFinalize,
-          EXECUTION_STATES.ERROR,
-          this.port.queue.getProgress().total,
-          this.port.queue.getState().totalExecutionTime
+    if (!runToFinalize) return "";
+    await this.port.history
+      .finalizeRun(
+        runToFinalize,
+        EXECUTION_STATES.ERROR,
+        this.port.queue.getProgress().total,
+        this.port.queue.getState().totalExecutionTime
+      )
+      .catch((err) =>
+        Log.warn(
+          "[executeLoadedPromptFile] Failed to finalize history run on early error:",
+          err
         )
-        .catch((err) =>
-          Log.warn(
-            "[executeLoadedPromptFile] Failed to finalize history run on early error:",
-            err
-          )
-        );
-    }
+      );
+    return runToFinalize;
+  }
+
+  private async finalizeFailure(error: unknown): Promise<void> {
+    Log.error(
+      "[executeLoadedPromptFile] Failed to execute prompt file:",
+      error
+    );
+    const failureMessage = getErrorMessage(error);
+    this.finalizeFailedStepBeforeStatusFlip(failureMessage);
+    this.port.failRuntime();
+    await this.port.queue.commitRuntimeTransition();
+    await this.settleProvisionedWorktreeAfterEarlyFailure();
+    await this.releaseLineageLockAfterEarlyFailure();
+    const runToFinalize = await this.finalizePromotedRunAfterEarlyFailure();
     const executionFailureMessage = this.port.execution.describeExecutionFailure
       ? await this.port.execution.describeExecutionFailure(error)
       : await this.describeExecutionFailure(error);

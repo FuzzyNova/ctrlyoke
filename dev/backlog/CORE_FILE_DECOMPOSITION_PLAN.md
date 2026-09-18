@@ -1,7 +1,8 @@
 # Core File Decomposition — `WorkflowOrchestrator` and `WorkflowInstance`
 
-> **Status:** Proposed — not implemented. Written 2026-09-17 against current code,
-> re-verified 2026-09-17 before staging (see the verification note below).
+> **Status:** Implemented through §5.1 (9b). §5.4 remains deferred; the broader
+> §9 ownership and size targets, plus legacy `Object.create` doubles outside the
+> extracted workflow-orchestrator tests, remain follow-up work.
 >
 > **Line numbers in this document are indicative, not authoritative.** They were
 > taken when it was written; `WorkflowOrchestrator.ts` has since grown from 7,563
@@ -509,6 +510,25 @@ the wrong trade. The targets that matter:
 If a phase does not move at least one of those four, it is a file split and
 should not be done.
 
+**§9 measurements after §5.1 (9b), 2026-09-18:**
+
+- **Method size:** `WorkflowInstance.ts` has no non-constructor method over
+  ~150 lines; its largest is `onRuntimeTransition` at 134 lines. The remaining
+  `WorkflowOrchestrator.ts` outlier is `buildWorkflowInstance` at 242 lines
+  (the constructor is 190 lines).
+- **Mutable-field ownership:** Not fully met. `WorkflowStartupPipeline.ts` is
+  1,348 lines and owns run-scoped mutable state, while `WorkflowInstance.ts`
+  still owns additional execution maps and lifecycle state; completing this
+  criterion requires the deferred §5.4 and follow-on ownership extractions.
+- **Test doubles/accessors:** Ten `Object.create` uses remain in legacy tests
+  outside `WorkflowOrchestrator.test.ts`; there are zero in production code,
+  and zero production accessors that exist solely to serve those doubles.
+- **File sizes:** `WorkflowOrchestrator.ts` is 5,234 lines versus the
+  3,400–3,800 target, and `WorkflowInstance.ts` is 5,351 lines versus the
+  2,800–3,200 target. The structural §5.1 extraction is complete, but these
+  targets are not met because §5.4 and additional planned extractions remain
+  deferred.
+
 ---
 
 ## 10. Execution log
@@ -528,7 +548,7 @@ one line — deviations, deferrals, or a reassessment outcome.
 | Test-double retirement               | ✅ Done     | this commit | Final count: 0 `Object.create` uses in `WorkflowOrchestrator.test.ts`; all three defensive accessors removed.                                                                                                                   |
 | §5.4 `ExecutionWorkspaceProvisioner` | ⏸ Deferred | 7e2e7799 | Reassessment measured 23 non-owned `this.` members after §5.3; above the ~15 gate, so no extraction was forced and no smaller cohesive sub-cluster was found.                                                                 |
 | §4.4 `RunLifecycleService`           | ✅ Done     | 5d13126e | Extracted addressed lifecycle decisions behind `WorkflowOrchestrator` delegations; 49 `Object.create` uses remain. Hosted smoke started/stopped cleanly; continue/rewind/delete browser actions were not exercised because Playwright was unavailable. |
-| §5.1 `ExecutionStartupPipeline`      | ✅ 9a Done | this commit | Extracted the seven startup phases, run-scoped fields, and intact failure finalizer; 9b remains for execution context/startup and failure-invariant decomposition.                                                               |
+| §5.1 `ExecutionStartupPipeline`      | ✅ Done     | this commit | Moved execution context/startup into the pipeline, split four failure invariants into callable methods with focused tests, and recorded §9 measurements; §5.4 and remaining size/ownership work stay deferred.                                      |
 
 **Optional, not scheduled:** the `EphemeralPromptRunner` filler noted in §5.4
 (~340 lines, region 3427–3750) remains available but is not on the critical path

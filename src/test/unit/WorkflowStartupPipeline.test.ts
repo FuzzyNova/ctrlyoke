@@ -15,9 +15,16 @@ import {
   type WorkflowStartupWorktreePort,
 } from "../../core/orchestration/WorkflowStartupPipeline";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
-import type { PromptFile, QueueState } from "../../types/CtrlYokeTypes";
+import type {
+  PromptFile,
+  QueueState,
+  RunRef,
+  WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  STEP_STATUS,
+  WORKTREE_MODES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -27,6 +34,7 @@ import type { WorkspaceWorktreeResolution } from "../../utils/WorktreeResolution
 import type { WorktreeInfo } from "../../core/orchestration/WorktreeManager";
 import type { ExecutionLeaseHandle } from "../../core/orchestration/ExecutionRootLeaseManager";
 import type { DefinitionRevisionContext } from "../../core/orchestration/OutputHistoryManager";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 class TestStatus implements WorkflowStartupStatusPort {
   resetCalls = 0;
@@ -60,6 +68,7 @@ class TestWorktreeManager implements WorkflowStartupWorktreeManagerPort {
 class TestWorktree implements WorkflowStartupWorktreePort {
   resolution: WorkspaceWorktreeResolution = { origin: "default" };
   readonly manager = new TestWorktreeManager();
+  activeWorktree: WorktreeInfo | undefined;
   ensureCalls = 0;
   releaseCalls = 0;
 
@@ -72,10 +81,12 @@ class TestWorktree implements WorkflowStartupWorktreePort {
   }
 
   getActiveWorktree(): WorktreeInfo | undefined {
-    return undefined;
+    return this.activeWorktree;
   }
 
-  clearActiveWorktree(): void {}
+  clearActiveWorktree(): void {
+    this.activeWorktree = undefined;
+  }
 
   getExecutionLease(): ExecutionLeaseHandle | undefined {
     return undefined;
@@ -83,7 +94,7 @@ class TestWorktree implements WorkflowStartupWorktreePort {
 
   clearExecutionLease(): void {}
 
-  async ensureRunnerLock(_workingFilePath: string): Promise<void> {
+  async ensureRunnerLock(_workingFilePath: string | undefined): Promise<void> {
     this.ensureCalls += 1;
   }
 
@@ -260,10 +271,7 @@ suite("WorkflowStartupPipeline", () => {
     const { pipeline } = createPipeline();
 
     assert.strictEqual(
-      await pipeline.ensureHarnessReadiness(
-        undefined,
-        "workflow.prompt.md"
-      ),
+      await pipeline.ensureHarnessReadiness(undefined, "workflow.prompt.md"),
       true
     );
   });
@@ -302,5 +310,62 @@ suite("WorkflowStartupPipeline", () => {
 
     assert.strictEqual(port.execution.preparedWorktree, "");
     assert.strictEqual(port.execution.started, true);
+  });
+
+  test("reports the failed step before the queue status advances", () => {
+    const { pipeline, port } = createPipeline();
+    const state = (port.queue as any).state as QueueState;
+    state.results[0].status = STEP_STATUS.RUNNING;
+    const reported: number[] = [];
+    (port as any).dashboardSink = {
+      updateStepStatus: (stepIndex: number) => reported.push(stepIndex),
+    };
+
+    const failedStepIndex =
+      pipeline.finalizeFailedStepBeforeStatusFlip("startup failed");
+
+    assert.strictEqual(failedStepIndex, 0);
+    assert.deepStrictEqual(reported, [0]);
+    assert.strictEqual(port.queue.getState().currentIndex, 1);
+  });
+
+  test("settles a provisioned managed worktree on an early failure", async () => {
+    const { pipeline, port } = createPipeline();
+    port.worktree.activeWorktree = {
+      mode: WORKTREE_MODES.MANAGED,
+    } as WorktreeInfo;
+
+    await pipeline.settleProvisionedWorktreeAfterEarlyFailure();
+
+    assert.strictEqual(port.worktree.manager.completeCalls, 1);
+    assert.strictEqual(port.worktree.activeWorktree, undefined);
+  });
+
+  test("releases the lineage lock on an early failure", async () => {
+    const { pipeline, port } = createPipeline();
+
+    await pipeline.releaseLineageLockAfterEarlyFailure();
+
+    assert.strictEqual(port.worktree.releaseCalls, 1);
+  });
+
+  test("finalizes a promoted run when history initialization never assigned its path", async () => {
+    const { pipeline, port } = createPipeline();
+    const workflowKey = "workflow-key" as WorkflowKey;
+    const runRef = WorkflowPaths.formatRunRef(Date.now()) as RunRef;
+    (port.queue as any).state.workflowKey = workflowKey;
+    (pipeline as any).promotedRunRef = runRef;
+    const finalizedPaths: string[] = [];
+    (port.history as any).finalizeRun = async (filePath: string) => {
+      finalizedPaths.push(filePath);
+    };
+
+    const finalizedPath = await pipeline.finalizePromotedRunAfterEarlyFailure();
+
+    assert.strictEqual(
+      finalizedPath,
+      port.history.getHistoryFilePath(workflowKey, runRef)
+    );
+    assert.deepStrictEqual(finalizedPaths, [finalizedPath]);
   });
 });
