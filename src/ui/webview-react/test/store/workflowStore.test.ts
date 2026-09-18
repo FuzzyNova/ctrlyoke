@@ -12,6 +12,7 @@ import {
   OPERATION_STATUS,
   OUTPUT_HISTORY_KINDS,
   EXECUTION_PHASES,
+  OUTPUT_ACTIVITY_KINDS,
   getStreamingChunkKey,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
@@ -1320,5 +1321,137 @@ describe("resetWorkflow", () => {
     expect(store().liveOrderedEntries).toEqual([]);
     expect(store().retryStates).toEqual({});
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live rehydration idempotence
+// ---------------------------------------------------------------------------
+
+describe("hydrateLiveRunHistory activity reconciliation", () => {
+  const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+
+  function makeStreamedEvents() {
+    return [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: 200,
+        data: { text: "I'll run the test suite." },
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 201,
+        data: { command: "npm test" },
+      },
+    ];
+  }
+
+  /** The durable timeline the run has written so far, as the snapshot replays it. */
+  function makeHistory(): WorkflowOutputHistory {
+    return {
+      schemaVersion: "1.1.0",
+      workflowId: "wf-live-dup",
+      runId: 21,
+      startedAt: 100,
+      executionState: EXECUTION_STATES.RUNNING,
+      promptOutputs: {},
+      orderedEntries: [
+        {
+          kind: OUTPUT_HISTORY_KINDS.CLI,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          cliOutput: makeOutput({ isStreaming: true, timestampMs: 150 }),
+          timestampMs: 150,
+          sequence: 3,
+        },
+      ],
+      activityEntries: [
+        {
+          timestampMs: 200,
+          // Same sequence the live push carried: both describe timeline event 5.
+          sequence: 5,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          kind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
+          events: makeStreamedEvents(),
+        },
+      ],
+    };
+  }
+
+  function structuredEventCount(): number {
+    return store()
+      .liveActivityEntries.filter(
+        (entry) => entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED
+      )
+      .reduce((total, entry) => total + (entry.events?.length ?? 0), 0);
+  }
+
+  it("does not re-append a streamed batch the durable timeline already holds", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    // Live push of timeline event 5, exactly as publishStreamingFlush sends it.
+    store().appendStreamingEvents(
+      0,
+      makeStreamedEvents(),
+      0,
+      0,
+      undefined,
+      200,
+      5
+    );
+    expect(structuredEventCount()).toBe(2);
+
+    store().hydrateLiveRunHistory(makeHistory());
+    expect(structuredEventCount()).toBe(2);
+
+    // A second snapshot while the same run is still executing.
+    store().hydrateLiveRunHistory(makeHistory());
+    expect(structuredEventCount()).toBe(2);
+  });
+
+  it("does not re-append a status the durable timeline already holds", () => {
+    const statusActivity = {
+      timestampMs: 180,
+      // The durable copy carries the timeline sequence; the live one below is
+      // stamped with the webview's own liveSequence, so the two never match.
+      sequence: 4,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      kind: OUTPUT_ACTIVITY_KINDS.STATUS,
+      text: "preCondition output is unavailable.",
+      severity: "warning" as const,
+    };
+    const historyWithStatus = (): WorkflowOutputHistory => ({
+      ...makeHistory(),
+      activityEntries: [statusActivity],
+    });
+
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
+      target,
+      statusMessage: {
+        message: statusActivity.text,
+        severity: "warning",
+        timestamp: 180,
+      },
+      timestampMs: 180,
+      sequence: store().liveSequence,
+    });
+
+    const statusCount = () =>
+      store().liveActivityEntries.filter(
+        (entry) => entry.kind === OUTPUT_ACTIVITY_KINDS.STATUS
+      ).length;
+    expect(statusCount()).toBe(1);
+
+    store().hydrateLiveRunHistory(historyWithStatus());
+    expect(statusCount()).toBe(1);
+
+    store().hydrateLiveRunHistory(historyWithStatus());
+    expect(statusCount()).toBe(1);
   });
 });

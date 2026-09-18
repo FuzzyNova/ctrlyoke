@@ -597,14 +597,79 @@ function mergeActivityEntry(
   return next;
 }
 
+/**
+ * Content identity for a status activity, used instead of its sequence.
+ * `appendLiveEntry` stamps a live status with the webview's own `liveSequence`,
+ * which has no relationship to the timeline sequence the durable copy carries.
+ */
+function statusActivityContentKey(entry: OutputActivityEntry): string {
+  return `${activityEntryKey(entry)}:${entry.severity ?? ""}:${entry.text ?? ""}`;
+}
+
+/**
+ * Overlay the panel's live activity entries onto the run's durable timeline.
+ *
+ * Both sides describe the same run, so a live entry the timeline has already
+ * persisted must be recognised as *the same* entry rather than merged into it.
+ * Folding it in with `mergeActivityEntry` instead concatenated its events onto
+ * the identical durable copy, and this runs on every re-delivery of an
+ * executing run's snapshot: each one added another copy of every already-
+ * persisted batch, so the output pane showed a step's events twice after one
+ * re-hydration, three times after two, and only came right once the run
+ * finished and a pure history load replaced the accumulated entries.
+ *
+ * Matching differs by kind because the two sides only agree on different
+ * fields:
+ * - Streamed text/structured batches carry the timeline sequence the extension
+ *   published them under (`publishStreamingFlush`), so identity + sequence is
+ *   exact. The live copy wins: it is the same timeline event already projected
+ *   for display, with the follow-up divider decided and the invisible
+ *   context-window markers filtered out.
+ * - Status messages carry a webview-local sequence, and a replayed status does
+ *   not preserve its original timestamp, so they match on content and each
+ *   durable occurrence is claimed at most once — the same rule
+ *   `overlayLiveHistoryEntries` applies to the ordered status entries.
+ *
+ * A live entry with no durable counterpart has not reached the timeline yet and
+ * is appended, which is what keeps the newest streamed batch on screen.
+ */
 function reconcileActivityEntries(
   durable: readonly OutputActivityEntry[],
   live: readonly OutputActivityEntry[]
 ): OutputActivityEntry[] {
-  let merged = [...durable];
+  const merged = [...durable];
+  const claimedStatusIndices = new Set<number>();
+
   for (const entry of live) {
-    merged = mergeActivityEntry(merged, entry);
+    if (entry.kind === OUTPUT_ACTIVITY_KINDS.STATUS) {
+      const contentKey = statusActivityContentKey(entry);
+      const matchingIdx = merged.findIndex(
+        (candidate, candidateIdx) =>
+          !claimedStatusIndices.has(candidateIdx) &&
+          candidate.kind === OUTPUT_ACTIVITY_KINDS.STATUS &&
+          statusActivityContentKey(candidate) === contentKey
+      );
+      if (matchingIdx >= 0) {
+        claimedStatusIndices.add(matchingIdx);
+        continue;
+      }
+      merged.push(entry);
+      continue;
+    }
+
+    const key = activityEntryKey(entry);
+    const matchingIdx = merged.findIndex(
+      (candidate) =>
+        activityEntryKey(candidate) === key &&
+        candidate.sequence === entry.sequence
+    );
+    if (matchingIdx < 0) {
+      merged.push(entry);
+      continue;
+    }
+    merged[matchingIdx] = entry;
   }
+
   return merged.sort(
     (left, right) =>
       left.timestampMs - right.timestampMs || left.sequence - right.sequence
