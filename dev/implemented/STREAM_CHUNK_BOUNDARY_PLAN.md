@@ -1,20 +1,23 @@
 # Stream Chunk Boundary Plan
 
-**Status:** Complete — issues 1, 2, and 3 resolved; step 3 convergence done
-(verified against the code 2026-09-17; see "Sequencing")
-**Priority:** P2 (P1 for issue 1, which is silent data corruption)
+**Status:** Implemented 2026-09-17 — all three issues resolved and all four
+incremental readers converged on the shared boundary helper. One related
+exposure was deliberately left open and carried forward to
+`dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
+**Priority:** P2 (P1 for issue 1, which was silent data corruption)
 **Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
 on U+2028`) introduced `src/utils/TextLines.ts` and single-sourced _where a line
 ends_. This doc covers the other half of that survey: what happens at a **read
 boundary**, which that commit deliberately did not touch.
-`.github/instructions/utils.instructions.md` carries the durable rule from the
-first half; issue 3 now uses the shared boundary helper described here.
+`.github/instructions/utils.instructions.md` carries the durable rule from both
+halves; `harness-shared.instructions.md` carries the `parseHeadlessStdout`
+whole-records contract that came out of issue 2.
 
 ## The problem in one sentence
 
-Four independent places decode a byte stream incrementally, and three of them
-get the boundary wrong in a different way — a UTF-8 character split across a
-chunk is corrupted permanently, and a JSONL record split across a chunk is
+Four independent places decoded a byte stream incrementally, and three of them
+got the boundary wrong in a different way — a UTF-8 character split across a
+chunk was corrupted permanently, and a JSONL record split across a chunk was
 dropped from the live stream — because each one re-derived the "carry the
 partial tail to the next read" logic instead of sharing it.
 
@@ -22,23 +25,26 @@ partial tail to the next read" logic instead of sharing it.
 
 A survey of every line-delimited-JSON site in `src/` (excluding tests), run
 while fixing the U+2028 bug. It turned up **13 independent line→`JSON.parse`
-implementations**. The splitting rule is now shared; the buffering is not.
+implementations**. The splitting rule was already shared at that point; the
+buffering was not, and this plan is what shared it.
 
 There is no JSONL package dependency in this repo — every one of these is
 hand-rolled.
 
 ## The three issues
 
-### 1. `CliProcessManager` decodes each stdout chunk independently — corrupts multi-byte characters
+### 1. `CliProcessManager` decoded each stdout chunk independently — corrupted multi-byte characters
 
-**Done:** Added `src/utils/StreamTextDecoder.ts` and converted both streams in
-`src/utils/CliProcessManager.spawn()`, `src/utils/ModelRegistry.ts`'s
-`execWithClosedStdin()`, and `src/dev/DevCommands.ts` to use it. The helper
-flushes trailing partial UTF-8 sequences explicitly at successful process
-close, and `CliProcessManager` forwards a non-empty stdout flush to
-`onStdout`. Coverage is in `src/test/unit/StreamTextDecoder.test.ts`.
+**Resolved.** Added `src/utils/StreamTextDecoder.ts` (`attachStreamTextDecoder`)
+and converted both streams in `CliProcessManager.spawn()`, `ModelRegistry`'s
+`execWithClosedStdin()`, and `DevCommands`' build runner onto it. The helper
+owns one `StringDecoder` per stream and returns an explicit flush, which each
+call site invokes on `close` — not on the error/timeout paths, which reject.
+`CliProcessManager` and `DevCommands` forward a non-empty stdout flush onward so
+the live stream and the accumulated text stay identical. Coverage:
+`src/test/unit/StreamTextDecoder.test.ts`.
 
-`src/utils/CliProcessManager.ts:108-119` (stdout) and `:117-119` (stderr)
+The code as found:
 
 ```ts
 child.stdout?.on("data", (data: Buffer) => {
@@ -77,14 +83,15 @@ transport), and it needs no exotic input — em dashes, curly quotes, box-drawin
 characters, emoji and CJK are ordinary in AI output. A ~1 MB response crosses
 ~16 chunk boundaries.
 
-The fix is one `StringDecoder` per spawn, which is exactly what `BaseLogParser`
-already does for file reads (`BaseLogParser.ts:73`). The accumulated `stdout`
-must be built from the decoded chunks (it already is), and the decoder needs an
-`end()` at process exit to flush a trailing partial sequence.
+The fix was one `StringDecoder` per spawn, which is exactly what `BaseLogParser`
+already did for file reads. The accumulated `stdout` had to be built from the
+decoded chunks (it already was), and the decoder needed an `end()` at process
+exit to flush a trailing partial sequence.
 
-### 2. `CliTransportCoordinator` hands raw chunks to stateless NDJSON parsers
+### 2. `CliTransportCoordinator` handed raw chunks to stateless NDJSON parsers
 
-`src/core/harness/shared/CliTransportCoordinator.ts:468`
+**Resolved.** See the sequencing note below for what shipped. The code as
+found, at `CliTransportCoordinator.ts:468`:
 
 ```ts
 const events = source.parseStdout?.(chunk) ?? [];
@@ -143,14 +150,16 @@ handles concatenated objects and balanced braces. Whole records therefore work
 without threading its `remainder` through the provider, and no change to
 `ClaudeCliProvider` is needed.
 
-### 3. `CopilotLogParser`'s OTel reader has neither a decoder nor a pending-line buffer
+### 3. `CopilotLogParser`'s OTel reader had neither a decoder nor a pending-line buffer
 
-**Done:** Added `splitCompleteLines`, a per-file pending-line buffer, and a
+**Resolved.** Added `splitCompleteLines`, a per-file pending-line buffer, and a
 `StringDecoder` to the OTel reader. The new state resets on every
 `setOtelFilePath()` and on truncation/rotation, so records split across polls
-are completed exactly once without leaking between prompts.
+are completed exactly once without leaking between prompts. The reader keeps
+`BaseLogParser`'s trailing-record policy: try to parse the unterminated tail,
+retain it as pending only when parsing proves the writer has not finished.
 
-`src/core/harness/copilot/CopilotLogParser.ts:282-303`
+The code as found, at `CopilotLogParser.ts:282-303`:
 
 A byte-offset tail read (`otelReadPosition`) that advances to `currentSize`
 unconditionally and then does `splitLines(buffer.toString("utf8"))`. A record
@@ -168,7 +177,7 @@ tracking with no error.
 
 ## The shape of the fix
 
-Add one primitive to `src/utils/TextLines.ts` alongside `splitLines` /
+One primitive was added to `src/utils/TextLines.ts` alongside `splitLines` /
 `streamFileLines`:
 
 ```ts
@@ -205,19 +214,20 @@ Issues 1 and 2 are _not_ solved by that helper alone:
   `parseStdout`; or give the `stdoutEventPump` the accumulator. Prefer the
   former — `parseStdout`'s contract then becomes "you are given whole records",
   which is what all three providers already assume. Claude's brace-balanced
-  parser is the exception to check: it is newline-agnostic, so it wants the
-  `remainder` threaded rather than line splitting.
+  parser was the exception to check — being newline-agnostic, it might have
+  wanted the `remainder` threaded instead — but its real output is
+  newline-delimited and it accepts whole records unchanged, so no
+  `ClaudeCliProvider` change was needed.
 
 ## Sequencing
 
 Staged as four steps, each independently committable:
 
-1. **Issue 1 alone.** One `StringDecoder` per stream in
-   `CliProcessManager.spawn` (stdout _and_ stderr), plus `decoder.end()` on
-   `close` so a trailing partial sequence is flushed into the accumulated text.
-   Single-source the pattern in a small helper and convert `ModelRegistry` and
-   `DevCommands` onto it. No harness parser changes. Verifiable with a unit test
-   that feeds a split multi-byte sequence through the chunk callback.
+1. **Done — issue 1 alone.** One `StringDecoder` per stream in
+   `CliProcessManager.spawn` (stdout _and_ stderr), plus an explicit flush on
+   `close` so a trailing partial sequence reaches the accumulated text. The
+   pattern is single-sourced in `attachStreamTextDecoder`, with `ModelRegistry`
+   and `DevCommands` converted onto it. No harness parser changes.
 2. **Done — `splitCompleteLines` + issue 3.** Added the helper to
    `TextLines.ts` and converted the Copilot OTel reader — the broken one — to
    it, giving it both the pending-line buffer and the `StringDecoder` it lacked.
@@ -240,12 +250,16 @@ Staged as four steps, each independently committable:
    completion callback. `CliLogEventPump.processEvent` does no de-duplication,
    so the flushed record is emitted exactly once. The provider tests cover
    Copilot, Claude, and OpenCode across split records, multi-record chunks,
-   unterminated tails, and consecutive spawns. The LOG-mode sibling path still
-   has a separate boundary exposure: `HeadlessLogTail.captureSessionId` runs
-   `extractSessionIdFromStdout` against one raw chunk at a time, so a session ID
-   split across chunks is not matched until `CliResponseCollector` recovers it
-   from full stdout. That remains follow-up work because fixing it requires a
-   second accumulator in the log-tail path.
+   unterminated tails, and consecutive spawns.
+
+## Carried forward
+
+The LOG-mode sibling path has the same boundary exposure for session-ID capture:
+`HeadlessLogTail.captureSessionId` runs `extractSessionIdFromStdout` against one
+raw chunk at a time. It is recoverable (`CliResponseCollector` re-runs the
+extractor over full stdout after exit) and fixing it needs a second accumulator
+in the log-tail path, so it was left out of this plan and written up separately
+in `dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
 
 ## Deliberately not in scope
 

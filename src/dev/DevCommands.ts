@@ -201,8 +201,17 @@ async function runNpmBuild(
         return;
       }
       settled = true;
-      handleStdout(flushStdout());
-      handleStderr(flushStderr());
+      // The decoder holds back an incomplete trailing sequence, so flush both
+      // streams here — but only deliver a non-empty tail, or every clean build
+      // would post an empty output chunk to the dashboard.
+      const stdoutTail = flushStdout();
+      if (stdoutTail.length > 0) {
+        handleStdout(stdoutTail);
+      }
+      const stderrTail = flushStderr();
+      if (stderrTail.length > 0) {
+        handleStderr(stderrTail);
+      }
       const durationMs = Date.now() - startedAt;
       const success = exitCode === 0;
       const result: DevBuildResult = {
