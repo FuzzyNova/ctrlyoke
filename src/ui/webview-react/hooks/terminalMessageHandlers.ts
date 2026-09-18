@@ -411,4 +411,32 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       }
     }
   };
+
+  // --------------------------------------------------------------------------
+  // TERMINAL_REMOVED - Extension retired this terminal; drop the tab entirely
+  //
+  // The extension is the sole authority on terminal lifetime — this handler is
+  // how it says "that tab is gone", the same way an explicit user close does.
+  // Sent when a newly spawned process takes over the AI session this terminal
+  // was holding open, so the conversation continues in the new tab instead of
+  // being shown twice. Arrives around the session's own TERMINAL_ENDED in
+  // either order; both the store and the registry no-op on an unknown session.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.TERMINAL_REMOVED] = (message: any) => {
+    const { workflowId, sessionId } = message;
+    if (!workflowId || !sessionId) return;
+
+    WebviewLog.debug(
+      `[TERMINAL_REMOVED] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+    );
+    clearPendingAutoClaim(workflowId, sessionId, "terminal removed");
+    terminalRegistry.clearSession(workflowId, sessionId);
+    useTerminalStore.getState().removeSession(workflowId, sessionId);
+
+    const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+    if (sessions.length === 0) {
+      useUiStore.getState().setTerminalSessionActive(workflowId, false);
+      useUiStore.getState().setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
+    }
+  };
 }

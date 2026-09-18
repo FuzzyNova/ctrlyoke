@@ -190,13 +190,45 @@ function createPtySession(
   );
 }
 
+/**
+ * Stands in for a `CliIntegration` holding a live interactive PTY, so
+ * cross-integration session takeover can be exercised without a real harness.
+ */
+class SessionHoldingMockHarnessIntegration extends MockHarnessIntegration {
+  private heldAiSessionId?: string;
+  private heldPtySessionId?: string;
+  readonly releasedAiSessions: string[] = [];
+
+  holdAiSession(aiSessionId: string, ptySessionId: string): void {
+    this.heldAiSessionId = aiSessionId;
+    this.heldPtySessionId = ptySessionId;
+  }
+
+  override ownsLiveAiSession(aiSessionId: string): boolean {
+    return this.heldAiSessionId === aiSessionId;
+  }
+
+  override async releaseLiveAiSession(
+    aiSessionId: string
+  ): Promise<string | undefined> {
+    if (!this.ownsLiveAiSession(aiSessionId)) {
+      return undefined;
+    }
+    this.releasedAiSessions.push(aiSessionId);
+    const ptySessionId = this.heldPtySessionId;
+    this.heldAiSessionId = undefined;
+    this.heldPtySessionId = undefined;
+    return ptySessionId;
+  }
+}
+
 class MockIntegrationFactory extends IntegrationFactory {
   constructor(platform: PlatformAdapter) {
     super(platform);
   }
 
   override createForExecution(_harness: HarnessId): HarnessIntegration {
-    return new MockHarnessIntegration(undefined, false);
+    return new SessionHoldingMockHarnessIntegration(undefined, false);
   }
 }
 
@@ -399,6 +431,71 @@ suite("WorkflowInstance target resources", () => {
       );
     } finally {
       instance.dispose();
+    }
+  });
+
+  // Sibling terminals are only safe while they own different conversations. A
+  // step that changes a spawn-time property but still resumes the previous
+  // step's session must take that session over, because every harness rejects a
+  // `--resume` of a session another process still holds open.
+  test("retires the sibling terminal holding the session a prompt resumes", async () => {
+    const platform = new MockPlatform();
+    const posted: unknown[] = [];
+    const ptyManager = initPtyProcessManager((message) => posted.push(message));
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const initial = new MockHarnessIntegration(undefined, false);
+    const context = (instance as any).buildWorkflowExecutionContext(
+      initial,
+      "",
+      undefined
+    );
+
+    try {
+      const holder = context.getIntegrationForPrompt(
+        { name: "step one", prompt: "one" },
+        createResolvedProperties({ model: "model-one" })
+      ) as SessionHoldingMockHarnessIntegration;
+      const taker = context.getIntegrationForPrompt(
+        { name: "step two", prompt: "two" },
+        createResolvedProperties({ model: "model-two" })
+      ) as SessionHoldingMockHarnessIntegration;
+      holder.holdAiSession("ai-session-1", "pty-1");
+      taker.holdAiSession("ai-session-2", "pty-2");
+
+      await context.releaseConflictingAiSession("ai-session-1", taker);
+
+      assert.deepStrictEqual(holder.releasedAiSessions, ["ai-session-1"]);
+      assert.deepStrictEqual(
+        taker.releasedAiSessions,
+        [],
+        "the requester retires its own PTY through its own paths"
+      );
+      assert.deepStrictEqual(posted, [
+        {
+          type: MESSAGE_TYPES.TERMINAL_REMOVED,
+          workflowId: instance.id,
+          sessionId: "pty-1",
+        },
+      ]);
+
+      posted.length = 0;
+      await context.releaseConflictingAiSession("ai-session-unrelated", taker);
+      assert.deepStrictEqual(
+        posted,
+        [],
+        "a sibling owning another conversation must be left alone"
+      );
+    } finally {
+      instance.dispose();
+      ptyManager.dispose();
     }
   });
 });

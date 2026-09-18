@@ -1481,7 +1481,12 @@ suite("CliIntegration", () => {
     integration: CliIntegration,
     resolvedProperties: ResolvedProperties,
     resolvedSessionId: string | undefined,
-    lifecycle: string[]
+    lifecycle: string[],
+    options: {
+      /** False models the fresh integration a spawn-identity change allocates. */
+      hasLivePtySession?: boolean;
+      workflowContext?: unknown;
+    } = {}
   ): Promise<boolean> {
     (integration as any).sessionResolverAdapter.resolve = () => ({
       resolvedProperties,
@@ -1490,7 +1495,8 @@ suite("CliIntegration", () => {
     (integration as any).initializeExecutionSession = async () => {};
     (integration as any).resumeSessionActivityWatcher = () => {};
     (integration as any).shouldUseInjectMode = () => false;
-    (integration as any).transportCoordinator.hasLivePtySession = () => true;
+    (integration as any).transportCoordinator.hasLivePtySession = () =>
+      options.hasLivePtySession ?? true;
     (integration as any).executionPlanBuilder.plan = async () => ({
       resolvedCommand: undefined,
       args: [],
@@ -1507,7 +1513,11 @@ suite("CliIntegration", () => {
       lifecycle.push("spawn");
       return true;
     };
-    return integration.sendPrompt({ prompt: "continue" });
+    return integration.sendPrompt(
+      { prompt: "continue" },
+      true,
+      options.workflowContext as any
+    );
   }
 
   // Sibling terminals come from WorkflowInstance handing an incompatible prompt
@@ -1636,6 +1646,141 @@ suite("CliIntegration", () => {
         resolvedProperties: createResolvedProperties(),
       });
       assert.strictEqual(killed, true);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  // The cross-integration case: a step that changes a spawn-time property but
+  // still resumes the previous step's session is handed a *fresh* integration,
+  // whose own coordinator has no PTY to retire — so the sibling holding that
+  // session must be retired through the workflow before this one spawns.
+  test("retires a sibling terminal holding the session it is about to resume", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    const requestedSessions: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      undefined;
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async () => {
+        lifecycle.push("kill");
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ model: "new-model" }),
+          "session-existing",
+          lifecycle,
+          {
+            hasLivePtySession: false,
+            workflowContext: {
+              promptIndex: 0,
+              allPrompts: [],
+              releaseConflictingAiSession: async (
+                aiSessionId: string,
+                requester: unknown
+              ) => {
+                assert.strictEqual(requester, integration);
+                requestedSessions.push(aiSessionId);
+                lifecycle.push("release-sibling");
+              },
+            },
+          }
+        ),
+        true
+      );
+      assert.deepStrictEqual(requestedSessions, ["session-existing"]);
+      assert.deepStrictEqual(lifecycle, ["release-sibling", "spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("does not retire a sibling terminal for a fresh-session prompt", async () => {
+    const integration = createTestIntegration();
+    const lifecycle: string[] = [];
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      undefined;
+
+    try {
+      assert.strictEqual(
+        await sendInteractiveWithLivePty(
+          integration,
+          createResolvedProperties({ resumeSession: false }),
+          "session-existing",
+          lifecycle,
+          {
+            hasLivePtySession: false,
+            workflowContext: {
+              promptIndex: 0,
+              allPrompts: [],
+              releaseConflictingAiSession: async () => {
+                lifecycle.push("release-sibling");
+              },
+            },
+          }
+        ),
+        true
+      );
+      assert.deepStrictEqual(lifecycle, ["spawn"]);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("reports and releases only the AI session its own live PTY owns", async () => {
+    const integration = createTestIntegration();
+    let terminatedReason: string | undefined;
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.hasLivePtySession = () => true;
+    (integration as any).transportCoordinator.terminateCurrentPtySession =
+      async (reason: string) => {
+        terminatedReason = reason;
+        return "pty-existing";
+      };
+
+    try {
+      assert.strictEqual(
+        integration.ownsLiveAiSession("session-unrelated"),
+        false
+      );
+      assert.strictEqual(
+        await integration.releaseLiveAiSession("session-unrelated"),
+        undefined
+      );
+      assert.strictEqual(terminatedReason, undefined);
+
+      assert.strictEqual(
+        integration.ownsLiveAiSession("session-existing"),
+        true
+      );
+      assert.strictEqual(
+        await integration.releaseLiveAiSession("session-existing"),
+        "pty-existing"
+      );
+      assert.match(terminatedReason ?? "", /takeover of AI session/u);
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  // A dead PTY cannot conflict with anything: the interactive context outlives
+  // the process, so ownership has to be gated on the coordinator too.
+  test("does not claim an AI session once its PTY is gone", () => {
+    const integration = createTestIntegration();
+    (integration as any).executionRunner.getLastInteractiveContext = () =>
+      createInteractiveInjectContext(createResolvedProperties());
+    (integration as any).transportCoordinator.hasLivePtySession = () => false;
+
+    try {
+      assert.strictEqual(
+        integration.ownsLiveAiSession("session-existing"),
+        false
+      );
     } finally {
       integration.dispose();
     }

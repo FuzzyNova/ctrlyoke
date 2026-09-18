@@ -25,8 +25,8 @@ other decided.
 `CliTransportCoordinator` holds a single `currentPtySession`
 (`src/core/harness/shared/CliTransportCoordinator.ts:113`). `CliIntegration` enforces it on
 every interactive dispatch: if inject mode is skipped and a live PTY exists, that PTY is
-killed before the new one spawns (`CliIntegration.ts:1176-1181` →
-`retireInteractivePtyForRestartFallback`, `:1337`).
+killed before the new one spawns (`CliIntegration.ts:1209-1227` →
+`retireInteractivePtyForRestartFallback`, `:1388`).
 
 Because sequential execution caches integrations by harness id
 (`WorkflowInstance.executionIntegrations`, `:404`; `liveInjectIntegrations`, `:455`), "one PTY
@@ -79,13 +79,36 @@ sibling.**
 3. **Any other new or non-running session → spawn a sibling.** Nothing bounds how many
    sibling terminals a workflow may accumulate; see **No terminal cap** below for why.
 
-### Rule 1 is only half-implemented today
+### Rule 1 spans integrations, not just one coordinator
+
+Both enforcement points below ask a _single_ integration about its _own_ PTY. Once the
+cache keys hand incompatible prompts their own integrations, that is no longer where the
+conflict lives: a step that changes a spawn-time property **while still resuming the
+previous step's session** gets a fresh integration whose coordinator has no PTY at all, and
+spawns `--resume` against a session the sibling TUI still holds open. Three terminals, one
+harness error, and the retained terminal is the one nobody asked about.
+
+So rule 1 is asked of every integration in the workflow, not only the dispatching one.
+`WorkflowContext.releaseConflictingAiSession` (implemented by
+`WorkflowInstance.releaseConflictingAiSession`, wired through `WorkflowExecutionContext`)
+walks `getLivePtyIntegrationCandidates()`, skips the requester, and asks each one
+`ownsLiveAiSession(aiSessionId)` — an AI-session predicate, not the PTY id
+`getActivitySessionId()` reports. A match is retired via `releaseLiveAiSession` before the
+spawn, and its tab is dropped with `TERMINAL_REMOVED`: the incoming terminal continues that
+very conversation, so leaving the dead one behind shows the same session twice.
+
+`CliIntegration.retireConflictingSiblingPty` asks for this immediately before the spawn and
+after the two local paths below, for both interactive and headless dispatch. It is a no-op
+for a `resumeSession: false` prompt (nothing to collide with) and for hosts that never wire
+the callback — a standalone CLI or MCP run has one integration and no sibling.
+
+### The two single-coordinator halves of rule 1
 
 - **Headless resume of a retained interactive PTY:** covered.
-  `retireInteractivePtyBeforeHeadlessResume` (`CliIntegration.ts:1360-1388`) compares
+  `retireInteractivePtyBeforeHeadlessResume` (`CliIntegration.ts:1475`) compares
   `resolvedSessionId` against `ctx.sessionId`/`ctx.spawnedWithSessionId` and terminates only
   on a match. This is the shape rule 1 wants and the model to copy.
-- **Interactive restart:** not covered _as a conflict check_. `CliIntegration.ts:1176-1181`
+- **Interactive restart:** not covered _as a conflict check_. `CliIntegration.ts:1209-1227`
   terminates unconditionally whenever a live PTY exists, never asking whether the sessions
   collide. It is over-broad rather than missing — it satisfies rule 1 by killing everything,
   which is exactly what this plan removes.
@@ -217,7 +240,7 @@ Deliberately excluded:
   the conflict predicate's job, and this is what keeps the narrowed teardown load-bearing
   rather than vestigial.
 - **`executionMode`** — a headless step must keep resolving to the retained interactive
-  integration so `retireInteractivePtyBeforeHeadlessResume` (`CliIntegration.ts:1360-1388`) can
+  integration so `retireInteractivePtyBeforeHeadlessResume` (`CliIntegration.ts:1475`) can
   decide about that PTY. Splitting by mode would hide the live PTY from the check that guards it.
 - **`agent`, `skills`, `priorContext`, `endCondition`, `preCondition`, `errorBehavior`** —
   per-turn inputs consumed by `CliPromptPreparer` and the executor, not baked into the process.
@@ -430,13 +453,16 @@ failure.
 
 ## Files
 
-| File                                                    | Change                                                                                                                                                                                                                                              |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/types/ExecutionSpawnIdentity.ts`                   | **New.** `spawnIdentityFields` / `spawnIdentityHash` — the sole source of both the cache key and the inject predicate's field comparison. No imports (see **The digest**).                                                                          |
-| `src/core/harness/CliIntegration.ts`                    | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Replace `getInjectIncompatibilityReason`'s `JSON.stringify` comparisons with `spawnIdentityFields`. |
-| `src/core/WorkflowExecutor.ts`                          | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite.                                                                                           |
-| `src/core/WorkflowInstance.ts`                          | Compose cache keys from harness + spawn identity; make the `getIntegrationForPrompt` selection compare that key rather than the harness; `resumeSession: false` bypasses the cache.                                                                 |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | Delete the harness-eviction block.                                                                                                                                                                                                                  |
+| File                                                    | Change                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/ExecutionSpawnIdentity.ts`                   | **New.** `spawnIdentityFields` / `spawnIdentityHash` — the sole source of both the cache key and the inject predicate's field comparison. No imports (see **The digest**).                                                                                                                                                                                                                                           |
+| `src/core/harness/CliIntegration.ts`                    | Extract the session-id conflict predicate shared by `retireInteractivePtyBeforeHeadlessResume` and the restart path; narrow `:1176-1181` to it. Replace `getInjectIncompatibilityReason`'s `JSON.stringify` comparisons with `spawnIdentityFields`. Stage 3: `ownsLiveAiSession`/`releaseLiveAiSession` overrides, one shared `retireInteractivePty` teardown, and `retireConflictingSiblingPty` before every spawn. |
+| `src/core/HarnessIntegration.ts`                        | **Stage 3.** `ownsLiveAiSession` / `releaseLiveAiSession` on the base class — false / no-op for every non-PTY harness.                                                                                                                                                                                                                                                                                               |
+| `src/types/WorkflowContextTypes.ts`                     | **Stage 3.** `WorkflowContext.releaseConflictingAiSession` — the hook a dispatching integration calls to have the workflow retire a sibling's PTY.                                                                                                                                                                                                                                                                   |
+| `src/core/WorkflowExecutor.ts`                          | Pass `ResolvedProperties` (not just `resolvedProperties.harness`) to `getIntegrationForPrompt` at `:2109`, after MCP normalization and the hooks rewrite. Stage 3: forward `releaseConflictingAiSession` into both per-prompt `WorkflowContext`s.                                                                                                                                                                    |
+| `src/core/WorkflowInstance.ts`                          | Compose cache keys from harness + spawn identity; make the `getIntegrationForPrompt` selection compare that key rather than the harness; `resumeSession: false` bypasses the cache. Stage 3: implement `releaseConflictingAiSession` over `getLivePtyIntegrationCandidates()` and post `TERMINAL_REMOVED` for the retired tab.                                                                                       |
+| `src/types/DashboardConstants.ts`                       | **Stage 3.** `MESSAGE_TYPES.TERMINAL_REMOVED` — extension → webview, "drop this tab".                                                                                                                                                                                                                                                                                                                                |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | Delete the harness-eviction block. Stage 3: handle `TERMINAL_REMOVED` by clearing the registry entry and removing the session.                                                                                                                                                                                                                                                                                       |
 
 No `schemas/workflow-schema.json` change — nothing here is authored per workflow.
 
@@ -468,7 +494,17 @@ headless path, where it also now declines to kill for `resumeSession: false`. Th
 keeps every started terminal until an explicit close message, so it no longer guesses which
 same-harness tab the backend intended to retain.
 
-Stage 1 and Stage 2 are complete. No per-workflow terminal cap, setting, or eviction logic was
+**Stage 3 — cross-integration session takeover — landed.** Stage 2's sibling terminals are
+only safe while they own different conversations, and a step that changed a spawn-time
+property while still resuming the previous step's session broke that: its fresh integration
+had no PTY of its own to retire, so it spawned `--resume` against a session the retained TUI
+still held open and the harness rejected it. Rule 1 now runs across integrations — see
+**Rule 1 spans integrations, not just one coordinator** — and the retired terminal's tab is
+dropped rather than left behind as a second copy of the same conversation. The webview gained
+one message (`TERMINAL_REMOVED`) and no new guesses: the extension still decides terminal
+lifetime, and this is how it says so.
+
+Stages 1 through 3 are complete. No per-workflow terminal cap, setting, or eviction logic was
 added; `CliTransportCoordinator` still owns exactly one PTY per integration.
 
 ---
@@ -485,10 +521,16 @@ added; `CliTransportCoordinator` still owns exactly one PTY per integration.
   coordinator invariant: a live PTY on this coordinator is retired before its replacement
   spawns whatever that replacement resumes, a same-session resume awaits exit before spawning,
   and the headless path leaves the interactive PTY alone when it resumes another session.
+  Stage 3 adds the cross-integration half: a dispatch that resumes a session asks the workflow
+  to retire whichever sibling holds it _before_ spawning, a `resumeSession: false` dispatch
+  asks for nothing, and `ownsLiveAiSession` claims a session only while its own PTY is live.
 - `src/test/unit/WorkflowInstance.test.ts` — two same-harness different-model steps produce
   two integrations; a third step with step 1's spawn identity resolves back to step 1's
   integration; `resumeSession: false` allocates a fresh one every time, and that fresh one
   — not the integration it displaced — is what the next resuming prompt continues. This is
   the suite that proves sibling retention, since the restart path itself no longer decides it.
+  Stage 3 adds the takeover: the sibling holding the resumed session is released and its tab
+  removed, while a sibling on another conversation is left alone.
 - `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` — same-harness
-  `TERMINAL_STARTED` no longer removes the prior session.
+  `TERMINAL_STARTED` no longer removes the prior session, and `TERMINAL_REMOVED` drops only
+  the session the extension named.

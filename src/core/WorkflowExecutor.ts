@@ -170,6 +170,8 @@ export interface WorkflowExecutionContext {
     resolvedProperties: ResolvedProperties,
     target?: ExecutionTarget
   ) => HarnessIntegration;
+  /** Retire a sibling integration's PTY when this dispatch takes over its session. */
+  releaseConflictingAiSession?: WorkflowContext["releaseConflictingAiSession"];
   /** Wait for the detector singleton to prove a required harness ready. */
   ensureHarnessReady?: (harnessId: HarnessId) => Promise<string | undefined>;
   /** Enables isolated target-keyed integrations for a parallel coordinator. */
@@ -2196,6 +2198,7 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          releaseConflictingAiSession: context.releaseConflictingAiSession,
           ...(preflightMember
             ? {
                 groupStartBoundary:
@@ -4289,6 +4292,7 @@ export class WorkflowExecutor {
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          releaseConflictingAiSession: context.releaseConflictingAiSession,
           ...(target.kind === FINAL_STEP_PHASES.QUEUE
             ? {
                 groupStartBoundary: this.getParallelGroupStartBoundary(

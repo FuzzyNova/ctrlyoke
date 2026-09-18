@@ -7,7 +7,10 @@ import type {
   WorktreeResolution,
 } from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
-import type { PriorContextItem } from "../core/HarnessIntegration";
+import type {
+  HarnessIntegration,
+  PriorContextItem,
+} from "../core/HarnessIntegration";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import type { RunSecretRedactor } from "../utils/SecretRedactionService";
@@ -157,6 +160,19 @@ export interface WorkflowContext {
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number
   ) => Promise<PriorContextItem[]>;
+  /**
+   * Retire any *other* live harness process in this workflow that still owns
+   * the AI session this prompt is about to resume, and close its terminal.
+   *
+   * Harnesses reject or corrupt a `--resume` of a session another process still
+   * holds open — including a finished inject-mode TUI left running for a later
+   * step — so the takeover has to be ordered: kill, await exit, then spawn.
+   * `requester` is excluded; it retires its own PTY through its own paths.
+   */
+  releaseConflictingAiSession?: (
+    aiSessionId: string,
+    requester: HarnessIntegration
+  ) => Promise<void>;
   /** Exclusive queue boundary used by grouped prior-context/session lookups. */
   groupStartBoundary?: number;
   /** Session resolution frozen by parallel-group preflight. */

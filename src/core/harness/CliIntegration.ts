@@ -1242,6 +1242,11 @@ export class CliIntegration extends HarnessIntegration {
       await this.retireInteractivePtyBeforeHeadlessResume(session);
     }
 
+    // Everything below spawns a process. Whatever mode it runs in, it must be
+    // the only owner of the AI session it resumes — including against the
+    // sibling terminals this workflow deliberately retains.
+    await this.retireConflictingSiblingPty(session);
+
     const executionPlan = await this.executionPlanBuilder.plan(session);
     const routedDiagnostics =
       executionPlan.permissionApplication.diagnostics.map((diagnostic) => {
@@ -1371,30 +1376,89 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Inject mode failed (PTY unavailable) so we are doing a full interactive restart
    * for this prompt. The old PTY session may still be alive or may exit soon; either
-   * way its exit must not be treated as a failure for the new step.
-   *
-   * - Terminates it immediately if still active.
-   * - Sets suppressPtyExitSessionId so a late exit event is silently ignored.
-   * - Resets the failure tracker in case capturePtyExit was already called for
-   *   the old PTY before we got here (e.g. exit fired during a prior await).
-   * - Clears lastInteractiveContext so shouldUseInjectMode won't retry inject
-   *   on the dead session.
+   * way its exit must not be treated as a failure for the new step — which is
+   * why this is the one caller that suppresses the *last known* PTY's exit and
+   * resets the failure tracker: `capturePtyExit` may already have run for it.
    */
   private async retireInteractivePtyForRestartFallback(): Promise<void> {
-    const activePtyId =
+    await this.retireInteractivePty({
+      reason: "inject fallback restart",
+      suppressLastKnownPty: true,
+      resetFailureTracker: true,
+    });
+  }
+
+  /**
+   * Shared teardown for every reason this integration abandons its interactive
+   * PTY: terminate it, stop inject mode from retrying against the dead session,
+   * and mark the pending exit as an intentional handoff rather than a step
+   * failure. Returns the terminated PTY session id, if one was still live.
+   */
+  private async retireInteractivePty(options: {
+    /** Coordinator-facing reason; also names the handoff in the log. */
+    reason: string;
+    /**
+     * Also suppress the exit of a PTY the coordinator has already forgotten.
+     * Only the inject-fallback path wants this: it gets here precisely because
+     * the PTY may have died on its own moments earlier.
+     */
+    suppressLastKnownPty?: boolean;
+    /**
+     * Discard a failure captured for the abandoned PTY (e.g. its exit fired
+     * during a prior await) so it is not attributed to the next step.
+     */
+    resetFailureTracker?: boolean;
+  }): Promise<string | undefined> {
+    const terminatedPtyId =
       await this.transportCoordinator.terminateCurrentPtySession(
-        "inject fallback restart"
+        options.reason
       );
-    const lastId =
-      activePtyId ?? this.transportCoordinator.getLastPtySessionId();
-    if (lastId) {
-      this.suppressPtyExitSessionId = lastId;
+    const suppressedPtyId = options.suppressLastKnownPty
+      ? (terminatedPtyId ?? this.transportCoordinator.getLastPtySessionId())
+      : terminatedPtyId;
+    this.executionRunner.clearInteractiveContext();
+    if (options.resetFailureTracker) {
+      this.failureTracker.reset();
+    }
+    if (suppressedPtyId) {
+      this.suppressPtyExitSessionId = suppressedPtyId;
       Log.info(
-        `[CliIntegration] Suppressing exit for abandoned PTY ${lastId.slice(0, 8)} after inject fallback`
+        `[CliIntegration] Retired interactive PTY ${suppressedPtyId.slice(0, 8)} for ${options.reason}`
       );
     }
-    this.executionRunner.clearInteractiveContext();
-    this.failureTracker.reset();
+    return terminatedPtyId;
+  }
+
+  /**
+   * Another integration in this workflow is about to resume the AI session this
+   * one still holds open. Retire the PTY so the incoming process is that
+   * session's only owner.
+   *
+   * Cross-integration takeover is the case neither local path above can see:
+   * a step that changes a spawn-time property (model, MCP servers, tool
+   * permissions…) while still resuming the previous step's session is handed a
+   * *fresh* integration by `WorkflowInstance`'s spawn-identity cache keys, whose
+   * own coordinator has no live PTY to retire. Sibling terminals are the point
+   * of those keys, but siblings are only safe while they own different
+   * conversations.
+   */
+  override ownsLiveAiSession(aiSessionId: string): boolean {
+    return (
+      this.transportCoordinator.hasLivePtySession() &&
+      this.interactivePtyOwnsAiSession(aiSessionId)
+    );
+  }
+
+  override async releaseLiveAiSession(
+    aiSessionId: string
+  ): Promise<string | undefined> {
+    if (!this.ownsLiveAiSession(aiSessionId)) {
+      return undefined;
+    }
+    return this.retireInteractivePty({
+      reason: `takeover of AI session ${aiSessionId}`,
+      resetFailureTracker: true,
+    });
   }
 
   /**
@@ -1406,23 +1470,35 @@ export class CliIntegration extends HarnessIntegration {
   private async retireInteractivePtyBeforeHeadlessResume(
     session: CliExecutionSession
   ): Promise<void> {
-    const resolvedSessionId = session.resolvedSessionId;
     if (!this.doesInteractivePtyOwnSession(session)) {
       return;
     }
 
-    const ptySessionId =
-      await this.transportCoordinator.terminateCurrentPtySession(
-        `headless resume of AI session ${resolvedSessionId}`
-      );
-    this.executionRunner.clearInteractiveContext();
+    await this.retireInteractivePty({
+      reason: `headless resume of AI session ${session.resolvedSessionId}`,
+    });
+  }
 
-    if (ptySessionId) {
-      this.suppressPtyExitSessionId = ptySessionId;
-      Log.info(
-        `[CliIntegration] Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
-      );
+  /**
+   * Retire a live PTY owned by a *different* integration when this dispatch is
+   * about to resume the AI session that PTY still holds. No-op unless the
+   * workflow wired the cross-integration hook — a standalone CLI or MCP host
+   * runs one integration at a time and has no sibling to conflict with.
+   */
+  private async retireConflictingSiblingPty(
+    session: CliExecutionSession
+  ): Promise<void> {
+    const resolvedSessionId = session.resolvedSessionId;
+    if (
+      !resolvedSessionId ||
+      session.resolvedProperties?.resumeSession === false
+    ) {
+      return;
     }
+    await session.workflowContext?.releaseConflictingAiSession?.(
+      resolvedSessionId,
+      this
+    );
   }
 
   /**
@@ -1441,16 +1517,28 @@ export class CliIntegration extends HarnessIntegration {
       return false;
     }
 
-    const ctx = this.executionRunner.getLastInteractiveContext();
     const resolvedSessionId = session.resolvedSessionId;
-    if (!ctx || !resolvedSessionId) {
+    return (
+      resolvedSessionId !== undefined &&
+      this.interactivePtyOwnsAiSession(resolvedSessionId)
+    );
+  }
+
+  /**
+   * Does the interactive context this integration last spawned name the given
+   * AI session? Both the session the harness reported and the one it was
+   * spawned with count — a resume of either would collide with that process.
+   */
+  private interactivePtyOwnsAiSession(aiSessionId: string): boolean {
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    if (!ctx) {
       return false;
     }
 
     const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
       (id): id is string => typeof id === "string" && id.length > 0
     );
-    return activeSessionIds.includes(resolvedSessionId);
+    return activeSessionIds.includes(aiSessionId);
   }
 
   private async persistExecutionOutcome(

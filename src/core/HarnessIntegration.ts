@@ -273,6 +273,32 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
+  /**
+   * True when this integration still holds a live harness process that owns the
+   * given *AI* session (not the PTY session id `getActivitySessionId` reports).
+   *
+   * Asked of every other integration in the workflow before a dispatch resumes
+   * that session: harnesses reject or corrupt `--resume` against a session another
+   * process still has open, including an idle inject-mode TUI left running for a
+   * later step. Default false — only PTY-backed integrations can hold one.
+   */
+  ownsLiveAiSession(_aiSessionId: string): boolean {
+    return false;
+  }
+
+  /**
+   * Gracefully terminate the live process owning `aiSessionId` so another
+   * dispatch can take the session over, returning the transport session id that
+   * was retired so the caller can retire its terminal view too.
+   *
+   * Default no-op. See {@link ownsLiveAiSession}.
+   */
+  async releaseLiveAiSession(
+    _aiSessionId: string
+  ): Promise<string | undefined> {
+    return undefined;
+  }
+
   constructor(
     context: SubscriptionContainer | undefined,
     registerWithContext: boolean = true

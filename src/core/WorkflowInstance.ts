@@ -4432,6 +4432,8 @@ export class WorkflowInstance {
         outputResolver: this.outputHistoryManager.getRunOutputResolver(),
       }),
       targetRunIndices,
+      releaseConflictingAiSession: (aiSessionId, requester) =>
+        this.releaseConflictingAiSession(aiSessionId, requester),
       getIntegrationForPrompt: (
         prompt: PromptStep,
         resolvedProperties: ResolvedProperties,
@@ -4867,6 +4869,51 @@ export class WorkflowInstance {
     }
 
     return undefined;
+  }
+
+  /**
+   * Retire every *other* live harness process in this workflow that still owns
+   * `aiSessionId`, then drop its terminal tab.
+   *
+   * Sibling terminals are the point of the spawn-identity integration caches —
+   * a model or MCP change spawns beside the previous step's TUI instead of
+   * replacing it. That is only safe while the siblings own different
+   * conversations: a step that changes a spawn-time property while still
+   * resuming the previous step's session would otherwise `--resume` a session
+   * the retained TUI still has open, which every harness rejects or corrupts.
+   * The dispatching integration asks for this immediately before it spawns
+   * (`CliIntegration.retireConflictingSiblingPty`), so the kill is ordered
+   * before the takeover rather than racing it.
+   *
+   * The tab goes with the process: the incoming terminal continues that very
+   * conversation, so leaving the dead one behind shows the same session twice.
+   */
+  private async releaseConflictingAiSession(
+    aiSessionId: string,
+    requester: HarnessIntegration
+  ): Promise<void> {
+    const visited = new Set<HarnessIntegration>();
+    for (const integration of this.getLivePtyIntegrationCandidates()) {
+      if (integration === requester || visited.has(integration)) {
+        continue;
+      }
+      visited.add(integration);
+      if (!integration.ownsLiveAiSession(aiSessionId)) {
+        continue;
+      }
+
+      const ptySessionId = await integration.releaseLiveAiSession(aiSessionId);
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] Retired terminal ${ptySessionId?.slice(0, 8) ?? "(none)"} — its AI session ${aiSessionId} is being resumed by a new process`
+      );
+      if (ptySessionId) {
+        ptyPostMessage({
+          type: MESSAGE_TYPES.TERMINAL_REMOVED,
+          workflowId: this.id,
+          sessionId: ptySessionId,
+        });
+      }
+    }
   }
 
   /** Send a steer message directly to a live AI-CLI PTY session. */

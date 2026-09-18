@@ -3852,6 +3852,39 @@ describe("TERMINAL_STARTED", () => {
     ]);
   });
 
+  // The extension is the sole authority on terminal lifetime: it removes a tab
+  // explicitly when a new process takes over that terminal's AI session, rather
+  // than the webview guessing from a same-harness TERMINAL_STARTED.
+  it("drops only the session the extension removed", () => {
+    renderHook(() => useMessageHandler());
+
+    for (const sessionId of ["retained-session", "superseded-session"]) {
+      act(() => {
+        dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+          workflowId: "workflow-1",
+          sessionId,
+          stepName: "Claude step",
+          kind: SESSION_KINDS.AI_CLI,
+          harnessId: "claude-cli",
+          controllerClientId: "controller-1",
+        });
+      });
+    }
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_REMOVED, {
+        workflowId: "workflow-1",
+        sessionId: "superseded-session",
+      });
+    });
+
+    expect(
+      useTerminalStore
+        .getState()
+        .sessions["workflow-1"].map((session) => session.id)
+    ).toEqual(["retained-session"]);
+  });
+
   it("preserves same-harness parallel sessions as separate labeled tabs", () => {
     renderHook(() => useMessageHandler());
 
