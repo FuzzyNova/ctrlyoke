@@ -1,12 +1,27 @@
 # Self-Serve Offline License File Download
 
 **Created:** September 17, 2026
-**Status:** Approved — Option B in progress (design verified 2026-09-17, see
+**Status:** Implemented — Option B shipped 2026-09-17 (design verified 2026-09-17, see
 [Verified design](#verified-design-for-option-b)). Option C remains backlog.
 **Found via:** live air-gapped-activation test on 2026-09-17 (see
 [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 12). Nathan, as the
 Keygen account admin, generated the signed license file himself from the Keygen dashboard and
 confirmed `importLicenseFile()` works end-to-end. A real customer has no equivalent path today.
+
+## Option B implementation
+
+The self-serve page is live at [`landing/src/pages/license/offline.astro`](../../landing/src/pages/license/offline.astro),
+and builds to `https://ctrlyoke.dev/license/offline/`. It validates a pasted key and checks out
+the plain signed certificate entirely in the browser, offering both a `.lic` download and
+copyable certificate text. The page requests a one-year checkout TTL and retries with the
+extension's 30-day TTL only when Keygen rejects the longer value; it never activates a machine or
+requests encryption.
+
+The shared Keygen identifiers and fallback TTL now live in
+[`src/license/KeygenConstants.ts`](../../src/license/KeygenConstants.ts), with compatibility
+re-exports from `LicenseService.ts`. The landing site imports that dependency-free module
+directly; no generated landing-local copy was needed because the cross-project import works in
+the static landing build. Option C remains intentionally untouched.
 
 ## The gap
 

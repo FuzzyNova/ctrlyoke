@@ -1,0 +1,356 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import {
+  KEYGEN_API_BASE_URL,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_VALID_POLICY_IDS,
+  LICENSE_FILE_TTL_MS,
+} from "../../../../src/license/KeygenConstants";
+
+const preferredTtlSeconds = 365 * 24 * 60 * 60;
+const fallbackTtlSeconds = LICENSE_FILE_TTL_MS / 1000;
+---
+
+<Layout
+  title="Offline License File — ctrlyoke"
+  description="Create a signed ctrlyoke license file for activating Pro on an air-gapped machine."
+>
+  <section class="border-b border-white/5 px-6 py-20 text-center">
+    <div class="mx-auto max-w-3xl">
+      <p class="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-sky-400">Air-gapped activation</p>
+      <h1 class="mb-5 text-4xl font-bold text-white md:text-5xl">Create your offline license file</h1>
+      <p class="mx-auto max-w-2xl text-lg leading-relaxed text-slate-400">
+        Use the license key from your Pro purchase to mint a signed file for a machine that cannot
+        reach the internet. Everything happens in your browser through Keygen's public API.
+      </p>
+    </div>
+  </section>
+
+  <section class="px-6 py-16">
+    <div class="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+      <div class="rounded-2xl border border-sky-400/25 bg-gradient-to-br from-brand-800 to-brand-900 p-6 shadow-2xl shadow-brand-950/30 md:p-8">
+        <h2 class="mb-2 text-2xl font-bold text-white">Mint a signed file</h2>
+        <p class="mb-6 text-sm leading-relaxed text-slate-400">
+          Paste your Keygen license key below. Your key is used only for these requests and is not
+          saved, added to the URL, or sent to ctrlyoke.
+        </p>
+
+        <form data-license-form>
+          <label for="license-key" class="mb-2 block text-sm font-medium text-slate-200">Pro license key</label>
+          <input
+            id="license-key"
+            name="license-key"
+            type="text"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="Paste your license key"
+            class="w-full rounded-lg border border-white/10 bg-brand-950/70 px-4 py-3 font-mono text-sm text-white outline-none placeholder:text-slate-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+            aria-describedby="license-key-help"
+          />
+          <p id="license-key-help" class="mt-2 text-xs text-slate-500">
+            This page never stores your key. Keep it private, just like a password.
+          </p>
+          <button
+            type="submit"
+            class="mt-6 w-full rounded-lg bg-sky-400 px-5 py-3 font-semibold text-brand-950 transition-colors hover:bg-sky-300 disabled:cursor-wait disabled:opacity-60"
+            data-submit
+          >
+            Create license file
+          </button>
+        </form>
+
+        <p class="mt-5 min-h-6 text-sm" role="status" aria-live="polite" data-status></p>
+
+        <div class="mt-6 hidden rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-4" data-result>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-semibold text-emerald-200">Your license file is ready</h3>
+              <p class="mt-1 text-xs text-slate-400">Transfer this file to the air-gapped machine.</p>
+            </div>
+            <button
+              type="button"
+              class="rounded-lg bg-emerald-300 px-4 py-2 text-sm font-semibold text-brand-950 transition-colors hover:bg-emerald-200"
+              data-download
+            >
+              Download .lic
+            </button>
+          </div>
+          <label for="certificate" class="mt-5 mb-2 block text-sm font-medium text-slate-200">
+            Or copy the signed license-file text
+          </label>
+          <textarea
+            id="certificate"
+            readonly
+            rows="10"
+            class="w-full resize-y rounded-lg border border-white/10 bg-brand-950/80 p-3 font-mono text-xs leading-relaxed text-slate-300 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+            data-certificate
+          ></textarea>
+          <button
+            type="button"
+            class="mt-3 rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-sky-400/50 hover:text-white"
+            data-copy
+          >
+            Copy license text
+          </button>
+        </div>
+      </div>
+
+      <aside class="flex flex-col gap-6">
+        <div class="rounded-2xl border border-white/8 bg-brand-900/40 p-6 md:p-8">
+          <h2 class="mb-4 text-xl font-bold text-white">What this file does</h2>
+          <div class="flex flex-col gap-4 text-sm leading-relaxed text-slate-400">
+            <p>
+              The downloaded file contains a Keygen-signed Pro entitlement. ctrlyoke verifies its
+              Ed25519 signature locally, so importing it on the other machine makes no network call.
+            </p>
+            <p>
+              This is for a development machine that must stay offline. Generate the file here on
+              any connected device, then transfer it using your approved removable-media process.
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-white/8 bg-brand-900/40 p-6 md:p-8">
+          <h2 class="mb-4 text-xl font-bold text-white">Import it in VS Code</h2>
+          <ol class="flex list-decimal flex-col gap-3 pl-5 text-sm leading-relaxed text-slate-400 marker:text-sky-400">
+            <li>Transfer the downloaded <code class="text-slate-300">.lic</code> file to the offline machine.</li>
+            <li>Open the Command Palette with <code class="text-slate-300">Ctrl/Cmd+Shift+P</code>.</li>
+            <li>Run <strong class="font-medium text-slate-200">ctrlyoke: Activate Offline (Air-Gapped) License</strong>.</li>
+            <li>Choose the file, or paste the complete certificate text shown above.</li>
+          </ol>
+        </div>
+      </aside>
+    </div>
+  </section>
+</Layout>
+
+<script
+  define:vars={{
+    apiBaseUrl: KEYGEN_API_BASE_URL,
+    expectedProductId: KEYGEN_PRODUCT_ID,
+    validPolicyIds: [...KEYGEN_VALID_POLICY_IDS],
+    preferredTtlSeconds,
+    fallbackTtlSeconds,
+  }}
+>
+  const ACCEPTED_VALIDATION_CODES = new Set([
+    "NO_MACHINES",
+    "FINGERPRINT_SCOPE_MISMATCH",
+    "TOO_MANY_MACHINES",
+  ]);
+
+  class OfflineLicenseError extends Error {
+    constructor(message, kind = "general") {
+      super(message);
+      this.kind = kind;
+    }
+  }
+
+  const form = document.querySelector("[data-license-form]");
+  const keyInput = document.querySelector("#license-key");
+  const submitButton = document.querySelector("[data-submit]");
+  const status = document.querySelector("[data-status]");
+  const result = document.querySelector("[data-result]");
+  const certificate = document.querySelector("[data-certificate]");
+  const downloadButton = document.querySelector("[data-download]");
+  const copyButton = document.querySelector("[data-copy]");
+  let generatedLicenseId = "license";
+
+  function setStatus(message, kind = "") {
+    status.textContent = message;
+    status.className = `min-h-6 text-sm ${
+      kind === "error"
+        ? "text-rose-300"
+        : kind === "success"
+          ? "text-emerald-300"
+          : "text-slate-400"
+    }`;
+  }
+
+  function classifyHttpError(response, operation) {
+    if (response.status === 429) {
+      return new OfflineLicenseError(
+        "Keygen is rate limiting requests. Wait a moment and try again.",
+        "rate-limit"
+      );
+    }
+    if (operation === "validation" && [400, 401, 403, 404, 409, 422].includes(response.status)) {
+      return new OfflineLicenseError(
+        "That license key was not accepted. Check that it is complete and active, then try again.",
+        "rejected"
+      );
+    }
+    return new OfflineLicenseError(
+      "Keygen could not complete the request right now. Please try again.",
+      "general"
+    );
+  }
+
+  async function validateKey(key) {
+    let response;
+    try {
+      response = await fetch(`${apiBaseUrl}/licenses/actions/validate-key`, {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.api+json",
+          "Content-Type": "application/vnd.api+json",
+        },
+        body: JSON.stringify({ meta: { key } }),
+      });
+    } catch {
+      throw new OfflineLicenseError(
+        "We could not reach Keygen. Check your internet connection and try again.",
+        "network"
+      );
+    }
+
+    if (!response.ok) {
+      throw classifyHttpError(response, "validation");
+    }
+
+    let body;
+    try {
+      body = await response.json();
+    } catch {
+      throw new OfflineLicenseError("Keygen returned an unexpected response. Please try again.");
+    }
+
+    const validationCode = body?.meta?.code;
+    if (body?.meta?.valid !== true && !ACCEPTED_VALIDATION_CODES.has(validationCode)) {
+      throw new OfflineLicenseError(
+        "That license key was not accepted. Check that it is complete and active, then try again.",
+        "rejected"
+      );
+    }
+
+    const license = body?.data;
+    const licenseId = license?.id;
+    if (typeof licenseId !== "string" || !licenseId) {
+      throw new OfflineLicenseError("Keygen returned no license identifier. Please try again.");
+    }
+
+    const productId = license?.relationships?.product?.data?.id;
+    const policyId = license?.relationships?.policy?.data?.id;
+    if (productId !== expectedProductId || !validPolicyIds.includes(policyId)) {
+      throw new OfflineLicenseError(
+        "That license key belongs to a different product or policy. Use a ctrlyoke Pro or Enterprise key.",
+        "wrong-product"
+      );
+    }
+
+    return licenseId;
+  }
+
+  async function checkoutRequest(licenseId, key, ttlSeconds) {
+    const url = new URL(
+      `${apiBaseUrl}/licenses/${encodeURIComponent(licenseId)}/actions/check-out`
+    );
+    url.searchParams.set("ttl", String(ttlSeconds));
+
+    try {
+      return await fetch(url, {
+        headers: {
+          Accept: "application/vnd.api+json, text/plain",
+          Authorization: `License ${key}`,
+        },
+      });
+    } catch {
+      throw new OfflineLicenseError(
+        "We could not reach Keygen. Check your internet connection and try again.",
+        "network"
+      );
+    }
+  }
+
+  async function checkoutLicense(licenseId, key) {
+    let response = await checkoutRequest(licenseId, key, preferredTtlSeconds);
+    if (!response.ok && [400, 422].includes(response.status)) {
+      response = await checkoutRequest(licenseId, key, fallbackTtlSeconds);
+    }
+    if (!response.ok) {
+      throw classifyHttpError(response, "checkout");
+    }
+
+    const responseText = (await response.text()).trim();
+    if (responseText.startsWith("-----BEGIN LICENSE FILE-----")) {
+      return responseText;
+    }
+
+    let body;
+    try {
+      body = JSON.parse(responseText);
+    } catch {
+      throw new OfflineLicenseError("Keygen returned an invalid license file. Please try again.");
+    }
+    const certificateText = body?.data?.attributes?.certificate;
+    if (typeof certificateText !== "string" || !certificateText.trim().startsWith("-----BEGIN LICENSE FILE-----")) {
+      throw new OfflineLicenseError("Keygen returned an invalid license file. Please try again.");
+    }
+    return certificateText.trim();
+  }
+
+  function downloadCertificate(text, licenseId) {
+    const shortId = licenseId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 12) || "license";
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `ctrlyoke-${shortId}.lic`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const key = keyInput.value.trim();
+    result.classList.add("hidden");
+    if (!key) {
+      setStatus("Paste your Pro license key to continue.", "error");
+      keyInput.focus();
+      return;
+    }
+
+    submitButton.disabled = true;
+    setStatus("Checking your license key…");
+    try {
+      const licenseId = await validateKey(key);
+      setStatus("Creating your signed license file…");
+      const certificateText = await checkoutLicense(licenseId, key);
+      generatedLicenseId = licenseId;
+      certificate.value = certificateText;
+      result.classList.remove("hidden");
+      setStatus("Your signed license file is ready.", "success");
+    } catch (error) {
+      const safeError =
+        error instanceof OfflineLicenseError
+          ? error
+          : new OfflineLicenseError(
+              "We could not create the license file. Check your connection and try again.",
+              "general"
+            );
+      setStatus(safeError.message, "error");
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  downloadButton.addEventListener("click", () => {
+    downloadCertificate(certificate.value, generatedLicenseId);
+  });
+
+  copyButton.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(certificate.value);
+      const originalLabel = copyButton.textContent;
+      copyButton.textContent = "Copied";
+      window.setTimeout(() => {
+        copyButton.textContent = originalLabel;
+      }, 1500);
+    } catch {
+      certificate.focus();
+      certificate.select();
+      setStatus("Copy was blocked by the browser. The license text is selected; press Ctrl/Cmd+C.", "error");
+    }
+  });
+</script>

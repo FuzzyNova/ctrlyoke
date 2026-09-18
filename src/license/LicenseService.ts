@@ -1,7 +1,24 @@
 import { createHash, randomUUID, webcrypto } from "node:crypto";
+import {
+  KEYGEN_API_BASE_URL,
+  KEYGEN_ENTERPRISE_POLICY_ID,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_VALID_POLICY_IDS,
+  LICENSE_FILE_TTL_MS,
+} from "./KeygenConstants";
 import type { SecretStore } from "../platform/SecretStore";
 import { PRO_FEATURES } from "../types/DashboardConstants";
 import { TypedEmitter } from "../utils/TypedEmitter";
+
+export {
+  KEYGEN_ACCOUNT_ID,
+  KEYGEN_API_BASE_URL,
+  KEYGEN_ENTERPRISE_POLICY_ID,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_PRO_POLICY_ID,
+  KEYGEN_VALID_POLICY_IDS,
+  LICENSE_FILE_TTL_MS,
+} from "./KeygenConstants";
 
 /** The source determines whether a license file's TTL is enforced locally. */
 export const LICENSE_SOURCES = {
@@ -21,23 +38,10 @@ export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
 export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
   "ctrlyoke.pro.machine-fingerprint";
 
-export const KEYGEN_ACCOUNT_ID = "6ed6209c-6633-4444-9d43-ab4a473e2f28";
-export const KEYGEN_PRODUCT_ID = "f4af3c3b-4350-4a6e-af09-744797abb4b0";
-export const KEYGEN_PRO_POLICY_ID = "da0764ce-6577-419a-862d-128efdbfc329";
-export const KEYGEN_ENTERPRISE_POLICY_ID =
-  "1700d3bb-06b7-4087-96ce-e08aa6c6a817";
-/** Both policies live on the same product and share the account's Ed25519 key. */
-export const KEYGEN_VALID_POLICY_IDS = [
-  KEYGEN_PRO_POLICY_ID,
-  KEYGEN_ENTERPRISE_POLICY_ID,
-] as const;
-export const KEYGEN_API_BASE_URL = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
-
 /** The Keygen account verification key. This is public and safe to ship. */
 export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
   "4cf46fe061bf97080094f14430fa2a1563f1b245cd600ccb99039bfff43836fa";
 
-export const LICENSE_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
 export const REMOTE_ACCESS_TRIAL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -218,10 +222,13 @@ export class LicenseService implements LicenseService {
   private readonly publicKeyHex: string;
   private readonly request: typeof fetch;
   private readonly machineFingerprintOption:
-    string | (() => Promise<string>) | undefined;
+    | string
+    | (() => Promise<string>)
+    | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
   private cachedEntitlement:
-    { readonly value: Entitlement; readonly expiresAt: number } | undefined;
+    | { readonly value: Entitlement; readonly expiresAt: number }
+    | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
