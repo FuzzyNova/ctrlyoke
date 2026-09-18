@@ -1,6 +1,6 @@
 # Final-Step Notation Unification + Running-Row Display Plan
 
-**Status:** Proposed
+**Status:** Planned — open questions resolved 2026-09-18; ready to implement.
 
 ## Goal
 
@@ -28,17 +28,18 @@ running the final step", because nothing upstream computes that distinction once
 
 ## Background — the two notations as they exist today
 
-**AI-harness spawn path** (`CliTransportCoordinator.startInteractiveSession` via
-`getWorkflowStepMetadata`, `src/core/harness/shared/CliTransportCoordinator.ts:751-776`): the
-terminal's `stepIndex` is `workflowContext.promptIndex`, which is `steps.length` for the final step
-(`WorkflowExecutor.ts:2154-2157`, `sendPromptIndex`). This is fundamentally an **array index into
+**AI-harness spawn path** (`CliTransportCoordinator.getWorkflowStepMetadata`,
+`src/core/harness/shared/CliTransportCoordinator.ts:751-776`, consumed at `:243` for a fresh PTY spawn
+and at `:363` by `updateCurrentPtySessionMetadata` when a live PTY is reused): the terminal's
+`stepIndex` is `workflowContext.promptIndex`, which is `steps.length` for the final step
+(`WorkflowExecutor.ts:2157-2160`, `sendPromptIndex`). This is fundamentally an **array index into
 `workflowContext.allPrompts`** — used for prompt numbering, `setWorkflowProgress`, and
 `CliIntegration.routePromptDiagnostics` (`src/core/harness/CliIntegration.ts:1152-1158`, which compares
 `promptIndex < allPrompts.length`). It carries no loop information: it is the same value on final-step
 loop 0, 1, 2, ….
 
 **Interactive-script spawn path** (`WorkflowExecutor`'s `spawnScriptPty` call,
-`src/core/WorkflowExecutor.ts:2531-2534`): the terminal's `stepIndex` is `signedStepIndex`, from
+`src/core/WorkflowExecutor.ts:2538`): the terminal's `stepIndex` is `signedStepIndex`, from
 `getSignedStepIndex()` (`src/core/orchestration/StatusMessageReporter.ts:51-65`), which returns
 `-(loopIndex + 1)` for a final-step attempt. This convention was built for the dashboard
 status-message/timeline system, which _does_ need loop granularity (retry displays, pre/end-condition
@@ -70,46 +71,70 @@ causing the next version of this bug somewhere else that keys off raw `stepIndex
 
 ## Phase 1 — pick and adopt one final-step terminal-identity notation
 
-### Decision needed (not made in this doc)
+### The decision, and the check that settles it
 
-**Option A — reuse the signed-index convention for the terminal's `stepIndex` too.** Change
-`CliTransportCoordinator`'s PTY spawn to stamp the terminal session's `stepIndex` with
-`getSignedStepIndex(target)` instead of `workflowContext.promptIndex`, matching what
-`spawnScriptPty` already does. Leave `workflowContext.promptIndex` itself untouched — it has
-legitimate array-index consumers (`promptNumber`, `routePromptDiagnostics`) that must keep the
-"one past the end" semantics. This only touches the _terminal session's own_ `stepIndex` field.
-Smaller diff; reuses plumbing that already exists everywhere else. Loses nothing, since AI-harness
-final-step sessions apparently don't currently need per-loop terminal identity (one continuous PTY
-spans the whole final step today) — confirm this assumption holds before adopting.
+**Option A — reuse the signed-index convention for the terminal's `stepIndex` too.** Stamp the
+terminal session's `stepIndex` with `getSignedStepIndex(target)` instead of
+`workflowContext.promptIndex`, matching what `spawnScriptPty` already does. Leave
+`workflowContext.promptIndex` itself untouched — it has legitimate array-index consumers
+(`promptNumber`, `routePromptDiagnostics`) that must keep the "one past the end" semantics.
+
+> **Plumbing detail the first draft of this plan glossed over:** `WorkflowContext`
+> (`src/types/WorkflowContextTypes.ts:115`) carries no loop or final-step information at all, so
+> `getWorkflowStepMetadata` **cannot** compute a signed index from what it currently receives.
+> Option A therefore requires threading the value down. `WorkflowExecutor` already has
+> `signedStepIndex` in scope where it builds the context literal (`WorkflowExecutor.ts:2182`, the
+> `promptIndex: sendPromptIndex` object), so add one explicit optional field (e.g.
+> `terminalStepIndex?: number`) set to `signedStepIndex`, and have `getWorkflowStepMetadata` prefer
+> it and fall back to `promptIndex`. Still a small diff, but not the zero-plumbing change implied
+> before.
 
 **Option B — stop overloading `stepIndex` for final-step identity at all.** Give `TerminalSession`
-(and the `TERMINAL_STARTED` wire message) an explicit `isFinalStep: boolean` (or
-`finalStepLoopIndex?: number`) alongside `stepIndex`, and have `getActiveStepIndices()` /
-`isTerminalSessionInUseByActiveStep` key off that instead of decoding a signed integer. Cleaner
-long-term — no arithmetic decoding, no possible collision with the shell sentinel ever again,
-self-documenting at every call site — but touches `PtyProcessManager`, both spawn paths, the
-`TerminalStartedMessage` wire shape, and `TerminalSession` in the webview store.
+(`src/ui/webview-react/store/terminalStore.ts:13`) and the `TERMINAL_STARTED` wire message an explicit
+`isFinalStep: boolean` (or `finalStepLoopIndex?: number`) alongside `stepIndex`, and have
+`getActiveStepIndices()` / `isTerminalSessionInUseByActiveStep` key off that instead of decoding a
+signed integer. Cleaner long-term — no arithmetic decoding, no possible collision with the shell
+sentinel ever again, self-documenting at every call site — but touches `PtyProcessManager`, both spawn
+paths, the `TerminalStartedMessage` wire shape, and `TerminalSession` in the webview store.
 
-Recommendation to weigh during implementation: Option A is the pragmatic single-source fix (one
-function, `getSignedStepIndex`, becomes the only place "final step" is encoded as a number,
-matching the project's DRY principle) and should be tried first; fall back to Option B only if
-per-loop terminal identity turns out to already be needed somewhere Option A can't reach.
+**Blocking check — does one AI-harness PTY span multiple final-step loops?** This decides A vs. B and
+must be answered from the code before either is implemented. `promptIndex` is loop-invariant
+(`steps.length` on every loop); `-(loopIndex + 1)` is not. If a single retained PTY serves final-step
+loops 0, 1, 2 and its `stepIndex` is only stamped at spawn, Option A would _reintroduce_ the very bug
+this plan exists to close: `getActiveStepIndices()` would report `-3` on loop 2 while the session still
+carries `-1`, and the terminal would again look closeable mid-run.
+`CliTransportCoordinator.updateCurrentPtySessionMetadata` (`:363`, called from
+`CliExecutionRunner.ts:212`) re-stamps a reused session's metadata, so the question is specifically
+whether that refresh fires on _every_ final-step loop, not just on inject-mode re-entry. Trace
+`WorkflowExecutor`'s final-step loop → `CliExecutionRunner` → transport coordinator and confirm.
+
+- Refresh covers every loop, or a fresh PTY is spawned per loop → **take Option A.**
+- A stamped-once PTY can outlive its loop index → **take Option B**, whose explicit flag is
+  loop-invariant by construction.
+
+Record which option was taken, and the evidence for it, in this document.
 
 ### Once a notation is chosen
 
-- `WorkflowInstance.getActiveStepIndices()` (`src/core/WorkflowInstance.ts:4822-4841`) collapses back
-  to emitting a single value per active final-step attempt instead of two.
+- `WorkflowInstance.getActiveStepIndices()` (`src/core/WorkflowInstance.ts:3768-3793`) collapses back
+  to emitting a single value per active final-step attempt instead of two, and its doc comment — which
+  currently explains the dual-emission workaround at length — is rewritten to describe the one
+  surviving convention.
 - `isTerminalSessionInUseByActiveStep`'s doc comment and tests
-  (`src/ui/webview-react/utils/terminalPresentation.ts`,
-  `src/ui/webview-react/test/utils/terminalPresentation.test.ts`) update to describe one convention.
-  Keep the `session.kind === SESSION_KINDS.AI_CLI` check regardless of which option is chosen — it is
-  the actually-correct discriminator ("shell sessions are never step-owned"), not merely a workaround
-  for the collision.
-- Audit other raw `stepIndex` consumers on `TerminalSession` for the same assumption —
-  `getTerminalStepLabel` in `TerminalView.tsx:45-53` already treats `stepIndex < 0` as "not a real
-  step" and falls back to `stepName`; confirm it still reads correctly under whichever notation wins
-  (Option A: final step is always negative, already handled; Option B: would need updating to check
-  `isFinalStep` instead of the sign).
+  (`src/ui/webview-react/utils/terminalPresentation.ts:85-111`,
+  `src/ui/webview-react/test/utils/terminalPresentation.test.ts:105-135` — two tests there assert the
+  two conventions by name and must become one) update to describe one convention. Keep the
+  `session.kind === SESSION_KINDS.AI_CLI` check regardless of which option is chosen — it is the
+  actually-correct discriminator ("shell sessions are never step-owned"), not merely a workaround for
+  the collision.
+- Audit the other raw `stepIndex` consumers on `TerminalSession`. There are two, both in
+  `TerminalView.tsx`, and both currently render a **wrong number** for an AI-harness final step:
+  `getTerminalStepLabel` (`:45-53`) and the tab badge (`:440-448`) each treat `stepIndex < 0` as "not a
+  real step" and fall back to `stepName`, but today's AI-harness final step arrives as `steps.length`
+  — a positive value — so a 10-step workflow's final-step terminal labels itself "Step 11". Option A
+  fixes this for free (negative ⇒ already handled); Option B must update both sites to check the new
+  explicit flag rather than the sign. Either way, pin the final-step terminal's label with a test:
+  this is a user-visible fix, not just a refactor.
 
 ---
 
@@ -117,8 +142,9 @@ per-loop terminal identity turns out to already be needed somewhere Option A can
 
 ### Data: extend `WorkflowSummary`
 
-`WorkflowSummary` (`src/types/CtrlYokeTypes.ts:1170-1199`) currently has no final-step field at all.
-Add something like:
+`WorkflowSummary` (`src/types/CtrlYokeTypes.ts:1200-1229`) currently has no final-step field at all.
+Add exactly these two optional fields — and no more; do not add per-loop detail the row will not
+render:
 
 ```ts
 /** Present when the workflow definition has an enabled final step. */
@@ -127,69 +153,61 @@ hasFinalStep?: boolean;
 finalStepRunning?: boolean;
 ```
 
-(Exact shape TBD — could instead mirror `workflowStore.ts`'s `finalStepPhase`/`finalStepStatus` pair
-if per-loop detail on the row ever becomes desirable, but the row only needs a boolean today; don't
-add fields the UI won't use.)
-
 ### Populate it
 
-- **Local instances**: `WorkflowInstance.getSummary()` (`src/core/WorkflowInstance.ts:1318-1350`) has
+- **Local instances**: `WorkflowInstance.getSummary()` (`src/core/WorkflowInstance.ts:1275-1309`) has
   `this.promptQueue.getWorkflowFile().finalStep` and `this.promptQueue.getFinalStepRuntime()`
-  (`FinalStepRuntimeState`, `src/types/CtrlYokeTypes.ts:367-375`) already in scope — this is the same
-  data `sendFullStateToDashboard` already reads (`WorkflowInstance.ts:1036-1037`). `hasFinalStep` is
+  (`FinalStepRuntimeState`, `src/types/CtrlYokeTypes.ts:369-377`) available on `this` — the same data
+  `sendFullStateToDashboard` already reads (`WorkflowInstance.ts:988`, `:1035`). `hasFinalStep` is
   `!!finalStep && finalStep.enabled !== false`; `finalStepRunning` is
   `finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP && finalStepRuntime.status === STEP_STATUS.RUNNING`.
-- **External-run watch sessions**: `WorkflowOrchestrator.ts:7033` and the `finalSummary` rebuild at
-  `WorkflowOrchestrator.ts:7522-7530` build `WorkflowSummary` from a polled `workingFile` on disk, not
-  live runtime state. Check what `workingFile._runtime` actually carries for final-step phase/status
-  in the external-run case before assuming parity with the local path — it may only support
-  `hasFinalStep` (static, from `workingFile.finalStep`) without a live running/idle distinction, in
-  which case the row shows "has a final step" but not "is on it right now" for externally-owned runs.
-  Confirm during implementation rather than assuming.
+- **External-run watch sessions — resolved: the data _is_ on disk.** The working file's
+  `_runtime.finalStep` is a full `FinalStepRuntimeState` (`CtrlYokeTypes.ts:667`), persisted by
+  `PromptQueue.persistFinalStepRuntime` and re-read on load (`PromptQueue.ts:497`); the static
+  definition sits at `workingFile.finalStep`. External runs are therefore capable of the same live
+  running/idle distinction as local ones — they lack it only because the polling code never looks:
+  `ExternalRunWatchSession.handleWorkingFileChange`
+  (`src/core/orchestration/ExternalRunWatchSession.ts:195-227`) declares a narrow inline type for
+  `workingFile` listing only `_runtime.currentIndex`, `_runtime.executionState`,
+  `_runtime.tokenTotals` and `steps`. Widen that inline type and the partial-summary payload it emits.
+  The two `WorkflowSummary` literals in `ExternalRunWatchCoordinator.ts` (`:504-520`, the initial
+  summary, and `:892-898`, the `finalSummary` rebuild) need the same two fields — the latter forcing
+  `finalStepRunning: false`, since it describes a finished run.
+
+  > **The first draft's references for this were stale.** It cited `WorkflowOrchestrator.ts:7033` and
+  > `:7522`; that file is 4724 lines long, and this code now lives in
+  > `src/core/orchestration/ExternalRunWatchCoordinator.ts` / `ExternalRunWatchSession.ts`. Several
+  > other citations were similarly off and have been corrected throughout this document — but verify
+  > each one against the current code anyway before relying on it.
 
 ### Display
 
-- Add a `workflowStepProgressLabel(summary)`-style helper beside `workflowDisplayStep`
-  (`src/types/CtrlYokeTypes.ts:1208-1215`, same file, same single-source spirit) that returns the
-  existing `"7/10"` shape normally and something like `"Final step"` when `finalStepRunning` is true,
-  so every caller of `workflowDisplayStep` for _display_ text (today just
-  `RunningWorkflowItem.tsx:242-246`, plus the accessible-name string at `:121-122`) goes through one
-  function instead of each row kind growing its own final-step conditional.
-- **Conflict to resolve**: `WorkflowRowLayout`'s `metaBadge` slot (`WorkflowRowLayout.tsx:49-59`) looks
-  like the natural home for a "Final step" pill — it already exists for exactly this
-  "small fixed-content pill in the meta line" purpose — but `RunningWorkflowItem.tsx:274-283` already
-  uses it for the external-owner badge. Decide the priority (external-owner badge wins, since it's
-  rarer and more load-bearing for read-only affordance; or show both side by side if `metaBadge` is
-  widened to accept multiple children) before implementing — don't silently drop one.
-- Update `accessibleName` (`RunningWorkflowItem.tsx:118-125`) to say "final step" instead of
-  "step 10 of 10" when applicable, for the same reason `workflowDisplayStep` exists: the visible text
-  and the accessible name must never disagree.
+- Add a `workflowStepProgressLabel(summary)` helper beside `workflowDisplayStep`
+  (`src/types/CtrlYokeTypes.ts:1243-1245` — same file, same single-source spirit) returning the
+  existing `"7/10"` shape normally and `"Final step"` when `finalStepRunning` is true. Route both of
+  `RunningWorkflowItem`'s display strings through it — the `count` slot (`:242-246`) and the
+  accessible name (`:118-125`) — so the visible text and the accessible name can never disagree, which
+  is the whole reason `workflowDisplayStep` exists. Leave `WorkflowInstanceRegistry.ts:596` and
+  `CtrlYokeWebviewProvider.ts:953` on plain `workflowDisplayStep`; those are log lines, not UI.
+- **`metaBadge` conflict — resolved: there isn't one.** The first draft proposed a "Final step" pill in
+  `WorkflowRowLayout`'s `metaBadge` slot (`WorkflowRowLayout.tsx:49-59`), which
+  `RunningWorkflowItem.tsx:274-283` already occupies with the external-owner badge. Render the
+  final-step state through the `count` slot instead: it is already the step-progress slot, `"Final
+step"` is precisely step progress, and nothing has to be dropped, widened, or prioritized.
+  `metaBadge` stays the external-owner badge's alone.
+- **Loop number on the row — resolved: no.** `"Final step"` carries no loop count, consistent with
+  `N/N` never having shown retry-attempt numbers either. Per-loop detail stays exclusive to the
+  open-workflow view.
 
 ### Tests
 
 - `src/test/unit/` (core): `WorkflowInstance.getSummary()` reports `hasFinalStep`/`finalStepRunning`
-  correctly across queue-running, final-step-running, and no-final-step workflows.
-- `src/ui/webview-react/test/components/workflow/`: `RunningWorkflowItem` shows "Final step" (or
-  whatever label wins) instead of `N/N` when `finalStepRunning` is true, and the accessible name
-  matches.
-- `src/ui/webview-react/test/utils/` (or beside `workflowDisplayStep`'s existing tests, if any): the
-  new progress-label helper's queue-vs-final-step branches.
-
----
-
-## Open questions
-
-1. **Option A vs. Option B for Phase 1** — see above. Try A first; only reach for B if a concrete need
-   for per-loop terminal identity in the AI-harness path surfaces.
-2. **Do external-run summaries have live final-step phase data, or only the static "has a final step"
-   flag?** Determines whether externally-owned running rows can show "final step running" at all, or
-   only "has a final step" (e.g. as a dimmer/different-styled badge).
-3. **`metaBadge` slot conflict** with the external-owner badge — resolve before implementing, not
-   during.
-4. **Does the final step's loop count belong on the row at all**, or is "Final step" (no loop number)
-   sufficient for the collapsed list view, with per-loop detail staying exclusive to the open-workflow
-   view? Leaning toward no loop number on the row — keeps it consistent with how `N/N` never showed
-   retry-attempt numbers either.
+  correctly across queue-running, final-step-running, and no-final-step workflows; and the
+  external-run summary path reports them from a working file carrying `_runtime.finalStep`.
+- `src/ui/webview-react/test/components/workflow/`: `RunningWorkflowItem` shows "Final step" instead of
+  `N/N` when `finalStepRunning` is true, and the accessible name matches.
+- `src/test/unit/CtrlYokeTypes.test.ts`, where `workflowDisplayStep`'s tests already live: the new
+  progress-label helper's queue-vs-final-step branches.
 
 ## Verification
 
@@ -198,4 +216,4 @@ add fields the UI won't use.)
 
 Manual check the automated tests cannot fully cover: run a workflow with an enabled final step, watch
 the running-workflows dropdown row as it transitions from the last queued step to the final step, and
-confirm the row's label/badge updates instead of staying frozen at `N/N`.
+confirm the row's label updates instead of staying frozen at `N/N`.
