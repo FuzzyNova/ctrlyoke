@@ -16,6 +16,7 @@ import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWat
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
 import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
+import { MockPlatform } from "../helpers/mockHarness";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -64,7 +65,7 @@ function createLineageBindingHarness() {
   const internal = orchestrator as any;
   const boundKey = "bound" as never;
 
-  internal.currentWorkspaceFolder = { uri: { fsPath: path.join("/", "ws") } };
+  internal.currentWorkspaceFolderPath = path.join("/", "ws");
   internal.instances = new Map<string, unknown>([
     [
       "instance-bound",
@@ -164,14 +165,9 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
   suite("WorkflowOrchestrator workflow-root approval", () => {
     const originalPending =
       ConfigurationUtils.getPendingWorkflowExternalFileRoots;
-    const originalTrusted = vscode.workspace.isTrusted;
 
     teardown(() => {
       ConfigurationUtils.getPendingWorkflowExternalFileRoots = originalPending;
-      Object.defineProperty(vscode.workspace, "isTrusted", {
-        configurable: true,
-        value: originalTrusted,
-      });
     });
 
     function createApprovalHarness() {
@@ -196,9 +192,8 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
         getQueueState: () => ({ status: "idle" }),
       };
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-      internal.currentWorkspaceFolder = {
-        uri: { fsPath: "C:\\workspace" },
-      };
+      internal.currentWorkspaceFolderPath = "C:\\workspace";
+      internal.workspaceTrustPredicate = () => true;
       internal.viewerRegistry = new Map([["browser:1", "workflow-instance"]]);
       internal.instances = new Map([["workflow-instance", instance]]);
       internal.retiredInstances = new Map();
@@ -207,10 +202,6 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 
     test("prompts only the active workflow client and publishes its pending state", async () => {
       const { orchestrator, port, sent, requests } = createApprovalHarness();
-      Object.defineProperty(vscode.workspace, "isTrusted", {
-        configurable: true,
-        value: true,
-      });
       ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
         "C:\\external",
       ];
@@ -235,6 +226,25 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
           pendingRoots: ["C:\\external"],
         },
       ]);
+    });
+
+    test("does not prompt when the host reports an untrusted workspace", async () => {
+      const { orchestrator, internal, port, requests } =
+        createApprovalHarness();
+      internal.workspaceTrustPredicate = () => false;
+      ConfigurationUtils.getPendingWorkflowExternalFileRoots = () => [
+        "C:\\external",
+      ];
+
+      const pending =
+        await orchestrator.approvePendingWorkflowExternalRootsForClient(
+          "browser:1",
+          undefined,
+          port
+        );
+
+      assert.deepStrictEqual(pending, ["C:\\external"]);
+      assert.strictEqual(requests.length, 0);
     });
 
     test("blocks the panel Run path while workflow roots remain pending", async () => {
@@ -700,6 +710,15 @@ suite("WorkflowOrchestrator active queue context key", () => {
 
     const originalExecuteCommand = vscode.commands.executeCommand;
     const updates: Array<{ key: string; value: boolean }> = [];
+    internal.statusBarSink = {
+      updateStatusBar: () => undefined,
+      setHasQueuedStepsContext: (hasQueuedSteps: boolean) => {
+        updates.push({
+          key: VSCODE_CONTEXT_KEYS.HAS_QUEUED_STEPS,
+          value: hasQueuedSteps,
+        });
+      },
+    };
     vscode.commands.executeCommand = (async (
       command: string,
       ...args: unknown[]
@@ -737,6 +756,100 @@ suite("WorkflowOrchestrator active queue context key", () => {
     } finally {
       vscode.commands.executeCommand = originalExecuteCommand;
     }
+  });
+});
+
+suite("WorkflowOrchestrator session command facade", () => {
+  test("reports the no-workspace early exit without discovering sessions", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const feedback: Array<{ message: string }> = [];
+    let discovered = false;
+
+    internal.userFeedbackSink = {
+      notify: (message: { message: string }) => feedback.push(message),
+    };
+    internal.workspaceSessionManager = {
+      discoverSessions: async () => {
+        discovered = true;
+        return [];
+      },
+    };
+
+    const sessions = await orchestrator.listResumableSessions();
+
+    assert.deepStrictEqual(sessions, []);
+    assert.strictEqual(discovered, false);
+    assert.deepStrictEqual(
+      feedback.map(({ message }) => message),
+      ["No workspace folder open"]
+    );
+  });
+
+  test("returns the session metadata produced by the session manager", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const sessions = [
+      {
+        label: "✓ workflow",
+        description: "1/1 completed",
+        detail: "Started: now",
+        filePath: "/workspace/.ctrlyoke/.runs/workflow/run/workflow.json",
+      },
+    ];
+    let requestedRoot: string | undefined;
+
+    internal.currentWorkspaceFolderPath = "/workspace";
+    internal.workspaceSessionManager = {
+      discoverSessions: async (workspaceRoot: string) => {
+        requestedRoot = workspaceRoot;
+        return sessions;
+      },
+    };
+
+    assert.deepStrictEqual(
+      await orchestrator.listResumableSessions(),
+      sessions
+    );
+    assert.strictEqual(requestedRoot, "/workspace");
+  });
+
+  test("restores the selected working file before focusing the dashboard", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    const calls: string[] = [];
+    const filePath = "/workspace/.ctrlyoke/.runs/workflow/run/workflow.json";
+
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.storedPanelSend = undefined;
+    internal.createWorkflowForClient = async (
+      _send: unknown,
+      clientId: string
+    ) => {
+      calls.push(`create:${clientId}`);
+    };
+    internal.getActiveInstance = () => ({
+      restoreWorkflowFromWorkingFile: async (selectedPath: string) => {
+        calls.push(`restore:${selectedPath}`);
+      },
+    });
+    internal.platform = {
+      focusDashboard: () => calls.push("focus"),
+    };
+
+    await orchestrator.resumeSessionFromWorkingFile(filePath);
+
+    assert.deepStrictEqual(calls, [
+      `create:${PANEL_CLIENT_ID}`,
+      `restore:${filePath}`,
+      "focus",
+    ]);
   });
 });
 
@@ -818,11 +931,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
     let settledWith: string | null | undefined;
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: {
-        fsPath: options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws"),
-      },
-    };
+    internal.currentWorkspaceFolderPath = options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws");
     internal.runnerHostIdentity = {
       runner: RUNNER_IDS.VSCODE,
       hostInstanceId: "observer-host",
@@ -1105,7 +1214,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     };
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = { uri: { fsPath: "C:\\dev\\ctrlyoke" } };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.viewerRegistry = new Map([[clientId, workflowId]]);
     internal.viewAddressRegistry = new Map([[clientId, address]]);
     internal.viewMessageSinks = new Map();
@@ -1145,7 +1254,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.strictEqual(
       (sent[snapshotIndex] as { runDirectory?: string }).runDirectory,
       WorkflowPaths.runDir(
-        internal.currentWorkspaceFolder.uri.fsPath,
+        internal.currentWorkspaceFolderPath,
         workflowKey,
         runRef
       )
@@ -1771,7 +1880,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
@@ -1926,7 +2035,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.externalRunSessions = new Map();
       // The requester (the run-navigation panel's client) is viewing an
@@ -2044,7 +2153,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map([
         [
           "instance-1",
@@ -2110,9 +2219,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     internal.viewerRegistry = new Map<string, string | null>();
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\ctrlyoke" },
-    };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () =>
         "C:\\dev\\ctrlyoke\\.ctrlyoke\\.runs\\recent-2026-07-20T10-30-00\\run-2026-07-20T10-31-00-000Z\\workflow.ctrlyoke.json",
@@ -2151,9 +2258,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       [PANEL_CLIENT_ID, "panel-workflow-id"],
     ]);
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\ctrlyoke" },
-    };
+    internal.currentWorkspaceFolderPath = "C:\\dev\\ctrlyoke";
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () => undefined,
     };
@@ -2262,7 +2367,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const operations: string[] = [];
       const sent: Array<{ type?: string }> = [];
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2427,7 +2532,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       );
       await writeRunTimeline(workspace, workflowKey, runRef, "completed");
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2529,7 +2634,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const bound: string[] = [];
       const received = new Map<string, Record<string, unknown>>();
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2636,7 +2741,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const sent: Array<Record<string, unknown>> = [];
       await writeRunTimeline(workspace, workflowKey, runRef, "running");
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map<string, string | null>();
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
@@ -2701,7 +2806,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       let bindCalls = 0;
       let resolveCalls = 0;
 
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
       internal.bindClientToAddressedLineage = async () => {
@@ -2877,7 +2982,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([
         ["client-a", "source-instance"],
@@ -2995,7 +3100,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
       let expectedRevision: number | undefined;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", "execution-instance"]]);
       internal.viewAddressRegistry = new Map([
@@ -3126,7 +3231,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", retained.id]]);
       internal.viewAddressRegistry = new Map([
@@ -3218,7 +3323,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
@@ -3341,7 +3446,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
@@ -3407,7 +3512,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map([["client-a", "unrelated-instance"]]);
       internal.viewAddressRegistry = new Map([
         [
@@ -3658,7 +3763,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.currentWorkspaceFolderPath = workspace;
     internal.runnerHostIdentity = runnerHostIdentity;
     internal.instances = new Map();
     internal.retiredInstances = new Map();
@@ -3673,7 +3778,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     };
     internal.setViewedWorkflowId = () => undefined;
     internal.replayWorkflowStateTo = async () => undefined;
-    internal.context = { workspaceState: { update: async () => undefined } };
+    internal.workspaceState = { update: async () => undefined };
     return { orchestrator, internal };
   }
 
@@ -4026,7 +4131,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
@@ -4136,7 +4241,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
@@ -4220,7 +4325,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.viewAddressRegistry = new Map([
         [
@@ -4345,7 +4450,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.viewAddressRegistry = new Map([
         [
@@ -4466,7 +4571,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.externalRunSessions = new Map();
@@ -4598,7 +4703,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.currentWorkspaceFolderPath = workspace;
     internal.instances = new Map(instance ? [["active", instance]] : []);
     internal.retiredInstances = new Map();
     internal.externalRunSessions = new Map();
@@ -5070,7 +5175,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
       internal.externalRunSessions = new Map();
@@ -5878,8 +5983,8 @@ suite("WorkflowOrchestrator client view addressing", () => {
     const workflowKey = "failed-start-lineage" as never;
     const runRef = "run-2026-07-30T14-00-00-000Z" as never;
 
-    internal.context = {};
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.platform = new MockPlatform(os.tmpdir());
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.instances = new Map();
     internal.retiredInstances = new Map();
     internal.viewerRegistry = new Map();
@@ -5940,8 +6045,8 @@ suite("WorkflowOrchestrator client view addressing", () => {
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
 
-    internal.context = {};
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.platform = new MockPlatform(os.tmpdir());
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.instances = new Map();
     internal.retiredInstances = new Map();
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -6070,7 +6175,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
         WorkflowOrchestrator.prototype
       ) as WorkflowOrchestrator;
       const internal = orchestrator as any;
-      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
       internal.viewAddressRegistry = new Map([
         ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
@@ -6154,7 +6259,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
-    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.viewAddressRegistry = new Map([["client-a", null]]);
 
     assert.strictEqual(await orchestrator.getViewIdentity("client-a"), null);

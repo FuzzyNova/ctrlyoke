@@ -170,7 +170,7 @@ export function createRoundTripHarness(
     WorkflowOrchestrator.prototype
   ) as WorkflowOrchestrator;
   const internal = orchestrator as unknown as Record<string, unknown>;
-  internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+  internal.currentWorkspaceFolderPath = workspace;
   internal.lineageRepository = repository;
   internal.viewerRegistry = new Map<string, string>([
     [TEST_CLIENT_ID, VIEW_ONLY_INSTANCE_ID],

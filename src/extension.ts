@@ -12,10 +12,12 @@ import { ContextMenuReferenceCommands } from "./completions/ContextMenuReference
 import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
 import {
   getVsCodeWorkspaceRoot,
+  getVsCodeWorkspaceFolder,
   getVsCodeNamedWorkspaceRoots,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
+import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
@@ -86,6 +88,7 @@ import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import { LicenseService, LICENSE_TIERS } from "./license/LicenseService";
 import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
+import { StatusBarManager } from "./ui/StatusBarManager";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -171,6 +174,7 @@ export async function activate(context: vscode.ExtensionContext) {
     hostInstanceId: crypto.randomUUID(),
     pid: process.pid,
   };
+  const platform = new VsCodeAdapter(context);
 
   try {
     // Initialize config service with file-based backends BEFORE Log.initialize()
@@ -361,14 +365,30 @@ export async function activate(context: vscode.ExtensionContext) {
       vscodeUserFeedbackSink,
       browserUserFeedbackSink,
     ]);
-    workflowOrchestrator = new WorkflowOrchestrator(
-      context,
-      webviewProvider,
+    // The orchestrator only ever calls the StatusBarSink surface, so disposal
+    // stays with the composition root that constructed the implementation.
+    const statusBarSink = new StatusBarManager(context, licenseService);
+    context.subscriptions.push(statusBarSink);
+    workflowOrchestrator = new WorkflowOrchestrator({
+      platform,
+      workspaceFolderPathResolver: () =>
+        getVsCodeWorkspaceFolder()?.uri.fsPath,
+      dashboardProvider: webviewProvider,
       userFeedbackSink,
       runnerHostIdentity,
-      licenseService,
-      webviewProvider.getUserInteractionPort()
-    );
+      fileWatcherFactory: new VsCodeFileWatcherFactory(),
+      statusBarSink,
+      disposableRegistry: {
+        add: (disposable) => context.subscriptions.push(disposable),
+      },
+      workspaceState: {
+        update: async (key, value) => {
+          await context.workspaceState.update(key, value);
+        },
+      },
+      isWorkspaceTrusted: () => vscode.workspace.isTrusted,
+      userInteractionPort: webviewProvider.getUserInteractionPort(),
+    });
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup
     // behind an init prompt. Must be set before initialize() so the check is in
@@ -570,7 +590,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Register commands
-    registerCommands(context, runnerHostIdentity);
+    registerCommands(context, runnerHostIdentity, platform);
 
     // Show the Getting Started walkthrough once, on first activation after install.
     if (!context.globalState.get<boolean>(GETTING_STARTED_SHOWN_KEY)) {
@@ -588,7 +608,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 function registerCommands(
   context: vscode.ExtensionContext,
-  runnerHostIdentity: RunnerHostIdentity
+  runnerHostIdentity: RunnerHostIdentity,
+  platform: VsCodeAdapter
 ) {
   const reportCommandError = (message: string): void => {
     notifyUserFeedback(
@@ -907,7 +928,34 @@ function registerCommands(
   const resumeSessionCommand = vscode.commands.registerCommand(
     "ctrlyoke.resumeSession",
     async () => {
-      await workflowOrchestrator.resumeSession();
+      try {
+        const sessions = await workflowOrchestrator.listResumableSessions();
+        if (sessions.length === 0) {
+          return;
+        }
+
+        const selected = await vscode.window.showQuickPick(sessions, {
+          placeHolder: "Select a session to resume",
+          matchOnDescription: true,
+          matchOnDetail: true,
+        });
+
+        if (selected) {
+          await workflowOrchestrator.resumeSessionFromWorkingFile(
+            selected.filePath
+          );
+        }
+      } catch (error) {
+        Log.error(
+          "[Extension] ctrlyoke: Failed to resume session:",
+          error as Error
+        );
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `Failed to resume session: ${getErrorMessage(error)}`
+        );
+      }
     }
   );
 
@@ -1371,7 +1419,7 @@ function registerCommands(
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(
-        new VsCodeAdapter(context).getSecretStore()
+        platform.getSecretStore()
       ).getOrCreate();
       unprotectServerToken?.();
       unprotectServerToken = secretRedactionService.protectValue(token);
@@ -1495,7 +1543,7 @@ function registerCommands(
     "ctrlyoke.regenerateServerToken",
     async () => {
       await new ServerTokenStore(
-        new VsCodeAdapter(context).getSecretStore()
+        platform.getSecretStore()
       ).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,

@@ -1,5 +1,6 @@
 export type { PlatformAdapter } from "./PlatformAdapter";
 export { VsCodeAdapter } from "./VsCodeAdapter";
+export { VsCodeFileWatcherFactory } from "./VsCodeFileWatcher";
 export { CliAdapter } from "./CliAdapter";
 export type { ResolvedCliConfig } from "./CliAdapter";
 export type { SecretStore } from "./SecretStore";
