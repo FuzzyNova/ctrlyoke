@@ -1211,6 +1211,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       }),
       getExecutionRunRef: () => runRef,
       replayBufferedOutputTo: () => undefined,
+      getActiveStepIndices: () => [],
     };
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -2382,6 +2383,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
               operations.push("buffered-output");
               sink.updateCliOutput(0, { response: "newer live output" });
             },
+            getActiveStepIndices: () => [],
           },
         ],
       ]);
@@ -2440,6 +2442,76 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ),
         "the runtime overlay must not reset or replace the addressed snapshot"
       );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("addressed switch snapshot carries the bound instance's live activeStepIndices", async () => {
+    // activeStepIndices has no persisted `_runtime` counterpart (see
+    // WorkflowInstance.getActiveStepIndices) — this is the only place a
+    // switch to a running workflow's addressed view learns which step(s) are
+    // actually executing, so terminal-deletion gating on the just-switched-to
+    // workflow doesn't fall back to `[]` and wrongly treat a live step's
+    // terminal as idle.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-view-active-steps-")
+    );
+    try {
+      const workingFilePath = path.join(workspace, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "Running workflow",
+          definitionRevision: 1,
+          steps: [{ prompt: "One" }, { prompt: "Two" }],
+        })
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      const workflowId = "workflow-running";
+      const workflowKey = "running-lineage" as never;
+      const sent: Array<{ type?: string; activeStepIndices?: number[] }> = [];
+
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.viewerRegistry = new Map<string, string | null>();
+      internal.viewAddressRegistry = new Map();
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map([
+        [
+          workflowId,
+          {
+            getSummary: () => ({ workingFilePath }),
+            replayBufferedOutputTo: () => undefined,
+            getActiveStepIndices: () => [1],
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.externalRunSessions = new Map();
+      internal.bindClientToAddressedLineage = async () => workflowId;
+      internal.resolveAddressFilePath = () => workingFilePath;
+      internal.findExecutionRunRef = () => null;
+      internal.getActiveTerminalWorkflowRefs = () => [];
+      internal.replayTerminalSessionsTo = () => undefined;
+      internal.lineageRepository = {
+        readDescriptor: async () => ({ revision: 1 }),
+      };
+
+      await orchestrator.loadRunViewForClient(
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        (message) => sent.push(message as { type?: string }),
+        "browser:switch",
+        "run-view-request-active-steps"
+      );
+
+      const snapshot = sent.find(
+        (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      );
+      assert.deepStrictEqual(snapshot?.activeStepIndices, [1]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
@@ -2547,6 +2619,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
               operations.push("buffered-output");
               sink.updateCliOutput(0, { response: "stale retry output" });
             },
+            getActiveStepIndices: () => [],
           },
         ],
       ]);
@@ -2757,6 +2830,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
                 response: "output that raced the read",
               });
             },
+            getActiveStepIndices: () => [],
           },
         ],
       ]);

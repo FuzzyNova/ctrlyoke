@@ -1340,6 +1340,59 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       useUiStore.getState().hiddenOutputTargets[workflowViewAddressKey(address)]
     ).toBeUndefined();
   });
+
+  it("applies activeStepIndices from a live RUN_VIEW_LOADED snapshot", () => {
+    // activeStepIndices has no persisted `_runtime` counterpart — it only
+    // reaches the client when the backend bound a live WorkflowInstance to
+    // this address (WorkflowOrchestrator.deliverRunView). Terminal-deletion
+    // gating (isTerminalSessionInUseByActiveStep) depends on this being
+    // fresh after switching to a running workflow, not left over from
+    // whatever was previously displayed.
+    renderHook(() => useMessageHandler());
+
+    const address = {
+      workflowKey: "wf-running" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    } as const;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: { workflowName: "Running", steps: [{ prompt: "one" }] },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        activeStepIndices: [1],
+      });
+    });
+
+    expect(useWorkflowStore.getState().activeStepIndices).toEqual([1]);
+  });
+
+  it("defaults activeStepIndices to empty when a RUN_VIEW_LOADED snapshot omits it", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useWorkflowStore.getState().setActiveStepIndices([3]);
+    });
+
+    const address = {
+      workflowKey: "wf-idle" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    } as const;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: { workflowName: "Idle", steps: [{ prompt: "one" }] },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+      });
+    });
+
+    expect(useWorkflowStore.getState().activeStepIndices).toEqual([]);
+  });
 });
 
 describe("RUN_VIEW_LOADED navigation identity", () => {

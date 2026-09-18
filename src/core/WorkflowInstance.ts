@@ -4828,8 +4828,13 @@ export class WorkflowInstance {
    * (WorkflowExecutor's `spawnScriptPty`, from `getSignedStepIndex`). Emit
    * both so terminal-session "is this actively running" gating matches
    * whichever convention produced the session, regardless of step type.
+   *
+   * Public because `WorkflowOrchestrator.deliverRunView` also needs it: the
+   * addressed run-view snapshot it sends on a workflow switch is otherwise
+   * built entirely from a disk read (`readAddressedRunView`), and this value
+   * has no persisted `_runtime` counterpart — it only ever exists in memory.
    */
-  private getActiveStepIndices(): number[] {
+  getActiveStepIndices(): number[] {
     const totalSteps = this.promptQueue.getState().steps.length;
     return this.workflowRuntime
       .getActiveAttempts()

@@ -3476,32 +3476,6 @@ export class WorkflowOrchestrator {
     const workspaceRoot = this.currentWorkspaceFolderPath;
     this.getViewAddressRegistry().set(clientId, address);
     this.getViewMessageSinks().set(clientId, send);
-    const snapshot: RunViewLoadedMessage = {
-      type: MESSAGE_TYPES.RUN_VIEW_LOADED,
-      requestId,
-      address,
-      ...(workspaceRoot
-        ? { runDirectory: this.resolveAddressDirectory(workspaceRoot, address) }
-        : {}),
-      workingFile,
-      history: view.history,
-      runSummaries: view.runSummaries,
-      workflowProperties: view.workflowProperties,
-      executionRunRef,
-      pendingRewind: workingFile._runtime?.pendingRewind,
-      descriptorRevision: view.descriptorRevision,
-      isSystemGenerated: view.isSystemGenerated,
-      ...(definitionRollback &&
-      (workingFile.definitionRevision ?? 1) ===
-        definitionRollback.restoredRevision &&
-      view.descriptorRevision === definitionRollback.descriptorRevision
-        ? {
-            definitionRollback: {
-              fromRevision: definitionRollback.fromRevision,
-            },
-          }
-        : {}),
-    };
 
     // Only a live view can hold in-memory output the timeline read above could
     // have missed: the run that is actually executing, or a draft, which has no
@@ -3521,6 +3495,43 @@ export class WorkflowOrchestrator {
     const boundInstance = runtimeWorkflowId
       ? this.findInstance(runtimeWorkflowId)
       : undefined;
+
+    const snapshot: RunViewLoadedMessage = {
+      type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+      requestId,
+      address,
+      ...(workspaceRoot
+        ? { runDirectory: this.resolveAddressDirectory(workspaceRoot, address) }
+        : {}),
+      workingFile,
+      history: view.history,
+      runSummaries: view.runSummaries,
+      workflowProperties: view.workflowProperties,
+      executionRunRef,
+      // Never persisted (see WorkflowInstance.getActiveStepIndices), so this
+      // is the only place a switch to a running workflow's addressed view can
+      // learn which step(s) are actually executing right now — without it,
+      // the client falls back to `[]` and terminal-deletion gating on the
+      // just-switched-to workflow can't tell a live step's terminal from an
+      // idle one (see fix: gate terminal deletion correctly for a running
+      // final step).
+      ...(boundInstance
+        ? { activeStepIndices: boundInstance.getActiveStepIndices() }
+        : {}),
+      pendingRewind: workingFile._runtime?.pendingRewind,
+      descriptorRevision: view.descriptorRevision,
+      isSystemGenerated: view.isSystemGenerated,
+      ...(definitionRollback &&
+      (workingFile.definitionRevision ?? 1) ===
+        definitionRollback.restoredRevision &&
+      view.descriptorRevision === definitionRollback.descriptorRevision
+        ? {
+            definitionRollback: {
+              fromRevision: definitionRollback.fromRevision,
+            },
+          }
+        : {}),
+    };
     const announcedWorkflowId =
       boundWorkflowId ??
       (announceReplayBoundary ? this.getViewedWorkflowId(clientId) : null);
