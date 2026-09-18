@@ -331,4 +331,21 @@ suite("Workflow property round trip (panel -> working file)", () => {
       "rejected write must not mutate disk"
     );
   });
+
+  test("a client that catches up to a foreign advance can write again", async () => {
+    const { h } = await harness();
+    // Prime the ledger so this client is its sole recorded author, then move
+    // the head from outside it exactly as a CLI or MCP writer would.
+    await h.routeWorkflowPropertyUpdate("model", "claude-opus-4-8");
+    await h.advanceRunDefinitionRevisionExternally();
+
+    // The client has now learned the true head by round trip, so it echoes a
+    // revision *newer* than anything the ledger recorded. Reconciling that
+    // backwards to the ledger's stale head would reject a correct write — and
+    // keep rejecting it, since the republished identity says the same thing.
+    const caughtUp = await h.currentMutationContext();
+    await h.routeWorkflowPropertyUpdateWith(caughtUp, "model", "codex");
+
+    assert.strictEqual((await h.readRunDefinition()).model, "codex");
+  });
 });

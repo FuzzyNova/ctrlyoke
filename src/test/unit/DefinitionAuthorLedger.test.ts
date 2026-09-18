@@ -55,4 +55,25 @@ suite("DefinitionAuthorLedger", () => {
 
     assert.strictEqual(ledger.reconcileDefinition(ADDRESS, "client-a", 3), 3);
   });
+
+  test("never rewrites an expectation newer than the ledger's head backwards", () => {
+    const ledger = new DefinitionAuthorLedger();
+
+    // A foreign writer (CLI, MCP, the executor, a second host) moved the head
+    // past anything this ledger recorded, and the client has since caught up.
+    ledger.recordDefinition(ADDRESS, "client-a", 4);
+
+    assert.strictEqual(ledger.reconcileDefinition(ADDRESS, "client-a", 5), 5);
+  });
+
+  test("never rewrites a newer descriptor expectation backwards", () => {
+    const ledger = new DefinitionAuthorLedger();
+
+    ledger.recordDescriptor(WORKFLOW_KEY, "client-a", 4);
+
+    assert.strictEqual(
+      ledger.reconcileDescriptor(WORKFLOW_KEY, "client-a", 5),
+      5
+    );
+  });
 });

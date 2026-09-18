@@ -25,12 +25,27 @@ class RevisionAuthorLedger {
     });
   }
 
+  /**
+   * Reconcile only *forward*, and only within this client's own authorship run.
+   *
+   * `expected <= entry.revision` is the load-bearing half. The ledger is a
+   * whitelist of writes this host performed for a client, so it goes stale the
+   * moment anyone else moves the head — a CLI run, an MCP append, the executor
+   * persisting its queue, a second extension host. The client then learns the
+   * true head by round trip and echoes a revision *newer* than anything the
+   * ledger knows. Without this bound that correct expectation is rewritten
+   * backwards to a superseded revision, and the on-disk check rejects it: the
+   * exact conflict this ledger exists to prevent, except now it is sticky,
+   * because `reportActionFailure` republishes the same head the client is
+   * already holding and every retry is downgraded again.
+   */
   reconcile(key: string, clientId: string, expected: number): number {
     const entry = this.entries.get(key);
     if (
       entry &&
       entry.authorClientId === clientId &&
-      expected >= entry.soleAuthorSince - 1
+      expected >= entry.soleAuthorSince - 1 &&
+      expected <= entry.revision
     ) {
       return entry.revision;
     }

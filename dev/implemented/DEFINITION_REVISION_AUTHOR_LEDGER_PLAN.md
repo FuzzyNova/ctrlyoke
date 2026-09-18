@@ -67,13 +67,24 @@ value* at the boundary, and the deep sites keep comparing against disk exactly a
 ```
 reconcileExpectedDefinitionRevision(key, clientId, expected):
   entry = ledger.get(key)
-  if entry && entry.authorClientId === clientId && expected >= entry.soleAuthorSince - 1:
+  if entry && entry.authorClientId === clientId
+     && expected >= entry.soleAuthorSince - 1   // floor: within this client's authorship run
+     && expected <= entry.revision:             // ceiling: never rewrite an expectation backwards
     return entry.revision      // the client is catching up to itself
   return expected              // unchanged; the deep check decides
 ```
 
 `soleAuthorSince - 1` is the floor because the expectation a client holds *before* its first write
 is the revision preceding that write.
+
+**The ceiling is equally load-bearing**, and was missing from the first implementation (caught in
+review). Because the ledger is a whitelist rather than a cache, it goes stale whenever a foreign
+writer moves the head. The client then learns the true head by round trip and echoes a revision
+*newer* than anything the ledger recorded. Without `expected <= entry.revision`, that correct
+expectation is reconciled *backwards* to a superseded revision and the on-disk check rejects it —
+reintroducing the very conflict this design removes, and worse: `reportActionFailure` republishes
+the same head the client already holds, so every retry is downgraded again and the address wedges
+until another client writes or the host restarts.
 
 This is what makes the "whitelist, not a cache" property fall out for free. A write this host did not
 perform — CLI, MCP, another extension host — never enters the ledger, so `entry.revision` goes stale
@@ -160,6 +171,10 @@ the wrong reason.
 A second case guards the whitelist property: move the head from outside the ledger (write the run
 file directly, as a CLI/MCP writer would) and assert the client's stale revision is still rejected.
 
+A third case guards the *other* side of that same foreign advance: after it, a client echoing the
+now-correct head must be able to write. It is the case that catches a reconcile with no ceiling, and
+it fails loudly without one.
+
 ## Implementation plan
 
 1. **Done — single-source the revision preconditions.** One shared guard for the 16
@@ -176,3 +191,11 @@ file directly, as a CLI/MCP writer would) and assert the client's stale revision
    test above.
 
 Each step keeps this document current and commits its own work.
+
+## Review findings
+
+The three steps landed as planned. One correctness bug was found and fixed during review: the
+reconcile predicate had no upper bound, so a client echoing a head newer than the ledger's (the
+normal state after any CLI/MCP/executor write) had its correct revision rewritten backwards into a
+sticky conflict. Fixed in `DefinitionAuthorLedger.reconcile` with `expected <= entry.revision`,
+covered by two unit cases and one integration case that all fail without it.
