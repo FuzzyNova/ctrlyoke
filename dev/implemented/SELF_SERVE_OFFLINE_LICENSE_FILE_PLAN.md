@@ -1,10 +1,11 @@
 # Self-Serve Offline License File Download
 
 **Created:** September 17, 2026
-**Status:** Option B implemented and shipped 2026-09-17 (design verified 2026-09-17, see
-[Verified design](#verified-design-for-option-b)). Option C is deliberately deferred and out of
-scope for this work; Option A is declined. This document remains in `dev/backlog/` so the deferred
-Option C work stays visible in its existing design record.
+**Status:** Implemented — Option B shipped 2026-09-17 (design verified the same day, see
+[Verified design](#verified-design-for-option-b)). Option A is declined. Option C is deliberately
+deferred and out of scope here; its remaining work is tracked in
+[`../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md`](../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md) §2, so this
+document could move out of `dev/backlog/`.
 **Found via:** live air-gapped-activation test on 2026-09-17 (see
 [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 12). Nathan, as the
 Keygen account admin, generated the signed license file himself from the Keygen dashboard and
@@ -24,6 +25,13 @@ The shared Keygen identifiers and fallback TTL now live in
 re-exports from `LicenseService.ts`. The landing site imports that dependency-free module
 directly; no generated landing-local copy was needed because the cross-project import works in
 the static landing build. Option C remains intentionally untouched.
+
+A review pass extended that module to cover the two literals the page and the extension both
+branch on, rather than leaving them duplicated: `LICENSE_VALIDATION_CODES` with the
+`CHECKOUT_ELIGIBLE_VALIDATION_CODES` subset (the codes that still permit a checkout), and
+`LICENSE_CERTIFICATE_BEGIN`/`LICENSE_CERTIFICATE_END`. `LicenseService.parseCertificate` now builds
+its envelope pattern from those constants via `String.raw`, so the page's "did Keygen hand back a
+certificate?" check and the extension's parser cannot drift apart.
 
 ## The gap (resolved by Option B)
 
@@ -46,7 +54,7 @@ machine with no network by policy).
 
 A customer only ever holds their **license key** (never an admin/product token — see the security
 boundary already established in
-[`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.4: "the extension only ever holds
+[`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) §1.4: "the extension only ever holds
 the Keygen account public key... and the user's own license key/file"). Keygen's license-file
 checkout is designed for exactly this: the "check out a license" action can be called with
 **license-key authentication** (`Authorization: License <key>`) instead of an admin token, so a
@@ -178,14 +186,14 @@ works from any browser on any connected device (a work laptop, a phone, a kiosk 
 install), and is the only option that helps a customer who wants to prep a license file _before_
 they've put ctrlyoke on any machine at all. It also matches the existing pattern of `ctrlyoke.dev`
 owning the pricing/checkout/portal surface per
-[`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.9.
+[`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) §1.9.
 
 Rate-limit consideration: since this is a public static page hitting Keygen directly from the
 browser, abuse is bounded by Keygen's own per-key/per-IP rate limits on the checkout action, not by
 anything ctrlyoke needs to build — another point in favor of not putting a Netlify function in the
 path.
 
-## Option C — a section in `LicenseSection.tsx` (deliberately deferred; out of scope)
+## Option C — a section in `LicenseSection.tsx` (deferred; tracked in [`../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md`](../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md) §2)
 
 Once Option B's client-side Keygen call is proven out, add a small "Generate a license file for
 another machine" action next to the existing "Activate with license key" section in
@@ -205,8 +213,8 @@ deferred as a future convenience for existing Pro users and is out of scope for 
 ## Out of scope for this plan
 
 - QR-code transfer for the generated file — already deferred in
-  [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) §1.5 and unrelated to _how_ the file
+  [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) §1.5 and unrelated to _how_ the file
   is obtained.
 - The Phase-2 "Sign in with ctrlyoke" device-code flow
-  ([`PRO_LICENSE_FOLLOWUPS_PLAN.md`](PRO_LICENSE_FOLLOWUPS_PLAN.md) item 2) — this plan is
+  ([`PRO_LICENSE_FOLLOWUPS_PLAN.md`](../backlog/PRO_LICENSE_FOLLOWUPS_PLAN.md) item 2) — this plan is
   key-only and doesn't depend on it.

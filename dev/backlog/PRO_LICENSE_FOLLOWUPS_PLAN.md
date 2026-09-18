@@ -30,6 +30,12 @@ Carried forward as still-future work, not started:
   tracked originally in `PRO_LICENSE_PLAN.md` §Phase 2. No code exists for
   this; email/password or device-code license activation is still
   key-paste/offline-file only.
+- **Option C of the self-serve offline license work** — a "generate a license
+  file for another machine" action inside `LicenseSection.tsx`, reusing the
+  client-side Keygen checkout now proven by the shipped
+  [`../implemented/SELF_SERVE_OFFLINE_LICENSE_FILE_PLAN.md`](../implemented/SELF_SERVE_OFFLINE_LICENSE_FILE_PLAN.md)
+  page. Deliberately deferred: it only helps someone already running Pro on a
+  connected machine, which the ctrlyoke.dev page already covers more broadly.
 - **General Keygen account/admin UI** — out of scope by design; machine
   management stays scoped to the current license via
   `LicenseService.listMachines`/`deactivateMachine`, not a broader account

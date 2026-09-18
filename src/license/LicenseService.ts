@@ -1,23 +1,31 @@
 import { createHash, randomUUID, webcrypto } from "node:crypto";
 import {
+  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
   KEYGEN_VALID_POLICY_IDS,
+  LICENSE_CERTIFICATE_BEGIN,
+  LICENSE_CERTIFICATE_END,
   LICENSE_FILE_TTL_MS,
+  LICENSE_VALIDATION_CODES,
 } from "./KeygenConstants";
 import type { SecretStore } from "../platform/SecretStore";
 import { PRO_FEATURES } from "../types/DashboardConstants";
 import { TypedEmitter } from "../utils/TypedEmitter";
 
 export {
+  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
   KEYGEN_ACCOUNT_ID,
   KEYGEN_API_BASE_URL,
   KEYGEN_ENTERPRISE_POLICY_ID,
   KEYGEN_PRODUCT_ID,
   KEYGEN_PRO_POLICY_ID,
   KEYGEN_VALID_POLICY_IDS,
+  LICENSE_CERTIFICATE_BEGIN,
+  LICENSE_CERTIFICATE_END,
   LICENSE_FILE_TTL_MS,
+  LICENSE_VALIDATION_CODES,
 } from "./KeygenConstants";
 
 /** The source determines whether a license file's TTL is enforced locally. */
@@ -68,13 +76,6 @@ const LICENSE_FILE_HEADER = "LICENSE";
 export const LICENSE_TIERS = {
   FREE: "free",
   PRO: "pro",
-} as const;
-
-const LICENSE_VALIDATION_CODES = {
-  NO_MACHINES: "NO_MACHINES",
-  FINGERPRINT_SCOPE_MISMATCH: "FINGERPRINT_SCOPE_MISMATCH",
-  TOO_MANY_MACHINES: "TOO_MANY_MACHINES",
-  MACHINE_LIMIT_EXCEEDED: "MACHINE_LIMIT_EXCEEDED",
 } as const;
 
 type LicenseTier = (typeof LICENSE_TIERS)[keyof typeof LICENSE_TIERS];
@@ -637,9 +638,10 @@ export class LicenseService implements LicenseService {
     const validationCode = readOptionalString(meta?.code);
     const canActivate =
       meta?.valid === true ||
-      validationCode === LICENSE_VALIDATION_CODES.NO_MACHINES ||
-      validationCode === LICENSE_VALIDATION_CODES.FINGERPRINT_SCOPE_MISMATCH ||
-      validationCode === LICENSE_VALIDATION_CODES.TOO_MANY_MACHINES;
+      (validationCode !== undefined &&
+        CHECKOUT_ELIGIBLE_VALIDATION_CODES.some(
+          (code) => code === validationCode
+        ));
     if (!canActivate) {
       throw new UserFacingLicenseError(
         "That Pro license key was rejected. It may be invalid, expired, suspended, or at its machine limit."
@@ -925,16 +927,23 @@ function parseLicenseSource(value: unknown): LicenseSource | undefined {
     : undefined;
 }
 
+/**
+ * Built from the shared envelope constants so the extension and the
+ * self-serve page in `landing/` can never disagree about what a signed
+ * license file looks like.
+ */
+const LICENSE_CERTIFICATE_PATTERN = new RegExp(
+  String.raw`^${LICENSE_CERTIFICATE_BEGIN}\n([\s\S]*?)\n${LICENSE_CERTIFICATE_END}$`
+);
+
 function parseCertificate(blob: string): LicenseCertificate {
   const normalized = blob.replace(/\r\n/g, "\n").trim();
-  const match = normalized.match(
-    /^-----BEGIN (LICENSE) FILE-----\n([\s\S]*?)\n-----END \1 FILE-----$/
-  );
+  const match = normalized.match(LICENSE_CERTIFICATE_PATTERN);
   if (!match) {
     throw new Error("Invalid license certificate");
   }
 
-  const payload = parseJson(decodeBase64(match[2].replace(/\s/g, "")));
+  const payload = parseJson(decodeBase64(match[1].replace(/\s/g, "")));
   if (
     !isRecord(payload) ||
     typeof payload.enc !== "string" ||

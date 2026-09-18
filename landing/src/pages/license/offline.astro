@@ -1,9 +1,11 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import {
+  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
   KEYGEN_API_BASE_URL,
   KEYGEN_PRODUCT_ID,
   KEYGEN_VALID_POLICY_IDS,
+  LICENSE_CERTIFICATE_BEGIN,
   LICENSE_FILE_TTL_MS,
 } from "../../../../src/license/KeygenConstants";
 
@@ -130,15 +132,13 @@ const fallbackTtlSeconds = LICENSE_FILE_TTL_MS / 1000;
     apiBaseUrl: KEYGEN_API_BASE_URL,
     expectedProductId: KEYGEN_PRODUCT_ID,
     validPolicyIds: [...KEYGEN_VALID_POLICY_IDS],
+    checkoutEligibleValidationCodes: [...CHECKOUT_ELIGIBLE_VALIDATION_CODES],
+    certificateBegin: LICENSE_CERTIFICATE_BEGIN,
     preferredTtlSeconds,
     fallbackTtlSeconds,
   }}
 >
-  const ACCEPTED_VALIDATION_CODES = new Set([
-    "NO_MACHINES",
-    "FINGERPRINT_SCOPE_MISMATCH",
-    "TOO_MANY_MACHINES",
-  ]);
+  const ACCEPTED_VALIDATION_CODES = new Set(checkoutEligibleValidationCodes);
 
   class OfflineLicenseError extends Error {
     constructor(message, kind = "general") {
@@ -159,7 +159,7 @@ const fallbackTtlSeconds = LICENSE_FILE_TTL_MS / 1000;
 
   function setStatus(message, kind = "") {
     status.textContent = message;
-    status.className = `min-h-6 text-sm ${
+    status.className = `mt-5 min-h-6 text-sm ${
       kind === "error"
         ? "text-rose-300"
         : kind === "success"
@@ -273,7 +273,7 @@ const fallbackTtlSeconds = LICENSE_FILE_TTL_MS / 1000;
     }
 
     const responseText = (await response.text()).trim();
-    if (responseText.startsWith("-----BEGIN LICENSE FILE-----")) {
+    if (responseText.startsWith(certificateBegin)) {
       return responseText;
     }
 
@@ -284,7 +284,10 @@ const fallbackTtlSeconds = LICENSE_FILE_TTL_MS / 1000;
       throw new OfflineLicenseError("Keygen returned an invalid license file. Please try again.");
     }
     const certificateText = body?.data?.attributes?.certificate;
-    if (typeof certificateText !== "string" || !certificateText.trim().startsWith("-----BEGIN LICENSE FILE-----")) {
+    if (
+      typeof certificateText !== "string" ||
+      !certificateText.trim().startsWith(certificateBegin)
+    ) {
       throw new OfflineLicenseError("Keygen returned an invalid license file. Please try again.");
     }
     return certificateText.trim();
