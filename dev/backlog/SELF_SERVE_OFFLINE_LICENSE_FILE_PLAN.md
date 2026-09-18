@@ -1,7 +1,8 @@
 # Self-Serve Offline License File Download
 
 **Created:** September 17, 2026
-**Status:** Backlog — not started.
+**Status:** Approved — Option B in progress (design verified 2026-09-17, see
+[Verified design](#verified-design-for-option-b)). Option C remains backlog.
 **Found via:** live air-gapped-activation test on 2026-09-17 (see
 [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 12). Nathan, as the
 Keygen account admin, generated the signed license file himself from the Keygen dashboard and
@@ -53,6 +54,86 @@ Whatever surface is built, it must be a **pure client-side call to Keygen's publ
 ctrlyoke backend, no Netlify function holding a secret. The moment an admin/product token needs to
 sit behind this feature to make it work, the design is wrong and has recreated the "someone has to
 mint it for you" problem, just moved to different infra.
+
+## Verified design for Option B
+
+Everything in this section was checked against the live Keygen API and the shipped
+`src/license/LicenseService.ts` on 2026-09-17. Treat it as the implementation contract — it
+resolves the questions the rest of this document left open.
+
+### The page is genuinely static — CORS confirmed
+
+A browser on `https://ctrlyoke.dev` can call both required endpoints directly. Preflighting each
+one with `Origin: https://ctrlyoke.dev` returns `Access-Control-Allow-Origin: *`,
+`Access-Control-Allow-Methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS`, and — critically for
+license-key auth — echoes `authorization` back in `Access-Control-Allow-Headers`:
+
+- `OPTIONS /v1/accounts/<account>/licenses/actions/validate-key` (requesting `POST`) → `200`
+- `OPTIONS /v1/accounts/<account>/licenses/<id>/actions/check-out` (requesting `GET` with
+  `authorization`) → `200`
+
+So no Netlify function, no proxy, and no server-held token is needed. This was the single
+make-or-break risk for Option B and it is cleared.
+
+### Exact call sequence the page must make
+
+Mirror `LicenseService`'s own online path so the file the page produces is byte-compatible with
+what the extension already accepts:
+
+1. `POST /licenses/actions/validate-key` with body `{"meta":{"key":"<pasted key>"}}` and no
+   `Authorization` header — this is how the page turns a key into a license **id**
+   (`LicenseService.validateKey`, `src/license/LicenseService.ts`). Accept the same set of
+   outcomes the extension accepts: `meta.valid === true`, or code `NO_MACHINES`,
+   `FINGERPRINT_SCOPE_MISMATCH`, or `TOO_MANY_MACHINES` — a key that is merely unactivated or at
+   its machine limit can still legitimately mint a file.
+2. Confirm `data.relationships.product.data.id` is `KEYGEN_PRODUCT_ID` and
+   `data.relationships.policy.data.id` is one of `KEYGEN_VALID_POLICY_IDS`, matching
+   `assertExpectedRelationship`, so a key for some other Keygen product gets a clear error rather
+   than a confusing one.
+3. `GET /licenses/<id>/actions/check-out?ttl=<seconds>` with `Authorization: License <key>`
+   (`LicenseService.checkoutLicense`). **No machine activation step** — the page must never `POST
+/machines`; checkout is a read-style action and does not consume one of the license's activation
+   slots (confirmed on the live account 2026-09-17).
+
+### Two hard constraints on the checkout call
+
+- **Never pass `encrypt=true`.** The file must come back as plain `base64+ed25519`. An air-gapped
+  machine importing a file has no license key in its credential store, so
+  `LicenseService.decryptLicensePayload` has nothing to decrypt an `aes-256-gcm+ed25519` payload
+  with and `importLicenseFile` would silently fall back to the existing (free) entitlement.
+- **The download must be the `-----BEGIN LICENSE FILE-----` certificate text.** `parseCertificate`
+  accepts only that envelope. Keygen's checkout action may answer with either the raw certificate
+  body or a JSON:API document carrying it at `data.attributes.certificate`, so the page should
+  handle both and write the certificate text out either way.
+
+### TTL
+
+`entitlementFromPayload` enforces the file's own `meta.expiry` **only** for
+`LICENSE_SOURCES.ONLINE`; an imported `offline-file` is bounded by the underlying license's expiry,
+not by the file TTL. A long TTL is therefore the friendlier choice for an air-gapped machine (it
+avoids re-minting for cosmetic reasons) — request roughly one year and fall back to the extension's
+`LICENSE_FILE_TTL_MS` (30 days) if the policy's max TTL rejects it.
+
+### Keygen identifiers must stay single-sourced
+
+`KEYGEN_ACCOUNT_ID`, `KEYGEN_PRODUCT_ID`, the two policy IDs, and `KEYGEN_API_BASE_URL` live in
+`src/license/LicenseService.ts` today. The page needs the same values, and re-typing them into
+`landing/` would create exactly the duplicated-constant problem the project's DRY rule exists to
+prevent. Extract them into a small dependency-free module the landing site can import (no
+`node:crypto`, no VS Code imports), re-exported from `LicenseService.ts` so existing importers are
+untouched. `landing/` already imports across the project root (`terms.astro` imports root
+`LICENSE.md`; `HarnessDeck.astro` imports from `images/`), and `astro.config.mjs`'s
+`server.fs.allow: [".."]` permits it. If that cross-project import turns out to be brittle,
+generate a landing-local constants file from the extension module with a `scripts/generate-*.mjs`
+step instead — do not hand-copy the IDs.
+
+### Route and surface
+
+`https://ctrlyoke.dev/license/offline/` (`landing/src/pages/license/offline.astro`). Standard
+`Layout.astro`, and follow `HarnessDeck.astro`'s pattern of a `<script define:vars={{ ... }}>` block
+for passing build-time constants into browser code. The page must offer both a file download and a
+copy-to-clipboard view of the certificate, because the extension accepts a picked file _or_ pasted
+text.
 
 ## Option A — Keygen-hosted customer portal
 
