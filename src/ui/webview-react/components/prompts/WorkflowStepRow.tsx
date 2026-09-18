@@ -244,6 +244,7 @@ export function WorkflowStepRowFrame({
   stepColor,
   isCurrent,
   showPauseBoundaryBefore = false,
+  hideExecutingHighlight = false,
   bodyRef,
   bodyStyle,
   displacementStyle,
@@ -255,6 +256,13 @@ export function WorkflowStepRowFrame({
   stepColor: string | undefined;
   isCurrent: boolean;
   showPauseBoundaryBefore?: boolean;
+  /**
+   * Suppresses this row's own running outline. Set by `ParallelGroupPanel`
+   * for its members — a running group draws one outline around the whole
+   * group instead of one per member, so a member row drawing its own on top
+   * would double up on the group's edges.
+   */
+  hideExecutingHighlight?: boolean;
   bodyRef?: (node: HTMLElement | null) => void;
   bodyStyle?: React.CSSProperties;
   /**
@@ -285,7 +293,7 @@ export function WorkflowStepRowFrame({
       >
         {slotNumber}
       </div>
-      {isCurrent && <ExecutingStepHighlight />}
+      {isCurrent && !hideExecutingHighlight && <ExecutingStepHighlight />}
       <div ref={bodyRef} style={bodyStyle} className="relative flex-1 min-w-0">
         {children}
       </div>
@@ -298,6 +306,8 @@ export type SortableWrapperProps = WorkflowStepRowProps & {
   disabled: boolean;
   slotNumber: number;
   showPauseBoundaryBefore?: boolean;
+  /** See `WorkflowStepRowFrame`'s prop of the same name. */
+  hideExecutingHighlight?: boolean;
 };
 
 export const SortableWorkflowStepWrapper = React.memo(
@@ -306,6 +316,7 @@ export const SortableWorkflowStepWrapper = React.memo(
     disabled,
     slotNumber,
     showPauseBoundaryBefore = false,
+    hideExecutingHighlight = false,
     ...stepItemProps
   }: SortableWrapperProps) {
     const {
@@ -357,6 +368,7 @@ export const SortableWorkflowStepWrapper = React.memo(
         stepColor={stepColor}
         isCurrent={stepItemProps.isCurrent}
         showPauseBoundaryBefore={showPauseBoundaryBefore}
+        hideExecutingHighlight={hideExecutingHighlight}
         bodyRef={setNodeRef}
         bodyStyle={style}
         displacementStyle={displacementStyle}

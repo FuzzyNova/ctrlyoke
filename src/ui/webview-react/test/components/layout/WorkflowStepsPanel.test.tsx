@@ -1331,13 +1331,15 @@ describe("WorkflowStepsPanel parallel group boundaries", () => {
     cleanup();
   });
 
-  it("outlines the member that is still running, not the one at the boundary", () => {
+  it("outlines the whole running group, not the individual member row", () => {
     // The state a run reached when one member of a live group settled first
     // and the boundary was published as the settled count: step 2 is done,
     // step 1 is still going, and `currentStep` sits between them. The panel
-    // outlined whichever step it found at `currentStep`, which is how the row
-    // showing a completed check ended up wearing the running outline — and how
-    // the group container disappeared on the way.
+    // used to outline whichever step it found at `currentStep`, which is how
+    // the row showing a completed check ended up wearing the running outline
+    // — and how the group container disappeared on the way. The group is now
+    // outlined as a whole instead of per member (see ExecutingStepHighlight),
+    // so no member row should carry its own outline.
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
       steps: [{ prompt: "still running" }, { prompt: "settled first" }],
@@ -1353,14 +1355,14 @@ describe("WorkflowStepsPanel parallel group boundaries", () => {
 
     render(<WorkflowStepsPanel />);
 
+    const groupPanel = screen.getByTestId(`parallel-group-${group.id}`);
+    expect(groupPanel).toBeInTheDocument();
     expect(
-      screen
-        .getByTestId("executing-step-highlight")
-        .closest("[data-workflow-step-index]")
-    ).toHaveAttribute("data-workflow-step-index", "0");
-    expect(
-      screen.getByTestId(`parallel-group-${group.id}`)
+      within(groupPanel).getByTestId("parallel-group-executing-highlight")
     ).toBeInTheDocument();
+    expect(
+      within(groupPanel).queryByTestId("executing-step-highlight")
+    ).not.toBeInTheDocument();
   });
 
   it("draws a group the done/pending boundary runs through as one container", () => {

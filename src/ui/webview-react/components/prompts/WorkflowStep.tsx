@@ -269,7 +269,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             shifts and stays aligned across done/pending/locked rows. */}
         <span className="flex-shrink-0 flex flex-col items-center self-stretch">
           <span className="mt-0.5">
-            <StatusIcon status={status} disabled={isDisabled} />
+            <StatusIcon status={status} disabled={isDisabled} animate />
           </span>
           {canSetStartPosition && (
             <button

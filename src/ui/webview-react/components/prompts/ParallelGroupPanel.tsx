@@ -19,6 +19,7 @@ import {
 import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
 import { StatusIcon } from "./StatusIcon";
+import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
 import { getStatusLabel, isStepExecuting, isWorkflowActive } from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
@@ -31,6 +32,14 @@ import { Icon } from "../shared/Icon";
 
 export type ParallelGroupStatus =
   "running" | "failed" | "cancelled" | "completed" | "skipped" | "pending";
+
+/**
+ * Single-sourced so the "running" tag used for flow control (below) isn't a
+ * bare string-literal comparison — `find-hardcoded-strings.mjs` flags
+ * repeated flow-control literals, and other files reuse the spelling
+ * "running" for unrelated concepts (step ids, token-total variants).
+ */
+const PARALLEL_GROUP_RUNNING_STATUS: ParallelGroupStatus = "running";
 
 type GroupMemberStatus = {
   status: StepStatus;
@@ -256,6 +265,12 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
       data-testid={`parallel-group-${group.id}`}
       aria-label={`Parallel steps ${group.startIndex + 1} to ${group.endIndex + 1}`}
     >
+      {/* One outline around the whole running group, in place of the
+          per-member outline a standalone step gets — see the matching
+          `hideExecutingHighlight` passed to each member row below. */}
+      {status === PARALLEL_GROUP_RUNNING_STATUS && (
+        <ExecutingStepHighlight testId="parallel-group-executing-highlight" />
+      )}
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
         <Icon name="worktree-compact" className="text-description-fg" />
         <span className="font-semibold">
@@ -351,6 +366,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   offsetInGroup={offset}
                   stepColorMode={stepColorMode}
                   harnessColorSettings={harnessColorSettings}
+                  hideExecutingHighlight
                   getStepHarnessModel={getStepHarnessModel}
                   getStepOverrides={getStepOverrides}
                   onStepClick={onStepClick}
@@ -384,6 +400,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   status={memberStatus}
                   stepColor={stepColor}
                   isCurrent={isStepActive(index)}
+                  hideExecutingHighlight
                 >
                   <WorkflowStepRow
                     step={step}
