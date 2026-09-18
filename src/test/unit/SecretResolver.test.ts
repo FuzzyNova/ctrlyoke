@@ -468,7 +468,8 @@ suite("SecretResolver", () => {
     const result = await evaluator.evaluateCondition(
       {
         script: 'node -e "console.log(process.env.SCRIPT_TOKEN)"',
-        returns: "script-value",
+        compareSource: "stdout",
+        expected: "script-value",
       },
       process.cwd(),
       undefined,

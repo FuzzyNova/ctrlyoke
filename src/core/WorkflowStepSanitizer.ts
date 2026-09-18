@@ -2,6 +2,7 @@ import {
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  type ScriptOperator,
   EXECUTION_MODES,
   type ExecutionMode,
 } from "../types/DashboardConstants";
@@ -303,17 +304,20 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
     return undefined;
   }
 
-  if (typeof value.returns !== "string") {
-    return undefined;
-  }
-
   const env = cloneStringRecord(value.env);
   return {
     script: value.script,
     ...(env && { env }),
-    returns: value.returns,
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as EndCondition["compareSource"],
+    }),
+    ...(typeof value.operator === "string" && {
+      operator: value.operator as EndCondition["operator"],
+    }),
+    ...((typeof value.expected === "string" ||
+      typeof value.expected === "number") && { expected: value.expected }),
+    ...(typeof value.ignoreCase === "boolean" && {
+      ignoreCase: value.ignoreCase,
     }),
     ...(typeof value.timeout === "number" && { timeout: value.timeout }),
     ...(typeof value.maxRetries === "number" && {
@@ -352,7 +356,14 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as PreCondition["compareSource"],
     }),
-    ...(typeof value.returns === "string" && { returns: value.returns }),
+    ...(typeof value.operator === "string" && {
+      operator: value.operator as PreCondition["operator"],
+    }),
+    ...((typeof value.expected === "string" ||
+      typeof value.expected === "number") && { expected: value.expected }),
+    ...(typeof value.ignoreCase === "boolean" && {
+      ignoreCase: value.ignoreCase,
+    }),
     ...(typeof value.timeout === "number" && { timeout: value.timeout }),
     ...(typeof value.onPass === "string" && {
       onPass: value.onPass as PreCondition["onPass"],
@@ -479,7 +490,14 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       ...(typeof step.compareSource === "string" && {
         compareSource: step.compareSource as ScriptStep["compareSource"],
       }),
-      ...(typeof step.returns === "string" && { returns: step.returns }),
+      ...(typeof step.operator === "string" && {
+        operator: step.operator as ScriptStep["operator"],
+      }),
+      ...((typeof step.expected === "string" ||
+        typeof step.expected === "number") && { expected: step.expected }),
+      ...(typeof step.ignoreCase === "boolean" && {
+        ignoreCase: step.ignoreCase,
+      }),
       ...((step.errorBehavior !== undefined || step.errorBehavior === null) && {
         errorBehavior: cloneErrorBehavior(step.errorBehavior),
       }),
@@ -631,8 +649,18 @@ export function buildScriptStepFromProperties(
         compareSource:
           props.compareSource as (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
       }),
-    ...(props.returns !== undefined &&
-      props.returns !== null && { returns: props.returns as string }),
+    ...(props.operator !== undefined &&
+      props.operator !== null && {
+        operator: props.operator as ScriptOperator,
+      }),
+    ...(props.expected !== undefined &&
+      props.expected !== null && {
+        expected: props.expected as string | number,
+      }),
+    ...(props.ignoreCase !== undefined &&
+      props.ignoreCase !== null && {
+        ignoreCase: props.ignoreCase as boolean,
+      }),
     ...((props.errorBehavior !== undefined || props.errorBehavior === null) && {
       errorBehavior: cloneErrorBehavior(props.errorBehavior),
     }),

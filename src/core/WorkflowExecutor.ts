@@ -73,6 +73,7 @@ import {
   type ResolvedProperties,
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
@@ -1931,14 +1932,15 @@ export class WorkflowExecutor {
         const preReport = await this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-          properties: {
+          properties: resolveReportedScriptProperties({
             script: resolvedPreCondition.script,
             env: resolvedPreCondition.env,
-            compareSource:
-              resolvedPreCondition.compareSource ?? COMPARE_SOURCES.AUTO,
-            returns: resolvedPreCondition.returns,
+            compareSource: resolvedPreCondition.compareSource,
+            operator: resolvedPreCondition.operator,
+            expected: resolvedPreCondition.expected,
+            ignoreCase: resolvedPreCondition.ignoreCase,
             timeout: resolvedPreCondition.timeout,
-          },
+          }),
           phase: EXECUTION_PHASES.PRE_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: this.getSignedStepIndex(target),
@@ -1965,6 +1967,7 @@ export class WorkflowExecutor {
               action: preReport.verdict.action,
               expected: preReport.verdict.expected,
               compareSource: preReport.verdict.compareSource,
+              operator: preReport.verdict.operator,
             }
           )
         );
@@ -2513,14 +2516,16 @@ export class WorkflowExecutor {
             `running headless: ${stepLabel}`
         );
       }
-      const resolvedProperties = {
+      const resolvedProperties = resolveReportedScriptProperties({
         script: effectiveStep.script,
         env: effectiveStep.env,
-        compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
-        returns: step.returns ?? "0",
+        compareSource: step.compareSource,
+        operator: step.operator,
+        expected: step.expected,
+        ignoreCase: step.ignoreCase,
         timeout,
         shell: effectiveStep.shell,
-      };
+      });
       const outputChunks: string[] = [];
       let ptyExitCode: number | undefined;
       let ptyTimedOut = false;
@@ -2585,13 +2590,11 @@ export class WorkflowExecutor {
             success: exitCode === 0,
             exitCode,
           },
-          resolvedProperties.returns,
-          resolvedProperties.compareSource
+          resolvedProperties
         );
         return {
           ...comparison,
           errored: ptyTimedOut,
-          matchRule: ptyTimedOut ? "none" : comparison.matchRule,
           stdout,
           stderr: "",
           result: "",
@@ -3647,8 +3650,9 @@ export class WorkflowExecutor {
           prompt.endCondition?.script ?? "",
           missingScriptResult,
           {
-            expected: prompt.endCondition?.returns,
+            expected: prompt.endCondition?.expected,
             compareSource: prompt.endCondition?.compareSource,
+            operator: prompt.endCondition?.operator,
           }
         )
       );
@@ -3688,13 +3692,15 @@ export class WorkflowExecutor {
     const endReport = await this.scriptExecutionReporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: endCondition.script,
         env: endCondition.env,
-        compareSource: endCondition.compareSource ?? COMPARE_SOURCES.AUTO,
-        returns: endCondition.returns,
+        compareSource: endCondition.compareSource,
+        operator: endCondition.operator,
+        expected: endCondition.expected,
+        ignoreCase: endCondition.ignoreCase,
         timeout: endCondition.timeout,
-      },
+      }),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: this.toOutputExecutionTarget(target),
       signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
@@ -3720,8 +3726,9 @@ export class WorkflowExecutor {
           endCondition.script,
           evaluationResult,
           {
-            expected: endCondition.returns,
+            expected: endCondition.expected,
             compareSource: endCondition.compareSource,
+            operator: endCondition.operator,
           }
         )
       );
@@ -3759,13 +3766,15 @@ export class WorkflowExecutor {
         this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-          properties: {
+          properties: resolveReportedScriptProperties({
             script: condition.script,
             env: condition.env,
-            compareSource: condition.compareSource ?? COMPARE_SOURCES.AUTO,
-            returns: condition.returns,
+            compareSource: condition.compareSource,
+            operator: condition.operator,
+            expected: condition.expected,
+            ignoreCase: condition.ignoreCase,
             timeout: condition.timeout,
-          },
+          }),
           phase: EXECUTION_PHASES.END_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),

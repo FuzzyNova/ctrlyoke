@@ -108,7 +108,7 @@ suite("Workflow property round trip (panel -> working file)", () => {
 
   test("endCondition object then null-disable round trip", async () => {
     const { h } = await harness();
-    const endCondition = { script: "npm test", returns: "true" };
+    const endCondition = { script: "npm test", expected: "true" };
     await h.routeWorkflowPropertyUpdate("endCondition", endCondition);
     assert.deepStrictEqual(
       (await h.readRunDefinition()).endCondition,

@@ -21,7 +21,8 @@ steps:
       Please respond with: "Step 1 executed - preCondition passed as expected."
     preCondition:
       script: manual-test/.ctrlyoke/scripts/always_true.py
-      returns: "true"
+      compareSource: stdout
+      expected: "true"
 
   - name: precondition-fails
     prompt: |
@@ -31,7 +32,8 @@ steps:
       Please respond with: "ERROR - this step should have been skipped."
     preCondition:
       script: manual-test/.ctrlyoke/scripts/always_false.py
-      returns: "true"
+      compareSource: stdout
+      expected: "true"
 
   - name: confirm-step
     prompt: |

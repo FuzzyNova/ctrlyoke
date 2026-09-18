@@ -140,8 +140,8 @@ steps:
       Review the implementation and fix any issues.
     endCondition:
       script: npm test
-      returns: "0"
       compareSource: exitCode
+      expected: 0
       maxRetries: 2
       retryPrompt: |
         Tests failed. Fix the issues:

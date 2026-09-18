@@ -27,6 +27,7 @@ import type {
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 
 const temporaryDirectories: string[] = [];
 const outputHistoryManagers: OutputHistoryManager[] = [];
@@ -49,9 +50,7 @@ function makeResult(
 ): EvaluationResult {
   return {
     passed: true,
-    matchRule: "exact",
     actual: "ok",
-    actualSource: "stdout",
     errored: false,
     stdout: "ok",
     stderr: "",
@@ -128,11 +127,11 @@ suite("ScriptExecutionReporter", () => {
       const report = await reporter.report({
         context,
         source: execution.source,
-        properties: {
+        properties: resolveReportedScriptProperties({
           script: "check.sh",
           compareSource: "stdout",
-          returns: "ok",
-        },
+          expected: "ok",
+        }),
         phase: execution.phase,
         target: { kind: "queue", stepIndex: 0 },
         signedStepIndex: 0,
@@ -148,12 +147,11 @@ suite("ScriptExecutionReporter", () => {
       assert.strictEqual(report.finalOutput.source, execution.source);
       assert.deepStrictEqual(report.verdict, {
         compareSource: "stdout",
+        operator: "eq",
         expected: "ok",
         actual: "ok",
-        actualSource: "stdout",
         exitCode: 0,
         outcome: "passed",
-        matchRule: "exact",
         action: "continue",
         actionDetail: undefined,
         durationMs: 12,
@@ -184,11 +182,11 @@ suite("ScriptExecutionReporter", () => {
     await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "check.sh",
         compareSource: "stdout",
-        returns: "ok",
-      },
+        expected: "ok",
+      }),
       phase: EXECUTION_PHASES.PRE_CONDITION,
       target,
       signedStepIndex: target.stepIndex,
@@ -234,10 +232,10 @@ suite("ScriptExecutionReporter", () => {
     await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "npm ci",
         compareSource: "exitCode",
-      },
+      }),
       phase: EXECUTION_PHASES.WORKTREE_SETUP,
       target: { kind: "queue", stepIndex: 0 },
       signedStepIndex: 0,
@@ -251,7 +249,6 @@ suite("ScriptExecutionReporter", () => {
         onOutput("installing\n");
         return makeResult({
           actual: "0",
-          actualSource: "exitCode",
           stdout: "installing\n",
           result: "installing\n",
         });
@@ -320,7 +317,10 @@ suite("ScriptExecutionReporter", () => {
       await reporter.report({
         context,
         source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
-        properties: { script: command, compareSource: "exitCode" },
+        properties: resolveReportedScriptProperties({
+          script: command,
+          compareSource: "exitCode",
+        }),
         phase: EXECUTION_PHASES.WORKTREE_SETUP,
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         signedStepIndex: 0,
@@ -333,7 +333,6 @@ suite("ScriptExecutionReporter", () => {
         evaluate: async () =>
           makeResult({
             actual: "0",
-            actualSource: "exitCode",
             stdout: `${command}\n`,
             result: `${command}\n`,
           }),
@@ -406,11 +405,11 @@ suite("ScriptExecutionReporter", () => {
     await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "check.sh",
         compareSource: "stdout",
-        returns: "ok",
-      },
+        expected: "ok",
+      }),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       signedStepIndex: -1,
@@ -429,7 +428,6 @@ suite("ScriptExecutionReporter", () => {
     for (const result of [
       makeResult({
         passed: false,
-        matchRule: "substring",
         actual: "bad",
         stdout: "bad",
         result: "bad",
@@ -438,9 +436,7 @@ suite("ScriptExecutionReporter", () => {
       {
         ...makeResult({
           passed: false,
-          matchRule: "none",
           actual: "",
-          actualSource: "stderr",
           stdout: "",
           stderr: "spawn failed",
           result: "",
@@ -465,11 +461,11 @@ suite("ScriptExecutionReporter", () => {
       const report = await reporter.report({
         context,
         source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
-        properties: {
+        properties: resolveReportedScriptProperties({
           script: "check.sh",
-          compareSource: result.actualSource,
-          returns: "expected",
-        },
+          compareSource: "stdout",
+          expected: "expected",
+        }),
         phase: EXECUTION_PHASES.PROMPT,
         target: { kind: "queue", stepIndex: 0 },
         signedStepIndex: 0,
@@ -491,8 +487,6 @@ suite("ScriptExecutionReporter", () => {
         result.errored ? "continue" : "stopWorkflow"
       );
       assert.strictEqual(report.verdict.actual, result.actual);
-      assert.strictEqual(report.verdict.actualSource, result.actualSource);
-      assert.strictEqual(report.verdict.matchRule, result.matchRule);
       assert.strictEqual(report.verdict.timedOut, result.timeout);
       assert.strictEqual(report.verdict.error, result.error);
       assert.strictEqual(cacheWrites, 0);
@@ -506,11 +500,11 @@ suite("ScriptExecutionReporter", () => {
     const report = await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "check.sh",
         compareSource: "stdout",
-        returns: "ok",
-      },
+        expected: "ok",
+      }),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: { kind: "queue", stepIndex: 0 },
       signedStepIndex: 0,
@@ -567,10 +561,10 @@ suite("ScriptExecutionReporter", () => {
     await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "npm test",
         compareSource: "exitCode",
-      },
+      }),
       phase: EXECUTION_PHASES.PRE_CONDITION,
       target: { kind: "queue", stepIndex: 0 },
       signedStepIndex: 0,
@@ -657,10 +651,10 @@ suite("ScriptExecutionReporter", () => {
     await reporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
-      properties: {
+      properties: resolveReportedScriptProperties({
         script: "check.sh",
         compareSource: "exitCode",
-      },
+      }),
       phase: EXECUTION_PHASES.PROMPT,
       target: { kind: "queue", stepIndex: 0 },
       signedStepIndex: 0,
@@ -699,11 +693,11 @@ suite("ScriptExecutionReporter", () => {
       reporter.report({
         context,
         source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-        properties: {
+        properties: resolveReportedScriptProperties({
           script: "check.sh",
           compareSource: "stdout",
-          returns: "ok",
-        },
+          expected: "ok",
+        }),
         phase: EXECUTION_PHASES.END_CONDITION,
         target,
         signedStepIndex:

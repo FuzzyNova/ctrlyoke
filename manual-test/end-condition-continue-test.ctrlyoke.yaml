@@ -21,7 +21,8 @@ steps:
       Please respond with: "Step 1 complete."
     endCondition:
       script: manual-test/.ctrlyoke/scripts/always_false.py
-      returns: "true"
+      compareSource: stdout
+      expected: "true"
       onFail: "continue"
 
   - name: confirm-workflow-continued

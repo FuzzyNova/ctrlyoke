@@ -1474,7 +1474,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           endCondition: {
             script: `node -e "process.stdout.write('ok')"`,
             compareSource: "stdout",
-            returns: "ok",
+            expected: "ok",
             onPass: CONDITION_ACTIONS.RETRY,
             onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
             maxRetries: 1,
@@ -1719,12 +1719,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           preCondition: {
             script: `node -e "process.stdout.write('0')" # {{unknownPreScript}}`,
             env: { PRE_VALUE: "{{unknownPreEnv}}" },
-            returns: "0",
+            expected: "0",
           },
           endCondition: {
             script: `node -e "process.stdout.write('0')" # {{unknownEndScript}}`,
             env: { END_VALUE: "{{unknownEndEnv}}" },
-            returns: "0",
+            expected: "0",
             retryPrompt: "Retry {{unknownRetryPrompt}}",
             passRetryPrompt: "Pass {{unknownPassRetryPrompt}}",
           },
@@ -1968,7 +1968,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
             script: `node -e "process.stdout.write(process.env.CHECK_TOKEN === '{{token}}' ? '{{token}}' : 'mismatch')"`,
             env: { CHECK_TOKEN: "{{token}}" },
             compareSource: "stdout",
-            returns: "pre-output",
+            expected: "pre-output",
           },
         },
       ],
@@ -1999,7 +1999,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           script: `node -e "process.stdout.write(process.env.GREETING || '')"`,
           env: { GREETING: "{{greeting}}" },
           compareSource: "stdout",
-          returns: "hello-world",
+          expected: "hello-world",
         },
       ],
     });
@@ -2158,12 +2158,12 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           preCondition: {
             script: `node -e "process.stdout.write('pre-output')"`,
             compareSource: "stdout",
-            returns: "pre-output",
+            expected: "pre-output",
           },
           endCondition: {
             script: `node -e "process.stdout.write('end-output')"`,
             compareSource: "stdout",
-            returns: "end-output",
+            expected: "end-output",
           },
         },
       ],
@@ -2181,7 +2181,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       status.message.startsWith("Pre-condition passed")
     );
     assert.ok(preResult);
-    assert.match(preResult.message, /stdout = "pre-output"/);
+    assert.match(preResult.message, /stdout == pre-output/);
     assert.match(preResult.message, /→ continue/);
     assert.strictEqual(preResult.severity, "info");
 
@@ -2189,7 +2189,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       status.message.startsWith("End condition passed")
     );
     assert.ok(endResult);
-    assert.match(endResult.message, /stdout = "end-output"/);
+    assert.match(endResult.message, /stdout == end-output/);
     assert.strictEqual(endResult.severity, "info");
 
     assert.deepStrictEqual(
@@ -2216,8 +2216,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       script: `node -e "process.stdout.write('pre-output')"`,
       expected: "pre-output",
       compareSource: "stdout",
+      operator: "eq",
       actual: "pre-output",
-      actualSource: "stdout",
       stdout: "pre-output",
       stderr: "",
       exitCode: 0,
@@ -2273,7 +2273,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           endCondition: {
             script: `node -e "process.stdout.write('ok')"`,
             compareSource: "stdout",
-            returns: "ok",
+            expected: "ok",
             onPass: "retry",
             onFail: "stopWorkflow",
             maxRetries: 1,
@@ -2373,9 +2373,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     const platform = new MockPlatform();
     const evaluator = new FixedEvaluationEvaluator(platform, {
       passed: false,
-      matchRule: "none",
       actual: "",
-      actualSource: "exitCode",
       errored: true,
       stdout: "",
       stderr: "evaluator failed",
@@ -2778,7 +2776,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         preCondition: {
           script: `node -e "process.stdout.write('ok')"`,
           compareSource: "stdout",
-          returns: "ok",
+          expected: "ok",
         },
       },
     });

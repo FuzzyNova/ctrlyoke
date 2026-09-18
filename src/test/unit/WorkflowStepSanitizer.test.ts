@@ -46,7 +46,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       hooks: [{ event: "stop", command: "echo done", timeoutSec: 5 }],
       endCondition: {
         script: "check.js",
-        returns: "done",
+        expected: "done",
         timeout: 30,
         maxRetries: 2,
         retryPrompt: "retry",
@@ -57,7 +57,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       },
       preCondition: {
         script: "pre.js",
-        returns: "true",
+        expected: "true",
         timeout: 10,
         compareSource: "stdout",
         onPass: CONDITION_ACTIONS.CONTINUE,
@@ -109,7 +109,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       hooks: [{ event: "stop", command: "echo done", timeoutSec: 5 }],
       endCondition: {
         script: "check.js",
-        returns: "done",
+        expected: "done",
         timeout: 30,
         maxRetries: 2,
         retryPrompt: "retry",
@@ -120,7 +120,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       },
       preCondition: {
         script: "pre.js",
-        returns: "true",
+        expected: "true",
         timeout: 10,
         compareSource: "stdout",
         onPass: CONDITION_ACTIONS.CONTINUE,

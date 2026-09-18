@@ -321,8 +321,6 @@ definitions:
         $ref: '#/definitions/scriptStep/properties/env'
       compareSource:
         $ref: '#/definitions/scriptStep/properties/compareSource'
-      returns:
-        $ref: '#/definitions/scriptStep/properties/returns'
       timeout:
         $ref: '#/definitions/scriptStep/properties/timeout'
       shell:
@@ -341,10 +339,20 @@ definitions:
         $ref: '#/definitions/worktreeConfig'
       vars:
         $ref: '#/definitions/varsConfig'
+      operator:
+        $ref: '#/definitions/scriptStep/properties/operator'
+      expected:
+        $ref: '#/definitions/scriptStep/properties/expected'
+      ignoreCase:
+        $ref: '#/definitions/scriptStep/properties/ignoreCase'
+      returns:
+        $ref: '#/definitions/scriptStep/properties/returns'
     required:
       - type
       - script
     additionalProperties: false
+    allOf:
+      - $ref: '#/definitions/scriptComparisonConstraint'
   workflowRunAddress:
     type: object
     additionalProperties: false
@@ -790,8 +798,6 @@ definitions:
         $ref: '#/definitions/scriptProperties/properties/env'
       compareSource:
         $ref: '#/definitions/scriptProperties/properties/compareSource'
-      returns:
-        $ref: '#/definitions/scriptProperties/properties/returns'
       timeout:
         $ref: '#/definitions/scriptProperties/properties/timeout'
       shell:
@@ -834,15 +840,25 @@ definitions:
       _runtime:
         $ref: '#/definitions/promptRuntimeMetadata'
         description: Per-step runtime execution metadata (optional, added automatically during execution)
+      operator:
+        $ref: '#/definitions/scriptProperties/properties/operator'
+      expected:
+        $ref: '#/definitions/scriptProperties/properties/expected'
+      ignoreCase:
+        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
+      returns:
+        $ref: '#/definitions/scriptProperties/properties/returns'
     required:
       - type
       - script
     additionalProperties: false
+    allOf:
+      - $ref: '#/definitions/scriptComparisonConstraint'
   endCondition:
     type: object
     description: >-
       Validation that runs after the prompt completes. Shares
-      script/env/returns/compareSource/timeout with preCondition and scriptStep via
+      script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via
       scriptProperties.
     allOf:
       - $ref: '#/definitions/scriptProperties'
@@ -899,7 +915,6 @@ definitions:
           retry.
     required:
       - script
-      - returns
   scriptProperties:
     type: object
     description: Shared script execution properties used by endCondition, preCondition, and scriptStep.
@@ -917,23 +932,19 @@ definitions:
       compareSource:
         type: string
         enum:
-          - auto
           - stdout
           - stderr
           - exitCode
         description: >-
-          Which output to compare against `returns`. 'auto' (default): 'true'/'false' use exit code,
-          other values compare stdout. 'stdout': always compare stdout (also requires a clean exit).
-          'stderr': compare stderr content (exit code ignored). 'exitCode': compare the numeric exit
-          code directly.
+          Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the
+          trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit
+          requirement layered onto a text comparison.
       returns:
-        type: string
+        not: {}
         description: >-
-          Expected result to compare against. When absent, exit code 0 = pass. Interpretation
-          depends on compareSource (default auto): for 'true'/'false' auto uses exit code (exit 0 =
-          true, non-zero = false); for other values auto checks stdout via exact match, numeric >=,
-          or substring. For compareSource: exitCode, provide the expected exit code as a number
-          string (e.g., '0', '1') or 'true'/'false'.
+          Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes.
+          Omit it entirely to pass on exit code 0. See
+          dev/backlog/SCRIPT_COMPARISON_REDESIGN_PLAN.md.
       timeout:
         type: number
         description: Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting.
@@ -952,8 +963,43 @@ definitions:
           - zsh
           - sh
           - cmd
+      operator:
+        type: string
+        enum:
+          - eq
+          - ne
+          - contains
+          - notContains
+          - gte
+          - gt
+          - lte
+          - lt
+          - matches
+          - isEmpty
+          - isNotEmpty
+        description: >-
+          How the compare source is compared against `expected`. Default: 'eq' (whole-value literal
+          match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains'
+          are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a
+          number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to
+          require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only:
+          `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+      expected:
+        type:
+          - string
+          - number
+        description: >-
+          Value the compare source is compared against. Omit it to pass when the script exits 0 —
+          there is no boolean form, and 'true'/'false' are not accepted as exit-code values.
+      ignoreCase:
+        type: boolean
+        description: >-
+          Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default:
+          false.
     required:
       - script
+    allOf:
+      - $ref: '#/definitions/scriptComparisonConstraint'
   preCondition:
     type: object
     description: >-
@@ -1206,12 +1252,6 @@ definitions:
         type: string
       actual:
         type: string
-      actualSource:
-        type: string
-        enum:
-          - stdout
-          - stderr
-          - exitCode
       stdout:
         type: string
       stderr:
@@ -1222,11 +1262,12 @@ definitions:
         type: number
       error:
         type: string
+      operator:
+        $ref: '#/definitions/scriptProperties/properties/operator'
     required:
       - passed
       - script
       - actual
-      - actualSource
       - stdout
       - stderr
       - durationMs
@@ -1418,3 +1459,24 @@ definitions:
     required:
       - id
     additionalProperties: false
+  scriptComparisonConstraint:
+    description: >-
+      Requires `expected` whenever a comparison is stated, except for isEmpty/isNotEmpty which take
+      no value.
+    if:
+      type: object
+      required:
+        - operator
+      properties:
+        operator:
+          enum:
+            - isEmpty
+            - isNotEmpty
+    then: {}
+    else:
+      type: object
+      dependencies:
+        compareSource:
+          - expected
+        operator:
+          - expected

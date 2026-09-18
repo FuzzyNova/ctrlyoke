@@ -229,7 +229,7 @@ echo 0 > counter.txt
 - Step 2 writes `3`, passes its condition, then its pass-retry prompt changes
   the marker to `4`; the failed re-check is handled by `onFail: "continue"`.
   It sets `compareSource: "stdout"` deliberately: `check_counter.py` always
-  exits `0`, and the default `auto` mode resolves `returns: "true"` to the exit
+  exits `0`, and the default comparison is "the script exits 0", so the exit
   code, so the re-check could never fail and the `onFail` branch would never be
   reached.
 - Step 3 runs and confirms that the workflow continued after the condition

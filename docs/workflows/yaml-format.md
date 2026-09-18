@@ -17,7 +17,7 @@ steps:
     type: script
     script: npm test
     compareSource: exitCode
-    returns: "0"
+    expected: 0
     onFail: stopWorkflow
 
   - name: implement
@@ -86,7 +86,7 @@ steps:
     type: script
     script: npm run lint
     compareSource: exitCode
-    returns: "0"
+    expected: 0
     onPass: continue
     onFail: stopWorkflow
 ```

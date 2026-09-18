@@ -96,8 +96,8 @@ steps:
     prompt: Fix the failing tests in @src/
     endCondition:
       script: npm test
-      returns: "0"
       compareSource: exitCode
+      expected: 0
       maxRetries: 2
       retryPrompt: |
         Tests are still failing.

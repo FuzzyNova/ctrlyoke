@@ -262,7 +262,9 @@ export class PromptFileParser {
     if (source.timeout !== undefined) step.timeout = source.timeout;
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;
-    if (source.returns !== undefined) step.returns = source.returns;
+    if (source.operator !== undefined) step.operator = source.operator;
+    if (source.expected !== undefined) step.expected = source.expected;
+    if (source.ignoreCase !== undefined) step.ignoreCase = source.ignoreCase;
     if (source.errorBehavior !== undefined)
       step.errorBehavior = source.errorBehavior;
     if (source.onPass !== undefined) step.onPass = source.onPass;
@@ -769,9 +771,12 @@ export class PromptFileParser {
         if (!item.endCondition.script) {
           errors.push(`Prompt ${index + 1}: End condition missing script path`);
         }
-        if (!item.endCondition.returns) {
+        // `expected` is optional — omitting it means "pass when the script
+        // exits 0". A leftover `returns` is named explicitly so the rename is
+        // obvious rather than silently dropping the author's comparison.
+        if ("returns" in item.endCondition) {
           errors.push(
-            `Prompt ${index + 1}: End condition missing expected return value`
+            `Prompt ${index + 1}: End condition \`returns\` was renamed to \`expected\`; omit it entirely to pass on exit code 0`
           );
         }
       }

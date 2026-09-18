@@ -7,24 +7,21 @@
 # Mostly script steps so re-running costs nothing except the one "say hi"
 # prompt.
 #
-# Two gotchas found by actually running this file once (do not "simplify"
-# these back out — the obvious version silently no-ops):
-#   - A scriptStep's own compareSource resolves to "exitCode" by default
-#     (WorkflowExecutor.ts ~2207), NOT "auto" like preCondition/endCondition
-#     use. Without `compareSource: auto`, a scriptStep's `returns` is
-#     compared against the exit code only — stdout content ("false" from
-#     always_false.py, which always exits 0) is ignored, so the step always
-#     "passes". Steps 1 and 4 below set `compareSource: auto` explicitly to
-#     get the documented stdout-aware comparison.
+# One gotcha found by actually running this file once (do not "simplify" it
+# back out — the obvious version silently no-ops):
 #   - A scriptStep's `timeout` is interpreted as SECONDS (multiplied by 1000
 #     internally), even though scriptProperties.timeout's own schema
 #     description says "milliseconds". Step 3 below sets `timeout: 3`
 #     (seconds) to actually fire before timeout_script.py's 20s sleep ends.
 #
+# always_false.py prints "false" and exits 0, so steps 1 and 4 compare its
+# stdout explicitly (`compareSource: stdout` + `expected: "true"`). The default
+# comparison — "exits 0" — would pass.
+#
 # Expected behavior:
 #   1. continuing-script-validation-failure — always_false.py's stdout
-#      ("false") fails the `returns: "true"` check under explicit
-#      compareSource: auto. onFail: continue logs a WARNING and the
+#      ("false") fails the explicit `expected: "true"` stdout check.
+#      onFail: continue logs a WARNING and the
 #      workflow keeps going.
 #   2. say-hi-with-condition-warnings — a real prompt with a failing
 #      preCondition (advisory, onFail: continue) and a failing endCondition
@@ -34,8 +31,8 @@
 #      past the 3s timeout, which is a genuine execution ERROR (the script
 #      never returns), not a validation failure — so errorBehavior, not
 #      onFail, governs it. onError: continue keeps the workflow going.
-#   4. terminal-script-failure — always_false.py fails again (same
-#      compareSource: auto trick as step 1), this time with the default
+#   4. terminal-script-failure — always_false.py fails again (same explicit
+#      stdout comparison as step 1), this time with the default
 #      onFail: stopWorkflow. This is the step that should actually halt the
 #      workflow (executionState -> error) and is the one to watch closely
 #      for the error-icon-on-the-wrong-row bug.
@@ -50,8 +47,8 @@ steps:
   - name: continuing-script-validation-failure
     type: script
     script: manual-test/.ctrlyoke/scripts/always_false.py
-    compareSource: auto
-    returns: "true"
+    compareSource: stdout
+    expected: "true"
     onFail: continue
 
   - name: say-hi-with-condition-warnings
@@ -59,11 +56,13 @@ steps:
       Just say hi! Please respond with a single friendly line, e.g. "Hi Nathan!".
     preCondition:
       script: manual-test/.ctrlyoke/scripts/always_false.py
-      returns: "true"
+      compareSource: stdout
+      expected: "true"
       onFail: continue
     endCondition:
       script: manual-test/.ctrlyoke/scripts/always_false.py
-      returns: "true"
+      compareSource: stdout
+      expected: "true"
       onFail: continue
 
   - name: continuing-script-execution-error
@@ -76,8 +75,8 @@ steps:
   - name: terminal-script-failure
     type: script
     script: manual-test/.ctrlyoke/scripts/always_false.py
-    compareSource: auto
-    returns: "true"
+    compareSource: stdout
+    expected: "true"
 
   - name: never-executes
     prompt: |

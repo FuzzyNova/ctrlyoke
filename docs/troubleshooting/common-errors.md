@@ -19,7 +19,7 @@ That usually means the script hit an execution error rather than a retryable val
 - the script path or command
 - the timeout
 - the exit code
-- whether `compareSource` matches what you expected to compare
+- whether `compareSource`, `operator`, and `expected` describe the check you meant — a numeric operator (`gte`/`gt`/`lte`/`lt`) fails outright when either side is not a number, and `matches` is an unanchored regex unless you add `^` and `$`
 
 ## Dynamic queue did nothing
 

@@ -50,7 +50,7 @@ describe("stepClipboard", () => {
           type: STEP_TYPES.SCRIPT,
           script: "npm test",
           timeout: 30,
-          returns: "true",
+          expected: "true",
         },
         false
       )

@@ -119,7 +119,13 @@ function schemaBackedFieldNames(): {
     ].filter((field) => !runtimeOnlyWorkflowFields.has(field)),
     step: [
       ...new Set([...executionFields, ...promptFields, ...scriptFields]),
-    ].filter((field) => field !== "_runtime"),
+    ].filter(
+      (field) =>
+        field !== "_runtime" &&
+        // `returns` is declared only to reject itself (`not: {}`) so a stale key
+        // errors by name; it was renamed to `expected` and must never persist.
+        field !== "returns"
+    ),
   };
 }
 

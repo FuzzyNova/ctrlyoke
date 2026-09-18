@@ -1019,12 +1019,11 @@ describe("outputRows", () => {
             source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
             scriptVerdict: {
               compareSource: "stdout",
+              operator: "eq",
               expected: "PASS",
               actual: "PASS",
-              actualSource: "stdout",
               exitCode: 0,
               outcome: "passed",
-              matchRule: "exact",
               action: "continue",
               durationMs: 1200,
             },

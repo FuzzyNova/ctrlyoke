@@ -2,7 +2,6 @@
   "prompt": "This is a test to verify script error handling.\n\nPlease respond with: 'I acknowledge this test will have a script error.'\n\nThis tests that script execution errors (non-zero exit codes) are properly displayed in the output.",
   "endCondition": {
     "script": "manual-test/.ctrlyoke/scripts/throws_error.py",
-    "returns": "true",
     "maxRetries": 3,
     "timeout": 10000,
     "retryPrompt": "This retry prompt should NEVER appear because script crashes are execution errors, not validation failures."

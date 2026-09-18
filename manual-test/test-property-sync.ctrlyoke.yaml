@@ -55,8 +55,8 @@ errorBehavior:
 
 endCondition:
   script: manual-test/.ctrlyoke/scripts/always_true.py
-  returns: "true"
-  compareSource: auto
+  compareSource: stdout
+  expected: "true"
   timeout: 30000
   maxRetries: 2
   resumeSessionOnRetry: true
@@ -74,8 +74,8 @@ endCondition:
 
 preCondition:
   script: manual-test/.ctrlyoke/scripts/always_true.py
-  returns: "true"
-  compareSource: auto
+  compareSource: stdout
+  expected: "true"
   timeout: 10000
   onPass: continue
   onFail: skipPrompt
@@ -174,8 +174,8 @@ steps:
 
     preCondition:
       script: manual-test/.ctrlyoke/scripts/always_true.py
-      returns: "true"
       compareSource: stdout
+      expected: "true"
       timeout: 15000
       onPass: continue
       onFail: stopWorkflow
@@ -185,8 +185,8 @@ steps:
 
     endCondition:
       script: manual-test/.ctrlyoke/scripts/always_true.py
-      returns: "true"
       compareSource: stdout
+      expected: "true"
       timeout: 45000
       maxRetries: 3
       resumeSessionOnRetry: false
@@ -298,8 +298,8 @@ finalStep:
   type: script
   name: final-cleanup-script
   script: manual-test/.ctrlyoke/scripts/always_true.py
-  returns: "true"
-  compareSource: auto
+  compareSource: stdout
+  expected: "true"
   timeout: 10000
   onPass: continue
   onFail: continue

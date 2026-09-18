@@ -2,7 +2,8 @@
   "prompt": "This is a test to verify timeout behavior (error path - should NOT retry).\n\nPlease respond with: 'I acknowledge this test will timeout.'\n\nThis tests that execution errors (timeouts) do NOT trigger retries, only validation failures do.",
   "endCondition": {
     "script": "manual-test/.ctrlyoke/scripts/timeout_script.py",
-    "returns": "success",
+    "compareSource": "stdout",
+    "expected": "success",
     "maxRetries": 3,
     "timeout": 5000,
     "retryPrompt": "This retry prompt should NEVER appear because timeouts are execution errors, not validation failures."

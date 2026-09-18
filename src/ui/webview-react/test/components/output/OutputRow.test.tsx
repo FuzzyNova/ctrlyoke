@@ -470,16 +470,14 @@ describe("OutputRow auto-expand on hidden active match", () => {
       rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
       expanded: false,
       verdict: {
-        compareSource: "auto",
+        compareSource: "stdout",
+        operator: "eq",
         expected: "ok",
         actual:
           outcome === SCRIPT_VERDICT_OUTCOMES.ERRORED
             ? "spawn npm ENOENT"
             : "ok",
-        actualSource: "stdout",
         outcome,
-        matchRule:
-          outcome === SCRIPT_VERDICT_OUTCOMES.PASSED ? "exact" : "none",
         action:
           outcome === SCRIPT_VERDICT_OUTCOMES.FAILED ? "retry" : "continue",
         durationMs: 1200,
@@ -489,7 +487,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
     render(<OutputRow row={row} isExecutionActive={false} />);
 
     expect(screen.getByRole("button")).toHaveTextContent(label);
-    expect(screen.getByRole("button")).toHaveTextContent("auto → stdout");
+    expect(screen.getByRole("button")).toHaveTextContent("stdout == ok");
   });
 
   it("wraps a collapsed exit-code verdict without shrinking the actual value away", () => {
@@ -500,13 +498,12 @@ describe("OutputRow auto-expand on hidden active match", () => {
       rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
       expanded: false,
       verdict: {
-        compareSource: "auto",
-        expected: "true",
+        compareSource: "exitCode",
+        operator: "eq",
+        expected: "0",
         actual: "1",
-        actualSource: "exitCode",
         exitCode: 1,
         outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
-        matchRule: "none",
         action: "stopWorkflow",
         durationMs: 130_600,
       },
@@ -520,8 +517,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       "[overflow-wrap:anywhere]"
     );
     expect(summary).not.toHaveClass("overflow-hidden");
-    expect(summary).toHaveTextContent("auto → exit code");
-    expect(summary).toHaveTextContent("expected true");
+    expect(summary).toHaveTextContent("exit code == 0");
     expect(summary).toHaveTextContent("actual 1");
     expect(summary).toHaveTextContent("stopWorkflow");
     expect(summary).toHaveTextContent("130.6s");
@@ -541,11 +537,10 @@ describe("OutputRow auto-expand on hidden active match", () => {
       expanded: false,
       verdict: {
         compareSource: "stdout",
+        operator: "eq",
         expected: "PASS",
         actual,
-        actualSource: "stdout",
         outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
-        matchRule: "substring",
         action: "stopWorkflow",
         durationMs: 100,
       },

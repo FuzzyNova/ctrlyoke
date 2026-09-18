@@ -7,7 +7,7 @@ ctrlyoke is a VS Code extension and workflow engine for CLI coding agents — Cl
 ## What it does
 
 - **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
-- **Script-based validation** — attach an end condition script to any prompt; if the script returns the expected value the step passes, otherwise the AI retries with a configurable retry prompt
+- **Script-based validation** — attach an end condition script to any prompt; by default the step passes when the script exits 0, and you can instead compare its stdout/stderr with an explicit operator. Otherwise the AI retries with a configurable retry prompt
 - **Harness-agnostic** — switch between six AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
 - **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to give the AI MCP tools (`append_step`, `workflow_status`) so it can extend the workflow queue autonomously
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
@@ -101,8 +101,8 @@ harness: claude-cli
 model: claude-sonnet-4.5
 endCondition:
   script: npm test
-  returns: "0"
   compareSource: exitCode
+  expected: 0
 
 steps:
   - name: analyze
@@ -120,8 +120,8 @@ steps:
       Verify the fixes are complete and all tests pass.
     endCondition:
       script: npm test
-      returns: "0"
       compareSource: exitCode
+      expected: 0
       maxRetries: 3
       retryPrompt: |
         Tests still failing (attempt {retryCount}/{maxRetries}):
@@ -157,8 +157,9 @@ Properties follow a three-tier precedence: **prompt-level → workflow-level →
 ```yaml
 endCondition:
   script: ./scripts/verify.js # file path or shell command
-  returns: "true" # expected value
-  compareSource: stdout # stdout (default), stderr, exitCode, or auto
+  compareSource: stdout # exitCode (default), stdout, or stderr
+  operator: contains # eq (default), ne, contains, notContains, gte, gt, lte, lt, matches, isEmpty, isNotEmpty
+  expected: "0 failing" # omit entirely to pass when the script exits 0
   timeout: 60000 # ms
   maxRetries: 3 # -1 = unlimited
   retryPrompt: |

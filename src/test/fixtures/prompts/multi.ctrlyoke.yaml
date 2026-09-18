@@ -8,4 +8,3 @@ steps:
       Step 2: Implement improvements
     endCondition:
       script: verify_changes.py
-      returns: "true"

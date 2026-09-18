@@ -38,7 +38,6 @@ steps:
       any implementation code yet.
     endCondition:
       script: node -e "process.exit(require('fs').existsSync(process.argv[1])?0:1)" "{planDocument}"
-      returns: "true"
       maxRetries: 2
       retryPrompt: |
         {planDocument} was not created. Write the implementation plan to it.
@@ -69,7 +68,6 @@ steps:
       Run {testCommand} and fix what it reports.
     endCondition:
       script: "{testCommand}"
-      returns: "true"
       maxRetries: 3
       retryPrompt: |
         {testCommand} is still failing. Fix the remaining issues:

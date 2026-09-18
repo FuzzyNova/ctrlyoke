@@ -31,7 +31,6 @@ steps:
     resumeSession: true # continue the previous step's conversation
     endCondition:
       script: "npm run lint"
-      returns: "true"
       maxRetries: 2
       retryPrompt: |
         Lint failed. Fix the issues:
@@ -43,7 +42,7 @@ Key fields:
 - **`prompt`** — the instruction for that step. Reference a file with `@path/to/file.ts` or a whole directory with `@path/to/dir/` (trailing slash). `@` is **only** for files and directories — there is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
 - **`model`** _(optional)_ — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
 - **`resumeSession: true`** — continue the prior step's conversation (shared live context) instead of starting fresh. **Only use it when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
-- **`endCondition`** — run a `script` after the step and gate on its result. `returns: "true"` passes on exit code 0. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Condition output references are `$preCondition:<field>` and `$endCondition:<field>` for `stdout`, `stderr`, `exitCode`, `actual`, `expected`, and `compareSource`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
+- **`endCondition`** — run a `script` after the step and gate on its result. With no comparison fields it passes when the script exits 0, which covers most checkpoints. To compare output instead, state all three: `compareSource` (`stdout`/`stderr`/`exitCode`), `operator` (`eq`, `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty` — word tokens, never symbols), and `expected`. Never write `expected: "true"` for an exit code; exit 0 means success, and there is no boolean form. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Condition output references are `$preCondition:<field>` and `$endCondition:<field>` for `stdout`, `stderr`, `exitCode`, `actual`, `expected`, and `compareSource`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
 
 ## Standard phases
 
@@ -93,7 +92,6 @@ steps:
       storage strategy. Write the plan to docs/auth-plan.md.
     endCondition:
       script: "test -f docs/auth-plan.md"
-      returns: "true"
       maxRetries: 2
       retryPrompt: |
         docs/auth-plan.md was not created. Write the implementation plan to it.
@@ -115,7 +113,6 @@ steps:
     resumeSession: false
     endCondition:
       script: "npm test"
-      returns: "true"
       maxRetries: 2
       retryPrompt: |
         Tests failed. Fix the issues:

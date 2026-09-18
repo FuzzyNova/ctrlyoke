@@ -478,7 +478,8 @@ suite("EndConditionEvaluator Tests", () => {
       // When a script doesn't exist, it's treated as a direct command
       const condition = {
         script: "echo hello",
-        returns: "hello",
+        compareSource: "stdout" as const,
+        expected: "hello",
         timeout: 5000,
       };
 
@@ -497,8 +498,6 @@ suite("EndConditionEvaluator Tests", () => {
       assert.ok(result.duration > 0);
       assert.strictEqual(result.passed, true);
       assert.strictEqual(result.errored, false);
-      assert.strictEqual(result.matchRule, "exact");
-      assert.strictEqual(result.actualSource, "stdout");
     });
 
     test("uses an inline shell override for a direct command", async () => {
@@ -517,7 +516,8 @@ suite("EndConditionEvaluator Tests", () => {
         const result = await evaluator.evaluateCondition(
           {
             script: windows ? "echo shell-override" : "printf shell-override",
-            returns: "shell-override",
+            compareSource: "stdout",
+            expected: "shell-override",
             shell: windows ? "cmd.exe" : "/bin/sh",
           },
           workspaceRoot
@@ -545,7 +545,8 @@ suite("EndConditionEvaluator Tests", () => {
               process.platform === "win32"
                 ? "echo no-shell-override"
                 : "printf no-shell-override",
-            returns: "no-shell-override",
+            compareSource: "stdout",
+            expected: "no-shell-override",
           },
           workspaceRoot
         );
@@ -604,7 +605,7 @@ suite("EndConditionEvaluator Tests", () => {
         {
           script: "args.js expected-argument",
           compareSource: "stdout",
-          returns: "expected-argument",
+          expected: "expected-argument",
         },
         workspaceRoot
       );
@@ -619,7 +620,7 @@ suite("EndConditionEvaluator Tests", () => {
         {
           script: 'echo first\nnode -e "process.exit(7)"',
           compareSource: "exitCode",
-          returns: "7",
+          expected: "7",
           shell: process.platform === "win32" ? "powershell.exe" : "/bin/sh",
         },
         workspaceRoot
@@ -651,7 +652,6 @@ suite("EndConditionEvaluator Tests", () => {
       const condition = {
         script:
           process.platform === "win32" ? "ping -n 10 localhost" : "sleep 5",
-        returns: "true",
         timeout: 100, // Very short timeout
       };
 
@@ -673,7 +673,8 @@ suite("EndConditionEvaluator Tests", () => {
     test("should report correct duration", async () => {
       const condition = {
         script: process.platform === "win32" ? "echo test" : "echo test",
-        returns: "test",
+        compareSource: "stdout" as const,
+        expected: "test",
         timeout: 5000,
       };
 
@@ -727,7 +728,7 @@ suite("EndConditionEvaluator Tests", () => {
       try {
         const fromExecution = await executionEvaluator.evaluateCondition({
           script: "condition.js",
-          returns: path.resolve(executionRoot).toLowerCase(),
+          expected: path.resolve(executionRoot).toLowerCase(),
           compareSource: "stdout",
         });
         assert.strictEqual(fromExecution.passed, true);
@@ -779,7 +780,8 @@ suite("EndConditionEvaluator Tests", () => {
     test("should match exact string output", async () => {
       const condition = {
         script: process.platform === "win32" ? "echo hello" : "echo hello",
-        returns: "hello",
+        compareSource: "stdout" as const,
+        expected: "hello",
         timeout: 5000,
       };
 
@@ -794,15 +796,14 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "exact");
       assert.strictEqual(result.actual, "hello");
-      assert.strictEqual(result.actualSource, "stdout");
     });
 
-    test("should match boolean interpretation (1 for true)", async () => {
+    test("should match an explicit exit code", async () => {
       const condition = {
-        script: process.platform === "win32" ? "echo 1" : "echo 1",
-        returns: "true",
+        script: 'node -e "process.exit(1)"',
+        compareSource: "exitCode" as const,
+        expected: 1,
         timeout: 5000,
       };
 
@@ -817,9 +818,7 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "boolean");
       assert.strictEqual(result.actual, "1");
-      assert.strictEqual(result.actualSource, "stdout");
     });
 
     test("should match substring in output", async () => {
@@ -828,7 +827,9 @@ suite("EndConditionEvaluator Tests", () => {
           process.platform === "win32"
             ? 'echo "This contains expected text"'
             : 'echo "This contains expected text"',
-        returns: "expected",
+        compareSource: "stdout" as const,
+        operator: "contains" as const,
+        expected: "expected",
         timeout: 5000,
       };
 
@@ -843,8 +844,6 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "substring");
-      assert.strictEqual(result.actualSource, "stdout");
     });
   });
 
@@ -855,140 +854,258 @@ suite("EndConditionEvaluator Tests", () => {
       return evaluator.evaluateCondition(condition, workspaceRoot);
     }
 
-    test("reports exitCode matching and actual source", async () => {
+    test("compares the exit code with eq", async () => {
       const result = await evaluate({
         script: 'node -e "process.exit(3)"',
-        returns: "3",
         compareSource: "exitCode",
+        operator: "eq",
+        expected: "3",
       });
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "exitCode");
       assert.strictEqual(result.actual, "3");
-      assert.strictEqual(result.actualSource, "exitCode");
       assert.strictEqual(result.errored, false);
     });
 
-    test("reports exact stdout matching", async () => {
+    test("accepts a numeric expected without quoting", async () => {
       const result = await evaluate({
+        script: 'node -e "process.exit(3)"',
+        compareSource: "exitCode",
+        expected: 3,
+      });
+
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.actual, "3");
+    });
+
+    test("eq requires the whole trimmed value, not a substring", async () => {
+      const matching = await evaluate({
         script: "echo exact-output",
-        returns: "exact-output",
         compareSource: "stdout",
+        expected: "exact-output",
       });
+      assert.strictEqual(matching.passed, true);
+      assert.strictEqual(matching.actual, "exact-output");
 
-      assert.strictEqual(result.matchRule, "exact");
-      assert.strictEqual(result.actual, "exact-output");
-      assert.strictEqual(result.actualSource, "stdout");
+      const partial = await evaluate({
+        script: "echo all-ok-here",
+        compareSource: "stdout",
+        operator: "eq",
+        expected: "ok",
+      });
+      assert.strictEqual(partial.passed, false);
     });
 
-    test("reports boolean stdout matching", async () => {
-      const result = await evaluate({
-        script: "echo 1",
-        returns: "true",
-        compareSource: "stdout",
-      });
-
-      assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "boolean");
-      assert.strictEqual(result.actual, "1");
-      assert.strictEqual(result.actualSource, "stdout");
-    });
-
-    test("reports numericGte stdout matching", async () => {
-      const result = await evaluate({
-        script: "echo 92",
-        returns: "80",
-        compareSource: "stdout",
-      });
-
-      assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "numericGte");
-      assert.strictEqual(result.actual, "92");
-      assert.strictEqual(result.actualSource, "stdout");
-    });
-
-    test("reports substring stdout matching", async () => {
+    test("contains matches a substring", async () => {
       const result = await evaluate({
         script: "echo all-ok-here",
-        returns: "ok",
         compareSource: "stdout",
+        operator: "contains",
+        expected: "ok",
       });
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "substring");
       assert.strictEqual(result.actual, "all-ok-here");
-      assert.strictEqual(result.actualSource, "stdout");
     });
 
-    test("reports no match when no comparison rule matches", async () => {
-      const result = await evaluate({
-        script: "echo actual-value",
-        returns: "expected-value",
+    test("ne and notContains invert their comparisons", async () => {
+      const ne = await evaluate({
+        script: 'node -e "process.exit(1)"',
+        compareSource: "exitCode",
+        operator: "ne",
+        expected: 0,
+      });
+      assert.strictEqual(ne.passed, true);
+
+      const notContains = await evaluate({
+        script: "echo all-ok-here",
         compareSource: "stdout",
+        operator: "notContains",
+        expected: "failure",
+      });
+      assert.strictEqual(notContains.passed, true);
+    });
+
+    test("gte compares numerically", async () => {
+      const above = await evaluate({
+        script: "echo 92",
+        compareSource: "stdout",
+        operator: "gte",
+        expected: "80",
+      });
+      assert.strictEqual(above.passed, true);
+      assert.strictEqual(above.actual, "92");
+
+      const below = await evaluate({
+        script: "echo 71",
+        compareSource: "stdout",
+        operator: "gte",
+        expected: "80",
+      });
+      assert.strictEqual(below.passed, false);
+    });
+
+    test("a numeric operator fails rather than degrading when the value is not numeric", async () => {
+      const result = await evaluate({
+        script: "echo none",
+        compareSource: "stdout",
+        operator: "gte",
+        expected: "80",
       });
 
       assert.strictEqual(result.passed, false);
-      assert.strictEqual(result.matchRule, "none");
-      assert.strictEqual(result.actual, "actual-value");
-      assert.strictEqual(result.actualSource, "stdout");
+      assert.strictEqual(
+        result.errored,
+        false,
+        "a wrong-typed operand is a failed comparison, not an internal error"
+      );
+    });
+
+    test("matches treats expected as an unanchored regex", async () => {
+      const unanchored = await evaluate({
+        script: `node -e "process.stdout.write('12 passing, 0 failing')"`,
+        compareSource: "stdout",
+        operator: "matches",
+        expected: "\\d+ passing",
+      });
+      assert.strictEqual(unanchored.passed, true);
+
+      const anchored = await evaluate({
+        script: `node -e "process.stdout.write('12 passing, 3 failing')"`,
+        compareSource: "stdout",
+        operator: "matches",
+        expected: "^\\d+ passing, 0 failing$",
+      });
+      assert.strictEqual(anchored.passed, false);
+    });
+
+    test("an invalid regex fails instead of throwing", async () => {
+      const result = await evaluate({
+        script: "echo anything",
+        compareSource: "stdout",
+        operator: "matches",
+        expected: "([unclosed",
+      });
+
+      assert.strictEqual(result.passed, false);
       assert.strictEqual(result.errored, false);
     });
 
-    test("reports stderr as the compared source", async () => {
+    test("isEmpty and isNotEmpty need no expected value", async () => {
+      const empty = await evaluate({
+        script: 'node -e "process.exit(0)"',
+        compareSource: "stdout",
+        operator: "isEmpty",
+      });
+      assert.strictEqual(empty.passed, true);
+
+      const notEmpty = await evaluate({
+        script: "echo something",
+        compareSource: "stdout",
+        operator: "isNotEmpty",
+      });
+      assert.strictEqual(notEmpty.passed, true);
+    });
+
+    test("string comparisons are case-sensitive unless ignoreCase is set", async () => {
+      const sensitive = await evaluate({
+        script: "echo PASS",
+        compareSource: "stdout",
+        expected: "pass",
+      });
+      assert.strictEqual(sensitive.passed, false);
+
+      const insensitive = await evaluate({
+        script: "echo PASS",
+        compareSource: "stdout",
+        expected: "pass",
+        ignoreCase: true,
+      });
+      assert.strictEqual(insensitive.passed, true);
+    });
+
+    test("compares stderr without consulting the exit code", async () => {
       const result = await evaluate({
-        script: "node -e \"console.error('stderr-value')\"",
-        returns: "stderr-value",
+        script: `node -e "console.error('stderr-value'); process.exit(1)"`,
         compareSource: "stderr",
+        expected: "stderr-value",
       });
 
       assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "exact");
       assert.strictEqual(result.actual, "stderr-value");
-      assert.strictEqual(result.actualSource, "stderr");
     });
 
-    test("resolves auto boolean comparisons to exitCode", async () => {
+    test("a stdout comparison no longer requires a clean exit", async () => {
+      const result = await evaluate({
+        script: `node -e "console.log('done'); process.exit(1)"`,
+        compareSource: "stdout",
+        expected: "done",
+      });
+
+      assert.strictEqual(
+        result.passed,
+        true,
+        "the author asked about stdout, so the exit code is not a hidden second condition"
+      );
+    });
+
+    test("no expected value means the script must exit 0", async () => {
+      const clean = await evaluate({ script: 'node -e "process.exit(0)"' });
+      assert.strictEqual(clean.passed, true);
+      assert.strictEqual(clean.actual, "0");
+
+      const dirty = await evaluate({ script: 'node -e "process.exit(7)"' });
+      assert.strictEqual(dirty.passed, false);
+      assert.strictEqual(dirty.errored, false);
+      assert.strictEqual(dirty.actual, "7");
+    });
+
+    test("'true' is not a magic exit-code value any more", async () => {
       const result = await evaluate({
         script: 'node -e "process.exit(0)"',
-        returns: "true",
+        compareSource: "exitCode",
+        expected: "true",
       });
 
-      assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "boolean");
-      assert.strictEqual(result.actual, "0");
-      assert.strictEqual(result.actualSource, "exitCode");
+      assert.strictEqual(
+        result.passed,
+        false,
+        "exit code 0 does not equal the string 'true' — the boolean translation is gone"
+      );
     });
 
-    test("resolves auto non-boolean comparisons to stdout", async () => {
-      const result = await evaluate({
-        script: "echo auto-output",
-        returns: "auto-output",
+    suite("regressions from the inferred-rule waterfall", () => {
+      test("expecting 0 no longer passes on '10 errors' via a numeric >=", async () => {
+        const result = await evaluate({
+          script: `node -e "process.stdout.write('10 errors')"`,
+          compareSource: "stdout",
+          expected: 0,
+        });
+
+        assert.strictEqual(result.passed, false);
       });
 
-      assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "exact");
-      assert.strictEqual(result.actual, "auto-output");
-      assert.strictEqual(result.actualSource, "stdout");
-    });
+      test("expecting PASS no longer passes on '3 PASSED, 2 FAILED' via a substring", async () => {
+        const result = await evaluate({
+          script: `node -e "process.stdout.write('3 PASSED, 2 FAILED')"`,
+          compareSource: "stdout",
+          expected: "PASS",
+        });
 
-    test("uses exitCode as the default rule when returns is absent", async () => {
-      const result = await evaluate({ script: 'node -e "process.exit(0)"' });
+        assert.strictEqual(result.passed, false);
 
-      assert.strictEqual(result.passed, true);
-      assert.strictEqual(result.matchRule, "exitCode");
-      assert.strictEqual(result.actual, "0");
-      assert.strictEqual(result.actualSource, "exitCode");
-    });
-
-    test("does not mark a clean non-zero exit as errored", async () => {
-      const result = await evaluate({
-        script: 'node -e "process.exit(7)"',
+        const explicit = await evaluate({
+          script: `node -e "process.stdout.write('3 PASSED, 2 FAILED')"`,
+          compareSource: "stdout",
+          operator: "contains",
+          expected: "PASS",
+        });
+        assert.strictEqual(
+          explicit.passed,
+          true,
+          "a substring match is still available — it just has to be asked for"
+        );
       });
-
-      assert.strictEqual(result.passed, false);
-      assert.strictEqual(result.errored, false);
-      assert.strictEqual(result.matchRule, "exitCode");
-      assert.strictEqual(result.actual, "7");
     });
 
     test("marks spawn failures as errored", async () => {
@@ -998,7 +1115,6 @@ suite("EndConditionEvaluator Tests", () => {
         const result = await evaluate({ script: scriptPath });
         assert.strictEqual(result.passed, false);
         assert.strictEqual(result.errored, true);
-        assert.strictEqual(result.matchRule, "none");
       } finally {
         fs.rmSync(scriptPath, { force: true });
       }
@@ -1016,7 +1132,6 @@ suite("EndConditionEvaluator Tests", () => {
         const result = await evaluate({ script: scriptPath });
         assert.strictEqual(result.passed, false);
         assert.strictEqual(result.errored, true);
-        assert.strictEqual(result.matchRule, "none");
         assert.match(result.error ?? "", /Unsupported script type/);
       } finally {
         fs.rmSync(scriptPath, { force: true });
@@ -1033,7 +1148,6 @@ suite("EndConditionEvaluator Tests", () => {
         const result = await evaluate({ script: scriptPath });
         assert.strictEqual(result.passed, false);
         assert.strictEqual(result.errored, true);
-        assert.strictEqual(result.matchRule, "none");
         assert.match(result.error ?? "", /Security:/);
       } finally {
         fs.rmSync(outsideDir, { recursive: true, force: true });

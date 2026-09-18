@@ -178,18 +178,6 @@ export const CAPABILITIES_FILE = "capabilities.json";
 /** Default queue limit shared by settings and the standalone MCP server. */
 export const DEFAULT_MAX_QUEUE_SIZE = 100;
 
-/** Boolean-like stdout values accepted by script condition evaluation. */
-export const SCRIPT_BOOLEAN_OUTPUT_VALUES = {
-  TRUE_NUMERIC: "1",
-  TRUE_YES: "yes",
-  TRUE_PASS: "pass",
-  TRUE_PASSED: "passed",
-  FALSE_NUMERIC: "0",
-  FALSE_NO: "no",
-  FALSE_FAIL: "fail",
-  FALSE_FAILED: "failed",
-} as const;
-
 /** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
 export const PRO_FEATURES = {
   HOSTED_DASHBOARD: "hosted-dashboard",
@@ -2790,22 +2778,89 @@ export type WorkflowExecutionOutcome =
 // COMPARE_SOURCES - compareSource values for script evaluation
 // ============================================================================
 export const COMPARE_SOURCES = {
-  AUTO: "auto",
   STDOUT: "stdout",
   STDERR: "stderr",
   EXIT_CODE: "exitCode",
 } as const;
+
+/** The compare source used when a script condition does not pin one. */
+export const DEFAULT_COMPARE_SOURCE = COMPARE_SOURCES.EXIT_CODE;
 
 /** Display labels for COMPARE_SOURCES values (script/endCondition/preCondition editors) */
 export const COMPARE_SOURCE_LABELS: Record<
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
   string
 > = {
-  auto: "Auto",
   stdout: "Stdout",
   stderr: "Stderr",
-  exitCode: "Exit Code",
+  exitCode: "Exit code",
 };
+
+// ============================================================================
+// SCRIPT OPERATORS - how a script condition compares its source against
+// `expected`. Word tokens, never symbols: `operator: >=` is a YAML block-scalar
+// parse error and `operator: !=` silently parses to "" (it reads as a YAML tag),
+// so the symbols live only in SCRIPT_OPERATOR_LABELS for display.
+// ============================================================================
+export const SCRIPT_OPERATORS = {
+  EQ: "eq",
+  NE: "ne",
+  CONTAINS: "contains",
+  NOT_CONTAINS: "notContains",
+  GTE: "gte",
+  GT: "gt",
+  LTE: "lte",
+  LT: "lt",
+  MATCHES: "matches",
+  IS_EMPTY: "isEmpty",
+  IS_NOT_EMPTY: "isNotEmpty",
+} as const;
+
+/** The operator used when a script condition does not pin one. */
+export const DEFAULT_SCRIPT_OPERATOR = SCRIPT_OPERATORS.EQ;
+
+/** Display labels for SCRIPT_OPERATORS values (script condition editors, verdicts). */
+export const SCRIPT_OPERATOR_LABELS: Record<
+  (typeof SCRIPT_OPERATORS)[keyof typeof SCRIPT_OPERATORS],
+  string
+> = {
+  eq: "==",
+  ne: "!=",
+  contains: "contains",
+  notContains: "does not contain",
+  gte: ">=",
+  gt: ">",
+  lte: "<=",
+  lt: "<",
+  matches: "matches regex",
+  isEmpty: "is empty",
+  isNotEmpty: "is not empty",
+};
+
+/**
+ * Operators that compare text, so `ignoreCase` applies to them. Numeric,
+ * regex, and emptiness operators ignore it.
+ */
+export const SCRIPT_STRING_OPERATORS: readonly string[] = [
+  SCRIPT_OPERATORS.EQ,
+  SCRIPT_OPERATORS.NE,
+  SCRIPT_OPERATORS.CONTAINS,
+  SCRIPT_OPERATORS.NOT_CONTAINS,
+];
+
+/** Operators that compare numbers, so both sides must parse as numeric. */
+export const SCRIPT_NUMERIC_OPERATORS: readonly string[] = [
+  SCRIPT_OPERATORS.GTE,
+  SCRIPT_OPERATORS.GT,
+  SCRIPT_OPERATORS.LTE,
+  SCRIPT_OPERATORS.LT,
+];
+
+/** Operators that take no `expected` value, so the value input is hidden. */
+export const SCRIPT_VALUELESS_OPERATORS: readonly string[] = [
+  SCRIPT_OPERATORS.IS_EMPTY,
+  SCRIPT_OPERATORS.IS_NOT_EMPTY,
+];
 
 // ============================================================================
 // SCRIPT OUTPUT SOURCES - Origin values for unified script execution output
@@ -2946,7 +3001,9 @@ export const PROMPT_PROPERTIES = {
   ENV: "env",
   TIMEOUT: "timeout",
   COMPARE_SOURCE: "compareSource",
-  RETURNS: "returns",
+  OPERATOR: "operator",
+  EXPECTED: "expected",
+  IGNORE_CASE: "ignoreCase",
   SHELL: "shell",
   ON_PASS: "onPass",
   ON_FAIL: "onFail",
@@ -3022,7 +3079,7 @@ export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];
 // End condition property names
 export const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",
-  RETURNS: "returns",
+  EXPECTED: "expected",
   TIMEOUT: "timeout",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
@@ -3512,11 +3569,6 @@ export const NONE_OPTION = "none" as const;
 export const CUSTOM_SHELL_OPTION = "__custom__" as const;
 
 // ============================================================================
-// SCRIPT MATCH RULE NONE - Script verdict sentinel when no rule matched
-// ============================================================================
-export const SCRIPT_MATCH_RULE_NONE = "none" as const;
-
-// ============================================================================
 // ATOMIC REFERENCE KINDS - Atomic file/context references across UI layers
 // ============================================================================
 export const ATOMIC_REFERENCE_KINDS = {
@@ -3952,6 +4004,8 @@ export type ConditionAction =
   (typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS];
 export type CompareSource =
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];
+export type ScriptOperator =
+  (typeof SCRIPT_OPERATORS)[keyof typeof SCRIPT_OPERATORS];
 export type ScriptOutputSource =
   (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
 export type ExecutionPhase =

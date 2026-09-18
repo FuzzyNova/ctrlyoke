@@ -1107,7 +1107,7 @@ suite("PromptQueue State Machine Tests", () => {
               prompt: "First",
               endCondition: {
                 script: "check.js",
-                returns: "true",
+                expected: "true",
                 retryPrompt: "Retry",
                 maxRetries: 2,
               },
@@ -1116,7 +1116,7 @@ suite("PromptQueue State Machine Tests", () => {
               prompt: "Second",
               endCondition: {
                 script: "check.js",
-                returns: "true",
+                expected: "true",
                 retryPrompt: "Retry",
                 maxRetries: 2,
               },
@@ -1292,7 +1292,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("canRetry() should return false when no retryPrompt", () => {
       const prompt: PromptStep = {
         prompt: "Test",
-        endCondition: { script: "test.py", returns: "true" },
+        endCondition: { script: "test.py", expected: "true" },
       };
       queue.loadPrompts(createPromptFile([prompt]));
       assert.strictEqual(queue.canRetry(prompt), false);
@@ -1303,7 +1303,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           maxRetries: 3,
           retryPrompt: "Try again",
         },
@@ -1317,7 +1317,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           maxRetries: 2,
           retryPrompt: "Try again",
         },
@@ -1333,7 +1333,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           maxRetries: -1,
           retryPrompt: "Try again",
         },
@@ -1351,7 +1351,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           maxRetries: 1,
           onPass: "retry",
         },
@@ -1365,7 +1365,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           maxRetries: 2,
           onPass: "retry",
         },
@@ -1381,7 +1381,7 @@ suite("PromptQueue State Machine Tests", () => {
         prompt: "Test",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           passRetryPrompt: "Explicit",
         },
       };
@@ -1395,7 +1395,7 @@ suite("PromptQueue State Machine Tests", () => {
       try {
         const prompt: PromptStep = {
           prompt: "Test",
-          endCondition: { script: "test.py", returns: "true" },
+          endCondition: { script: "test.py", expected: "true" },
         };
         queue.loadPrompts(createPromptFile([prompt]));
         assert.strictEqual(

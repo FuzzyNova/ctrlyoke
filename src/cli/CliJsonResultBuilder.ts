@@ -104,7 +104,8 @@ export interface CliJsonCondition {
   action: ConditionAction | null;
   script: string;
   actual: string;
-  actualSource: ConditionEvaluationSummary["actualSource"];
+  compareSource: ConditionEvaluationSummary["compareSource"] | null;
+  operator: ConditionEvaluationSummary["operator"] | null;
   stdout: string;
   stderr: string;
   exitCode: number | null;
@@ -509,7 +510,8 @@ function toCondition(
     action: summary.action ?? null,
     script: summary.script,
     actual: summary.actual,
-    actualSource: summary.actualSource,
+    compareSource: summary.compareSource ?? null,
+    operator: summary.operator ?? null,
     stdout: summary.stdout,
     stderr: summary.stderr,
     exitCode: summary.exitCode ?? null,

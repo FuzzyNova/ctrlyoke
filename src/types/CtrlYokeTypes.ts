@@ -13,6 +13,7 @@ import {
   type ConditionAction,
   type WorkflowExecutionOutcome,
   type CompareSource,
+  type ScriptOperator,
   type HarnessId,
   type ExecutionMode,
   type HookEvent,
@@ -879,17 +880,14 @@ export interface ScriptRuntimeOutput {
   exitCode?: number;
 }
 
-export type ScriptMatchRule =
-  "exitCode" | "exact" | "boolean" | "numericGte" | "substring" | "none";
-
 export interface ScriptVerdict {
   compareSource: CompareSource;
+  /** The comparison the author configured. Never inferred from the output. */
+  operator: ScriptOperator;
   expected?: string;
   actual: string;
-  actualSource: "stdout" | "stderr" | "exitCode";
   exitCode?: number;
   outcome: (typeof SCRIPT_VERDICT_OUTCOMES)[keyof typeof SCRIPT_VERDICT_OUTCOMES];
-  matchRule: ScriptMatchRule;
   action: ConditionAction;
   actionDetail?: string;
   durationMs: number;
@@ -907,8 +905,8 @@ export interface ConditionEvaluationSummary {
   script: string;
   expected?: string;
   compareSource?: CompareSource;
+  operator?: ScriptOperator;
   actual: string;
-  actualSource: ScriptVerdict["actualSource"];
   stdout: string;
   stderr: string;
   exitCode?: number;
@@ -963,13 +961,14 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 }
 
 /**
- * Controls which output source is compared against `returns`.
+ * Which output source is compared against `expected`. Default: `"exitCode"`.
  *
- * - `"auto"` (default): `"true"`/`"false"` use exit code; all other values compare stdout.
- * - `"stdout"`: Always compare stdout. Requires a clean exit (exitCode === 0).
- * - `"stderr"`: Compare stderr content. Exit code is not checked.
- * - `"exitCode"`: Compare the numeric exit code. Use `"0"` for success, or any integer string.
- *   `"true"`/`"false"` are also accepted and map to exit 0 / non-zero.
+ * - `"exitCode"`: the numeric exit code. `"true"`/`"false"` are NOT accepted —
+ *   exit 0 means "no error", and the boolean translation was removed.
+ * - `"stdout"` / `"stderr"`: the trimmed text. Neither also requires a clean
+ *   exit; if the author asked about the text, the text is the condition.
+ *
+ * How the comparison is made is `operator`'s job, never inferred from the value.
  */
 export type EndConditionCompareSource = CompareSource;
 
@@ -989,18 +988,25 @@ export interface ScriptProperties {
   script: string;
   /** Environment map consumed by the script process. */
   env?: Record<string, string>;
-  /** Controls which output source is compared against `returns`. Default: `"auto"`. */
+  /** Which output source is compared against `expected`. Default: `"exitCode"`. */
   compareSource?: EndConditionCompareSource;
-  /** Expected result to compare against. When absent, exit code 0 = pass. */
-  returns?: string;
+  /** How the source is compared against `expected`. Default: `"eq"`. */
+  operator?: ScriptOperator;
+  /**
+   * Value the source is compared against. When absent, the condition passes on
+   * exit code 0 — there is no boolean form, and `true`/`false` are not accepted.
+   * A number is accepted at the authoring boundary (`expected: 0`) and
+   * normalized to a string by `resolveScriptComparison`.
+   */
+  expected?: string | number;
+  /** Compare text case-insensitively. Only applies to string operators. */
+  ignoreCase?: boolean;
   timeout?: number;
   /** Pins the shell for this script's inline-text execution path. See scriptProperties description. */
   shell?: string;
 }
 
 export interface EndCondition extends ScriptProperties {
-  /** Required for endCondition: expected result to compare against. */
-  returns: string;
   /** Maximum shared retry attempts across both pass and fail directions (default: 0). */
   maxRetries?: number;
   retryPrompt?: string; // Template with placeholders for retry messages

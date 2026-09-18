@@ -54,12 +54,24 @@
           "type": "object",
           "description": "The default model to use for each harness for new workflows.",
           "properties": {
-            "copilot-cli": { "type": "string" },
-            "claude-cli": { "type": "string" },
-            "codex-cli": { "type": "string" },
-            "opencode-cli": { "type": "string" },
-            "qwen-cli": { "type": "string" },
-            "antigravity-cli": { "type": "string" }
+            "copilot-cli": {
+              "type": "string"
+            },
+            "claude-cli": {
+              "type": "string"
+            },
+            "codex-cli": {
+              "type": "string"
+            },
+            "opencode-cli": {
+              "type": "string"
+            },
+            "qwen-cli": {
+              "type": "string"
+            },
+            "antigravity-cli": {
+              "type": "string"
+            }
           },
           "additionalProperties": false
         },
@@ -67,12 +79,24 @@
           "type": "object",
           "description": "The default additional CLI arguments for each harness for new workflows.",
           "properties": {
-            "copilot-cli": { "type": "string" },
-            "claude-cli": { "type": "string" },
-            "codex-cli": { "type": "string" },
-            "opencode-cli": { "type": "string" },
-            "qwen-cli": { "type": "string" },
-            "antigravity-cli": { "type": "string" }
+            "copilot-cli": {
+              "type": "string"
+            },
+            "claude-cli": {
+              "type": "string"
+            },
+            "codex-cli": {
+              "type": "string"
+            },
+            "opencode-cli": {
+              "type": "string"
+            },
+            "qwen-cli": {
+              "type": "string"
+            },
+            "antigravity-cli": {
+              "type": "string"
+            }
           },
           "additionalProperties": false
         },
@@ -82,12 +106,17 @@
         },
         "skills": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support."
         },
         "secrets": {
           "type": "array",
-          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
           "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions."
         },
         "executionMode": {
@@ -108,19 +137,29 @@
           "description": "Default MCP servers to attach to each prompt execution.",
           "items": {
             "oneOf": [
-              { "type": "string" },
+              {
+                "type": "string"
+              },
               {
                 "type": "object",
                 "properties": {
-                  "id": { "type": "string" },
-                  "command": { "type": "string" },
+                  "id": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  },
                   "args": {
                     "type": "array",
-                    "items": { "type": "string" }
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "env": {
                     "type": "object",
-                    "additionalProperties": { "type": "string" }
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": true
@@ -179,12 +218,16 @@
             },
             "allowedTools": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Explicitly allowed tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
             },
             "deniedTools": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Explicitly denied tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
             }
           }
@@ -199,14 +242,10 @@
                   "type": "string",
                   "description": "Shell command or script path to execute after each prompt."
                 },
-                "returns": {
-                  "type": "string",
-                  "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout."
-                },
                 "compareSource": {
                   "type": "string",
-                  "enum": ["auto", "stdout", "stderr", "exitCode"],
-                  "description": "Which output to compare against returns."
+                  "enum": ["stdout", "stderr", "exitCode"],
+                  "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
                 },
                 "timeout": {
                   "type": "number",
@@ -239,9 +278,34 @@
                   "type": "string",
                   "enum": ["continue", "retry", "stopWorkflow"],
                   "description": "Action when end condition fails."
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "contains",
+                    "notContains",
+                    "gte",
+                    "gt",
+                    "lte",
+                    "lt",
+                    "matches",
+                    "isEmpty",
+                    "isNotEmpty"
+                  ],
+                  "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag."
+                },
+                "expected": {
+                  "type": ["string", "number"],
+                  "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values."
+                },
+                "ignoreCase": {
+                  "type": "boolean",
+                  "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
                 }
               },
-              "required": ["script", "returns"],
+              "required": ["script"],
               "additionalProperties": false
             },
             {
@@ -260,14 +324,10 @@
                   "type": "string",
                   "description": "Shell command or script path to execute before each prompt."
                 },
-                "returns": {
-                  "type": "string",
-                  "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout."
-                },
                 "compareSource": {
                   "type": "string",
-                  "enum": ["auto", "stdout", "stderr", "exitCode"],
-                  "description": "Which output to compare against returns."
+                  "enum": ["stdout", "stderr", "exitCode"],
+                  "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
                 },
                 "timeout": {
                   "type": "number",
@@ -282,6 +342,31 @@
                   "type": "string",
                   "enum": ["continue", "skipPrompt", "stopWorkflow"],
                   "description": "Action when pre-condition fails."
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "contains",
+                    "notContains",
+                    "gte",
+                    "gt",
+                    "lte",
+                    "lt",
+                    "matches",
+                    "isEmpty",
+                    "isNotEmpty"
+                  ],
+                  "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag."
+                },
+                "expected": {
+                  "type": ["string", "number"],
+                  "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values."
+                },
+                "ignoreCase": {
+                  "type": "boolean",
+                  "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
                 }
               },
               "required": ["script"],
@@ -332,13 +417,22 @@
               "if": {
                 "required": ["mode"],
                 "properties": {
-                  "mode": { "const": "named" }
+                  "mode": {
+                    "const": "named"
+                  }
                 }
               },
               "then": {
                 "required": ["branch"],
                 "not": {
-                  "anyOf": [{ "required": ["keep"] }, { "required": ["merge"] }]
+                  "anyOf": [
+                    {
+                      "required": ["keep"]
+                    },
+                    {
+                      "required": ["merge"]
+                    }
+                  ]
                 }
               }
             },
@@ -346,7 +440,9 @@
               "if": {
                 "required": ["mode"],
                 "properties": {
-                  "mode": { "const": "managed" }
+                  "mode": {
+                    "const": "managed"
+                  }
                 }
               },
               "then": {
@@ -359,17 +455,29 @@
               "if": {
                 "required": ["mode"],
                 "properties": {
-                  "mode": { "const": "none" }
+                  "mode": {
+                    "const": "none"
+                  }
                 }
               },
               "then": {
                 "not": {
                   "anyOf": [
-                    { "required": ["branch"] },
-                    { "required": ["base"] },
-                    { "required": ["setup"] },
-                    { "required": ["keep"] },
-                    { "required": ["merge"] }
+                    {
+                      "required": ["branch"]
+                    },
+                    {
+                      "required": ["base"]
+                    },
+                    {
+                      "required": ["setup"]
+                    },
+                    {
+                      "required": ["keep"]
+                    },
+                    {
+                      "required": ["merge"]
+                    }
                   ]
                 }
               }
@@ -469,18 +577,28 @@
               "default": false,
               "description": "Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused."
             },
-            "sharedFormat": { "$ref": "#/definitions/statusLineFormat" },
-            "claude": { "$ref": "#/definitions/statusLineTrackingSettings" },
+            "sharedFormat": {
+              "$ref": "#/definitions/statusLineFormat"
+            },
+            "claude": {
+              "$ref": "#/definitions/statusLineTrackingSettings"
+            },
             "antigravity": {
               "$ref": "#/definitions/statusLineTrackingSettings"
             },
-            "copilot": { "$ref": "#/definitions/statusLineTrackingSettings" },
-            "qwen": { "$ref": "#/definitions/statusLineTrackingSettings" }
+            "copilot": {
+              "$ref": "#/definitions/statusLineTrackingSettings"
+            },
+            "qwen": {
+              "$ref": "#/definitions/statusLineTrackingSettings"
+            }
           }
         },
         "allowedExternalFileRoots": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Absolute directory paths outside the workspace that ctrlyoke may read for prompt attachments and open from file links. Workspace files are always allowed. User-scope entries are trusted immediately; workspace-scope entries require a one-time batch approval before they take effect."
         },
         "heuristicSecretRedactionEnabled": {
@@ -528,11 +646,26 @@
           "type": "object",
           "required": ["inputPerMTok", "outputPerMTok"],
           "properties": {
-            "inputPerMTok": { "type": "number", "minimum": 0 },
-            "outputPerMTok": { "type": "number", "minimum": 0 },
-            "cachedInputPerMTok": { "type": "number", "minimum": 0 },
-            "cacheWritePerMTok": { "type": "number", "minimum": 0 },
-            "reasoningPerMTok": { "type": "number", "minimum": 0 }
+            "inputPerMTok": {
+              "type": "number",
+              "minimum": 0
+            },
+            "outputPerMTok": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cachedInputPerMTok": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cacheWritePerMTok": {
+              "type": "number",
+              "minimum": 0
+            },
+            "reasoningPerMTok": {
+              "type": "number",
+              "minimum": 0
+            }
           },
           "additionalProperties": false
         }
@@ -672,15 +805,21 @@
           "properties": {
             "bar": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "popup": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "hidden": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": ["bar", "popup", "hidden"]
@@ -692,9 +831,15 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" },
-              "sequence": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "string"
+              }
             },
             "required": ["id", "label", "sequence"]
           }
@@ -845,7 +990,9 @@
         },
         "fallbackPorts": {
           "type": "array",
-          "items": { "type": "number" },
+          "items": {
+            "type": "number"
+          },
           "description": "Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance."
         },
         "theme": {
@@ -1040,7 +1187,9 @@
             "additionalProperties": false,
             "required": ["type", "field"],
             "properties": {
-              "type": { "const": "field" },
+              "type": {
+                "const": "field"
+              },
               "field": {
                 "type": "string",
                 "enum": [
@@ -1058,7 +1207,10 @@
                   "time"
                 ]
               },
-              "label": { "type": "string", "maxLength": 64 },
+              "label": {
+                "type": "string",
+                "maxLength": 64
+              },
               "color": {
                 "type": "string",
                 "enum": [
@@ -1080,8 +1232,13 @@
             "additionalProperties": false,
             "required": ["type", "text"],
             "properties": {
-              "type": { "const": "literal" },
-              "text": { "type": "string", "maxLength": 64 },
+              "type": {
+                "const": "literal"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 64
+              },
               "color": {
                 "type": "string",
                 "enum": [
@@ -1105,7 +1262,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
         "customCommand": {
           "type": "string",
           "default": "",
@@ -1116,7 +1276,9 @@
           "default": true,
           "description": "Show ctrlyoke's branded statusline instead of custom-command output."
         },
-        "format": { "$ref": "#/definitions/statusLineFormat" }
+        "format": {
+          "$ref": "#/definitions/statusLineFormat"
+        }
       }
     }
   }

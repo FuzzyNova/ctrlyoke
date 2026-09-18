@@ -111,11 +111,10 @@ function makeVerdictRow(): OutputRenderRow {
     expanded: false,
     verdict: {
       compareSource: "stdout",
+      operator: "eq",
       expected: "PASS",
       actual: "all tests PASS",
-      actualSource: "stdout",
       outcome: "passed",
-      matchRule: "substring",
       action: "continue",
       durationMs: 1000,
     },

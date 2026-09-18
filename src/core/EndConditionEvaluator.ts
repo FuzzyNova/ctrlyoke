@@ -4,15 +4,8 @@ import * as os from "os";
 import { spawn } from "child_process";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { type ScriptProperties } from "../types/CtrlYokeTypes";
 import {
-  type ScriptProperties,
-  type EndConditionCompareSource,
-  type ScriptMatchRule,
-} from "../types/CtrlYokeTypes";
-import {
-  BOOLEAN_STRING_VALUES,
-  SCRIPT_BOOLEAN_OUTPUT_VALUES,
-  COMPARE_SOURCES,
   END_CONDITION_SCRIPT_TYPES,
   SCRIPT_FILE_INTERPRETER_KINDS,
   SCRIPT_FILE_INTERPRETERS,
@@ -38,6 +31,10 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
+import {
+  compareScriptOutput,
+  type ScriptComparisonConfig,
+} from "../utils/ScriptComparison";
 import { resolveShellInvocation } from "./harness/PtyProcessManager";
 import {
   getShellInvocationError,
@@ -59,12 +56,8 @@ const SHEBANG_SHELL_NAMES = new Set<string>([
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
   passed: boolean;
-  /** The comparison rule that produced the verdict, or none when nothing matched. */
-  matchRule: ScriptMatchRule;
-  /** The value from the source that was compared against returns. */
+  /** The value read from `compareSource` and compared against `expected`. */
   actual: string;
-  /** The output axis used for the comparison, including the resolved auto axis. */
-  actualSource: "stdout" | "stderr" | "exitCode";
   /** Whether the script could not run or evaluation itself failed. */
   errored: boolean;
   stdout: string; // Separate stdout from script
@@ -78,9 +71,7 @@ export interface EvaluationResult {
 
 export interface EvaluationComparison {
   passed: boolean;
-  matchRule: ScriptMatchRule;
   actual: string;
-  actualSource: "stdout" | "stderr" | "exitCode";
 }
 
 export class EndConditionEvaluator {
@@ -185,7 +176,7 @@ export class EndConditionEvaluator {
 
   /**
    * Evaluate a script condition (endCondition, preCondition, or scriptStep).
-   * When `returns` is absent, exit code 0 = pass.
+   * When `expected` is absent, exit code 0 = pass.
    * @param vars Optional variable map — injected as CTRLYOKE_VAR_<KEY> environment
    *   variables so end condition scripts can branch on workflow variables.
    * @param onOutput Optional streaming callback — called for each stdout chunk as it
@@ -221,11 +212,6 @@ export class EndConditionEvaluator {
         ? null
         : await this.resolveScriptPath(rawScriptPath, workingDirectory);
 
-      const actualSource = this.resolveActualSource(
-        condition.returns,
-        condition.compareSource
-      );
-
       let command: {
         executable: string;
         args: string[];
@@ -239,9 +225,7 @@ export class EndConditionEvaluator {
         if (!fileCommand) {
           return {
             passed: false,
-            matchRule: "none",
             actual: "",
-            actualSource,
             errored: true,
             stdout: "",
             stderr: "",
@@ -313,9 +297,7 @@ export class EndConditionEvaluator {
       if (result.errored) {
         return {
           passed: false,
-          matchRule: "none",
           actual: "",
-          actualSource,
           errored: true,
           stdout: result.stdout || "",
           stderr: result.stderr || "",
@@ -327,11 +309,7 @@ export class EndConditionEvaluator {
         };
       }
 
-      const comparison = this.evaluateSuccess(
-        result,
-        condition.returns,
-        condition.compareSource
-      );
+      const comparison = this.evaluateSuccess(result, condition);
 
       return {
         ...comparison,
@@ -347,12 +325,7 @@ export class EndConditionEvaluator {
     } catch (error) {
       return {
         passed: false,
-        matchRule: "none",
         actual: "",
-        actualSource: this.resolveActualSource(
-          condition.returns,
-          condition.compareSource
-        ),
         errored: true,
         stdout: "",
         stderr: "",
@@ -375,10 +348,9 @@ export class EndConditionEvaluator {
       exitCode?: number;
       success: boolean;
     },
-    returns: string | undefined,
-    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
+    comparison: ScriptComparisonConfig
   ): EvaluationComparison {
-    return this.evaluateSuccess(result, returns, compareSource);
+    return this.evaluateSuccess(result, comparison);
   }
 
   /**
@@ -932,14 +904,13 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Determines whether an end condition passes, routing to the correct comparison
-   * axis based on `compareSource`.
+   * Determines whether a script condition passed by delegating to the shared
+   * comparator. Nothing here inspects the output to choose a comparison — the
+   * author's `operator` decides, and `compareSource` decides which stream is read.
    *
-   * - `"auto"` (default): `"true"`/`"false"` use exit code; other values compare stdout.
-   *   Stdout comparisons also require a clean exit (exitCode === 0).
-   * - `"stdout"`: Compares stdout. Also requires a clean exit.
-   * - `"stderr"`: Compares stderr content. Exit code is not checked.
-   * - `"exitCode"`: Compares the numeric exit code directly. `"true"` = exit 0, `"false"` = non-zero.
+   * With no `expected`, the condition is "exited 0". Note there is deliberately
+   * no implicit clean-exit requirement layered onto a stdout or stderr
+   * comparison: if the author asked about the text, the text is the condition.
    */
   private evaluateSuccess(
     result: {
@@ -949,189 +920,13 @@ export class EndConditionEvaluator {
       exitCode?: number;
       success: boolean;
     },
-    returns: string | undefined,
-    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
+    comparison: ScriptComparisonConfig
   ): EvaluationComparison {
-    const actualSource = this.resolveActualSource(returns, compareSource);
-
-    // When returns is absent, exit code 0 = pass
-    if (returns === undefined) {
-      return {
-        passed: result.exitCode === 0,
-        matchRule: "exitCode",
-        actual: String(result.exitCode ?? ""),
-        actualSource,
-      };
-    }
-    const expectedLower = returns.trim().toLowerCase();
-
-    switch (compareSource) {
-      case COMPARE_SOURCES.EXIT_CODE: {
-        // Directly compare exit code — boolean keywords or exact integer string
-        if (expectedLower === BOOLEAN_STRING_VALUES.TRUE) {
-          return {
-            passed: result.exitCode === 0,
-            matchRule: result.exitCode === 0 ? "exitCode" : "none",
-            actual: String(result.exitCode ?? ""),
-            actualSource,
-          };
-        }
-        if (expectedLower === BOOLEAN_STRING_VALUES.FALSE) {
-          const passed = result.exitCode !== undefined && result.exitCode !== 0;
-          return {
-            passed,
-            matchRule: passed ? "exitCode" : "none",
-            actual: String(result.exitCode ?? ""),
-            actualSource,
-          };
-        }
-        const expectedCode = parseInt(returns.trim(), 10);
-        const passed = !isNaN(expectedCode) && result.exitCode === expectedCode;
-        return {
-          passed,
-          matchRule: passed ? "exitCode" : "none",
-          actual: String(result.exitCode ?? ""),
-          actualSource,
-        };
-      }
-
-      case COMPARE_SOURCES.STDERR:
-        // Compare stderr, no exit code requirement
-        return this.checkResult(
-          result.stderr ?? "",
-          returns,
-          undefined,
-          actualSource
-        );
-
-      case COMPARE_SOURCES.STDOUT: {
-        // Compare stdout, require clean exit
-        const comparison = this.checkResult(
-          result.result,
-          returns,
-          undefined,
-          actualSource
-        );
-        return { ...comparison, passed: comparison.passed && result.success };
-      }
-
-      case COMPARE_SOURCES.AUTO:
-      default: {
-        // "true"/"false" use exit code; everything else compares stdout + requires clean exit
-        const comparison = this.checkResult(
-          result.result,
-          returns,
-          result.exitCode,
-          actualSource
-        );
-        const isBooleanReturn =
-          expectedLower === BOOLEAN_STRING_VALUES.TRUE ||
-          expectedLower === BOOLEAN_STRING_VALUES.FALSE;
-        return {
-          ...comparison,
-          passed: isBooleanReturn
-            ? comparison.passed
-            : comparison.passed && result.success,
-          actual: isBooleanReturn
-            ? String(result.exitCode ?? "")
-            : comparison.actual,
-        };
-      }
-    }
-  }
-
-  private resolveActualSource(
-    returns: string | undefined,
-    compareSource: EndConditionCompareSource = COMPARE_SOURCES.AUTO
-  ): "stdout" | "stderr" | "exitCode" {
-    if (compareSource === COMPARE_SOURCES.STDERR) return "stderr";
-    if (compareSource === COMPARE_SOURCES.STDOUT) return "stdout";
-    if (compareSource === COMPARE_SOURCES.EXIT_CODE) return "exitCode";
-    if (returns === undefined) return "exitCode";
-
-    const expectedLower = returns.trim().toLowerCase();
-    return expectedLower === BOOLEAN_STRING_VALUES.TRUE ||
-      expectedLower === BOOLEAN_STRING_VALUES.FALSE
-      ? "exitCode"
-      : "stdout";
-  }
-
-  /**
-   * Compares an actual output string against an expected value using four strategies
-   * (in order): exact match, boolean synonyms (with optional exit code precedence),
-   * numeric >=, substring.
-   *
-   * Pass `exitCode` only for `"auto"` mode — it makes `"true"`/`"false"` use exit
-   * code instead of stdout content. For explicit `compareSource` values, call
-   * `evaluateSuccess` directly; don't pass `exitCode` here.
-   */
-  private checkResult(
-    actualResult: string,
-    expectedResult: string,
-    exitCode?: number,
-    actualSource: "stdout" | "stderr" | "exitCode" = "stdout"
-  ): EvaluationComparison {
-    const actual = actualResult.trim().toLowerCase();
-    const expected = expectedResult.trim().toLowerCase();
-    const comparisonActual = actualResult.trim();
-
-    const matched = (passed: boolean, matchRule: ScriptMatchRule) => ({
-      passed,
-      matchRule: passed ? matchRule : ("none" as const),
-      actual: comparisonActual,
-      actualSource,
+    return compareScriptOutput(comparison, {
+      stdout: result.stdout ?? result.result,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
     });
-
-    // Exact match (handles explicit "true"/"false" stdout output)
-    if (actual === expected) {
-      return matched(true, "exact");
-    }
-
-    // Boolean interpretation — explicit stdout output takes priority; exit code is the fallback.
-    // This prevents a script that explicitly prints "false" from being treated as passing
-    // just because it exited cleanly (exit code 0).
-    const isExplicitTrue =
-      actual === BOOLEAN_STRING_VALUES.TRUE ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_NUMERIC ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_YES ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_PASS ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.TRUE_PASSED;
-    const isExplicitFalse =
-      actual === BOOLEAN_STRING_VALUES.FALSE ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_NUMERIC ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_NO ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_FAIL ||
-      actual === SCRIPT_BOOLEAN_OUTPUT_VALUES.FALSE_FAILED;
-
-    if (expected === BOOLEAN_STRING_VALUES.TRUE) {
-      if (isExplicitFalse) return matched(false, "boolean"); // Explicit "false" stdout overrides exit code
-      if (isExplicitTrue) return matched(true, "boolean"); // Explicit "true" stdout (already caught by exact match above, kept for clarity)
-      // No explicit boolean output — fall back to exit code
-      if (exitCode !== undefined) {
-        return matched(exitCode === 0, "boolean");
-      }
-      return matched(false, "boolean");
-    }
-
-    if (expected === BOOLEAN_STRING_VALUES.FALSE) {
-      if (isExplicitTrue) return matched(false, "boolean"); // Explicit "true" stdout overrides exit code
-      if (isExplicitFalse) return matched(true, "boolean"); // Explicit "false" stdout
-      // No explicit boolean output — fall back to exit code
-      if (exitCode !== undefined) {
-        return matched(exitCode !== 0, "boolean");
-      }
-      return matched(false, "boolean");
-    }
-
-    // Numeric comparison
-    const actualNum = parseFloat(actual);
-    const expectedNum = parseFloat(expected);
-    if (!isNaN(actualNum) && !isNaN(expectedNum)) {
-      return matched(actualNum >= expectedNum, "numericGte"); // For coverage percentages, etc.
-    }
-
-    // String contains (for complex outputs)
-    return matched(actual.includes(expected), "substring");
   }
 
   /**

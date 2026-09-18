@@ -86,7 +86,7 @@ This directory contains example workflows demonstrating the workflow-level prope
 ```yaml
 endCondition:
   script: npm test
-  returns: "true"
+  expected: "true"
   maxRetries: 2
   retryPrompt: |
     Tests failed: {error}
@@ -137,7 +137,7 @@ newChatSession: true
 # Optional: Workflow-wide validation
 endCondition:
   script: npm test
-  returns: "true"
+  expected: "true"
   timeout: 30000
   maxRetries: 2
   retryPrompt: |

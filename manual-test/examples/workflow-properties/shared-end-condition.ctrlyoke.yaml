@@ -16,7 +16,6 @@ model: claude-sonnet-4.5
 # This validation applies to ALL prompts unless overridden
 endCondition:
   script: npm test
-  returns: "true"
   timeout: 60000
   maxRetries: 2
   onFail: "retry"

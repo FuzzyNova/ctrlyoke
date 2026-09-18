@@ -9,18 +9,14 @@ const fs = require("fs");
 async function main() {
   try {
     // Example: Check if a file exists
-    // if (fs.existsSync('some-generated-file.txt')) {
-    //     console.log('true');
-    //     process.exit(0);
-    // }
+    // process.exit(fs.existsSync('some-generated-file.txt') ? 0 : 1);
 
     // Example: Run tests
     // const testResult = await runCommand('npm', ['test']);
-    // console.log(testResult.success ? 'true' : 'false');
     // process.exit(testResult.success ? 0 : 1);
 
-    // For demo purposes, always return true
-    console.log("true");
+    // For demo purposes, always succeed. The exit code is the whole contract:
+    // 0 passes, non-zero fails.
     process.exit(0);
   } catch (error) {
     console.error("Error:", error.message);

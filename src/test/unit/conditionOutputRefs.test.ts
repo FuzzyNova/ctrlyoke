@@ -16,7 +16,6 @@ const preCondition: ConditionEvaluationSummary = {
   expected: "0",
   compareSource: "stdout",
   actual: " actual pre ",
-  actualSource: "stdout",
   stdout: " pre stdout ",
   stderr: " pre stderr ",
   exitCode: 2,
@@ -29,7 +28,6 @@ const endCondition: ConditionEvaluationSummary = {
   expected: "true",
   compareSource: "stderr",
   actual: " actual end ",
-  actualSource: "stderr",
   stdout: " end stdout ",
   stderr: " end stderr ",
   exitCode: 0,
@@ -100,7 +98,7 @@ suite("Condition output references", () => {
     assert.deepStrictEqual(result.unresolved, []);
   });
 
-  test("uses empty expected and auto compare-source defaults", () => {
+  test("uses empty expected and the exitCode compare-source default", () => {
     const summary: ConditionEvaluationSummary = {
       ...preCondition,
       expected: undefined,
@@ -111,7 +109,7 @@ suite("Condition output references", () => {
       { preCondition: summary }
     );
 
-    assert.strictEqual(result.text, "|auto");
+    assert.strictEqual(result.text, "|exitCode");
     assert.deepStrictEqual(result.unresolved, []);
   });
 

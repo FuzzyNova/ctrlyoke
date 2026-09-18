@@ -21,8 +21,8 @@ steps:
       any directly related tests or docs.
     endCondition:
       script: npm test
-      returns: "0"
       compareSource: exitCode
+      expected: 0
       maxRetries: 2
       retryPrompt: |
         The validation step failed.

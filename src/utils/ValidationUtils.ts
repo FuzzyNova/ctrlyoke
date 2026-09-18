@@ -89,8 +89,10 @@ export class ValidationUtils {
         type: "object",
         properties: {
           script: { type: "string" },
-          returns: { type: "string" },
           compareSource: { type: "string", nullable: true },
+          operator: { type: "string", nullable: true },
+          expected: { type: ["string", "number"], nullable: true },
+          ignoreCase: { type: "boolean", nullable: true },
           timeout: { type: "number", nullable: true },
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
@@ -115,7 +117,7 @@ export class ValidationUtils {
             nullable: true,
           },
         },
-        required: ["script", "returns"],
+        required: ["script"],
         nullable: true,
       } as any,
       preCondition: {
@@ -162,15 +164,17 @@ export class ValidationUtils {
             type: "object",
             properties: {
               script: { type: "string" },
-              returns: { type: "string" },
               compareSource: { type: "string", nullable: true },
+              operator: { type: "string", nullable: true },
+              expected: { type: ["string", "number"], nullable: true },
+              ignoreCase: { type: "boolean", nullable: true },
               timeout: { type: "number", nullable: true },
               maxRetries: { type: "number", nullable: true },
               retryPrompt: { type: "string", nullable: true },
               passRetryPrompt: { type: "string", nullable: true },
               resumeSessionOnRetry: { type: "boolean", nullable: true },
             },
-            required: ["script", "returns"],
+            required: ["script"],
             nullable: true,
           } as any,
           priorContext: {
@@ -246,8 +250,19 @@ export class ValidationUtils {
       errors.push("End condition must have a script property (string)");
     }
 
-    if (!condition.returns || typeof condition.returns !== "string") {
-      errors.push("End condition must have a returns property (string)");
+    // `expected` is optional: omitting it means "pass when the script exits 0".
+    if (
+      condition.expected !== undefined &&
+      typeof condition.expected !== "string" &&
+      typeof condition.expected !== "number"
+    ) {
+      errors.push("End condition expected must be a string or number");
+    }
+
+    if (condition.returns !== undefined) {
+      errors.push(
+        "End condition `returns` was renamed to `expected`; omit it entirely to pass on exit code 0"
+      );
     }
 
     if (

@@ -42,7 +42,8 @@ import {
   EDITOR_TARGET_KINDS,
   EDITOR_PLACEHOLDER_TEXT,
   CONDITION_ACTIONS,
-  COMPARE_SOURCES,
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
   PROMPT_FILE_CONVERSION_TIMEOUT_MS,
 } from "../../types/messages";
 import {
@@ -133,7 +134,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
-    scriptReturns,
+    scriptOperator,
+    scriptExpected,
+    scriptIgnoreCase,
     scriptEnv,
     scriptExecutionMode,
     scriptShell,
@@ -143,7 +146,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptOnPass,
     setScriptOnFail,
     setScriptCompareSource,
-    setScriptReturns,
+    setScriptOperator,
+    setScriptExpected,
+    setScriptIgnoreCase,
     setScriptEnv,
     setScriptExecutionMode,
     setScriptShell,
@@ -958,10 +963,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
         onFail: scriptOnFail,
       }),
-      ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+      ...(scriptCompareSource !== DEFAULT_COMPARE_SOURCE && {
         compareSource: scriptCompareSource,
       }),
-      ...(scriptReturns && { returns: scriptReturns }),
+      ...(scriptOperator !== DEFAULT_SCRIPT_OPERATOR && {
+        operator: scriptOperator,
+      }),
+      ...(scriptExpected && { expected: scriptExpected }),
+      ...(scriptIgnoreCase && { ignoreCase: scriptIgnoreCase }),
       ...(scriptExecutionMode !== undefined && {
         executionMode: scriptExecutionMode,
       }),
@@ -976,7 +985,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptExecutionMode,
       scriptOnFail,
       scriptOnPass,
-      scriptReturns,
+      scriptOperator,
+      scriptExpected,
+      scriptIgnoreCase,
       scriptShell,
       scriptTimeout,
       stepEnabled,
@@ -1190,10 +1201,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
           onFail: scriptOnFail,
         }),
-        ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+        ...(scriptCompareSource !== DEFAULT_COMPARE_SOURCE && {
           compareSource: scriptCompareSource,
         }),
-        ...(scriptReturns && { returns: scriptReturns }),
+        ...(scriptOperator !== DEFAULT_SCRIPT_OPERATOR && {
+          operator: scriptOperator,
+        }),
+        ...(scriptExpected && { expected: scriptExpected }),
+        ...(scriptIgnoreCase && { ignoreCase: scriptIgnoreCase }),
         ...(scriptExecutionMode !== undefined && {
           executionMode: scriptExecutionMode,
         }),
@@ -1211,10 +1226,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(scriptTimeout === undefined ? ["timeout"] : []),
         ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
         ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
-        ...(scriptCompareSource === COMPARE_SOURCES.AUTO
+        ...(scriptCompareSource === DEFAULT_COMPARE_SOURCE
           ? ["compareSource"]
           : []),
-        ...(!scriptReturns ? ["returns"] : []),
+        ...(scriptOperator === DEFAULT_SCRIPT_OPERATOR ? ["operator"] : []),
+        ...(!scriptExpected ? ["expected"] : []),
+        ...(!scriptIgnoreCase ? ["ignoreCase"] : []),
         ...(scriptExecutionMode === undefined ? ["executionMode"] : []),
         ...(!scriptShell?.trim() ? ["shell"] : []),
         ...(properties.color === undefined ? ["color"] : []),
@@ -1302,7 +1319,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
-    scriptReturns,
+    scriptOperator,
+    scriptExpected,
+    scriptIgnoreCase,
     scriptEnv,
     scriptExecutionMode,
     scriptShell,
@@ -1397,8 +1416,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptTimeout(updated.timeout);
       setScriptOnPass(updated.onPass ?? CONDITION_ACTIONS.CONTINUE);
       setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
-      setScriptCompareSource(updated.compareSource ?? COMPARE_SOURCES.AUTO);
-      setScriptReturns(updated.returns ?? "");
+      setScriptCompareSource(updated.compareSource ?? DEFAULT_COMPARE_SOURCE);
+      setScriptOperator(updated.operator ?? DEFAULT_SCRIPT_OPERATOR);
+      setScriptExpected(updated.expected ?? "");
+      setScriptIgnoreCase(updated.ignoreCase ?? false);
       setScriptEnv(updated.env);
       setScriptExecutionMode(updated.executionMode);
       setScriptShell(updated.shell);
@@ -1409,7 +1430,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptOnPass,
       setScriptOnFail,
       setScriptCompareSource,
-      setScriptReturns,
+      setScriptOperator,
+      setScriptExpected,
+      setScriptIgnoreCase,
       setScriptEnv,
       setScriptExecutionMode,
       setScriptShell,
@@ -1511,7 +1534,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               onPass: scriptOnPass,
               onFail: scriptOnFail,
               compareSource: scriptCompareSource,
-              returns: scriptReturns,
+              operator: scriptOperator,
+              expected: scriptExpected,
+              ignoreCase: scriptIgnoreCase,
               env: scriptEnv,
               executionMode: scriptExecutionMode,
               shell: scriptShell,

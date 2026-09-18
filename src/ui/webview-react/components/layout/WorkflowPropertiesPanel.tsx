@@ -1210,10 +1210,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
         // Initialize from global default if set, otherwise use hardcoded defaults
         const globalDefault =
           useSettingsStore.getState().globalSettings.defaultEndCondition;
-        const defaultEndCondition = globalDefault ?? {
-          script: "",
-          returns: "true",
-        };
+        // No comparison fields: an end condition with no `expected` passes when
+        // the script exits 0, which is what the old `returns: "true"` meant.
+        const defaultEndCondition = globalDefault ?? { script: "" };
         settingsStore.updateWorkflowProperty(
           PROMPT_PROPERTIES.END_CONDITION,
           defaultEndCondition

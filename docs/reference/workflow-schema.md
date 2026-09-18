@@ -75,24 +75,28 @@ Prompt steps also accept the execution fields listed in the workflow-level table
 
 ## Script step fields
 
-| Field           | Type                                   | Notes                  |
-| --------------- | -------------------------------------- | ---------------------- |
-| `type`          | `"script"`                             | Required               |
-| `name`          | string                                 | Optional label         |
-| `script`        | string                                 | Command or script path |
-| `compareSource` | `auto`, `stdout`, `stderr`, `exitCode` | Comparison source      |
-| `returns`       | string                                 | Expected result        |
-| `timeout`       | number                                 | Milliseconds           |
-| `onPass`        | `continue`, `stopWorkflow`             | Pass behavior          |
-| `onFail`        | `continue`, `stopWorkflow`             | Failure behavior       |
+| Field           | Type                           | Notes                                            |
+| --------------- | ------------------------------ | ------------------------------------------------ |
+| `type`          | `"script"`                     | Required                                         |
+| `name`          | string                         | Optional label                                   |
+| `script`        | string                         | Command or script path                           |
+| `compareSource` | `stdout`, `stderr`, `exitCode` | Which output to compare (default `exitCode`)     |
+| `operator`      | enum                           | How to compare (default `eq`)                    |
+| `expected`      | string \| number               | Value to compare against; omit to pass on exit 0 |
+| `ignoreCase`    | boolean                        | Case-insensitive text compare                    |
+| `timeout`       | number                         | Milliseconds                                     |
+| `onPass`        | `continue`, `stopWorkflow`     | Pass behavior                                    |
+| `onFail`        | `continue`, `stopWorkflow`     | Failure behavior                                 |
 
 ## End condition fields
 
 | Field                  | Type                                | Notes                                             |
 | ---------------------- | ----------------------------------- | ------------------------------------------------- |
 | `script`               | string                              | Command or script path                            |
-| `returns`              | string                              | Expected result                                   |
-| `compareSource`        | enum                                | Output source to compare                          |
+| `expected`             | string \| number                    | Value to compare against; omit to pass on exit 0  |
+| `compareSource`        | enum                                | Which output to compare (default `exitCode`)      |
+| `operator`             | enum                                | How to compare (default `eq`)                     |
+| `ignoreCase`           | boolean                             | Case-insensitive text compare                     |
 | `timeout`              | number                              | Milliseconds                                      |
 | `maxRetries`           | number                              | `-1` for unlimited                                |
 | `retryPrompt`          | string                              | Retry template                                    |

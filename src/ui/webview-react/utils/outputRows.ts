@@ -1200,7 +1200,7 @@ function estimateCollapsedScriptVerdictHeight(
   const summaryText = [
     verdict.outcome,
     verdict.compareSource,
-    verdict.actualSource,
+    verdict.operator,
     verdict.expected == null ? "" : `expected ${verdict.expected}`,
     `actual ${actualPreview.visibleText.replace(/\s+/g, " ") || "∅"}`,
     verdict.actionDetail ?? verdict.action,

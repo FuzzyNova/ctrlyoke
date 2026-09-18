@@ -103,7 +103,7 @@ export function DefaultsValidationPage({
     if (!enabled) {
       onUpdate("defaults.endCondition", null);
     } else {
-      const initial = wf.endCondition ?? { script: "", returns: "true" };
+      const initial = wf.endCondition ?? { script: "" };
       onUpdate("defaults.endCondition", initial);
     }
   }

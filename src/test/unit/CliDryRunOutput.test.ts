@@ -270,12 +270,11 @@ CliTerminalFormatter.renderScriptOutput({
   isStreaming: false,
   scriptVerdict: {
     compareSource: "stdout",
+    operator: "eq",
     expected: "ok",
     actual: "ok",
-    actualSource: "stdout",
     exitCode: 0,
     outcome: "passed",
-    matchRule: "exact",
     action: "continue",
     durationMs: 12,
   },
@@ -287,12 +286,11 @@ CliTerminalFormatter.renderScriptOutput({
   isStreaming: false,
   scriptVerdict: {
     compareSource: "stdout",
+    operator: "eq",
     expected: "ok",
     actual: "bad",
-    actualSource: "stdout",
     exitCode: 1,
     outcome: "failed",
-    matchRule: "substring",
     action: "retry",
     actionDetail: "retry 1 of 3",
     durationMs: 34,
@@ -305,10 +303,9 @@ CliTerminalFormatter.renderScriptOutput({
   isStreaming: false,
   scriptVerdict: {
     compareSource: "exitCode",
+    operator: "eq",
     actual: "",
-    actualSource: "exitCode",
     outcome: "errored",
-    matchRule: "none",
     action: "stopWorkflow",
     durationMs: 56,
     timedOut: true,
@@ -319,10 +316,9 @@ CliTerminalFormatter.renderScriptOutput({
     assert.ok(output.includes("Passed"));
     assert.ok(output.includes("Failed"));
     assert.ok(output.includes("Errored"));
-    assert.ok(output.includes("Compare: Stdout"));
+    assert.ok(output.includes("Compare: stdout == ok"));
     assert.ok(output.includes("Expected: ok"));
     assert.ok(output.includes("Actual: bad"));
-    assert.ok(output.includes("Matched by: substring"));
     assert.ok(output.includes("Action: retry (retry 1 of 3)"));
     assert.ok(output.includes("Timed out: yes"));
     assert.ok(output.includes("Error: spawn failed"));

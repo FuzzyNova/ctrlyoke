@@ -6,19 +6,23 @@ import {
   STEP_STATUS,
   type StepStatus,
   type CompareSource,
+  type ScriptOperator,
 } from "../types/messages";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 export type EndConditionCompareSource = CompareSource;
+export type { ScriptOperator };
 
 /**
  * End condition configuration
  */
 interface EndCondition {
   script: string;
-  returns: string;
   env?: Record<string, string>;
   compareSource?: EndConditionCompareSource;
+  operator?: ScriptOperator;
+  expected?: string | number;
+  ignoreCase?: boolean;
   timeout?: number;
   maxRetries?: number;
   retryPrompt?: string;

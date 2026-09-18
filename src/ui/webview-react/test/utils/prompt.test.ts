@@ -61,7 +61,7 @@ describe("createPromptStep", () => {
   it("passes through endCondition from raw prompt", () => {
     const raw: RawPrompt = {
       prompt: "Run tests",
-      endCondition: { script: "npm test", returns: "true", maxRetries: 3 },
+      endCondition: { script: "npm test", expected: "true", maxRetries: 3 },
     };
     const item = createPromptStep(raw, 0);
     expect(item.endCondition?.script).toBe("npm test");

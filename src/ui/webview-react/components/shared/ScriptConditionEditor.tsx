@@ -8,6 +8,18 @@ import {
   COMPARE_SOURCE_LABELS,
   type CompareSource,
 } from "../../types/messages";
+import {
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
+  SCRIPT_OPERATORS,
+  SCRIPT_OPERATOR_LABELS,
+  type ScriptOperator,
+} from "@root/types/DashboardConstants";
+import {
+  describeComparison,
+  operatorTakesNoValue,
+  operatorUsesCase,
+} from "@root/utils/ScriptComparison";
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { ScriptCommandEditor } from "./ScriptCommandEditor";
@@ -48,6 +60,15 @@ const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
 ).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
+/**
+ * Operator options in reading order. The labels are the symbolic forms authors
+ * expect (`==`, `>=`); the stored values are the word tokens, because symbols
+ * are not usable as YAML scalars — see SCRIPT_OPERATORS.
+ */
+const SCRIPT_OPERATOR_OPTIONS: SelectOption[] = (
+  Object.values(SCRIPT_OPERATORS) as ScriptOperator[]
+).map((v) => ({ value: v, label: SCRIPT_OPERATOR_LABELS[v] }));
+
 /** Action options for end condition (onPass/onFail) */
 const END_CONDITION_ACTION_OPTIONS: SelectOption[] = [
   { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
@@ -86,7 +107,9 @@ function scriptFileName(scriptPath: string): string {
 export interface ScriptConditionValue {
   script?: string;
   env?: Record<string, string>;
-  returns?: string;
+  expected?: string;
+  operator?: string;
+  ignoreCase?: boolean;
   compareSource?: string;
   timeout?: number;
   shell?: string;
@@ -178,7 +201,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // Local string state for text fields — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
   const [scriptInput, setScriptInput] = useState(v.script ?? "");
-  const [returnsInput, setReturnsInput] = useState(v.returns ?? "");
+  const [expectedInput, setExpectedInput] = useState(v.expected ?? "");
   const [shellInput, setShellInput] = useState(v.shell ?? "");
 
   // Local string state for timeout to prevent auto-reset when clearing.
@@ -210,8 +233,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   }, [v.script]);
 
   useEffect(() => {
-    setReturnsInput(v.returns ?? "");
-  }, [v.returns]);
+    setExpectedInput(v.expected ?? "");
+  }, [v.expected]);
 
   useEffect(() => {
     setShellInput(v.shell ?? "");
@@ -365,7 +388,31 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     : COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING;
 
   const compareSource = (v.compareSource ??
-    COMPARE_SOURCES.AUTO) as CompareSource;
+    DEFAULT_COMPARE_SOURCE) as CompareSource;
+  const operator = (v.operator ?? DEFAULT_SCRIPT_OPERATOR) as ScriptOperator;
+  const showExpected = !operatorTakesNoValue(operator);
+  const showIgnoreCase = operatorUsesCase(operator);
+
+  /**
+   * Switching to an operator that ignores case (or ignores `expected`) clears
+   * the field it no longer shows. Hiding a control without clearing its value
+   * leaves an invisible override serialized onto the step.
+   */
+  const handleOperatorChange = (selected: string) => {
+    const nextOperator = selected as ScriptOperator;
+    const patch: Partial<ScriptConditionValue> = {
+      operator:
+        nextOperator === DEFAULT_SCRIPT_OPERATOR ? undefined : nextOperator,
+    };
+    if (!operatorUsesCase(nextOperator)) {
+      patch.ignoreCase = undefined;
+    }
+    if (operatorTakesNoValue(nextOperator)) {
+      patch.expected = undefined;
+      setExpectedInput("");
+    }
+    update(patch);
+  };
   const { affUri, dicUri } = getDictionaryUris();
 
   // scriptStep-only: resolved inherited execution mode (workflow -> global settings),
@@ -378,22 +425,23 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       (option) => option.value === resolvedExecutionMode
     )?.label ?? resolvedExecutionMode
   })`;
-  const compareSourceHint =
-    compareSource === COMPARE_SOURCES.AUTO
-      ? "'true'/'false' check exit code; other values compare stdout"
-      : compareSource === COMPARE_SOURCES.STDOUT
-        ? "Compares stdout text output (requires a clean exit)"
-        : compareSource === COMPARE_SOURCES.STDERR
-          ? "Compares stderr text output (exit code not checked)"
-          : "Compares the numeric exit code directly (e.g. '0', '1')";
-
-  // Shown under Expected Return when exit code semantics apply — clarifies the
-  // counterintuitive shell convention: success=0, failure=non-zero.
-  const returnsExitCodeHint =
-    compareSource === COMPARE_SOURCES.AUTO ||
+  // One generated sentence, shared with the execution preview and the CLI
+  // verdict, so all three describe a condition the same way.
+  // The unset value renders its own default as a placeholder, so the author
+  // sees what will run without the workflow file carrying the field.
+  const expectedPlaceholder =
     compareSource === COMPARE_SOURCES.EXIT_CODE
-      ? "Shell exit codes: true = 0 (success)  ·  false = non-zero (failure)"
-      : null;
+      ? "0"
+      : operator === SCRIPT_OPERATORS.MATCHES
+        ? "^\d+ passing, 0 failing$"
+        : "0 failing";
+
+  const comparisonHint = describeComparison({
+    compareSource,
+    operator,
+    expected: showExpected ? (v.expected ?? undefined) : undefined,
+    ignoreCase: v.ignoreCase,
+  });
 
   return (
     <div className="space-y-3">
@@ -444,54 +492,77 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </DrawerRow>
       )}
 
-      {/* Compare Source + Expected Return */}
-      <DrawerRow narrow={narrow}>
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`${idPrefix}-compare-source`}
-            className="text-xs font-medium text-foreground"
-            title="Auto: 'true'/'false' check exit code (0=success); other values compare stdout. Stdout/Stderr: text match. Exit Code: numeric exit code directly."
-          >
-            Compare Source
-          </label>
+      {/* Pass when: compare source + operator + expected, read as one sentence. */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">Pass when</span>
+        <div
+          className={`flex gap-2 ${narrow ? "flex-col" : "flex-row items-start"}`}
+        >
           <CustomSelect
             id={`${idPrefix}-compare-source`}
             value={compareSource}
             onChange={(val) => update({ compareSource: val as CompareSource })}
             options={COMPARE_SOURCE_OPTIONS}
             disabled={disabled}
+            triggerAriaLabel="Compare source"
+            className={narrow ? "w-full" : "flex-1 min-w-0"}
           />
-          <span className="text-xxs text-description-fg">
-            {compareSourceHint}
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`${idPrefix}-returns`}
-            className="text-xs font-medium text-foreground"
-          >
-            Expected Return
-          </label>
-          <input
-            type="text"
-            id={`${idPrefix}-returns`}
-            value={returnsInput}
-            onChange={(e) => setReturnsInput(e.target.value)}
-            onBlur={(e) => update({ returns: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === KEYBOARD_KEYS.ENTER) e.currentTarget.blur();
-            }}
-            placeholder="true"
+          <CustomSelect
+            id={`${idPrefix}-operator`}
+            value={operator}
+            onChange={handleOperatorChange}
+            options={SCRIPT_OPERATOR_OPTIONS}
             disabled={disabled}
-            className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            triggerAriaLabel="Comparison operator"
+            className={narrow ? "w-full" : "flex-1 min-w-0"}
           />
-          {returnsExitCodeHint && (
-            <span className="text-xxs text-description-fg">
-              {returnsExitCodeHint}
-            </span>
+          {showExpected && (
+            <input
+              type="text"
+              id={`${idPrefix}-expected`}
+              aria-label="Expected value"
+              value={expectedInput}
+              onChange={(e) => setExpectedInput(e.target.value)}
+              onBlur={(e) =>
+                update({
+                  expected:
+                    e.target.value.trim() === "" ? undefined : e.target.value,
+                })
+              }
+              onKeyDown={(e) => {
+                if (e.key === KEYBOARD_KEYS.ENTER) e.currentTarget.blur();
+              }}
+              placeholder={expectedPlaceholder}
+              disabled={disabled}
+              className={`px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 ${
+                narrow ? "w-full" : "flex-1 min-w-0"
+              }`}
+            />
           )}
         </div>
-      </DrawerRow>
+        <span className="text-xxs text-description-fg">{comparisonHint}</span>
+        {showIgnoreCase && (
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id={`${idPrefix}-ignore-case`}
+              checked={v.ignoreCase ?? false}
+              onChange={(e) =>
+                update({ ignoreCase: e.target.checked ? true : undefined })
+              }
+              disabled={disabled}
+              className="w-4 h-4 accent-focus-border cursor-pointer"
+            />
+            <label
+              htmlFor={`${idPrefix}-ignore-case`}
+              className="text-xs font-medium text-foreground cursor-pointer"
+              title="Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators."
+            >
+              Ignore case
+            </label>
+          </div>
+        )}
+      </div>
 
       {/* On Pass + On Fail */}
       <DrawerRow narrow={narrow}>

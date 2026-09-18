@@ -7,9 +7,9 @@ import type {
   HarnessCapabilityRegistrySnapshot,
 } from "../types/CompatibilityTypes";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
+import { formatComparison } from "../utils/ScriptComparison";
 import {
   CONDITION_ACTIONS,
-  COMPARE_SOURCES,
   FINAL_STEP_PHASES,
   PREVIEW_PERMISSION_ACTIONS,
   PREVIEW_MUTATION_SCOPES,
@@ -1278,10 +1278,7 @@ export class ExecutionPreviewService {
       configured: true,
       scriptPath,
       description: [
-        `compare=${condition.compareSource ?? COMPARE_SOURCES.AUTO}`,
-        condition.returns !== undefined
-          ? `returns=${condition.returns}`
-          : undefined,
+        formatComparison(condition),
         condition.timeout !== undefined
           ? `timeout=${condition.timeout}s`
           : undefined,

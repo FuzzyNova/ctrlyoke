@@ -112,10 +112,10 @@ suite("ValidationUtils Extended Tests", () => {
   });
 
   suite("validateEndCondition", () => {
-    test("should accept valid end condition with script and returns", () => {
+    test("should accept a valid end condition with script and expected", () => {
       const condition = {
         script: "test.py",
-        returns: "true",
+        expected: "true",
       };
       const result = ValidationUtils.validateEndCondition(condition);
       assert.strictEqual(result.valid, true);
@@ -125,7 +125,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should accept end condition with optional timeout", () => {
       const condition = {
         script: "test.py",
-        returns: "true",
+        expected: "true",
         timeout: 5000,
       };
       const result = ValidationUtils.validateEndCondition(condition);
@@ -142,26 +142,35 @@ suite("ValidationUtils Extended Tests", () => {
 
     test("should reject missing script property", () => {
       const condition = {
-        returns: "true",
+        expected: "true",
       };
       const result = ValidationUtils.validateEndCondition(condition);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("script")));
     });
 
-    test("should reject missing returns property", () => {
-      const condition = {
+    test("should accept a condition with no expected value", () => {
+      // An end condition with no comparison passes when the script exits 0.
+      const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-      };
-      const result = ValidationUtils.validateEndCondition(condition);
+      });
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.errors.length, 0);
+    });
+
+    test("should reject the renamed `returns` property by name", () => {
+      const result = ValidationUtils.validateEndCondition({
+        script: "test.py",
+        returns: "true",
+      });
       assert.strictEqual(result.valid, false);
-      assert.ok(result.errors.some((e) => e.includes("returns")));
+      assert.ok(result.errors.some((e) => e.includes("expected")));
     });
 
     test("should reject non-positive timeout", () => {
       const condition = {
         script: "test.py",
-        returns: "true",
+        expected: "true",
         timeout: 0,
       };
       const result = ValidationUtils.validateEndCondition(condition);
@@ -172,7 +181,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject negative timeout", () => {
       const condition = {
         script: "test.py",
-        returns: "true",
+        expected: "true",
         timeout: -1000,
       };
       const result = ValidationUtils.validateEndCondition(condition);
@@ -182,21 +191,21 @@ suite("ValidationUtils Extended Tests", () => {
     test("should accept maxRetries in valid range (0-100)", () => {
       const zeroResult = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: 0,
       });
       assert.strictEqual(zeroResult.valid, true);
 
       const normalResult = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: 50,
       });
       assert.strictEqual(normalResult.valid, true);
 
       const maxResult = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: 100,
       });
       assert.strictEqual(maxResult.valid, true);
@@ -205,7 +214,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should accept maxRetries = -1 (unlimited)", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: -1,
       });
       assert.strictEqual(result.valid, true);
@@ -214,7 +223,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject maxRetries > 100 (unless -1)", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: 101,
       });
       assert.strictEqual(result.valid, false);
@@ -224,7 +233,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject maxRetries < -1", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         maxRetries: -2,
       });
       assert.strictEqual(result.valid, false);
@@ -233,7 +242,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should accept retryPrompt as string", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         retryPrompt: "Try again: $endCondition:stdout",
       });
       assert.strictEqual(result.valid, true);
@@ -244,7 +253,7 @@ suite("ValidationUtils Extended Tests", () => {
         prompt: "Test prompt",
         endCondition: {
           script: "test.py",
-          returns: "true",
+          expected: "true",
           onPass: "retry",
         },
       });
@@ -255,7 +264,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject retryPrompt as non-string", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         retryPrompt: 123,
       });
       assert.strictEqual(result.valid, false);
@@ -265,7 +274,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should accept passRetryPrompt as string", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         passRetryPrompt:
           "Keep working: $endCondition:actual vs $endCondition:expected",
       });
@@ -275,7 +284,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject passRetryPrompt as non-string", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
-        returns: "true",
+        expected: "true",
         passRetryPrompt: 123,
       });
       assert.strictEqual(result.valid, false);

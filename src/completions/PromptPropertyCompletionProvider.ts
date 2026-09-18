@@ -46,17 +46,31 @@ export class PromptPropertyCompletionProvider
     },
     {
       key: PROMPT_PROPERTIES.COMPARE_SOURCE,
-      detail: "Output source to compare against returns",
+      detail: "Which output the comparison reads",
       documentation:
-        "Which output to compare against `returns`. `auto` (default): `true`/`false` use exit code, other values compare stdout. `stdout`: always compare stdout. `stderr`: compare stderr. `exitCode`: compare the numeric exit code.",
+        "Which output is compared against `expected`. `exitCode` (default): the numeric exit code. `stdout`/`stderr`: the trimmed text. A text comparison does not also require a clean exit.",
       insertSnippet: `${PROMPT_PROPERTIES.COMPARE_SOURCE}: `,
     },
     {
-      key: PROMPT_PROPERTIES.RETURNS,
-      detail: "Expected return value",
+      key: PROMPT_PROPERTIES.OPERATOR,
+      detail: "How the comparison is made",
       documentation:
-        "Expected result to compare against. When absent, exit code 0 = pass. Interpretation depends on `compareSource` (default auto).",
-      insertSnippet: `${PROMPT_PROPERTIES.RETURNS}: `,
+        "How the compare source is compared against `expected`. `eq` (default) / `ne`, `contains` / `notContains`, `gte` / `gt` / `lte` / `lt` (numeric — both sides must be numbers), `matches` (unanchored regex), `isEmpty` / `isNotEmpty` (no value needed). Word tokens only: `>=` is a YAML parse error and `!=` silently parses as a YAML tag.",
+      insertSnippet: `${PROMPT_PROPERTIES.OPERATOR}: `,
+    },
+    {
+      key: PROMPT_PROPERTIES.EXPECTED,
+      detail: "Value the compare source is checked against",
+      documentation:
+        "Value the compare source is compared against, as a string or number. Omit it entirely to pass when the script exits 0 — there is no boolean form, and `true`/`false` are not exit-code values.",
+      insertSnippet: `${PROMPT_PROPERTIES.EXPECTED}: `,
+    },
+    {
+      key: PROMPT_PROPERTIES.IGNORE_CASE,
+      detail: "Compare text case-insensitively",
+      documentation:
+        "Compare text without regard to case. Applies only to the string operators (`eq`, `ne`, `contains`, `notContains`). Default: false.",
+      insertSnippet: `${PROMPT_PROPERTIES.IGNORE_CASE}: `,
     },
     {
       key: PROMPT_PROPERTIES.ON_PASS,
@@ -173,7 +187,7 @@ export class PromptPropertyCompletionProvider
       detail: "Validation script run after AI response",
       documentation:
         "End condition evaluated after the AI responds. If the condition passes, `onPass: retry` re-runs the step with `passRetryPrompt` (or the step's own prompt); if it fails, the step retries with `retryPrompt`. `onPass` supports `continue | retry | stopWorkflow`; `onFail` supports `continue | retry | stopWorkflow`.",
-      insertSnippet: `${PROMPT_PROPERTIES.END_CONDITION}:\n  script: \n  returns: "true"`,
+      insertSnippet: `${PROMPT_PROPERTIES.END_CONDITION}:\n  script: `,
     },
     {
       key: PROMPT_PROPERTIES.PRE_CONDITION,
@@ -405,7 +419,7 @@ export class PromptPropertyCompletionProvider
     scriptItem.documentation = new vscode.MarkdownString(
       "Runs a shell command or script file with no AI interaction.\n\n" +
         "Required additional property: `script` (the command or path to execute).\n\n" +
-        "Optional: `timeout` (ms), `compareSource`, `returns`, `onPass`, `onFail`."
+        "Optional: `timeout` (ms), `compareSource`/`operator`/`expected`, `onPass`, `onFail`."
     );
     scriptItem.insertText = STEP_TYPES.SCRIPT;
     scriptItem.sortText = `1_${STEP_TYPES.SCRIPT}`;

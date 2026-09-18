@@ -264,11 +264,11 @@ suite("PromptFileLoader Tests", () => {
     test("should seed default pre- and end-conditions from settings", () => {
       const preCondition = {
         script: "node pre-check.js",
-        returns: "true",
+        expected: "true",
       };
       const endCondition = {
         script: "node post-check.js",
-        returns: "passed",
+        expected: "passed",
       };
       configService.setCliOverlay({
         defaults: { preCondition, endCondition },
@@ -297,7 +297,7 @@ suite("PromptFileLoader Tests", () => {
           preCondition: { script: "default-pre.js" },
           endCondition: {
             script: "default-end.js",
-            returns: "true",
+            expected: "true",
           },
         },
       });
@@ -410,7 +410,7 @@ suite("PromptFileLoader Tests", () => {
 
     test("should materialize every settings-backed execution property", () => {
       const preCondition = { script: "settings-pre.js" };
-      const endCondition = { script: "settings-end.js", returns: "true" };
+      const endCondition = { script: "settings-end.js", expected: "true" };
       const hooks = [{ event: "stop" as const, command: "echo settings" }];
       const errorBehavior = { onError: "retry" as const, maxRetries: 2 };
       const toolPermissions = {
@@ -579,16 +579,16 @@ suite("PromptFileLoader Tests", () => {
         });
         assert.deepStrictEqual(loaded.preCondition, {
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
-          returns: "true",
-          compareSource: "auto",
+          expected: "true",
+          compareSource: "stdout",
           timeout: 10000,
           onPass: "continue",
           onFail: "skipPrompt",
         });
         assert.deepStrictEqual(loaded.endCondition, {
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
-          returns: "true",
-          compareSource: "auto",
+          expected: "true",
+          compareSource: "stdout",
           timeout: 30000,
           maxRetries: 2,
           resumeSessionOnRetry: true,
@@ -608,8 +608,8 @@ suite("PromptFileLoader Tests", () => {
           type: "script",
           name: "final-cleanup-script",
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
-          returns: "true",
-          compareSource: "auto",
+          expected: "true",
+          compareSource: "stdout",
           timeout: 10000,
           onPass: "continue",
           onFail: "continue",
@@ -645,7 +645,7 @@ suite("PromptFileLoader Tests", () => {
       });
       assert.deepStrictEqual(stepWithAllProperties.preCondition, {
         script: "manual-test/.ctrlyoke/scripts/always_true.py",
-        returns: "true",
+        expected: "true",
         compareSource: "stdout",
         timeout: 15000,
         onPass: "continue",
@@ -653,7 +653,7 @@ suite("PromptFileLoader Tests", () => {
       });
       assert.deepStrictEqual(stepWithAllProperties.endCondition, {
         script: "manual-test/.ctrlyoke/scripts/always_true.py",
-        returns: "true",
+        expected: "true",
         compareSource: "stdout",
         timeout: 45000,
         maxRetries: 3,

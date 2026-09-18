@@ -1,6 +1,6 @@
 import type { ConditionEvaluationSummary } from "../types/CtrlYokeTypes";
 import {
-  COMPARE_SOURCES,
+  DEFAULT_COMPARE_SOURCE,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
   type RetryPromptPlaceholder,
@@ -38,7 +38,7 @@ const FIELD_VALUES: Record<
   [RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE]: (summary) =>
     String(summary.exitCode ?? ""),
   [RETRY_PROMPT_PLACEHOLDERS.COMPARE_SOURCE]: (summary) =>
-    summary.compareSource ?? COMPARE_SOURCES.AUTO,
+    summary.compareSource ?? DEFAULT_COMPARE_SOURCE,
 };
 
 function isRetryPromptPlaceholder(

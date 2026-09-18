@@ -13,10 +13,14 @@ import {
   FINAL_STEP_PHASES,
   EDITOR_TARGET_KINDS,
   CONDITION_ACTIONS,
-  COMPARE_SOURCES,
   PROMPT_PROPERTIES,
 } from "../types/messages";
-import { STEP_TYPES, type ExecutionMode } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
+  STEP_TYPES,
+  type ExecutionMode,
+} from "@root/types/DashboardConstants";
 import type {
   PromptEditorInsertRequest,
   ScriptStep,
@@ -133,7 +137,9 @@ export interface SavedNewStepState {
   scriptOnPass?: string;
   scriptOnFail?: string;
   scriptCompareSource?: string;
-  scriptReturns?: string;
+  scriptOperator?: string;
+  scriptExpected?: string;
+  scriptIgnoreCase?: boolean;
   scriptEnv?: Record<string, string>;
   scriptExecutionMode?: ExecutionMode;
   scriptShell?: string;
@@ -189,7 +195,9 @@ interface EditorState {
   scriptOnPass: string;
   scriptOnFail: string;
   scriptCompareSource: string;
-  scriptReturns: string;
+  scriptOperator: string;
+  scriptExpected: string;
+  scriptIgnoreCase: boolean;
   scriptEnv: Record<string, string> | undefined;
   scriptExecutionMode: ExecutionMode | undefined;
   scriptShell: string | undefined;
@@ -235,7 +243,9 @@ interface EditorActions {
   setScriptOnPass: (value: string) => void;
   setScriptOnFail: (value: string) => void;
   setScriptCompareSource: (value: string) => void;
-  setScriptReturns: (value: string) => void;
+  setScriptOperator: (value: string) => void;
+  setScriptExpected: (value: string) => void;
+  setScriptIgnoreCase: (value: boolean) => void;
   setScriptEnv: (value: Record<string, string> | undefined) => void;
   setScriptExecutionMode: (value: ExecutionMode | undefined) => void;
   setScriptShell: (value: string | undefined) => void;
@@ -320,8 +330,10 @@ const initialState: EditorState = {
   scriptTimeout: undefined,
   scriptOnPass: CONDITION_ACTIONS.CONTINUE,
   scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-  scriptCompareSource: COMPARE_SOURCES.AUTO,
-  scriptReturns: "",
+  scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+  scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+  scriptExpected: "",
+  scriptIgnoreCase: false,
   scriptEnv: undefined,
   scriptExecutionMode: undefined,
   scriptShell: undefined,
@@ -403,8 +415,11 @@ export const useEditorStore = create<
         scriptOnFail:
           savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
         scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
-        scriptReturns: savedNewPromptState.scriptReturns ?? "",
+          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
+        scriptOperator:
+          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
+        scriptExpected: savedNewPromptState.scriptExpected ?? "",
+        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         scriptShell: savedNewPromptState.scriptShell,
@@ -434,8 +449,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -455,8 +472,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -485,7 +504,9 @@ export const useEditorStore = create<
         scriptOnPass: state.scriptOnPass,
         scriptOnFail: state.scriptOnFail,
         scriptCompareSource: state.scriptCompareSource,
-        scriptReturns: state.scriptReturns,
+        scriptOperator: state.scriptOperator,
+        scriptExpected: state.scriptExpected,
+        scriptIgnoreCase: state.scriptIgnoreCase,
         scriptEnv: state.scriptEnv,
         scriptExecutionMode: state.scriptExecutionMode,
         scriptShell: state.scriptShell,
@@ -508,7 +529,9 @@ export const useEditorStore = create<
             scriptOnPass: state.scriptOnPass,
             scriptOnFail: state.scriptOnFail,
             scriptCompareSource: state.scriptCompareSource,
-            scriptReturns: state.scriptReturns,
+            scriptOperator: state.scriptOperator,
+            scriptExpected: state.scriptExpected,
+            scriptIgnoreCase: state.scriptIgnoreCase,
             scriptEnv: state.scriptEnv,
             scriptExecutionMode: state.scriptExecutionMode,
             scriptShell: state.scriptShell,
@@ -557,11 +580,17 @@ export const useEditorStore = create<
           ? (pendingEdit.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW)
           : (promptData.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW),
         scriptCompareSource: pendingEdit
-          ? (pendingEdit.scriptCompareSource ?? COMPARE_SOURCES.AUTO)
-          : (promptData.compareSource ?? COMPARE_SOURCES.AUTO),
-        scriptReturns: pendingEdit
-          ? (pendingEdit.scriptReturns ?? "")
-          : (promptData.returns ?? ""),
+          ? (pendingEdit.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE)
+          : (promptData.compareSource ?? DEFAULT_COMPARE_SOURCE),
+        scriptOperator: pendingEdit
+          ? (pendingEdit.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR)
+          : (promptData.operator ?? DEFAULT_SCRIPT_OPERATOR),
+        scriptExpected: pendingEdit
+          ? (pendingEdit.scriptExpected ?? "")
+          : String(promptData.expected ?? ""),
+        scriptIgnoreCase: pendingEdit
+          ? (pendingEdit.scriptIgnoreCase ?? false)
+          : (promptData.ignoreCase ?? false),
         scriptEnv: pendingEdit ? pendingEdit.scriptEnv : promptData.env,
         scriptExecutionMode: pendingEdit
           ? pendingEdit.scriptExecutionMode
@@ -620,8 +649,10 @@ export const useEditorStore = create<
         scriptOnFail:
           pendingEdit?.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
         scriptCompareSource:
-          pendingEdit?.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
-        scriptReturns: pendingEdit?.scriptReturns ?? "",
+          pendingEdit?.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
+        scriptOperator: pendingEdit?.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
+        scriptExpected: pendingEdit?.scriptExpected ?? "",
+        scriptIgnoreCase: pendingEdit?.scriptIgnoreCase ?? false,
         scriptEnv: pendingEdit?.scriptEnv,
         scriptExecutionMode: pendingEdit?.scriptExecutionMode,
         scriptShell: pendingEdit?.scriptShell,
@@ -662,8 +693,11 @@ export const useEditorStore = create<
         scriptOnFail:
           savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
         scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
-        scriptReturns: savedNewPromptState.scriptReturns ?? "",
+          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
+        scriptOperator:
+          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
+        scriptExpected: savedNewPromptState.scriptExpected ?? "",
+        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         scriptShell: savedNewPromptState.scriptShell,
@@ -695,8 +729,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -717,8 +753,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -748,7 +786,9 @@ export const useEditorStore = create<
       scriptOnPass: state.scriptOnPass,
       scriptOnFail: state.scriptOnFail,
       scriptCompareSource: state.scriptCompareSource,
-      scriptReturns: state.scriptReturns,
+      scriptOperator: state.scriptOperator,
+      scriptExpected: state.scriptExpected,
+      scriptIgnoreCase: state.scriptIgnoreCase,
       scriptEnv: state.scriptEnv,
       scriptExecutionMode: state.scriptExecutionMode,
       scriptShell: state.scriptShell,
@@ -771,8 +811,11 @@ export const useEditorStore = create<
         scriptOnFail:
           savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
         scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
-        scriptReturns: savedNewPromptState.scriptReturns ?? "",
+          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
+        scriptOperator:
+          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
+        scriptExpected: savedNewPromptState.scriptExpected ?? "",
+        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
         scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         scriptShell: savedNewPromptState.scriptShell,
@@ -800,8 +843,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -821,8 +866,10 @@ export const useEditorStore = create<
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: COMPARE_SOURCES.AUTO,
-          scriptReturns: "",
+          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+          scriptExpected: "",
+          scriptIgnoreCase: false,
           scriptEnv: undefined,
           scriptExecutionMode: undefined,
           scriptShell: undefined,
@@ -885,9 +932,21 @@ export const useEditorStore = create<
       isDirty: true,
     }),
 
-  setScriptReturns: (value) =>
+  setScriptExpected: (value) =>
     set({
-      scriptReturns: value,
+      scriptExpected: value,
+      isDirty: true,
+    }),
+
+  setScriptOperator: (value) =>
+    set({
+      scriptOperator: value,
+      isDirty: true,
+    }),
+
+  setScriptIgnoreCase: (value) =>
+    set({
+      scriptIgnoreCase: value,
       isDirty: true,
     }),
 
@@ -1157,8 +1216,10 @@ export const useEditorStore = create<
       scriptTimeout: undefined,
       scriptOnPass: CONDITION_ACTIONS.CONTINUE,
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-      scriptCompareSource: COMPARE_SOURCES.AUTO,
-      scriptReturns: "",
+      scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+      scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+      scriptExpected: "",
+      scriptIgnoreCase: false,
       scriptEnv: undefined,
       scriptExecutionMode: undefined,
       scriptShell: undefined,
@@ -1179,8 +1240,10 @@ export const useEditorStore = create<
       scriptTimeout: undefined,
       scriptOnPass: CONDITION_ACTIONS.CONTINUE,
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-      scriptCompareSource: COMPARE_SOURCES.AUTO,
-      scriptReturns: "",
+      scriptCompareSource: DEFAULT_COMPARE_SOURCE,
+      scriptOperator: DEFAULT_SCRIPT_OPERATOR,
+      scriptExpected: "",
+      scriptIgnoreCase: false,
       scriptEnv: undefined,
       scriptExecutionMode: undefined,
       scriptShell: undefined,

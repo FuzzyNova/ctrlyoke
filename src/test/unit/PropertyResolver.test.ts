@@ -106,14 +106,14 @@ suite("PropertyResolver Tests", () => {
         },
         {
           property: "endCondition",
-          prompt: { script: "prompt-end", returns: "true" },
-          workflow: { script: "workflow-end", returns: "true" },
+          prompt: { script: "prompt-end", expected: "true" },
+          workflow: { script: "workflow-end", expected: "true" },
           defaults: undefined,
         },
         {
           property: "preCondition",
-          prompt: { script: "prompt-pre", returns: "true" },
-          workflow: { script: "workflow-pre", returns: "true" },
+          prompt: { script: "prompt-pre", expected: "true" },
+          workflow: { script: "workflow-pre", expected: "true" },
           defaults: undefined,
         },
         {
@@ -368,7 +368,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: ["workflow-mcp"],
         hooks: [{ event: "stop", command: "echo workflow" }],
         sessionId: "workflow-session",
-        endCondition: { script: "workflow-end.js", returns: "true" },
+        endCondition: { script: "workflow-end.js", expected: "true" },
         preCondition: { script: "workflow-pre.js" },
         additionalArgs: "--workflow",
         toolPermissions: {
@@ -405,7 +405,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.sessionId, "workflow-session");
       assert.deepStrictEqual(resolved.endCondition, {
         script: "workflow-end.js",
-        returns: "true",
+        expected: "true",
       });
       assert.deepStrictEqual(resolved.preCondition, {
         script: "workflow-pre.js",
@@ -429,7 +429,7 @@ suite("PropertyResolver Tests", () => {
           hooks: [{ event: "stop", command: "echo prompt" }],
           endCondition: {
             script: "prompt-end.js",
-            returns: "passed",
+            expected: "passed",
           },
           preCondition: { script: "prompt-pre.js" },
           toolPermissions: {
@@ -444,7 +444,7 @@ suite("PropertyResolver Tests", () => {
           hooks: [{ event: "stop", command: "echo workflow" }],
           endCondition: {
             script: "workflow-end.js",
-            returns: "passed",
+            expected: "passed",
           },
           preCondition: { script: "workflow-pre.js" },
           toolPermissions: {
@@ -459,7 +459,7 @@ suite("PropertyResolver Tests", () => {
       ]);
       assert.deepStrictEqual(resolved.endCondition, {
         script: "prompt-end.js",
-        returns: "passed",
+        expected: "passed",
       });
       assert.deepStrictEqual(resolved.preCondition, {
         script: "prompt-pre.js",
@@ -481,7 +481,7 @@ suite("PropertyResolver Tests", () => {
         skills: ["workflow-skill"],
         mcpServers: ["workflow-mcp"],
         hooks: [{ event: "stop", command: "echo workflow" }],
-        endCondition: { script: "workflow-end.js", returns: "true" },
+        endCondition: { script: "workflow-end.js", expected: "true" },
         preCondition: { script: "workflow-pre.js" },
         additionalArgs: "--workflow",
         toolPermissions: {
@@ -944,11 +944,11 @@ suite("PropertyResolver Tests", () => {
     test("should use prompt-level endCondition when specified", () => {
       const promptCondition = {
         script: "prompt-test.js",
-        returns: "true",
+        expected: "true",
       };
       const workflowCondition = {
         script: "workflow-test.js",
-        returns: "true",
+        expected: "true",
       };
 
       const prompt: PromptStep = {
@@ -967,7 +967,7 @@ suite("PropertyResolver Tests", () => {
     test("should use workflow-level endCondition when prompt-level not specified", () => {
       const workflowCondition = {
         script: "workflow-test.js",
-        returns: "true",
+        expected: "true",
       };
 
       const prompt: PromptStep = {
@@ -997,7 +997,7 @@ suite("PropertyResolver Tests", () => {
     test("should inherit workflow endCondition when prompt value is undefined", () => {
       const workflowCondition = {
         script: "workflow-test.js",
-        returns: "true",
+        expected: "true",
       };
 
       const prompt: PromptStep = {
@@ -1420,7 +1420,7 @@ suite("PropertyResolver Tests", () => {
         // mcpServers: not specified - prompt overrides anyway
         endCondition: {
           script: "test.js",
-          returns: "true",
+          expected: "true",
         }, // Should be used
       };
 
@@ -1433,7 +1433,7 @@ suite("PropertyResolver Tests", () => {
       assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]); // From prompt
       assert.deepStrictEqual(resolved.endCondition, {
         script: "test.js",
-        returns: "true",
+        expected: "true",
       }); // From workflow
     });
   });

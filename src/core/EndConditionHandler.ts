@@ -285,8 +285,8 @@ export class EndConditionHandler {
         );
         const failureReason =
           maxRetries > 0
-            ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
-            : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
+            ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.expected}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
+            : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.expected}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
 
         Log.error(
           `[EndConditionHandler] End condition failed after ${retryCount} retries (max: ${maxRetries})`
@@ -499,8 +499,9 @@ export class EndConditionHandler {
       prompt.endCondition?.script ?? "",
       evaluationResult,
       {
-        expected: prompt.endCondition?.returns,
+        expected: prompt.endCondition?.expected,
         compareSource: prompt.endCondition?.compareSource,
+        operator: prompt.endCondition?.operator,
       }
     );
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
@@ -535,7 +536,7 @@ export class EndConditionHandler {
 
     if (!retryPromptTemplate) {
       // Fallback retry prompt if none configured (should rarely happen due to smart defaults)
-      return `The previous task validation failed. Expected: ${prompt.endCondition?.returns}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
+      return `The previous task validation failed. Expected: ${prompt.endCondition?.expected}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
     }
 
     return retryPromptTemplate;

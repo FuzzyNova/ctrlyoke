@@ -22,14 +22,11 @@ import type {
 } from "../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
-  COMPARE_SOURCES,
-  COMPARE_SOURCE_LABELS,
   OPERATION_STATUS,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
-  SCRIPT_MATCH_RULE_NONE,
   SCRIPT_OUTPUT_SOURCES,
   SCRIPT_SOURCE_LABELS,
   SCRIPT_VERDICT_OUTCOMES,
@@ -39,6 +36,7 @@ import {
 import type { ScriptVerdict } from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
+import { formatComparison } from "../utils/ScriptComparison";
 import type {
   PromptCompleteData,
   PromptStartData,
@@ -73,15 +71,6 @@ const ASK_USER_QUESTION_DECLINE_LABELS = {
   clarify: "Asked to clarify",
   rejected: "Question declined",
 } as const satisfies Record<AskUserQuestionDeclined["reason"], string>;
-
-const SCRIPT_MATCH_RULE_LABELS: Record<ScriptVerdict["matchRule"], string> = {
-  exitCode: "exit code",
-  exact: "exact",
-  boolean: "boolean",
-  numericGte: "numeric ≥",
-  substring: "substring",
-  [SCRIPT_MATCH_RULE_NONE]: "no match",
-};
 
 interface ScriptStreamingState {
   shownChars: number;
@@ -123,13 +112,7 @@ function scriptHeaderLabel(output: CliOutput): string | undefined {
 }
 
 function scriptCompareLabel(verdict: ScriptVerdict): string {
-  const actualSource =
-    verdict.actualSource === COMPARE_SOURCES.EXIT_CODE
-      ? "exit code"
-      : verdict.actualSource;
-  return verdict.compareSource === COMPARE_SOURCES.AUTO
-    ? `auto → ${actualSource}`
-    : COMPARE_SOURCE_LABELS[verdict.compareSource];
+  return formatComparison(verdict);
 }
 
 function scriptOutcomePresentation(outcome: ScriptVerdict["outcome"]): {
@@ -702,9 +685,6 @@ export class CliTerminalFormatter {
       "Actual",
       verdict.actual || "∅",
       border
-    );
-    console.log(
-      `${border}   Matched by: ${SCRIPT_MATCH_RULE_LABELS[verdict.matchRule]}`
     );
     console.log(
       `${border}   Result: ${presentation.label}${verdict.timedOut ? " (timed out)" : ""}`

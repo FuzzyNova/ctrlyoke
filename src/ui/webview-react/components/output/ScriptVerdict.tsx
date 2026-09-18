@@ -2,9 +2,13 @@ import { memo, useEffect } from "react";
 import type { ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
-  SCRIPT_MATCH_RULE_NONE,
   SCRIPT_VERDICT_OUTCOMES,
 } from "@root/types/DashboardConstants";
+import {
+  formatComparison,
+  formatComparisonSubject,
+  operatorTakesNoValue,
+} from "@root/utils/ScriptComparison";
 import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
@@ -22,33 +26,11 @@ interface ScriptVerdictProps {
 }
 
 function getCompareLabel(verdict: ScriptVerdictData): string {
-  const actualSource =
-    verdict.actualSource === COMPARE_SOURCES.EXIT_CODE
-      ? "exit code"
-      : verdict.actualSource;
-  if (verdict.compareSource === COMPARE_SOURCES.AUTO) {
-    return `auto → ${actualSource}`;
-  }
-  return verdict.compareSource === COMPARE_SOURCES.EXIT_CODE
-    ? COMPARE_SOURCES.EXIT_CODE
-    : verdict.compareSource;
+  return formatComparison(verdict);
 }
 
 function getExpectedLabel(verdict: ScriptVerdictData): string {
-  return verdict.expected ?? "exit code 0 (no `returns` set)";
-}
-
-function getMatchedByLabel(verdict: ScriptVerdictData): string {
-  switch (verdict.matchRule) {
-    case "numericGte":
-      return "numeric ≥";
-    case COMPARE_SOURCES.EXIT_CODE:
-      return "exit code";
-    case SCRIPT_MATCH_RULE_NONE:
-      return "no match";
-    default:
-      return verdict.matchRule;
-  }
+  return verdict.expected ?? "exit code 0 (no `expected` set)";
 }
 
 function getOutcomePresentation(outcome: ScriptVerdictData["outcome"]): {
@@ -96,9 +78,9 @@ function getActionLabel(verdict: ScriptVerdictData): string {
 
 function formatSummaryValue(
   value: string,
-  actualSource: ScriptVerdictData["actualSource"]
+  compareSource: ScriptVerdictData["compareSource"]
 ): string {
-  return actualSource === COMPARE_SOURCES.EXIT_CODE ||
+  return compareSource === COMPARE_SOURCES.EXIT_CODE ||
     /^-?\d+(\.\d+)?$/.test(value)
     ? value
     : `"${value}"`;
@@ -120,11 +102,12 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
     const collapsedActual = actualPreview.visibleText.replace(/\s+/g, " ");
     const actualLabel = formatSummaryValue(
       collapsedActual || "∅",
-      verdict.actualSource
+      verdict.compareSource
     );
-    const collapsedExpected =
-      verdict.expected ??
-      (verdict.actualSource === COMPARE_SOURCES.EXIT_CODE ? "0" : undefined);
+    // isEmpty/isNotEmpty carry no value, so the subject says it all.
+    const collapsedExpected = operatorTakesNoValue(verdict.operator)
+      ? undefined
+      : (verdict.expected ?? "0");
 
     useEffect(() => {
       const activeActualMatch = actualFindMatches.find((match) => match.active);
@@ -151,16 +134,15 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             {presentation.icon} {presentation.label}
           </span>{" "}
           <span className="text-description-fg">
-            · {getCompareLabel(verdict)}
-            {collapsedExpected != null &&
-              verdict.actualSource !== COMPARE_SOURCES.EXIT_CODE && (
-                <>
-                  {" ~ "}
-                  <span>
-                    {highlightText(collapsedExpected, expectedFindMatches)}
-                  </span>
-                </>
-              )}
+            · {formatComparisonSubject(verdict)}
+            {collapsedExpected != null && (
+              <>
+                {" "}
+                <span>
+                  {highlightText(collapsedExpected, expectedFindMatches)}
+                </span>
+              </>
+            )}
           </span>
           {verdict.outcome === SCRIPT_VERDICT_OUTCOMES.ERRORED &&
           verdict.error ? (
@@ -170,18 +152,7 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
             </>
           ) : (
             <>
-              {verdict.actualSource === COMPARE_SOURCES.EXIT_CODE && (
-                <>
-                  {" "}
-                  <span className="text-description-fg">
-                    · expected{" "}
-                    {highlightText(
-                      collapsedExpected ?? "0",
-                      expectedFindMatches
-                    )}
-                  </span>
-                </>
-              )}{" "}
+              {" "}
               <span className="text-description-fg">
                 · actual{" "}
                 <span className="text-foreground">
@@ -227,8 +198,6 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
           <dd className="min-w-0 whitespace-pre-wrap break-words">
             {highlightText(actualPreview.visibleText || "∅", actualFindMatches)}
           </dd>
-          <dt className="text-description-fg">Matched by</dt>
-          <dd className="min-w-0">{getMatchedByLabel(verdict)}</dd>
           <dt className="text-description-fg">Result</dt>
           <dd className="min-w-0">
             {presentation.label}

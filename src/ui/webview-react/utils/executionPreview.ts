@@ -5,6 +5,8 @@ import {
 } from "@store/workflowStore";
 import {
   CONDITION_ACTIONS,
+  DEFAULT_COMPARE_SOURCE,
+  DEFAULT_SCRIPT_OPERATOR,
   EDITOR_TARGET_KINDS,
   FINAL_STEP_PHASES,
   STEP_TYPES,
@@ -59,13 +61,19 @@ export function getExecutionPreviewEditorSnapshot():
       ...(editor.scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW
         ? { onFail: editor.scriptOnFail as ScriptStep["onFail"] }
         : {}),
-      ...(editor.scriptCompareSource !== "auto"
+      ...(editor.scriptCompareSource !== DEFAULT_COMPARE_SOURCE
         ? {
             compareSource:
               editor.scriptCompareSource as ScriptStep["compareSource"],
           }
         : {}),
-      ...(editor.scriptReturns.trim() ? { returns: editor.scriptReturns } : {}),
+      ...(editor.scriptOperator !== DEFAULT_SCRIPT_OPERATOR
+        ? { operator: editor.scriptOperator as ScriptStep["operator"] }
+        : {}),
+      ...(editor.scriptExpected.trim()
+        ? { expected: editor.scriptExpected }
+        : {}),
+      ...(editor.scriptIgnoreCase ? { ignoreCase: true } : {}),
       ...(editor.stepEnabled ? {} : { enabled: false }),
     };
     if (!editor.promptName.trim()) delete step.name;

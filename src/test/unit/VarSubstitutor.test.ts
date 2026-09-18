@@ -174,7 +174,7 @@ suite("VarSubstitutor Tests", () => {
         makeProps({
           endCondition: {
             script: "scripts/check-{{env}}.sh",
-            returns: "true",
+            expected: "true",
           },
         }),
         { env: "prod" }
@@ -187,7 +187,7 @@ suite("VarSubstitutor Tests", () => {
         makeProps({
           endCondition: {
             script: "check.sh",
-            returns: "true",
+            expected: "true",
             retryPrompt: "Fix issues in {{repoPath}}",
             passRetryPrompt: "Keep working in {{repoPath}}",
           },
@@ -262,7 +262,7 @@ suite("VarSubstitutor Tests", () => {
         makeProps({
           endCondition: {
             script: "check.sh",
-            returns: "true",
+            expected: "true",
             env: { TARGET: "{{env}}" },
           },
         }),

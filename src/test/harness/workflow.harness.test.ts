@@ -180,7 +180,7 @@ suite("Workflow Feature Harness Tests", function () {
             prompt: `Run the bash command exactly as written: \`echo SUCCESS > "${outputFile}"\`. Do not explain — just run it.`,
             endCondition: {
               script: endCondScript,
-              returns: "true",
+              expected: "true",
             },
           },
         ],
@@ -239,7 +239,7 @@ suite("Workflow Feature Harness Tests", function () {
           prompt: `Run the bash command exactly as written: \`echo ATTEMPT1 > "${retryMarker}"\`. Do not explain — just run it.`,
           endCondition: {
             script: endCondScript,
-            returns: "true",
+            expected: "true",
             maxRetries: 1,
             retryPrompt: `Run the bash command exactly as written: \`echo ATTEMPT2 > "${retryMarker}"\`. Do not explain — just run it.`,
           },

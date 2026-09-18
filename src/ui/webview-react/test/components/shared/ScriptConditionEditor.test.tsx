@@ -104,7 +104,7 @@ describe("ScriptConditionEditor", () => {
     render(
       <ScriptConditionEditor
         variant="endCondition"
-        value={{ returns: "true" }}
+        value={{ expected: "true" }}
         onChange={onChange}
         idPrefix="test-condition"
       />
@@ -285,7 +285,7 @@ describe("ScriptConditionEditor", () => {
           variant={variant}
           value={{
             script: "npm test",
-            returns: "true",
+            expected: "true",
             env: { CI_TOKEN: "${secret:CI_TOKEN}" },
           }}
           onChange={onChange}
@@ -329,7 +329,7 @@ describe("ScriptConditionEditor", () => {
           variant={variant}
           value={{
             script: "npm test",
-            returns: "true",
+            expected: "true",
             env: { CI_TOKEN: "${secret:CI_TOKEN}" },
           }}
           onChange={onChange}
@@ -355,7 +355,7 @@ describe("ScriptConditionEditor", () => {
         variant="endCondition"
         value={{
           script: "npm test",
-          returns: "true",
+          expected: "true",
           onPass: CONDITION_ACTIONS.RETRY,
           passRetryPrompt: "Keep strengthening the test",
         }}
@@ -396,7 +396,7 @@ describe("ScriptConditionEditor", () => {
         variant="endCondition"
         value={{
           script: "npm test",
-          returns: "true",
+          expected: "true",
           onFail: CONDITION_ACTIONS.RETRY,
           retryPrompt: "Fix $preCondition:stderr",
         }}
@@ -433,7 +433,7 @@ describe("ScriptConditionEditor", () => {
         render(
           <ScriptConditionEditor
             variant={variant}
-            value={{ script: "npm test", returns: "true" }}
+            value={{ script: "npm test", expected: "true" }}
             onChange={vi.fn()}
             idPrefix="test-condition"
           />
@@ -455,7 +455,7 @@ describe("ScriptConditionEditor", () => {
         render(
           <ScriptConditionEditor
             variant={variant}
-            value={{ script: "npm test", returns: "true", timeout: 5000 }}
+            value={{ script: "npm test", expected: "true", timeout: 5000 }}
             onChange={onChange}
             idPrefix="test-condition"
           />
@@ -478,7 +478,7 @@ describe("ScriptConditionEditor", () => {
         render(
           <ScriptConditionEditor
             variant={variant}
-            value={{ script: "npm test", returns: "true" }}
+            value={{ script: "npm test", expected: "true" }}
             onChange={onChange}
             idPrefix="test-condition"
           />
@@ -705,7 +705,7 @@ describe("ScriptConditionEditor", () => {
         render(
           <ScriptConditionEditor
             variant={variant}
-            value={{ script: "npm test", returns: "true" }}
+            value={{ script: "npm test", expected: "true" }}
             onChange={vi.fn()}
             idPrefix="test-condition"
           />
@@ -802,5 +802,178 @@ describe("ScriptConditionEditor", () => {
         );
       }
     );
+  });
+
+  describe("Pass when row", () => {
+    it("shows the exit-code defaults and the generated sentence when nothing is set", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Compare source" })
+      ).toHaveTextContent("Exit code");
+      expect(
+        screen.getByRole("button", { name: "Comparison operator" })
+      ).toHaveTextContent("==");
+      // The unset value shows its default as a placeholder rather than writing
+      // it onto the step.
+      expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+        "placeholder",
+        "0"
+      );
+      expect(
+        screen.getByText("Passes when the script exits with code 0.")
+      ).toBeInTheDocument();
+    });
+
+    it("describes a stdout comparison with the configured operator", () => {
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{
+            script: "npm test",
+            compareSource: "stdout",
+            operator: "contains",
+            expected: "0 failing",
+          }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(
+        screen.getByText('Passes when stdout contains "0 failing".')
+      ).toBeInTheDocument();
+    });
+
+    it("commits an operator and omits the default instead of writing it", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{ script: "npm test", compareSource: "stdout" }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Comparison operator" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "contains" }));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ operator: "contains" })
+      );
+
+      onChange.mockClear();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Comparison operator" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "==" }));
+
+      // `eq` is the default, so selecting it clears the field rather than
+      // serializing a redundant value onto the step.
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ operator: undefined })
+      );
+    });
+
+    it("hides the value input for operators that take no value, and clears it", () => {
+      const onChange = vi.fn();
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{
+            script: "npm run lint",
+            compareSource: "stdout",
+            expected: "leftover",
+          }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(screen.getByLabelText("Expected value")).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Comparison operator" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "is empty" }));
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ operator: "isEmpty", expected: undefined })
+      );
+    });
+
+    it("offers ignore case only for string operators and clears it otherwise", () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{
+            script: "npm test",
+            compareSource: "stdout",
+            operator: "contains",
+            expected: "PASS",
+            ignoreCase: true,
+          }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(screen.getByLabelText("Ignore case")).toBeChecked();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Comparison operator" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: ">=" }));
+
+      // A hidden control must clear its value, not merely stop displaying it —
+      // otherwise a stale ignoreCase stays serialized on a numeric comparison.
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ operator: "gte", ignoreCase: undefined })
+      );
+
+      rerender(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{
+            script: "npm test",
+            compareSource: "stdout",
+            operator: "gte",
+            expected: "80",
+          }}
+          onChange={onChange}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(screen.queryByLabelText("Ignore case")).toBeNull();
+    });
+
+    it("never offers `auto` as a compare source", () => {
+      render(
+        <ScriptConditionEditor
+          variant="preCondition"
+          value={{ script: "npm test" }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Compare source" }));
+      expect(screen.queryByRole("button", { name: /auto/i })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Stdout" })
+      ).toBeInTheDocument();
+    });
   });
 });

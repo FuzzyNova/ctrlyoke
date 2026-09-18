@@ -1178,12 +1178,12 @@ suite("WebviewSettingsSync", () => {
         errorBehavior: { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
         endCondition: {
           script: "npm test",
-          returns: "true",
+          expected: "true",
           maxRetries: 3,
           timeout: 60,
           retryPrompt: "Fix the failing tests",
         },
-        preCondition: { script: "check.sh", returns: "ok" },
+        preCondition: { script: "check.sh", expected: "ok" },
         priorContext: "last",
         additionalArgs: "--verbose",
         toolPermissions: {
@@ -1965,11 +1965,11 @@ suite("WebviewSettingsSync", () => {
     test("should write the expected config path for each schema-backed workflow default", async () => {
       const endCondition = {
         script: "npm test",
-        returns: "true",
+        expected: "true",
       };
       const preCondition = {
         script: "npm run lint",
-        returns: "0",
+        expected: "0",
       };
       const hook = { event: "postToolUse", command: "echo done" };
       const errorBehavior = {

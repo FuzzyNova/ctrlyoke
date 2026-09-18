@@ -105,9 +105,7 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
 function successResult(stdout: string = "ok"): EvaluationResult {
   return {
     passed: true,
-    matchRule: "exact",
     actual: stdout,
-    actualSource: "stdout",
     errored: false,
     result: stdout,
     stdout,
@@ -120,9 +118,7 @@ function successResult(stdout: string = "ok"): EvaluationResult {
 function validationFailure(result: string = "bad"): EvaluationResult {
   return {
     passed: false,
-    matchRule: "none",
     actual: result,
-    actualSource: "stdout",
     errored: false,
     result,
     stdout: result,
@@ -135,9 +131,7 @@ function validationFailure(result: string = "bad"): EvaluationResult {
 function evaluationError(error: string = "could not run"): EvaluationResult {
   return {
     passed: false,
-    matchRule: "none",
     actual: "",
-    actualSource: "exitCode",
     errored: true,
     result: "",
     stdout: "partial stdout",
@@ -159,7 +153,7 @@ function createPrompt(
 ): PromptStep {
   const endCondition = {
     script: "check-results.js",
-    returns: "ok",
+    expected: "ok",
     retryPrompt: "Please fix the issues",
     maxRetries,
     onPass,
@@ -294,7 +288,6 @@ suite("EndConditionHandler", () => {
       script: "check-results.js",
       expected: "ok",
       actual: "ok",
-      actualSource: "stdout",
       stdout: "ok",
       stderr: "",
       exitCode: 0,
@@ -528,7 +521,6 @@ suite("EndConditionHandler", () => {
       script: "check-results.js",
       expected: "ok",
       actual: "",
-      actualSource: "exitCode",
       stdout: "partial stdout",
       stderr: "stderr",
       durationMs: 7,

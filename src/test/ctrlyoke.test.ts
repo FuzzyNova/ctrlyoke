@@ -37,7 +37,7 @@ suite("ctrlyoke Core Tests", () => {
       prompt: "Test prompt",
       endCondition: {
         script: "test.py",
-        returns: "true",
+        expected: "true",
       },
     };
 
@@ -51,7 +51,7 @@ suite("ctrlyoke Core Tests", () => {
       // Missing required 'prompt' field
       endCondition: {
         script: "test.py",
-        returns: "true",
+        expected: "true",
       },
     };
 

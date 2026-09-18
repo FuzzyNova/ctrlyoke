@@ -12,7 +12,6 @@ const summary: ConditionEvaluationSummary = {
   action: CONDITION_ACTIONS.SKIP_PROMPT,
   script: "check.js",
   actual: "1",
-  actualSource: "exitCode",
   stdout: "out",
   stderr: "err",
   exitCode: 1,

@@ -62,7 +62,6 @@ endCondition:
   # until timeout. Verify the actual file on disk instead, inside the
   # execution root ctrlyoke sets as cwd (the worktree, for this test).
   script: manual-test/.ctrlyoke/scripts/check_file_contains.py manual-test/sample-code/example.py "def apply_discount"
-  returns: "true"
   onFail: retry
   maxRetries: 2
   retryPrompt: "example.py doesn't contain 'def apply_discount' yet. Please add that method to the Inventory class and save the file."

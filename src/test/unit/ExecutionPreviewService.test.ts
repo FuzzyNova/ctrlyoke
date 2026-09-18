@@ -866,7 +866,7 @@ suite("ExecutionPreviewService", () => {
           },
           endCondition: {
             script: 'node -e "condition"',
-            returns: "ok",
+            expected: "ok",
           },
         },
       ],

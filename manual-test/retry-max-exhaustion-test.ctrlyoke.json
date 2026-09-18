@@ -2,7 +2,8 @@
   "prompt": "This is a test to verify maxRetries exhaustion behavior.\n\nPlease respond with: 'I acknowledge this test will fail validation.'\n\nThis prompt is designed to fail validation repeatedly to test that ctrlyoke correctly stops after reaching maxRetries.",
   "endCondition": {
     "script": "manual-test/.ctrlyoke/scripts/always_fails.py",
-    "returns": "true",
+    "compareSource": "stdout",
+    "expected": "true",
     "maxRetries": 2,
     "timeout": 5000,
     "onFail": "retry",

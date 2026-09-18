@@ -126,7 +126,7 @@ suite("PromptFileParser Tests", () => {
       const endCondition = result.steps[0].endCondition;
       assert.ok(endCondition);
       assert.strictEqual(endCondition.script, "check_explanation.py");
-      assert.strictEqual(endCondition.returns, "true");
+      assert.strictEqual(endCondition.expected, undefined);
       assert.strictEqual(endCondition.timeout, 30000);
     });
 
@@ -229,7 +229,6 @@ suite("PromptFileParser Tests", () => {
                   prompt: "Test prompt",
                   endCondition: {
                     script: "npm test",
-                    returns: "true",
                     onPass: "retry",
                   },
                 },
@@ -691,7 +690,7 @@ suite("PromptFileParser Tests", () => {
           prompt: "Test",
           endCondition: {
             script: "test.py",
-            returns: "true",
+            expected: "true",
           },
         },
       ];
@@ -704,7 +703,7 @@ suite("PromptFileParser Tests", () => {
         {
           prompt: "Test",
           endCondition: {
-            returns: "true",
+            expected: "true",
           } as any,
         },
       ];
@@ -713,7 +712,8 @@ suite("PromptFileParser Tests", () => {
       assert.ok(result.errors.some((e) => e.includes("script")));
     });
 
-    test("should reject endCondition missing returns", () => {
+    test("should accept an endCondition with no comparison value", () => {
+      // No `expected` means "pass when the script exits 0".
       const items = [
         {
           prompt: "Test",
@@ -723,8 +723,22 @@ suite("PromptFileParser Tests", () => {
         },
       ];
       const result = parser.validateWorkflowSteps(items);
+      assert.strictEqual(result.valid, true);
+    });
+
+    test("should reject the renamed `returns` key", () => {
+      const items = [
+        {
+          prompt: "Test",
+          endCondition: {
+            script: "test.py",
+            returns: "true",
+          } as any,
+        },
+      ];
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, false);
-      assert.ok(result.errors.some((e) => e.includes("return")));
+      assert.ok(result.errors.some((e) => e.includes("expected")));
     });
   });
 

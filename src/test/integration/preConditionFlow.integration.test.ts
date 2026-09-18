@@ -365,7 +365,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
         preCondition: {
           script: "echo gate-output",
           compareSource: "stdout",
-          returns: "gate-output",
+          expected: "gate-output",
         },
       })
     );
@@ -504,11 +504,9 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       defaults: {
         preCondition: {
           script: PASSING_SCRIPT,
-          returns: "true",
         },
         endCondition: {
           script: PASSING_END_SCRIPT,
-          returns: "true",
         },
       },
     });
@@ -523,11 +521,9 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     const workflow = harness.instance.promptQueue.getWorkflowFile();
     assert.deepStrictEqual(workflow.preCondition, {
       script: PASSING_SCRIPT,
-      returns: "true",
     });
     assert.deepStrictEqual(workflow.endCondition, {
       script: PASSING_END_SCRIPT,
-      returns: "true",
     });
     assert.strictEqual(workflow.agent, null);
     assert.strictEqual(await markerExists(), true);
@@ -557,7 +553,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
         preCondition: {
           script: "echo gate-ran",
           compareSource: "stdout",
-          returns: "gate-ran",
+          expected: "gate-ran",
           onPass: CONDITION_ACTIONS.SKIP_PROMPT,
           // Distinguish pass from spawn failure: a failed spawn would fall
           // through to the prompt, which the assertion below catches.

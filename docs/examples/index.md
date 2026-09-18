@@ -19,8 +19,8 @@ steps:
   - prompt: Fix the failing tests in @src/test/
     endCondition:
       script: npm test
-      returns: "0"
       compareSource: exitCode
+      expected: 0
 ```
 
 ## Script gate before an AI step
@@ -31,7 +31,7 @@ steps:
     name: check-format
     script: npm run format:check
     compareSource: exitCode
-    returns: "0"
+    expected: 0
     onFail: stopWorkflow
 
   - prompt: Update the docs after the formatting check passes.

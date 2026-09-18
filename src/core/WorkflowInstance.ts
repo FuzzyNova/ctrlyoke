@@ -42,6 +42,7 @@ import {
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { pathsEqual } from "../utils/PathCasing";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
@@ -4156,10 +4157,10 @@ export class WorkflowInstance {
                 this._targetedScriptOutputEmitter.fire({ target, output }),
             } satisfies ScriptExecutionReporterContext,
             source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
-            properties: {
+            properties: resolveReportedScriptProperties({
               script: args.command,
               compareSource: COMPARE_SOURCES.EXIT_CODE,
-            },
+            }),
             phase: EXECUTION_PHASES.WORKTREE_SETUP,
             target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
             signedStepIndex: 0,
@@ -4191,8 +4192,7 @@ export class WorkflowInstance {
                   exitCode: processResult.exitCode,
                   success: processResult.success,
                 },
-                undefined,
-                COMPARE_SOURCES.EXIT_CODE
+                { compareSource: COMPARE_SOURCES.EXIT_CODE }
               );
               return {
                 ...comparison,

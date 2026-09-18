@@ -19,11 +19,13 @@ import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapt
 
 type ComparisonCase = {
   name: string;
-  compareSource?: "auto" | "stdout" | "stderr" | "exitCode";
-  returns?: string;
+  compareSource?: "stdout" | "stderr" | "exitCode";
+  operator?: "eq" | "contains" | "gte";
+  expected?: string | number;
   script: string;
   ptyOutput: string;
-  expected: boolean;
+  /** Whether the step is expected to pass, in both execution modes. */
+  shouldPass: boolean;
 };
 
 const cases: ComparisonCase[] = [
@@ -31,55 +33,57 @@ const cases: ComparisonCase[] = [
     name: "default exit code",
     script: `node -e "process.stdout.write('ignored')"`,
     ptyOutput: "ignored",
-    expected: true,
+    shouldPass: true,
   },
   {
     name: "explicit exit code",
     compareSource: "exitCode",
-    returns: "0",
+    expected: 0,
     script: `node -e "process.stdout.write('ignored')"`,
     ptyOutput: "ignored",
-    expected: true,
-  },
-  {
-    name: "auto boolean",
-    compareSource: "auto",
-    returns: "true",
-    script: `node -e "process.stdout.write('ignored')"`,
-    ptyOutput: "ignored",
-    expected: true,
+    shouldPass: true,
   },
   {
     name: "stdout text",
     compareSource: "stdout",
-    returns: "PASS",
+    expected: "PASS",
     script: `node -e "process.stdout.write('PASS')"`,
     ptyOutput: "\x1b[32mPASS\x1b[0m\r\n",
-    expected: true,
+    shouldPass: true,
   },
   {
     name: "stderr fallback",
     compareSource: "stderr",
-    returns: "ERR",
+    expected: "ERR",
     script: `node -e "process.stderr.write('ERR')"`,
     ptyOutput: "this PTY must not be used",
-    expected: true,
+    shouldPass: true,
   },
   {
-    name: "auto numeric stdout",
-    compareSource: "auto",
-    returns: "80",
+    name: "stdout numeric gte",
+    compareSource: "stdout",
+    operator: "gte",
+    expected: "80",
     script: `node -e "process.stdout.write('80')"`,
     ptyOutput: "\x1b[36m80\x1b[0m",
-    expected: true,
+    shouldPass: true,
+  },
+  {
+    name: "stdout contains",
+    compareSource: "stdout",
+    operator: "contains",
+    expected: "ASS",
+    script: `node -e "process.stdout.write('PASS')"`,
+    ptyOutput: "PASS",
+    shouldPass: true,
   },
   {
     name: "stdout mismatch",
     compareSource: "stdout",
-    returns: "FAIL",
+    expected: "FAIL",
     script: `node -e "process.stdout.write('PASS')"`,
     ptyOutput: "PASS",
-    expected: false,
+    shouldPass: false,
   },
 ];
 
@@ -223,7 +227,8 @@ async function runCase(
         type: STEP_TYPES.SCRIPT,
         script: comparisonCase.script,
         compareSource: comparisonCase.compareSource,
-        returns: comparisonCase.returns,
+        operator: comparisonCase.operator,
+        expected: comparisonCase.expected,
         executionMode:
           executionMode === EXECUTION_MODES.INTERACTIVE
             ? EXECUTION_MODES.INTERACTIVE
@@ -249,7 +254,7 @@ suite("interactive script steps", () => {
 
       assert.strictEqual(
         headless.passed,
-        comparisonCase.expected,
+        comparisonCase.shouldPass,
         `${comparisonCase.name}: headless verdict`
       );
       assert.strictEqual(

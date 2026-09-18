@@ -11,6 +11,7 @@ import {
   SCRIPT_VERDICT_OUTCOMES,
   STATUS_MESSAGE_SEVERITY,
   type CompareSource,
+  type ScriptOperator,
   type ConditionAction,
   type ExecutionPhase,
   type ScriptOutputSource,
@@ -30,6 +31,10 @@ import type {
   TimelineAttemptStartContext,
 } from "./OutputHistoryManager";
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
+import {
+  formatComparison,
+  normalizeExpected,
+} from "../../utils/ScriptComparison";
 import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
 import type { ScriptProcessRunner } from "./ScriptProcessRunner";
@@ -78,7 +83,16 @@ export interface ScriptExecutionReporterContext {
 export interface ScriptExecutionReportRequest {
   context: ScriptExecutionReporterContext;
   source: ScriptOutputSource;
-  properties: ScriptProperties & { compareSource: CompareSource };
+  /**
+   * Comparison-resolved properties: pass the output of
+   * `resolveReportedScriptProperties` so the verdict never has to re-apply a
+   * default or coerce a numeric `expected`.
+   */
+  properties: Omit<ScriptProperties, "expected"> & {
+    compareSource: CompareSource;
+    operator: ScriptOperator;
+    expected?: string;
+  };
   phase: ExecutionPhase;
   target: OutputExecutionTarget;
   signedStepIndex: number;
@@ -123,11 +137,11 @@ export function formatVerdictSummary(
     ? summarizeStatusError(verdict.error)
     : verdict.timedOut
       ? "timed out"
-      : verdict.actualSource === "exitCode"
-        ? `exit code ${verdict.actual}`
-        : `${verdict.actualSource} ${
-            verdict.outcome === SCRIPT_VERDICT_OUTCOMES.PASSED ? "=" : "≠"
-          } ${JSON.stringify(verdict.expected ?? "")}`;
+      : `${formatComparison(verdict)}${
+          verdict.outcome === SCRIPT_VERDICT_OUTCOMES.PASSED
+            ? ""
+            : `, got ${JSON.stringify(verdict.actual)}`
+        }`;
   const action = verdict.actionDetail ?? verdict.action;
   return `${label} ${verdict.outcome} (${comparison}) → ${action}`;
 }
@@ -145,15 +159,15 @@ export function createConditionEvaluationSummary(
   result: EvaluationResult,
   details?: {
     action?: ConditionAction;
-    expected?: string;
+    expected?: string | number;
     compareSource?: CompareSource;
+    operator?: ScriptOperator;
   }
 ): ConditionEvaluationSummary {
   const summary: ConditionEvaluationSummary = {
     passed: result.passed,
     script,
     actual: result.actual,
-    actualSource: result.actualSource,
     stdout: result.stdout,
     stderr: result.stderr,
     durationMs: result.duration,
@@ -162,10 +176,13 @@ export function createConditionEvaluationSummary(
     summary.action = details.action;
   }
   if (details?.expected !== undefined) {
-    summary.expected = details.expected;
+    summary.expected = normalizeExpected(details.expected);
   }
   if (details?.compareSource !== undefined) {
     summary.compareSource = details.compareSource;
+  }
+  if (details?.operator !== undefined) {
+    summary.operator = details.operator;
   }
   if (result.exitCode !== undefined) {
     summary.exitCode = result.exitCode;
@@ -365,16 +382,15 @@ export class ScriptExecutionReporter {
   ): ScriptVerdict {
     return {
       compareSource: request.properties.compareSource,
-      expected: request.properties.returns,
+      operator: request.properties.operator,
+      expected: request.properties.expected,
       actual: result.actual,
-      actualSource: result.actualSource,
       exitCode: result.exitCode,
       outcome: result.errored
         ? SCRIPT_VERDICT_OUTCOMES.ERRORED
         : result.passed
           ? SCRIPT_VERDICT_OUTCOMES.PASSED
           : SCRIPT_VERDICT_OUTCOMES.FAILED,
-      matchRule: result.matchRule,
       action: result.errored
         ? request.actionForErrored
         : !result.passed

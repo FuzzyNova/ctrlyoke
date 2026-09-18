@@ -419,11 +419,11 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
       ]);
     useSettingsStore.getState().updateGlobalSetting("defaultPreCondition", {
       script: "test -f package.json",
-      returns: "true",
+      expected: "true",
     });
     useSettingsStore.getState().updateGlobalSetting("defaultEndCondition", {
       script: "npm test",
-      returns: "true",
+      expected: "true",
     });
   });
 

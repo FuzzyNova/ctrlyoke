@@ -112,6 +112,10 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["script", "step content carried by the message's `text`"],
   ["name", "carried by the message's dedicated `promptName` field"],
   ["enabled", "carried explicitly by every save payload; see the toggle tests"],
+  [
+    "returns",
+    "rename tombstone: declared as `not: {}` so a stale key errors by name; renamed to `expected`",
+  ],
 ]);
 
 function authorableProperties(node: SchemaObject): string[] {
@@ -131,9 +135,11 @@ const SAMPLES: Record<string, unknown> = {
   additionalArgs: "--effort high",
   agent: "seeded-agent",
   compareSource: "stdout",
+  operator: "contains",
+  ignoreCase: true,
   endCondition: {
     script: "npm test",
-    returns: "true",
+    expected: "true",
     env: { CI_TOKEN: "${secret:CI_TOKEN}" },
     maxRetries: 2,
   },
@@ -160,7 +166,7 @@ const SAMPLES: Record<string, unknown> = {
   },
   priorContext: "previous",
   resumeSession: true,
-  returns: "OK",
+  expected: "OK",
   secrets: ["DEPLOY_TOKEN"],
   sessionId: "seeded-session-id",
   shell: "bash",
@@ -175,6 +181,27 @@ const SAMPLES: Record<string, unknown> = {
   vars: { region: "us-east-1" },
   worktree: { mode: "named", branch: "feature/seeded" },
 };
+
+/**
+ * Properties the schema requires alongside a sample. `compareSource` and
+ * `operator` are only meaningful with an `expected` value, and the schema
+ * enforces that (see `scriptComparisonConstraint`), so validating either one in
+ * isolation is invalid by design rather than a gap in the schema.
+ */
+const SAMPLE_COMPANIONS: Record<string, readonly string[]> = {
+  compareSource: ["expected"],
+  operator: ["expected"],
+  ignoreCase: ["expected"],
+};
+
+/** The sample for `property` plus any companions the schema requires with it. */
+function sampleSeeds(property: string): Record<string, unknown> {
+  const seeds: Record<string, unknown> = { [property]: sampleFor(property) };
+  for (const companion of SAMPLE_COMPANIONS[property] ?? []) {
+    seeds[companion] = sampleFor(companion);
+  }
+  return seeds;
+}
 
 function sampleFor(property: string): unknown {
   assert.ok(
@@ -201,8 +228,12 @@ interface Surface {
     property: string,
     value: unknown
   ): Promise<void>;
-  /** Build the workflow used to schema-validate this surface's sample. */
-  validationDocument(property: string, value: unknown): SchemaObject;
+  /**
+   * Build the workflow used to schema-validate this surface's sample. Takes the
+   * whole seed record so a property with schema companions (see
+   * SAMPLE_COMPANIONS) can be validated as the coupled set it really is.
+   */
+  validationDocument(seeds: Record<string, unknown>): SchemaObject;
 }
 
 const executionProperties = () =>
@@ -246,9 +277,9 @@ const SURFACES: Surface[] = [
       ),
     saveWith: (harness, property, value) =>
       harness.routeWorkflowPropertyUpdate(property, value),
-    validationDocument: (property, value) => ({
+    validationDocument: (seeds) => ({
       steps: [promptStepSeed()],
-      [property]: value,
+      ...seeds,
     }),
   },
   {
@@ -270,8 +301,8 @@ const SURFACES: Surface[] = [
         text: PROMPT_TEXT,
         properties: { [property]: value },
       }),
-    validationDocument: (property, value) => ({
-      steps: [{ ...promptStepSeed(), [property]: value }],
+    validationDocument: (seeds) => ({
+      steps: [{ ...promptStepSeed(), ...seeds }],
     }),
   },
   {
@@ -293,8 +324,8 @@ const SURFACES: Surface[] = [
         text: SCRIPT_TEXT,
         properties: { type: "script", [property]: value },
       }),
-    validationDocument: (property, value) => ({
-      steps: [{ ...scriptStepSeed(), [property]: value }],
+    validationDocument: (seeds) => ({
+      steps: [{ ...scriptStepSeed(), ...seeds }],
     }),
   },
   {
@@ -312,9 +343,9 @@ const SURFACES: Surface[] = [
       harness.routeUpdateFinalPrompt({
         finalStep: { prompt: PROMPT_TEXT, [property]: value } as never,
       }),
-    validationDocument: (property, value) => ({
+    validationDocument: (seeds) => ({
       steps: [promptStepSeed()],
-      finalStep: { ...promptStepSeed(), [property]: value },
+      finalStep: { ...promptStepSeed(), ...seeds },
     }),
   },
   {
@@ -336,9 +367,9 @@ const SURFACES: Surface[] = [
           [property]: value,
         } as never,
       }),
-    validationDocument: (property, value) => ({
+    validationDocument: (seeds) => ({
       steps: [promptStepSeed()],
-      finalStep: { ...scriptStepSeed(), [property]: value },
+      finalStep: { ...scriptStepSeed(), ...seeds },
     }),
   },
 ];
@@ -367,7 +398,9 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["preCondition", ["settings-pre-condition-enabled"]],
   ["priorContext", ["settings-prior-context"]],
   ["resumeSession", ["settings-resume-session"]],
-  ["returns", ["${idPrefix}-returns"]],
+  ["expected", ["${idPrefix}-expected"]],
+  ["ignoreCase", ["${idPrefix}-ignore-case"]],
+  ["operator", ["${idPrefix}-operator"]],
   ["secrets", ["${idPrefix}-control"]],
   ["sessionId", ["settings-session-id"]],
   ["shell", ["${idPrefix}-shell"]],
@@ -482,10 +515,7 @@ suite("Schema -> dashboard property round trip", () => {
       const invalid: string[] = [];
       for (const surface of SURFACES) {
         for (const property of surface.properties) {
-          const document = surface.validationDocument(
-            property,
-            sampleFor(property)
-          );
+          const document = surface.validationDocument(sampleSeeds(property));
           if (!validate(document)) {
             invalid.push(
               `${surface.id}:${property} -> ${ajv.errorsText(validate.errors)}`
@@ -604,7 +634,7 @@ suite("Schema -> dashboard property round trip", () => {
       };
       const workflowEndCondition = {
         script: "npm test",
-        returns: "true",
+        expected: "true",
         env: { END_TOKEN: "${secret:END_TOKEN}" },
       };
       const workflowHooks = [
@@ -621,7 +651,7 @@ suite("Schema -> dashboard property round trip", () => {
       };
       const stepEndCondition = {
         script: "npm test",
-        returns: "true",
+        expected: "true",
         env: { STEP_END_TOKEN: "${secret:STEP_END_TOKEN}" },
       };
       const stepHooks = [
@@ -768,7 +798,7 @@ suite("Schema -> dashboard property round trip", () => {
             onPass: "stopWorkflow",
             onFail: "continue",
             compareSource: "stdout",
-            returns: "OK",
+            expected: "OK",
             executionMode: "headless",
           },
         ];
@@ -783,7 +813,9 @@ suite("Schema -> dashboard property round trip", () => {
           "onPass",
           "onFail",
           "compareSource",
-          "returns",
+          "operator",
+          "expected",
+          "ignoreCase",
           "executionMode",
         ],
       });
