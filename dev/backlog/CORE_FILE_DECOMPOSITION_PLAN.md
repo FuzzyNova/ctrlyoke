@@ -506,7 +506,7 @@ one line — deviations, deferrals, or a reassessment outcome.
 | Phase                                | Status      | Commit | Notes |
 | ------------------------------------ | ----------- | ------ | ----- |
 | Decoupling plan, Phase 1             | ✅ Done     | (prior) | Verified 2026-09-17: options-object ctor, no `vscode` imports in either file. |
-| §4.1 `ExternalRunWatchCoordinator`   | Not started | —      | |
+| §4.1 `ExternalRunWatchCoordinator`   | ✅ Done     | 7cbcc7d6 | Added `fileWatcherFactory` to the narrow host port because the coordinator owns watcher setup; updated affected object-create harnesses. |
 | §5.2 `SessionActivityRecorder`       | Not started | —      | |
 | §5.3 `RunnerLockCoordinator`         | Not started | —      | |
 | §4.2 `WorkflowInstanceRegistry`      | Not started | —      | |
