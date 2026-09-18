@@ -5,9 +5,20 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
+import type { WorkflowOrchestratorDependencies } from "../../core/WorkflowOrchestrator";
+import type {
+  Disposable,
+  DisposableRegistry,
+  FileWatcher,
+  FileWatcherFactory,
+  KeyValueStore,
+} from "../../core/HostPorts";
+import type { UserFeedback, UserFeedbackSink } from "../../core/UserFeedbackSink";
 import type { QueueState } from "../../types/CtrlYokeTypes";
+import type { RunnerHostIdentity } from "../../types/CtrlYokeTypes";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -30,6 +41,76 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 
+const NOOP_DISPOSABLE: Disposable = { dispose: () => {} };
+
+class TestFileWatcher implements FileWatcher {
+  onDidCreate(_listener: (filePath: string) => void): Disposable {
+    return NOOP_DISPOSABLE;
+  }
+
+  onDidChange(_listener: (filePath: string) => void): Disposable {
+    return NOOP_DISPOSABLE;
+  }
+
+  onDidDelete(_listener: (filePath: string) => void): Disposable {
+    return NOOP_DISPOSABLE;
+  }
+
+  dispose(): void {}
+}
+
+class TestFileWatcherFactory implements FileWatcherFactory {
+  create(_basePath: string, _glob: string): FileWatcher {
+    return new TestFileWatcher();
+  }
+}
+
+class TestDisposableRegistry implements DisposableRegistry {
+  add(_disposable: Disposable): void {}
+}
+
+class TestWorkspaceState implements KeyValueStore {
+  async update(_key: string, _value: unknown): Promise<void> {}
+}
+
+class TestUserFeedbackSink implements UserFeedbackSink {
+  readonly messages: UserFeedback[] = [];
+
+  notify(message: UserFeedback): void {
+    this.messages.push(message);
+  }
+}
+
+const TEST_RUNNER_HOST_IDENTITY: RunnerHostIdentity = {
+  runner: RUNNER_IDS.VSCODE,
+  hostInstanceId: "workflow-orchestrator-test",
+  pid: process.pid,
+};
+
+function createTestOrchestrator(
+  overrides: Partial<WorkflowOrchestratorDependencies> = {}
+): WorkflowOrchestrator {
+  const orchestrator = new WorkflowOrchestrator({
+    platform: new MockPlatform(os.tmpdir()),
+    workspaceFolderPathResolver: () => undefined,
+    userFeedbackSink: new TestUserFeedbackSink(),
+    runnerHostIdentity: TEST_RUNNER_HOST_IDENTITY,
+    fileWatcherFactory: new TestFileWatcherFactory(),
+    disposableRegistry: new TestDisposableRegistry(),
+    workspaceState: new TestWorkspaceState(),
+    ...overrides,
+  });
+  const internal = orchestrator as any;
+  // Keep focused façade tests free to replace the parent construction seam.
+  // The production constructor uses a hosted registry; these tests exercise
+  // the façade with narrow instance doubles and therefore use the real
+  // registry's hostless mode instead.
+  internal.workflowInstanceRegistryInstance = new WorkflowInstanceRegistry();
+  internal.runViewPublisherInstance = undefined;
+  internal.runLifecycleServiceInstance = undefined;
+  return orchestrator;
+}
+
 function createEmptyExternalRunWatchCoordinator() {
   return {
     getEntry: () => undefined,
@@ -45,9 +126,7 @@ function createEmptyExternalRunWatchCoordinator() {
 }
 
 function createOrchestratorHarness() {
-  const orchestrator = Object.create(
-    WorkflowOrchestrator.prototype
-  ) as WorkflowOrchestrator;
+  const orchestrator = createTestOrchestrator();
   const internal = orchestrator as any;
 
   internal.dashboardReady = false;
@@ -73,9 +152,7 @@ function createOrchestratorHarness() {
  * with the replay and fresh-instance seams recorded instead of executed.
  */
 function createLineageBindingHarness() {
-  const orchestrator = Object.create(
-    WorkflowOrchestrator.prototype
-  ) as WorkflowOrchestrator;
+  const orchestrator = createTestOrchestrator();
   const internal = orchestrator as any;
   const boundKey = "bound" as never;
 
@@ -137,9 +214,7 @@ function createLineageBindingHarness() {
 
 suite("WorkflowOrchestrator steer dispatch", () => {
   test("resolves the workflow instance and delegates the session and text", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const calls: unknown[] = [];
     internal.instances = new Map([
@@ -186,9 +261,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
     });
 
     function createApprovalHarness() {
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       const sent: unknown[] = [];
       const requests: unknown[] = [];
@@ -359,9 +432,7 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
   test("replays a lineage-less instance as a replacement, not a replay", async () => {
     const replayCalls: Array<{ asReplacement?: boolean } | undefined> = [];
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const instance = {
       getSummary: () => ({ workingFilePath: null }),
@@ -394,9 +465,7 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
 
 suite("WorkflowOrchestrator active queue context key", () => {
   test("sets and clears the queue context key as the active queue changes", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const queueState = (stepCount: number): QueueState => ({
       status: EXECUTION_STATES.IDLE,
@@ -493,9 +562,7 @@ suite("WorkflowOrchestrator active queue context key", () => {
 
 suite("WorkflowOrchestrator session command facade", () => {
   test("reports the no-workspace early exit without discovering sessions", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const feedback: Array<{ message: string }> = [];
     let discovered = false;
@@ -521,9 +588,7 @@ suite("WorkflowOrchestrator session command facade", () => {
   });
 
   test("returns the session metadata produced by the session manager", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const sessions = [
       {
@@ -551,9 +616,7 @@ suite("WorkflowOrchestrator session command facade", () => {
   });
 
   test("restores the selected working file before focusing the dashboard", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const calls: string[] = [];
     const filePath = "/workspace/.ctrlyoke/.runs/workflow/run/workflow.json";
@@ -587,9 +650,7 @@ suite("WorkflowOrchestrator session command facade", () => {
 
 suite("WorkflowOrchestrator duplicate workflow policy", () => {
   test("reuses a running instance without prompting for a conflicting choice", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const existing = {
       id: "existing-instance",
@@ -650,9 +711,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
   }
 
   function createAutoLoadHarness(options: AutoLoadHarnessOptions) {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     const autoLoadedInto: string[] = [];
@@ -972,9 +1031,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   }
 
   test("announces a replay boundary before restoring a retained preferred view", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const clientId = "browser:mobile";
     const workflowId = "workflow-output-pane";
@@ -1065,9 +1122,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("keeps client run views independent from the execution target", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "demo" as never;
     const executingRun = "run-2026-07-20T10-30-00-000Z" as never;
@@ -1121,9 +1176,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("does not treat an idle resident instance as a lineage execution owner", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "demo" as never;
     const restoredRun = "run-2026-06-08T21-27-08-408Z" as never;
@@ -1148,9 +1201,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("registers the client's view sink so draft viewers follow their promoted run", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "demo" as never;
     const runRef = "run-2026-07-20T10-30-00-000Z" as never;
@@ -1681,9 +1732,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         1
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -1837,9 +1886,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         1
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -1956,9 +2003,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         second.startedAt
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map([
@@ -2020,9 +2065,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("loads the current most-recent run file for a first-time browser client", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     internal.viewerRegistry = new Map<string, string | null>();
@@ -2057,9 +2100,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("falls back to the panel's viewed workflow when no recent working file exists", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     internal.viewerRegistry = new Map<string, string | null>([
@@ -2094,9 +2135,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("loads the addressed run view before replaying live output to a reconnecting client", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowId = "workflow-live";
     const workflowKey = "live-lineage" as never;
@@ -2157,9 +2196,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       path.join(os.tmpdir(), "ctrlyoke-run-summaries-")
     );
     try {
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       const workflowKey = "summaries-lineage" as never;
       const sent: Array<{ type?: string }> = [];
@@ -2219,9 +2256,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   });
 
   test("re-publishes the addressed view identity after the live replay so SESSION_RESTORED cannot leave the client without a run address", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowId = "workflow-live";
     const workflowKey = "live-lineage" as never;
@@ -2339,9 +2374,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         workflowKey
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
@@ -2457,9 +2490,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         workflowKey
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       let expectedRevision: number | undefined;
       internal.currentWorkspaceFolderPath = workspace;
@@ -2591,9 +2622,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
           primedRevision = revision;
         },
       };
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
@@ -2684,9 +2713,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         workflowKey
       );
       const messages: unknown[] = [];
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
@@ -2808,9 +2835,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         workflowKey
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.lineageRepository = repository;
@@ -2875,9 +2900,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       const run2 =
         "run-2" as unknown as import("../../types/CtrlYokeTypes").RunRef;
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.viewerRegistry = new Map([["client-a", "unrelated-instance"]]);
@@ -2937,9 +2960,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
 
 suite("WorkflowOrchestrator active workflow helpers", () => {
   test("getRunningWorkflows includes pausing workflows", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     const running = {
@@ -2972,9 +2993,7 @@ suite("WorkflowOrchestrator promoteInstanceToLive", () => {
   // both maps — otherwise the still-running workflow looks "retired" to
   // setViewedWorkflowId/unregisterClient, which can dispose it mid-run.
   test("removes the retired copy when an instance is promoted back to live", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     const instance = { id: "wf-1" };
@@ -2993,9 +3012,7 @@ suite("WorkflowOrchestrator promoteInstanceToLive", () => {
   });
 
   test("reports no stale entry when promoting a never-retired instance", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     const instance = { id: "wf-2" };
@@ -3015,9 +3032,7 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
   // a running workflow must resolve to its live instance instead of building a
   // fresh instance from disk (which restores as STOPPED).
   test("matches a live instance whose working file path uses native separators", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     const nativePath =
@@ -3117,9 +3132,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         runRef: run.runRef,
       };
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -3227,9 +3240,7 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
         runRef: run.runRef,
       };
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -3311,9 +3322,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         workflowKey
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -3436,9 +3445,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
       );
       const latestBefore = await fs.readFile(latest.workingFilePath, "utf8");
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -3557,9 +3564,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         );
       const completedHead = await fs.readFile(promoted.workingFilePath);
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
@@ -3690,9 +3695,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     runRef: import("../../types/CtrlYokeTypes").RunRef,
     instance?: any
   ): { orchestrator: WorkflowOrchestrator; internal: any } {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     internal.currentWorkspaceFolderPath = workspace;
     internal.instances = new Map(instance ? [["active", instance]] : []);
@@ -4162,9 +4165,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         workflowKey
       );
 
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
+      const orchestrator = createTestOrchestrator();
       const internal = orchestrator as any;
       internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
       internal.currentWorkspaceFolderPath = workspace;
@@ -4793,9 +4794,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
 
 suite("WorkflowOrchestrator client view addressing", () => {
   test("adopts an instance's own lineage for the clients bound to it", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const previousKey = "previous-lineage" as never;
     const newKey = "new-lineage" as never;
@@ -4840,9 +4839,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   // became unreachable: every promotion in nine sessions of logs pushed zero
   // run views, leaving the dashboard offering "Run draft" for a finished run.
   test("leaves a promoted lineage's draft holder addressable for the run-view push", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "promoted-lineage" as never;
     const runRef = "run-2026-07-21T10-00-00-000Z" as never;
@@ -4865,9 +4862,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   });
 
   test("keeps a client reading an older run of the promoted lineage on that run", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "promoted-lineage" as never;
     const olderRun = "run-2026-07-21T09-00-00-000Z" as never;
@@ -4897,9 +4892,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   // RunRef lands on an idle queue (adoption), then the queue goes RUNNING
   // (sync). Asserting the two together is what the separate unit tests missed.
   test("publishes the promoted run to the draft holder across the full emit sequence", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "promoted-lineage" as never;
     const runRef = "run-2026-07-21T10-00-00-000Z" as never;
@@ -4934,9 +4927,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   });
 
   test("moves a sink-less draft holder off the deleted draft even though it cannot be shown the run", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "promoted-lineage" as never;
     const runRef = "run-2026-07-21T10-00-00-000Z" as never;
@@ -4969,9 +4960,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   // deleted by that promotion. Syncing only on RUNNING stranded them on a file
   // that no longer exists while their definition sat in the promoted run.
   test("lands a draft holder on the promoted run when the start fails before RUNNING", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowKey = "failed-start-lineage" as never;
     const runRef = "run-2026-07-30T14-00-00-000Z" as never;
@@ -5033,9 +5022,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   // list — without ever being adopted as the panel's viewed workflow, and
   // without disturbing whatever the panel was already viewing.
   test("announces an externally-created instance without adopting it as the panel's view", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     internal.platform = new MockPlatform(os.tmpdir());
@@ -5104,9 +5091,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   });
 
   test("drops the previous lineage's address when a client switches to a blank workflow", () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
 
     internal.viewerRegistry = new Map([["client-a", "old-instance"]]);
@@ -5130,9 +5115,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
   });
 
   test("has no identity to publish before a client's workflow has a lineage", async () => {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
+    const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     internal.currentWorkspaceFolderPath = os.tmpdir();
     internal.viewAddressRegistry = new Map([["client-a", null]]);

@@ -153,15 +153,14 @@ import { TypedEmitter } from "../utils/TypedEmitter";
  *
  * Manages the registry of WorkflowInstance objects and owns resources that
  * are shared or orchestrator-scoped:
- *   - Four harness integrations (created once, shared for Phase 1)
+ *   - Six harness integrations (created once and shared by workflow instances)
  *   - injected host services
  *   - WorkflowCommandHandler
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
  *
- * Phase 1: Always holds exactly one WorkflowInstance (the active one).
- * Phase 2: Will hold many instances in parallel; `activeWorkflowId` decides
- *          which one is displayed in the dashboard.
+ * Holds active and retired workflow instances in registry-owned maps; the
+ * active workflow ID decides which one is displayed in the dashboard.
  */
 
 /**
@@ -2813,7 +2812,7 @@ export class WorkflowOrchestrator {
       send ??
       (clientId === this.PANEL_CLIENT_ID
         ? this.storedPanelSend
-        : this.getViewMessageSinks().get(clientId));
+        : this.workflowInstanceRegistry.getViewMessageSinks().get(clientId));
     target?.({
       type: MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED,
       workflowId,
@@ -2917,20 +2916,6 @@ export class WorkflowOrchestrator {
     clientId: string
   ): Promise<WorkflowViewIdentityMessage | null> {
     return this.runViewPublisher.publishViewIdentityToViewers(clientId);
-  }
-
-  /** Defensive for lightweight unit-test instances created without constructors. */
-  private getViewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
-    return this.workflowInstanceRegistry.getViewAddressRegistry();
-  }
-
-  private getViewMessageSinks(): Map<string, (message: unknown) => void> {
-    return this.workflowInstanceRegistry.getViewMessageSinks();
-  }
-
-  /** Defensive for lightweight unit-test instances created without constructors. */
-  public getLineageBindingClients(): Set<string> {
-    return this.workflowInstanceRegistry.getLineageBindingClients();
   }
 
   public async bindClientToAddressedLineage(
@@ -4665,7 +4650,7 @@ export class WorkflowOrchestrator {
         ? (this.instances.get(workflowId) ??
           this.retiredInstances.get(workflowId))
         : undefined;
-      this.getViewAddressRegistry().set(
+      this.workflowInstanceRegistry.getViewAddressRegistry().set(
         clientId,
         lineageAddressOf(adopted?.getQueueState())
       );
@@ -4732,12 +4717,12 @@ export class WorkflowOrchestrator {
     if (!this.viewerRegistry.has(clientId)) {
       this.viewerRegistry.set(clientId, null);
     }
-    const viewAddresses = this.getViewAddressRegistry();
+    const viewAddresses = this.workflowInstanceRegistry.getViewAddressRegistry();
     if (!viewAddresses.has(clientId)) {
       viewAddresses.set(clientId, null);
     }
     if (send) {
-      this.getViewMessageSinks().set(clientId, send);
+      this.workflowInstanceRegistry.getViewMessageSinks().set(clientId, send);
     }
   }
 
@@ -4759,8 +4744,8 @@ export class WorkflowOrchestrator {
         `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false}, activePty=${ptyCount})`
     );
     this.viewerRegistry.delete(clientId);
-    this.getViewAddressRegistry().delete(clientId);
-    this.getViewMessageSinks().delete(clientId);
+    this.workflowInstanceRegistry.getViewAddressRegistry().delete(clientId);
+    this.workflowInstanceRegistry.getViewMessageSinks().delete(clientId);
 
     if (!workflowId) return;
 
@@ -5114,7 +5099,7 @@ export class WorkflowOrchestrator {
       ) {
         continue;
       }
-      this.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry.getViewAddressRegistry().set(clientId, address);
     }
   }
 
@@ -5164,9 +5149,9 @@ export class WorkflowOrchestrator {
       // asynchronous, the draft this client is addressing is already gone, and
       // RUNNING is emitted repeatedly — an unmoved address would send a fresh
       // snapshot on every one of them.
-      this.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry.getViewAddressRegistry().set(clientId, address);
       const send =
-        this.getViewMessageSinks().get(clientId) ??
+        this.workflowInstanceRegistry.getViewMessageSinks().get(clientId) ??
         (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
       if (!send) {
         continue;
