@@ -68,6 +68,53 @@ function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
 }
 
 /**
+ * Applies a workflow-level property patch to `target`, returning only the keys
+ * whose persisted value actually changed.
+ *
+ * The comparison is **deep** on purpose. Several workflow properties are objects
+ * or arrays (`endCondition`, `preCondition`, `toolPermissions`, `mcpServers`,
+ * `hooks`, `skills`, `worktree`, …), and a reference comparison reports every
+ * one of them as changed on every write — the client always posts a freshly
+ * deserialized object. That made `definitionRevision` climb on writes that
+ * persisted nothing, which is the manufactured half of "Definition revision
+ * conflict" during fast editing/undo: each no-op write superseded the revision
+ * the client was still holding, and the next real action was rejected against a
+ * revision it had no way to have learned yet. The tell in
+ * `ctrlyoke-<timestamp>.log` is a properties `write analysis` line whose
+ * `definitionRevision` is `"changed"` while every attempted field is `"no-op"`.
+ *
+ * Shared by the instance-owned path (`updateWorkingFileProperties`) and the
+ * addressed-run path (`updatePropertiesAtRun`) so the two cannot drift.
+ */
+function applyWorkflowPropertyWrites(
+  target: Record<string, unknown>,
+  properties: Record<string, unknown>,
+  options: { onlyIfUndefined?: boolean; allowDeletes?: boolean } = {}
+): string[] {
+  const appliedKeys: string[] = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === undefined) {
+      if (options.allowDeletes && target[key] !== undefined) {
+        delete target[key];
+        appliedKeys.push(key);
+      }
+      continue;
+    }
+
+    if (options.onlyIfUndefined && target[key] !== undefined) {
+      continue;
+    }
+
+    const persistedValue = normalizeWorkflowPropertyValue(key, value);
+    if (!isDeepStrictEqual(target[key], persistedValue)) {
+      target[key] = persistedValue;
+      appliedKeys.push(key);
+    }
+  }
+  return appliedKeys;
+}
+
+/**
  * Read a working file straight off disk. Free function (rather than an instance method)
  * so `WorkingFileManager.seedNewRun` can read an arbitrary run's file — one that may not
  * be the one currently loaded into any live queue — without needing an `IWorkingFileQueueAccess`.
@@ -465,7 +512,8 @@ export interface IWorkingFileQueueAccess {
 
   /** Durable same-run rewind marker, when the queue is editing a suffix. */
   getPendingRewind?():
-    { fromStepIndex: number; baseDefinitionRevision: number } | undefined;
+    | { fromStepIndex: number; baseDefinitionRevision: number }
+    | undefined;
 
   /** Update a workflow property in cached workflow file */
   updateWorkflowProperty(key: string, value: unknown): void;
@@ -1191,6 +1239,20 @@ export class WorkingFileManager {
           throw new Error(`Cannot edit while run is in state ${sourceState}`);
         }
         const { workingFile: transformed, result } = transform(source);
+        // A transform that reproduced the definition already on disk must not
+        // bump `definitionRevision`. That revision is the optimistic-concurrency
+        // token every client echoes on its next mutation, so bumping it for a
+        // write that persists nothing supersedes a revision the client is still
+        // legitimately holding and rejects its *next* real action as a
+        // conflict. See `applyWorkflowPropertyWrites`.
+        if (isDeepStrictEqual(source, transformed)) {
+          return {
+            workingFile: source,
+            definitionRevision: sourceRevision,
+            descriptorRevision: descriptor.revision,
+            result,
+          };
+        }
         const now = Date.now();
         const workingFile: WorkingFile = {
           ...transformed,
@@ -1237,24 +1299,11 @@ export class WorkingFileManager {
       expectedDefinitionRevision,
       (source) => {
         const workingFile: WorkingFile = { ...source };
-        const appliedKeys: string[] = [];
-        for (const [key, value] of Object.entries(properties)) {
-          if (value === undefined) {
-            if (
-              options.allowDeletes &&
-              (workingFile as any)[key] !== undefined
-            ) {
-              delete (workingFile as any)[key];
-              appliedKeys.push(key);
-            }
-            continue;
-          }
-          const persistedValue = normalizeWorkflowPropertyValue(key, value);
-          if ((workingFile as any)[key] !== persistedValue) {
-            (workingFile as any)[key] = persistedValue;
-            appliedKeys.push(key);
-          }
-        }
+        const appliedKeys = applyWorkflowPropertyWrites(
+          workingFile as unknown as Record<string, unknown>,
+          properties,
+          { allowDeletes: options.allowDeletes }
+        );
         return { workingFile, result: appliedKeys };
       },
       { lineageRepository, allowDuringPendingRewind: true }
@@ -2246,35 +2295,17 @@ export class WorkingFileManager {
         // Discard Continuation still reverts these via its separate base
         // snapshot, taken before this write.
 
-        let modified = false;
-        for (const [key, value] of Object.entries(properties)) {
-          if (value === undefined) {
-            if (
-              options.allowDeletes &&
-              (workingFile as any)[key] !== undefined
-            ) {
-              delete (workingFile as any)[key];
-              modified = true;
-              appliedKeys.push(key);
+        appliedKeys.push(
+          ...applyWorkflowPropertyWrites(
+            workingFile as unknown as Record<string, unknown>,
+            properties,
+            {
+              onlyIfUndefined: options.onlyIfUndefined,
+              allowDeletes: options.allowDeletes,
             }
-            continue;
-          }
-
-          const persistedValue = normalizeWorkflowPropertyValue(key, value);
-
-          if (
-            options.onlyIfUndefined &&
-            (workingFile as any)[key] !== undefined
-          ) {
-            continue;
-          }
-
-          if ((workingFile as any)[key] !== persistedValue) {
-            (workingFile as any)[key] = persistedValue;
-            modified = true;
-            appliedKeys.push(key);
-          }
-        }
+          )
+        );
+        let modified = appliedKeys.length > 0;
 
         if (options.ensureHarnessAndModel) {
           if (!workingFile.harness) {

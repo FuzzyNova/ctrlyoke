@@ -501,11 +501,22 @@ export class WorkflowStepHandlers {
   ): Promise<void> {
     if (!this.mutationCoordinator.canStartRun(ctx, "re-run")) return;
     try {
-      await this.getOrchestrator()?.seedAndExecuteAtRun(
+      // Re-run seeds a *new* run from this one's persisted definition, so a
+      // revision the client's own in-flight edits have already superseded is
+      // latency, not a conflict worth refusing — see
+      // `retryWithRefreshedRevisions`. Editing a property and pressing Re-run
+      // before the identity round trip landed used to fail the first press and
+      // succeed on the second.
+      await this.mutationCoordinator.retryWithRefreshedRevisions(
+        ctx,
         message.address,
-        message.expectedDefinitionRevision,
-        message.expectedDescriptorRevision,
-        ctx.clientId
+        (revisions) =>
+          this.getOrchestrator()?.seedAndExecuteAtRun(
+            message.address,
+            revisions?.definitionRevision ?? message.expectedDefinitionRevision,
+            revisions?.descriptorRevision ?? message.expectedDescriptorRevision,
+            ctx.clientId
+          ) ?? Promise.resolve(undefined)
       );
     } catch (error) {
       this.mutationCoordinator.showRunActionFailure(ctx, "re-run", error);
