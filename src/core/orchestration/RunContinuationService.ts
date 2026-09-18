@@ -31,6 +31,7 @@ import type { QueueLimitPolicy } from "../../utils/QueueLimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { assertDefinitionRevision } from "./RevisionPrecondition";
 import {
   appendParallelGroupMembers,
   deleteParallelGroupStep,
@@ -322,11 +323,7 @@ export class RunContinuationService {
       return withFileLock(runFilePath, async () => {
         const source = await this.readRun(workspaceRoot, workflowKey, runRef);
         const sourceRevision = source.definitionRevision ?? 1;
-        if (sourceRevision !== expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-          );
-        }
+        assertDefinitionRevision(expectedDefinitionRevision, sourceRevision);
         const sourceState = source._runtime?.executionState;
         if (
           !allowInterruptedRun &&
@@ -484,11 +481,7 @@ export class RunContinuationService {
       return withFileLock(runFilePath, async () => {
         const source = await this.readRun(workspaceRoot, workflowKey, runRef);
         const sourceRevision = source.definitionRevision ?? 1;
-        if (sourceRevision !== expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-          );
-        }
+        assertDefinitionRevision(expectedDefinitionRevision, sourceRevision);
 
         const sourceState = source._runtime?.executionState;
         if (sourceState !== EXECUTION_STATES.RUNNING) {
@@ -1104,11 +1097,7 @@ export class RunContinuationService {
       return withFileLock(runFilePath, async () => {
         const source = await this.readRun(workspaceRoot, workflowKey, runRef);
         const sourceRevision = source.definitionRevision ?? 1;
-        if (sourceRevision !== expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-          );
-        }
+        assertDefinitionRevision(expectedDefinitionRevision, sourceRevision);
         const sourceState = source._runtime?.executionState;
         if (
           !options.allowInterruptedRun &&

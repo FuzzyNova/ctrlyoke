@@ -1,6 +1,6 @@
 # Definition-revision conflicts — make "my own edit can't conflict with me" structural
 
-> **Status:** Not implemented. Design finalized 2026-09-18; staged as the three steps in
+> **Status:** Step 1 implemented; steps 2–3 remain. Design finalized 2026-09-18; staged as the three steps in
 > **Implementation plan** below.
 >
 > **Prerequisites already landed** (bug-fix branch, Sept 2026): no-op writes no longer bump
@@ -126,6 +126,10 @@ descriptor revision across `WorkflowOrchestrator`, `RunLifecycleService` and
 re-deriving the rule — that single-sourcing is most of the work, and is worth doing even if the
 ledger itself is deferred.
 
+Step 1 provides `assertDefinitionRevision` and `assertDescriptorRevision` in
+`src/core/orchestration/RevisionPrecondition.ts`. Steps 2–3 should use these guards for every
+new revision precondition rather than adding local comparison-and-throw logic.
+
 Two of the 16 do not produce the standard message and must be normalized as part of that pass:
 `RunLifecycleService`'s draft check throws the bare `"Definition revision conflict while running
 draft"`, and `WorkflowInstance.assertExpectedDefinitionRevision` consumes a primed expectation
@@ -158,8 +162,8 @@ file directly, as a CLI/MCP writer would) and assert the client's stale revision
 
 ## Implementation plan
 
-1. **Single-source the revision preconditions.** One shared guard for the 16 definition-revision and
-   5 descriptor-revision comparisons. Pure refactor, no behavior change.
+1. **Done — single-source the revision preconditions.** One shared guard for the 16
+   definition-revision and 5 descriptor-revision comparisons. Pure refactor, no behavior change.
 2. **Add the author ledger** and reconcile at every orchestrator entry point that has both a
    `clientId` and an expected revision. Deep check sites are left alone.
 3. **Retire `retryWithRefreshedRevisions`** and prove the invariant with the sequence regression

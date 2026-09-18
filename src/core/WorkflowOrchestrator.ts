@@ -83,6 +83,10 @@ import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import {
+  assertDefinitionRevision,
+  assertDescriptorRevision,
+} from "./orchestration/RevisionPrecondition";
+import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
 } from "./orchestration/ExecutionRootCoordinationWatchSession";
@@ -2921,11 +2925,10 @@ export class WorkflowOrchestrator {
           resident.ownsRunnerLock());
       if (isLocallyOwnedRun) {
         const liveRevision = resident.getQueueState().definitionRevision;
-        if (liveRevision !== mutation.expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${liveRevision}`
-          );
-        }
+        assertDefinitionRevision(
+          mutation.expectedDefinitionRevision,
+          liveRevision
+        );
         // No descriptor check here: this run's own definition head is what's
         // being edited, and the lineage descriptor is not touched by that
         // write. Checking it would spuriously reject this edit whenever
@@ -2943,11 +2946,10 @@ export class WorkflowOrchestrator {
         this.lineageRepository,
         "edit"
       );
-      if (target.definitionRevision !== mutation.expectedDefinitionRevision) {
-        throw new Error(
-          `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${target.definitionRevision}`
-        );
-      }
+      assertDefinitionRevision(
+        mutation.expectedDefinitionRevision,
+        target.definitionRevision
+      );
       // No descriptor-revision check: see the executing-run branch above.
       // If a live instance already owns this exact run (executing/paused, or
       // simply loaded), prime its next definition write with the client's
@@ -2974,16 +2976,14 @@ export class WorkflowOrchestrator {
     ]);
     const draftRevision =
       (JSON.parse(draft) as WorkingFile).definitionRevision ?? 1;
-    if (descriptor.revision !== mutation.expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
-    if (draftRevision !== mutation.expectedDefinitionRevision) {
-      throw new Error(
-        `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${draftRevision}`
-      );
-    }
+    assertDescriptorRevision(
+      mutation.expectedDescriptorRevision,
+      descriptor.revision
+    );
+    assertDefinitionRevision(
+      mutation.expectedDefinitionRevision,
+      draftRevision
+    );
     this.getInstanceForClient(clientId).expectDefinitionRevision(
       mutation.expectedDefinitionRevision
     );

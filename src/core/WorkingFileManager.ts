@@ -44,6 +44,10 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import {
+  assertDefinitionRevision,
+  assertDescriptorRevision,
+} from "./orchestration/RevisionPrecondition";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
@@ -586,12 +590,7 @@ export class WorkingFileManager {
     if (expected === undefined) {
       return;
     }
-    const actual = workingFile.definitionRevision ?? 1;
-    if (actual !== expected) {
-      throw new Error(
-        `Definition revision conflict: expected ${expected}, found ${actual}`
-      );
-    }
+    assertDefinitionRevision(expected, workingFile.definitionRevision);
   }
 
   /**
@@ -842,13 +841,8 @@ export class WorkingFileManager {
     );
     const source = await readWorkingFileFromDisk(sourceFilePath);
     const sourceRevision = source.definitionRevision ?? 1;
-    if (
-      expected?.definitionRevision !== undefined &&
-      sourceRevision !== expected.definitionRevision
-    ) {
-      throw new Error(
-        `Definition revision conflict: expected ${expected.definitionRevision}, found ${sourceRevision}`
-      );
+    if (expected?.definitionRevision !== undefined) {
+      assertDefinitionRevision(expected.definitionRevision, sourceRevision);
     }
 
     const sourceDescriptor = await lineageRepository.readDescriptor(
@@ -860,12 +854,10 @@ export class WorkingFileManager {
         "A draft or continuation is already being prepared for this workflow"
       );
     }
-    if (
-      expected?.descriptorRevision !== undefined &&
-      sourceDescriptor.revision !== expected.descriptorRevision
-    ) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${expected.descriptorRevision}, found ${sourceDescriptor.revision}`
+    if (expected?.descriptorRevision !== undefined) {
+      assertDescriptorRevision(
+        expected.descriptorRevision,
+        sourceDescriptor.revision
       );
     }
 
@@ -1025,11 +1017,7 @@ export class WorkingFileManager {
             sourceBytes.toString("utf8")
           ) as WorkingFile;
           const sourceRevision = source.definitionRevision ?? 1;
-          if (sourceRevision !== expectedDefinitionRevision) {
-            throw new Error(
-              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-            );
-          }
+          assertDefinitionRevision(expectedDefinitionRevision, sourceRevision);
           const topology = normalizeParallelGroupTopology({
             steps: ensureStepIds(source.steps ?? []),
             parallelGroups: source.parallelGroups,
@@ -1224,11 +1212,7 @@ export class WorkingFileManager {
       return withFileLock(runFilePath, async () => {
         const source = await readWorkingFileFromDisk(runFilePath);
         const sourceRevision = source.definitionRevision ?? 1;
-        if (sourceRevision !== expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-          );
-        }
+        assertDefinitionRevision(expectedDefinitionRevision, sourceRevision);
         const sourceState = source._runtime?.executionState;
         if (
           sourceState === EXECUTION_STATES.RUNNING ||
@@ -1765,11 +1749,10 @@ export class WorkingFileManager {
           return withFileLock(runFilePath, async () => {
             const current = await readWorkingFileFromDisk(runFilePath);
             const currentRevision = current.definitionRevision ?? 1;
-            if (currentRevision !== expectedDefinitionRevision) {
-              throw new Error(
-                `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${currentRevision}`
-              );
-            }
+            assertDefinitionRevision(
+              expectedDefinitionRevision,
+              currentRevision
+            );
             const snapshotBytes = await fs.readFile(snapshotPath);
             const base = JSON.parse(
               snapshotBytes.toString("utf8")
@@ -1883,11 +1866,7 @@ export class WorkingFileManager {
         return withFileLock(runFilePath, async () => {
           const current = await readWorkingFileFromDisk(runFilePath);
           const currentRevision = current.definitionRevision ?? 1;
-          if (currentRevision !== expectedDefinitionRevision) {
-            throw new Error(
-              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${currentRevision}`
-            );
-          }
+          assertDefinitionRevision(expectedDefinitionRevision, currentRevision);
           const nextRuntime = current._runtime
             ? { ...current._runtime }
             : undefined;

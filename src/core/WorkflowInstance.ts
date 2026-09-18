@@ -2,6 +2,7 @@ import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
 import { WorkingFileManager } from "./WorkingFileManager";
+import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
   buildClearUpdates,
   buildDefinitionSnapshot,
@@ -2190,11 +2191,10 @@ export class WorkflowInstance {
     if (state.workflowKey !== workflowKey || state.runRef !== runRef) {
       throw new Error("Continuation target did not bind to the requested run");
     }
-    if (state.definitionRevision !== expectedDefinitionRevision) {
-      throw new Error(
-        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${state.definitionRevision}`
-      );
-    }
+    assertDefinitionRevision(
+      expectedDefinitionRevision,
+      state.definitionRevision
+    );
     await onPrepared?.();
 
     const historyFilePath = this.outputHistoryManager.getHistoryFilePath(
