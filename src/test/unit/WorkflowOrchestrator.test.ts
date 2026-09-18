@@ -2343,6 +2343,63 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 });
 
 suite("WorkflowOrchestrator draft mutation preparation", () => {
+  test("reconciles a client's own addressed definition revision before the deep guard", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-ledger-orchestrator-")
+    );
+    try {
+      const workflowKey =
+        "ledger-workflow" as import("../../types/CtrlYokeTypes").WorkflowKey;
+      const runRef = "run-1" as import("../../types/CtrlYokeTypes").RunRef;
+      const address = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      } as const;
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      let primedRevision: number | undefined;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.viewerRegistry = new Map([["client-a", "ledger-instance"]]);
+      internal.viewAddressRegistry = new Map([["client-a", address]]);
+      internal.viewMessageSinks = new Map();
+      internal.instances = new Map([
+        [
+          "ledger-instance",
+          {
+            getQueueState: () => ({
+              workflowKey,
+              runRef,
+              status: EXECUTION_STATES.RUNNING,
+              definitionRevision: 4,
+            }),
+            getExecutionRunRef: () => runRef,
+            ownsRunnerLock: () => true,
+            expectDefinitionRevision: (revision: number) => {
+              primedRevision = revision;
+            },
+          },
+        ],
+      ]);
+      internal.retiredInstances = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
+      internal.definitionAuthorLedger.recordDefinition(address, "client-a", 4);
+
+      const mutation = {
+        address,
+        expectedDefinitionRevision: 3,
+        expectedDescriptorRevision: 1,
+      };
+      await orchestrator.prepareDefinitionMutation(mutation, "client-a");
+
+      assert.strictEqual(mutation.expectedDefinitionRevision, 4);
+      assert.strictEqual(primedRevision, 4);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("validates a promoted run's edit in place, primes the live instance's revision guard, and never forks a draft", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-run-edit-")

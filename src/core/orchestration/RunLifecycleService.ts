@@ -3,6 +3,10 @@ import { WorkingFileManager } from "../WorkingFileManager";
 import { RunContinuationService } from "./RunContinuationService";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import {
+  assertDefinitionRevision,
+  assertDescriptorRevision,
+} from "./RevisionPrecondition";
 import type {
   RunnerHostIdentity,
   QueueState,
@@ -440,20 +444,17 @@ export class RunLifecycleService {
     const descriptor = await this.host
       .getLineageRepository()
       .readDescriptor(workspaceRoot, address.workflowKey);
-    if (descriptor.revision !== expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
+    assertDescriptorRevision(expectedDescriptorRevision, descriptor.revision);
     const draft = JSON.parse(
       await fs.readFile(
         WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
         "utf8"
       )
     ) as WorkingFile;
-    if ((draft.definitionRevision ?? 1) !== expectedDefinitionRevision) {
-      throw new Error("Definition revision conflict while running draft");
-    }
+    assertDefinitionRevision(
+      expectedDefinitionRevision,
+      draft.definitionRevision
+    );
     const instance = this.findInstanceForClient(clientId);
     let prepared = false;
     let resolvePrepared!: () => void;
@@ -657,11 +658,7 @@ export class RunLifecycleService {
     const descriptor = await this.host
       .getLineageRepository()
       .readDescriptor(workspaceRoot, address.workflowKey);
-    if (descriptor.revision !== expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
+    assertDescriptorRevision(expectedDescriptorRevision, descriptor.revision);
     const pendingRewindOnThisRun =
       descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
       descriptor.pendingEdit.runRef === address.runRef;
@@ -743,11 +740,10 @@ export class RunLifecycleService {
         "utf8"
       )
     ) as WorkingFile;
-    if ((target.definitionRevision ?? 1) !== expectedDefinitionRevision) {
-      throw new Error(
-        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${target.definitionRevision ?? 1}`
-      );
-    }
+    assertDefinitionRevision(
+      expectedDefinitionRevision,
+      target.definitionRevision
+    );
     const targetState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
     const activeTarget =

@@ -47,7 +47,7 @@ function makeOrchestrator(overrides: Record<string, unknown>) {
   const orchestrator = Object.create(
     WorkflowOrchestrator.prototype
   ) as WorkflowOrchestrator;
-  Object.assign(orchestrator as unknown as Record<string, unknown>, overrides);
+  Object.assign(orchestrator, overrides);
   return orchestrator;
 }
 
@@ -273,47 +273,36 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
   });
 });
 
-suite("WorkflowMutationCoordinator — property revision recovery", () => {
-  test("retries a property mutation with the authoritative revision", async () => {
-    const attempts: number[] = [];
+suite("WorkflowMutationCoordinator — property revision delegation", () => {
+  test("delegates property revision validation once to the orchestrator", async () => {
+    const calls: Array<{ mutation: unknown; clientId: string }> = [];
     const address = {
       kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       workflowKey: "workflow-key",
     } as const;
-    const orchestrator = {
-      prepareWorkflowPropertiesMutation: async (mutation?: {
-        expectedDefinitionRevision?: number;
-      }) => {
-        attempts.push(mutation?.expectedDefinitionRevision ?? -1);
-        if (attempts.length === 1) {
-          throw new Error("Definition revision conflict: expected 1, found 2");
-        }
+    const orchestrator = makeOrchestrator({
+      prepareWorkflowPropertiesMutation: async (
+        mutation: unknown,
+        clientId: string
+      ) => {
+        calls.push({ mutation, clientId });
       },
-      publishViewIdentityToViewers: async () => ({
-        type: "workflowViewIdentity",
-        address,
-        definitionRevision: 2,
-        descriptorRevision: 4,
-      }),
-    } as unknown as WorkflowOrchestrator;
+    });
     const coordinator = new WorkflowMutationCoordinator(() => orchestrator);
+    const mutation = {
+      address,
+      expectedDefinitionRevision: 1,
+      expectedDescriptorRevision: 3,
+    };
     const message: {
       mutation?: unknown;
     } = {
-      mutation: {
-        address,
-        expectedDefinitionRevision: 1,
-        expectedDescriptorRevision: 3,
-      },
+      mutation,
     };
 
     await coordinator.prepareWorkflowPropertiesMutation(makeCtx(), message);
 
-    assert.deepStrictEqual(attempts, [1, 2]);
-    assert.deepStrictEqual(message.mutation, {
-      address,
-      expectedDefinitionRevision: 2,
-      expectedDescriptorRevision: 4,
-    });
+    assert.deepStrictEqual(calls, [{ mutation, clientId: "panel" }]);
+    assert.strictEqual(message.mutation, mutation);
   });
 });

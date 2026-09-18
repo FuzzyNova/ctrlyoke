@@ -2,19 +2,32 @@ import * as fs from "fs/promises";
 import { WorkflowOrchestrator } from "../../../core/WorkflowOrchestrator";
 import { WorkingFileManager } from "../../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../../core/orchestration/WorkflowLineageRepository";
+import {
+  RunLifecycleService,
+  type RunLifecycleInstancePort,
+} from "../../../core/orchestration/RunLifecycleService";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
 import {
   EXECUTION_STATES,
+  MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../../types/DashboardConstants";
 import { WebviewSettingsSync } from "../../../ui/WebviewSettingsSync";
+import { WorkflowMutationCoordinator } from "../../../ui/WorkflowMutationCoordinator";
+import { WorkflowStepHandlers } from "../../../ui/WorkflowStepHandlers";
+import { createWebviewClientContext } from "../../../ui/WebviewClientContext";
 import type {
   WorkflowKey,
   RunRef,
+  WorkflowRunAddress,
   WorkflowStep,
   PromptStep,
 } from "../../../types/CtrlYokeTypes";
-import type { WorkflowDefinitionMutation } from "../../../types/WebviewMessageTypes";
+import type {
+  SeedNewRunMessage,
+  WorkflowDefinitionMutation,
+  WorkflowViewIdentityMessage,
+} from "../../../types/WebviewMessageTypes";
 
 /**
  * Message-contract integration harness for the property/prompt round trip.
@@ -45,6 +58,47 @@ const VIEW_ONLY_INSTANCE_ID = "view-only-instance";
 /** A workflowKey that never matches the run under test, so the seeded instance
  * keeps the run "idle" (static write path) yet still answers getQueueState. */
 const VIEW_ONLY_KEY = "__view_only__" as WorkflowKey;
+
+class SeedRunTestDouble
+  implements
+    Pick<
+      RunLifecycleService,
+      "seedAndExecuteAtRun" | "findResidentInstanceForRun"
+    >
+{
+  constructor(
+    private readonly workspace: string,
+    private readonly repository: WorkflowLineageRepository
+  ) {}
+
+  findResidentInstanceForRun(
+    _workflowKey: WorkflowKey,
+    _runRef: RunRef
+  ): RunLifecycleInstancePort | undefined {
+    return undefined;
+  }
+
+  async seedAndExecuteAtRun(
+    address: WorkflowRunAddress,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    _clientId: string = TEST_CLIENT_ID
+  ): Promise<{ runRef: RunRef }> {
+    const seeded = await WorkingFileManager.seedNewRun(
+      this.workspace,
+      address.workflowKey,
+      address.runRef,
+      {},
+      this.repository,
+      {
+        definitionRevision: expectedDefinitionRevision,
+        descriptorRevision: expectedDescriptorRevision,
+      },
+      EXECUTION_STATES.IDLE
+    );
+    return { runRef: seeded.runRef };
+  }
+}
 
 export interface PromotedRun {
   workflowKey: WorkflowKey;
@@ -116,6 +170,14 @@ export interface RoundTripHarness {
     property: string,
     value: unknown
   ): Promise<void>;
+  /** Same property route, including the dashboard mutation coordinator. */
+  routeWorkflowPropertyUpdateThroughHandlers(
+    mutation: WorkflowDefinitionMutation,
+    property: string,
+    value: unknown
+  ): Promise<void>;
+  /** Mirrors the dashboard's Re-run handler. */
+  routeSeedNewRun(message: SeedNewRunMessage): Promise<void>;
   /** Mirrors `WebviewMessageRouter.handleUpdateWorkflowProperties`. */
   routeWorkflowPropertiesUpdate(
     properties: Record<string, unknown>
@@ -143,6 +205,8 @@ export interface RoundTripHarness {
   patchRunDefinition(
     mutate: (definition: RunDefinition) => void
   ): Promise<void>;
+  /** Advance the run's definition revision as an external writer would. */
+  advanceRunDefinitionRevisionExternally(): Promise<void>;
   /** The live `{ address, expectedDefinitionRevision, expectedDescriptorRevision }`
    * a client would echo — read fresh from disk. */
   currentMutationContext(): Promise<WorkflowDefinitionMutation>;
@@ -230,7 +294,34 @@ export function createRoundTripHarness(
         expectedDefinitionRevision: definition.definitionRevision ?? 1,
         expectedDescriptorRevision: descriptor.revision,
       };
+  };
+
+  internal.isInitialized = () => true;
+  Object.defineProperty(orchestrator, "runLifecycleService", {
+    configurable: true,
+    value: new SeedRunTestDouble(workspace, repository),
+  });
+  const getViewIdentity = async (): Promise<WorkflowViewIdentityMessage> => {
+    const mutation = await currentMutationContext();
+    return {
+      type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
+      address: mutation.address,
+      definitionRevision: mutation.expectedDefinitionRevision,
+      descriptorRevision: mutation.expectedDescriptorRevision,
     };
+  };
+  internal.getViewIdentity = getViewIdentity;
+  internal.publishViewIdentityToViewers = getViewIdentity;
+
+  const mutationCoordinator = new WorkflowMutationCoordinator(
+    () => orchestrator
+  );
+  const workflowStepHandlers = new WorkflowStepHandlers(
+    () => orchestrator,
+    settingsSync,
+    mutationCoordinator
+  );
+  const clientContext = createWebviewClientContext(TEST_CLIENT_ID, fakePost);
 
   const staleMutationContext =
     async (): Promise<WorkflowDefinitionMutation> => {
@@ -265,6 +356,21 @@ export function createRoundTripHarness(
         fakePost,
         TEST_CLIENT_ID
       );
+    },
+    async routeWorkflowPropertyUpdateThroughHandlers(
+      mutation,
+      property,
+      value
+    ) {
+      await workflowStepHandlers.handleUpdateWorkflowProperty(clientContext, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        mutation: wire(mutation),
+        property,
+        value: wire(value),
+      });
+    },
+    async routeSeedNewRun(message) {
+      await workflowStepHandlers.handleSeedNewRun(clientContext, message);
     },
     async routeWorkflowPropertiesUpdate(properties) {
       const mutation = await currentMutationContext();
@@ -307,6 +413,15 @@ export function createRoundTripHarness(
     async patchRunDefinition(mutate) {
       const definition = await readRunDefinition();
       mutate(definition);
+      await fs.writeFile(
+        runFilePath(),
+        JSON.stringify(definition, null, 2),
+        "utf8"
+      );
+    },
+    async advanceRunDefinitionRevisionExternally() {
+      const definition = await readRunDefinition();
+      definition.definitionRevision = (definition.definitionRevision ?? 1) + 1;
       await fs.writeFile(
         runFilePath(),
         JSON.stringify(definition, null, 2),

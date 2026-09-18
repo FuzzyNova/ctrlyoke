@@ -17,6 +17,7 @@ import {
 } from "../../utils/AtomicFileUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { WORKTREE_EDIT_KINDS } from "../../types/DashboardConstants";
+import { assertDescriptorRevision } from "./RevisionPrecondition";
 
 const DESCRIPTOR_SCHEMA_VERSION = 1;
 /** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
@@ -210,12 +211,10 @@ export class WorkflowLineageRepository {
 
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
-      if (
-        expectedDescriptorRevision !== undefined &&
-        descriptor.revision !== expectedDescriptorRevision
-      ) {
-        throw new Error(
-          `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
+      if (expectedDescriptorRevision !== undefined) {
+        assertDescriptorRevision(
+          expectedDescriptorRevision,
+          descriptor.revision
         );
       }
       const isFirstRun = !descriptor.latestRunRef;
@@ -475,11 +474,7 @@ export class WorkflowLineageRepository {
     );
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
-      if (descriptor.revision !== expectedRevision) {
-        throw new Error(
-          `Descriptor revision conflict: expected ${expectedRevision}, found ${descriptor.revision}`
-        );
-      }
+      assertDescriptorRevision(expectedRevision, descriptor.revision);
       const result = await mutate(descriptor);
       const updated = {
         ...result.descriptor,

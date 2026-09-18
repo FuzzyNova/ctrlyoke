@@ -82,6 +82,11 @@ import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import { DefinitionAuthorLedger } from "./orchestration/DefinitionAuthorLedger";
+import {
+  assertDefinitionRevision,
+  assertDescriptorRevision,
+} from "./orchestration/RevisionPrecondition";
 import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
@@ -499,6 +504,11 @@ export class WorkflowOrchestrator {
     for (const id of value) target.add(id);
   }
   private readonly lineageRepository = new WorkflowLineageRepository();
+  private definitionAuthorLedgerInstance?: DefinitionAuthorLedger;
+  private get definitionAuthorLedger(): DefinitionAuthorLedger {
+    return (this.definitionAuthorLedgerInstance ??=
+      new DefinitionAuthorLedger());
+  }
 
   private readonly externalRunWatchCoordinator: ExternalRunWatchCoordinator;
   private readonly coordinationWatchSessions = new Map<
@@ -2764,6 +2774,128 @@ export class WorkflowOrchestrator {
     return this.runViewPublisher.publishViewIdentityToViewers(clientId);
   }
 
+  private reconcileExpectedRevisions(
+    address: WorkflowViewAddress,
+    clientId: string,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number
+  ): {
+    expectedDefinitionRevision: number;
+    expectedDescriptorRevision: number;
+  } {
+    return {
+      expectedDefinitionRevision:
+        this.definitionAuthorLedger.reconcileDefinition(
+          address,
+          clientId,
+          expectedDefinitionRevision
+        ),
+      expectedDescriptorRevision:
+        this.definitionAuthorLedger.reconcileDescriptor(
+          address.workflowKey,
+          clientId,
+          expectedDescriptorRevision
+        ),
+    };
+  }
+
+  private reconcileRunRevisions(
+    address: WorkflowRunAddress,
+    clientId: string,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number
+  ): {
+    expectedDefinitionRevision: number;
+    expectedDescriptorRevision: number;
+  } {
+    return this.reconcileExpectedRevisions(
+      WorkflowOrchestrator.runViewAddress(address),
+      clientId,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
+  }
+
+  private static runViewAddress(
+    address: WorkflowRunAddress
+  ): Extract<WorkflowViewAddress, { kind: "run" }> {
+    return {
+      workflowKey: address.workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: address.runRef,
+    };
+  }
+
+  private async recordDefinitionWrite(
+    address: WorkflowViewAddress | undefined,
+    clientId: string,
+    newRevision?: number,
+    expectedRevision?: number
+  ): Promise<void> {
+    if (
+      newRevision !== undefined &&
+      expectedRevision !== undefined &&
+      newRevision === expectedRevision
+    ) {
+      return;
+    }
+    const identity =
+      newRevision === undefined || address === undefined
+        ? await this.getViewIdentity(clientId)
+        : null;
+    const effectiveAddress = address ?? identity?.address;
+    const effectiveRevision = newRevision ?? identity?.definitionRevision;
+    if (!effectiveAddress || effectiveRevision === undefined) {
+      return;
+    }
+    this.definitionAuthorLedger.recordDefinition(
+      effectiveAddress,
+      clientId,
+      effectiveRevision
+    );
+  }
+
+  private async recordSuccessfulRevisions(
+    fallbackAddress: WorkflowViewAddress,
+    clientId: string,
+    options: {
+      definitionRevision?: number;
+      descriptorRevision?: number;
+      recordDefinition: boolean;
+      recordDescriptor: boolean;
+    }
+  ): Promise<void> {
+    const needsIdentity =
+      (options.recordDefinition && options.definitionRevision === undefined) ||
+      (options.recordDescriptor && options.descriptorRevision === undefined);
+    const identity = needsIdentity
+      ? await this.getViewIdentity(clientId)
+      : null;
+    const address = identity?.address ?? fallbackAddress;
+    if (options.recordDefinition) {
+      const revision =
+        options.definitionRevision ?? identity?.definitionRevision;
+      if (revision !== undefined) {
+        this.definitionAuthorLedger.recordDefinition(
+          address,
+          clientId,
+          revision
+        );
+      }
+    }
+    if (options.recordDescriptor) {
+      const revision =
+        options.descriptorRevision ?? identity?.descriptorRevision;
+      if (revision !== undefined) {
+        this.definitionAuthorLedger.recordDescriptor(
+          address.workflowKey,
+          clientId,
+          revision
+        );
+      }
+    }
+  }
+
   public async bindClientToAddressedLineage(
     address: WorkflowViewAddress,
     send: (message: unknown) => void,
@@ -2899,6 +3031,14 @@ export class WorkflowOrchestrator {
           `viewing: ${WorkflowOrchestrator.describeViewAddress(viewed)})`
       );
     }
+    const reconciled = this.reconcileExpectedRevisions(
+      mutation.address,
+      clientId,
+      mutation.expectedDefinitionRevision,
+      mutation.expectedDescriptorRevision
+    );
+    mutation.expectedDefinitionRevision = reconciled.expectedDefinitionRevision;
+    mutation.expectedDescriptorRevision = reconciled.expectedDescriptorRevision;
     const workspaceRoot = this.currentWorkspaceFolderPath;
     if (!workspaceRoot) {
       throw new Error("No workspace folder is open");
@@ -2921,11 +3061,10 @@ export class WorkflowOrchestrator {
           resident.ownsRunnerLock());
       if (isLocallyOwnedRun) {
         const liveRevision = resident.getQueueState().definitionRevision;
-        if (liveRevision !== mutation.expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${liveRevision}`
-          );
-        }
+        assertDefinitionRevision(
+          mutation.expectedDefinitionRevision,
+          liveRevision
+        );
         // No descriptor check here: this run's own definition head is what's
         // being edited, and the lineage descriptor is not touched by that
         // write. Checking it would spuriously reject this edit whenever
@@ -2943,11 +3082,10 @@ export class WorkflowOrchestrator {
         this.lineageRepository,
         "edit"
       );
-      if (target.definitionRevision !== mutation.expectedDefinitionRevision) {
-        throw new Error(
-          `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${target.definitionRevision}`
-        );
-      }
+      assertDefinitionRevision(
+        mutation.expectedDefinitionRevision,
+        target.definitionRevision
+      );
       // No descriptor-revision check: see the executing-run branch above.
       // If a live instance already owns this exact run (executing/paused, or
       // simply loaded), prime its next definition write with the client's
@@ -2974,16 +3112,14 @@ export class WorkflowOrchestrator {
     ]);
     const draftRevision =
       (JSON.parse(draft) as WorkingFile).definitionRevision ?? 1;
-    if (descriptor.revision !== mutation.expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
-    if (draftRevision !== mutation.expectedDefinitionRevision) {
-      throw new Error(
-        `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${draftRevision}`
-      );
-    }
+    assertDescriptorRevision(
+      mutation.expectedDescriptorRevision,
+      descriptor.revision
+    );
+    assertDefinitionRevision(
+      mutation.expectedDefinitionRevision,
+      draftRevision
+    );
     this.getInstanceForClient(clientId).expectDefinitionRevision(
       mutation.expectedDefinitionRevision
     );
@@ -3045,19 +3181,32 @@ export class WorkflowOrchestrator {
    */
   private async applyRunAddressedMutation(
     runAddress: WorkflowRunAddress,
+    clientId: string,
+    expectedDefinitionRevision: number,
     liveEdit: (instance: WorkflowInstance) => Promise<void>,
-    staticEdit: (workspaceRoot: string) => Promise<void>,
+    staticEdit: (workspaceRoot: string) => Promise<number | undefined>,
     invalidation: "snapshot" | "properties" | StepColorInvalidation = "snapshot"
   ): Promise<void> {
     const live = this.findResidentInstanceForRun(
       runAddress.workflowKey,
       runAddress.runRef
     );
+    let newDefinitionRevision: number | undefined;
     if (live) {
       await liveEdit(live);
     } else {
-      await staticEdit(this.requireWorkspaceRoot());
+      newDefinitionRevision = await staticEdit(this.requireWorkspaceRoot());
     }
+    await this.recordDefinitionWrite(
+      {
+        workflowKey: runAddress.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: runAddress.runRef,
+      },
+      clientId,
+      newDefinitionRevision,
+      expectedDefinitionRevision
+    );
     // Before the invalidation, never after: the write is already durable, and
     // the client cannot safely act on this address again until it holds the
     // revisions the write produced. See `publishRunRevisionsToViewers`.
@@ -3121,13 +3270,17 @@ export class WorkflowOrchestrator {
       await this.getInstanceForClient(clientId).updateWorkflowName(
         workflowName
       );
+      await this.recordDefinitionWrite(undefined, clientId);
       return undefined;
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) => instance.updateWorkflowName(workflowName),
       async (workspaceRoot) => {
         const written = await WorkingFileManager.updateWorkflowNameAtRun(
@@ -3142,6 +3295,7 @@ export class WorkflowOrchestrator {
           definitionRevision: written.definitionRevision,
           descriptorRevision: written.descriptorRevision,
         };
+        return written.definitionRevision;
       },
       // A rename leaves steps/output untouched — same as any other property
       // write — so viewers only need the lightweight properties push, not a
@@ -3395,16 +3549,25 @@ export class WorkflowOrchestrator {
     clientId: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).updateWorkingFileProperties(
-        properties,
-        options
-      );
+      const result = await this.getInstanceForClient(
+        clientId
+      ).updateWorkingFileProperties(properties, options);
+      if (result && result.appliedKeys.length > 0) {
+        await this.recordDefinitionWrite(
+          undefined,
+          clientId,
+          result.workingFile.definitionRevision
+        );
+      }
+      return result;
     }
     const runAddress = mutation.address;
     let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
       null;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       async (instance) => {
         result = await instance.updateWorkingFileProperties(
           properties,
@@ -3425,6 +3588,9 @@ export class WorkflowOrchestrator {
           workingFile: written.workingFile,
           appliedKeys: written.appliedKeys,
         };
+        return written.appliedKeys.length > 0
+          ? written.definitionRevision
+          : undefined;
       },
       // Property-only writes leave steps and output untouched, so viewers get
       // a lightweight properties push instead of a full snapshot replay.
@@ -3443,17 +3609,21 @@ export class WorkflowOrchestrator {
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).updatePromptInQueue(
+      await this.getInstanceForClient(clientId).updatePromptInQueue(
         index,
         text,
         properties,
         promptName,
         clearProperties
       );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) =>
         instance.updatePromptInQueue(
           index,
@@ -3471,7 +3641,7 @@ export class WorkflowOrchestrator {
           buildPromptStepChange(text, properties, promptName, clearProperties),
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3486,12 +3656,15 @@ export class WorkflowOrchestrator {
         index,
         color
       );
+      await this.recordDefinitionWrite(undefined, clientId);
       return;
     }
 
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) => instance.updateStepColorInQueue(index, color),
       (workspaceRoot) =>
         WorkingFileManager.updateStepAtRun(
@@ -3502,7 +3675,7 @@ export class WorkflowOrchestrator {
           { updates: { color: color ?? undefined } },
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined),
+        ).then((written) => written.definitionRevision),
       { kind: "stepColor", index }
     );
   }
@@ -3544,6 +3717,7 @@ export class WorkflowOrchestrator {
       throw new Error("Completed-step edit did not create a pending rewind");
     }
 
+    let newDefinitionRevision: number | undefined;
     try {
       const live = this.findResidentInstanceForRun(
         runAddress.workflowKey,
@@ -3562,7 +3736,7 @@ export class WorkflowOrchestrator {
           clearProperties
         );
       } else {
-        await WorkingFileManager.updateStepAtRun(
+        const written = await WorkingFileManager.updateStepAtRun(
           this.requireWorkspaceRoot(),
           runAddress.workflowKey,
           runAddress.runRef,
@@ -3571,7 +3745,14 @@ export class WorkflowOrchestrator {
           rewind.definitionRevision,
           this.lineageRepository
         );
+        newDefinitionRevision = written.definitionRevision;
       }
+      await this.recordDefinitionWrite(
+        runAddress,
+        clientId,
+        newDefinitionRevision,
+        rewind.definitionRevision
+      );
     } catch (error) {
       // The rewind is already durable even if the content edit fails. Publish
       // it so clients see the continuation state they can discard or retry.
@@ -3597,14 +3778,18 @@ export class WorkflowOrchestrator {
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
+      await this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
         afterIndex,
         step
       );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) => instance.insertWorkflowStepAfterIndex(afterIndex, step),
       (workspaceRoot) =>
         WorkingFileManager.insertStepAtRun(
@@ -3615,7 +3800,7 @@ export class WorkflowOrchestrator {
           sanitizeClipboardWorkflowStep(step),
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3626,14 +3811,18 @@ export class WorkflowOrchestrator {
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).updateFinalStepInQueue(
+      await this.getInstanceForClient(clientId).updateFinalStepInQueue(
         finalStep,
         clearProperties
       );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) => instance.updateFinalStepInQueue(finalStep, clearProperties),
       (workspaceRoot) =>
         WorkingFileManager.updateFinalStepAtRun(
@@ -3644,7 +3833,7 @@ export class WorkflowOrchestrator {
           clearProperties,
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3663,11 +3852,15 @@ export class WorkflowOrchestrator {
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).deletePromptFromQueue(index);
+      await this.getInstanceForClient(clientId).deletePromptFromQueue(index);
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) => instance.deletePromptFromQueue(index),
       (workspaceRoot) =>
         WorkingFileManager.deleteStepAtRun(
@@ -3677,7 +3870,7 @@ export class WorkflowOrchestrator {
           index,
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3688,14 +3881,18 @@ export class WorkflowOrchestrator {
     pendingGroups?: PendingParallelGroupRange[]
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      return this.getInstanceForClient(clientId).reorderPendingPrompts(
+      await this.getInstanceForClient(clientId).reorderPendingPrompts(
         newPendingOrder,
         pendingGroups
       );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
     }
     const runAddress = mutation.address;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) =>
         instance.reorderPendingPrompts(newPendingOrder, pendingGroups),
       (workspaceRoot) =>
@@ -3707,7 +3904,7 @@ export class WorkflowOrchestrator {
           mutation.expectedDefinitionRevision,
           this.lineageRepository,
           pendingGroups
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3739,13 +3936,17 @@ export class WorkflowOrchestrator {
         finalStep,
         parallelGroups
       );
+      await this.recordDefinitionWrite(undefined, clientId);
       return undefined;
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (instance) =>
         instance.syncStepsForUndoRedo(steps, finalStep, parallelGroups),
       async (workspaceRoot) => {
@@ -3778,7 +3979,9 @@ export class WorkflowOrchestrator {
             definitionRevision: finalStepResult.definitionRevision,
             descriptorRevision: finalStepResult.descriptorRevision,
           };
+          return finalStepResult.definitionRevision;
         }
+        return stepsResult.definitionRevision;
       }
     );
     return latest;
@@ -3809,14 +4012,39 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
   > {
-    return this.runLifecycleService.setStartPositionAtRun(
+    const reconciled = this.reconcileRunRevisions(
+      address,
+      clientId,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.setStartPositionAtRun(
       address,
       toIndex,
-      expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       clientId,
       options
     );
+    const resultAddress =
+      "runRef" in result
+        ? {
+            workflowKey: address.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: result.runRef,
+          }
+        : {
+            workflowKey: address.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: address.runRef,
+          };
+    await this.recordSuccessfulRevisions(resultAddress, clientId, {
+      definitionRevision: result.definitionRevision,
+      descriptorRevision: result.descriptorRevision,
+      recordDefinition: true,
+      recordDescriptor: true,
+    });
+    return result;
   }
 
   /** Seed a fresh RunRef from an addressed run and execute that new run. */
@@ -3826,12 +4054,31 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ runRef: RunRef }> {
-    return this.runLifecycleService.seedAndExecuteAtRun(
+    const reconciled = this.reconcileRunRevisions(
       address,
+      clientId,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.seedAndExecuteAtRun(
+      address,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       clientId
     );
+    await this.recordSuccessfulRevisions(
+      {
+        workflowKey: address.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: result.runRef,
+      },
+      clientId,
+      {
+        recordDefinition: true,
+        recordDescriptor: true,
+      }
+    );
+    return result;
   }
 
   /** Execute the exact viewed draft; promoted runs must use seedAndExecuteAtRun. */
@@ -3841,12 +4088,22 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.runLifecycleService.executeDraftAtAddress(
+    const reconciled = this.reconcileExpectedRevisions(
       address,
+      clientId,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      expectedDescriptorRevision
+    );
+    await this.runLifecycleService.executeDraftAtAddress(
+      address,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       clientId
     );
+    await this.recordSuccessfulRevisions(address, clientId, {
+      recordDefinition: true,
+      recordDescriptor: true,
+    });
   }
 
   /** One client action: restore the committed run, then seed and execute a new RunRef. */
@@ -3857,13 +4114,34 @@ export class WorkflowOrchestrator {
     confirmEditedSuffix: boolean,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ runRef: RunRef } | { hasSuffixEdits: true }> {
-    return this.runLifecycleService.startNewRunInsteadAtRun(
+    const reconciled = this.reconcileRunRevisions(
       address,
+      clientId,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.startNewRunInsteadAtRun(
+      address,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       confirmEditedSuffix,
       clientId
     );
+    if ("runRef" in result) {
+      await this.recordSuccessfulRevisions(
+        {
+          workflowKey: address.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: result.runRef,
+        },
+        clientId,
+        {
+          recordDefinition: true,
+          recordDescriptor: true,
+        }
+      );
+    }
+    return result;
   }
 
   /** Human-readable view address for mismatch diagnostics in thrown errors. */
@@ -3895,13 +4173,38 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
-    return this.runLifecycleService.appendAndContinueAtRun(
+    const reconciled = this.reconcileRunRevisions(
+      address,
+      clientId,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.appendAndContinueAtRun(
       address,
       tail,
-      expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       clientId
     );
+    await this.recordSuccessfulRevisions(
+      {
+        workflowKey: address.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: address.runRef,
+      },
+      clientId,
+      {
+        definitionRevision: result.definitionRevision,
+        descriptorRevision:
+          result.descriptorRevision !== reconciled.expectedDescriptorRevision
+            ? result.descriptorRevision
+            : undefined,
+        recordDefinition: true,
+        recordDescriptor:
+          result.descriptorRevision !== reconciled.expectedDescriptorRevision,
+      }
+    );
+    return result;
   }
 
   /** Continue an unchanged addressed run; no target is inferred from recency. */
@@ -3911,12 +4214,29 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.runLifecycleService.continueAtRun(
+    const reconciled = this.reconcileRunRevisions(
       address,
+      clientId,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      expectedDescriptorRevision
+    );
+    await this.runLifecycleService.continueAtRun(
+      address,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       clientId
     );
+    const identity = await this.getViewIdentity(clientId);
+    if (
+      identity &&
+      identity.descriptorRevision !== reconciled.expectedDescriptorRevision
+    ) {
+      this.definitionAuthorLedger.recordDescriptor(
+        address.workflowKey,
+        clientId,
+        identity.descriptorRevision
+      );
+    }
   }
 
   public async validateExplicitContinuationTarget(
@@ -3950,14 +4270,37 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
   > {
-    return this.runLifecycleService.discardContinuationAtRun(
+    const reconciled = this.reconcileRunRevisions(
       address,
+      clientId,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.discardContinuationAtRun(
+      address,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
       confirmEditedSuffix,
       clientId,
       invalidate
     );
+    if (result.discarded) {
+      await this.recordSuccessfulRevisions(
+        {
+          workflowKey: address.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: address.runRef,
+        },
+        clientId,
+        {
+          definitionRevision: result.definitionRevision,
+          descriptorRevision: result.descriptorRevision,
+          recordDefinition: true,
+          recordDescriptor: true,
+        }
+      );
+    }
+    return result;
   }
 
   /**
@@ -4191,6 +4534,8 @@ export class WorkflowOrchestrator {
     await this.prepareDefinitionMutation(mutation, clientId);
     await this.applyRunAddressedMutation(
       runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
       (live) =>
         live.executeEphemeralPrompt(text, properties, action, promptName),
       (workspaceRoot) =>
@@ -4201,7 +4546,7 @@ export class WorkflowOrchestrator {
           [step],
           mutation.expectedDefinitionRevision,
           this.lineageRepository
-        ).then(() => undefined)
+        ).then((written) => written.definitionRevision)
     );
   }
 
