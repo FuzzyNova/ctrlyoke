@@ -268,7 +268,8 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
+    | { merge: boolean; keep: boolean }
+    | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -1138,6 +1139,14 @@ export class WorkflowInstance {
    * End every terminal/integration retained from the previous run before a
    * different RunRef starts. Same-run append/continue deliberately does not
    * call this because its resumable session is part of that run's state.
+   *
+   * The retained-reservation release is awaited here rather than left to the
+   * `onPtySessionEnded` callback. That callback is the *asynchronous* trigger —
+   * it fires only once the graceful kill actually reaps the PTY, several
+   * hundred ms later — while the caller (`seedAndExecuteAtRun`) goes straight
+   * on to acquire this lineage's runner lock for the new run. Releasing here
+   * makes the hand-off ordered instead of a race the incoming run can only win
+   * by out-waiting the previous owner.
    */
   async closeRetainedTerminalsForFreshRun(): Promise<void> {
     for (const previous of this.lastRunIntegrations) {
@@ -1154,6 +1163,7 @@ export class WorkflowInstance {
       liveIntegration.dispose();
     }
     this.liveInjectIntegrations.clear();
+    await this.releaseNamedWorktreeRetentionAfterPtyExit();
   }
 
   /**

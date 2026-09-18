@@ -61,6 +61,19 @@ export class WorkflowLockManager {
    * Exclusively acquires the lineage's runner lock. Retries for up to
    * `ACQUIRE_TIMEOUT_MS` if the existing lock is stale (dead PID or heartbeat older
    * than 30s); throws if a live owner holds it or the timeout elapses.
+   *
+   * **The `runner.json` file mutex is taken per attempt, never across the whole
+   * wait.** `releaseLock`/`updateHeartbeat` take that same mutex, so holding it
+   * for the full retry window makes this method block the very release it is
+   * spinning for: the previous owner's release queues behind it and can only
+   * land *after* the acquire has already given up, turning every legitimate
+   * hand-off into a guaranteed 5s failure. That is what a re-run hits when the
+   * previous run is still tearing down a retained PTY — the observed shape is
+   * `Timed out waiting for runner lock: <key> (held by a live owner)` followed
+   * within ~50ms by the previous owner's `releaseLock` for the same lineage.
+   * Correctness does not need the wider hold: each attempt's `open(…, "wx")` is
+   * itself the exclusive-create, and the mutex only serializes the
+   * read-then-unlink of a stale owner's record against a concurrent writer.
    */
   static async acquireLock(
     workspaceRoot: string,
@@ -72,11 +85,11 @@ export class WorkflowLockManager {
       workflowKey
     );
     await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    await withFileLock(lockPath, async () => {
-      const content = JSON.stringify(lock, null, 2);
-      const startTime = Date.now();
+    const content = JSON.stringify(lock, null, 2);
+    const startTime = Date.now();
 
-      while (Date.now() - startTime < ACQUIRE_TIMEOUT_MS) {
+    do {
+      const acquired = await withFileLock(lockPath, async () => {
         try {
           const handle = await fs.promises.open(lockPath, "wx");
           try {
@@ -87,7 +100,7 @@ export class WorkflowLockManager {
           Log.debug(
             `[WorkflowLockManager] acquireLock: ${workflowKey} ${lock.runRef}`
           );
-          return;
+          return true;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
             throw error;
@@ -103,17 +116,18 @@ export class WorkflowLockManager {
                 throw unlinkError;
               }
             });
-            continue;
           }
-
-          await sleep(ACQUIRE_RETRY_DELAY_MS);
+          return false;
         }
-      }
+      });
 
-      throw new Error(
-        `Timed out waiting for runner lock: ${workflowKey} (held by a live owner)`
-      );
-    });
+      if (acquired) return;
+      await sleep(ACQUIRE_RETRY_DELAY_MS);
+    } while (Date.now() - startTime < ACQUIRE_TIMEOUT_MS);
+
+    throw new Error(
+      `Timed out waiting for runner lock: ${workflowKey} (held by a live owner)`
+    );
   }
 
   /**

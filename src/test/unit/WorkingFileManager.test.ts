@@ -649,6 +649,46 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(persisted.steps!.length, 2);
     });
 
+    test("re-writing an object-valued property verbatim does not bump definitionRevision", async () => {
+      // Regression: the property writer compared values by reference, so every
+      // object-valued property (endCondition/preCondition/toolPermissions/…)
+      // counted as changed on every write — the client always posts a freshly
+      // deserialized object. Each such no-op write superseded the revision the
+      // client was still holding, and its next real action (an edit, or Re-run)
+      // was rejected as "Definition revision conflict" against a revision it
+      // could not yet have learned.
+      const workingFilePath = tempFile("noop-property-revision");
+      const preCondition = { script: "exit 0", operator: "eq", expected: "0" };
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        definitionRevision: 3,
+        preCondition,
+      });
+
+      const manager = new WorkingFileManager(makeMockAccess(workingFilePath));
+      const unchanged = await manager.updateWorkingFileProperties({
+        // Structurally identical, different object identity — exactly what
+        // arrives over postMessage.
+        preCondition: { ...preCondition },
+      });
+
+      assert.deepStrictEqual(unchanged?.appliedKeys, []);
+      let persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted.definitionRevision, 3);
+
+      // A genuine change still advances it.
+      const changed = await manager.updateWorkingFileProperties({
+        preCondition: { ...preCondition, expected: "1" },
+      });
+      assert.deepStrictEqual(changed?.appliedKeys, ["preCondition"]);
+      persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted.definitionRevision, 4);
+    });
+
     test("rejects a stale expected definition revision without writing", async () => {
       tmpWorkspace = await makeTmpWorkspace();
       const { workingFilePath } = await new WorkingFileManager(
@@ -1944,6 +1984,32 @@ suite("WorkingFileManager", () => {
         2
       );
       assert.strictEqual(renamed.workingFile.workflowName, "Renamed run");
+    });
+
+    test("updatePropertiesAtRun leaves definitionRevision alone when nothing changed", async () => {
+      // Same regression as the instance-bound path: an addressed write that
+      // persists nothing must not supersede the revision the client is holding.
+      const { workflowKey, runRef } = await makeIdleRun();
+      const endCondition = { script: "exit 0" };
+
+      const first = await WorkingFileManager.updatePropertiesAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { endCondition },
+        1
+      );
+      assert.strictEqual(first.definitionRevision, 2);
+
+      const repeat = await WorkingFileManager.updatePropertiesAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { endCondition: { ...endCondition } },
+        2
+      );
+      assert.deepStrictEqual(repeat.appliedKeys, []);
+      assert.strictEqual(repeat.definitionRevision, 2);
     });
 
     test("rejects an addressed edit while the run is RUNNING", async () => {

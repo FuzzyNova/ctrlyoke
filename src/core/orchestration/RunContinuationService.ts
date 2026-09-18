@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { isDeepStrictEqual } from "util";
 import type {
   ParallelGroupDefinition,
   RunRef,
@@ -1116,6 +1117,22 @@ export class RunContinuationService {
           throw new Error(`Cannot edit while run is in state ${sourceState}`);
         }
         const { workingFile, result } = transform(source);
+        // A transform that produced the definition already on disk must not
+        // bump `definitionRevision`. That revision is the optimistic-concurrency
+        // token every client echoes on its next mutation, so bumping it for a
+        // write that persists nothing supersedes a revision the client is still
+        // legitimately holding and rejects its *next* real action as a
+        // conflict — the manufactured half of "Definition revision conflict"
+        // during fast editing/undo. Nothing downstream needs a write here: the
+        // bytes are identical, so viewers already hold this content.
+        if (isDeepStrictEqual(source, workingFile)) {
+          return {
+            workingFile: source,
+            definitionRevision: sourceRevision,
+            descriptorRevision: descriptor.revision,
+            result,
+          };
+        }
         const persisted: WorkingFile = {
           ...workingFile,
           lastModifiedAt: Date.now(),

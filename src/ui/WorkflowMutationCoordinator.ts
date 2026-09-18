@@ -67,6 +67,64 @@ export class WorkflowMutationCoordinator {
     );
   }
 
+  /**
+   * Runs an addressed action, and on a revision conflict re-reads the
+   * authoritative revisions for `address` and runs it exactly once more.
+   *
+   * `definitionRevision` is an optimistic-concurrency token the client can only
+   * learn by round trip, so a user editing faster than that round trip
+   * necessarily posts messages carrying a revision their own previous message
+   * already superseded. Nothing client-side can fix that — the client has no
+   * way to know it is behind — so the conflict has to be absorbed here for the
+   * mutation classes where "the state moved on" is not a reason to refuse.
+   *
+   * Applied to two of them: property writes, which are field-level
+   * last-writer-wins, and run-*starting* actions (Re-run / start position),
+   * which copy a run's persisted definition forward into a brand-new run and so
+   * have nothing to clobber — the worst a refresh can do is start from the
+   * newest definition rather than the one the client last rendered, which is
+   * what the user pressing the button wanted anyway. Step-topology edits stay
+   * strict: there a stale revision means the client is about to overwrite
+   * content it never saw.
+   *
+   * The retry is only safe because every `action` here validates revisions
+   * before taking any other effect, so a rejected first attempt leaves nothing
+   * behind. Bailing when the refreshed identity names a different address keeps
+   * this from silently retargeting an action at whatever the client is viewing
+   * now.
+   */
+  async retryWithRefreshedRevisions<T>(
+    ctx: WebviewClientContext,
+    address: unknown,
+    action: (revisions?: {
+      definitionRevision: number;
+      descriptorRevision: number;
+    }) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await action();
+    } catch (error) {
+      if (!getErrorMessage(error).includes("revision conflict")) {
+        throw error;
+      }
+      const identity =
+        await this.getOrchestrator()?.publishViewIdentityToViewers(
+          ctx.clientId
+        );
+      if (
+        !identity ||
+        !address ||
+        JSON.stringify(identity.address) !== JSON.stringify(address)
+      ) {
+        throw error;
+      }
+      return await action({
+        definitionRevision: identity.definitionRevision,
+        descriptorRevision: identity.descriptorRevision,
+      });
+    }
+  }
+
   /** Keep workflow settings on an executing run's own definition head. */
   async prepareWorkflowPropertiesMutation(
     ctx: WebviewClientContext,
@@ -78,45 +136,24 @@ export class WorkflowMutationCoordinator {
     if (!orchestrator) {
       throw new Error("WorkflowOrchestrator not initialized");
     }
-    try {
-      await orchestrator.prepareWorkflowPropertiesMutation(
-        this.asWorkflowDefinitionMutation(message),
-        ctx.clientId
-      );
-    } catch (error) {
-      // Property writes are field-level last-writer-wins updates. A fast client
-      // can post several messages before the identity response for the first
-      // write reaches the webview, so each queued message may carry the same
-      // revision even though the previous property write already advanced it.
-      // Refresh and retry only this merge-safe mutation class; step topology and
-      // run lifecycle mutations must continue to fail on stale revisions.
-      if (!getErrorMessage(error).includes("revision conflict")) {
-        throw error;
+    const originalMutation = this.asWorkflowDefinitionMutation(message);
+    await this.retryWithRefreshedRevisions(
+      ctx,
+      originalMutation?.address,
+      async (revisions) => {
+        if (revisions && originalMutation) {
+          message.mutation = {
+            ...originalMutation,
+            expectedDefinitionRevision: revisions.definitionRevision,
+            expectedDescriptorRevision: revisions.descriptorRevision,
+          };
+        }
+        await orchestrator.prepareWorkflowPropertiesMutation(
+          this.asWorkflowDefinitionMutation(message),
+          ctx.clientId
+        );
       }
-
-      const originalMutation = this.asWorkflowDefinitionMutation(message);
-      const identity = await orchestrator.publishViewIdentityToViewers(
-        ctx.clientId
-      );
-      if (
-        !identity ||
-        !originalMutation ||
-        JSON.stringify(identity.address) !==
-          JSON.stringify(originalMutation.address)
-      ) {
-        throw error;
-      }
-
-      message.mutation = {
-        ...originalMutation,
-        expectedDefinitionRevision: identity.definitionRevision,
-        expectedDescriptorRevision: identity.descriptorRevision,
-      };
-      await orchestrator.prepareWorkflowPropertiesMutation(
-        this.asWorkflowDefinitionMutation(message),
-        ctx.clientId
-      );
-    }
+    );
   }
 
   asWorkflowDefinitionMutation(message: {
