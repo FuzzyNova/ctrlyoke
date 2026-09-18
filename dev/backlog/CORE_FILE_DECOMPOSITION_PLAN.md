@@ -1,6 +1,15 @@
 # Core File Decomposition — `WorkflowOrchestrator` and `WorkflowInstance`
 
-> **Status:** Proposed — not implemented. Written 2026-09-17 against current code.
+> **Status:** Proposed — not implemented. Written 2026-09-17 against current code,
+> re-verified 2026-09-17 before staging (see the verification note below).
+>
+> **Line numbers in this document are indicative, not authoritative.** They were
+> taken when it was written; `WorkflowOrchestrator.ts` has since grown from 7,563
+> to 7,591 lines, so citations in §1/§4 drift by roughly 30 lines (e.g.
+> `buildWorkflowInstance` is at 6261, not 6229; `validateExplicitContinuationTarget`
+> at 5119, not 5081). **Always locate a method by symbol name, never by line
+> number.** Method *lengths* and the state-ownership claims below were re-measured
+> and are accurate.
 >
 > **Verdict in one line:** yes, split them — but by lifting out the _state each
 > cluster privately owns_, not by chopping the files into 2,000-line slices, and
@@ -75,10 +84,14 @@ cover the rest, and three measurable facts say so:
 
 2. **The class is not constructible in tests, and production code has been bent
    to accommodate that.** `WorkflowOrchestrator.test.ts` uses
-   `Object.create(WorkflowOrchestrator.prototype)` **57 times**, then hand-sets
-   private fields. Three production accessors exist _only_ to serve those
-   doubles — `getViewAddressRegistry()` (line 3082),
-   `getViewMessageSinks()` (3094) and `getLineageBindingClients()` (3104), each
+   `Object.create(WorkflowOrchestrator.prototype)` **60 times** (57 when written;
+   re-counted 2026-09-17), then hand-sets
+   private fields. Note the call is Prettier-wrapped across two lines, so a
+   single-line `grep "Object.create(WorkflowOrchestrator.prototype)"` reports
+   **zero** — that is a grep artifact, not evidence the doubles are gone. Match
+   on `Object.create` alone. Three production accessors exist _only_ to serve those
+   doubles — `getViewAddressRegistry()` (now line 3121),
+   `getViewMessageSinks()` (3132) and `getLineageBindingClients()` (3142), each
    carrying the comment _"Defensive for lightweight unit-test instances created
    without constructors."_ That is test-shaped code in the production file, and
    it is a direct symptom of the class being too big to build. By contrast
@@ -180,7 +193,7 @@ an interface. Extracting it first turns those from "tangled" into "mechanical."
 It is also what kills the three defensive accessors from §2.2 — a registry
 constructed with its own maps cannot be half-built, so
 `getViewAddressRegistry()` and friends collapse back into plain field access and
-the 57 `Object.create` doubles can construct a real registry instead.
+the 60 `Object.create` doubles can construct a real registry instead.
 
 **Note on `buildWorkflowInstance` (174 lines):** this is the wiring that
 supplies `WorkflowInstance`'s 17 constructor arguments. It should move as-is
@@ -390,7 +403,7 @@ tooling. Rules:
 - **Each extraction ships with its own `src/test/unit/<Collaborator>.test.ts`**,
   carrying over the assertions that were exercising that behaviour through the
   parent.
-- **Retire `Object.create(WorkflowOrchestrator.prototype)` as you go.** All 57
+- **Retire `Object.create(WorkflowOrchestrator.prototype)` as you go.** All 60
   uses exist because the class cannot be constructed; every extraction converts
   some of them into `new <Collaborator>(...)` with real arguments. Track the
   count down — it is the cleanest single progress metric this plan has. When it
@@ -434,9 +447,17 @@ both classes constructible without a VS Code host, which is precisely what the
 new collaborators' tests need; and doing it second would mean re-applying it
 across five files instead of one.
 
+> **✅ Order 0 is already done (verified 2026-09-17).**
+> `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` records Phase 1 as complete, and the
+> code agrees: `WorkflowOrchestrator`'s constructor is
+> `constructor(dependencies: WorkflowOrchestratorDependencies)` (line 550), and
+> **neither `WorkflowOrchestrator.ts` nor `WorkflowInstance.ts` imports `vscode`
+> at all.** Phase 1 below is therefore the real starting point — do not re-do the
+> decoupling work.
+
 | Order | Phase                                | Lines moved | Risk        | Unblocks   |
 | ----- | ------------------------------------ | ----------- | ----------- | ---------- |
-| 0     | Decoupling plan, Phase 1 (external)  | —           | —           | all        |
+| 0     | Decoupling plan, Phase 1 — ✅ DONE   | —           | —           | all        |
 | 1     | §4.1 `ExternalRunWatchCoordinator`   | ~1,000      | low         | —          |
 | 2     | §5.2 `SessionActivityRecorder`       | ~470        | low         | —          |
 | 3     | §5.3 `RunnerLockCoordinator`         | ~100        | low         | §5.4       |
@@ -473,3 +494,28 @@ the wrong trade. The targets that matter:
 
 If a phase does not move at least one of those four, it is a file split and
 should not be done.
+
+---
+
+## 10. Execution log
+
+Each phase updates this table as it lands, so the next session can tell what is
+already done without re-deriving it from `git log`. Keep the "Notes" column to
+one line — deviations, deferrals, or a reassessment outcome.
+
+| Phase                                | Status      | Commit | Notes |
+| ------------------------------------ | ----------- | ------ | ----- |
+| Decoupling plan, Phase 1             | ✅ Done     | (prior) | Verified 2026-09-17: options-object ctor, no `vscode` imports in either file. |
+| §4.1 `ExternalRunWatchCoordinator`   | Not started | —      | |
+| §5.2 `SessionActivityRecorder`       | Not started | —      | |
+| §5.3 `RunnerLockCoordinator`         | Not started | —      | |
+| §4.2 `WorkflowInstanceRegistry`      | Not started | —      | |
+| §4.3 `RunViewPublisher`              | Not started | —      | |
+| Test-double retirement               | Not started | —      | Retire `Object.create` doubles; delete the three defensive accessors. |
+| §5.4 `ExecutionWorkspaceProvisioner` | Not started | —      | Has a stop-and-reassess gate; record the outcome here either way. |
+| §4.4 `RunLifecycleService`           | Not started | —      | |
+| §5.1 `ExecutionStartupPipeline`      | Not started | —      | Split across two sessions: phase extraction, then context/startup + failure invariants. |
+
+**Optional, not scheduled:** the `EphemeralPromptRunner` filler noted in §5.4
+(~340 lines, region 3427–3750) remains available but is not on the critical path
+for any other phase.
