@@ -263,6 +263,7 @@ suite("Workflow property round trip (panel -> working file)", () => {
     const { h } = await harness();
     await h.routeWorkflowPropertyUpdate("model", "claude-opus-4-8");
     const stale = await h.staleMutationContext();
+    await h.advanceRunDefinitionRevisionExternally();
     const before = await h.readRunDefinition();
 
     await assert.rejects(

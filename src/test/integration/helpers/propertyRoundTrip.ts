@@ -143,6 +143,8 @@ export interface RoundTripHarness {
   patchRunDefinition(
     mutate: (definition: RunDefinition) => void
   ): Promise<void>;
+  /** Advance the run's definition revision as an external writer would. */
+  advanceRunDefinitionRevisionExternally(): Promise<void>;
   /** The live `{ address, expectedDefinitionRevision, expectedDescriptorRevision }`
    * a client would echo — read fresh from disk. */
   currentMutationContext(): Promise<WorkflowDefinitionMutation>;
@@ -307,6 +309,15 @@ export function createRoundTripHarness(
     async patchRunDefinition(mutate) {
       const definition = await readRunDefinition();
       mutate(definition);
+      await fs.writeFile(
+        runFilePath(),
+        JSON.stringify(definition, null, 2),
+        "utf8"
+      );
+    },
+    async advanceRunDefinitionRevisionExternally() {
+      const definition = await readRunDefinition();
+      definition.definitionRevision = (definition.definitionRevision ?? 1) + 1;
       await fs.writeFile(
         runFilePath(),
         JSON.stringify(definition, null, 2),

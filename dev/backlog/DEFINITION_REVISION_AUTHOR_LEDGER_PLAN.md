@@ -1,6 +1,6 @@
 # Definition-revision conflicts — make "my own edit can't conflict with me" structural
 
-> **Status:** Step 1 implemented; steps 2–3 remain. Design finalized 2026-09-18; staged as the three steps in
+> **Status:** Steps 1–2 implemented; step 3 remains. Design finalized 2026-09-18; staged as the three steps in
 > **Implementation plan** below.
 >
 > **Prerequisites already landed** (bug-fix branch, Sept 2026): no-op writes no longer bump
@@ -164,8 +164,14 @@ file directly, as a CLI/MCP writer would) and assert the client's stale revision
 
 1. **Done — single-source the revision preconditions.** One shared guard for the 16
    definition-revision and 5 descriptor-revision comparisons. Pure refactor, no behavior change.
-2. **Add the author ledger** and reconcile at every orchestrator entry point that has both a
-   `clientId` and an expected revision. Deep check sites are left alone.
+2. **Done — add the author ledger.** `src/core/orchestration/DefinitionAuthorLedger.ts` exports
+   `DefinitionAuthorLedger`, owned by `WorkflowOrchestrator`. It reconciles at
+   `prepareDefinitionMutation` (and therefore `prepareWorkflowPropertiesMutation`),
+   `setStartPositionAtRun`, `seedAndExecuteAtRun`, `executeDraftAtAddress`,
+   `startNewRunInsteadAtRun`, `appendAndContinueAtRun`, `continueAtRun`, and
+   `discardContinuationAtRun`. Definition-address entries use
+   `RunLifecycleService.describeViewAddress`; descriptor entries use `WorkflowKey`.
+   Deep check sites remain unchanged.
 3. **Retire `retryWithRefreshedRevisions`** and prove the invariant with the sequence regression
    test above.
 
