@@ -5,6 +5,9 @@ import {
   WorkflowSummary,
   WorkflowTokenTotals,
   EXECUTION_STATES,
+  deriveWorkflowFinalStepSummary,
+  type FinalStepRuntimeState,
+  type WorkingFile,
   type RunRef,
   type RunnerHostIdentity,
   type WorkflowKey,
@@ -206,7 +209,9 @@ export class ExternalRunWatchSession implements vscode.Disposable {
           currentIndex?: number;
           executionState?: string;
           tokenTotals?: WorkflowTokenTotals;
+          finalStep?: FinalStepRuntimeState;
         };
+        finalStep?: WorkingFile["finalStep"];
         steps?: StepWithRuntimeStatus[];
       };
 
@@ -215,6 +220,10 @@ export class ExternalRunWatchSession implements vscode.Disposable {
         (workingFile._runtime?.executionState as string | undefined) ??
         EXECUTION_STATES.RUNNING;
       const steps = workingFile.steps ?? [];
+      const finalStepSummary = deriveWorkflowFinalStepSummary(
+        workingFile.finalStep,
+        workingFile._runtime?.finalStep
+      );
 
       this.onUpdate(
         {
@@ -222,6 +231,7 @@ export class ExternalRunWatchSession implements vscode.Disposable {
           totalSteps: steps.length,
           executionState: executionState as WorkflowSummary["executionState"],
           tokenTotals: workingFile._runtime?.tokenTotals,
+          ...finalStepSummary,
         },
         steps
       );

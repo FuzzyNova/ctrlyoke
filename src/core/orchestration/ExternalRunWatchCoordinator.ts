@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   EXECUTION_STATES,
+  deriveWorkflowFinalStepSummary,
   type QueueState,
   type RunnerHostIdentity,
   type WorkflowKey,
@@ -503,6 +504,10 @@ export class ExternalRunWatchCoordinator {
 
     const currentIndex = workingFile._runtime?.currentIndex ?? 0;
     const totalSteps = workingFile.steps?.length ?? 0;
+    const finalStepSummary = deriveWorkflowFinalStepSummary(
+      workingFile.finalStep,
+      workingFile._runtime?.finalStep
+    );
     const summary: WorkflowSummary = {
       id: workflowId,
       workflowKey,
@@ -517,6 +522,7 @@ export class ExternalRunWatchCoordinator {
       externalOwner,
       tokenTotals: workingFile._runtime?.tokenTotals,
       worktree: workingFile._runtime?.worktree,
+      ...finalStepSummary,
     };
 
     const session = new ExternalRunWatchSession(
@@ -863,8 +869,10 @@ export class ExternalRunWatchCoordinator {
             executionState?: string;
             currentIndex?: number;
             tokenTotals?: WorkflowSummary["tokenTotals"];
+            finalStep?: NonNullable<WorkingFile["_runtime"]>["finalStep"];
           };
           steps?: StepWithRuntimeStatus[];
+          finalStep?: WorkingFile["finalStep"];
           workflowName?: string;
           startedAt?: number;
         };
@@ -898,6 +906,11 @@ export class ExternalRunWatchCoordinator {
           totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
           externalOwner: undefined,
           tokenTotals: workingFile._runtime?.tokenTotals,
+          ...deriveWorkflowFinalStepSummary(
+            workingFile.finalStep,
+            workingFile._runtime?.finalStep
+          ),
+          finalStepRunning: false,
         };
         this.broadcastExternalRunStepStatuses(
           workflowId,

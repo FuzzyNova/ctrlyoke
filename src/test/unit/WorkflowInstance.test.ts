@@ -240,6 +240,39 @@ async function startQueueExecution(instance: WorkflowInstance): Promise<void> {
   }
 }
 
+function createSummaryTestInstance(): WorkflowInstance {
+  const platform = new MockPlatform();
+  return new WorkflowInstance(
+    platform,
+    {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyPromptsReordered: () => {},
+    } as any,
+    new MockIntegrationFactory(platform),
+    () => new MockHarnessIntegration(undefined, false),
+    () => {},
+    () => {},
+    process.cwd()
+  );
+}
+
 async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
   const queue = instance.promptQueue;
   queue.getRuntimeStateMachine().complete();
@@ -849,6 +882,41 @@ suite("WorkflowInstance replay classification", () => {
 });
 
 suite("WorkflowInstance runtime transitions", () => {
+  test("getSummary reports final-step definition and runtime state", async () => {
+    const instance = createSummaryTestInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "queue" }],
+      finalStep: { prompt: "final" },
+    });
+    await startQueueExecution(instance);
+
+    const queueSummary = instance.getSummary();
+    assert.strictEqual(queueSummary.hasFinalStep, true);
+    assert.strictEqual(queueSummary.finalStepRunning, false);
+
+    await instance.promptQueue.setFinalStepRuntime({
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: 0,
+      status: STEP_STATUS.RUNNING,
+    });
+    const finalStepSummary = instance.getSummary();
+    assert.strictEqual(finalStepSummary.hasFinalStep, true);
+    assert.strictEqual(finalStepSummary.finalStepRunning, true);
+
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "queue-only" }] });
+    const noFinalStepSummary = instance.getSummary();
+    assert.strictEqual(noFinalStepSummary.hasFinalStep, false);
+    assert.strictEqual(noFinalStepSummary.finalStepRunning, false);
+
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "queue" }],
+      finalStep: { prompt: "disabled", enabled: false },
+    });
+    const disabledFinalStepSummary = instance.getSummary();
+    assert.strictEqual(disabledFinalStepSummary.hasFinalStep, false);
+    assert.strictEqual(disabledFinalStepSummary.finalStepRunning, false);
+  });
+
   test("getSummary reports the workflow-level harness instead of a step override", async () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(

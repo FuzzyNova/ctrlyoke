@@ -1,6 +1,7 @@
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
@@ -1223,9 +1224,29 @@ export interface WorkflowSummary {
   harness?: HarnessId;
   /** Resolved worktree identity for the currently executing run, when applicable. */
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
+  /** Present when the workflow definition has an enabled final step. */
+  hasFinalStep?: boolean;
+  /** Set only while the final step is the attempt actually executing right now. */
+  finalStepRunning?: boolean;
   /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;
+}
+
+/**
+ * Derive the final-step state carried by lightweight workflow summaries.
+ * Keep this definition/runtime pairing single-sourced across local and external runs.
+ */
+export function deriveWorkflowFinalStepSummary(
+  finalStep: PromptFile["finalStep"],
+  finalStepRuntime: FinalStepRuntimeState | undefined
+): Pick<WorkflowSummary, "hasFinalStep" | "finalStepRunning"> {
+  return {
+    hasFinalStep: !!finalStep && finalStep.enabled !== false,
+    finalStepRunning:
+      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepRuntime.status === STEP_STATUS.RUNNING,
+  };
 }
 
 /** Read-only ownership identity discovered when a window opens on a managed worktree. */

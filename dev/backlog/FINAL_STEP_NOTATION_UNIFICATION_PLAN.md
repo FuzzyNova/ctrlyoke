@@ -1,6 +1,7 @@
 # Final-Step Notation Unification + Running-Row Display Plan
 
-**Status:** Phase 1 complete — Option A implemented 2026-09-18; Phase 2 remains planned.
+**Status:** Phase 1 complete — Option A implemented 2026-09-18; Phase 2 data implemented
+2026-09-18; the display half of Phase 2 remains planned.
 
 ## Goal
 
@@ -174,6 +175,12 @@ finalStepRunning?: boolean;
   > `src/core/orchestration/ExternalRunWatchCoordinator.ts` / `ExternalRunWatchSession.ts`. Several
   > other citations were similarly off and have been corrected throughout this document — but verify
   > each one against the current code anyway before relying on it.
+
+  **Implemented:** the shared `deriveWorkflowFinalStepSummary` helper now lives beside the workflow
+  contracts in `src/types/CtrlYokeTypes.ts`. Local summaries and external-run watch summaries use it
+  for the definition/runtime predicates; the finished external-run summary explicitly reports
+  `finalStepRunning: false`. The summary fields flow unchanged through the existing dashboard
+  message envelopes, so no serializer changes were required.
 
 ### Display
 

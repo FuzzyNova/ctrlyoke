@@ -35,6 +35,7 @@ import {
   WorkflowSummary,
   type WorktreeRunProjection,
   DynamicQueueConfig,
+  deriveWorkflowFinalStepSummary,
   type RunRef,
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
@@ -1275,6 +1276,10 @@ export class WorkflowInstance {
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
     const executionTimeUpdatedAt = Date.now();
+    const finalStepSummary = deriveWorkflowFinalStepSummary(
+      this.promptQueue.getWorkflowFile().finalStep,
+      this.promptQueue.getFinalStepRuntime()
+    );
     const workflowHarness =
       this.currentPromptFile?.promptFile?.harness ??
       this.promptQueue.getWorkflowFile().harness;
@@ -1296,6 +1301,7 @@ export class WorkflowInstance {
       executionTimeMs: this.workflowRuntime.getActiveExecutionTime(),
       executionTimeUpdatedAt,
       harness,
+      ...finalStepSummary,
       worktree: this.activeWorktree
         ? ({
             branchName: this.activeWorktree.branchName,

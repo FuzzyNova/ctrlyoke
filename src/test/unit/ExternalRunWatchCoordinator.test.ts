@@ -21,6 +21,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   RUNNER_IDS,
   STEP_STATUS,
   type ExecutionState,
@@ -70,13 +71,16 @@ class TestBroadcast implements ExternalRunWatchBroadcast {
     workflowId?: string;
   }> = [];
   readonly restoredCalls: Array<unknown[]> = [];
+  readonly updatedSummaries: WorkflowSummary[] = [];
   dismissed = false;
 
   notifyWorkflowAdded(): void {}
   notifyWorkflowDismissed(): void {
     this.dismissed = true;
   }
-  notifyWorkflowSummaryUpdated(): void {}
+  notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    this.updatedSummaries.push(summary);
+  }
   notifyCliWatchOutput(): void {}
   notifyCliPromptsExtended(): void {}
   updateStepStatus(
@@ -210,6 +214,75 @@ function fakeInstance(
 }
 
 suite("ExternalRunWatchCoordinator dashboard state", () => {
+  test("reports final-step state in live and finished external summaries", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-final-step-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-final-step"
+      );
+      const liveWorkingFile = {
+        workflowName: "external-final-step",
+        startedAt: Date.now(),
+        finalStep: { prompt: "final" },
+        steps: [{ prompt: "queue" }],
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+          finalStep: {
+            phase: FINAL_STEP_PHASES.FINAL_STEP,
+            loopCount: 0,
+            status: STEP_STATUS.RUNNING,
+          },
+        },
+      };
+      await fs.writeFile(run.filePath, JSON.stringify(liveWorkingFile), "utf8");
+
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+      const liveSummary = coordinator.getEntry(run.workflowKey)?.summary;
+      assert.strictEqual(liveSummary?.hasFinalStep, true);
+      assert.strictEqual(liveSummary?.finalStepRunning, true);
+
+      await fs.writeFile(
+        run.filePath,
+        JSON.stringify({
+          ...liveWorkingFile,
+          _runtime: {
+            ...liveWorkingFile._runtime,
+            executionState: EXECUTION_STATES.COMPLETED,
+          },
+        }),
+        "utf8"
+      );
+      coordinator.handleExternalRunFinished(
+        run.workflowKey,
+        run.filePath,
+        "lock-deleted"
+      );
+      for (let i = 0; i < 100 && host.broadcast.updatedSummaries.length === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      const finishedSummary = host.broadcast.updatedSummaries.at(-1);
+      assert.strictEqual(finishedSummary?.hasFinalStep, true);
+      assert.strictEqual(finishedSummary?.finalStepRunning, false);
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("omits the definition revision for external replays", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordinator-revision-")
