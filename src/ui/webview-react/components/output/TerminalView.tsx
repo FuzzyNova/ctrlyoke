@@ -32,6 +32,7 @@ import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
 import { TerminalSessionIcon } from "./TerminalSessionIcon";
 import {
+  getAiCliCompactLabel,
   getShellCompactLabel,
   isTerminalSessionInUseByActiveStep,
 } from "@utils/terminalPresentation";
@@ -440,12 +441,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     <CompactRailEntry
                       key={session.id}
                       session={session}
-                      label={
-                        session.stepIndex !== undefined &&
-                        session.stepIndex >= 0
-                          ? String(session.stepIndex + 1)
-                          : session.stepName
-                      }
+                      label={getAiCliCompactLabel(session)}
                       isActive={session.id === activeSessionId}
                       onClick={() => setActiveSession(workflowId, session.id)}
                     />

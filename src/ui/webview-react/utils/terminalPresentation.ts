@@ -49,6 +49,21 @@ export function inferShellKind(
   return undefined;
 }
 
+/**
+ * Compact-rail label for an ai-cli session: the 1-based queue step number, or a
+ * short marker for a final-step attempt, whose signed `stepIndex` is not a step
+ * number. The collapsed rail is a narrow strip sized for the 1-4 character
+ * labels `getShellCompactLabel` produces, so an arbitrary-length `stepName`
+ * cannot go here — the entry's tooltip already carries the full name.
+ */
+export function getAiCliCompactLabel(
+  session: Pick<TerminalSession, "stepIndex">
+): string {
+  return session.stepIndex !== undefined && session.stepIndex >= 0
+    ? String(session.stepIndex + 1)
+    : "fin";
+}
+
 export function getShellCompactLabel(
   shellKind: ShellKind | undefined,
   stepName: string | undefined

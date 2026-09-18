@@ -45,8 +45,10 @@ describe("RunningWorkflowItem", () => {
 
     const row = screen.getByRole("listitem");
     expect(within(row).getByText("Final step")).toBeInTheDocument();
-    expect(row).toHaveAccessibleName(/Final step/);
-    expect(row).not.toHaveAccessibleName(/2\/2/);
+    // The spoken form is phrased for a screen reader rather than mirroring the
+    // visible string verbatim; what must never differ is which state it names.
+    expect(row).toHaveAccessibleName(/final step/i);
+    expect(row).not.toHaveAccessibleName(/step 2 of 2/);
   });
 
   it.each([
@@ -74,8 +76,9 @@ describe("RunningWorkflowItem", () => {
 
       const row = screen.getByRole("listitem");
       expect(within(row).getByText("2/2")).toBeInTheDocument();
-      expect(row).toHaveAccessibleName(/2\/2/);
-      expect(row).not.toHaveAccessibleName(/Final step/);
+      // Spelled out so a screen reader does not read "2/2" as "two slash two".
+      expect(row).toHaveAccessibleName(/step 2 of 2/);
+      expect(row).not.toHaveAccessibleName(/final step/i);
     }
   );
 

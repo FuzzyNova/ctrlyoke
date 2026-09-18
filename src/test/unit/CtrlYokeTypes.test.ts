@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   workflowDisplayStep,
+  workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "../../types/CtrlYokeTypes";
 
@@ -72,5 +73,43 @@ suite("CtrlYokeTypes workflowStepProgressLabel", () => {
       workflowStepProgressLabel({ currentStep: 0, totalSteps: 0 }),
       "0/0"
     );
+  });
+});
+
+suite("CtrlYokeTypes workflowStepProgressAccessibleLabel", () => {
+  test("spells out numeric progress so a screen reader does not read a slash", () => {
+    assert.strictEqual(
+      workflowStepProgressAccessibleLabel({ currentStep: 6, totalSteps: 10 }),
+      "step 7 of 10"
+    );
+  });
+
+  test("clamps the spoken step number exactly like the visible label", () => {
+    assert.strictEqual(
+      workflowStepProgressAccessibleLabel({ currentStep: 3, totalSteps: 2 }),
+      "step 2 of 2"
+    );
+  });
+
+  test("names the final step instead of a step number", () => {
+    assert.strictEqual(
+      workflowStepProgressAccessibleLabel({
+        currentStep: 2,
+        totalSteps: 2,
+        finalStepRunning: true,
+      }),
+      "final step"
+    );
+  });
+
+  test("agrees with the visible label about which state the row is in", () => {
+    for (const finalStepRunning of [true, false, undefined]) {
+      const summary = { currentStep: 1, totalSteps: 2, finalStepRunning };
+      const visibleIsFinal =
+        workflowStepProgressLabel(summary) === "Final step";
+      const spokenIsFinal =
+        workflowStepProgressAccessibleLabel(summary) === "final step";
+      assert.strictEqual(visibleIsFinal, spokenIsFinal);
+    }
   });
 });

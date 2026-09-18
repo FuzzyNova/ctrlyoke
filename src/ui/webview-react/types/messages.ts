@@ -244,7 +244,9 @@ export type {
   ToolPermissionMode,
 } from "@root/types/CtrlYokeTypes";
 export {
+  FINAL_STEP_PROGRESS_LABEL,
   workflowDisplayStep,
+  workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "@root/types/CtrlYokeTypes";
 export type {

@@ -1,6 +1,6 @@
 # Final-Step Notation Unification + Running-Row Display Plan
 
-**Status:** Complete — Phase 1 and Phase 2 implemented 2026-09-18.
+**Status:** Implemented 2026-09-18 (Phase 1 + Phase 2, plus the review fixes recorded at the end).
 
 ## Goal
 
@@ -218,3 +218,34 @@ step"` is precisely step progress, and nothing has to be dropped, widened, or pr
 Manual check the automated tests cannot fully cover: run a workflow with an enabled final step, watch
 the running-workflows dropdown row as it transitions from the last queued step to the final step, and
 confirm the row's label updates to `Final step` instead of staying frozen at `N/N`.
+
+---
+
+## Review-pass corrections (2026-09-18)
+
+Three defects found by inspecting the implementation against this plan, fixed during review:
+
+1. **The final-step retry path bypassed the new notation.** Phase 1 set `terminalStepIndex` on the
+   primary context literal (`WorkflowExecutor.ts:2183`) but not on the _retry_ one built by
+   `createSendRetryPromptCallback` (`WorkflowExecutor.ts:4285`). That context's `promptIndex` is
+   `EndConditionHandler`'s `currentIndex`, which for a final-step target is `results.length` — a
+   **positive** value. With `getActiveStepIndices()` no longer emitting `steps.length` as a second
+   value, a final-step end-condition retry would have stamped its terminal with a positive index that
+   nothing reports as active, un-gating a live terminal's delete button mid-retry: exactly the bug
+   `c4957eb6` fixed. **Whenever a new `WorkflowContext` literal is added on a path that can spawn or
+   re-stamp a PTY, it must carry `terminalStepIndex`** — the `?? promptIndex` fallback in
+   `getWorkflowStepMetadata` is correct for queue steps and silently wrong for final steps.
+
+2. **The collapsed terminal rail could overflow.** Fixing the "Step 11" label made the ai-cli
+   `CompactRailEntry` fall back to a raw `session.stepName`. That rail is a narrow strip sized for the
+   1-4 character labels `getShellCompactLabel` emits, so an arbitrary-length step name did not belong
+   there. Added `getAiCliCompactLabel` beside it in `terminalPresentation.ts`, returning the 1-based
+   queue number or a short `fin` marker; the full name was already in the entry's tooltip.
+
+3. **The accessible name regressed to reading "step 2 slash 2".** Routing both surfaces through the
+   single `workflowStepProgressLabel` made the spoken name mirror the visible string verbatim,
+   yielding "step 2/2" and the doubled "step Final step". Split into
+   `workflowStepProgressAccessibleLabel`, which branches on the same `finalStepRunning` field (so the
+   two can still never disagree about _which_ state the row is in) but keeps the numeric branch
+   spelled out as "step 2 of 2" and says "final step". The shared visible literal lives in
+   `FINAL_STEP_PROGRESS_LABEL`.

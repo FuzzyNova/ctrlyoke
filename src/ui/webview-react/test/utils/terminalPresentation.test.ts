@@ -5,6 +5,7 @@ import {
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
 import {
+  getAiCliCompactLabel,
   getShellCodiconName,
   getShellCompactLabel,
   inferShellKind,
@@ -128,5 +129,24 @@ describe("isTerminalSessionInUseByActiveStep", () => {
         [-1]
       )
     ).toBe(false);
+  });
+});
+
+describe("getAiCliCompactLabel", () => {
+  it("numbers a queue step one-based", () => {
+    expect(getAiCliCompactLabel({ stepIndex: 2 })).toBe("3");
+  });
+
+  it("keeps a final-step attempt's label short instead of using its step name", () => {
+    // The collapsed rail is sized for the 1-4 character labels the shell side
+    // produces, so a signed final-step index must not fall through to an
+    // arbitrary-length stepName.
+    const label = getAiCliCompactLabel({ stepIndex: -1 });
+    expect(label).toBe("fin");
+    expect(label.length).toBeLessThanOrEqual(4);
+  });
+
+  it("falls back to the short marker when the session carries no step index", () => {
+    expect(getAiCliCompactLabel({ stepIndex: undefined })).toBe("fin");
   });
 });

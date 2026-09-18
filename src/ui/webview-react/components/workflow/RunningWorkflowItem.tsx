@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   EXECUTION_STATES,
   HARNESS_INFO,
+  workflowStepProgressAccessibleLabel,
   workflowStepProgressLabel,
 } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
@@ -118,8 +119,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   const accessibleName = composeRowAccessibleName([
     workflow.workflowName,
     workflow.executionState,
-    workflow.totalSteps > 0 &&
-      `step ${workflowStepProgressLabel(workflow)}`,
+    workflow.totalSteps > 0 && workflowStepProgressAccessibleLabel(workflow),
     workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
     hasActiveTerminal && "terminal session is still running",
   ]);

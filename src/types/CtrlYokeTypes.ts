@@ -1265,6 +1265,9 @@ export const workflowDisplayStep = (
   s: Pick<WorkflowSummary, "currentStep" | "totalSteps">
 ): number => Math.max(0, Math.min(s.currentStep + 1, s.totalSteps));
 
+/** Visible row text for a lineage executing its final step. */
+export const FINAL_STEP_PROGRESS_LABEL = "Final step";
+
 /**
  * Returns the running row's step-progress label, including its final-step state.
  */
@@ -1272,8 +1275,21 @@ export const workflowStepProgressLabel = (
   s: Pick<WorkflowSummary, "currentStep" | "totalSteps" | "finalStepRunning">
 ): string =>
   s.finalStepRunning
-    ? "Final step"
+    ? FINAL_STEP_PROGRESS_LABEL
     : `${workflowDisplayStep(s)}/${s.totalSteps}`;
+
+/**
+ * The spoken form of `workflowStepProgressLabel`, branching on the same field so
+ * the visible text and the accessible name can never disagree about *which*
+ * state the row is in. They are phrased differently on purpose: a screen reader
+ * reads "2/2" as "two slash two", so the numeric branch stays spelled out.
+ */
+export const workflowStepProgressAccessibleLabel = (
+  s: Pick<WorkflowSummary, "currentStep" | "totalSteps" | "finalStepRunning">
+): string =>
+  s.finalStepRunning
+    ? FINAL_STEP_PROGRESS_LABEL.toLowerCase()
+    : `step ${workflowDisplayStep(s)} of ${s.totalSteps}`;
 
 /**
  * Process lock file written at the lineage root while one of its runs is executing.
