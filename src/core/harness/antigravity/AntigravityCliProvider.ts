@@ -339,9 +339,10 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   /**
-   * Extract Antigravity's session ID from the headless JSONL clock stream. A
-   * chunk may end mid-record; `parseJsonLines` drops the incomplete line and
-   * the next chunk retries it.
+   * Extract Antigravity's session ID from a complete headless JSONL record.
+   * HeadlessLogTail accumulates transport chunks and only calls this hook with
+   * complete records, plus one flush of an unterminated tail at process exit,
+   * so this hook stays pure and stateless.
    */
   extractSessionIdFromStdout(chunk: string): string | undefined {
     const event = CliParseUtils.parseJsonLines(chunk).find(

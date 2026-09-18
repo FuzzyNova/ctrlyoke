@@ -109,6 +109,162 @@ suite("HeadlessLogTail", () => {
     assert.strictEqual(fake.getReadCount() >= 2, true);
   });
 
+  test("captures a Codex session ID split across stdout chunks", async () => {
+    const provider = new CodexCliProvider();
+    const fake = createParser({ discoveries: [null, "session.log"] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) =>
+        provider.extractSessionIdFromStdout(chunk),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk('{"type":"thread.started","thread_id":"thread-from-');
+    tail.onStdoutChunk('stdout"}\n');
+
+    const result = await tail.finish();
+
+    assert.strictEqual(result.sessionId, "thread-from-stdout");
+    assert.strictEqual(
+      fake.discoveryArguments[1].sessionId,
+      "thread-from-stdout"
+    );
+  });
+
+  test("captures a complete session-ID record on its stdout chunk", async () => {
+    const provider = new CodexCliProvider();
+    const fake = createParser();
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) =>
+        provider.extractSessionIdFromStdout(chunk),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk('{"type":"thread.started","thread_id":"same-chunk"}\n');
+    const result = await tail.finish();
+
+    assert.strictEqual(result.sessionId, "same-chunk");
+    assert.strictEqual(fake.discoveryArguments[0].sessionId, "same-chunk");
+  });
+
+  test("flushes an unterminated stdout tail during finish", async () => {
+    const record = '{"type":"thread.started","thread_id":"at-exit"}';
+    let extractionCalls = 0;
+    const fake = createParser({ discoveries: [null, "session.log"] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) => {
+        extractionCalls += 1;
+        return extractionCalls === 2 && chunk === record
+          ? "at-exit"
+          : undefined;
+      },
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk(record);
+    const result = await tail.finish();
+
+    assert.strictEqual(result.sessionId, "at-exit");
+    assert.strictEqual(extractionCalls, 2);
+    assert.strictEqual(fake.discoveryArguments[1].sessionId, "at-exit");
+  });
+
+  test("keeps the carry bounded and does not corrupt a later match", async () => {
+    const provider = new CodexCliProvider();
+    const fake = createParser();
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) =>
+        provider.extractSessionIdFromStdout(chunk),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk("not a JSON record");
+    tail.onStdoutChunk(
+      '\n{"type":"thread.started","thread_id":"later-match"}\n'
+    );
+    const result = await tail.finish();
+
+    assert.strictEqual(result.sessionId, "later-match");
+  });
+
+  test("captures a complete record before a partial following record", async () => {
+    const provider = new CodexCliProvider();
+    const fake = createParser();
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) =>
+        provider.extractSessionIdFromStdout(chunk),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk(
+      '{"type":"thread.started","thread_id":"complete-first"}\n{"type":"turn.started"'
+    );
+    const result = await tail.finish();
+
+    assert.strictEqual(result.sessionId, "complete-first");
+  });
+
+  test("queues a log read for a chunk without a complete record", async () => {
+    const fake = createParser({ reads: [[], [], []] });
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: (chunk) =>
+        chunk.includes("complete record\n")
+          ? "session-from-second-chunk"
+          : undefined,
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 0,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk("incomplete record");
+    tail.onStdoutChunk("complete record\n");
+    await tail.finish();
+
+    // One read per stdout chunk plus the post-exit discovery read. If the
+    // first chunk were dropped because it had no complete record, this would
+    // be only two.
+    assert.strictEqual(fake.getReadCount(), 3);
+  });
+
   test("delivers log-sourced file diffs before headless completion", async () => {
     const logSourcedProviders = [
       new CodexCliProvider(),

@@ -1,9 +1,9 @@
 # Stream Chunk Boundary Plan
 
 **Status:** Implemented 2026-09-17 — all three issues resolved and all four
-incremental readers converged on the shared boundary helper. One related
-exposure was deliberately left open and carried forward to
-`dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
+incremental readers converged on the shared boundary helper. The related
+headless log-tail session-ID exposure was subsequently implemented in
+`dev/implemented/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
 **Priority:** P2 (P1 for issue 1, which was silent data corruption)
 **Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
 on U+2028`) introduced `src/utils/TextLines.ts` and single-sourced _where a line
@@ -252,14 +252,14 @@ Staged as four steps, each independently committable:
    Copilot, Claude, and OpenCode across split records, multi-record chunks,
    unterminated tails, and consecutive spawns.
 
-## Carried forward
+## Related follow-up
 
 The LOG-mode sibling path has the same boundary exposure for session-ID capture:
 `HeadlessLogTail.captureSessionId` runs `extractSessionIdFromStdout` against one
 raw chunk at a time. It is recoverable (`CliResponseCollector` re-runs the
-extractor over full stdout after exit) and fixing it needs a second accumulator
-in the log-tail path, so it was left out of this plan and written up separately
-in `dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
+extractor over full stdout after exit). It needed a second accumulator in the
+log-tail path and was implemented separately in
+`dev/implemented/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
 
 ## Deliberately not in scope
 

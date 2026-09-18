@@ -1,10 +1,12 @@
 # Headless Session-ID Chunk Boundary Plan
 
-**Status:** Backlog — not started
+**Status:** Implemented 2026-09-17 — `HeadlessLogTail` now carries incomplete
+stdout records across transport chunks, flushes an unterminated tail at exit,
+and preserves raw observer chunks and one log-read tick per stdout chunk.
 **Priority:** P3 (recoverable; costs live session-ID resolution, not data)
 **Related:** `dev/implemented/STREAM_CHUNK_BOUNDARY_PLAN.md`, which closed the
-other three boundary bugs. This is the one exposure that survey deliberately
-left open, carved out here so it does not get buried in an implemented doc.
+other three boundary bugs. This document records the follow-up implementation
+for the remaining log-tail exposure.
 
 ## The problem
 
@@ -52,58 +54,47 @@ discover and start tailing the log, so a missed init record delays streaming
 until the idle poll or post-exit discovery picks the log up. Affects the three
 LOG-mode harnesses (`codex-cli`, `antigravity-cli`, `qwen-cli`).
 
-## The shape of the fix
+## What was built
 
-Give the log-tail path its own accumulator, mirroring what the coordinator now
-does — but note the two places this is **not** a copy of the coordinator's
-accumulator, because the consumer is an extractor rather than a per-record
-parser.
+The log-tail path received its own accumulator, separate from the coordinator's
+per-spawn accumulator. The lifetimes, consumers, and flush points remain
+independent; `splitCompleteLines` is the shared boundary helper.
 
-### 1. Carry the incomplete tail, feed the extractor the joined text
+### 1. Carry the incomplete tail and feed the extractor joined text
 
-Hold a `splitCompleteLines` remainder inside `HeadlessLogTail` and run
-`extractSessionIdFromStdout` over `carry + chunk` **as one string** — not
-line-by-line. Feeding records individually would be a regression for
+`HeadlessLogTail` holds the `splitCompleteLines` remainder and runs
+`extractSessionIdFromStdout` over `carry + chunk` as one string. Feeding records
+individually would be a regression for
 `QwenCliProvider`, whose extractor is brace-balanced
 (`CliParseUtils.extractJsonObjectsFromStream`) rather than line-delimited: an
 object spanning several lines inside a single chunk matches today and must keep
-matching. Passing the joined text makes the new behaviour a strict superset of
-the current per-chunk behaviour.
+matching, so the joined text preserves the existing behaviour.
 
-Retain only `splitCompleteLines(carry + chunk).remainder` after a failed match,
-so the buffer stays bounded to one incomplete record rather than growing into a
-copy of stdout. Clear the carry once a session ID is resolved — capture is
-already gated on `!this.sessionId`, and the buffer has no other consumer.
+After a failed match, only the new remainder is retained, keeping the buffer
+bounded to one incomplete record; a resolved ID clears it.
 
 ### 2. Flush the unterminated tail in `finish()`
 
-This is the part the coordinator's `flushStdout` already gets right and that a
-naive port of the accumulator would drop. Today's raw-chunk path **does** match
-a final record that arrives without a trailing newline; a carry-only fix would
-stop matching it, turning a fix into a regression for exactly the streams whose
-last write is unterminated.
-
-`finish()` must run the leftover carry through `captureSessionId` once, after
-`await this.pendingWork` and **before** `enqueueTick("post-exit discovery")`, so
-a late-resolved ID still feeds that discovery pass.
+After pending stdout work completes, `finish()` sends the remaining carry
+through `captureSessionId` once, directly, before queuing post-exit discovery.
+This preserves matching for a final record without a trailing newline and lets
+a session ID resolved at exit participate in that discovery pass.
 
 ### 3. Preserve tick ordering and the stdout clock
 
-`onStdoutChunk` must still queue a read tick for **every** chunk, including one
-that contributes no complete record — stdout is the clock for log reads, and
-dropping a tick would delay streaming rather than fix it. Whether the carry is
-advanced synchronously in `onStdoutChunk` or inside the queued tick is an
-implementation choice; either way chunks must be consumed in arrival order,
-since `pendingWork` is what serialises them.
+`onStdoutChunk` still queues one read tick for every chunk, including chunks
+without a complete record. Capture remains inside `pendingWork`, so chunks are
+consumed in arrival order and the existing session-ID gate stops capture after
+resolution.
 
 ### 4. Leave `observeHeadlessStdout` on raw chunks
 
-Confirmed correct and deliberately unchanged: `AntigravityStreamJsonUsage.ingest`
-already does its own `splitCompleteLines` buffering
+`observeHeadlessStdout` remains unchanged and receives raw chunks.
+`AntigravityStreamJsonUsage.ingest` already does its own `splitCompleteLines`
 (`src/core/harness/antigravity/AntigravityStreamJsonUsage.ts`), so handing it
 pre-split records would double-buffer and strip the line breaks its
 `ingest`/`flush` contract expects. Accumulating only for session-ID capture is
-both the lower-risk and the correct shape.
+the correct shape.
 
 `harness-cli-providers.instructions.md` documents how timing-sensitive these
 paths are; the same caution that applied to issue 2 applies here.

@@ -4,6 +4,7 @@ import {
   type HeadlessSourceMode,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
+import { splitCompleteLines } from "../../../utils/TextLines";
 import { DRAIN_DEADLINE_MS, DRAIN_POLL_INTERVAL_MS } from "../CliLogMonitor";
 import { CliLogEventPump } from "./CliLogEventPump";
 import type { ICliProvider } from "./interfaces/ICliProvider";
@@ -123,6 +124,7 @@ export class HeadlessLogTail {
   private readonly drainDeadlineMs: number;
   private readonly drainPollIntervalMs: number;
   private sessionId?: string;
+  private stdoutRemainder = "";
   private logPath?: string;
   private pollHandle?: NodeJS.Timeout;
   private pendingWork: Promise<void> = Promise.resolve();
@@ -241,6 +243,15 @@ export class HeadlessLogTail {
     this.discoveryAbort.abort();
     await this.pendingWork;
 
+    // A final stdout record may be unterminated. onStdoutChunk() cannot queue
+    // this flush because finish() marks the tail finished before waiting for
+    // pending work, so capture it directly before post-exit discovery.
+    if (!this.sessionId && this.stdoutRemainder.length > 0) {
+      const remainder = this.stdoutRemainder;
+      this.stdoutRemainder = "";
+      this.captureSessionId(remainder);
+    }
+
     // The post-exit read gets a fresh budget: the log is now written, so
     // retrying is exactly the right thing — unless the run was abandoned, in
     // which case nobody is waiting for its output.
@@ -284,17 +295,27 @@ export class HeadlessLogTail {
   }
 
   private captureSessionId(chunk: string): void {
+    const extractor = this.options.extractSessionIdFromStdout;
+    if (!extractor) {
+      return;
+    }
+
+    const combined = this.stdoutRemainder + chunk;
     try {
-      const sessionId = this.options.extractSessionIdFromStdout?.(chunk);
+      const sessionId = extractor(combined);
       if (sessionId) {
         this.sessionId = sessionId;
+        this.stdoutRemainder = "";
         Log.debug(`[HeadlessLogTail] Session ID from stdout: ${sessionId}`);
+        return;
       }
     } catch (error) {
       Log.trace(
         `[HeadlessLogTail] stdout session-ID extraction failed: ${String(error)}`
       );
     }
+
+    this.stdoutRemainder = splitCompleteLines(combined).remainder;
   }
 
   private async readTick(source: string): Promise<void> {

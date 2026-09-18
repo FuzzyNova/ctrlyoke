@@ -152,7 +152,9 @@ export interface ICliProvider {
   parseHeadlessStdout?(stdout: string): BaseCliEvent[];
 
   /**
-   * Extract a session ID from a headless stdout chunk.
+   * Extract a session ID from complete headless stdout records. HeadlessLogTail
+   * owns transport-chunk accumulation and flushes one unterminated tail at
+   * process exit before calling this hook.
    *
    * This is a narrow session-ID lookup, not a response parser. A provider
    * implementing only this method is log-sourced: stdout supplies the
