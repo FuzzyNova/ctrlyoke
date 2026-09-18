@@ -41,13 +41,7 @@ import {
   type RunnerHostIdentity,
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
-import { WorkflowLockManager } from "../utils/WorkflowLockManager";
-import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
-import {
-  deleteWorkflowStopRequest,
-  readWorkflowStopRequest,
-} from "../utils/WorkflowStopRequest";
 import { pathsEqual } from "../utils/PathCasing";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
@@ -148,6 +142,7 @@ import {
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder";
+import { RunnerLockCoordinator } from "./orchestration/RunnerLockCoordinator";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
@@ -294,15 +289,7 @@ export class WorkflowInstance {
    */
   private pendingRunAfterCancel: { harness: HarnessId | undefined } | null =
     null;
-  /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
-  private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
-  /** Polls the owner-token-scoped stop request sentinel while this instance owns a run. */
-  private stopRequestPollInterval: ReturnType<typeof setInterval> | undefined;
-  private stopRequestPollInFlight = false;
-  /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
-  private currentLockOwnerToken: string | undefined;
-  /** Stable process/Extension Host identity used by every lock this instance writes. */
-  private readonly runnerHostIdentity: RunnerHostIdentity;
+  private readonly runnerLockCoordinator: RunnerLockCoordinator;
   /** Shared lease for the execution root used by this run. */
   private executionLease: ExecutionLeaseHandle | undefined;
   /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
@@ -534,7 +521,7 @@ export class WorkflowInstance {
     ) => Promise<void>,
     runnerHostIdentity?: RunnerHostIdentity
   ) {
-    this.runnerHostIdentity = runnerHostIdentity ?? {
+    const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
       hostInstanceId: crypto.randomUUID(),
       pid: process.pid,
@@ -552,6 +539,15 @@ export class WorkflowInstance {
     );
     this.workflowRuntime = new WorkflowStateMachine();
     this.promptQueue = new PromptQueue(this.workflowRuntime);
+    this.runnerLockCoordinator = new RunnerLockCoordinator({
+      id: this.id,
+      runnerHostIdentity: resolvedRunnerHostIdentity,
+      getQueueState: () => this.promptQueue.getState(),
+      getWorkspaceRoot: () =>
+        this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+      stop: () => this.stop(),
+      getExecutionLease: () => this.executionLease,
+    });
     this.worktreeManager = new WorktreeManager({
       updateWorktreeRuntime: (patch) =>
         this.promptQueue.updateWorktreeRuntime(patch),
@@ -1100,10 +1096,7 @@ export class WorkflowInstance {
   dispose(): void {
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
     // releaseLock for normal termination; crash path is covered by staleness detection).
-    if (this.heartbeatInterval !== undefined) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
-    }
+    this.runnerLockCoordinator.stopHeartbeat();
     this.stopStopRequestPolling();
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
@@ -1378,7 +1371,7 @@ export class WorkflowInstance {
 
   /** Whether this resident instance still owns its lineage runner lock. */
   ownsRunnerLock(): boolean {
-    return this.currentLockOwnerToken !== undefined;
+    return this.runnerLockCoordinator.ownsLock();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -5002,102 +4995,26 @@ export class WorkflowInstance {
   }
 
   private async ensureRunnerLock(workingFilePath?: string): Promise<void> {
-    if (this.currentLockOwnerToken) return;
-    const state = this.promptQueue.getState();
-    const lockWorkspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    if (
-      !workingFilePath ||
-      !state.workflowKey ||
-      !state.runRef ||
-      !lockWorkspaceRoot
-    ) {
-      return;
-    }
-    const ownerToken = WorkflowLockManager.generateOwnerToken();
-    await WorkflowLockManager.acquireLock(
-      lockWorkspaceRoot,
-      state.workflowKey,
-      {
-        schemaVersion: 2,
-        workflowKey: state.workflowKey,
-        runRef: state.runRef,
-        runner: this.runnerHostIdentity.runner,
-        pid: this.runnerHostIdentity.pid,
-        hostInstanceId: this.runnerHostIdentity.hostInstanceId,
-        executionInstanceId: this.id,
-        ownerToken,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
-      }
-    );
-    this.currentLockOwnerToken = ownerToken;
-    this.startStopRequestPolling();
+    return this.runnerLockCoordinator.ensureRunnerLock(workingFilePath);
   }
 
   private stopStopRequestPolling(): void {
-    if (this.stopRequestPollInterval !== undefined) {
-      clearInterval(this.stopRequestPollInterval);
-      this.stopRequestPollInterval = undefined;
-    }
-  }
-
-  private startStopRequestPolling(): void {
-    this.stopStopRequestPolling();
-    this.stopRequestPollInterval = setInterval(() => {
-      void this.pollStopRequest();
-    }, 1_000);
-  }
-
-  private async pollStopRequest(): Promise<void> {
-    if (this.stopRequestPollInFlight) return;
-    const state = this.promptQueue.getState();
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    const ownerToken = this.currentLockOwnerToken;
-    if (!workspaceRoot || !state.workflowKey || !ownerToken) return;
-
-    this.stopRequestPollInFlight = true;
-    try {
-      const request = await readWorkflowStopRequest(
-        workspaceRoot,
-        state.workflowKey,
-        ownerToken
-      );
-      if (!request) return;
-
-      Log.info(
-        `[inst:${this.id.slice(0, 8)}] honoring stop request ${request.requestId}`
-      );
-      await this.stop();
-      await deleteWorkflowStopRequest(
-        workspaceRoot,
-        state.workflowKey,
-        ownerToken
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] failed to honor stop request:`,
-        error
-      );
-    } finally {
-      this.stopRequestPollInFlight = false;
-    }
+    this.runnerLockCoordinator.stopStopRequestPolling();
   }
 
   private async releaseRunnerLock(): Promise<void> {
-    const state = this.promptQueue.getState();
-    const lockWorkspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    const ownerToken = this.currentLockOwnerToken;
-    if (!lockWorkspaceRoot || !state.workflowKey || !ownerToken) return;
-    this.currentLockOwnerToken = undefined;
-    this.stopStopRequestPolling();
-    await WorkflowLockManager.releaseLock(
-      lockWorkspaceRoot,
-      state.workflowKey,
-      ownerToken
-    );
+    return this.runnerLockCoordinator.releaseRunnerLock();
+  }
+
+  private startRunnerLockHeartbeat(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): void {
+    this.runnerLockCoordinator.startHeartbeat(workspaceRoot, workflowKey);
+  }
+
+  private stopRunnerLockHeartbeat(): void {
+    this.runnerLockCoordinator.stopHeartbeat();
   }
 
   private async startWorkflowExecution(
@@ -5167,17 +5084,12 @@ export class WorkflowInstance {
       // Runner and execution leases share one heartbeat cadence. The lease is
       // acquired after the lineage lock and released before it, preserving the
       // global coordination order.
-      if (this.currentLockOwnerToken || this.executionLease) {
-        this.heartbeatInterval = setInterval(() => {
-          if (this.currentLockOwnerToken) {
-            WorkflowLockManager.updateHeartbeat(
-              lockWorkspaceRoot!,
-              workflowKey!,
-              this.currentLockOwnerToken
-            ).catch(() => {});
-          }
-          this.executionLease?.updateHeartbeat().catch(() => {});
-        }, HEARTBEAT_INTERVAL_MS);
+      if (
+        (this.runnerLockCoordinator.ownsLock() || this.executionLease) &&
+        lockWorkspaceRoot &&
+        workflowKey
+      ) {
+        this.startRunnerLockHeartbeat(lockWorkspaceRoot, workflowKey);
       }
 
       // Re-insert all live integrations saved from the previous execution pass
@@ -5462,12 +5374,8 @@ export class WorkflowInstance {
       // sidecar, and workspace artifact owned by the run is gone. Otherwise a
       // retained integration could still mutate a directory after its lease
       // was handed to another run.
-      if (
-        !preserveWorktreeReservation &&
-        this.heartbeatInterval !== undefined
-      ) {
-        clearInterval(this.heartbeatInterval);
-        this.heartbeatInterval = undefined;
+      if (!preserveWorktreeReservation) {
+        this.stopRunnerLockHeartbeat();
         this.stopStopRequestPolling();
       }
       if (
@@ -5486,20 +5394,8 @@ export class WorkflowInstance {
             )
           );
       }
-      if (
-        !preserveWorktreeReservation &&
-        workflowKey &&
-        lockWorkspaceRoot &&
-        this.currentLockOwnerToken
-      ) {
-        const ownerToken = this.currentLockOwnerToken;
-        this.currentLockOwnerToken = undefined;
-        this.stopStopRequestPolling();
-        await WorkflowLockManager.releaseLock(
-          lockWorkspaceRoot,
-          workflowKey,
-          ownerToken
-        ).catch((err) =>
+      if (!preserveWorktreeReservation) {
+        await this.releaseRunnerLock().catch((err) =>
           Log.warn(
             `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
             err
@@ -5564,9 +5460,8 @@ export class WorkflowInstance {
 
     this.worktreeManager.releaseRuntimeTrust(worktree);
     this.activeWorktree = undefined;
-    if (this.heartbeatInterval !== undefined) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
+    if (this.runnerLockCoordinator.ownsLock() || this.executionLease) {
+      this.stopRunnerLockHeartbeat();
       this.stopStopRequestPolling();
     }
 
