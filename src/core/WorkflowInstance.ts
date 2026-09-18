@@ -41,13 +41,7 @@ import {
   type RunnerHostIdentity,
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
-import { WorkflowLockManager } from "../utils/WorkflowLockManager";
-import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
-import {
-  deleteWorkflowStopRequest,
-  readWorkflowStopRequest,
-} from "../utils/WorkflowStopRequest";
 import { pathsEqual } from "../utils/PathCasing";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
 import {
@@ -55,11 +49,8 @@ import {
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   DEFAULT_WORKFLOW_NAME,
-  CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
-  OUTPUT_ACTIVITY_KINDS,
-  OUTPUT_HISTORY_KINDS,
   PARALLEL_GROUP_ADMISSION,
   getEffectiveParallelGroupWidth,
   QUEUE_POSITION,
@@ -71,7 +62,6 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
-  CONTEXT_RESOLUTION_FAILURE_MODES,
   PROMPT_DIAGNOSTIC_CODES,
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
@@ -84,7 +74,6 @@ import {
   WORKFLOW_TELEMETRY_OUTCOMES,
   WORKTREE_MODES,
   type ActionType,
-  type ExecutionMode,
   type QueuePosition,
   type WorkflowTelemetryOutcome,
 } from "../types/DashboardConstants";
@@ -93,8 +82,6 @@ import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   CliEvent,
   CliOutput,
-  ContextWindowSyncData,
-  FollowUpResumedData,
   TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
@@ -149,14 +136,19 @@ import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
-import { getCliEntryKey } from "./orchestration/OutputHistoryTimelineAdapter";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
-import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder";
+import { RunnerLockCoordinator } from "./orchestration/RunnerLockCoordinator";
+import {
+  WorkflowStartupPipeline,
+  type WorkflowStartupContextPort,
+  type WorkflowStartupLifecyclePort,
+  type WorkflowStartupPipelinePort,
+} from "./orchestration/WorkflowStartupPipeline";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
-import { preflightWorkflowSecrets } from "../utils/SecretResolver";
 import {
   RunSecretRedactor,
   secretRedactionService,
@@ -170,7 +162,6 @@ import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { spawnIdentityHash } from "../types/ExecutionSpawnIdentity";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
-  OutputActivityEntry,
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
@@ -181,8 +172,6 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
-import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor";
-import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -278,9 +267,8 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    { merge: boolean; keep: boolean } | undefined;
-  /** Used only to look up another lease owner's display name for lease-conflict errors. */
-  private readonly lineageRepository = new WorkflowLineageRepository();
+    | { merge: boolean; keep: boolean }
+    | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -303,15 +291,7 @@ export class WorkflowInstance {
    */
   private pendingRunAfterCancel: { harness: HarnessId | undefined } | null =
     null;
-  /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
-  private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
-  /** Polls the owner-token-scoped stop request sentinel while this instance owns a run. */
-  private stopRequestPollInterval: ReturnType<typeof setInterval> | undefined;
-  private stopRequestPollInFlight = false;
-  /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
-  private currentLockOwnerToken: string | undefined;
-  /** Stable process/Extension Host identity used by every lock this instance writes. */
-  private readonly runnerHostIdentity: RunnerHostIdentity;
+  private readonly runnerLockCoordinator: RunnerLockCoordinator;
   /** Shared lease for the execution root used by this run. */
   private executionLease: ExecutionLeaseHandle | undefined;
   /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
@@ -328,58 +308,11 @@ export class WorkflowInstance {
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
+  private readonly sessionActivityRecorder: SessionActivityRecorder;
   private readonly statusMessageReporter: StatusMessageReporter;
 
   /** Manages all output capture Maps and replay logic for background workflows. */
   private readonly outputCaptureBuffer: OutputCaptureBuffer;
-
-  /**
-   * Target/attempt of the most recently completed step's CliOutput — set every
-   * time `captureCompletedOutput`/`captureFinalStepCompletedOutput` fires.
-   * `SessionActivityWatcher`'s resumed activity has no target of its own (it
-   * fires outside any active dispatch), so it is attributed here instead.
-   */
-  private readonly activityIntegrationIds = new WeakMap<
-    HarnessIntegration,
-    string
-  >();
-  private nextActivityIntegrationId = 1;
-  private readonly completedActivityTargets = new Map<
-    string,
-    {
-      target: OutputExecutionTarget;
-      runIndex: number;
-      attemptIndex: number;
-    }
-  >();
-  private readonly latestCompletedActivityBySession = new Map<
-    string,
-    {
-      target: OutputExecutionTarget;
-      runIndex: number;
-      attemptIndex: number;
-    }
-  >();
-  /** Compatibility bridge for callers that do not yet supply integration identity. */
-  private legacyCompletedActivityTarget?: {
-    target: OutputExecutionTarget;
-    runIndex: number;
-    attemptIndex: number;
-  };
-  /** @deprecated Kept only for older in-process callers during target migration. */
-  private lastCompletedActivityTarget?: {
-    target: OutputExecutionTarget;
-    runIndex: number;
-    attemptIndex: number;
-  };
-  /** Events that arrive in the monitor-to-session-watcher handoff window. */
-  private readonly pendingSessionActivityEvents = new Map<string, CliEvent[]>();
-  /** Per-attempt tail of follow-up persistence; see `enqueueFollowUpPersist`. */
-  private readonly followUpPersistQueue = new Map<string, Promise<void>>();
-  private readonly pendingSessionActivityIntegrations = new Map<
-    string,
-    { integration: HarnessIntegration; sessionId: string | undefined }
-  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -590,7 +523,7 @@ export class WorkflowInstance {
     ) => Promise<void>,
     runnerHostIdentity?: RunnerHostIdentity
   ) {
-    this.runnerHostIdentity = runnerHostIdentity ?? {
+    const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
       hostInstanceId: crypto.randomUUID(),
       pid: process.pid,
@@ -608,6 +541,15 @@ export class WorkflowInstance {
     );
     this.workflowRuntime = new WorkflowStateMachine();
     this.promptQueue = new PromptQueue(this.workflowRuntime);
+    this.runnerLockCoordinator = new RunnerLockCoordinator({
+      id: this.id,
+      runnerHostIdentity: resolvedRunnerHostIdentity,
+      getQueueState: () => this.promptQueue.getState(),
+      getWorkspaceRoot: () =>
+        this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+      stop: () => this.stop(),
+      getExecutionLease: () => this.executionLease,
+    });
     this.worktreeManager = new WorktreeManager({
       updateWorktreeRuntime: (patch) =>
         this.promptQueue.updateWorktreeRuntime(patch),
@@ -622,6 +564,14 @@ export class WorkflowInstance {
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.sessionActivityRecorder = new SessionActivityRecorder({
+      id: this.id,
+      dashboardSink: this.dashboardSink,
+      promptQueue: this.promptQueue,
+      outputHistoryManager: this.outputHistoryManager,
+      resolveHistoryFilePath: () => this.resolveHistoryFilePath(),
+      getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+    });
     this.outputHistoryManager.setOutputActivityHandler((entry) =>
       this.publishOutputActivity(entry)
     );
@@ -1148,10 +1098,7 @@ export class WorkflowInstance {
   dispose(): void {
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
     // releaseLock for normal termination; crash path is covered by staleness detection).
-    if (this.heartbeatInterval !== undefined) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
-    }
+    this.runnerLockCoordinator.stopHeartbeat();
     this.stopStopRequestPolling();
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
@@ -1426,7 +1373,7 @@ export class WorkflowInstance {
 
   /** Whether this resident instance still owns its lineage runner lock. */
   ownsRunnerLock(): boolean {
-    return this.currentLockOwnerToken !== undefined;
+    return this.runnerLockCoordinator.ownsLock();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1735,6 +1682,420 @@ export class WorkflowInstance {
   // Execution
   // ─────────────────────────────────────────────────────────────────────────
 
+  private createWorkflowStartupPipelinePort(): WorkflowStartupPipelinePort {
+    return {
+      id: this.id,
+      platform: this.platform,
+      workspaceFolderPath: this.workspaceFolderPath,
+      dashboardSink: this.dashboardSink,
+      userFeedbackSink: this.userFeedbackSink,
+      queue: this.promptQueue,
+      history: this.outputHistoryManager,
+      status: this.statusMessageReporter,
+      failRuntime: () => {
+        this.workflowRuntime.fail();
+      },
+      getDetectorIntegration: (harnessOverride) =>
+        this.getDetectorIntegration(harnessOverride),
+      analyzeWorkflowCompatibility: (workflow) =>
+        this.analyzeWorkflowCompatibility(workflow),
+      approveSecretGrants: this.approveSecretGrants,
+      getHarnessUsageSnapshots: this.getHarnessUsageSnapshots,
+      hostCanProvidePty: this.hostCanProvidePty,
+      execution: {
+        currentPromptFile: () => this.currentPromptFile,
+        getAuthoritativeExecutionState: () =>
+          this.getAuthoritativeExecutionState(),
+        closeRetainedTerminalsForFreshRun: () =>
+          this.closeRetainedTerminalsForFreshRun(),
+        syncCurrentPromptFileFromQueue: (filePath) =>
+          this.syncCurrentPromptFileFromQueue(filePath),
+        setExecutionRunRef: (runRef) => {
+          this.executionRunRef = runRef;
+        },
+        clearOutputBuffers: () => this.clearOutputBuffers(),
+        prepareExecutionWorktree: (historyFilePath) =>
+          this.prepareExecutionWorktree(historyFilePath),
+        createIntegrationForMode: (modeOverride) =>
+          this.createIntegrationForMode(modeOverride),
+        startWorkflowExecution: (
+          integration,
+          historyFilePath,
+          workingFilePath,
+          targetRunIndices
+        ) =>
+          this.startWorkflowExecution(
+            integration,
+            historyFilePath,
+            workingFilePath,
+            targetRunIndices
+          ),
+        reportMissingAssetWarning: (missingDirectories) =>
+          this.reportMissingAssetWarning(missingDirectories),
+        getMissingAssetDirectories: () =>
+          this.promptFileLoader.getLastMissingAssetDirectories(),
+        getMissingAssetDedupeKey: (missingDirectories) =>
+          this.getMissingAssetDedupeKey(missingDirectories),
+        getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+        getResolvedHistoryFilePath: () => this.resolveHistoryFilePath(),
+        getActiveHistoryFilePath: () => this.activeHistoryFilePath,
+        setActiveHistoryFilePath: (filePath) => {
+          this.activeHistoryFilePath = filePath;
+        },
+        startPending: () => this.startPending,
+        reportCompatibilityDiagnostics: (diagnostics) =>
+          this.reportCompatibilityDiagnostics(diagnostics),
+        cacheHistoricalStepOutput: (stepIndex, outputs, retry) =>
+          this.outputCaptureBuffer.cacheHistoricalStepOutput(
+            stepIndex,
+            [...outputs],
+            retry
+          ),
+        getStepBufferSize: () => this.outputCaptureBuffer.stepBufferSize,
+        computeTargetRunIndices: (historyFilePath, isContinuation) =>
+          this.computeTargetRunIndices(historyFilePath, isContinuation),
+        warnBeforeWorkflowStart: (
+          queueState,
+          workflow,
+          modeOverride,
+          restartFromBeginning
+        ) =>
+          this.warnBeforeWorkflowStart(
+            queueState,
+            workflow,
+            modeOverride,
+            restartFromBeginning
+          ),
+        describeExecutionFailure: (error) =>
+          this.describeExecutionFailure(error),
+        context: this.createWorkflowStartupContextPort(),
+        lifecycle: this.createWorkflowStartupLifecyclePort(),
+      },
+      worktree: {
+        getResolution: () => this.worktreeResolution,
+        setResolution: (resolution) => {
+          this.worktreeResolution = resolution;
+        },
+        getActiveWorktree: () => this.activeWorktree,
+        clearActiveWorktree: () => {
+          this.activeWorktree = undefined;
+        },
+        getExecutionLease: () => this.executionLease,
+        clearExecutionLease: () => {
+          this.executionLease = undefined;
+        },
+        manager: this.worktreeManager,
+        ensureRunnerLock: (workingFilePath) =>
+          this.ensureRunnerLock(workingFilePath),
+        releaseRunnerLock: () => this.releaseRunnerLock(),
+      },
+    };
+  }
+
+  private createWorkflowStartupOutputContext(): Pick<
+    WorkflowStartupContextPort,
+    | "captureOutputInit"
+    | "captureChunk"
+    | "captureEvents"
+    | "getBufferedOutput"
+    | "captureCompletedOutput"
+    | "captureFinalStepOutputInit"
+    | "beginSessionActivityTargetCapture"
+    | "captureFinalStepChunk"
+    | "captureFinalStepEvents"
+    | "getFinalStepBufferedOutput"
+    | "captureFinalStepCompletedOutput"
+    | "onFinalStepStatusMessage"
+    | "onStatusMessage"
+    | "onTargetStreamingEvents"
+    | "onTargetStreamingChunk"
+    | "onScriptOutput"
+    | "onScriptCompletedOutput"
+    | "snapshotService"
+    | "onSnapshotCaptured"
+  > {
+    return {
+      captureOutputInit: (
+        stepIndex,
+        prompt,
+        cliCommand,
+        cliCommandWasInjected,
+        workingDirectory,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput,
+        runIndex
+      ) => {
+        this.outputCaptureBuffer.captureOutputInit(
+          stepIndex,
+          prompt,
+          cliCommand,
+          cliCommandWasInjected,
+          workingDirectory,
+          timestampMs,
+          attemptIndex,
+          rawTextOutput,
+          runIndex
+        );
+      },
+      captureChunk: (stepIndex, chunk) => {
+        this.outputCaptureBuffer.captureChunk(stepIndex, chunk);
+      },
+      captureEvents: (stepIndex, events) => {
+        this.outputCaptureBuffer.captureEvents(stepIndex, events);
+      },
+      getBufferedOutput: (stepIndex) => {
+        return this.outputCaptureBuffer.getBufferedOutput(stepIndex);
+      },
+      captureCompletedOutput: (stepIndex, output, integration) => {
+        this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
+        if (integration) {
+          this.recordCompletedActivityTarget(
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+            output.runIndex ?? 0,
+            output.attemptIndex ?? 0,
+            integration
+          );
+        }
+      },
+      captureFinalStepOutputInit: (
+        loopIndex,
+        prompt,
+        cliCommand,
+        cliCommandWasInjected,
+        workingDirectory,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput,
+        runIndex
+      ) => {
+        this.outputCaptureBuffer.captureFinalStepOutputInit(
+          loopIndex,
+          prompt,
+          cliCommand,
+          cliCommandWasInjected,
+          workingDirectory,
+          timestampMs,
+          attemptIndex,
+          rawTextOutput,
+          runIndex
+        );
+      },
+      beginSessionActivityTargetCapture: (integration, target) =>
+        this.beginActivityTargetCapture(integration, target),
+      captureFinalStepChunk: (loopIndex, chunk) => {
+        this.outputCaptureBuffer.captureFinalStepChunk(loopIndex, chunk);
+      },
+      captureFinalStepEvents: (loopIndex, events) => {
+        this.outputCaptureBuffer.captureFinalStepEvents(loopIndex, events);
+      },
+      getFinalStepBufferedOutput: (loopIndex) => {
+        return this.outputCaptureBuffer.getFinalStepBufferedOutput(loopIndex);
+      },
+      captureFinalStepCompletedOutput: (loopIndex, output, integration) => {
+        this.outputCaptureBuffer.captureFinalStepCompletedOutput(
+          loopIndex,
+          output
+        );
+        if (integration) {
+          this.recordCompletedActivityTarget(
+            { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+            output.runIndex ?? 0,
+            output.attemptIndex ?? 0,
+            integration
+          );
+        }
+      },
+      onFinalStepStatusMessage: (loopIndex, message, severity) => {
+        this.outputCaptureBuffer.onFinalStepStatusMessage(
+          loopIndex,
+          message,
+          severity
+        );
+      },
+      onStatusMessage: (stepIndex, message, severity) => {
+        this._workflowStatusMessageEmitter.fire({
+          stepIndex,
+          message,
+          severity,
+        });
+      },
+      onTargetStreamingEvents: (data) =>
+        this._targetedStreamingEventsEmitter.fire(data),
+      onTargetStreamingChunk: (data) =>
+        this._targetedStreamingChunkEmitter.fire(data),
+      onScriptOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
+      onScriptCompletedOutput: (target, output) =>
+        this._targetedScriptOutputEmitter.fire({ target, output }),
+      snapshotService: new WorkspaceSnapshotService(),
+      onSnapshotCaptured: (target, snapshot) => {
+        this.dashboardSink?.sendStepUndoDataUpdated(
+          target as UndoExecutionTarget,
+          snapshot
+        );
+      },
+    };
+  }
+
+  private createWorkflowStartupContextPort(): WorkflowStartupContextPort {
+    const instance = this;
+    return {
+      get executionWorkspace() {
+        return instance.executionWorkspace;
+      },
+      workspaceFolderPath: this.workspaceFolderPath,
+      hostCanProvidePty: this.hostCanProvidePty,
+      supportsConcurrentInteractiveSessions:
+        this.supportsConcurrentInteractiveSessions,
+      get namedWorkspaceRoots() {
+        return instance.executionWorkspace.namedWorkspaceRoots;
+      },
+      get currentPromptFilePath() {
+        return instance.currentPromptFile?.filePath;
+      },
+      get sourceDefinitionPath() {
+        return instance.sourceDefinitionPath;
+      },
+      statusReporter: this.statusMessageReporter,
+      reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
+        this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
+      analyzeCompatibilityForPrompt: (
+        promptIndex,
+        prompt,
+        resolvedProperties,
+        imageFileRefs
+      ) =>
+        this.analyzePromptCompatibility(
+          promptIndex,
+          prompt,
+          resolvedProperties,
+          imageFileRefs
+        ),
+      get shouldShowCliCommand() {
+        return instance.shouldShowCliCommand();
+      },
+      get dynamicQueueConfig() {
+        return instance.getDynamicQueueConfig();
+      },
+      getScriptProcessRunner: (target) => this.getScriptProcessRunner(target),
+      ensureHarnessReady: (harnessId) =>
+        this.getHarnessReadinessError(harnessId),
+      registerActiveTarget: (target, attemptIndex) =>
+        this.registerActiveTarget(target, attemptIndex),
+      registerTargetPtySession: (target, sessionId) =>
+        this.registerTargetPtySession(target, sessionId),
+      clearTargetPtySession: (target) => this.clearTargetPtySession(target),
+      unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
+      cancelTarget: (target) => this.cancelTarget(target),
+      releaseTargetResources: (target) => this.releaseTargetResources(target),
+      closeCoordinationParticipant: (target) =>
+        this.closeCoordinationParticipant(target),
+      releaseCoordinationGroupClaims: (group) =>
+        this.releaseCoordinationGroupClaims(group),
+      releaseConflictingAiSession: (aiSessionId, requester) =>
+        this.releaseConflictingAiSession(aiSessionId, requester),
+      outputHistoryManager: this.outputHistoryManager,
+      ...this.createWorkflowStartupOutputContext(),
+      getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+      getSecretRedactor: () => this.activeRunRedactor,
+      getMcpToolSkillContext: () => this.mcpToolSkillContext,
+      createPriorContextResolver: (historyFilePath) =>
+        createPriorContextResolver({
+          workspaceRoot:
+            this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+          historyFilePath,
+          outputResolver: this.outputHistoryManager.getRunOutputResolver(),
+        }),
+      getDashboardProvider: () => this.dashboardSink,
+      createIntegrationForMode: (harnessOverride, target, properties) =>
+        this.createIntegrationForMode(harnessOverride, target, properties),
+      getSequentialIntegrationKey: (properties) =>
+        this.getSequentialIntegrationKey(properties),
+      registerTargetIntegration: (target, integration) =>
+        this.registerTargetIntegration(target, integration),
+      isTargetInParallelGroup: (target) =>
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
+        this.promptQueue
+          .getState()
+          .parallelGroups.some(
+            (group) =>
+              target.stepIndex >= group.startIndex &&
+              target.stepIndex <= group.endIndex
+          ),
+      getHarnessReadinessError: (harnessId) =>
+        this.getHarnessReadinessError(harnessId),
+      platform: this.platform,
+      isCli: isCli(),
+      instanceTag: `[inst:${this.id.slice(0, 8)}]`,
+      instanceId: this.id,
+      spawnScriptPty: isCli()
+        ? undefined
+        : (options) => this.spawnScriptPty(options),
+    };
+  }
+  private createWorkflowStartupLifecyclePort(): WorkflowStartupLifecyclePort {
+    return {
+      isStartPending: () => this.startPending,
+      beginExecution: (historyFilePath) => {
+        this.startPending = true;
+        this.executionSettledPromise = new Promise<void>((resolve) => {
+          this.resolveExecutionSettled = resolve;
+        });
+        this.startedAt = Date.now();
+        this.activeHistoryFilePath = historyFilePath;
+        this.activeRunRedactor = new RunSecretRedactor();
+        this.releaseActiveRunRedactor?.();
+        this.releaseActiveRunRedactor = secretRedactionService.register(
+          this.activeRunRedactor
+        );
+        for (const previous of this.lastRunIntegrations) {
+          previous.closeTerminal();
+        }
+        this.lastRunIntegrations = [];
+      },
+      getRunIdentity: () => {
+        const state = this.promptQueue.getState();
+        this.executionRunRef = state.runRef;
+        return {
+          workflowKey: state.workflowKey,
+          runRef: state.runRef,
+          lockWorkspaceRoot:
+            this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
+        };
+      },
+      acquireExecutionLease: async (
+        workflowKey,
+        runRef,
+        _lockWorkspaceRoot,
+        workingFilePath
+      ) => {
+        if (workingFilePath && !this.executionLease) {
+          this.executionLease = await ExecutionRootLeaseManager.acquireLease({
+            mode: "shared-native",
+            pid: process.pid,
+            runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+            instanceId: this.id,
+            stateRoot: this.executionWorkspace.stateRoot,
+            executionRoot: this.executionWorkspace.executionRoot,
+            workflowKey,
+            runRef,
+          });
+        }
+      },
+      ownsExecutionReservation: () =>
+        this.runnerLockCoordinator.ownsLock() ||
+        this.executionLease !== undefined,
+      startRunnerLockHeartbeat: (workspaceRoot, workflowKey) =>
+        this.startRunnerLockHeartbeat(workspaceRoot, workflowKey),
+      restoreRetainedIntegrations: () =>
+        this.restoreRetainedExecutionIntegrations(),
+      executeWorkflow: (integration, context) =>
+        this.workflowExecutor.execute(integration, context),
+      settleExecution: (options) => this.settleWorkflowExecution(options),
+    };
+  }
+
   /**
    * Executes a run already allocated and written by `WorkingFileManager.seedNewRun`
    * (Re-run / CLI `rerun`) — a brand-new `RunRef` whose definition was seeded from an
@@ -1875,698 +2236,17 @@ export class WorkflowInstance {
     prePromotedFreshStart: boolean = false,
     onPrepared?: () => Promise<void>
   ): Promise<void> {
-    if (!this.currentPromptFile) {
-      const queueState = this.promptQueue.getState();
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] executeLoadedPromptFile: currentPromptFile is null — ` +
-          `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
-          `prompts=${queueState.steps.length}, status=${this.getAuthoritativeExecutionState()}`
-      );
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        "warning",
-        "No prompt file loaded. Use 'Change' button to select a file first."
-      );
-      return;
-    }
-
-    const { filePath } = this.currentPromptFile;
-
-    const prevQueueState = this.promptQueue.getState();
-    const prevExecutionState = this.getAuthoritativeExecutionState();
-    // Only COMPLETED workflows count as having "completed" steps for append-continuation.
-    const prevCompletedCount =
-      prevExecutionState === EXECUTION_STATES.COMPLETED
-        ? this.promptQueue.getCompletedCount()
-        : 0;
-
-    const { promptFile } = this.currentPromptFile;
-    const fileName = path.basename(filePath);
-
-    const filePromptCount = promptFile.steps?.length ?? 0;
-    // Count pending (never-run) prompts in the queue. Newly appended prompts are
-    // PENDING; prompts that ran but were cancelled/skipped are CANCELLED. Using
-    // pendingCount instead of (filePromptCount > prevCompletedCount) prevents a
-    // false-positive when a completed workflow has cancelled prompts: e.g. 3 prompts
-    // where 1 was cancelled → completedCount=2, filePromptCount=3, but no PENDING
-    // prompts exist, so this is a restart, not an append continuation.
-    const pendingCount = prevQueueState.results.filter(
-      (r) => r.status === STEP_STATUS.PENDING
-    ).length;
-    const isAppendContinuation =
-      !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
-
-    // Detect stop → rewind → Run scenario: the queue is IDLE but already has
-    // a partial run in progress (currentIndex > 0). This happens when the
-    // user stopped a workflow, moved the start position past the cancelled
-    // step (a nonzero rewind), and then pressed Run instead of Resume. We
-    // want to reuse the existing history file rather than starting a fresh run.
-    const isIdleContinuation =
-      !continueFromCurrent &&
-      !isAppendContinuation &&
-      prevExecutionState === EXECUTION_STATES.IDLE &&
-      prevQueueState.currentIndex > 0;
-
-    Log.debug(
-      `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
-        `prevQueueStatus=${prevExecutionState}, prevCompletedCount=${prevCompletedCount}, ` +
-        `pendingCount=${pendingCount}, filePromptCount=${filePromptCount}, ` +
-        `isAppendContinuation=${isAppendContinuation}, isIdleContinuation=${isIdleContinuation}`
+    const pipeline = new WorkflowStartupPipeline({
+      ...this.createWorkflowStartupPipelinePort(),
+      onPrepared,
+    });
+    await pipeline.execute(
+      modeOverride,
+      continueFromCurrent,
+      preinitializedHistoryFilePath,
+      prePromotedFreshStart
     );
-
-    // Declared outside try so the catch block can finalize history on early errors
-    // (errors thrown before startWorkflowExecution, which has its own finally block).
-    let historyFilePath = preinitializedHistoryFilePath;
-    // The run *this call* promoted, if any. Publishing a run deletes the
-    // lineage's draft, so from that moment the run is the only thing the user's
-    // definition lives in and the only address a client can be sent to — the
-    // catch below has to be able to name it even when the throw beat
-    // `historyFilePath` being resolved. Never read the queue's `runRef` for
-    // this: on a later run's failed start that still holds the *previous*,
-    // legitimately completed run.
-    let promotedRunRef: RunRef | undefined;
-    let worktreeNotice: string | undefined;
-    let missingSecretNames: string[] = [];
-
-    // A genuinely fresh run (not a step continuation, append, or idle-rewind
-    // resume) starts a new compatibility-reporting window so this run's
-    // applicable warnings are reported at least once, even if the previous
-    // run already reported the identical fact.
-    if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation) {
-      const missingAssetDirectories =
-        this.promptFileLoader.getLastMissingAssetDirectories();
-      const missingAssetDedupeKey =
-        missingAssetDirectories.length > 0
-          ? this.getMissingAssetDedupeKey(missingAssetDirectories)
-          : undefined;
-      this.statusMessageReporter.resetDedupeState(
-        missingAssetDedupeKey ? [missingAssetDedupeKey] : []
-      );
-    }
-
-    try {
-      Log.info(
-        `[executeLoadedPromptFile] ctrlyoke: Executing loaded prompt file: ${filePath}`
-      );
-
-      const workflow = this.promptQueue.getWorkflowFile();
-      await this.approveSecretGrants?.(
-        workflow,
-        this.platform.getWorkspaceRoot()
-      );
-      missingSecretNames = await preflightWorkflowSecrets(
-        workflow,
-        this.platform,
-        this.platform.getWorkspaceRoot(),
-        process.env,
-        {
-          failOnMissing:
-            ConfigurationUtils.getContextResolutionFailureMode() ===
-            CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
-        }
-      );
-
-      this.worktreeResolution = await resolveWorktreeForWorkspace(
-        this.promptQueue.getWorkflowFile().worktree,
-        ConfigurationUtils.getDefaultWorktree(),
-        this.platform.getNamedWorkspaceRoots()
-      );
-      worktreeNotice = this.worktreeResolution.notice;
-
-      // Compatibility is authoritative at execution time. Resolve only the
-      // consumers that exist in the current queue/definition so a workflow
-      // default never stands in for a step-level harness override.
-      const compatibilityDiagnostics = await this.analyzeWorkflowCompatibility({
-        ...this.promptQueue.getWorkflowFile(),
-        steps: this.promptQueue.getState().steps,
-      });
-      const compatibilityErrors = compatibilityDiagnostics.filter(
-        (diagnostic) =>
-          diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
-      );
-      if (compatibilityErrors.length > 0) {
-        // Report here (rather than after EXECUTION_STARTED, like the success
-        // path below) because this early-return means EXECUTION_STARTED is
-        // never sent at all — nothing will ever reset the dashboard's runtime
-        // state to make room for it otherwise.
-        this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
-        Log.error(
-          "[executeLoadedPromptFile] ctrlyoke: Compatibility preflight failed:",
-          compatibilityErrors.map((diagnostic) => diagnostic.message).join(" ")
-        );
-        this.workflowRuntime.fail();
-        await this.promptQueue.commitRuntimeTransition();
-        return;
-      }
-
-      // Pre-flight: use the DETECTOR singleton (already initialized at startup).
-      // If the harness is still initializing or polling, wait until it settles
-      // (up to 35 s — enough to cover the six-provider polling window).
-      // If it ends up unavailable, surface the error in the webview and bail.
-      const preflightHarness = PropertyResolver.resolveHarnessValue(
-        modeOverride,
-        this.currentPromptFile?.promptFile?.harness
-      );
-      const detectedIntegration = this.getDetectorIntegration(preflightHarness);
-      let detailedStatus = detectedIntegration.getDetailedStatus();
-
-      if (
-        detailedStatus.initializationStatus === HarnessStatus.Initializing ||
-        detailedStatus.initializationStatus === HarnessStatus.Waiting
-      ) {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
-        );
-        await new Promise<void>((resolve) => {
-          let settled = false;
-          const settle = () => {
-            if (!settled) {
-              settled = true;
-              subscription.dispose();
-              clearTimeout(timer);
-              resolve();
-            }
-          };
-          const subscription = detectedIntegration.onDidChangeStatus(settle);
-          const timer = setTimeout(settle, 35_000);
-        });
-        detailedStatus = detectedIntegration.getDetailedStatus();
-      }
-
-      if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
-        const errorMessage = detailedStatus.message || "Harness is unavailable";
-        Log.error(
-          `[executeLoadedPromptFile] ctrlyoke: Harness not ready: ${errorMessage}`
-        );
-        const preflightStepCount = this.promptQueue.getState().steps.length;
-        if (this.dashboardSink && preflightStepCount > 0) {
-          this.dashboardSink.updateExecutionStarted(
-            this.id,
-            fileName,
-            preflightStepCount
-          );
-          this.dashboardSink.updateCliOutput(0, {
-            prompt: "",
-            response: "",
-            elapsed: 0,
-            errorMessage,
-          });
-        }
-        this.workflowRuntime.fail();
-        await this.promptQueue.commitRuntimeTransition();
-        if (historyFilePath) {
-          await this.outputHistoryManager.finalizeRun(
-            historyFilePath,
-            EXECUTION_STATES.ERROR,
-            preflightStepCount,
-            this.promptQueue.getState().totalExecutionTime
-          );
-        }
-        return;
-      }
-
-      const executionState = this.getAuthoritativeExecutionState();
-      const isRestartFromBeginning =
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        (executionState === EXECUTION_STATES.COMPLETED ||
-          executionState === EXECUTION_STATES.PAUSED ||
-          executionState === EXECUTION_STATES.STOPPED ||
-          executionState === EXECUTION_STATES.ERROR);
-
-      this.warnBeforeWorkflowStart(
-        prevQueueState,
-        promptFile,
-        modeOverride,
-        isRestartFromBeginning
-      );
-
-      if (isRestartFromBeginning) {
-        await this.closeRetainedTerminalsForFreshRun();
-      }
-
-      if (!continueFromCurrent && !isAppendContinuation) {
-        if (isRestartFromBeginning) {
-          Log.info(
-            `[executeLoadedPromptFile] ctrlyoke: Queue in ${executionState} state, restarting from beginning`
-          );
-          await this.promptQueue.restart();
-        }
-      } else if (isAppendContinuation) {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
-        );
-        if (executionState === EXECUTION_STATES.IDLE) {
-          await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
-        }
-      } else {
-        Log.info(
-          `[executeLoadedPromptFile] ctrlyoke: Continuing from current position (append mode), preserving history`
-        );
-      }
-
-      const currentQueueState = this.promptQueue.getState();
-      const totalSteps = currentQueueState.steps.length;
-      const currentStep =
-        currentQueueState.steps[currentQueueState.currentIndex];
-      const executionMode: ExecutionMode | undefined = currentStep
-        ? PropertyResolver.resolveExecutionMode(
-            currentStep,
-            this.promptQueue.getWorkflowFile(),
-            { hostCanProvidePty: this.hostCanProvidePty }
-          )
-        : undefined;
-
-      let workingFilePath = currentQueueState.workingFilePath ?? "";
-      const workflowKey = currentQueueState.workflowKey;
-      if (
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        !isIdleContinuation &&
-        !prePromotedFreshStart &&
-        workflowKey
-      ) {
-        const runWorkspaceRoot =
-          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot() ?? "";
-        const startedAt = Date.now();
-        const promoted = await this.promptQueue.promoteToNewRun(
-          runWorkspaceRoot,
-          startedAt
-        );
-        if (promoted) {
-          workingFilePath = promoted.workingFilePath;
-          promotedRunRef = promoted.runRef;
-          this.syncCurrentPromptFileFromQueue(promoted.workingFilePath);
-          this.executionRunRef = promoted.runRef;
-          const historyInit = await this.outputHistoryManager.initializeRunAt(
-            workflowKey,
-            promoted.runRef,
-            promoted.runDir,
-            promoted.runId,
-            startedAt,
-            [],
-            this.getDefinitionRevisionContext().definition
-          );
-          if (!historyInit.filePath) {
-            throw new Error(
-              `Failed to initialize timeline for promoted run ${workflowKey}/${promoted.runRef}`
-            );
-          }
-          historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-            workflowKey,
-            promoted.runRef
-          );
-        }
-      } else if (isAppendContinuation && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error(
-            "Append continuation requires an explicit promoted run"
-          );
-        }
-        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-          workflowKey,
-          runRef
-        );
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Reusing explicit history file for append continuation: ${historyFilePath}`
-        );
-
-        // Cache historical step outputs in completedStepOutputs so they can be
-        // replayed by sendFullStateToDashboard() when the user switches away and
-        // back to this workflow mid-execution.  Without this, completedStepOutputs
-        // is empty for steps that ran in the previous VS Code session, and
-        // switching back shows only the currently-running step's output.
-        if (historyFilePath) {
-          try {
-            const history =
-              await this.outputHistoryManager.loadHistory(historyFilePath);
-
-            const cliEntriesByStep = new Map<
-              number,
-              Array<{ cliOutput: CliOutput; attemptIndex: number }>
-            >();
-            for (const entry of history.orderedEntries) {
-              if (
-                entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-                entry.target.kind === FINAL_STEP_PHASES.QUEUE
-              ) {
-                const stepIndex = (
-                  entry.target as {
-                    kind: typeof FINAL_STEP_PHASES.QUEUE;
-                    stepIndex: number;
-                  }
-                ).stepIndex;
-                const arr = cliEntriesByStep.get(stepIndex) ?? [];
-                arr.push({
-                  cliOutput: entry.cliOutput,
-                  attemptIndex: entry.attemptIndex,
-                });
-                cliEntriesByStep.set(stepIndex, arr);
-              }
-            }
-
-            for (let i = 0; i < prevCompletedCount; i++) {
-              const entries = cliEntriesByStep.get(i);
-              if (entries && entries.length > 0) {
-                const cliOutputs = entries.map((e) => e.cliOutput);
-                const maxAttemptIndex = Math.max(
-                  ...entries.map((e) => e.attemptIndex)
-                );
-                this.outputCaptureBuffer.cacheHistoricalStepOutput(
-                  i,
-                  cliOutputs,
-                  maxAttemptIndex > 0
-                    ? {
-                        currentRetry: maxAttemptIndex,
-                        maxRetries: maxAttemptIndex,
-                      }
-                    : undefined
-                );
-              }
-            }
-            Log.debug(
-              `[inst:${this.id.slice(0, 8)}] Cached ${this.outputCaptureBuffer.stepBufferSize} historical step(s) for replay on workflow switch`
-            );
-          } catch (error) {
-            Log.warn(
-              `[inst:${this.id.slice(0, 8)}] Failed to cache historical step outputs for replay: ${error}`
-            );
-          }
-        }
-      } else if (continueFromCurrent && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error("Continuation requires an explicit promoted run");
-        }
-        historyFilePath =
-          historyFilePath ||
-          this.outputHistoryManager.getHistoryFilePath(workflowKey, runRef);
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
-        );
-      } else if (isIdleContinuation && workflowKey) {
-        const runRef = currentQueueState.runRef;
-        if (!runRef) {
-          throw new Error(
-            "Idle continuation requires an explicit promoted run"
-          );
-        }
-        historyFilePath = this.outputHistoryManager.getHistoryFilePath(
-          workflowKey,
-          runRef
-        );
-        Log.debug(
-          `[WorkflowInstance] [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
-        );
-      }
-
-      // Identity is settled (queue state names the run this call is about to
-      // execute) — safe for a caller to move its client onto it now, before
-      // the potentially long-running step loop below even starts.
-      await onPrepared?.();
-
-      // The runner lock must precede any worktree discovery or mutation. The
-      // same lock is reused by startWorkflowExecution below.
-      await this.ensureRunnerLock(workingFilePath);
-
-      if (
-        this.dashboardSink &&
-        totalSteps > 0 &&
-        !continueFromCurrent &&
-        !isAppendContinuation &&
-        !isIdleContinuation
-      ) {
-        Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
-        );
-        this.clearOutputBuffers();
-        this.dashboardSink.updateExecutionStarted(
-          this.id,
-          fileName,
-          totalSteps,
-          undefined,
-          undefined,
-          undefined,
-          executionMode
-        );
-      }
-
-      await this.prepareExecutionWorktree(historyFilePath);
-
-      // Create the execution integration only after the execution workspace
-      // has been remapped to the resolved worktree.
-      const integration = this.createIntegrationForMode(modeOverride);
-
-      if (this.dashboardSink && totalSteps > 0) {
-        if (continueFromCurrent || isIdleContinuation) {
-          const currentIndex = currentQueueState.currentIndex;
-          const willInject = integration.canReuseForInject();
-          Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
-          );
-          if (willInject) {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              currentIndex,
-              true,
-              executionMode
-            );
-          } else {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              currentIndex,
-              undefined,
-              executionMode
-            );
-          }
-        } else if (isAppendContinuation) {
-          const willInject = integration.canReuseForInject();
-          Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
-          );
-          if (willInject) {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              prevCompletedCount,
-              true,
-              executionMode
-            );
-          } else {
-            this.dashboardSink.updateExecutionStarted(
-              this.id,
-              fileName,
-              totalSteps,
-              true,
-              prevCompletedCount,
-              undefined,
-              executionMode
-            );
-          }
-        }
-      }
-
-      // Reported only now, after EXECUTION_STARTED has already gone out: a
-      // fresh (non-continuation) start makes the dashboard wipe its live
-      // status-message feed to make room for the new run (see
-      // EXECUTION_STARTED's webview handler). Reporting any earlier races
-      // that reset — the diagnostic lands, then gets discarded a message
-      // later — so the warning silently never appears live, only resurfacing
-      // once the run ends and history is reloaded from disk.
-      this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
-      this.reportMissingAssetWarning(
-        this.promptFileLoader.getLastMissingAssetDirectories()
-      );
-
-      if (missingSecretNames.length > 0) {
-        const missingSecretNotice = `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(
-          ", "
-        )}.`;
-        const timestampMs = Date.now();
-        const stepIndex = currentQueueState.currentIndex;
-        this.statusMessageReporter.report(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          missingSecretNotice,
-          STATUS_MESSAGE_SEVERITY.WARNING,
-          { timestampMs }
-        );
-      }
-
-      if (worktreeNotice && historyFilePath) {
-        await this.promptQueue.updateWorktreeNotice(worktreeNotice);
-        const timestampMs = Date.now();
-        const stepIndex = currentQueueState.currentIndex;
-        this.statusMessageReporter.report(
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          worktreeNotice,
-          STATUS_MESSAGE_SEVERITY.WARNING,
-          { timestampMs }
-        );
-      }
-
-      if (totalSteps > 0) {
-        const currentIndex = currentQueueState.currentIndex;
-        integration.setWorkflowProgress(currentIndex + 1, totalSteps);
-      }
-      const targetRunIndices = await this.computeTargetRunIndices(
-        historyFilePath,
-        continueFromCurrent || isAppendContinuation || isIdleContinuation
-      );
-      Log.debug(
-        `[WorkflowInstance] [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
-      );
-      await this.startWorkflowExecution(
-        integration,
-        historyFilePath,
-        workingFilePath || undefined,
-        targetRunIndices
-      );
-    } catch (error) {
-      Log.error(
-        "[executeLoadedPromptFile] Failed to execute prompt file:",
-        error
-      );
-      const failureMessage = getErrorMessage(error);
-      const failedStepIndex =
-        this.promptQueue.finalizeFailedInFlightPrompt(failureMessage);
-      // Report before flipping the workflow to ERROR. This setup/startup path
-      // never reaches the attempt state machine, so it is the only chance to
-      // tell the dashboard which step failed — and `finalizeFailedInFlightPrompt`
-      // has already advanced `currentIndex` past it, so a dashboard that never
-      // hears about it can only guess, and guesses one row too far.
-      if (failedStepIndex !== undefined) {
-        this.dashboardSink?.updateStepStatus(failedStepIndex, {
-          state: STEP_STATUS.FAILED,
-          message: failureMessage,
-        });
-      }
-      this.workflowRuntime.fail();
-      await this.promptQueue.commitRuntimeTransition();
-      // Worktree provisioning can succeed before integration construction or
-      // history startup fails. That path never enters startWorkflowExecution's
-      // finally block, so settle it here or setup/early-run edits would be
-      // stranded outside the managed landing barrier.
-      if (
-        !this.startPending &&
-        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED
-      ) {
-        const worktree = this.activeWorktree;
-        this.worktreeManager.releaseRuntimeTrust(worktree);
-        await this.worktreeManager
-          .completeManagedRun(worktree, {
-            merge: this.worktreeResolution.config?.merge === true,
-            keep: this.worktreeResolution.config?.keep === true,
-            artifactsClean: true,
-          })
-          .catch((settlementError) =>
-            Log.error(
-              `[inst:${this.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
-              settlementError
-            )
-          );
-        this.executionLease = undefined;
-        this.activeWorktree = undefined;
-      }
-      // Setup can fail before startWorkflowExecution enters its finally block;
-      // release the lineage lock here so the blocked worktree can be retried
-      // explicitly by the user.
-      if (!this.startPending) {
-        await this.releaseRunnerLock().catch((lockError) =>
-          Log.warn(
-            "[executeLoadedPromptFile] Failed to release runner lock after setup failure:",
-            lockError
-          )
-        );
-      }
-      // Finalize the history run if it was initialized before the error occurred
-      // (errors thrown between initializeRun and startWorkflowExecution; the latter
-      // has its own finally block that handles finalization for errors within execution).
-      //
-      // A run promoted by this call must be finalized even when the throw came
-      // from `initializeRunAt` itself, before `historyFilePath` was resolved:
-      // the run directory is already published (and the draft already deleted),
-      // and its staged manifest says RUNNING. Left that way the lineage shows a
-      // permanently executing run that retention never prunes, and the header
-      // offers neither Resume nor "Run" for the one address the user's
-      // definition now lives at.
-      // The lineage *key* is stable across a promotion (only the RunRef moves),
-      // so reading it from the queue here still names the run promoted above.
-      const failedRunKey = this.promptQueue.getState().workflowKey;
-      const runToFinalize =
-        historyFilePath ||
-        (promotedRunRef && failedRunKey
-          ? this.outputHistoryManager.getHistoryFilePath(
-              failedRunKey,
-              promotedRunRef
-            )
-          : "");
-      if (runToFinalize) {
-        await this.outputHistoryManager
-          .finalizeRun(
-            runToFinalize,
-            EXECUTION_STATES.ERROR,
-            this.promptQueue.getProgress().total,
-            this.promptQueue.getState().totalExecutionTime
-          )
-          .catch((err) =>
-            Log.warn(
-              "[executeLoadedPromptFile] Failed to finalize history run on early error:",
-              err
-            )
-          );
-      }
-      const executionFailureMessage =
-        await this.describeExecutionFailure(error);
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        "error",
-        `ctrlyoke: Execution failed: ${executionFailureMessage}`
-      );
-      const executionFailureStatusMessage = `Execution failed: ${executionFailureMessage}`;
-      const executionFailureTimestampMs = Date.now();
-      const executionFailureStepIndex =
-        this.promptQueue.getState().currentIndex;
-      const resolvedHistoryFilePath = this.resolveHistoryFilePath();
-      if (runToFinalize && runToFinalize !== resolvedHistoryFilePath) {
-        // This early-failure path can finalize the promoted run before the
-        // active-history field is assigned. Temporarily point the reporter at
-        // the exact run that was finalized rather than silently changing the
-        // row's destination.
-        const previousActiveHistoryFilePath = this.activeHistoryFilePath;
-        this.activeHistoryFilePath = runToFinalize;
-        this.statusMessageReporter.report(
-          {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: executionFailureStepIndex,
-          },
-          executionFailureStatusMessage,
-          STATUS_MESSAGE_SEVERITY.ERROR,
-          { timestampMs: executionFailureTimestampMs }
-        );
-        this.activeHistoryFilePath = previousActiveHistoryFilePath;
-      } else {
-        this.statusMessageReporter.report(
-          {
-            kind: FINAL_STEP_PHASES.QUEUE,
-            stepIndex: executionFailureStepIndex,
-          },
-          executionFailureStatusMessage,
-          STATUS_MESSAGE_SEVERITY.ERROR,
-          { timestampMs: executionFailureTimestampMs }
-        );
-      }
-    }
   }
-
   /**
    * Pause current execution.
    */
@@ -3772,44 +3452,7 @@ export class WorkflowInstance {
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
     this.outputCaptureBuffer.clear();
-    this.completedActivityTargets.clear();
-    this.latestCompletedActivityBySession.clear();
-    this.legacyCompletedActivityTarget = undefined;
-    this.lastCompletedActivityTarget = undefined;
-    this.pendingSessionActivityEvents.clear();
-    this.pendingSessionActivityIntegrations.clear();
-    this.followUpPersistQueue.clear();
-  }
-
-  private getActivityIntegrationId(integration?: HarnessIntegration): string {
-    if (!integration) {
-      return "legacy";
-    }
-    let id = this.activityIntegrationIds.get(integration);
-    if (!id) {
-      id = `integration:${this.nextActivityIntegrationId++}`;
-      this.activityIntegrationIds.set(integration, id);
-    }
-    return id;
-  }
-
-  private getActivitySessionKey(
-    integration: HarnessIntegration | undefined,
-    sessionId: string | undefined
-  ): string {
-    return `${this.getActivityIntegrationId(integration)}:${sessionId ?? "unknown"}`;
-  }
-
-  private getActivityTargetKey(
-    integration: HarnessIntegration,
-    sessionId: string | undefined,
-    target: OutputExecutionTarget
-  ): string {
-    const targetKey =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${target.stepIndex}`
-        : `final:${target.loopIndex}`;
-    return `${this.getActivitySessionKey(integration, sessionId)}:${targetKey}`;
+    this.sessionActivityRecorder.clear();
   }
 
   private recordCompletedActivityTarget(
@@ -3818,464 +3461,63 @@ export class WorkflowInstance {
     attemptIndex: number,
     integration?: HarnessIntegration
   ): void {
-    const activity = { target, runIndex, attemptIndex };
-    if (!integration) {
-      this.legacyCompletedActivityTarget = activity;
-      this.lastCompletedActivityTarget = activity;
-      for (const [sessionKey, pendingEvents] of this
-        .pendingSessionActivityEvents) {
-        const pendingIntegration =
-          this.pendingSessionActivityIntegrations.get(sessionKey);
-        if (pendingIntegration) {
-          this.pendingSessionActivityEvents.delete(sessionKey);
-          this.pendingSessionActivityIntegrations.delete(sessionKey);
-          void this.handleSessionActivityResumed(
-            pendingEvents,
-            pendingIntegration.integration,
-            pendingIntegration.sessionId
-          );
-        }
-      }
-      return;
-    }
-    const sessionId = integration.getActivitySessionId();
-    const sessionKey = this.getActivitySessionKey(integration, sessionId);
-    this.completedActivityTargets.set(
-      this.getActivityTargetKey(integration, sessionId, target),
-      activity
-    );
-    this.latestCompletedActivityBySession.set(sessionKey, activity);
-    const pendingEvents = this.pendingSessionActivityEvents.get(sessionKey);
-    if (!pendingEvents || pendingEvents.length === 0) {
-      return;
-    }
-    this.pendingSessionActivityEvents.delete(sessionKey);
-    void this.handleSessionActivityResumed(
-      pendingEvents,
-      integration,
-      sessionId
+    this.sessionActivityRecorder.recordCompletedActivityTarget(
+      target,
+      runIndex,
+      attemptIndex,
+      integration
     );
   }
 
   private beginActivityTargetCapture(
     integration?: HarnessIntegration,
-    _target?: WorkflowAttemptTarget
+    target?: WorkflowAttemptTarget
   ): void {
-    // The completed target remains addressable until its watcher emits or the
-    // integration is retired. Do not clear siblings when another target starts.
-    if (integration) {
-      this.getActivityIntegrationId(integration);
-    } else {
-      this.legacyCompletedActivityTarget = undefined;
-      this.lastCompletedActivityTarget = undefined;
-      this.pendingSessionActivityEvents.clear();
-      this.pendingSessionActivityIntegrations.clear();
-    }
+    this.sessionActivityRecorder.beginActivityTargetCapture(
+      integration,
+      target
+    );
   }
 
   private getExecutionTargetRunKey(
     target: OutputExecutionTarget | WorkflowAttemptTarget
-  ): `queue:${number}` | `final:${number}` {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
+  ): ReturnType<SessionActivityRecorder["getExecutionTargetRunKey"]> {
+    return this.sessionActivityRecorder.getExecutionTargetRunKey(target);
   }
 
-  /**
-   * Handle activity observed by `SessionActivityWatcher` after a step's own
-   * dispatch already completed — a harness auto-resuming a backgrounded task,
-   * or a human typing directly into the live TUI. Display-only: forwards to
-   * the live dashboard immediately, then merges into the already-persisted
-   * history entry for the most recently completed step/attempt. Never touches
-   * workflow/queue state.
-   */
   private async handleSessionActivityResumed(
     events: CliEvent[],
     integration?: HarnessIntegration,
     sessionId?: string
   ): Promise<void> {
-    if (events.length === 0) {
-      return;
-    }
-    const sessionKey = this.getActivitySessionKey(integration, sessionId);
-    const activityTarget =
-      this.latestCompletedActivityBySession.get(sessionKey) ??
-      this.legacyCompletedActivityTarget ??
-      this.lastCompletedActivityTarget;
-    if (!activityTarget) {
-      Log.trace(
-        `[inst:${this.id.slice(0, 8)}] Session activity resumed before completed step attribution — buffering`
-      );
-      const pending = this.pendingSessionActivityEvents.get(sessionKey) ?? [];
-      pending.push(...events);
-      this.pendingSessionActivityEvents.set(sessionKey, pending);
-      if (integration) {
-        this.pendingSessionActivityIntegrations.set(sessionKey, {
-          integration,
-          sessionId,
-        });
-      }
-      return;
-    }
-    const { target, runIndex, attemptIndex } = activityTarget;
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.dashboardSink?.updateCliStreamingEvents(
-        target.stepIndex,
-        events,
-        attemptIndex,
-        runIndex,
-        this.id
-      );
-    } else {
-      this.dashboardSink?.updateFinalStepStreamingEvents(
-        target.loopIndex,
-        events,
-        attemptIndex,
-        runIndex,
-        this.id
-      );
-    }
-
-    // CONTEXT_WINDOW_SYNC is an invisible marker (see CliIntegration.
-    // resumeSessionActivityWatcher) — pull its data out for the tokens/footer
-    // refresh below rather than merging it into the visible event stream.
-    const contentEvents = events.filter(
-      (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
-    );
-
-    const followUpText = extractTextFromEvents({ events: contentEvents });
-    const latestContextWindowSync = [...events]
-      .reverse()
-      .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
-      ?.data as ContextWindowSyncData | undefined;
-
-    await this.enqueueFollowUpPersist(target, runIndex, attemptIndex, () =>
-      this.persistResumedSessionActivity(
-        target,
-        runIndex,
-        attemptIndex,
-        contentEvents,
-        followUpText,
-        latestContextWindowSync
-          ? {
-              used: latestContextWindowSync.used,
-              size: latestContextWindowSync.size,
-            }
-          : undefined
-      )
+    return this.sessionActivityRecorder.handleSessionActivityResumed(
+      events,
+      integration,
+      sessionId
     );
   }
 
-  /**
-   * Serialize one attempt's follow-up persistence.
-   * `handleSessionActivityResumed` is invoked fire-and-forget from watcher
-   * callbacks, and `persistResumedSessionActivity` is a read-modify-write over
-   * the attempt's stored aggregate (resolve -> merge -> save) with awaits in
-   * between. Overlapping bursts would each merge onto the *pre-burst*
-   * aggregate, so the later save would drop the earlier burst's events —
-   * observed as a follow-up's closing message missing from the newest
-   * `cliOutputRecorded` while an earlier one still had it.
-   */
-  private enqueueFollowUpPersist(
-    target: OutputExecutionTarget,
-    runIndex: number,
-    attemptIndex: number,
-    work: () => Promise<void>
-  ): Promise<void> {
-    const key = getCliEntryKey(target, runIndex, attemptIndex);
-    const tail = (this.followUpPersistQueue.get(key) ?? Promise.resolve()).then(
-      work
-    );
-    // The stored tail never rejects, so one failed burst cannot poison the
-    // chain for the bursts queued behind it.
-    const guarded = tail.catch(() => undefined);
-    this.followUpPersistQueue.set(key, guarded);
-    void guarded.then(() => {
-      if (this.followUpPersistQueue.get(key) === guarded) {
-        this.followUpPersistQueue.delete(key);
-      }
-    });
-    return tail;
-  }
-
-  /**
-   * Persist one follow-up burst: the timeline activity batch the output pane
-   * replays on reload, the mutable working-file response text, and the merged
-   * attempt aggregate. Always runs inside `enqueueFollowUpPersist`.
-   */
-  private async persistResumedSessionActivity(
-    target: OutputExecutionTarget,
-    runIndex: number,
-    attemptIndex: number,
-    contentEvents: CliEvent[],
-    followUpText: string,
-    contextWindow: { used: number; size: number } | undefined
-  ): Promise<void> {
-    const historyFilePath = this.resolveHistoryFilePath();
-
-    // The stored aggregate decides whether this burst opens with the one-time
-    // follow-up divider, so it has to be read before anything is written.
-    let existingOutput: CliOutput | undefined;
-    if (historyFilePath) {
-      try {
-        existingOutput = (
-          await this.outputHistoryManager
-            .getRunOutputResolver()
-            .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
-        )?.output;
-      } catch (error) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to resolve attempt for resumed session activity:`,
-          error
-        );
-      }
-    }
-
-    const existingEvents = existingOutput?.structured?.events ?? [];
-    const hasFollowUpDivider = existingEvents.some(
-      (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-    );
-    // Insert the divider at most once per step/attempt/run — it marks the
-    // boundary between the step's original output and its follow-up activity,
-    // so later batches from the same follow-up burst just append past it. With
-    // no stored aggregate there is nothing to divide from, matching the live
-    // store's `computeStreamingEventsToMerge`.
-    const eventsToAppend: CliEvent[] =
-      contentEvents.length > 0 && existingOutput && !hasFollowUpDivider
-        ? [
-            {
-              type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-              timestamp: Date.now(),
-              data: { resumedAt: Date.now() } as FollowUpResumedData,
-            },
-            ...contentEvents,
-          ]
-        : contentEvents;
-
-    // Follow-up output is persisted to the timeline before it enters the small
-    // active-only cache. Prior-context consumers always resolve the timeline.
-    // `eventsToAppend` — not `contentEvents` — is what gets recorded, so the
-    // activity entries a history load replays carry the same divider the
-    // aggregate merge below does.
-    if (historyFilePath) {
-      try {
-        await this.outputHistoryManager.recordFollowUpResponse(
-          historyFilePath,
-          target,
-          runIndex,
-          attemptIndex,
-          followUpText,
-          eventsToAppend,
-          contextWindow,
-          this.getDefinitionRevisionContext()
-        );
-      } catch (error) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity event:`,
-          error
-        );
-      }
-    }
-    if (followUpText) {
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.appendPromptResponseText(
-          target.stepIndex,
-          followUpText
-        );
-      } else {
-        this.promptQueue.appendFinalStepResponseText(
-          target.loopIndex,
-          followUpText
-        );
-      }
-    }
-
-    if (!historyFilePath || !existingOutput) {
-      return;
-    }
-    try {
-      const merged: CliOutput = {
-        ...existingOutput,
-        // Mirror PromptQueue.appendPromptResponseText's concatenation so the
-        // persisted timeline response (read by prior-context resolution, see
-        // RunOutputResolver.resolvePriorContextItems) stays in sync with the
-        // mutable working-file cache — otherwise $previous/$all/$step:N
-        // silently drop follow-up activity that fired after the step's Stop
-        // hook but before the next step read prior context.
-        response: existingOutput.response + followUpText,
-        structured: existingOutput.structured
-          ? {
-              ...existingOutput.structured,
-              events: [...existingEvents, ...eventsToAppend],
-            }
-          : undefined,
-        tokens:
-          contextWindow && existingOutput.tokens
-            ? {
-                ...existingOutput.tokens,
-                contextWindowUsed: contextWindow.used,
-                contextWindowSize: contextWindow.size,
-              }
-            : existingOutput.tokens,
-        // timestampMs is the attempt's *start* time (see WorkflowExecutor's
-        // finalization), so re-deriving elapsed from it naturally folds in
-        // follow-up time without needing a separately tracked baseline.
-        elapsed:
-          existingOutput.timestampMs != null
-            ? (Date.now() - existingOutput.timestampMs) / 1000
-            : existingOutput.elapsed,
-      };
-      await this.outputHistoryManager.saveExecutionOutput(
-        historyFilePath,
-        target,
-        [merged],
-        this.getDefinitionRevisionContext()
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,
-        error
-      );
-    }
-  }
-
-  private publishOutputActivity(entry: OutputActivityEntry): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-
-    if (entry.target.kind === FINAL_STEP_PHASES.QUEUE) {
-      if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
-        this.dashboardSink.updateCliStreamingChunk(
-          entry.target.stepIndex,
-          entry.text ?? "",
-          entry.phase,
-          this.id,
-          entry.timestampMs,
-          entry.sequence,
-          entry.attemptIndex,
-          entry.runIndex
-        );
-      } else if (
-        entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
-        entry.events
-      ) {
-        this.dashboardSink.updateCliStreamingEvents(
-          entry.target.stepIndex,
-          entry.events,
-          entry.attemptIndex,
-          entry.runIndex,
-          this.id,
-          entry.phase,
-          entry.timestampMs,
-          entry.sequence
-        );
-      }
-      return;
-    }
-
-    if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
-      this.dashboardSink.updateFinalStepStreamingChunk(
-        entry.target.loopIndex,
-        entry.text ?? "",
-        entry.phase,
-        this.id,
-        entry.timestampMs,
-        entry.sequence,
-        entry.attemptIndex,
-        entry.runIndex
-      );
-    } else if (
-      entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
-      entry.events
-    ) {
-      this.dashboardSink.updateFinalStepStreamingEvents(
-        entry.target.loopIndex,
-        entry.events,
-        entry.attemptIndex,
-        entry.runIndex,
-        this.id,
-        entry.phase,
-        entry.timestampMs,
-        entry.sequence
-      );
-    }
+  private publishOutputActivity(
+    entry: import("../types/OutputHistoryTypes").OutputActivityEntry
+  ): void {
+    this.sessionActivityRecorder.publishOutputActivity(entry);
   }
 
   private async computeTargetRunIndices(
     historyFilePath: string,
     isContinuation: boolean
   ): Promise<Map<string, number>> {
-    if (!historyFilePath || !isContinuation) {
-      return new Map();
-    }
-
-    const rerunTargets: OutputExecutionTarget[] = [];
-    const state = this.promptQueue.getState();
-
-    for (
-      let stepIndex = state.currentIndex;
-      stepIndex < state.steps.length;
-      stepIndex++
-    ) {
-      rerunTargets.push({
-        kind: FINAL_STEP_PHASES.QUEUE,
-        stepIndex,
-      });
-    }
-
-    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
-    if (
-      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
-      !this.promptQueue.hasNext()
-    ) {
-      rerunTargets.push({
-        kind: FINAL_STEP_PHASES.FINAL_STEP,
-        loopIndex: finalStepRuntime.loopCount,
-      });
-    }
-
-    if (rerunTargets.length === 0) {
-      return new Map();
-    }
-
-    const targetKeys = new Set(
-      rerunTargets.map((target) => this.getExecutionTargetRunKey(target))
-    );
-
-    return this.outputHistoryManager.findNextRunIndexByTarget(
-      historyFilePath,
-      targetKeys
-    );
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).computeTargetRunIndices(historyFilePath, isContinuation);
   }
-
   /** Advance a completed final-step loop before it is reached again in this run. */
   private async prepareFinalStepContinuation(
     historyFilePath: string
   ): Promise<void> {
-    const runtime = this.promptQueue.getFinalStepRuntime();
-    if (
-      !runtime ||
-      runtime.phase !== FINAL_STEP_PHASES.FINAL_STEP ||
-      (runtime.status !== STEP_STATUS.COMPLETED &&
-        runtime.status !== STEP_STATUS.SKIPPED)
-    ) {
-      return;
-    }
-    const history =
-      await this.outputHistoryManager.loadHistory(historyFilePath);
-    let maxLoopIndex = runtime.loopCount;
-    for (const entry of history.orderedEntries) {
-      if (
-        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        maxLoopIndex = Math.max(maxLoopIndex, entry.target.loopIndex);
-      }
-    }
-    await this.promptQueue.prepareFinalStepContinuation(maxLoopIndex + 1);
-    this.syncCurrentPromptFileFromQueue();
+    await new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).prepareFinalStepContinuation(historyFilePath);
   }
 
   private warnBeforeWorkflowStart(
@@ -4284,64 +3526,14 @@ export class WorkflowInstance {
     modeOverride: HarnessId | undefined,
     restartFromBeginning: boolean
   ): void {
-    if (
-      !ConfigurationUtils.shouldTrackHarnessUsage() ||
-      !this.getHarnessUsageSnapshots
-    ) {
-      return;
-    }
-
-    const startIndex = restartFromBeginning ? 0 : queueState.currentIndex;
-    const queuedAttempts = queueState.steps
-      .slice(startIndex)
-      .filter((step, offset): step is PromptStep => {
-        if (step.enabled === false || isScriptStep(step)) return false;
-        const absoluteIndex = startIndex + offset;
-        if (restartFromBeginning) return true;
-        const status = queueState.results[absoluteIndex]?.status;
-        return (
-          status !== STEP_STATUS.COMPLETED &&
-          status !== STEP_STATUS.CANCELLED &&
-          status !== STEP_STATUS.FAILED &&
-          status !== STEP_STATUS.SKIPPED
-        );
-      })
-      .map((step) => ({
-        harnessId: PropertyResolver.resolveHarnessValue(
-          step.harness,
-          modeOverride ?? workflow.harness
-        ),
-      }));
-
-    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
-    const finalStep = workflow.finalStep;
-    const finalStepStillQueued =
-      finalStep !== undefined &&
-      finalStep.enabled !== false &&
-      !isScriptStep(finalStep) &&
-      (restartFromBeginning ||
-        !finalStepRuntime ||
-        finalStepRuntime.phase === FINAL_STEP_PHASES.QUEUE ||
-        (finalStepRuntime.status !== STEP_STATUS.COMPLETED &&
-          finalStepRuntime.status !== STEP_STATUS.SKIPPED));
-    if (finalStepStillQueued && finalStep) {
-      queuedAttempts.push({
-        harnessId: PropertyResolver.resolveHarnessValue(
-          finalStep.harness,
-          modeOverride ?? workflow.harness
-        ),
-      });
-    }
-
-    const settings = ConfigurationUtils.getHarnessUsageSettings();
-    const warning = buildUsageSelectionWarning({
-      queuedAttempts,
-      snapshots: this.getHarnessUsageSnapshots(),
-      warningPercentUsed: settings.warningPercentUsed,
-    });
-    if (warning) {
-      notifyUserFeedback(this.userFeedbackSink, "warning", warning.message);
-    }
+    new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).warnBeforeWorkflowStart(
+      queueState,
+      workflow,
+      modeOverride,
+      restartFromBeginning
+    );
   }
 
   /**
@@ -4350,392 +3542,136 @@ export class WorkflowInstance {
    * lazy dashboard getter) so startWorkflowExecution stays focused on
    * lock/lifecycle/cleanup concerns.
    */
-  private buildWorkflowExecutionContext(
+  public buildWorkflowExecutionContext(
     activeIntegration: HarnessIntegration,
     historyFilePath: string,
     workingFilePath: string | undefined,
     targetRunIndices?: Map<string, number>,
     targetKeyedExecution: boolean = false
   ): WorkflowExecutionContext {
-    const self = this;
-    let currentIntegration = activeIntegration;
-    let activeIntegrationKey: string | undefined;
-    return {
-      executionWorkspace: this.executionWorkspace,
-      workspaceFolderPath: this.workspaceFolderPath,
-      hostCanProvidePty: this.hostCanProvidePty,
-      supportsConcurrentInteractiveSessions:
-        this.supportsConcurrentInteractiveSessions,
-      namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
-      currentPromptFilePath: this.currentPromptFile?.filePath,
-      sourceDefinitionPath: this.sourceDefinitionPath,
-      statusReporter: this.statusMessageReporter,
-      // Use a getter so dashboardProvider is evaluated lazily each time
-      // WorkflowExecutor accesses it.
-      get dashboardProvider() {
-        return self.dashboardSink;
-      },
-      reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
-        this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
-      analyzeCompatibilityForPrompt: (
-        promptIndex,
-        prompt,
-        resolvedProperties,
-        imageFileRefs
-      ) =>
-        this.analyzePromptCompatibility(
-          promptIndex,
-          prompt,
-          resolvedProperties,
-          imageFileRefs
-        ),
-      getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
-      getScriptProcessRunner: (target) => this.getScriptProcessRunner(target),
-      // In CLI mode always show the CLI command so it flows through
-      // captureOutputInit and into onPromptStart events.
-      shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
-      dynamicQueueConfig: this.getDynamicQueueConfig(),
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
+      activeIntegration,
       historyFilePath,
-      workingFilePath: workingFilePath || undefined,
-      mcpToolSkillContext: {
-        mcpServerPath: path.join(
-          this.platform.getExtensionPath(),
-          "out",
-          "mcp-server.js"
-        ),
-        workspaceRoot: this.executionWorkspace.stateRoot,
-        executionRoot: this.executionWorkspace.executionRoot,
-        workingFilePath: workingFilePath || undefined,
-        ...this.mcpToolSkillContext,
-      },
-      instanceTag: `[inst:${this.id.slice(0, 8)}]`,
-      instanceId: this.id,
-      targetKeyedExecution,
-      registerActiveTarget: (target, attemptIndex) =>
-        this.registerActiveTarget(target, attemptIndex),
-      unregisterActiveTarget: (target) => this.unregisterActiveTarget(target),
-      registerTargetPtySession: (target, sessionId) =>
-        this.registerTargetPtySession(target, sessionId),
-      clearTargetPtySession: (target) => this.clearTargetPtySession(target),
-      cancelTarget: (target) => this.cancelTarget(target),
-      releaseTargetResources: (target) => this.releaseTargetResources(target),
-      closeCoordinationParticipant: (target) =>
-        this.closeCoordinationParticipant(target),
-      releaseCoordinationGroupClaims: (group) =>
-        this.releaseCoordinationGroupClaims(group),
-      outputHistoryManager: this.outputHistoryManager,
-      secretRedactor: this.activeRunRedactor,
-      resolvePriorContextItems: createPriorContextResolver({
-        workspaceRoot:
-          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
-        historyFilePath,
-        outputResolver: this.outputHistoryManager.getRunOutputResolver(),
-      }),
+      workingFilePath,
       targetRunIndices,
-      releaseConflictingAiSession: (aiSessionId, requester) =>
-        this.releaseConflictingAiSession(aiSessionId, requester),
-      getIntegrationForPrompt: (
-        prompt: PromptStep,
-        resolvedProperties: ResolvedProperties,
-        target?: WorkflowAttemptTarget
-      ) => {
-        const targetIsGrouped =
-          target?.kind === FINAL_STEP_PHASES.QUEUE &&
-          this.promptQueue
-            .getState()
-            .parallelGroups.some(
-              (group) =>
-                target.stepIndex >= group.startIndex &&
-                target.stepIndex <= group.endIndex
-            );
-        if (target && (targetKeyedExecution || targetIsGrouped)) {
-          const targetIntegration = this.createIntegrationForMode(
-            resolvedProperties.harness,
-            target,
-            resolvedProperties
-          );
-          this.registerTargetIntegration(target, targetIntegration);
-          return targetIntegration;
-        }
+      targetKeyedExecution
+    );
+  }
 
-        const integrationKey =
-          this.getSequentialIntegrationKey(resolvedProperties);
-        const requiresFreshIntegration = !resolvedProperties.resumeSession;
-        if (
-          requiresFreshIntegration ||
-          activeIntegrationKey !== integrationKey
-        ) {
-          Log.info(
-            `[inst:${this.id.slice(0, 8)}] Prompt ${prompt.name || "unnamed"} selecting spawn identity ${resolvedProperties.harness}::${integrationKey.slice(-16)}; retaining incompatible terminals`
-          );
-          currentIntegration = this.createIntegrationForMode(
-            resolvedProperties.harness,
-            undefined,
-            resolvedProperties
-          );
-          // Including the fresh-session case: that integration now owns this
-          // spawn identity, so a later compatible prompt continues its session.
-          activeIntegrationKey = integrationKey;
-        }
-        if (target) {
-          this.registerTargetIntegration(target, currentIntegration);
-        }
-        return currentIntegration;
-      },
-      ensureHarnessReady: (harnessId) =>
-        this.getHarnessReadinessError(harnessId),
-      captureOutputInit: (
-        stepIndex,
-        prompt,
-        cliCommand,
-        cliCommandWasInjected,
-        workingDirectory,
-        timestampMs,
-        attemptIndex,
-        rawTextOutput,
-        runIndex
-      ) => {
-        this.outputCaptureBuffer.captureOutputInit(
-          stepIndex,
-          prompt,
-          cliCommand,
-          cliCommandWasInjected,
-          workingDirectory,
-          timestampMs,
-          attemptIndex,
-          rawTextOutput,
-          runIndex
-        );
-      },
-      captureChunk: (stepIndex, chunk) => {
-        this.outputCaptureBuffer.captureChunk(stepIndex, chunk);
-      },
-      captureEvents: (stepIndex, events) => {
-        this.outputCaptureBuffer.captureEvents(stepIndex, events);
-      },
-      getBufferedOutput: (stepIndex) => {
-        return this.outputCaptureBuffer.getBufferedOutput(stepIndex);
-      },
-      captureCompletedOutput: (stepIndex, output, integration) => {
-        this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
-        if (integration) {
-          this.recordCompletedActivityTarget(
-            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-            output.runIndex ?? 0,
-            output.attemptIndex ?? 0,
-            integration
-          );
-        }
-      },
-      captureFinalStepOutputInit: (
-        loopIndex,
-        prompt,
-        cliCommand,
-        cliCommandWasInjected,
-        workingDirectory,
-        timestampMs,
-        attemptIndex,
-        rawTextOutput,
-        runIndex
-      ) => {
-        this.outputCaptureBuffer.captureFinalStepOutputInit(
-          loopIndex,
-          prompt,
-          cliCommand,
-          cliCommandWasInjected,
-          workingDirectory,
-          timestampMs,
-          attemptIndex,
-          rawTextOutput,
-          runIndex
-        );
-      },
-      beginSessionActivityTargetCapture: (integration, target) =>
-        this.beginActivityTargetCapture(integration, target),
-      captureFinalStepChunk: (loopIndex, chunk) => {
-        this.outputCaptureBuffer.captureFinalStepChunk(loopIndex, chunk);
-      },
-      captureFinalStepEvents: (loopIndex, events) => {
-        this.outputCaptureBuffer.captureFinalStepEvents(loopIndex, events);
-      },
-      getFinalStepBufferedOutput: (loopIndex) => {
-        return this.outputCaptureBuffer.getFinalStepBufferedOutput(loopIndex);
-      },
-      captureFinalStepCompletedOutput: (loopIndex, output, integration) => {
-        this.outputCaptureBuffer.captureFinalStepCompletedOutput(
-          loopIndex,
-          output
-        );
-        if (integration) {
-          this.recordCompletedActivityTarget(
-            { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
-            output.runIndex ?? 0,
-            output.attemptIndex ?? 0,
-            integration
-          );
-        }
-      },
-      onFinalStepStatusMessage: (loopIndex, message, severity) => {
-        this.outputCaptureBuffer.onFinalStepStatusMessage(
-          loopIndex,
-          message,
-          severity
-        );
-      },
-      onStatusMessage: (stepIndex, message, severity) => {
-        this._workflowStatusMessageEmitter.fire({
-          stepIndex,
-          message,
-          severity,
-        });
-      },
-      onTargetStreamingEvents: (data) =>
-        this._targetedStreamingEventsEmitter.fire(data),
-      onTargetStreamingChunk: (data) =>
-        this._targetedStreamingChunkEmitter.fire(data),
-      onScriptOutput: (target, output) =>
-        this._targetedScriptOutputEmitter.fire({ target, output }),
-      onScriptCompletedOutput: (target, output) =>
-        this._targetedScriptOutputEmitter.fire({ target, output }),
-      snapshotService: new WorkspaceSnapshotService(),
-      onSnapshotCaptured: (target, snapshot) => {
-        self.dashboardSink?.sendStepUndoDataUpdated(
-          target as UndoExecutionTarget,
-          snapshot
-        );
-      },
-      spawnScriptPty: isCli()
-        ? undefined
-        : (options) => {
-            return new Promise<number>((resolve) => {
-              const ptyManager = getPtyProcessManager();
-              if (!ptyManager) {
-                Log.warn("[spawnScriptPty] PtyProcessManager not available");
-                resolve(1);
-                return;
-              }
+  private async spawnScriptPty(
+    options: Parameters<
+      NonNullable<WorkflowExecutionContext["spawnScriptPty"]>
+    >[0]
+  ): Promise<number> {
+    return new Promise<number>((resolve) => {
+      const ptyManager = getPtyProcessManager();
+      if (!ptyManager) {
+        Log.warn("[spawnScriptPty] PtyProcessManager not available");
+        resolve(1);
+        return;
+      }
 
-              const workflowId = self.id;
-              const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const preSessionId = `script-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      const {
+        executable: shell,
+        args: shellArgs,
+        shellKind,
+        windowsVerbatimArguments,
+      } = resolveShellInvocation(options.script, options.shell);
+      Log.debug(
+        `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
+          .map((a) => JSON.stringify(a))
+          .join(" ")}`
+      );
+      const shellError = getShellInvocationError(options.script, shellKind);
+      if (shellError) {
+        Log.warn(`[spawnScriptPty] ${shellError}`);
+        options.onOutput(shellError);
+        resolve(1);
+        return;
+      }
 
-              // Wrap the script in its per-script override, the user's configured
-              // shell, or the auto-detected shell so PTY interactive input works.
-              // Same resolution headless inline script/condition execution uses
-              // (resolveShellInvocation), so the same script text runs under the
-              // same shell whether the step is interactive or headless.
-              const {
-                executable: shell,
-                args: shellArgs,
-                shellKind,
-                windowsVerbatimArguments,
-              } = resolveShellInvocation(options.script, options.shell);
-              Log.debug(
-                `[spawnScriptPty] resolved shell (${shellKind}): ${shell} ${shellArgs
-                  .map((a) => JSON.stringify(a))
-                  .join(" ")}`
-              );
-              const shellError = getShellInvocationError(
-                options.script,
-                shellKind
-              );
-              if (shellError) {
-                Log.warn(`[spawnScriptPty] ${shellError}`);
-                options.onOutput(shellError);
-                resolve(1);
-                return;
-              }
+      options.onSessionCreated?.(preSessionId);
+      ptyPostMessage({
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId: this.id,
+        sessionId: preSessionId,
+        stepName: options.stepName,
+        stepIndex: options.stepIndex,
+        kind: SESSION_KINDS.AI_CLI,
+        parallelGroupId: options.parallelGroupId,
+        controllerClientId: ptyManager.getExpectedController(this.id),
+      });
 
-              const controllerClientId =
-                ptyManager.getExpectedController(workflowId);
-              options.onSessionCreated?.(preSessionId);
-
-              // TERMINAL_STARTED must be sent before spawnPty so the webview
-              // session store is populated before any TERMINAL_OUTPUT arrives.
-              const terminalStartedMessage: TerminalStartedMessage = {
-                type: MESSAGE_TYPES.TERMINAL_STARTED,
-                workflowId,
-                sessionId: preSessionId,
-                stepName: options.stepName,
-                stepIndex: options.stepIndex,
-                kind: SESSION_KINDS.AI_CLI,
-                parallelGroupId: options.parallelGroupId,
-                controllerClientId,
-              };
-              ptyPostMessage(terminalStartedMessage);
-
-              try {
-                let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-                const session = ptyManager.spawnPty({
-                  workflowId,
-                  stepName: options.stepName,
-                  stepIndex: options.stepIndex,
-                  kind: SESSION_KINDS.AI_CLI,
-                  sessionId: preSessionId,
-                  parallelGroupId: options.parallelGroupId,
-                  command: shell,
-                  // cmd.exe cannot read node-pty's array re-quoting; a verbatim
-                  // payload must arrive as one pre-joined command line.
-                  args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
-                  cwd: options.cwd,
-                  env: { ...process.env, ...(options.env ?? {}) },
-                  onData: (ptySession, chunk) => {
-                    ptyPostMessage({
-                      type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                      workflowId: ptySession.workflowId,
-                      sessionId: ptySession.id,
-                      data: chunk,
-                    });
-                    // Keep raw bytes for xterm; WorkflowExecutor sanitizes the
-                    // accumulated output before display and persistence.
-                    options.onOutput(chunk);
-                  },
-                  onExit: (ptySession, exitCode) => {
-                    if (timeoutHandle !== undefined) {
-                      clearTimeout(timeoutHandle);
-                    }
-                    options.onSessionEnded?.();
-                    ptyPostMessage({
-                      type: MESSAGE_TYPES.TERMINAL_ENDED,
-                      workflowId: ptySession.workflowId,
-                      sessionId: ptySession.id,
-                      kind: ptySession.kind,
-                      exitCode,
-                    });
-                    resolve(exitCode);
-                  },
-                });
-                if (options.timeout > 0) {
-                  timeoutHandle = setTimeout(() => {
-                    Log.warn(
-                      `[spawnScriptPty] timed out after ${options.timeout}ms: ${options.stepName}`
-                    );
-                    options.onTimeout?.();
-                    ptyManager.killSession(session.id);
-                  }, options.timeout);
-                }
-              } catch (error) {
-                const message = getErrorMessage(error);
-                Log.warn(`[spawnScriptPty] ${message}`);
-                options.onSessionEnded?.();
-                ptyPostMessage({
-                  type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                  workflowId,
-                  sessionId: preSessionId,
-                  data: `${message}\r\n`,
-                });
-                ptyPostMessage({
-                  type: MESSAGE_TYPES.TERMINAL_ENDED,
-                  workflowId,
-                  sessionId: preSessionId,
-                  kind: SESSION_KINDS.AI_CLI,
-                  exitCode: 1,
-                });
-                options.onOutput(message);
-                resolve(1);
-              }
+      try {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        const session = ptyManager.spawnPty({
+          workflowId: this.id,
+          stepName: options.stepName,
+          stepIndex: options.stepIndex,
+          kind: SESSION_KINDS.AI_CLI,
+          sessionId: preSessionId,
+          parallelGroupId: options.parallelGroupId,
+          command: shell,
+          args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
+          cwd: options.cwd,
+          env: { ...process.env, ...(options.env ?? {}) },
+          onData: (session, chunk) => {
+            ptyPostMessage({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: session.workflowId,
+              sessionId: session.id,
+              data: chunk,
             });
+            options.onOutput(chunk);
           },
-    };
+          onExit: (session, exitCode) => {
+            if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+            options.onSessionEnded?.();
+            ptyPostMessage({
+              type: MESSAGE_TYPES.TERMINAL_ENDED,
+              workflowId: session.workflowId,
+              sessionId: session.id,
+              kind: session.kind,
+              exitCode,
+            });
+            resolve(exitCode);
+          },
+        });
+        if (options.timeout > 0) {
+          timeoutHandle = setTimeout(() => {
+            Log.warn(
+              `[spawnScriptPty] timed out after ${options.timeout}ms: ${options.stepName}`
+            );
+            options.onTimeout?.();
+            ptyManager.killSession(session.id);
+          }, options.timeout);
+        }
+      } catch (error) {
+        const message = getErrorMessage(error);
+        Log.warn(`[spawnScriptPty] ${message}`);
+        options.onSessionEnded?.();
+        ptyPostMessage({
+          type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+          workflowId: this.id,
+          sessionId: preSessionId,
+          data: `${message}\r\n`,
+        });
+        ptyPostMessage({
+          type: MESSAGE_TYPES.TERMINAL_ENDED,
+          workflowId: this.id,
+          sessionId: preSessionId,
+          kind: SESSION_KINDS.AI_CLI,
+          exitCode: 1,
+        });
+        options.onOutput(message);
+        resolve(1);
+      }
+    });
   }
 
   private shouldShowCliCommand(): boolean {
@@ -5296,7 +4232,9 @@ export class WorkflowInstance {
     if (error instanceof ExecutionLeaseConflictError) {
       return this.describeLeaseConflict(error);
     }
-    return getErrorMessage(error);
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).describeExecutionFailure(error);
   }
 
   /**
@@ -5311,30 +4249,9 @@ export class WorkflowInstance {
   private async describeLeaseConflict(
     error: ExecutionLeaseConflictError
   ): Promise<string> {
-    const owner = error.conflict.lease;
-    const ageSeconds = Math.max(0, Math.floor(error.conflict.ageMs / 1000));
-    const ageLabel =
-      ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`;
-
-    const ownerDescriptor = await this.lineageRepository
-      .tryReadDescriptor(owner.stateRoot, owner.workflowKey as WorkflowKey)
-      .catch(() => undefined);
-    const ownerName =
-      ownerDescriptor?.workflowName?.trim() || owner.workflowKey;
-
-    const config = this.worktreeResolution.config;
-    const target =
-      config?.mode === WORKTREE_MODES.NAMED
-        ? `named worktree "${config.branch}"`
-        : owner.mode === "exclusive-worktree"
-          ? "this worktree"
-          : "this execution directory";
-
-    return (
-      `Can't start — "${ownerName}" is still holding the lease on ${target} ` +
-      `(started ${ageLabel} ago). Close its live harness session or wait ` +
-      `for it to finish, then run this workflow again.`
-    );
+    return new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).describeLeaseConflict(error);
   }
 
   private async prepareExecutionWorktree(
@@ -5480,102 +4397,26 @@ export class WorkflowInstance {
   }
 
   private async ensureRunnerLock(workingFilePath?: string): Promise<void> {
-    if (this.currentLockOwnerToken) return;
-    const state = this.promptQueue.getState();
-    const lockWorkspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    if (
-      !workingFilePath ||
-      !state.workflowKey ||
-      !state.runRef ||
-      !lockWorkspaceRoot
-    ) {
-      return;
-    }
-    const ownerToken = WorkflowLockManager.generateOwnerToken();
-    await WorkflowLockManager.acquireLock(
-      lockWorkspaceRoot,
-      state.workflowKey,
-      {
-        schemaVersion: 2,
-        workflowKey: state.workflowKey,
-        runRef: state.runRef,
-        runner: this.runnerHostIdentity.runner,
-        pid: this.runnerHostIdentity.pid,
-        hostInstanceId: this.runnerHostIdentity.hostInstanceId,
-        executionInstanceId: this.id,
-        ownerToken,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
-      }
-    );
-    this.currentLockOwnerToken = ownerToken;
-    this.startStopRequestPolling();
-  }
-
-  private startStopRequestPolling(): void {
-    this.stopStopRequestPolling();
-    this.stopRequestPollInterval = setInterval(() => {
-      void this.pollStopRequest();
-    }, 1_000);
+    return this.runnerLockCoordinator.ensureRunnerLock(workingFilePath);
   }
 
   private stopStopRequestPolling(): void {
-    if (this.stopRequestPollInterval !== undefined) {
-      clearInterval(this.stopRequestPollInterval);
-      this.stopRequestPollInterval = undefined;
-    }
-  }
-
-  private async pollStopRequest(): Promise<void> {
-    if (this.stopRequestPollInFlight) return;
-    const state = this.promptQueue.getState();
-    const workspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    const ownerToken = this.currentLockOwnerToken;
-    if (!workspaceRoot || !state.workflowKey || !ownerToken) return;
-
-    this.stopRequestPollInFlight = true;
-    try {
-      const request = await readWorkflowStopRequest(
-        workspaceRoot,
-        state.workflowKey,
-        ownerToken
-      );
-      if (!request) return;
-
-      Log.info(
-        `[inst:${this.id.slice(0, 8)}] honoring stop request ${request.requestId}`
-      );
-      await this.stop();
-      await deleteWorkflowStopRequest(
-        workspaceRoot,
-        state.workflowKey,
-        ownerToken
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] failed to honor stop request:`,
-        error
-      );
-    } finally {
-      this.stopRequestPollInFlight = false;
-    }
+    this.runnerLockCoordinator.stopStopRequestPolling();
   }
 
   private async releaseRunnerLock(): Promise<void> {
-    const state = this.promptQueue.getState();
-    const lockWorkspaceRoot =
-      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    const ownerToken = this.currentLockOwnerToken;
-    if (!lockWorkspaceRoot || !state.workflowKey || !ownerToken) return;
-    this.currentLockOwnerToken = undefined;
-    this.stopStopRequestPolling();
-    await WorkflowLockManager.releaseLock(
-      lockWorkspaceRoot,
-      state.workflowKey,
-      ownerToken
-    );
+    return this.runnerLockCoordinator.releaseRunnerLock();
+  }
+
+  private startRunnerLockHeartbeat(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): void {
+    this.runnerLockCoordinator.startHeartbeat(workspaceRoot, workflowKey);
+  }
+
+  private stopRunnerLockHeartbeat(): void {
+    this.runnerLockCoordinator.stopHeartbeat();
   }
 
   private async startWorkflowExecution(
@@ -5584,443 +4425,352 @@ export class WorkflowInstance {
     workingFilePath?: string,
     targetRunIndices?: Map<string, number>
   ): Promise<void> {
-    if (this.startPending) {
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] Workflow start already pending, skipping duplicate start request`
-      );
-      return;
-    }
-
-    this.startPending = true;
-    this.executionSettledPromise = new Promise<void>((resolve) => {
-      this.resolveExecutionSettled = resolve;
-    });
-    this.startedAt = Date.now();
-    this.activeHistoryFilePath = historyFilePath;
-    this.activeRunRedactor = new RunSecretRedactor();
-    this.releaseActiveRunRedactor?.();
-    this.releaseActiveRunRedactor = secretRedactionService.register(
-      this.activeRunRedactor
+    await new WorkflowStartupPipeline(
+      this.createWorkflowStartupPipelinePort()
+    ).startWorkflowExecution(
+      integration,
+      historyFilePath,
+      workingFilePath,
+      targetRunIndices
     );
+  }
 
-    // Close any terminals left open from the previous run. With
-    // closeTerminalWhenPromptCompletes=false, dispose() only kills the process
-    // and leaves the terminal visible. When a new run starts (restart, resume,
-    // or prompt-append auto-start) the previous run's CliProcessManager is gone
-    // so createFreshTerminal() can't find and close the old terminal — we must
-    // do it explicitly here before the new integration opens its own terminal.
-    for (const prev of this.lastRunIntegrations) {
-      prev.closeTerminal();
+  private async restoreRetainedExecutionIntegrations(): Promise<void> {
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveInjectIntegrations.size}`
+    );
+    for (const [integrationKey, liveIntegration] of this
+      .liveInjectIntegrations) {
+      if (!this.canReuseExecutionIntegration(liveIntegration)) {
+        this.liveInjectIntegrations.delete(integrationKey);
+        await this.cleanupRetainedIntegrationArtifacts(
+          integrationKey,
+          liveIntegration
+        );
+        liveIntegration.closeTerminalGracefully();
+        liveIntegration.dispose();
+        continue;
+      }
+      liveIntegration.resetForNewRun();
+      this.executionIntegrations.set(integrationKey, liveIntegration);
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] Restored live inject integration (key=${integrationKey}) at workflow start`
+      );
     }
-    this.lastRunIntegrations = [];
+    this.liveInjectIntegrations.clear();
+  }
 
-    const workflowKey = this.promptQueue.getState().workflowKey;
-    const runRef = this.promptQueue.getState().runRef;
-    this.executionRunRef = runRef;
-    const lockWorkspaceRoot =
+  private async settleWorkflowExecution(options: {
+    historyFilePath: string;
+    workingFilePath: string | undefined;
+  }): Promise<void> {
+    const paused =
+      this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
+      this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
+    const pausedWorktreeReservation =
+      paused && Boolean(this.executionWorkspace.worktree);
+    const namedWorktreeInjectRetention =
+      !paused &&
+      this.activeWorktree?.mode === "named" &&
+      ConfigurationUtils.isInjectModeEnabled() &&
+      Array.from(this.executionIntegrations.values()).some((integration) =>
+        integration.canReuseForInject()
+      );
+    const preserveWorktreeReservation =
+      pausedWorktreeReservation || namedWorktreeInjectRetention;
+    const terminalWorktreeRun =
+      !preserveWorktreeReservation && Boolean(this.activeWorktree);
+    const managedTerminalRun =
+      terminalWorktreeRun &&
+      this.activeWorktree?.mode === WORKTREE_MODES.MANAGED;
+    const workspaceRoot =
       this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    let activeIntegration: HarnessIntegration | undefined;
+    const integrationCleanup = await this.settleExecutionIntegrations(
+      options,
+      preserveWorktreeReservation,
+      terminalWorktreeRun,
+      workspaceRoot
+    );
+    const retainedCleanup = await this.settleRetainedIntegrations(
+      options,
+      terminalWorktreeRun,
+      workspaceRoot,
+      integrationCleanup.strictArtifactCleanupSucceeded,
+      integrationCleanup.strictArtifactCleanupMessage
+    );
+    await this.settleActiveExecutionWorktree(
+      terminalWorktreeRun,
+      managedTerminalRun,
+      retainedCleanup.strictArtifactCleanupSucceeded,
+      retainedCleanup.strictArtifactCleanupMessage
+    );
+    await this.releaseExecutionReservations(
+      preserveWorktreeReservation,
+      managedTerminalRun
+    );
+    await this.finishExecutionHistory(options.historyFilePath);
+  }
 
-    try {
-      await this.ensureRunnerLock(workingFilePath);
-      if (
-        workingFilePath &&
-        workflowKey &&
-        runRef &&
-        lockWorkspaceRoot &&
-        !this.executionLease
-      ) {
-        this.executionLease = await ExecutionRootLeaseManager.acquireLease({
-          mode: "shared-native",
-          pid: process.pid,
-          runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
-          instanceId: this.id,
-          stateRoot: this.executionWorkspace.stateRoot,
-          executionRoot: this.executionWorkspace.executionRoot,
-          workflowKey,
-          runRef,
-        });
-      }
-
-      // Runner and execution leases share one heartbeat cadence. The lease is
-      // acquired after the lineage lock and released before it, preserving the
-      // global coordination order.
-      if (this.currentLockOwnerToken || this.executionLease) {
-        this.heartbeatInterval = setInterval(() => {
-          if (this.currentLockOwnerToken) {
-            WorkflowLockManager.updateHeartbeat(
-              lockWorkspaceRoot!,
-              workflowKey!,
-              this.currentLockOwnerToken
-            ).catch(() => {});
-          }
-          this.executionLease?.updateHeartbeat().catch(() => {});
-        }, HEARTBEAT_INTERVAL_MS);
-      }
-
-      // Re-insert all live integrations saved from the previous execution pass
-      // (inject mode with PTY still alive) into executionIntegrations so
-      // createIntegrationForMode finds and returns the correct one. "Pass" is
-      // deliberate: this never spans a RunRef — a new run disposes every entry
-      // first via closeRetainedTerminalsForFreshRun. This keeps each PTY connection and lastInteractiveContext intact,
-      // enabling immediate inject regardless of which harness the next prompt targets.
-      // Any remaining liveInjectIntegrations entries that weren't consumed by
-      // createIntegrationForMode() above are restored here. This covers entry
-      // paths where startWorkflowExecution() is reached before a run-specific
-      // integration is chosen, plus multi-harness workflows whose first prompt
-      // is not the default harness.
-      // The map may already be empty when executeLoadedPromptFile consumed the
-      // retained default harness. Entries for other harnesses are expected in
-      // same-run multi-harness and per-step override continuations.
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: retained same-run integrations available=${this.liveInjectIntegrations.size}`
-      );
-      for (const [
-        integrationKey,
-        liveIntegration,
-      ] of this.liveInjectIntegrations.entries()) {
-        if (!this.canReuseExecutionIntegration(liveIntegration)) {
-          this.liveInjectIntegrations.delete(integrationKey);
-          await this.cleanupRetainedIntegrationArtifacts(
-            integrationKey,
-            liveIntegration
-          );
-          liveIntegration.closeTerminalGracefully();
-          liveIntegration.dispose();
-          continue;
-        }
-        liveIntegration.resetForNewRun();
-        this.executionIntegrations.set(integrationKey, liveIntegration);
-        Log.info(
-          `[inst:${this.id.slice(0, 8)}] Restored live inject integration (key=${integrationKey}) at workflow start`
-        );
-      }
-      this.liveInjectIntegrations.clear();
-
-      activeIntegration = integration || this.createIntegrationForMode();
-      this.registerTargetIntegration(
-        {
-          kind: FINAL_STEP_PHASES.QUEUE,
-          stepIndex: this.promptQueue.getState().currentIndex,
-        },
-        activeIntegration
-      );
-
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: historyFilePath="${historyFilePath}"`
-      );
-      // A promoted run always has a manifest, so an empty path here means every
-      // history write for this execution will silently no-op — the run finishes
-      // on disk while its manifest keeps whatever state it had before. Loud,
-      // because the symptom (run panel disagreeing with the header) only shows
-      // up much later and nowhere near this code.
-      if (!historyFilePath) {
-        const { workflowKey, runRef } = this.promptQueue.getState();
-        if (workflowKey && runRef) {
-          Log.error(
-            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: no history file for promoted run ` +
-              `${workflowKey}/${runRef} — timeline and manifest writes will be skipped for this execution`
-          );
-        }
-      }
-      const workflowContext = this.buildWorkflowExecutionContext(
-        activeIntegration,
-        historyFilePath,
-        workingFilePath,
-        targetRunIndices
-      );
-
-      await this.workflowExecutor.execute(activeIntegration, workflowContext);
-    } finally {
-      const paused =
-        this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
-        this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
-      const pausedWorktreeReservation =
-        paused && Boolean(this.executionWorkspace.worktree);
-      // Named worktrees are user-owned: ctrlyoke never auto-commits, merges, or
-      // removes them, so — unlike managed mode, whose finalization auto-commits
-      // and may delete the directory — nothing requires the working tree to be
-      // quiescent once the queue empties. When a live inject-capable PTY is
-      // still running, keep the lease/PTY alive for a possible follow-up prompt
-      // instead of tearing everything down, mirroring how a pause preserves the
-      // reservation. Only the lease/lock stay reserved this way; the per-run
-      // callback below disposes the integration and releases both reservations
-      // once the user closes the last retained terminal or the process exits.
-      const namedWorktreeInjectRetention =
-        !paused &&
-        this.activeWorktree?.mode === "named" &&
-        ConfigurationUtils.isInjectModeEnabled() &&
-        Array.from(this.executionIntegrations.values()).some((integration) =>
-          integration.canReuseForInject()
-        );
-      const preserveWorktreeReservation =
-        pausedWorktreeReservation || namedWorktreeInjectRetention;
-      const terminalWorktreeRun =
-        !preserveWorktreeReservation && Boolean(this.activeWorktree);
-      const managedTerminalRun =
-        terminalWorktreeRun &&
-        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED;
-      let strictArtifactCleanupSucceeded = true;
-      let strictArtifactCleanupMessage: string | undefined;
-
-      // Pause is not terminal for a worktree run. Keep the runner lock, the
-      // exclusive lease, and their heartbeat until the loaded instance resumes
-      // or the process dies and stale-lock recovery takes over. The same is
-      // true when a named worktree's PTY is being kept alive for inject.
-      // Dispose all execution integrations created for this run, unless they have
-      // a live PTY with inject context — those are saved to liveInjectIntegrations
-      // so the next run can reuse them without re-spawning.
-      this.lastRunIntegrations = [];
-      const workspaceRoot =
-        this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
-      );
-      const executionIntegrationEntries = [
-        ...this.executionIntegrations.entries(),
-        ...Array.from(
-          this.unkeyedExecutionIntegrations,
-          (execIntegration, index) =>
-            [`unkeyed:${index}`, execIntegration] as const
-        ),
-      ];
-      for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
-        const isUnkeyedIntegration =
-          this.unkeyedExecutionIntegrations.has(execIntegration);
-        const retainIntegration =
-          !isUnkeyedIntegration &&
-          ((preserveWorktreeReservation &&
-            execIntegration.canReuseForInject()) ||
-            (!this.executionWorkspace.worktree &&
-              (execIntegration.canReuseForInject() ||
-                execIntegration.shouldPersistForSessionActivity())));
-        if (retainIntegration) {
-          // Either the PTY is still alive with inject context set (CLI), or the
-          // integration wants to stay alive for its own post-completion session
-          // watcher (non-PTY harness). Keep it alive for the next run rather
-          // than destroying it. Store under the same map key so the restore code
-          // can insert it where createIntegrationForMode looks. Register a
-          // one-shot exit callback so we dispose it if the terminal is killed
-          // between runs (no-op for non-PTY harnesses).
-          this.liveInjectIntegrations.set(harnessKey, execIntegration);
-          if (
-            workspaceRoot &&
-            execIntegration.shouldRetainWorkflowArtifactsForReuse()
-          ) {
-            this.retainedIntegrationArtifactContexts.set(harnessKey, {
-              integration: execIntegration,
-              workingFilePath,
-              workspaceRoot:
-                execIntegration.getExecutionRoot() ?? workspaceRoot,
-            });
-          } else {
-            await this.cleanupRetainedIntegrationArtifacts(
-              harnessKey,
-              execIntegration,
-              workingFilePath,
-              workspaceRoot
-            );
-          }
-          execIntegration.onPtySessionEnded(() => {
-            if (
-              this.liveInjectIntegrations.get(harnessKey) === execIntegration
-            ) {
-              this.liveInjectIntegrations.delete(harnessKey);
-            }
-            void this.cleanupRetainedIntegrationArtifacts(
-              harnessKey,
-              execIntegration
-            ).finally(() => {
-              execIntegration.dispose();
-              void this.releaseNamedWorktreeRetentionAfterPtyExit();
-            });
+  private async settleExecutionIntegrations(
+    options: { historyFilePath: string; workingFilePath: string | undefined },
+    preserveWorktreeReservation: boolean,
+    terminalWorktreeRun: boolean,
+    workspaceRoot: string
+  ): Promise<{
+    strictArtifactCleanupSucceeded: boolean;
+    strictArtifactCleanupMessage: string | undefined;
+  }> {
+    let strictArtifactCleanupSucceeded = true;
+    let strictArtifactCleanupMessage: string | undefined;
+    this.lastRunIntegrations = [];
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
+    );
+    const executionIntegrationEntries = [
+      ...this.executionIntegrations.entries(),
+      ...Array.from(
+        this.unkeyedExecutionIntegrations,
+        (execIntegration, index) =>
+          [`unkeyed:${index}`, execIntegration] as const
+      ),
+    ];
+    for (const [harnessKey, execIntegration] of executionIntegrationEntries) {
+      const isUnkeyedIntegration =
+        this.unkeyedExecutionIntegrations.has(execIntegration);
+      const retainIntegration =
+        !isUnkeyedIntegration &&
+        ((preserveWorktreeReservation && execIntegration.canReuseForInject()) ||
+          (!this.executionWorkspace.worktree &&
+            (execIntegration.canReuseForInject() ||
+              execIntegration.shouldPersistForSessionActivity())));
+      if (retainIntegration) {
+        // Either the PTY is still alive with inject context set (CLI), or the
+        // integration wants to stay alive for its own post-completion session
+        // watcher (non-PTY harness). Keep it alive for the next run rather
+        // than destroying it. Store under the same map key so the restore code
+        // can insert it where createIntegrationForMode looks. Register a
+        // one-shot exit callback so we dispose it if the terminal is killed
+        // between runs (no-op for non-PTY harnesses).
+        this.liveInjectIntegrations.set(harnessKey, execIntegration);
+        if (
+          workspaceRoot &&
+          execIntegration.shouldRetainWorkflowArtifactsForReuse()
+        ) {
+          this.retainedIntegrationArtifactContexts.set(harnessKey, {
+            integration: execIntegration,
+            workingFilePath: options.workingFilePath,
+            workspaceRoot: execIntegration.getExecutionRoot() ?? workspaceRoot,
           });
         } else {
-          // A worktree-targeted terminal run cannot park a PTY or watcher:
-          // cleanup is the barrier that makes the lease safe to release.
-          // Dispose first so no background reader can recreate an artifact
-          // while provider cleanup is proving the directory clean.
-          if (terminalWorktreeRun) {
-            execIntegration.closeTerminalGracefully();
-            execIntegration.dispose();
-          }
-          const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+          await this.cleanupRetainedIntegrationArtifacts(
             harnessKey,
             execIntegration,
-            workingFilePath,
-            execIntegration.getExecutionRoot() ?? workspaceRoot,
-            terminalWorktreeRun
+            options.workingFilePath,
+            workspaceRoot
           );
-          if (!cleanup.cleaned) {
-            strictArtifactCleanupSucceeded = false;
-            strictArtifactCleanupMessage = [
-              strictArtifactCleanupMessage,
-              cleanup.message,
-            ]
-              .filter(Boolean)
-              .join("; ");
-          }
-          // Normal path: terminal closed or inject mode not active — dispose now
-          // and save so the next run can close any VS Code terminal tab left open.
-          if (!terminalWorktreeRun) {
-            this.lastRunIntegrations.push(execIntegration);
-            execIntegration.dispose();
-          }
         }
-      }
-      this.executionIntegrations.clear();
-      this.unkeyedExecutionIntegrations.clear();
-
-      for (const targetIntegration of this.targetExecutionIntegrations.values()) {
-        targetIntegration.closeTerminalGracefully();
-        targetIntegration.dispose();
-      }
-      this.targetExecutionIntegrations.clear();
-      for (const runner of this.targetScriptProcessRunners.values()) {
-        runner.dispose();
-      }
-      this.targetScriptProcessRunners.clear();
-      this.activeTargetResources.clear();
-
-      // A retained entry can survive an unusual handoff path even when it was
-      // not reinserted into executionIntegrations. It is still part of the
-      // worktree cleanup barrier and must never outlive the lease.
-      if (terminalWorktreeRun) {
-        for (const [harnessKey, retained] of this.liveInjectIntegrations) {
-          retained.closeTerminalGracefully();
-          retained.dispose();
-          const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+        execIntegration.onPtySessionEnded(() => {
+          if (this.liveInjectIntegrations.get(harnessKey) === execIntegration) {
+            this.liveInjectIntegrations.delete(harnessKey);
+          }
+          void this.cleanupRetainedIntegrationArtifacts(
             harnessKey,
-            retained,
-            workingFilePath,
-            retained.getExecutionRoot() ?? workspaceRoot,
-            true
-          );
-          if (!cleanup.cleaned) {
-            strictArtifactCleanupSucceeded = false;
-            strictArtifactCleanupMessage = [
-              strictArtifactCleanupMessage,
-              cleanup.message,
-            ]
-              .filter(Boolean)
-              .join("; ");
-          }
+            execIntegration
+          ).finally(() => {
+            execIntegration.dispose();
+            void this.releaseNamedWorktreeRetentionAfterPtyExit();
+          });
+        });
+      } else {
+        // A worktree-targeted terminal run cannot park a PTY or watcher:
+        // cleanup is the barrier that makes the lease safe to release.
+        // Dispose first so no background reader can recreate an artifact
+        // while provider cleanup is proving the directory clean.
+        if (terminalWorktreeRun) {
+          execIntegration.closeTerminalGracefully();
+          execIntegration.dispose();
         }
-        this.liveInjectIntegrations.clear();
-      }
-
-      if (terminalWorktreeRun && this.activeWorktree) {
-        const worktree = this.activeWorktree;
-        // Runtime trust is only needed while integrations are live. Remove it
-        // before the Git landing guard/commit, as required by finalization order.
-        this.worktreeManager.releaseRuntimeTrust(worktree);
-        if (managedTerminalRun) {
-          try {
-            await this.worktreeManager.completeManagedRun(worktree, {
-              merge: this.worktreeResolution.config?.merge === true,
-              keep: this.worktreeResolution.config?.keep === true,
-              artifactsClean: strictArtifactCleanupSucceeded,
-              cleanupMessage: strictArtifactCleanupMessage,
-            });
-          } catch (error) {
-            Log.error(
-              `[inst:${this.id.slice(0, 8)}] Managed worktree settlement failed:`,
-              error
-            );
-            await worktree.lease?.release().catch(() => undefined);
-          }
-        }
-        if (managedTerminalRun) {
-          this.executionLease = undefined;
-        }
-        this.activeWorktree = undefined;
-      }
-
-      // A worktree lease is released only after every process, watcher,
-      // sidecar, and workspace artifact owned by the run is gone. Otherwise a
-      // retained integration could still mutate a directory after its lease
-      // was handed to another run.
-      if (
-        !preserveWorktreeReservation &&
-        this.heartbeatInterval !== undefined
-      ) {
-        clearInterval(this.heartbeatInterval);
-        this.heartbeatInterval = undefined;
-        this.stopStopRequestPolling();
-      }
-      if (
-        !preserveWorktreeReservation &&
-        !managedTerminalRun &&
-        this.executionLease
-      ) {
-        const lease = this.executionLease;
-        this.executionLease = undefined;
-        await lease
-          .release()
-          .catch((err) =>
-            Log.warn(
-              `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release execution lease:`,
-              err
-            )
-          );
-      }
-      if (
-        !preserveWorktreeReservation &&
-        workflowKey &&
-        lockWorkspaceRoot &&
-        this.currentLockOwnerToken
-      ) {
-        const ownerToken = this.currentLockOwnerToken;
-        this.currentLockOwnerToken = undefined;
-        this.stopStopRequestPolling();
-        await WorkflowLockManager.releaseLock(
-          lockWorkspaceRoot,
-          workflowKey,
-          ownerToken
-        ).catch((err) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
-            err
-          )
+        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+          harnessKey,
+          execIntegration,
+          options.workingFilePath,
+          execIntegration.getExecutionRoot() ?? workspaceRoot,
+          terminalWorktreeRun
         );
+        if (!cleanup.cleaned) {
+          strictArtifactCleanupSucceeded = false;
+          strictArtifactCleanupMessage = [
+            strictArtifactCleanupMessage,
+            cleanup.message,
+          ]
+            .filter(Boolean)
+            .join("; ");
+        }
+        // Normal path: terminal closed or inject mode not active — dispose now
+        // and save so the next run can close any VS Code terminal tab left open.
+        if (!terminalWorktreeRun) {
+          this.lastRunIntegrations.push(execIntegration);
+          execIntegration.dispose();
+        }
       }
+    }
+    this.executionIntegrations.clear();
+    this.unkeyedExecutionIntegrations.clear();
 
-      await this.pendingRuntimeTransitionHistoryWrite;
+    for (const targetIntegration of this.targetExecutionIntegrations.values()) {
+      targetIntegration.closeTerminalGracefully();
+      targetIntegration.dispose();
+    }
+    this.targetExecutionIntegrations.clear();
+    for (const runner of this.targetScriptProcessRunners.values()) {
+      runner.dispose();
+    }
+    this.targetScriptProcessRunners.clear();
+    this.activeTargetResources.clear();
 
-      if (historyFilePath) {
-        const runStepCount = this.promptQueue.getProgress().total;
-        await this.outputHistoryManager
-          .finalizeRun(
-            historyFilePath,
-            this.getAuthoritativeExecutionState() as Parameters<
-              OutputHistoryManager["finalizeRun"]
-            >[1],
-            runStepCount,
-            this.promptQueue.getState().totalExecutionTime
-          )
-          .catch((err) =>
-            Log.warn(
-              `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
-              err
-            )
+    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+  }
+
+  private async settleRetainedIntegrations(
+    options: { historyFilePath: string; workingFilePath: string | undefined },
+    terminalWorktreeRun: boolean,
+    workspaceRoot: string,
+    strictArtifactCleanupSucceeded: boolean,
+    strictArtifactCleanupMessage: string | undefined
+  ): Promise<{
+    strictArtifactCleanupSucceeded: boolean;
+    strictArtifactCleanupMessage: string | undefined;
+  }> {
+    // A retained entry can survive an unusual handoff path even when it was
+    // not reinserted into executionIntegrations. It is still part of the
+    // worktree cleanup barrier and must never outlive the lease.
+    if (terminalWorktreeRun) {
+      for (const [harnessKey, retained] of this.liveInjectIntegrations) {
+        retained.closeTerminalGracefully();
+        retained.dispose();
+        const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+          harnessKey,
+          retained,
+          options.workingFilePath,
+          retained.getExecutionRoot() ?? workspaceRoot,
+          true
+        );
+        if (!cleanup.cleaned) {
+          strictArtifactCleanupSucceeded = false;
+          strictArtifactCleanupMessage = [
+            strictArtifactCleanupMessage,
+            cleanup.message,
+          ]
+            .filter(Boolean)
+            .join("; ");
+        }
+      }
+      this.liveInjectIntegrations.clear();
+    }
+
+    return { strictArtifactCleanupSucceeded, strictArtifactCleanupMessage };
+  }
+
+  private async settleActiveExecutionWorktree(
+    terminalWorktreeRun: boolean,
+    managedTerminalRun: boolean,
+    strictArtifactCleanupSucceeded: boolean,
+    strictArtifactCleanupMessage: string | undefined
+  ): Promise<void> {
+    if (terminalWorktreeRun && this.activeWorktree) {
+      const worktree = this.activeWorktree;
+      // Runtime trust is only needed while integrations are live. Remove it
+      // before the Git landing guard/commit, as required by finalization order.
+      this.worktreeManager.releaseRuntimeTrust(worktree);
+      if (managedTerminalRun) {
+        try {
+          await this.worktreeManager.completeManagedRun(worktree, {
+            merge: this.worktreeResolution.config?.merge === true,
+            keep: this.worktreeResolution.config?.keep === true,
+            artifactsClean: strictArtifactCleanupSucceeded,
+            cleanupMessage: strictArtifactCleanupMessage,
+          });
+        } catch (error) {
+          Log.error(
+            `[inst:${this.id.slice(0, 8)}] Managed worktree settlement failed:`,
+            error
           );
+          await worktree.lease?.release().catch(() => undefined);
+        }
       }
-      this.releaseActiveRunRedactor?.();
-      this.releaseActiveRunRedactor = undefined;
-      this.activeRunRedactor = undefined;
-      this.startPending = false;
-      this.resolveExecutionSettled?.();
-      this.resolveExecutionSettled = undefined;
+      if (managedTerminalRun) {
+        this.executionLease = undefined;
+      }
+      this.activeWorktree = undefined;
     }
   }
 
-  /**
-   * A completed named-worktree run can keep its PTY, execution-root lease, and
-   * lineage lock alive for inject reuse. Once the last retained PTY exits,
-   * those reservations no longer protect anything and must be released
-   * immediately. In particular, leaving the runner heartbeat alive makes this
-   * instance's own completed run look like a conflicting external executor.
-   */
+  private async releaseExecutionReservations(
+    preserveWorktreeReservation: boolean,
+    managedTerminalRun: boolean
+  ): Promise<void> {
+    // A worktree lease is released only after every process, watcher,
+    // sidecar, and workspace artifact owned by the run is gone. Otherwise a
+    // retained integration could still mutate a directory after its lease
+    // was handed to another run.
+    if (!preserveWorktreeReservation) {
+      this.stopRunnerLockHeartbeat();
+      this.stopStopRequestPolling();
+    }
+    if (
+      !preserveWorktreeReservation &&
+      !managedTerminalRun &&
+      this.executionLease
+    ) {
+      const lease = this.executionLease;
+      this.executionLease = undefined;
+      await lease
+        .release()
+        .catch((err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release execution lease:`,
+            err
+          )
+        );
+    }
+    if (!preserveWorktreeReservation) {
+      await this.releaseRunnerLock().catch((err) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
+          err
+        )
+      );
+    }
+  }
+
+  private async finishExecutionHistory(historyFilePath: string): Promise<void> {
+    await this.pendingRuntimeTransitionHistoryWrite;
+
+    if (historyFilePath) {
+      const runStepCount = this.promptQueue.getProgress().total;
+      await this.outputHistoryManager
+        .finalizeRun(
+          historyFilePath,
+          this.getAuthoritativeExecutionState() as Parameters<
+            OutputHistoryManager["finalizeRun"]
+          >[1],
+          runStepCount,
+          this.promptQueue.getState().totalExecutionTime
+        )
+        .catch((err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] Failed to finalize history run:`,
+            err
+          )
+        );
+    }
+    this.releaseActiveRunRedactor?.();
+    this.releaseActiveRunRedactor = undefined;
+    this.activeRunRedactor = undefined;
+    this.startPending = false;
+    this.resolveExecutionSettled?.();
+    this.resolveExecutionSettled = undefined;
+  }
   private async releaseNamedWorktreeRetentionAfterPtyExit(): Promise<void> {
     const status = this.workflowRuntime.status;
     const executionStillOwnsReservation =
@@ -6042,9 +4792,8 @@ export class WorkflowInstance {
 
     this.worktreeManager.releaseRuntimeTrust(worktree);
     this.activeWorktree = undefined;
-    if (this.heartbeatInterval !== undefined) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = undefined;
+    if (this.runnerLockCoordinator.ownsLock() || this.executionLease) {
+      this.stopRunnerLockHeartbeat();
       this.stopStopRequestPolling();
     }
 

@@ -14,7 +14,6 @@ import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { createPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
-  buildDefinitionSnapshot,
   buildEphemeralWorkflowStep,
   buildPromptStepProperties,
   buildScriptStepFromProperties,
@@ -38,51 +37,36 @@ import {
   type WorktreeRunProjection,
   type WorkspaceWorktreeOwnership,
   projectWorktreeRuntime,
-  workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
-  ACTIVE_EXECUTION_STATES,
-  EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   HARNESS_IDS,
-  FINAL_STEP_PHASES,
-  OUTPUT_HISTORY_KINDS,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   RUNNER_IDS,
   STEP_TYPES,
-  TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_EDIT_KINDS,
   WORKTREE_BRANCH_STATES,
   WORKTREE_MODES,
-  WORKFLOW_LOCK_LIVENESS,
-  WORKFLOW_LOCK_LOCALITIES,
   type EndConditionScriptType,
   type HarnessId,
   type QueuePosition,
   type ActionType,
-  type StepStatus,
-  type FinalStepPhase,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
-import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   DisposableRegistry,
-  FileWatcher,
   FileWatcherFactory,
   KeyValueStore,
   StatusBarSink,
 } from "./HostPorts";
 import type {
-  CliOutput,
   ActiveTerminalWorkflowRef,
-  RunViewLoadedMessage,
-  RunSummariesLoadedMessage,
   WorkflowDefinitionMutation,
   WorkflowViewIdentityMessage,
   ExecutionPreviewScope,
@@ -96,27 +80,17 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
-import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
-import {
-  ExternalRunWatchSession,
-  type ExternalRunWatchFinishReason,
-} from "./orchestration/ExternalRunWatchSession";
-import {
-  deriveStepStatusesFromRuntime,
-  type StepWithRuntimeStatus,
-} from "../utils/StepStatusDerivation";
 import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
 } from "./orchestration/ExecutionRootCoordinationWatchSession";
+import type { ExternalExecutionResolution } from "./orchestration/ExternalExecutionResolver";
 import {
-  ExternalExecutionResolver,
-  type ActiveExternalLockInspection,
-  type ExternalExecutionResolution,
-} from "./orchestration/ExternalExecutionResolver";
-import { readWorkflowLockOwnershipInspection } from "../utils/WorkflowLockInspector";
+  ExternalRunWatchCoordinator,
+  type ExternalRunWatchInstance,
+} from "./orchestration/ExternalRunWatchCoordinator";
 import {
   deleteWorkflowStopRequest,
   waitForWorkflowStopRequestPickup,
@@ -134,6 +108,22 @@ import {
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
+import {
+  WorkflowInstanceRegistry,
+  type LineageExecutionClaim,
+  lineageAddressOf,
+} from "./orchestration/WorkflowInstanceRegistry";
+import {
+  RunViewPublisher,
+  type DefinitionRollbackInvalidation,
+  type StepColorInvalidation,
+  sameViewAddress,
+} from "./orchestration/RunViewPublisher";
+import {
+  RunLifecycleService,
+  type ExplicitContinuationValidation,
+  type RunLifecycleViewPort,
+} from "./orchestration/RunLifecycleService";
 import {
   WorktreeManager,
   type WorktreeInfo,
@@ -163,15 +153,14 @@ import { TypedEmitter } from "../utils/TypedEmitter";
  *
  * Manages the registry of WorkflowInstance objects and owns resources that
  * are shared or orchestrator-scoped:
- *   - Four harness integrations (created once, shared for Phase 1)
+ *   - Six harness integrations (created once and shared by workflow instances)
  *   - injected host services
  *   - WorkflowCommandHandler
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
  *
- * Phase 1: Always holds exactly one WorkflowInstance (the active one).
- * Phase 2: Will hold many instances in parallel; `activeWorkflowId` decides
- *          which one is displayed in the dashboard.
+ * Holds active and retired workflow instances in registry-owned maps; the
+ * active workflow ID decides which one is displayed in the dashboard.
  */
 
 /**
@@ -187,66 +176,6 @@ function sameWorkingFilePath(
 ): boolean {
   if (a == null || b == null) return a === b;
   return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
-}
-
-/**
- * Whether a resident instance still owns an execution for its lineage.
- *
- * Instances can remain resident while idle (for example, after startup
- * restoration), so registry membership alone must not be interpreted as a
- * running workflow.
- */
-function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.RUNNING ||
-    status === EXECUTION_STATES.PAUSING ||
-    status === EXECUTION_STATES.PAUSED ||
-    status === EXECUTION_STATES.CANCELLING
-  );
-}
-
-/**
- * Whether an instance has finished the execution it was prepared for. Used to
- * expire a `lineageExecutionOwners` entry on read: nothing deletes those
- * entries, so a spent one must not keep outranking the lineage's other
- * residents. A status-less instance (lightweight test double) is not finished.
- */
-function isSpentExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.COMPLETED ||
-    status === EXECUTION_STATES.ERROR ||
-    status === EXECUTION_STATES.STOPPED
-  );
-}
-
-/**
- * A `lineageExecutionOwners` entry. `promoted` is false from the moment a run
- * action parks its incoming instance until that instance's own state
- * transitions into an execution-owner state at least once — only then can a
- * later terminal status mean "this claim's run is over" rather than "this
- * instance's *previous* run left it terminal, and the one it was just
- * prepared for has not started yet". Continuing an already-completed run
- * reuses that same retired instance, so at claim time its status is still
- * whatever the prior run left it at (typically COMPLETED) — unlike a Re-run's
- * freshly built instance, which starts IDLE. Without the `promoted` gate,
- * `isSpentExecutionOwnerState` cannot tell those two apart and discards the
- * still-valid claim, letting some other resident of the lineage (e.g. a live
- * idle instance browsing another run) win the tie-break instead.
- */
-interface LineageExecutionClaim {
-  instanceId: string;
-  promoted: boolean;
-}
-
-interface DefinitionRollbackInvalidation {
-  fromRevision: number;
-  restoredRevision: number;
-  descriptorRevision: number;
-}
-
-interface StepColorInvalidation {
-  kind: "stepColor";
-  index: number;
 }
 
 function buildPromptStepChange(
@@ -278,57 +207,8 @@ function buildPromptStepChange(
  * the lineage has never executed, otherwise the run it holds open. `null` until
  * the instance has a lineage at all (a blank, never-edited new workflow).
  */
-/** Structural equality for two stable client view addresses. */
-function sameViewAddress(
-  a: WorkflowViewAddress | null | undefined,
-  b: WorkflowViewAddress | null | undefined
-): boolean {
-  if (!a || !b) return false;
-  if (a.workflowKey !== b.workflowKey || a.kind !== b.kind) return false;
-  return (
-    a.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-    (b.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && a.runRef === b.runRef)
-  );
-}
-
-function lineageAddressOf(
-  state: QueueState | undefined
-): WorkflowViewAddress | null {
-  if (!state?.workflowKey) return null;
-  return state.runRef
-    ? {
-        workflowKey: state.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef: state.runRef,
-      }
-    : {
-        workflowKey: state.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-      };
-}
-
 interface WorkflowReplayOptions {
   skipTerminalReplay?: boolean;
-}
-
-/**
- * The half of a run-view snapshot that depends only on the address, so every
- * client viewing that address receives identical values.
- *
- * Reading it is by far the most expensive part of a view load — `getRunSummaries`
- * alone reads a manifest *and* a working file for every run in the lineage, and
- * the addressed run's timeline is read on top of that. A fan-out to several
- * clients therefore reads this once and shares it (`publishRunViewToClients`).
- * Delivery treats it as immutable: it is handed to more than one sink, so
- * nothing may mutate a field here after `readAddressedRunView` returns.
- */
-interface AddressedRunView {
-  workingFile: WorkingFile;
-  history: RunViewLoadedMessage["history"];
-  runSummaries: RunViewLoadedMessage["runSummaries"];
-  workflowProperties: RunViewLoadedMessage["workflowProperties"];
-  descriptorRevision: number;
-  isSystemGenerated: boolean;
 }
 
 export interface WorkflowOrchestratorDependencies {
@@ -353,63 +233,278 @@ export interface WorkflowOrchestratorDependencies {
   userInteractionPort?: UserInteractionPort;
 }
 
-export type ResumableSession =
-  Awaited<ReturnType<WorkspaceSessionManager["discoverSessions"]>>[number];
+export type ResumableSession = Awaited<
+  ReturnType<WorkspaceSessionManager["discoverSessions"]>
+>[number];
 
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Instance registry — running/paused instances plus idle instances loaded via browser client.
-   * Keyed by WorkflowInstance.id (UUID). */
-  private readonly instances: Map<string, WorkflowInstance> = new Map();
+  private workflowInstanceRegistryInstance?: WorkflowInstanceRegistry;
+  private get workflowInstanceRegistry(): WorkflowInstanceRegistry {
+    return (this.workflowInstanceRegistryInstance ??=
+      this.createWorkflowInstanceRegistry());
+  }
+  private set workflowInstanceRegistry(value: WorkflowInstanceRegistry) {
+    this.workflowInstanceRegistryInstance = value;
+  }
+
+  private runViewPublisherInstance?: RunViewPublisher;
+  private get runViewPublisher(): RunViewPublisher {
+    return (this.runViewPublisherInstance ??= this.createRunViewPublisher());
+  }
+  private set runViewPublisher(value: RunViewPublisher) {
+    this.runViewPublisherInstance = value;
+  }
+
+  /** Builds the instance registry with this orchestrator as its host. */
+  private createWorkflowInstanceRegistry(): WorkflowInstanceRegistry {
+    // Every member reads through `this` at call time rather than capturing the
+    // field's value here: the orchestrator's collaborators are replaceable
+    // seams, and a captured reference would pin the registry to whichever
+    // object happened to exist when it was built.
+    const orchestrator = this;
+    return new WorkflowInstanceRegistry({
+      get platform() {
+        return orchestrator.platform;
+      },
+      get dashboardSink() {
+        return orchestrator.dashboardBroadcastHub as IDashboardSink;
+      },
+      get dashboardBroadcast() {
+        return orchestrator.dashboardBroadcastHub;
+      },
+      get integrationFactory() {
+        return orchestrator.integrationFactory;
+      },
+      resolveDetectorIntegration: (harnessOverride) =>
+        this.resolveDetectorIntegration(harnessOverride),
+      propagateWorkflowNameToIntegrations: (name) =>
+        this.propagateWorkflowNameToIntegrations(name),
+      updateStatusBar: () => this.updateStatusBar(),
+      get currentWorkspaceFolderPath() {
+        return orchestrator.currentWorkspaceFolderPath;
+      },
+      get compatibilityRegistry() {
+        return orchestrator.compatibilityRegistry;
+      },
+      get userFeedbackSink() {
+        return orchestrator.userFeedbackSink;
+      },
+      getHarnessUsageSnapshots: () =>
+        this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
+      refreshHarnessUsage: async (harnessId) => {
+        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
+      },
+      approveSecretGrantsForWorkflow: (workflow, workspaceRoot) =>
+        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
+      get runnerHostIdentity() {
+        return orchestrator.runnerHostIdentity;
+      },
+      get panelClientId() {
+        return orchestrator.PANEL_CLIENT_ID;
+      },
+      getStoredPanelSend: () => this.storedPanelSend,
+      replayWorkflowStateTo: (workflowId, send, clientId) =>
+        this.replayWorkflowStateTo(workflowId, send, clientId),
+      approvePendingWorkflowExternalRootsForClient: (
+        clientId,
+        send,
+        port,
+        promptUser
+      ) =>
+        this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          send,
+          port,
+          promptUser
+        ),
+      emitWorkflowExternalRootsApprovalState: (
+        clientId,
+        workflowId,
+        pendingRoots,
+        send
+      ) =>
+        this.emitWorkflowExternalRootsApprovalState(
+          clientId,
+          workflowId,
+          pendingRoots,
+          send
+        ),
+      saveState: () => this.saveState(),
+      ensureCoordinationWatchSession: (executionRoot) =>
+        this.ensureCoordinationWatchSession(executionRoot),
+      getActiveWorkflowId: () => this.getActiveWorkflowId(),
+      fireActiveQueueStateChanged: (state) =>
+        this.getActiveQueueStateChangedEmitter().fire(state),
+      getActiveQueueState: () => this.getActiveQueueState(),
+      getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
+      syncExecutingRunViews: (instance) => this.syncExecutingRunViews(instance),
+    });
+  }
+
+  private createRunViewPublisher(): RunViewPublisher {
+    return new RunViewPublisher({
+      workspaceRoot: this.currentWorkspaceFolderPath,
+      lineageRepository: this.lineageRepository,
+      registry: this.workflowInstanceRegistry,
+      externalRunWatch: this.externalRunWatchCoordinator ?? {
+        hasSession: () => false,
+        getEntry: () => undefined,
+      },
+      loadFreshInstanceAndReplay: (filePath, clientId, send, options) =>
+        this.loadFreshInstanceAndReplay(filePath, clientId, send, options),
+      findExecutionRunRef: (workflowKey) =>
+        this.findExecutionRunRef(workflowKey),
+      getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
+      replayTerminalSessionsTo: (workflowId, send, clientId) =>
+        this.replayTerminalSessionsTo(workflowId, send, clientId),
+    });
+  }
+
+  private runLifecycleServiceInstance?: RunLifecycleService;
+  private get runLifecycleService(): RunLifecycleService {
+    return (this.runLifecycleServiceInstance ??=
+      this.createRunLifecycleService());
+  }
+
+  private createRunLifecycleService(): RunLifecycleService {
+    const views: RunLifecycleViewPort = {
+      getViewAddress: (clientId) => this.getViewAddress(clientId),
+      loadRunViewForClient: (address, send, clientId) =>
+        this.loadRunViewForClient(address, send, clientId),
+      publishRunRevisionsToViewers: (workflowKey, runRef) =>
+        this.publishRunRevisionsToViewers(workflowKey, runRef),
+      invalidateRunViews: (workflowKey, runRef, definitionRollback) =>
+        this.invalidateRunViews(workflowKey, runRef, definitionRollback),
+      pushRunSummariesRefreshIfNotAlreadyViewing: (
+        workflowKey,
+        send,
+        refreshedClientIds,
+        clientId
+      ) =>
+        this.pushRunSummariesRefreshIfNotAlreadyViewing(
+          workflowKey,
+          send,
+          refreshedClientIds,
+          clientId
+        ),
+    };
+    return new RunLifecycleService({
+      registry: this.workflowInstanceRegistry,
+      views,
+      panelClientId: this.PANEL_CLIENT_ID,
+      getWorkspaceRoot: () => this.currentWorkspaceFolderPath,
+      getLineageRepository: () => this.lineageRepository,
+      getRunnerHostIdentity: () => this.runnerHostIdentity,
+      getUserFeedbackSink: () => this.userFeedbackSink,
+      getInstanceForClient: (clientId) => this.getInstanceForClient(clientId),
+      getStoredPanelSend: () => this.storedPanelSend,
+      assertNoPendingWorkflowExternalRoots: (clientId) =>
+        this.assertNoPendingWorkflowExternalRoots(clientId),
+      buildWorkflowInstance: () => this.buildWorkflowInstance(),
+      replayWorkflowStateTo: (workflowId, send, clientId) =>
+        this.replayWorkflowStateTo(workflowId, send, clientId),
+      getExternalExecutionRunRef: (workflowKey) => {
+        const external = this.externalRunWatchCoordinator.getEntry(workflowKey);
+        return external
+          ? WorkflowPaths.parseWorkingFileAddressFromPath(
+              external.summary.workingFilePath ?? ""
+            )?.runRef
+          : undefined;
+      },
+    });
+  }
+
+  // These accessors keep prototype-based legacy unit fixtures wired to the
+  // real registry while the remaining façade tests are migrated.
+  private get instances(): Map<string, WorkflowInstance> {
+    return this.workflowInstanceRegistry.getInstances();
+  }
+  private set instances(value: Map<string, WorkflowInstance>) {
+    const target = this.workflowInstanceRegistry.getInstances();
+    target.clear();
+    for (const [id, instance] of value) target.set(id, instance);
+  }
+  private get retiredInstances(): Map<string, WorkflowInstance> {
+    return this.workflowInstanceRegistry.getRetiredInstances();
+  }
+  private set retiredInstances(value: Map<string, WorkflowInstance>) {
+    const target = this.workflowInstanceRegistry.getRetiredInstances();
+    target.clear();
+    for (const [id, instance] of value) target.set(id, instance);
+  }
+  private get viewerRegistry(): Map<string, string | null> {
+    return this.workflowInstanceRegistry.getViewerRegistry();
+  }
+  private set viewerRegistry(value: Map<string, string | null>) {
+    const target = this.workflowInstanceRegistry.getViewerRegistry();
+    target.clear();
+    for (const [id, instanceId] of value) target.set(id, instanceId);
+  }
+  public get viewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
+    return this.workflowInstanceRegistry.getViewAddressRegistry();
+  }
+  public set viewAddressRegistry(
+    value: Map<string, WorkflowViewAddress | null>
+  ) {
+    const target = this.workflowInstanceRegistry.getViewAddressRegistry();
+    target.clear();
+    for (const [id, address] of value) target.set(id, address);
+  }
+  public get viewMessageSinks(): Map<string, (message: unknown) => void> {
+    return this.workflowInstanceRegistry.getViewMessageSinks();
+  }
+  public set viewMessageSinks(value: Map<string, (message: unknown) => void>) {
+    const target = this.workflowInstanceRegistry.getViewMessageSinks();
+    target.clear();
+    for (const [id, send] of value) target.set(id, send);
+  }
+  public get lineageBindingClients(): Set<string> {
+    return this.workflowInstanceRegistry.getLineageBindingClients();
+  }
+  public set lineageBindingClients(value: Set<string>) {
+    const target = this.workflowInstanceRegistry.getLineageBindingClients();
+    target.clear();
+    for (const clientId of value) target.add(clientId);
+  }
+  public get lineageExecutionOwners(): Map<WorkflowKey, LineageExecutionClaim> {
+    return this.workflowInstanceRegistry.getLineageExecutionOwners();
+  }
+  public set lineageExecutionOwners(
+    value: Map<WorkflowKey, LineageExecutionClaim>
+  ) {
+    const target = this.workflowInstanceRegistry.getLineageExecutionOwners();
+    target.clear();
+    for (const [key, claim] of value) target.set(key, claim);
+  }
+  public get externallyCreatedInstanceIds(): Set<string> {
+    return this.workflowInstanceRegistry.getExternallyCreatedInstanceIds();
+  }
+  public set externallyCreatedInstanceIds(value: Set<string>) {
+    const target =
+      this.workflowInstanceRegistry.getExternallyCreatedInstanceIds();
+    target.clear();
+    for (const id of value) target.add(id);
+  }
+  public get announcedExternalWorkflowIds(): Set<string> {
+    return this.workflowInstanceRegistry.getAnnouncedExternalWorkflowIds();
+  }
+  public set announcedExternalWorkflowIds(value: Set<string>) {
+    const target =
+      this.workflowInstanceRegistry.getAnnouncedExternalWorkflowIds();
+    target.clear();
+    for (const id of value) target.add(id);
+  }
   private readonly lineageRepository = new WorkflowLineageRepository();
 
-  /** Externally managed workflows being watched (keyed by workflowId) */
-  private readonly externalRunSessions: Map<
-    string,
-    {
-      session: ExternalRunWatchSession;
-      summary: WorkflowSummary;
-      /**
-       * Last per-step statuses broadcast for this run, so working-file changes
-       * can be diffed into STEP_STATUS_CHANGED messages instead of re-sending
-       * every step on every write.
-       */
-      lastStepStatuses: StepStatus[];
-    }
-  > = new Map();
+  private readonly externalRunWatchCoordinator: ExternalRunWatchCoordinator;
   private readonly coordinationWatchSessions = new Map<
     string,
     ExecutionRootCoordinationWatchSession
   >();
-
-  /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
-  private runnerJsonCreateWatcher?: FileWatcher;
-  /** Polling fallback for VS Code builds that do not deliver external recursive events. */
-  private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
-  /**
-   * Last `runner.json` mtime already handed to `handleRunnerJsonEvent`, keyed by
-   * lock path. The poll fires every second for the host's lifetime, so without
-   * this every stale lock in the runs root would be re-read and re-inspected
-   * on every tick. A new lock has no entry and is processed immediately.
-   */
-  private readonly polledRunnerJsonMtimes = new Map<string, number>();
-  /**
-   * Last logged external-execution decision (as a JSON signature), keyed by
-   * workflowKey. A live lock's heartbeat rewrites `runner.json` every
-   * `HEARTBEAT_INTERVAL_MS` (5s) for the lifetime of every running workflow,
-   * which re-triggers resolution on every tick — without this, a single
-   * long-running self-owned workflow logged thousands of byte-identical
-   * "external execution resolution" lines. Log only when the outcome for a
-   * given lineage actually changes. Lazily created (rather than a field
-   * initializer) so unit-test harnesses that build this class via
-   * `Object.create(WorkflowOrchestrator.prototype)` and wire up only the
-   * fields their scenario touches don't need to know about this cache.
-   */
-  private lastLoggedExternalExecutionDecision?: Map<string, string>;
-  private activationWorktreeOwnership?: WorkspaceWorktreeOwnership;
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
@@ -429,46 +524,8 @@ export class WorkflowOrchestrator {
   /** True once startupAutoLoadSettled has been resolved (set in triggerAutoLoad finally). */
   private _autoLoadHasSettled: boolean = false;
 
-  /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
-  private viewerRegistry = new Map<string, string | null>();
-
-  /** Client-local displayed address. This is intentionally separate from the
-   * instance registry: changing it must never rebind a shared PromptQueue. */
-  private readonly viewAddressRegistry = new Map<
-    string,
-    WorkflowViewAddress | null
-  >();
-  /** Per-client addressed-view transport, used for targeted invalidation. */
-  private readonly viewMessageSinks = new Map<
-    string,
-    (message: unknown) => void
-  >();
-  /** Clients mid-rebind, so the replay's own run-view load cannot re-enter. */
-  private readonly lineageBindingClients = new Set<string>();
-  /** Lineage → instance most recently prepared to execute it (see
-   * {@link getLineageExecutionOwners}); disambiguates retired duplicates. */
-  private readonly lineageExecutionOwners = new Map<
-    WorkflowKey,
-    LineageExecutionClaim
-  >();
-
   /** Emits the queue state of the instance currently viewed by the panel. */
   private activeQueueStateChangedEmitter?: TypedEmitter<QueueState | undefined>;
-
-  /** Retired instances keyed by workflowId — held until no client views them. */
-  private retiredInstances = new Map<string, WorkflowInstance>();
-
-  /**
-   * Instances created via `createExternalWorkflowInstance` (e.g. commit-message
-   * generation) — pre-registered in `instances` before their prompt loads, so
-   * they must never be auto-adopted as a client's viewed workflow and must be
-   * announced to the dashboard (`notifyWorkflowAdded`) despite already being
-   * `inRegistry` by the time they reach RUNNING/PAUSED. See
-   * `announcedExternalWorkflowIds` for the one-shot announce guard.
-   */
-  private readonly externallyCreatedInstanceIds = new Set<string>();
-  /** One-shot guard so an externally-created instance's `notifyWorkflowAdded` fires exactly once. */
-  private readonly announcedExternalWorkflowIds = new Set<string>();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
@@ -566,8 +623,6 @@ export class WorkflowOrchestrator {
       this.resolveStartupAutoLoad = resolve;
     });
 
-    this.viewerRegistry.set(this.PANEL_CLIENT_ID, null);
-
     if (dependencies.dashboardProvider) {
       this.dashboardBroadcastHub.addClient(dependencies.dashboardProvider);
     }
@@ -575,10 +630,20 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolderPath =
       dependencies.workspaceFolderPathResolver();
+    this.externalRunWatchCoordinator = new ExternalRunWatchCoordinator({
+      broadcast: this.dashboardBroadcastHub,
+      lineageRepository: this.lineageRepository,
+      findInstanceForWorkingFile: (workingFilePath) =>
+        this.findInstancesForExternalRunWatch(workingFilePath),
+      retireWorkflow: (workflowId) => this.retireWorkflow(workflowId),
+      workspaceRoot: this.currentWorkspaceFolderPath,
+      saveState: () => this.saveState(),
+      getOutputHistoryManager: () => this.getOutputHistoryManager(),
+      runnerHostIdentity: this.runnerHostIdentity,
+      fileWatcherFactory: this.fileWatcherFactory,
+    });
     if (this.currentWorkspaceFolderPath) {
-      this.ensureCoordinationWatchSession(
-        this.currentWorkspaceFolderPath
-      );
+      this.ensureCoordinationWatchSession(this.currentWorkspaceFolderPath);
       this.harnessUsageService = new HarnessUsageService(
         this.currentWorkspaceFolderPath,
         undefined,
@@ -624,12 +689,14 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       this.platform
     );
-    this.endConditionEvaluator = new EndConditionEvaluator(
-      this.platform
-    );
+    this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
     this.workflowCommandHandler = new WorkflowCommandHandler(
       this.userFeedbackSink
     );
+
+    this.workflowInstanceRegistry = this.createWorkflowInstanceRegistry();
+
+    this.runViewPublisher = this.createRunViewPublisher();
 
     // Wire harness status subscriptions
     const defaultIntegration = this.getDefaultIntegration();
@@ -743,10 +810,7 @@ export class WorkflowOrchestrator {
    * idle instance to dispose here the way the normal "make active" path does.
    */
   public createExternalWorkflowInstance(): WorkflowInstance {
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.externallyCreatedInstanceIds.add(instance.id);
-    return instance;
+    return this.workflowInstanceRegistry.createExternalWorkflowInstance();
   }
 
   /**
@@ -756,107 +820,7 @@ export class WorkflowOrchestrator {
   private async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
-    const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    Log.debug(
-      `[WorkflowOrchestrator] createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
-    );
-    // ── Duplicate detection: only running/paused instances are in the Map ──
-    if (_filePath) {
-      const existing = [...this.instances.values()].find(
-        (w) => w.filePath === _filePath
-      );
-      if (existing) {
-        const existingStatus = existing.getQueueState().status;
-        if (
-          existingStatus === EXECUTION_STATES.RUNNING ||
-          existingStatus === EXECUTION_STATES.PAUSING ||
-          existingStatus === EXECUTION_STATES.PAUSED
-        ) {
-          Log.info(
-            `[WorkflowOrchestrator] createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
-          );
-          // The running-instance policy is to reuse the existing workflow.
-          // Keep this safe default explicit now that the native choice prompt
-          // is no longer allowed to override it from a shared core path.
-          const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-          await this.replayWorkflowStateTo(
-            existing.id,
-            panelSend,
-            this.PANEL_CLIENT_ID
-          );
-          return existing;
-        }
-      }
-    }
-
-    // Dispose/deactivate the current panel-viewed instance if applicable
-    const retiredInstance = currentPanelId
-      ? this.retiredInstances.get(currentPanelId)
-      : null;
-    const currentViewed = currentPanelId
-      ? (this.instances.get(currentPanelId) ?? retiredInstance)
-      : null;
-    if (retiredInstance) {
-      Log.debug(
-        `[WorkflowOrchestrator] createWorkflow: disposing retired viewedInstance inst:${retiredInstance.id.slice(0, 8)}`
-      );
-      retiredInstance.dispose();
-      this.retiredInstances.delete(currentPanelId!);
-    } else if (currentViewed) {
-      const viewedStatus = currentViewed.getQueueState().status;
-      const isIdle =
-        viewedStatus !== EXECUTION_STATES.RUNNING &&
-        viewedStatus !== EXECUTION_STATES.PAUSING &&
-        viewedStatus !== EXECUTION_STATES.PAUSED;
-      if (isIdle) {
-        Log.debug(
-          `[WorkflowOrchestrator] createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
-        );
-        currentViewed.dispose();
-        this.instances.delete(currentPanelId!);
-      } else {
-        // It is running/paused — keep it in the registry but do not deactivate
-        Log.debug(
-          `[WorkflowOrchestrator] createWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
-        );
-      }
-    }
-
-    const instance = this.buildWorkflowInstance();
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    this.instances.set(instance.id, instance);
-    let pendingWorkflowExternalRoots: string[] = [];
-    if (_filePath) {
-      await instance.loadPromptFile(_filePath);
-      pendingWorkflowExternalRoots =
-        await this.approvePendingWorkflowExternalRootsForClient(
-          this.PANEL_CLIENT_ID,
-          undefined,
-          undefined,
-          false
-        );
-    }
-
-    // Deliver full state to the panel via per-client replay (sends ACTIVE_WORKFLOW_CHANGED first,
-    // then SESSION_RESTORED with current state). If the panel is not yet connected, it will
-    // receive the state when it connects via the READY → handleClientReady path.
-    if (this.storedPanelSend) {
-      await this.replayWorkflowStateTo(
-        instance.id,
-        this.storedPanelSend,
-        this.PANEL_CLIENT_ID
-      );
-    }
-    if (_filePath && this.storedPanelSend) {
-      this.emitWorkflowExternalRootsApprovalState(
-        this.PANEL_CLIENT_ID,
-        instance.id,
-        pendingWorkflowExternalRoots,
-        this.storedPanelSend
-      );
-    }
-
-    return instance;
+    return this.workflowInstanceRegistry.createWorkflow(_filePath);
   }
 
   /**
@@ -876,72 +840,25 @@ export class WorkflowOrchestrator {
    *
    * @returns true if a stale retired entry was removed.
    */
-  private promoteInstanceToLive(instance: WorkflowInstance): boolean {
-    this.instances.set(instance.id, instance);
-    return this.retiredInstances.delete(instance.id);
+  public promoteInstanceToLive(instance: WorkflowInstance): boolean {
+    return this.workflowInstanceRegistry.promoteInstanceToLive(instance);
   }
 
   private retireWorkflow(workflowId: string): void {
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.debug(
-        `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
-      );
-      return;
-    }
-
-    const isViewed = this.isWorkflowViewedByAnyClient(workflowId);
-    const ptyManager = getPtyProcessManager();
-    const activePtySessions = ptyManager
-      ? ptyManager
-          .getSessionsForWorkflow(workflowId)
-          .filter((s) => s.status === TERMINAL_SESSION_STATUS.RUNNING)
-      : [];
-    const hasActivePty = activePtySessions.length > 0;
-    Log.debug(
-      `[WorkflowOrchestrator] retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.getSummary().workflowName || "(empty)"}\" ` +
-        `status=${instance.getQueueState().status}, isViewed=${isViewed}, hasActivePty=${hasActivePty}(${activePtySessions.length}), remaining=${this.instances.size - 1}`
-    );
-    this.instances.delete(workflowId);
-
-    if (isViewed || hasActivePty) {
-      // Keep in retiredInstances if a client is still viewing it OR if PTY sessions remain
-      // alive. In the latter case, the user may switch back to this workflow and expect to
-      // see (and interact with) the still-running terminal. Each client's entry is cleaned
-      // up when the client switches away or disconnects; PTY-only entries are cleaned up
-      // when the last PTY session exits (via onExit → replayWorkflowStateTo finding 0 sessions
-      // → no TERMINAL_STARTED sent → TerminalInstance unmount → nothing holds the entry).
-      this.retiredInstances.set(workflowId, instance);
-    } else {
-      // Background workflow completed silently with no active terminals — dispose immediately.
-      instance.dispose();
-      this.externallyCreatedInstanceIds.delete(workflowId);
-      this.announcedExternalWorkflowIds.delete(workflowId);
-    }
-
-    // Remove from the Running Workflows section in the dashboard.
-    this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-
-    void this.saveState();
+    this.workflowInstanceRegistry.retireWorkflow(workflowId);
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
-    return this.findInstance(workflowId);
+    return this.workflowInstanceRegistry.getWorkflow(workflowId);
   }
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getAllWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()];
+    return this.workflowInstanceRegistry.getAllWorkflows();
   }
 
   getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()].filter((w) => {
-      const status = w.getQueueState().status;
-      return (
-        status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING
-      );
-    });
+    return this.workflowInstanceRegistry.getRunningWorkflows();
   }
 
   getUserFeedbackSink(): UserFeedbackSink {
@@ -950,18 +867,12 @@ export class WorkflowOrchestrator {
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflow(): WorkflowInstance | undefined {
-    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    if (id) {
-      return (
-        this.instances.get(id) ?? this.retiredInstances.get(id) ?? undefined
-      );
-    }
-    return undefined;
+    return this.workflowInstanceRegistry.getActiveWorkflow();
   }
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflowId(): string | null {
-    return this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    return this.workflowInstanceRegistry.getActiveWorkflowId();
   }
 
   /**
@@ -1122,7 +1033,7 @@ export class WorkflowOrchestrator {
     }
 
     // External-run session
-    const externalEntry = this.externalRunSessions.get(workflowId);
+    const externalEntry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (externalEntry) {
       send({
         type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
@@ -1131,7 +1042,7 @@ export class WorkflowOrchestrator {
       });
       // Update viewerRegistry before the await for the same reason as above.
       this.setViewedWorkflowId(clientId, workflowId);
-      await this.sendExternalRunFullStateToDashboard(
+      await this.externalRunWatchCoordinator.sendExternalRunFullStateToDashboard(
         workflowId,
         externalEntry,
         sink
@@ -1231,7 +1142,7 @@ export class WorkflowOrchestrator {
           this.retiredInstances.get(workflowId);
         const summary =
           instance?.getSummary() ??
-          this.externalRunSessions.get(workflowId)?.summary;
+          this.externalRunWatchCoordinator.getEntry(workflowId)?.summary;
         if (!summary?.workflowKey || !summary.runRef) {
           return undefined;
         }
@@ -1260,12 +1171,11 @@ export class WorkflowOrchestrator {
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
     const vsSummaries = [...this.instances.values()].map((w) => w.getSummary());
-    const externalRunSummaries = [...this.externalRunSessions.values()].map(
-      (entry) => entry.summary
-    );
+    const externalRunSummaries =
+      this.externalRunWatchCoordinator.getSummaries();
     const summaries = [...vsSummaries, ...externalRunSummaries];
     Log.trace(
-      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${this.externalRunSessions.size} external sessions, viewed=${this.getViewedWorkflowId(this.PANEL_CLIENT_ID)?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${externalRunSummaries.length} external sessions, viewed=${this.getViewedWorkflowId(this.PANEL_CLIENT_ID)?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
   }
@@ -1296,7 +1206,7 @@ export class WorkflowOrchestrator {
       "";
 
     // Check for an external-run session first
-    const externalEntry = this.externalRunSessions.get(workflowId);
+    const externalEntry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (externalEntry) {
       // setViewedWorkflowId is normally called inside replayWorkflowStateTo; call
       // it explicitly here so the viewer registry stays consistent when skipping.
@@ -1479,42 +1389,8 @@ export class WorkflowOrchestrator {
   async ensureExternalRunWatchSession(
     workingFilePath: string
   ): Promise<boolean> {
-    const workflowId =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath)
-        ?.workflowKey ?? "";
-    if (!workflowId) {
-      return false;
-    }
-
-    // Already tracked — nothing to do
-    if (this.externalRunSessions.has(workflowId)) {
-      return true;
-    }
-
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) {
-      return false;
-    }
-
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      resolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return false;
-    }
-
-    Log.info(
-      `[WorkflowOrchestrator] ensureExternalRunWatchSession: registering external watch session for "${workflowId}" (watcher hadn't fired yet)`
-    );
-    // Session creation revalidates this proof immediately before registration.
-    return await this.startExternalRunWatchSession(
-      workingFilePath,
-      workspaceFolderPath,
-      resolution.inspection
+    return this.externalRunWatchCoordinator.ensureExternalRunWatchSession(
+      workingFilePath
     );
   }
 
@@ -1522,28 +1398,10 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     workspaceFolderPath: string
   ): Promise<ExternalExecutionResolution> {
-    return new ExternalExecutionResolver(
-      workspaceFolderPath,
-      this.runnerHostIdentity,
-      {
-        onDecision: (decision) => {
-          const key = decision.workflowKey ?? workingFilePath;
-          const signature = JSON.stringify(decision);
-          const cache = (this.lastLoggedExternalExecutionDecision ??=
-            new Map());
-          if (cache.get(key) === signature) {
-            return;
-          }
-          cache.set(key, signature);
-          const message = `[WorkflowOrchestrator] external execution resolution: ${signature}`;
-          if (decision.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE) {
-            Log.warn(message);
-          } else {
-            Log.debug(message);
-          }
-        },
-      }
-    ).resolve(workingFilePath);
+    return this.externalRunWatchCoordinator.resolveExternalExecutionForPath(
+      workingFilePath,
+      workspaceFolderPath
+    );
   }
 
   /**
@@ -1556,49 +1414,10 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     resolution: ExternalExecutionResolution
   ): boolean {
-    if (
-      resolution.kind !== EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL ||
-      (resolution.reason !== EXTERNAL_EXECUTION_REASONS.SELF_OWNED &&
-        resolution.reason !== EXTERNAL_EXECUTION_REASONS.INDETERMINATE_OWNER)
-    ) {
-      return false;
-    }
-
-    const hasResidentExecution = [
-      ...this.instances.values(),
-      ...this.retiredInstances.values(),
-    ].some((instance) => {
-      const summary = instance.getSummary();
-      return (
-        sameWorkingFilePath(summary.workingFilePath, workingFilePath) &&
-        isExecutionOwnerState(instance.getQueueState().status)
-      );
-    });
-    if (hasResidentExecution) {
-      return false;
-    }
-
-    const address =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-    const diagnostic = {
-      event: "workflow-ownership-invariant",
-      workflowKey: address?.workflowKey,
-      runRef: address?.runRef,
-      locality:
-        resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED
-          ? "self-owned-but-untracked"
-          : "indeterminate-owner",
-      decision: "preserve-non-mutating",
-    } as const;
-    const message =
-      `[WorkflowOrchestrator] active run ownership requires reconciliation: ` +
-      JSON.stringify(diagnostic);
-    if (resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED) {
-      Log.error(message);
-    } else {
-      Log.warn(message);
-    }
-    return true;
+    return this.externalRunWatchCoordinator.shouldDeclineUntrackedOwnership(
+      workingFilePath,
+      resolution
+    );
   }
 
   /**
@@ -2290,63 +2109,14 @@ export class WorkflowOrchestrator {
    * ExternalRunWatchSession.onFinished() → workflow transitions to STOPPED automatically.
    */
   async stopExternalRunSession(workflowId: string): Promise<void> {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: no external run session found for workflowId="${workflowId}"`
-      );
-      return;
-    }
-
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath || !entry.summary.workingFilePath) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: no active external run for workflowId="${workflowId}"`
-      );
-      return;
-    }
-
-    const resolution = await this.resolveExternalExecutionForPath(
-      entry.summary.workingFilePath,
-      workspaceFolderPath
-    );
-    // Intentional runner-type policy after resolver proof: SIGTERM is only the
-    // CLI transport; locality comes exclusively from external resolution.
-    if (
-      resolution.kind !==
-        EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN ||
-      resolution.inspection.lock.runner !== RUNNER_IDS.CLI ||
-      resolution.inspection.lock.ownerToken !== entry.session.getOwnerToken()
-    ) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: external lock acquisition is no longer owned by the tracked session for workflowId="${workflowId}"`
-      );
-      return;
-    }
-    const lock = resolution.inspection.lock;
-
-    Log.info(
-      `[WorkflowOrchestrator] stopExternalRunSession: sending stop request to ${lock.runner} pid=${lock.pid} for workflowId="${workflowId}"`
-    );
-    try {
-      process.kill(lock.pid, "SIGTERM");
-    } catch (err) {
-      // ESRCH = process already dead — that's fine, the session will clean itself up
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ESRCH") {
-        Log.warn(
-          `[WorkflowOrchestrator] stopExternalRunSession: process.kill(${lock.pid}) failed:`,
-          err
-        );
-      }
-    }
+    return this.externalRunWatchCoordinator.stopExternalRunSession(workflowId);
   }
 
   /** Ask a live sibling VS Code instance to stop through its owner-token sentinel. */
   async requestVscodeStop(
     workflowId: string
   ): Promise<"picked-up" | "timed-out" | "unavailable"> {
-    const entry = this.externalRunSessions.get(workflowId);
+    const entry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (!entry) return "unavailable";
 
     const workspaceFolderPath = this.currentWorkspaceFolderPath;
@@ -2408,7 +2178,7 @@ export class WorkflowOrchestrator {
 
   /** Ownership discovered for the workspace root during activation, if any. */
   getActivationWorktreeOwnership(): WorkspaceWorktreeOwnership | undefined {
-    return this.activationWorktreeOwnership;
+    return this.externalRunWatchCoordinator.getActivationWorktreeOwnership();
   }
 
   async clearWorkflow(): Promise<void> {
@@ -2484,10 +2254,7 @@ export class WorkflowOrchestrator {
 
   /** Build a fresh workflow instance, register it, and make it the client's viewed workflow. */
   private registerNewInstance(clientId: string): WorkflowInstance {
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.setViewedWorkflowId(clientId, instance.id);
-    return instance;
+    return this.workflowInstanceRegistry.registerNewInstance(clientId);
   }
 
   /**
@@ -2790,7 +2557,7 @@ export class WorkflowOrchestrator {
   }
 
   getViewAddress(clientId: string): WorkflowViewAddress | null {
-    return this.getViewAddressRegistry().get(clientId) ?? null;
+    return this.runViewPublisher.getViewAddress(clientId);
   }
 
   /**
@@ -2891,7 +2658,7 @@ export class WorkflowOrchestrator {
       send ??
       (clientId === this.PANEL_CLIENT_ID
         ? this.storedPanelSend
-        : this.getViewMessageSinks().get(clientId));
+        : this.workflowInstanceRegistry.getViewMessageSinks().get(clientId));
     target?.({
       type: MESSAGE_TYPES.WORKFLOW_EXTERNAL_ROOTS_APPROVAL_REQUIRED,
       workflowId,
@@ -2972,195 +2739,41 @@ export class WorkflowOrchestrator {
    * returns the previously bound workflow's file — or none at all.
    */
   getViewFilePath(clientId: string): string | null {
-    const address = this.getViewAddress(clientId);
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!address || !workspaceRoot) {
-      return null;
-    }
-    return this.resolveAddressFilePath(workspaceRoot, address);
-  }
-
-  /** The definition file an address names. Sole place layout is applied. */
-  private resolveAddressFilePath(
-    workspaceRoot: string,
-    address: WorkflowViewAddress
-  ): string {
-    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
-      ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
-      : WorkflowPaths.runFilePath(
-          workspaceRoot,
-          address.workflowKey,
-          address.runRef
-        );
-  }
-
-  private resolveAddressDirectory(
-    workspaceRoot: string,
-    address: WorkflowViewAddress
-  ): string {
-    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
-      ? WorkflowPaths.draftDir(workspaceRoot, address.workflowKey)
-      : WorkflowPaths.runDir(
-          workspaceRoot,
-          address.workflowKey,
-          address.runRef
-        );
+    return this.runViewPublisher.getViewFilePath(clientId);
   }
 
   async getViewIdentity(
     clientId: string
   ): Promise<WorkflowViewIdentityMessage | null> {
-    const address = this.getViewAddress(clientId);
-    return address ? this.buildViewIdentityForAddress(address) : null;
+    return this.runViewPublisher.getViewIdentity(clientId);
   }
 
-  /**
-   * The authoritative identity of an address, read from disk without going
-   * through any client's view registration. Two small reads (the addressed
-   * definition file and the lineage descriptor) — cheap enough to publish on
-   * the write path itself, unlike the full `RUN_VIEW_LOADED` snapshot.
-   */
-  private async buildViewIdentityForAddress(
-    address: WorkflowViewAddress
-  ): Promise<WorkflowViewIdentityMessage | null> {
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) {
-      return null;
-    }
-    try {
-      const [content, descriptor] = await Promise.all([
-        fs.promises.readFile(
-          this.resolveAddressFilePath(workspaceRoot, address),
-          "utf8"
-        ),
-        this.lineageRepository.readDescriptor(
-          workspaceRoot,
-          address.workflowKey
-        ),
-      ]);
-      return {
-        type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
-        address,
-        runDirectory: this.resolveAddressDirectory(workspaceRoot, address),
-        definitionRevision:
-          (JSON.parse(content) as WorkingFile).definitionRevision ?? 1,
-        descriptorRevision: descriptor.revision,
-        isSystemGenerated: descriptor.isSystemGenerated ?? false,
-      };
-    } catch (error) {
-      Log.warn(
-        `[WorkflowOrchestrator] Could not resolve view identity for ${WorkflowOrchestrator.describeViewAddress(address)}: ${getErrorMessage(error)}`
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Hands every client viewing a run the revisions its next action must carry,
-   * as soon as the write that bumped them is durable.
-   *
-   * `invalidateRunViews` already carries the same fields, but building its
-   * snapshot costs a lineage-wide scan (`getRunSummaries` reads one working
-   * file per run in the lineage) — measured at over four seconds on a large
-   * history. Until it landed, the acting client kept echoing the superseded
-   * `definitionRevision` on every message, so a Run or Continue pressed inside
-   * that window was rejected as a "Definition revision conflict" and only
-   * worked on the second press, once the snapshot finally arrived. The client
-   * has no way to know it is holding a stale revision, so the window has to be
-   * closed here: publish the cheap identity read first, then let the snapshot
-   * follow with the content.
-   */
   private async publishRunRevisionsToViewers(
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<void> {
-    const address: WorkflowViewAddress = {
+    await this.runViewPublisher.publishRunRevisionsToViewers(
       workflowKey,
-      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-      runRef,
-    };
-    const sends: Array<(message: unknown) => void> = [];
-    for (const [clientId, viewed] of this.getViewAddressRegistry()) {
-      if (!sameViewAddress(viewed, address)) continue;
-      const send = this.getViewMessageSinks().get(clientId);
-      if (send) sends.push(send);
-    }
-    if (sends.length === 0) return;
-    const identity = await this.buildViewIdentityForAddress(address);
-    if (!identity) return;
-    for (const send of sends) {
-      send(identity);
-    }
+      runRef
+    );
   }
 
-  /**
-   * Publishes one client's authoritative identity to **every** client viewing
-   * the same address, not just the client whose action produced the write.
-   *
-   * `definitionRevision` is per-address optimistic-concurrency state, so a
-   * write made by client A supersedes the revision every other viewer of that
-   * address is holding. Publishing only to the actor left those viewers armed
-   * with a stale revision, and their next edit — or their next Run — was
-   * rejected as a conflict with no way to recover short of reloading the view.
-   */
   async publishViewIdentityToViewers(
     clientId: string
   ): Promise<WorkflowViewIdentityMessage | null> {
-    const identity = await this.getViewIdentity(clientId);
-    if (!identity) return null;
-    for (const [otherId, send] of this.getViewMessageSinks()) {
-      if (otherId === clientId) continue;
-      if (sameViewAddress(this.getViewAddress(otherId), identity.address)) {
-        send(identity);
-      }
-    }
-    return identity;
+    return this.runViewPublisher.publishViewIdentityToViewers(clientId);
   }
 
-  /** Defensive for lightweight unit-test instances created without constructors. */
-  private getViewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
-    const initialized = this.viewAddressRegistry;
-    if (initialized) {
-      return initialized;
-    }
-    const partial = this as unknown as {
-      viewAddressRegistry?: Map<string, WorkflowViewAddress | null>;
-    };
-    return (partial.viewAddressRegistry ??= new Map());
-  }
-
-  private getViewMessageSinks(): Map<string, (message: unknown) => void> {
-    const initialized = this.viewMessageSinks;
-    if (initialized) return initialized;
-    const partial = this as unknown as {
-      viewMessageSinks?: Map<string, (message: unknown) => void>;
-    };
-    return (partial.viewMessageSinks ??= new Map());
-  }
-
-  /** Defensive for lightweight unit-test instances created without constructors. */
-  private getLineageBindingClients(): Set<string> {
-    const initialized = this.lineageBindingClients;
-    if (initialized) return initialized;
-    const partial = this as unknown as { lineageBindingClients?: Set<string> };
-    return (partial.lineageBindingClients ??= new Set());
-  }
-
-  /**
-   * lineage → the instance most recently prepared to execute it. Entries are
-   * only ever read as a tie-break between *resident* instances, so one going
-   * stale (its instance disposed) is inert rather than wrong, and a lineage
-   * never accumulates more than one entry.
-   *
-   * Defensive for lightweight unit-test instances created without constructors.
-   */
-  private getLineageExecutionOwners(): Map<WorkflowKey, LineageExecutionClaim> {
-    const initialized = this.lineageExecutionOwners;
-    if (initialized) return initialized;
-    const partial = this as unknown as {
-      lineageExecutionOwners?: Map<WorkflowKey, LineageExecutionClaim>;
-    };
-    return (partial.lineageExecutionOwners ??= new Map());
+  public async bindClientToAddressedLineage(
+    address: WorkflowViewAddress,
+    send: (message: unknown) => void,
+    clientId: string
+  ): Promise<string | null> {
+    return this.runViewPublisher.bindClientToAddressedLineage(
+      address,
+      send,
+      clientId
+    );
   }
 
   /**
@@ -3192,64 +2805,6 @@ export class WorkflowOrchestrator {
    * longer considers active and are dropped — the run executes to completion on
    * disk while the dashboard sits on the previously viewed run's history.
    */
-  private findInstanceForLineage(
-    workflowKey: WorkflowKey
-  ): WorkflowInstance | undefined {
-    const matches = (instance: WorkflowInstance) =>
-      instance.getQueueState().workflowKey === workflowKey;
-    // Live first so it wins every "first match" below. The maps are normally
-    // disjoint, but a promotion that races a read can briefly leave an instance
-    // in both, and a duplicate would corrupt the single-resident fast path.
-    const live = [...this.instances.values()].filter(matches);
-    const liveIds = new Set(live.map((instance) => instance.id));
-    const retired = [...this.retiredInstances.values()].filter(
-      (instance) => matches(instance) && !liveIds.has(instance.id)
-    );
-    const residents = [...live, ...retired];
-    if (residents.length <= 1) {
-      return residents[0];
-    }
-
-    const executing = residents.find((instance) =>
-      isExecutionOwnerState(instance.getQueueState().status)
-    );
-    if (executing) {
-      return executing;
-    }
-
-    // Only until the execution it describes finishes: nothing deletes these
-    // entries, so a spent one would otherwise outrank a live instance forever.
-    // The window this covers is real and unavoidable — a prepared instance has
-    // not transitioned to RUNNING yet, so rule 1 cannot see it. Before that
-    // transition (`!claim.promoted`) the instance's status can only be
-    // leftover from *its own previous* execution — e.g. a continuation reusing
-    // the run's own retired, COMPLETED instance — so it must not be read as
-    // this claim already being spent.
-    const claim = this.getLineageExecutionOwners().get(workflowKey);
-    const prepared = residents.find((instance) => {
-      if (!claim || instance.id !== claim.instanceId) return false;
-      if (!claim.promoted) return true;
-      return !isSpentExecutionOwnerState(instance.getQueueState().status);
-    });
-    if (prepared) {
-      return prepared;
-    }
-
-    if (live.length > 0) {
-      return live[0];
-    }
-
-    const activeTerminalOwnerIds = new Set(
-      this.getActiveTerminalWorkflowRefs()
-        .filter((ref) => ref.workflowKey === workflowKey)
-        .map((ref) => ref.workflowId)
-    );
-    return (
-      retired.find((instance) => activeTerminalOwnerIds.has(instance.id)) ??
-      retired[0]
-    );
-  }
-
   /**
    * Moving a client's view address is not a read-only act. Everything
    * instance-scoped — the terminal pane's `workflowId`, live-message
@@ -3265,47 +2820,7 @@ export class WorkflowOrchestrator {
    * a different run. Only a lineage with no resident instance at all
    * materializes a fresh one.
    */
-  private async bindClientToAddressedLineage(
-    address: WorkflowViewAddress,
-    send: (message: unknown) => void,
-    clientId: string
-  ): Promise<string | null> {
-    const binding = this.getLineageBindingClients();
-    // A nested client transition must not bind/replay the same lineage twice.
-    if (binding.has(clientId)) return null;
 
-    const boundId = this.getViewedWorkflowId(clientId);
-    const resident = this.externalRunSessions.has(address.workflowKey)
-      ? address.workflowKey
-      : this.findInstanceForLineage(address.workflowKey)?.id;
-    if (boundId === resident) return null;
-
-    binding.add(clientId);
-    try {
-      // An external-run lineage is registered under its workflowKey, not a UUID.
-      if (resident) {
-        this.setViewedWorkflowId(clientId, resident);
-        return resident;
-      }
-      await this.loadFreshInstanceAndReplay(
-        this.resolveAddressFilePath(this.requireWorkspaceRoot(), address),
-        clientId,
-        send,
-        { skipReplay: true }
-      );
-      return this.getViewedWorkflowId(clientId);
-    } finally {
-      binding.delete(clientId);
-    }
-  }
-
-  /**
-   * Loads one addressed definition and its matching timeline as a single
-   * client-local snapshot. It never calls loadWorkingFile() on an instance
-   * owned by another run, so a client browsing an older run cannot change the
-   * queue, watcher, lock, or harness environment of an execution in this
-   * lineage.
-   */
   async loadRunViewForClient(
     address: WorkflowViewAddress,
     send: (message: unknown) => void,
@@ -3314,48 +2829,16 @@ export class WorkflowOrchestrator {
     definitionRollback?: DefinitionRollbackInvalidation,
     announceReplayBoundary = false
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder is open");
-    }
-
-    const boundWorkflowId = await this.bindClientToAddressedLineage(
+    await this.runViewPublisher.loadRunViewForClient(
       address,
-      send,
-      clientId
-    );
-    const view = await this.readAddressedRunView(
-      workspaceRoot,
-      address,
-      `request=${requestId ?? "none"}`
-    );
-    this.deliverRunView(
-      address,
-      view,
       send,
       clientId,
-      boundWorkflowId,
       requestId,
       definitionRollback,
       announceReplayBoundary
     );
   }
 
-  /**
-   * Publishes one addressed view to several clients from a single set of disk
-   * reads — the fan-out counterpart of `loadRunViewForClient`.
-   *
-   * The reads are address-derived and therefore identical per client (see
-   * `AddressedRunView`), so looping `loadRunViewForClient` re-read every one of
-   * them concurrently: for a lineage with N runs that is 2N manifest/working-file
-   * reads *per client*, issued in the same millisecond. On the draft→run
-   * promotion those reads land on a directory the executor has just created and
-   * is actively writing, which is how a two-client first run reliably starved
-   * the executor's own working-file write.
-   *
-   * Binding stays per client and runs first: it can materialize an instance that
-   * loads the addressed file, so the shared read must observe the settled state.
-   */
   private async publishRunViewToClients(
     address: WorkflowViewAddress,
     targets: ReadonlyArray<{
@@ -3364,264 +2847,25 @@ export class WorkflowOrchestrator {
     }>,
     definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
-    if (targets.length === 0) {
-      return;
-    }
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder is open");
-    }
-
-    const boundWorkflowIds = new Map<string, string | null>();
-    for (const target of targets) {
-      boundWorkflowIds.set(
-        target.clientId,
-        await this.bindClientToAddressedLineage(
-          address,
-          target.send,
-          target.clientId
-        )
-      );
-    }
-
-    const view = await this.readAddressedRunView(
-      workspaceRoot,
+    await this.runViewPublisher.publishRunViewToClients(
       address,
-      `clients=${targets.length}`
+      targets,
+      definitionRollback
     );
-
-    for (const target of targets) {
-      this.deliverRunView(
-        address,
-        view,
-        target.send,
-        target.clientId,
-        boundWorkflowIds.get(target.clientId) ?? null,
-        undefined,
-        definitionRollback
-      );
-    }
   }
 
-  /**
-   * Reads every part of a run-view snapshot that depends only on the address.
-   * The result is shared across clients by `publishRunViewToClients`, so it must
-   * stay free of per-client state and must not be mutated by its consumers.
-   */
-  private async readAddressedRunView(
-    workspaceRoot: string,
-    address: WorkflowViewAddress,
-    logContext: string
-  ): Promise<AddressedRunView> {
-    const startTime = Date.now();
-    const addressLabel = `${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"}`;
-    const logPrefix = `[readAddressedRunView] ${logContext} address=${addressLabel}`;
-
-    const filePath = this.resolveAddressFilePath(workspaceRoot, address);
-    const content = await fs.promises.readFile(filePath, "utf-8");
-    const workingFile = JSON.parse(content) as WorkingFile;
-    Log.debug(`${logPrefix} definition read at ${Date.now() - startTime}ms`);
-
-    const historyManager = new OutputHistoryManager(workspaceRoot);
-    const [history, runSummaries, descriptor] = await Promise.all([
-      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-        ? historyManager.loadHistory(
-            historyManager.getHistoryFilePath(
-              address.workflowKey,
-              address.runRef
-            )
-          )
-        : Promise.resolve(null),
-      historyManager.getRunSummaries(address.workflowKey),
-      this.lineageRepository.readDescriptor(workspaceRoot, address.workflowKey),
-    ]);
-    Log.debug(
-      `${logPrefix} summaries/descriptor/history read at ${Date.now() - startTime}ms`
-    );
-
-    const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
-    void prompt;
-    void steps;
-    void finalStep;
-
-    return {
-      workingFile,
-      history,
-      runSummaries,
-      workflowProperties,
-      descriptorRevision: descriptor.revision,
-      isSystemGenerated: descriptor.isSystemGenerated ?? false,
-    };
-  }
-
-  /**
-   * Applies one already-read addressed view to a single client: the registry
-   * writes, the authoritative snapshot, and the live overlay that follows it.
-   *
-   * Deliberately synchronous — everything here is per-client in-memory work, so
-   * a fan-out pays for the disk reads exactly once.
-   */
-  private deliverRunView(
-    address: WorkflowViewAddress,
-    view: AddressedRunView,
-    send: (message: unknown) => void,
-    clientId: string,
-    boundWorkflowId: string | null,
-    requestId?: string,
-    definitionRollback?: DefinitionRollbackInvalidation,
-    announceReplayBoundary = false
-  ): void {
-    const { workingFile } = view;
-    const executionRunRef = this.findExecutionRunRef(address.workflowKey);
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    this.getViewAddressRegistry().set(clientId, address);
-    this.getViewMessageSinks().set(clientId, send);
-    const snapshot: RunViewLoadedMessage = {
-      type: MESSAGE_TYPES.RUN_VIEW_LOADED,
-      requestId,
-      address,
-      ...(workspaceRoot
-        ? { runDirectory: this.resolveAddressDirectory(workspaceRoot, address) }
-        : {}),
-      workingFile,
-      history: view.history,
-      runSummaries: view.runSummaries,
-      workflowProperties: view.workflowProperties,
-      executionRunRef,
-      pendingRewind: workingFile._runtime?.pendingRewind,
-      descriptorRevision: view.descriptorRevision,
-      isSystemGenerated: view.isSystemGenerated,
-      ...(definitionRollback &&
-      (workingFile.definitionRevision ?? 1) ===
-        definitionRollback.restoredRevision &&
-      view.descriptorRevision === definitionRollback.descriptorRevision
-        ? {
-            definitionRollback: {
-              fromRevision: definitionRollback.fromRevision,
-            },
-          }
-        : {}),
-    };
-
-    // Only a live view can hold in-memory output the timeline read above could
-    // have missed: the run that is actually executing, or a draft, which has no
-    // persisted timeline of its own. Every other addressed run is *fully*
-    // described by the history snapshot, so replaying the bound instance's
-    // buffer there re-sends an earlier execution's output on top of it. This
-    // must be evaluated independently of `boundWorkflowId` — that is non-null on
-    // every lineage switch, so folding the check into the `??` fallback below
-    // left it unreachable in exactly the case that matters.
-    const isLiveAddress =
-      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
-      (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        address.runRef === executionRunRef);
-    const runtimeWorkflowId =
-      boundWorkflowId ??
-      (isLiveAddress ? this.getViewedWorkflowId(clientId) : null);
-    const boundInstance = runtimeWorkflowId
-      ? this.findInstance(runtimeWorkflowId)
-      : undefined;
-    const announcedWorkflowId =
-      boundWorkflowId ??
-      (announceReplayBoundary ? this.getViewedWorkflowId(clientId) : null);
-    if (announcedWorkflowId) {
-      const announcedInstance = this.findInstance(announcedWorkflowId);
-      // Announce the new active instance before transferring the potentially
-      // large history snapshot. Client-ready preferred-address replays must do
-      // this even when the instance binding is unchanged: a resumed mobile page
-      // can retain workflowStore content that no longer matches its retained
-      // applied address, and the requestless announcement invalidates that
-      // association before the authoritative snapshot reaches the stale guard.
-      send({
-        type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
-        workflows: this.getActiveTerminalWorkflowRefs(),
-      });
-      send({
-        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
-        workflowId: announcedWorkflowId,
-        workingFilePath:
-          announcedInstance?.getSummary().workingFilePath ??
-          this.externalRunSessions.get(announcedWorkflowId)?.summary
-            .workingFilePath ??
-          null,
-        // Announcing before the snapshot must not read as a backend-initiated
-        // switch: without the requestId the client cancels its own in-flight
-        // request and then drops the requestful RUN_VIEW_LOADED that follows.
-        requestId,
-      });
-    }
-
-    // This is the one authoritative definition/runtime/history application for
-    // the addressed switch. Nothing after it may emit FILE_SELECTED,
-    // SESSION_RESTORED, RUN_VIEW_LOADED, or OUTPUT_HISTORY_LOADED.
-    send(snapshot);
-    Log.debug(
-      `[deliverRunView] client=${clientId.slice(0, 12)} address=${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"} snapshot sent`
-    );
-
-    // Overlay only in-memory output that may have arrived after the timeline
-    // read, then restore PTY metadata/scrollback. Neither path resets the
-    // snapshot, so completed/fresh instances keep their persisted output.
-    //
-    // The overlay is a stream of *live* updates, not a snapshot, so it is tagged
-    // with the instance it describes: every per-workflow guard in the webview is
-    // conditional on `message.workflowId`, which means an untagged overlay is
-    // accepted unconditionally by whatever view the client is displaying by the
-    // time it arrives — including a workflow the user switched to in between.
-    if (runtimeWorkflowId && isLiveAddress) {
-      boundInstance?.replayBufferedOutputTo(
-        new WorkflowTaggedSink(
-          new PostMessageDashboardSink(send),
-          runtimeWorkflowId
-        )
-      );
-    }
-    if (boundWorkflowId) {
-      this.replayTerminalSessionsTo(boundWorkflowId, send, clientId);
-    }
-  }
-
-  /**
-   * Fetches one lineage's manifest-only run list for the run-navigation dropdown's
-   * drill-in panel. Unlike `loadRunViewForClient`, this never binds a client to the
-   * lineage, loads a working file, or replays PTY/output state — it is a pure,
-   * request-correlated summary fetch so drilling into another lineage's runs cannot
-   * change what the caller is currently viewing.
-   */
   async loadRunSummariesForClient(
     workflowKey: WorkflowKey,
     send: (message: unknown) => void,
     requestId: string
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder is open");
-    }
-    const historyManager = new OutputHistoryManager(workspaceRoot);
-    const [runSummaries, descriptor] = await Promise.all([
-      historyManager.getRunSummaries(workflowKey),
-      this.lineageRepository.readDescriptor(workspaceRoot, workflowKey),
-    ]);
-    const snapshot: RunSummariesLoadedMessage = {
-      type: MESSAGE_TYPES.RUN_SUMMARIES_LOADED,
-      requestId,
+    await this.runViewPublisher.loadRunSummariesForClient(
       workflowKey,
-      descriptorRevision: descriptor.revision,
-      lastModifiedAt: descriptor.lastModifiedAt,
-      runSummaries,
-      executionRunRef: this.findExecutionRunRef(workflowKey),
-    };
-    send(snapshot);
+      send,
+      requestId
+    );
   }
 
-  /**
-   * Resolves a definition mutation against the requesting client's addressed
-   * view. A promoted run is validated in place (no draft fork, no instance
-   * rebinding) — the actual write happens in the caller's subsequent per-op
-   * call, either against a reused live instance or the static `*AtRun`
-   * primitives. Editing an already-existing draft still goes through this
-   * client's bound draft instance, unchanged.
-   */
   async prepareDefinitionMutation(
     mutation: WorkflowDefinitionMutation | undefined,
     clientId: string
@@ -3770,16 +3014,10 @@ export class WorkflowOrchestrator {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): WorkflowInstance | undefined {
-    const matches = (instance: WorkflowInstance) => {
-      const state = instance.getQueueState();
-      return state.workflowKey === workflowKey && state.runRef === runRef;
-    };
-    const instances = this.instances ?? new Map();
-    const retiredInstances = this.retiredInstances ?? new Map();
-    return (
-      [...instances.values()].find(matches) ??
-      [...retiredInstances.values()].find(matches)
-    );
+    return this.runLifecycleService.findResidentInstanceForRun(
+      workflowKey,
+      runRef
+    ) as WorkflowInstance | undefined;
   }
 
   private requireWorkspaceRoot(): string {
@@ -3788,6 +3026,12 @@ export class WorkflowOrchestrator {
       throw new Error("No workspace folder is open");
     }
     return workspaceRoot;
+  }
+
+  public findInstanceForLineage(
+    workflowKey: WorkflowKey
+  ): WorkflowInstance | undefined {
+    return this.workflowInstanceRegistry.findInstanceForLineage(workflowKey);
   }
 
   /**
@@ -3848,21 +3092,7 @@ export class WorkflowOrchestrator {
   }
 
   private findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {
-    for (const instance of this.instances.values()) {
-      const state = instance.getQueueState();
-      if (
-        state.workflowKey === workflowKey &&
-        isExecutionOwnerState(state.status)
-      ) {
-        return instance.getExecutionRunRef() ?? state.runRef;
-      }
-    }
-    const external = this.externalRunSessions.get(workflowKey);
-    return external
-      ? WorkflowPaths.parseWorkingFileAddressFromPath(
-          external.summary.workingFilePath ?? ""
-        )?.runRef
-      : undefined;
+    return this.runLifecycleService.findExecutionRunRef(workflowKey);
   }
 
   clearWorkingFilePath(clientId: string): void {
@@ -3895,7 +3125,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) => instance.updateWorkflowName(workflowName),
@@ -3947,7 +3178,8 @@ export class WorkflowOrchestrator {
         resolution.kind ===
         EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
       ) {
-        const existingExternalEntry = this.externalRunSessions.get(workflowId);
+        const existingExternalEntry =
+          this.externalRunWatchCoordinator.getEntry(workflowId);
         if (existingExternalEntry) {
           Log.debug(
             `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
@@ -3967,7 +3199,7 @@ export class WorkflowOrchestrator {
         Log.debug(
           `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" has a proven external lock — starting external run watch session`
         );
-        await this.startExternalRunWatchSession(
+        await this.externalRunWatchCoordinator.startExternalRunWatchSession(
           filePath,
           workspaceFolderPath,
           resolution.inspection
@@ -4512,7 +3744,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) =>
@@ -4578,140 +3811,14 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
   > {
-    if (!Number.isInteger(toIndex) || toIndex < 0) {
-      throw new Error("Start position must be a non-negative integer");
-    }
-    this.assertViewedRunAddress(address, clientId, "Set start position");
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder is open");
-    }
-
-    const activeForLineage = [...this.instances.values()].find((instance) => {
-      const state = instance.getQueueState();
-      return (
-        state.workflowKey === address.workflowKey &&
-        isExecutionOwnerState(state.status)
-      );
-    });
-    if (
-      activeForLineage &&
-      activeForLineage.getExecutionRunRef() !== address.runRef
-    ) {
-      throw new Error("Another run in this workflow lineage is executing");
-    }
-
-    if (toIndex === 0) {
-      if (activeForLineage) {
-        throw new Error(
-          "Cannot seed a new run while this workflow lineage is executing"
-        );
-      }
-      const seeded = await WorkingFileManager.seedNewRun(
-        workspaceRoot,
-        address.workflowKey,
-        address.runRef,
-        {},
-        this.lineageRepository,
-        {
-          definitionRevision: expectedDefinitionRevision,
-          descriptorRevision: expectedDescriptorRevision,
-        }
-        // No execution follows: this seed is a start-position move, and the run
-        // stays IDLE until the user presses Run on it.
-      );
-      const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
-        workflowKey: address.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef: seeded.runRef,
-      };
-      if (options.invalidateViews !== false) {
-        // Seeding forks a new run, so — unlike the rewind branch — the client's
-        // address itself moves. Publishing is not optional here: the seed
-        // advanced the descriptor revision, and a client left on the source
-        // address keeps echoing the superseded pair, so its very next mutation
-        // (including a second Set Start Position) is rejected as a conflict.
-        await this.switchClientToRunAddress(seededAddress, clientId);
-        // Whoever stayed on the source run still holds that stale descriptor
-        // revision and a run list missing the fork.
-        await this.invalidateRunViews(address.workflowKey, address.runRef);
-      }
-      return {
-        kind: "seeded",
-        runRef: seeded.runRef,
-        definitionRevision: 1,
-        descriptorRevision: seeded.allocation.reservationDescriptorRevision,
-      };
-    }
-
-    const targetPath = WorkflowPaths.runFilePath(
-      workspaceRoot,
-      address.workflowKey,
-      address.runRef
+    return this.runLifecycleService.setStartPositionAtRun(
+      address,
+      toIndex,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId,
+      options
     );
-    const target = JSON.parse(
-      await fs.promises.readFile(targetPath, "utf8")
-    ) as WorkingFile;
-    if (toIndex >= (target.steps?.length ?? 0)) {
-      throw new Error(
-        "Start position must leave at least one suffix step to run"
-      );
-    }
-    const targetState =
-      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
-    if (
-      targetState === EXECUTION_STATES.RUNNING ||
-      targetState === EXECUTION_STATES.PAUSING ||
-      targetState === EXECUTION_STATES.CANCELLING
-    ) {
-      throw new Error(
-        `Cannot set start position while in state ${targetState}`
-      );
-    }
-    if (targetState === EXECUTION_STATES.PAUSED && !activeForLineage) {
-      throw new Error(
-        "Cannot rewind a paused run without its live execution owner"
-      );
-    }
-
-    const loadedTarget = this.findResidentInstanceForRun(
-      address.workflowKey,
-      address.runRef
-    );
-    const result = loadedTarget
-      ? await loadedTarget.beginPendingRewind(
-          address.workflowKey,
-          address.runRef,
-          toIndex,
-          expectedDefinitionRevision,
-          expectedDescriptorRevision
-        )
-      : await WorkingFileManager.beginPendingRewind(
-          workspaceRoot,
-          address.workflowKey,
-          address.runRef,
-          toIndex,
-          expectedDefinitionRevision,
-          expectedDescriptorRevision,
-          this.lineageRepository
-        );
-    await this.commitPendingRewindRevision(
-      address.workflowKey,
-      address.runRef,
-      result.definitionRevision,
-      JSON.parse(await fs.promises.readFile(targetPath, "utf8")) as WorkingFile
-    );
-    if (options.invalidateViews !== false) {
-      // Setting a start position is the single most common prelude to pressing
-      // Continue, so the rewind's new revisions must reach the client ahead of
-      // the snapshot rather than behind it.
-      await this.publishRunRevisionsToViewers(
-        address.workflowKey,
-        address.runRef
-      );
-      await this.invalidateRunViews(address.workflowKey, address.runRef);
-    }
-    return { kind: WORKTREE_EDIT_KINDS.REWIND, ...result };
   }
 
   /** Seed a fresh RunRef from an addressed run and execute that new run. */
@@ -4721,146 +3828,12 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ runRef: RunRef }> {
-    await this.assertNoPendingWorkflowExternalRoots(clientId);
-    this.assertViewedRunAddress(address, clientId, "Re-run");
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-    if (this.findExecutionRunRef(address.workflowKey)) {
-      throw new Error(
-        "Cannot seed a new run while this workflow lineage is executing"
-      );
-    }
-    const seeded = await WorkingFileManager.seedNewRun(
-      workspaceRoot,
-      address.workflowKey,
-      address.runRef,
-      {},
-      this.lineageRepository,
-      {
-        definitionRevision: expectedDefinitionRevision,
-        descriptorRevision: expectedDescriptorRevision,
-      },
-      // Executed below, so the manifest opens RUNNING.
-      EXECUTION_STATES.RUNNING
+    return this.runLifecycleService.seedAndExecuteAtRun(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
     );
-    await this.closeLineageTerminalsForFreshRun(address.workflowKey);
-    const instance = this.buildWorkflowInstance();
-    getPtyProcessManager()?.setPendingController(instance.id, clientId);
-    let prepared = false;
-    let resolvePrepared!: () => void;
-    let rejectPrepared!: (error: unknown) => void;
-    const preparedPromise = new Promise<void>((resolve, reject) => {
-      resolvePrepared = resolve;
-      rejectPrepared = reject;
-    });
-    void instance
-      .executeSeededRun(seeded, address.workflowKey, undefined, async () => {
-        await this.switchClientToPreparedExecution(instance, clientId);
-        prepared = true;
-        resolvePrepared();
-      })
-      .catch((error) => {
-        if (!prepared) {
-          rejectPrepared(error);
-        }
-        Log.error(
-          `[WorkflowOrchestrator] Failed to execute seeded run: ${getErrorMessage(error)}`
-        );
-      });
-    // The action is not complete until the initiating client is visibly bound
-    // to the seeded run. Execution itself continues in the background.
-    await preparedPromise;
-    return { runRef: seeded.runRef };
-  }
-
-  /**
-   * Moves a client onto a run address by pushing it a fresh run-view
-   * snapshot, falling back to a bare registry update if no message sink is
-   * available (or the push itself fails) — the caller's action must still be
-   * complete even without a visible client to follow it.
-   *
-   * Shared by every path that moves a client's address without the client
-   * having asked for that exact address itself: `seedAndExecuteAtRun`'s idle
-   * counterpart (a seed forks a new run the client must follow) and
-   * `executeDraftAtAddress` (a draft promoted into a run mid-request).
-   */
-  private async switchClientToRunAddress(
-    address: Extract<WorkflowViewAddress, { kind: "run" }>,
-    clientId: string
-  ): Promise<void> {
-    const send =
-      this.getViewMessageSinks().get(clientId) ??
-      (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
-    if (!send) {
-      // No sink to publish through, but the address must still follow along
-      // or the client's next addressed mutation targets the stale one.
-      this.getViewAddressRegistry().set(clientId, address);
-      return;
-    }
-    try {
-      await this.loadRunViewForClient(address, send, clientId);
-    } catch (error) {
-      Log.warn(
-        `[WorkflowOrchestrator] Failed to switch ${clientId} to run ${address.runRef}: ${getErrorMessage(error)}`
-      );
-      this.getViewAddressRegistry().set(clientId, address);
-    }
-  }
-
-  /** A different RunRef is a fresh terminal/session boundary for the lineage. */
-  private async closeLineageTerminalsForFreshRun(
-    workflowKey: WorkflowKey
-  ): Promise<void> {
-    const residents = new Set([
-      ...this.instances.values(),
-      ...this.retiredInstances.values(),
-    ]);
-    await Promise.all(
-      [...residents]
-        .filter(
-          (instance) => instance.getQueueState().workflowKey === workflowKey
-        )
-        .map((instance) => instance.closeRetainedTerminalsForFreshRun())
-    );
-  }
-
-  /**
-   * Make the initiating client follow a run only after its working file and
-   * timeline exist, but before execution can emit any run-scoped messages.
-   */
-  private async switchClientToPreparedExecution(
-    instance: WorkflowInstance,
-    clientId: string
-  ): Promise<void> {
-    if (
-      !this.instances.has(instance.id) &&
-      !this.retiredInstances.has(instance.id)
-    ) {
-      // Keep the prepared ID discoverable during replay. The RUNNING state
-      // transition promotes it into the live registry immediately afterward.
-      this.retiredInstances.set(instance.id, instance);
-    }
-    // Until that promotion the incoming instance is indistinguishable from the
-    // outgoing run's — which is still retired, still owns the PTY being torn
-    // down, and therefore wins every heuristic in findInstanceForLineage. Claim
-    // the lineage now so the replay below (and any later addressed navigation)
-    // resolves to the run the client was just switched to.
-    const workflowKey = instance.getQueueState().workflowKey;
-    if (workflowKey) {
-      this.getLineageExecutionOwners().set(workflowKey, {
-        instanceId: instance.id,
-        promoted: false,
-      });
-    }
-
-    const send =
-      this.getViewMessageSinks().get(clientId) ??
-      (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
-    if (!send) {
-      this.setViewedWorkflowId(clientId, instance.id);
-      return;
-    }
-    await this.replayWorkflowStateTo(instance.id, send, clientId);
   }
 
   /** Execute the exact viewed draft; promoted runs must use seedAndExecuteAtRun. */
@@ -4870,78 +3843,12 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    await this.assertNoPendingWorkflowExternalRoots(clientId);
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
-      viewed.workflowKey !== address.workflowKey
-    ) {
-      throw new Error("Run no longer targets this client's viewed draft");
-    }
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-    const descriptor = await this.lineageRepository.readDescriptor(
-      workspaceRoot,
-      address.workflowKey
+    return this.runLifecycleService.executeDraftAtAddress(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
     );
-    if (descriptor.revision !== expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
-    const draft = JSON.parse(
-      await fs.promises.readFile(
-        WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
-        "utf8"
-      )
-    ) as WorkingFile;
-    if ((draft.definitionRevision ?? 1) !== expectedDefinitionRevision) {
-      throw new Error("Definition revision conflict while running draft");
-    }
-    const instance = this.getInstanceForClient(clientId);
-    // Promoting the draft moves this client's own address from draft to the
-    // new run — unlike invalidateRunViews (which only refreshes clients
-    // already addressed at a run), nothing else tells a client still
-    // addressed at the draft that its promotion happened. Without this the
-    // client stays on the draft address for the run's entire duration: no
-    // RunSummaryBanner, no run-panel entry, until some unrelated navigation
-    // (switching workflows and back) happens to force a fresh snapshot.
-    // Mirrors seedAndExecuteAtRun: execute without awaiting the full run, and
-    // resolve this call once the client is visibly moved onto the promoted
-    // run's address rather than once every step has finished.
-    let prepared = false;
-    let resolvePrepared!: () => void;
-    let rejectPrepared!: (error: unknown) => void;
-    const preparedPromise = new Promise<void>((resolve, reject) => {
-      resolvePrepared = resolve;
-      rejectPrepared = reject;
-    });
-    void instance
-      .executeLoadedPromptFile(undefined, false, "", false, async () => {
-        const state = instance.getQueueState();
-        if (state.workflowKey && state.runRef) {
-          await this.switchClientToRunAddress(
-            {
-              workflowKey: state.workflowKey,
-              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-              runRef: state.runRef,
-            },
-            clientId
-          );
-        }
-        prepared = true;
-        resolvePrepared();
-      })
-      .catch((error) => {
-        if (!prepared) {
-          rejectPrepared(error);
-        }
-        Log.error(
-          `[WorkflowOrchestrator] Failed to execute draft: ${getErrorMessage(error)}`
-        );
-      });
-    await preparedPromise;
   }
 
   /** One client action: restore the committed run, then seed and execute a new RunRef. */
@@ -4952,25 +3859,11 @@ export class WorkflowOrchestrator {
     confirmEditedSuffix: boolean,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ runRef: RunRef } | { hasSuffixEdits: true }> {
-    this.assertViewedRunAddress(address, clientId, "Start new run instead");
-    if (this.findExecutionRunRef(address.workflowKey)) {
-      throw new Error(
-        "Cannot seed a new run while this workflow lineage is executing"
-      );
-    }
-    const discarded = await this.discardContinuationAtRun(
+    return this.runLifecycleService.startNewRunInsteadAtRun(
       address,
       expectedDefinitionRevision,
       expectedDescriptorRevision,
       confirmEditedSuffix,
-      clientId,
-      false
-    );
-    if (!discarded.discarded) return { hasSuffixEdits: true };
-    return this.seedAndExecuteAtRun(
-      address,
-      discarded.definitionRevision,
-      discarded.descriptorRevision,
       clientId
     );
   }
@@ -4979,32 +3872,17 @@ export class WorkflowOrchestrator {
   private static describeViewAddress(
     address: WorkflowViewAddress | null | undefined
   ): string {
-    if (!address) {
-      return "(none)";
-    }
-    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-      ? `${address.workflowKey}/${address.runRef}`
-      : `${address.workflowKey}/draft`;
+    return RunLifecycleService.describeViewAddress(address);
   }
 
-  private assertViewedRunAddress(
-    address: WorkflowRunAddress,
-    clientId: string,
-    action: string
-  ): void {
-    const viewed = this.getViewAddress(clientId);
-    if (
-      !viewed ||
-      viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-      viewed.workflowKey !== address.workflowKey ||
-      viewed.runRef !== address.runRef
-    ) {
-      throw new Error(
-        `${action} no longer targets this client's viewed run ` +
-          `(targeted: ${address.workflowKey}/${address.runRef}, ` +
-          `viewing: ${WorkflowOrchestrator.describeViewAddress(viewed)})`
-      );
-    }
+  public async switchClientToPreparedExecution(
+    instance: WorkflowInstance,
+    clientId: string
+  ): Promise<void> {
+    return this.runLifecycleService.switchClientToPreparedExecution(
+      instance,
+      clientId
+    );
   }
 
   /**
@@ -5019,58 +3897,13 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
-    await this.assertNoPendingWorkflowExternalRoots(clientId);
-    const {
-      workspaceRoot,
-      activeInstance,
-      allowInterruptedRun,
-      pendingRewindOnThisRun,
-    } = await this.validateExplicitContinuationTarget(
+    return this.runLifecycleService.appendAndContinueAtRun(
       address,
+      tail,
       expectedDefinitionRevision,
       expectedDescriptorRevision,
       clientId
     );
-    // Appending to a rewound run commits the rewind first, clearing the
-    // descriptor marker and discard snapshot. The definition revision is
-    // untouched by the commit, so the append still validates against the
-    // observed head; the append itself no longer checks a descriptor
-    // revision (see `RunContinuationService.appendStepsToRun`).
-    if (pendingRewindOnThisRun) {
-      await WorkingFileManager.commitPendingRewind(
-        workspaceRoot,
-        address.workflowKey,
-        address.runRef,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        this.lineageRepository
-      );
-    }
-    const appended = await RunContinuationService.appendStepsToRun(
-      workspaceRoot,
-      address.workflowKey,
-      address.runRef,
-      tail,
-      expectedDefinitionRevision,
-      this.lineageRepository,
-      allowInterruptedRun
-    );
-    const instance =
-      activeInstance ??
-      this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
-      this.buildWorkflowInstance();
-    getPtyProcessManager()?.setPendingController(instance.id, clientId);
-    await instance.executeContinuationAtRun(
-      address.workflowKey,
-      address.runRef,
-      appended.definitionRevision,
-      () => this.switchClientToPreparedExecution(instance, clientId)
-    );
-    await this.invalidateRunViews(address.workflowKey, address.runRef);
-    return {
-      definitionRevision: appended.definitionRevision,
-      descriptorRevision: appended.descriptorRevision,
-    };
   }
 
   /** Continue an unchanged addressed run; no target is inferred from recency. */
@@ -5080,200 +3913,26 @@ export class WorkflowOrchestrator {
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    await this.assertNoPendingWorkflowExternalRoots(clientId);
-    const { workspaceRoot, activeInstance, pendingRewindOnThisRun } =
-      await this.validateExplicitContinuationTarget(
-        address,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        clientId
-      );
-    // Continuing a rewound run commits the rewind: clear the descriptor marker
-    // and discard snapshot before execution so the run head is durable and no
-    // stale pending state can block later edits/continuations. The definition
-    // revision is unchanged, so the continuation still validates below.
-    if (pendingRewindOnThisRun) {
-      await WorkingFileManager.commitPendingRewind(
-        workspaceRoot,
-        address.workflowKey,
-        address.runRef,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        this.lineageRepository
-      );
-    }
-    const instance =
-      activeInstance ??
-      this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
-      this.buildWorkflowInstance();
-    getPtyProcessManager()?.setPendingController(instance.id, clientId);
-    await instance.executeContinuationAtRun(
-      address.workflowKey,
-      address.runRef,
+    return this.runLifecycleService.continueAtRun(
+      address,
       expectedDefinitionRevision,
-      () => this.switchClientToPreparedExecution(instance, clientId)
+      expectedDescriptorRevision,
+      clientId
     );
-    await this.invalidateRunViews(address.workflowKey, address.runRef);
   }
 
-  private async validateExplicitContinuationTarget(
+  public async validateExplicitContinuationTarget(
     address: { workflowKey: WorkflowKey; runRef: RunRef },
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     clientId: string
-  ): Promise<{
-    workspaceRoot: string;
-    activeInstance: WorkflowInstance | undefined;
-    allowInterruptedRun: boolean;
-    pendingRewindOnThisRun: boolean;
-  }> {
-    this.assertViewedRunAddress(address, clientId, "Continuation");
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-
-    const descriptor = await this.lineageRepository.readDescriptor(
-      workspaceRoot,
-      address.workflowKey
+  ): Promise<ExplicitContinuationValidation> {
+    return this.runLifecycleService.validateExplicitContinuationTarget(
+      address,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision,
+      clientId
     );
-    if (descriptor.revision !== expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
-    // A pending rewind on the run being continued is not a blocker: continuing
-    // it is precisely how the user commits that rewind. Only a draft, or a
-    // rewind belonging to a different run, blocks this continuation.
-    const pendingRewindOnThisRun =
-      descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
-      descriptor.pendingEdit.runRef === address.runRef;
-    if (descriptor.pendingEdit && !pendingRewindOnThisRun) {
-      throw new Error("This workflow has a draft or pending continuation");
-    }
-
-    const activeInstance = [...this.instances.values()].find((instance) => {
-      const state = instance.getQueueState();
-      return (
-        state.workflowKey === address.workflowKey &&
-        isExecutionOwnerState(state.status)
-      );
-    });
-    if (
-      activeInstance &&
-      activeInstance.getExecutionRunRef() !== address.runRef
-    ) {
-      throw new Error("Another run in this workflow lineage is executing");
-    }
-    if (
-      activeInstance &&
-      activeInstance.getQueueState().status !== EXECUTION_STATES.PAUSED
-    ) {
-      throw new Error("Cannot continue while this run is actively executing");
-    }
-
-    const lockInspection = await readWorkflowLockOwnershipInspection(
-      workspaceRoot,
-      address.workflowKey,
-      this.runnerHostIdentity,
-      {
-        onIdentityDiagnostic: (diagnostic) =>
-          Log.warn(
-            `[WorkflowOrchestrator] continuation lock identity contradiction: ${JSON.stringify(diagnostic)}`
-          ),
-      }
-    );
-
-    const activeInspection =
-      lockInspection.liveness === WORKFLOW_LOCK_LIVENESS.ACTIVE
-        ? lockInspection
-        : undefined;
-    const activeLock = activeInspection?.lock;
-    const lockNamesTarget = activeLock?.runRef === address.runRef;
-    if (activeLock && !activeInstance) {
-      if (activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.SELF) {
-        // A spent-but-resident instance (for example a named-worktree run
-        // that errored while retaining its injectable PTY, per
-        // `preserveWorktreeReservation` in `WorkflowInstance`) is not an
-        // owner-state instance, so the lookup above misses it even though it
-        // still legitimately holds this exact run's lock. Mirrors the
-        // locally-owned-run carve-out in `applyRunAddressedMutation`. Fall
-        // through so the caller's own `findResidentInstanceForRun` fallback
-        // reuses it below instead of rejecting a real invariant violation.
-        const retainedResident = lockNamesTarget
-          ? this.findResidentInstanceForRun(address.workflowKey, address.runRef)
-          : undefined;
-        if (!retainedResident?.ownsRunnerLock()) {
-          Log.error(
-            `[WorkflowOrchestrator] self-owned but untracked execution for ${address.workflowKey}/${activeLock.runRef}`
-          );
-          throw new Error(
-            "Self-owned execution is not tracked by this process; refusing continuation"
-          );
-        }
-      } else if (
-        activeInspection.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE
-      ) {
-        throw new Error(
-          "Cannot continue while execution ownership is indeterminate"
-        );
-      } else {
-        throw new Error(
-          lockNamesTarget
-            ? "The requested run is executing in another process"
-            : "Another run in this workflow lineage is executing"
-        );
-      }
-    }
-    if (activeLock && !lockNamesTarget) {
-      throw new Error("Another run in this workflow lineage is executing");
-    }
-
-    const target = JSON.parse(
-      await fs.promises.readFile(
-        WorkflowPaths.runFilePath(
-          workspaceRoot,
-          address.workflowKey,
-          address.runRef
-        ),
-        "utf8"
-      )
-    ) as WorkingFile;
-    if ((target.definitionRevision ?? 1) !== expectedDefinitionRevision) {
-      throw new Error(
-        `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${target.definitionRevision ?? 1}`
-      );
-    }
-    const targetState =
-      target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
-    const activeTarget =
-      activeInstance?.getExecutionRunRef() === address.runRef;
-    // An orphaned run is adoptable: no resident instance owns it and no live
-    // lock names it, so nothing can be executing it and a fresh execution owner
-    // can take it over from its own persisted position. This covers PAUSED as
-    // well as RUNNING — a host restart routinely leaves paused runs with no
-    // owner, and a paused run is the safer of the two to adopt (no in-flight
-    // harness turn, and `currentIndex` sits on a clean step boundary). The lock
-    // check is what makes it safe in both cases.
-    const interruptedRun =
-      (targetState === EXECUTION_STATES.RUNNING ||
-        targetState === EXECUTION_STATES.PAUSED) &&
-      !activeTarget &&
-      lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE;
-    if (
-      targetState === EXECUTION_STATES.PAUSING ||
-      targetState === EXECUTION_STATES.CANCELLING ||
-      ((targetState === EXECUTION_STATES.RUNNING ||
-        targetState === EXECUTION_STATES.PAUSED) &&
-        !activeTarget &&
-        !interruptedRun)
-    ) {
-      throw new Error(`Cannot continue while run is in state ${targetState}`);
-    }
-    return {
-      workspaceRoot,
-      activeInstance,
-      allowInterruptedRun: interruptedRun,
-      pendingRewindOnThisRun,
-    };
   }
 
   /** One lifecycle operation shared by dashboard actions and startup recovery. */
@@ -5293,50 +3952,13 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
   > {
-    this.assertViewedRunAddress(address, clientId, "Discard continuation");
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-    const result = await WorkingFileManager.discardPendingRewind(
-      workspaceRoot,
-      address.workflowKey,
-      address.runRef,
+    return this.runLifecycleService.discardContinuationAtRun(
+      address,
       expectedDefinitionRevision,
       expectedDescriptorRevision,
       confirmEditedSuffix,
-      this.lineageRepository
-    );
-    if (!result.discarded) return result;
-    if (invalidate) {
-      await this.invalidateRunViews(address.workflowKey, address.runRef, {
-        fromRevision: expectedDefinitionRevision,
-        restoredRevision: result.definitionRevision,
-        descriptorRevision: result.descriptorRevision,
-      });
-    }
-    return result;
-  }
-
-  private async commitPendingRewindRevision(
-    workflowKey: WorkflowKey,
-    runRef: RunRef,
-    definitionRevision: number,
-    workingFile: WorkingFile
-  ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-    await new OutputHistoryManager(workspaceRoot).commitDefinitionRevision(
-      WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef),
-      {
-        definitionRevision,
-        definition: buildDefinitionSnapshot(
-          workingFile.workflowName ?? "",
-          workingFile.steps ?? [],
-          workingFile._runtime?.pendingRewind?.fromStepIndex,
-          workingFile.finalStep,
-          workingFile.worktree,
-          workingFile.parallelGroups
-        ),
-      }
+      clientId,
+      invalidate
     );
   }
 
@@ -5353,41 +3975,10 @@ export class WorkflowOrchestrator {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<void> {
-    const targets = [...this.getViewAddressRegistry().entries()].filter(
-      ([, address]) =>
-        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        address.workflowKey === workflowKey &&
-        address.runRef === runRef
+    await this.runViewPublisher.invalidateRunViewProperties(
+      workflowKey,
+      runRef
     );
-    if (targets.length === 0) return;
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) return;
-    let workingFile: WorkingFile;
-    try {
-      const filePath = this.resolveAddressFilePath(workspaceRoot, {
-        workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef,
-      });
-      workingFile = JSON.parse(
-        await fs.promises.readFile(filePath, "utf-8")
-      ) as WorkingFile;
-    } catch (error) {
-      Log.warn(
-        `[WorkflowOrchestrator] Failed to read run file for properties invalidation: ${getErrorMessage(error)}`
-      );
-      return;
-    }
-    const { prompt, steps, finalStep, ...workflowProperties } = workingFile;
-    void prompt;
-    void steps;
-    void finalStep;
-    for (const [clientId] of targets) {
-      this.getViewMessageSinks().get(clientId)?.({
-        type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
-        workflowProperties,
-      });
-    }
   }
 
   private async invalidateRunViewStepColor(
@@ -5395,179 +3986,31 @@ export class WorkflowOrchestrator {
     runRef: RunRef,
     index: number
   ): Promise<void> {
-    const targets = [...this.getViewAddressRegistry().entries()].filter(
-      ([, address]) =>
-        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        address.workflowKey === workflowKey &&
-        address.runRef === runRef
+    await this.runViewPublisher.invalidateRunViewStepColor(
+      workflowKey,
+      runRef,
+      index
     );
-    if (targets.length === 0) return;
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) return;
-
-    try {
-      const filePath = this.resolveAddressFilePath(workspaceRoot, {
-        workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef,
-      });
-      const workingFile = JSON.parse(
-        await fs.promises.readFile(filePath, "utf-8")
-      ) as WorkingFile;
-      const color = workingFile.steps?.[index]?.color ?? null;
-      const definitionRevision = workingFile.definitionRevision;
-      for (const [clientId] of targets) {
-        this.getViewMessageSinks().get(clientId)?.({
-          type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
-          index,
-          color,
-          ...(definitionRevision !== undefined ? { definitionRevision } : {}),
-        });
-      }
-    } catch (error) {
-      Log.warn(
-        `[WorkflowOrchestrator] Failed to read run file for step color invalidation: ${getErrorMessage(error)}`
-      );
-    }
   }
 
-  /**
-   * Refresh every connected client viewing the changed stable run identity.
-   *
-   * All of them are refreshed from one shared read: this runs after every
-   * definition mutation, so a per-client read made ordinary editing rescan the
-   * whole lineage once per connected client.
-   */
   private async invalidateRunViews(
     workflowKey: WorkflowKey,
     runRef: RunRef,
     definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
-    const targets: Array<{
-      clientId: string;
-      send: (message: unknown) => void;
-    }> = [];
-    for (const [clientId, address] of this.getViewAddressRegistry()) {
-      if (
-        address?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-        address.workflowKey !== workflowKey ||
-        address.runRef !== runRef
-      ) {
-        continue;
-      }
-      const send = this.getViewMessageSinks().get(clientId);
-      if (!send) continue;
-      targets.push({ clientId, send });
-    }
-    try {
-      await this.publishRunViewToClients(
-        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
-        targets,
-        definitionRollback
-      );
-    } catch (error) {
-      // Invalidation is a refresh, never the write itself — a failed read must
-      // not fail the mutation that triggered it.
-      Log.warn(
-        `[WorkflowOrchestrator] Failed to invalidate run view for ${targets.length} client(s): ${getErrorMessage(error)}`
-      );
-    }
+    await this.runViewPublisher.invalidateRunViews(
+      workflowKey,
+      runRef,
+      definitionRollback
+    );
   }
 
-  /**
-   * Deletes one stable run and rehydrates every client viewing the lineage.
-   * A client on the deleted address moves to the newest remaining run (or the
-   * draft); clients on another address retain that address but receive refreshed
-   * summaries. Keeping this here prevents a UI-only caller from leaving another
-   * connected client pointed at a removed directory.
-   *
-   * `address.runRef` may be any run in the lineage — deliberately not required
-   * to be the requesting client's own viewed run. The run-navigation panel
-   * (RUN_NAVIGATION_UX_PLAN.md) offers a delete button on every row while
-   * browsing a lineage the client may not even be viewing (a drilled-into,
-   * non-displayed lineage), so a "must match my own viewed address" guard
-   * would reject the common case rather than an edge case.
-   */
   async deleteRunAtAddress(
     address: { workflowKey: WorkflowKey; runRef: RunRef },
     send: (message: unknown) => void,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (this.findExecutionRunRef(address.workflowKey) === address.runRef) {
-      throw new Error("Cannot delete an executing run");
-    }
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-
-    const historyManager = new OutputHistoryManager(workspaceRoot);
-    const deletedRunId = (
-      await historyManager.getRunSummaries(address.workflowKey)
-    ).find((summary) => summary.runRef === address.runRef)?.runId;
-    await historyManager.deleteRunByRef(address.workflowKey, address.runRef);
-    const remaining = await historyManager.getRunSummaries(address.workflowKey);
-    const fallback: WorkflowViewAddress = remaining[0]
-      ? {
-          workflowKey: address.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: remaining[0].runRef,
-        }
-      : {
-          workflowKey: address.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-        };
-
-    const targets = [...this.getViewAddressRegistry().entries()].filter(
-      ([, candidate]) => candidate?.workflowKey === address.workflowKey
-    );
-    const displacedAViewer = targets.some(
-      ([, currentAddress]) =>
-        currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        currentAddress.runRef === address.runRef
-    );
-    await Promise.all(
-      targets.map(async ([targetClientId, currentAddress]) => {
-        const targetAddress =
-          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-          currentAddress.runRef === address.runRef
-            ? fallback
-            : currentAddress;
-        if (!targetAddress) return;
-        const targetSend =
-          targetClientId === clientId
-            ? send
-            : this.getViewMessageSinks().get(targetClientId);
-        if (!targetSend) return;
-        await this.loadRunViewForClient(
-          targetAddress,
-          targetSend,
-          targetClientId
-        );
-      })
-    );
-
-    // Only a client actually looking at the deleted run got moved off it —
-    // deleting a different run's row from the navigation panel while viewing
-    // something else changes nothing on screen and must stay silent.
-    if (displacedAViewer) {
-      const fallbackLabel =
-        fallback.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-          ? `Run ${remaining[0].runId}`
-          : "the draft";
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        USER_FEEDBACK_SEVERITY.INFO,
-        deletedRunId !== undefined
-          ? `Run ${deletedRunId} was deleted — you're now viewing ${fallbackLabel}.`
-          : `That run was deleted — you're now viewing ${fallbackLabel}.`
-      );
-    }
-
-    await this.pushRunSummariesRefreshIfNotAlreadyViewing(
-      address.workflowKey,
-      send,
-      targets.map(([targetClientId]) => targetClientId),
-      clientId
-    );
+    return this.runLifecycleService.deleteRunAtAddress(address, send, clientId);
   }
 
   /**
@@ -5581,61 +4024,9 @@ export class WorkflowOrchestrator {
     send: (message: unknown) => void,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    const workspaceRoot = this.currentWorkspaceFolderPath;
-    if (!workspaceRoot) throw new Error("No workspace folder is open");
-
-    const historyManager = new OutputHistoryManager(workspaceRoot);
-    const executionRunRef = this.findExecutionRunRef(workflowKey);
-    const runRefs = await historyManager.getRunsForWorkflow(workflowKey);
-    for (const runRef of runRefs) {
-      if (runRef === executionRunRef) continue;
-      try {
-        await historyManager.deleteRunByRef(workflowKey, runRef);
-      } catch (error) {
-        Log.warn(
-          `[WorkflowOrchestrator] deleteAllRunsForLineage: failed to delete ${workflowKey}/${runRef}:`,
-          error
-        );
-      }
-    }
-
-    const remaining = await historyManager.getRunSummaries(workflowKey);
-    const fallback: WorkflowViewAddress = remaining[0]
-      ? {
-          workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: remaining[0].runRef,
-        }
-      : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-
-    const targets = [...this.getViewAddressRegistry().entries()].filter(
-      ([, candidate]) => candidate?.workflowKey === workflowKey
-    );
-    await Promise.all(
-      targets.map(async ([targetClientId, currentAddress]) => {
-        const targetAddress =
-          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-          currentAddress.runRef !== executionRunRef
-            ? fallback
-            : currentAddress;
-        if (!targetAddress) return;
-        const targetSend =
-          targetClientId === clientId
-            ? send
-            : this.getViewMessageSinks().get(targetClientId);
-        if (!targetSend) return;
-        await this.loadRunViewForClient(
-          targetAddress,
-          targetSend,
-          targetClientId
-        );
-      })
-    );
-
-    await this.pushRunSummariesRefreshIfNotAlreadyViewing(
+    return this.runLifecycleService.deleteAllRunsForLineage(
       workflowKey,
       send,
-      targets.map(([targetClientId]) => targetClientId),
       clientId
     );
   }
@@ -5655,13 +4046,11 @@ export class WorkflowOrchestrator {
     refreshedClientIds: string[],
     clientId: string
   ): Promise<void> {
-    if (refreshedClientIds.includes(clientId)) {
-      return;
-    }
-    await this.loadRunSummariesForClient(
+    await this.runViewPublisher.pushRunSummariesRefreshIfNotAlreadyViewing(
       workflowKey,
       send,
-      `delete-refresh-${Date.now()}`
+      refreshedClientIds,
+      clientId
     );
   }
 
@@ -5955,24 +4344,12 @@ export class WorkflowOrchestrator {
     }
     this.instances.clear();
 
-    // Dispose all external watch sessions
-    for (const entry of this.externalRunSessions.values()) {
-      entry.session.dispose();
-    }
-    this.externalRunSessions.clear();
+    this.externalRunWatchCoordinator.dispose();
 
     for (const session of this.coordinationWatchSessions?.values() ?? []) {
       session.dispose();
     }
     this.coordinationWatchSessions?.clear();
-
-    // Dispose the runner.json create watcher
-    this.runnerJsonCreateWatcher?.dispose();
-    if (this.runnerJsonDiscoveryPollInterval !== undefined) {
-      clearInterval(this.runnerJsonDiscoveryPollInterval);
-      this.runnerJsonDiscoveryPollInterval = undefined;
-    }
-    this.polledRunnerJsonMtimes.clear();
 
     // The extension owns the injected status sink. Its StatusBarManager is
     // registered with context.subscriptions at construction time.
@@ -5991,6 +4368,21 @@ export class WorkflowOrchestrator {
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
 
+  private findInstancesForExternalRunWatch(
+    workingFilePath: string,
+    includeRetired = false
+  ): ReadonlyArray<ExternalRunWatchInstance> {
+    const instances = includeRetired
+      ? [...this.instances.values(), ...this.retiredInstances.values()]
+      : [...this.instances.values()];
+    return instances.filter((instance) =>
+      sameWorkingFilePath(
+        instance.getSummary().workingFilePath,
+        workingFilePath
+      )
+    );
+  }
+
   /**
    * Find a workflow instance regardless of whether it is currently executing
    * (in `instances`) or has reached a terminal state but is still alive
@@ -6003,9 +4395,7 @@ export class WorkflowOrchestrator {
    * stays explicit.
    */
   private findInstance(workflowId: string): WorkflowInstance | undefined {
-    return (
-      this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId)
-    );
+    return this.workflowInstanceRegistry.findInstance(workflowId);
   }
 
   /**
@@ -6014,17 +4404,7 @@ export class WorkflowOrchestrator {
    * specific clientId is available (e.g. from a browser message handler).
    */
   private getActiveInstance(): WorkflowInstance {
-    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    if (id) {
-      const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
-      if (inst) return inst;
-    }
-
-    // Lazily create the initial viewed instance
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    return instance;
+    return this.workflowInstanceRegistry.getActiveInstance();
   }
 
   /**
@@ -6034,12 +4414,7 @@ export class WorkflowOrchestrator {
    * last resort but logs a warning so bugs are surfaced immediately.
    */
   private getInstanceForClient(clientId: string): WorkflowInstance {
-    if (!this.viewerRegistry.has(clientId)) {
-      Log.warn(
-        `[WorkflowOrchestrator] getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
-      );
-    }
-    return this.getBoundInstance(clientId) ?? this.getActiveInstance();
+    return this.workflowInstanceRegistry.getInstanceForClient(clientId);
   }
 
   /**
@@ -6051,9 +4426,7 @@ export class WorkflowOrchestrator {
    * reconnect because `unregisterClient` clears their viewed id.
    */
   private getBoundInstance(clientId: string): WorkflowInstance | null {
-    const id = this.getViewedWorkflowId(clientId);
-    if (!id) return null;
-    return this.instances.get(id) ?? this.retiredInstances.get(id) ?? null;
+    return this.workflowInstanceRegistry.getBoundInstance(clientId);
   }
 
   /** Return the execution-root coordination projection for one dashboard view. */
@@ -6099,43 +4472,14 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   private getViewedWorkflowId(clientId: string): string | null {
-    return this.viewerRegistry.get(clientId) ?? null;
+    return this.workflowInstanceRegistry.getViewedWorkflowId(clientId);
   }
 
   private setViewedWorkflowId(
     clientId: string,
     workflowId: string | null
   ): void {
-    const prev = this.viewerRegistry.get(clientId);
-    this.viewerRegistry.set(clientId, workflowId);
-    if (prev !== workflowId) {
-      // The address must follow the instance this client now edits; keeping the
-      // previous workflow's address would point every addressed guard, and every
-      // lineage-scoped command, at a workflow the client no longer has open.
-      const adopted = workflowId
-        ? (this.instances.get(workflowId) ??
-          this.retiredInstances.get(workflowId))
-        : undefined;
-      this.getViewAddressRegistry().set(
-        clientId,
-        lineageAddressOf(adopted?.getQueueState())
-      );
-      const prevInRetired = prev ? this.retiredInstances.has(prev) : false;
-      const prevStillViewed = prev
-        ? this.isWorkflowViewedByAnyClient(prev)
-        : false;
-      Log.debug(
-        `[setViewedWorkflowId] clientId=${clientId.slice(0, 12)} ` +
-          `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
-          `inst:${workflowId?.slice(0, 8) ?? "null"}`
-      );
-
-      if (clientId === this.PANEL_CLIENT_ID) {
-        this.getActiveQueueStateChangedEmitter().fire(
-          this.getActiveQueueState()
-        );
-      }
-    }
+    this.workflowInstanceRegistry.setViewedWorkflowId(clientId, workflowId);
   }
 
   private getActiveQueueStateChangedEmitter(): TypedEmitter<
@@ -6147,14 +4491,15 @@ export class WorkflowOrchestrator {
   }
 
   private setHasQueuedStepsContext(state: QueueState | undefined): void {
-    this.statusBarSink?.setHasQueuedStepsContext((state?.steps.length ?? 0) > 0);
+    this.statusBarSink?.setHasQueuedStepsContext(
+      (state?.steps.length ?? 0) > 0
+    );
   }
 
-  private isWorkflowViewedByAnyClient(workflowId: string): boolean {
-    for (const viewed of this.viewerRegistry.values()) {
-      if (viewed === workflowId) return true;
-    }
-    return false;
+  public isWorkflowViewedByAnyClient(workflowId: string): boolean {
+    return this.workflowInstanceRegistry.isWorkflowViewedByAnyClient(
+      workflowId
+    );
   }
 
   /**
@@ -6166,73 +4511,11 @@ export class WorkflowOrchestrator {
    * would keep offering "Run draft" for a run that has already finished.
    */
   registerClient(clientId: string, send?: (message: unknown) => void): void {
-    if (!this.viewerRegistry.has(clientId)) {
-      this.viewerRegistry.set(clientId, null);
-    }
-    const viewAddresses = this.getViewAddressRegistry();
-    if (!viewAddresses.has(clientId)) {
-      viewAddresses.set(clientId, null);
-    }
-    if (send) {
-      this.getViewMessageSinks().set(clientId, send);
-    }
+    this.workflowInstanceRegistry.registerClient(clientId, send);
   }
 
   unregisterClient(clientId: string): void {
-    const workflowId = this.getViewedWorkflowId(clientId);
-    const ptyManager = getPtyProcessManager();
-    const ptyCount =
-      workflowId && ptyManager
-        ? ptyManager.getSessionsForWorkflow(workflowId).length
-        : 0;
-    Log.debug(
-      `[unregisterClient] clientId=${clientId.slice(0, 12)} ` +
-        `was viewing inst:${workflowId?.slice(0, 8) ?? "null"} ` +
-        `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false}, activePty=${ptyCount})`
-    );
-    this.viewerRegistry.delete(clientId);
-    this.getViewAddressRegistry().delete(clientId);
-    this.getViewMessageSinks().delete(clientId);
-
-    if (!workflowId) return;
-
-    // If the workflow is in retiredInstances and no other client views it, consider disposal.
-    if (
-      this.retiredInstances.has(workflowId) &&
-      !this.isWorkflowViewedByAnyClient(workflowId)
-    ) {
-      // Don't dispose while PTY sessions are still running. The instance must remain in
-      // retiredInstances so a reconnecting viewer (e.g. browser page refresh) can find it
-      // by workflowId and receive TERMINAL_STARTED for the still-live sessions.
-      // Cleanup happens on the next unregisterClient call after those sessions have ended.
-      if (ptyCount > 0) {
-        Log.debug(
-          `[unregisterClient] keeping retired inst:${workflowId.slice(0, 8)} — ` +
-            `${ptyCount} active PTY session(s) still running`
-        );
-        return;
-      }
-      Log.debug(
-        `[unregisterClient] disposing retired inst:${workflowId.slice(0, 8)} — no viewers, no active PTY sessions`
-      );
-      this.retiredInstances.get(workflowId)?.dispose();
-      this.retiredInstances.delete(workflowId);
-      return;
-    }
-
-    // If the workflow is a live idle instance and no other client views it, dispose and remove
-    const instance = this.instances.get(workflowId);
-    if (instance && !this.isWorkflowViewedByAnyClient(workflowId)) {
-      const status = instance.getQueueState().status;
-      const isIdle =
-        status !== EXECUTION_STATES.RUNNING &&
-        status !== EXECUTION_STATES.PAUSING &&
-        status !== EXECUTION_STATES.PAUSED;
-      if (isIdle) {
-        instance.dispose();
-        this.instances.delete(workflowId);
-      }
-    }
+    this.workflowInstanceRegistry.unregisterClient(clientId);
   }
 
   /**
@@ -6259,178 +4542,7 @@ export class WorkflowOrchestrator {
    * Construct a new WorkflowInstance wired to this orchestrator's integrations.
    */
   private buildWorkflowInstance(): WorkflowInstance {
-    const instance = new WorkflowInstance(
-      this.platform,
-      this.dashboardBroadcastHub as IDashboardSink,
-      this.integrationFactory,
-      (harnessOverride?: HarnessId) =>
-        this.resolveDetectorIntegration(harnessOverride),
-      (name: string | undefined) =>
-        this.propagateWorkflowNameToIntegrations(name),
-      () => this.updateStatusBar(),
-      this.currentWorkspaceFolderPath,
-      true,
-      true,
-      this.compatibilityRegistry,
-      this.userFeedbackSink,
-      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
-      (harnessId) =>
-        this.harnessUsageService?.refreshHarnessUsage(harnessId) ??
-        Promise.resolve(),
-      (workflow, workspaceRoot) =>
-        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
-      this.runnerHostIdentity
-    );
-
-    Log.debug(
-      `[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`
-    );
-
-    // Tracks the lineage identity this instance last reported, so the address
-    // registry is refreshed on the transition rather than on every state change.
-    let lastLineageIdentity = "";
-
-    // Broadcast summary updates whenever this instance's execution state changes.
-    // This covers both active and inactive workflows so the multi-workflow list
-    // stays in sync regardless of which workflow is currently displayed.
-    instance.promptQueue.onDidChangeState((state) => {
-      this.ensureCoordinationWatchSession(instance.getExecutionRoot());
-      if (this.getActiveWorkflowId() === instance.id) {
-        this.getActiveQueueStateChangedEmitter().fire(state);
-      }
-
-      const summary = instance.getSummary();
-      const inRegistry = this.instances.has(instance.id);
-
-      const lineageIdentity = `${state.workflowKey ?? ""}|${state.runRef ?? ""}`;
-      if (lineageIdentity !== lastLineageIdentity) {
-        lastLineageIdentity = lineageIdentity;
-        this.adoptInstanceLineageAddress(instance, state);
-      }
-
-      Log.debug(
-        `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
-          `inRegistry=${inRegistry} registrySize=${this.instances.size} ` +
-          `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
-      );
-
-      // Mark this instance's lineageExecutionOwners claim (if any) promoted the
-      // first time it actually reaches an execution-owner state. Until this
-      // fires, a terminal status on the claimed instance is leftover from its
-      // *previous* run (e.g. continuing an already-COMPLETED run reuses that
-      // same retired instance) and must not be read as this claim being spent
-      // — see `findInstanceForLineage` and `LineageExecutionClaim`.
-      if (state.workflowKey && isExecutionOwnerState(state.status)) {
-        const owners = this.getLineageExecutionOwners();
-        const claim = owners.get(state.workflowKey);
-        if (claim && claim.instanceId === instance.id && !claim.promoted) {
-          owners.set(state.workflowKey, { ...claim, promoted: true });
-        }
-      }
-
-      // Register in the running/paused registry whenever this instance enters
-      // RUNNING or PAUSED and is not already tracked.  Using the registry
-      // membership check (rather than a one-shot closure flag) lets a retired
-      // instance be re-registered if the user restarts it from the dashboard.
-      // Doing this here (rather than eagerly in executeWorkflow) guarantees
-      // that getWorkflowSummaries() never returns an IDLE workflow and that
-      // notifyWorkflowAdded() always fires with an accurate RUNNING/PAUSED
-      // state — eliminating the race condition where a GET_WORKFLOWS_LIST
-      // request processed before the runtime entered RUNNING would return an
-      // IDLE summary that the webview filter drops, incorrectly clearing
-      // loadedWorkflows.
-      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
-        instance.id
-      );
-      const needsExternalAnnounce =
-        isExternallyCreated &&
-        !this.announcedExternalWorkflowIds.has(instance.id);
-      if (
-        (state.status === EXECUTION_STATES.RUNNING ||
-          state.status === EXECUTION_STATES.PAUSING ||
-          state.status === EXECUTION_STATES.PAUSED) &&
-        (!inRegistry || needsExternalAnnounce)
-      ) {
-        if (needsExternalAnnounce) {
-          this.announcedExternalWorkflowIds.add(instance.id);
-        }
-        const wasRetired = this.promoteInstanceToLive(instance);
-        Log.debug(
-          `[onDidChangeState] registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
-            `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})` +
-            (wasRetired ? " — removed stale retiredInstances entry" : "")
-        );
-        this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
-
-        // If the panel is currently viewing a blank placeholder (no steps, no working file)
-        // and this workflow was started outside the normal panel launch path (inRegistry=false),
-        // auto-update viewerRegistry so subsequent executeEphemeralPrompt and retireWorkflow
-        // calls resolve to this running instance instead of the blank placeholder.
-        // Externally-created background instances (e.g. commit-message generation) are
-        // excluded — they must never hijack a client's displayed workflow, only announce
-        // their existence in the Running-workflows list.
-        const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-        if (!isExternallyCreated && panelViewedId !== instance.id) {
-          const panelViewed = panelViewedId
-            ? (this.instances.get(panelViewedId) ??
-              this.retiredInstances.get(panelViewedId))
-            : null;
-          const panelSummary = panelViewed?.getSummary();
-          const panelViewedIsBlank =
-            !panelViewed ||
-            (!panelSummary?.workingFilePath &&
-              (panelSummary?.totalSteps ?? 0) === 0);
-          if (panelViewedIsBlank) {
-            this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-            Log.debug(
-              `[onDidChangeState] auto-switched panel viewerRegistry to running inst:${instance.id.slice(0, 8)} (panel had blank placeholder)`
-            );
-          }
-        }
-      }
-
-      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
-
-      // A draft is promoted to a RunRef immediately before execution starts.
-      // Rebind clients viewing that instance from the draft snapshot to the
-      // executing run so subsequent dashboard property edits address and
-      // persist to the same run working file as the executor.
-      //
-      // Terminal states matter for the same reason and are not redundant: a run
-      // start that throws after the promotion published its run (harness
-      // unavailable, lock contention, timeline init) never reaches RUNNING, and
-      // the draft those clients are addressing was deleted by that promotion.
-      // Without this they are stranded on a file that no longer exists, while
-      // the definition they spent the session building sits in the promoted run
-      // nothing has pointed them at.
-      if (
-        state.status === EXECUTION_STATES.RUNNING ||
-        state.status === EXECUTION_STATES.ERROR ||
-        state.status === EXECUTION_STATES.STOPPED ||
-        state.status === EXECUTION_STATES.COMPLETED
-      ) {
-        this.syncExecutingRunViews(instance);
-      }
-
-      // Auto-retire when a workflow completes, errors, or stops.
-      // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
-      // sent synchronously above, so there's nothing to wait for.
-      // Guard with inRegistry — workflows restored from disk in a terminal
-      // state are never in this.instances, so there is nothing to retire.
-      if (
-        inRegistry &&
-        (state.status === EXECUTION_STATES.COMPLETED ||
-          state.status === EXECUTION_STATES.ERROR ||
-          state.status === EXECUTION_STATES.STOPPED)
-      ) {
-        Log.debug(
-          `[onDidChangeState] inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
-        );
-        this.retireWorkflow(instance.id);
-      }
-    });
-
-    return instance;
+    return this.workflowInstanceRegistry.buildWorkflowInstanceForHost();
   }
 
   /**
@@ -6458,10 +4570,11 @@ export class WorkflowOrchestrator {
    * never been told about, so its next edit or run action was rejected against
    * an address it was not displaying.
    */
-  private adoptInstanceLineageAddress(
+  public adoptInstanceLineageAddress(
     instance: WorkflowInstance,
     state: QueueState
   ): void {
+    this.workflowInstanceRegistry.adoptInstanceLineageAddress(instance, state);
     const address = lineageAddressOf(state);
 
     for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
@@ -6474,7 +4587,9 @@ export class WorkflowOrchestrator {
       ) {
         continue;
       }
-      this.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry
+        .getViewAddressRegistry()
+        .set(clientId, address);
     }
   }
 
@@ -6493,6 +4608,7 @@ export class WorkflowOrchestrator {
    * holds the definition the draft used to, and the header's Resume/Run gives
    * them a one-click retry there.
    */
+
   private syncExecutingRunViews(instance: WorkflowInstance): void {
     const state = instance.getQueueState();
     if (!state.workflowKey || !state.runRef) {
@@ -6523,9 +4639,11 @@ export class WorkflowOrchestrator {
       // asynchronous, the draft this client is addressing is already gone, and
       // RUNNING is emitted repeatedly — an unmoved address would send a fresh
       // snapshot on every one of them.
-      this.getViewAddressRegistry().set(clientId, address);
+      this.workflowInstanceRegistry
+        .getViewAddressRegistry()
+        .set(clientId, address);
       const send =
-        this.getViewMessageSinks().get(clientId) ??
+        this.workflowInstanceRegistry.getViewMessageSinks().get(clientId) ??
         (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
       if (!send) {
         continue;
@@ -6594,998 +4712,15 @@ export class WorkflowOrchestrator {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   // CLI Watch Mode
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Normalize stale locks and set up watchers for any active externally managed workflows.
-   * Called during initialize() after harness initialization.
-   */
   private async setupExternalRunWatching(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) {
-      return;
-    }
-
-    const runsRootDir = WorkflowPaths.runsRoot(workspaceFolderPath);
-
-    // VS Code cannot reliably observe an external directory that does not
-    // exist yet. Create the project state and .runs directories before
-    // installing the discovery watcher below.
-    try {
-      await fs.promises.mkdir(runsRootDir, { recursive: true });
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] setupExternalRunWatching: unable to create runs root "${runsRootDir}" — external-run discovery watcher not installed:`,
-        err
-      );
-      return;
-    }
-
-    // Normalize stale locks and retain every lineage with active liveness. The
-    // external-execution resolver below is the authority for locality.
-    let activeRunPaths: string[];
-    let recoveredPaths: string[];
-    try {
-      const workflowKeys =
-        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
-      const normalized = await WorkflowLockManager.normalizeStaleLocks(
-        workspaceFolderPath,
-        workflowKeys
-      );
-      activeRunPaths = normalized.activeRunFiles;
-      recoveredPaths = normalized.recoveredRunFiles;
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: normalizeStaleLocks failed:",
-        err
-      );
-      activeRunPaths = [];
-      recoveredPaths = [];
-    }
-
-    // Prune `.creating-*` staging dirs orphaned by an allocateRun that never reached
-    // finalizeAllocatedRun (crash, disk full, thrown validation error). Kept off the
-    // blocks above/below so a failure here can't discard their recovery results.
-    try {
-      const workflowKeys =
-        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
-      for (const workflowKey of workflowKeys) {
-        await this.lineageRepository.pruneStaleStagingDirs(
-          workspaceFolderPath,
-          workflowKey
-        );
-      }
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: pruneStaleStagingDirs failed:",
-        err
-      );
-    }
-
-    // Close out history manifests left RUNNING by the dead owner. Kept off the
-    // block above so a recovery failure cannot discard active paths and silently
-    // leave externally managed workflows unwatched.
-    try {
-      const historyManager = new OutputHistoryManager(workspaceFolderPath);
-      for (const recoveredPath of recoveredPaths) {
-        const recoveredAddress = WorkflowPaths.parseRunFilePath(
-          workspaceFolderPath,
-          recoveredPath
-        );
-        if (!recoveredAddress) {
-          continue;
-        }
-        let stepCount = 0;
-        try {
-          const recoveredWorkingFile = JSON.parse(
-            await fs.promises.readFile(recoveredPath, "utf8")
-          ) as { steps?: unknown[] };
-          stepCount = recoveredWorkingFile.steps?.length ?? 0;
-        } catch {
-          // The history manifest can still be finalized without a step count.
-        }
-        await historyManager.recoverInterruptedRun(
-          recoveredAddress.workflowKey,
-          stepCount
-        );
-      }
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: interrupted-run recovery failed:",
-        err
-      );
-    }
-
-    // Create an external-run watch session for each active workflow (Entry Point 1).
-    const startupExternalPaths = new Set(activeRunPaths);
-    for (const workingFilePath of startupExternalPaths) {
-      await this.startExternalRunWatchSessionIfExternal(
-        workingFilePath,
-        workspaceFolderPath
-      );
-    }
-
-    // Entry Point 3: Watch for new runner.json files created while VS Code is open
-    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
+    return this.externalRunWatchCoordinator.setupExternalRunWatching();
   }
 
-  /** Read-only activation report for managed and user-owned Git worktrees. */
   private async discoverWorktreesOnActivation(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) return;
-    this.activationWorktreeOwnership = undefined;
-
-    try {
-      const report = await new WorktreeManager().discoverActivationState({
-        sourceCheckoutRoot: workspaceFolderPath,
-      });
-      const inUse = report.worktrees.filter((entry) => entry.inUse);
-      const prunable = report.worktrees.filter((entry) => entry.prunableReason);
-      this.activationWorktreeOwnership = report.currentManagedWorktree;
-
-      Log.info(
-        `[WorktreeRecovery] activation discovered ${report.worktrees.length} worktree(s), ` +
-          `${report.recoverableManagedWorktrees.length} recoverable managed, ` +
-          `${report.staleManagedWorktrees.length} stale managed record(s), ` +
-          `${prunable.length} prunable entr${prunable.length === 1 ? "y" : "ies"}.`
-      );
-      for (const entry of inUse) {
-        const owners = entry.leaseOwners
-          .map(
-            ({ lease, ageMs }) =>
-              `workflow ${lease.workflowKey}, run ${lease.runRef}; ` +
-              `${lease.runner} instance ${lease.instanceId}, PID ${lease.pid}; ` +
-              `state root ${lease.stateRoot}; lease age ${Math.floor(ageMs / 1000)}s`
-          )
-          .join(" | ");
-        Log.warn(
-          `[WorktreeRecovery] worktree in use: ${entry.worktreePath} — ${owners}`
-        );
-      }
-      for (const entry of prunable) {
-        Log.warn(
-          `[WorktreeRecovery] Git reports a prunable worktree entry: ${entry.worktreePath}` +
-            `${entry.prunableReason ? ` (${entry.prunableReason})` : ""}. No automatic prune was performed.`
-        );
-      }
-      for (const record of report.staleManagedWorktrees) {
-        Log.warn(
-          `[WorktreeRecovery] managed worktree requires reconciliation: ${record.branchName} at ${record.worktreePath}. ` +
-            "Activation is read-only; no directory or branch was deleted."
-        );
-      }
-    } catch (error) {
-      Log.warn("[WorktreeRecovery] activation discovery failed:", error);
-    }
-  }
-
-  /**
-   * Watch for new *.runner.json files so we detect when the CLI starts a workflow
-   * while VS Code is already open.
-   */
-  private setupRunnerJsonCreateWatcher(
-    workspaceFolderPath: string,
-    runsRootDir: string
-  ): void {
-    const watcher = this.fileWatcherFactory.create(runsRootDir, "*/runner.json");
-    this.runnerJsonCreateWatcher = watcher;
-
-    watcher.onDidCreate(async (filePath) => {
-      Log.debug(
-        `[WorkflowOrchestrator] runner.json created: ${path.basename(filePath)}`
-      );
-      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
-    });
-
-    // Fallback for Windows: atomic file creation via rename (writeFile+rename)
-    // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
-    // also use atomic rename, so this fires ~5s after CLI start at the latest.
-    watcher.onDidChange(async (filePath) => {
-      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
-    });
-
-    // VS Code 1.133 on Windows did not deliver the recursive event for a
-    // runner file created below an external RelativePattern base. Keep the
-    // watcher for hosts that do support it, but poll the small lineage-root
-    // directory as a reliable discovery fallback.
-    this.runnerJsonDiscoveryPollInterval = setInterval(() => {
-      void this.pollRunnerJsonDiscovery(runsRootDir, workspaceFolderPath);
-    }, 1_000);
-  }
-
-  private async pollRunnerJsonDiscovery(
-    runsRootDir: string,
-    workspaceFolderPath: string
-  ): Promise<void> {
-    try {
-      const entries = await fs.promises.readdir(runsRootDir, {
-        withFileTypes: true,
-      });
-      const seenRunnerPaths = new Set<string>();
-      await Promise.all(
-        entries
-          .filter((entry) => entry.isDirectory())
-          // The lineage directory name *is* the workflowKey, so an already
-          // watched run can be skipped without touching the filesystem.
-          .filter((entry) => !this.externalRunSessions.has(entry.name))
-          .map(async (entry) => {
-            // WorkflowPaths owns every `.runs` path; it rejects a directory
-            // name that is not a valid workflowKey, which is not a lineage.
-            let runnerPath: string;
-            try {
-              runnerPath = WorkflowPaths.runnerLockPath(
-                workspaceFolderPath,
-                entry.name as WorkflowKey
-              );
-            } catch {
-              return;
-            }
-            let mtimeMs: number;
-            try {
-              ({ mtimeMs } = await fs.promises.stat(runnerPath));
-            } catch {
-              return;
-            }
-            seenRunnerPaths.add(runnerPath);
-            if (this.polledRunnerJsonMtimes.get(runnerPath) === mtimeMs) {
-              return;
-            }
-            this.polledRunnerJsonMtimes.set(runnerPath, mtimeMs);
-            await this.handleRunnerJsonEvent(runnerPath, workspaceFolderPath);
-          })
-      );
-      // Drop locks that have been released so a later run at the same path is
-      // treated as new rather than being suppressed by a remembered mtime.
-      for (const trackedPath of this.polledRunnerJsonMtimes.keys()) {
-        if (!seenRunnerPaths.has(trackedPath)) {
-          this.polledRunnerJsonMtimes.delete(trackedPath);
-          // The lineage directory name is the workflowKey the decision log is
-          // keyed by; forget it too so a later run at the same lineage logs
-          // its first resolution instead of being suppressed as unchanged.
-          this.lastLoggedExternalExecutionDecision?.delete(
-            path.basename(path.dirname(trackedPath))
-          );
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
-        err
-      );
-    }
-  }
-
-  private async handleRunnerJsonEvent(
-    lockFilePath: string,
-    workspaceFolderPath: string
-  ): Promise<void> {
-    const workflowKey = path.basename(
-      path.dirname(lockFilePath)
-    ) as WorkflowKey;
-    const lockInspection = await readWorkflowLockOwnershipInspection(
-      workspaceFolderPath,
-      workflowKey,
-      this.runnerHostIdentity
-    );
-    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
-      return;
-    }
-    const lock = lockInspection.lock;
-
-    // The lock itself names the exact lineage/run — no path-basename derivation needed.
-    const workflowId = lock.workflowKey;
-    const workingFilePath = WorkflowPaths.runFilePath(
-      workspaceFolderPath,
-      lock.workflowKey,
-      lock.runRef
-    );
-
-    // The deduped "external execution resolution" decision log below (and the
-    // startExternalRunWatchSession logs further down) already cover this
-    // event; a per-call trace here would repeat on every 5s heartbeat.
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      resolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return;
-    }
-
-    if (this.externalRunSessions.has(workflowId)) {
-      return;
-    }
-
-    await this.startExternalRunWatchSession(
-      workingFilePath,
-      workspaceFolderPath,
-      resolution.inspection
-    );
-  }
-
-  /**
-   * Create and start an external-run watch session for a CLI- or sibling-VSCode-managed workflow.
-   * Reads the working file, builds a WorkflowSummary, and registers the session.
-   */
-  private async startExternalRunWatchSessionIfExternal(
-    workingFilePath: string,
-    workspaceFolderPath: string
-  ): Promise<boolean> {
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    return resolution.kind ===
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-      ? this.startExternalRunWatchSession(
-          workingFilePath,
-          workspaceFolderPath,
-          resolution.inspection
-        )
-      : false;
-  }
-
-  private async startExternalRunWatchSession(
-    workingFilePath: string,
-    workspaceFolderPath: string,
-    inspection: ActiveExternalLockInspection
-  ): Promise<boolean> {
-    const address =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-    if (!address?.runRef) {
-      Log.warn(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: "${workingFilePath}" is not a promoted run file — skipping`
-      );
-      return false;
-    }
-    const { workflowKey, runRef } = address;
-    const workflowId = workflowKey;
-
-    if (
-      inspection.lock.workflowKey !== workflowKey ||
-      inspection.lock.runRef !== runRef
-    ) {
-      Log.warn(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: external proof does not match "${workingFilePath}" — skipping`
-      );
-      return false;
-    }
-
-    // Re-resolve immediately before registration to close the handoff race
-    // between the caller's proof and this session's ownership.
-    const currentResolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      currentResolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return false;
-    }
-    const currentInspection = currentResolution.inspection;
-    if (
-      currentInspection.lock.ownerToken !== inspection.lock.ownerToken ||
-      currentInspection.lock.workflowKey !== inspection.lock.workflowKey ||
-      currentInspection.lock.runRef !== inspection.lock.runRef
-    ) {
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: external lock acquisition changed for "${workflowId}" — skipping stale proof`
-      );
-      return false;
-    }
-
-    const workingFile = currentResolution.workingFile;
-
-    const executionState = workingFile._runtime?.executionState;
-    if (!executionState || !ACTIVE_EXECUTION_STATES.has(executionState)) {
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" has a live ${currentInspection.lock.runner} lock but persisted state is ${executionState ?? "missing"} — skipping external watch session`
-      );
-      return false;
-    }
-
-    const externalOwner = {
-      locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
-      runner: currentInspection.lock.runner,
-    };
-
-    // Retire any existing VS Code WorkflowInstance tracking this same working file.
-    // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
-    // and the CLI is now taking over execution. Without this, the PAUSED instance
-    // stays in the Running Workflows section alongside the external watch session.
-    //
-    // This loop is reached only after the resolver proved an external owner. It
-    // still must not retire a local instance that is genuinely mid-step
-    // (RUNNING/PAUSING/CANCELLING): only a PAUSED tracking instance has no
-    // in-flight harness turn and can safely yield to the external owner.
-    for (const [instanceId, instance] of [...this.instances.entries()]) {
-      const localSummary = instance.getSummary();
-      if (!sameWorkingFilePath(localSummary.workingFilePath, workingFilePath)) {
-        continue;
-      }
-      const hasInFlightStep =
-        localSummary.executionState === EXECUTION_STATES.RUNNING ||
-        localSummary.executionState === EXECUTION_STATES.PAUSING ||
-        localSummary.executionState === EXECUTION_STATES.CANCELLING;
-      if (hasInFlightStep) {
-        Log.info(
-          `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instanceId.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
-        );
-        return false;
-      }
-      if (localSummary.executionState !== EXECUTION_STATES.PAUSED) {
-        continue;
-      }
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
-      );
-      this.retireWorkflow(instanceId);
-      break;
-    }
-
-    const currentIndex = workingFile._runtime?.currentIndex ?? 0;
-    const totalSteps = workingFile.steps?.length ?? 0;
-
-    const summary: WorkflowSummary = {
-      id: workflowId,
-      workflowKey,
-      runRef,
-      workflowName: workingFile.workflowName ?? workflowId,
-      filePath: workingFilePath,
-      workingFilePath,
-      executionState,
-      currentStep: currentIndex,
-      totalSteps,
-      startedAt: workingFile.startedAt,
-      externalOwner,
-      tokenTotals: workingFile._runtime?.tokenTotals,
-      worktree: workingFile._runtime?.worktree,
-    };
-
-    const session = new ExternalRunWatchSession(
-      workingFilePath,
-      workflowKey,
-      runRef,
-      workspaceFolderPath,
-      currentInspection,
-      this.runnerHostIdentity,
-      (partialSummary, updatedSteps) => {
-        // Merge partial update into stored summary
-        const entry = this.externalRunSessions.get(workflowId);
-        if (!entry) {
-          return;
-        }
-        const prevTotalSteps = entry.summary.totalSteps;
-        const updatedSummary: WorkflowSummary = {
-          ...entry.summary,
-          ...partialSummary,
-          externalOwner,
-        };
-        entry.summary = updatedSummary;
-        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
-
-        // A summary carries only the position, so without this the dashboard's
-        // per-step statuses stay frozen at whatever the last full-state push
-        // recorded. That is invisible while the run is RUNNING (usePromptStatus
-        // falls back to position) and becomes visible the instant it reaches a
-        // terminal state: the step that actually failed renders with its stale
-        // status and the error badge lands on a later, never-executed step.
-        this.broadcastExternalRunStepStatuses(
-          workflowId,
-          entry,
-          updatedSteps,
-          updatedSummary
-        );
-
-        // If the CLI extended the queue, send the new prompts so the WorkflowStepsPanel reflects them
-        if (updatedSummary.totalSteps > prevTotalSteps) {
-          const provider = this.dashboardBroadcastHub;
-          fs.promises
-            .readFile(workingFilePath, "utf8")
-            .then((content) => {
-              const wf = JSON.parse(content) as {
-                steps?: unknown[];
-                definitionRevision?: number;
-                parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[];
-              };
-              if (wf.steps) {
-                Log.info(
-                  `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} ${updatedSummary.totalSteps} steps`
-                );
-                provider.notifyCliPromptsExtended(
-                  workflowId,
-                  wf.steps,
-                  wf.definitionRevision ?? 1,
-                  wf.parallelGroups
-                );
-              }
-            })
-            .catch((err) => {
-              Log.warn(
-                `[WorkflowOrchestrator] onUpdate: failed to read working file for queue extension:`,
-                err
-              );
-            });
-        }
-      },
-      (historyFilePath) => {
-        this.handleExternalRunWatchOutput(workflowId, historyFilePath);
-      },
-      (reason) => {
-        this.handleExternalRunFinished(workflowId, workingFilePath, reason);
-      }
-    );
-
-    this.externalRunSessions.set(workflowId, {
-      session,
-      summary,
-      lastStepStatuses: deriveStepStatusesFromRuntime(
-        (workingFile.steps as StepWithRuntimeStatus[] | undefined) ?? [],
-        currentIndex,
-        executionState
-      ),
-    });
-    await session.start();
-
-    // The initial post-watcher read can discover that the run completed during
-    // startup and remove the session through onFinished. Do not announce a
-    // watch that no longer exists.
-    const activeEntry = this.externalRunSessions.get(workflowId);
-    if (activeEntry?.session !== session) {
-      return false;
-    }
-
-    // Notify the dashboard so the workflow appears in the Running section
-    this.dashboardBroadcastHub.notifyWorkflowAdded(activeEntry.summary);
-    Log.info(
-      `[WorkflowOrchestrator] external run watch session started for "${workflowId}" (runner=${externalOwner.runner})`
-    );
-    return true;
-  }
-
-  /**
-   * Push STEP_STATUS_CHANGED for every step whose derived status moved since
-   * the last broadcast for this external run.
-   *
-   * Diffed rather than re-sent wholesale because the working file is rewritten
-   * on every `_runtime` mutation by an out-of-process writer, and each message
-   * fans out to every connected dashboard client (see
-   * `WORKING_FILE_CHANGE_THROTTLE_MS` in `ExternalRunWatchSession`).
-   */
-  private broadcastExternalRunStepStatuses(
-    workflowId: string,
-    entry: { lastStepStatuses: StepStatus[] },
-    steps: readonly StepWithRuntimeStatus[],
-    summary: WorkflowSummary
-  ): void {
-    const statuses = deriveStepStatusesFromRuntime(
-      steps,
-      summary.currentStep ?? 0,
-      summary.executionState
-    );
-    for (const [index, status] of statuses.entries()) {
-      if (entry.lastStepStatuses[index] === status) {
-        continue;
-      }
-      this.dashboardBroadcastHub.updateStepStatus(
-        index,
-        { state: status },
-        undefined,
-        workflowId
-      );
-    }
-    entry.lastStepStatuses = statuses;
-  }
-
-  /**
-   * Send full workflow state to the dashboard when switching to an externally managed workflow.
-   * Sends SESSION_RESTORED with the current prompts, then replays all captured outputs.
-   * When `sink` is provided, sends only to that single client (per-client replay);
-   * otherwise broadcasts to all clients via the hub.
-   */
-  private async sendExternalRunFullStateToDashboard(
-    workflowId: string,
-    externalEntry: {
-      session: ExternalRunWatchSession;
-      summary: WorkflowSummary;
-      lastStepStatuses: StepStatus[];
-    },
-    sink?: IDashboardSink
-  ): Promise<void> {
-    const workingFilePath = externalEntry.summary.workingFilePath;
-    if (!workingFilePath) {
-      return;
-    }
-
-    // Read the latest working file to get current prompt list and step position
-    let steps: WorkflowStep[] = [];
-    let currentIndex = externalEntry.summary.currentStep ?? 0;
-    let finalStep: WorkflowStep | null = null;
-    let finalStepRuntime:
-      | {
-          status?: StepStatus;
-          loopCount: number;
-          phase: FinalStepPhase;
-        }
-      | undefined;
-
-    try {
-      const content = await fs.promises.readFile(workingFilePath, "utf8");
-      const workingFile = JSON.parse(content) as WorkingFile;
-      steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
-        ...p,
-        // Strip any existing status so loadWorkflow sets it from the results array
-        status: undefined as unknown as string,
-      })) as WorkflowStep[];
-      currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
-      finalStep = (workingFile.finalStep as WorkflowStep | undefined) ?? null;
-      finalStepRuntime = workingFile._runtime?.finalStep
-        ? {
-            status: workingFile._runtime.finalStep.status,
-            loopCount: workingFile._runtime.finalStep.loopCount,
-            phase: workingFile._runtime.finalStep.phase,
-          }
-        : undefined;
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] sendExternalRunFullStateToDashboard: could not read working file:`,
-        err
-      );
-    }
-
-    const statuses = deriveStepStatusesFromRuntime(
-      steps,
-      currentIndex,
-      externalEntry.summary.executionState
-    );
-    const results = statuses.map((status) => ({ status }));
-    // Keep the diff baseline aligned with what this client now displays, so the
-    // next working-file change sends only what actually moved.
-    externalEntry.lastStepStatuses = statuses;
-
-    const fileName = path.basename(workingFilePath);
-    const target: IDashboardSink = sink ?? this.dashboardBroadcastHub;
-    await target.updateSessionRestored(
-      fileName,
-      steps,
-      results,
-      externalEntry.summary.executionState,
-      currentIndex,
-      externalEntry.summary.workflowName,
-      finalStep,
-      finalStepRuntime,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      // Deliberately no `definitionRevision`: switching a client onto an
-      // external run replaces its displayed workflow and publishes no address
-      // of its own, so a revision here would be misread as a replay of the
-      // outgoing workflow and preserve that workflow's view address. The steps
-      // above were just read from disk, so there is no staleness for the
-      // webview's regressive-snapshot guard to catch either.
-      undefined
-    );
-
-    // Replay all captured CLI outputs from the active history file
-    const historyFilePath = externalEntry.session.getActiveHistoryFilePath();
-    if (historyFilePath) {
-      if (sink) {
-        // Per-client replay: send directly to the sink without updating lastKnown counts
-        await this.replayExternalHistoryFileTo(historyFilePath, sink);
-      } else {
-        await this.replayExternalWatchHistoryFile(workflowId, historyFilePath);
-      }
-    }
-  }
-
-  /**
-   * Replay external watch history outputs to a single explicit sink.
-   * Does NOT update lastKnownOutputCount — used for per-client replays only.
-   */
-  private async replayExternalHistoryFileTo(
-    historyFilePath: string,
-    sink: IDashboardSink
-  ): Promise<void> {
-    try {
-      const history =
-        await this.getOutputHistoryManager().loadHistory(historyFilePath);
-      for (const entry of history.orderedEntries) {
-        if (
-          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          entry.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          const stepIndex = (
-            entry.target as {
-              kind: typeof FINAL_STEP_PHASES.QUEUE;
-              stepIndex: number;
-            }
-          ).stepIndex;
-          sink.updateCliOutput(stepIndex, entry.cliOutput as CliOutput);
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalHistoryFileTo: failed:`,
-        err
-      );
-    }
-  }
-
-  /**
-   * Replay all captured CLI outputs from a history file to the dashboard.
-   * Updates lastKnownOutputByStep so subsequent incremental updates don't re-send.
-   */
-  private async replayExternalWatchHistoryFile(
-    workflowId: string,
-    historyFilePath: string
-  ): Promise<void> {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    try {
-      const history =
-        await this.getOutputHistoryManager().loadHistory(historyFilePath);
-
-      const cliOutputsByStep = new Map<number, unknown[]>();
-      for (const historyEntry of history.orderedEntries) {
-        if (
-          historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          const stepIndex = (
-            historyEntry.target as {
-              kind: typeof FINAL_STEP_PHASES.QUEUE;
-              stepIndex: number;
-            }
-          ).stepIndex;
-          const arr = cliOutputsByStep.get(stepIndex) ?? [];
-          arr.push(historyEntry.cliOutput);
-          cliOutputsByStep.set(stepIndex, arr);
-        }
-      }
-
-      for (const [stepIndex, outputs] of cliOutputsByStep) {
-        // Update lastKnown so subsequent incremental handleExternalRunWatchOutput calls
-        // don't re-send these outputs
-        entry.session.getAndUpdateLastKnownOutputCount(
-          stepIndex,
-          outputs.length
-        );
-
-        // Send ALL outputs from the beginning (full replay, not diff)
-        for (let i = 0; i < outputs.length; i++) {
-          this.dashboardBroadcastHub.notifyCliWatchOutput(
-            workflowId,
-            stepIndex,
-            outputs[i] as CliOutput
-          );
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
-        err
-      );
-    }
-  }
-
-  /**
-   * Handle output change notifications from an ExternalRunWatchSession.
-   * Reads the history file and sends new outputs to the dashboard.
-   */
-  private handleExternalRunWatchOutput(
-    workflowId: string,
-    historyFilePath: string
-  ): void {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    this.getOutputHistoryManager()
-      .loadHistory(historyFilePath)
-      .then((history) => {
-        const cliOutputsByStep = new Map<number, unknown[]>();
-        for (const historyEntry of history.orderedEntries) {
-          if (
-            historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-            historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-          ) {
-            const stepIndex = (
-              historyEntry.target as {
-                kind: typeof FINAL_STEP_PHASES.QUEUE;
-                stepIndex: number;
-              }
-            ).stepIndex;
-            const arr = cliOutputsByStep.get(stepIndex) ?? [];
-            arr.push(historyEntry.cliOutput);
-            cliOutputsByStep.set(stepIndex, arr);
-          }
-        }
-
-        for (const [stepIndex, outputs] of cliOutputsByStep) {
-          const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
-            stepIndex,
-            outputs.length
-          );
-
-          // Send only new outputs
-          for (let i = lastKnown; i < outputs.length; i++) {
-            this.dashboardBroadcastHub.notifyCliWatchOutput(
-              workflowId,
-              stepIndex,
-              outputs[i] as CliOutput
-            );
-          }
-        }
-      })
-      .catch((err: unknown) => {
-        Log.warn(
-          `[WorkflowOrchestrator] handleExternalRunWatchOutput: failed to read history file:`,
-          err
-        );
-      });
-  }
-
-  /**
-   * Handle external session completion (lock deleted, heartbeat stale, or ownership changed).
-   * Reads the final working file state, normalizes if needed, and updates the dashboard.
-   */
-  private handleExternalRunFinished(
-    workflowId: string,
-    workingFilePath: string,
-    reason: ExternalRunWatchFinishReason
-  ): void {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    Log.info(
-      `[WorkflowOrchestrator] external run session finished for "${workflowId}" (reason=${reason})`
-    );
-
-    // Dispose the session first so watchers stop firing
-    entry.session.dispose();
-    this.externalRunSessions.delete(workflowId);
-
-    // A lock replacement is not completion of the replacement run. Re-resolve
-    // from the current lock after removing the old session so an active
-    // successor can be watched without inheriting the old owner's cleanup.
-    if (reason === "ownership-changed") {
-      const workspaceFolderPath = this.currentWorkspaceFolderPath;
-      const workflowKey = entry.summary.workflowKey;
-      if (workspaceFolderPath && workflowKey) {
-        void this.restartExternalRunWatchSession(
-          workspaceFolderPath,
-          workflowKey
-        ).catch((error) => {
-          Log.warn(
-            `[WorkflowOrchestrator] failed to restart external watch session for "${workflowKey}":`,
-            error
-          );
-          this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-        });
-      } else {
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-      }
-      return;
-    }
-
-    // Read final working file state
-    fs.promises
-      .readFile(workingFilePath, "utf8")
-      .then(async (content) => {
-        const workingFile = JSON.parse(content) as {
-          _runtime?: {
-            executionState?: string;
-            currentIndex?: number;
-            tokenTotals?: WorkflowSummary["tokenTotals"];
-          };
-          steps?: StepWithRuntimeStatus[];
-          workflowName?: string;
-          startedAt?: number;
-        };
-
-        let finalState =
-          workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
-
-        // If still shows "running", normalize to "stopped" on disk
-        if (finalState === EXECUTION_STATES.RUNNING) {
-          finalState = EXECUTION_STATES.STOPPED;
-          if (workingFile._runtime) {
-            workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-          }
-          try {
-            const tmpPath = workingFilePath + ".tmp";
-            await fs.promises.writeFile(
-              tmpPath,
-              JSON.stringify(workingFile, null, 2),
-              "utf8"
-            );
-            await fs.promises.rename(tmpPath, workingFilePath);
-          } catch (writeErr) {
-            Log.warn(
-              `[WorkflowOrchestrator] handleExternalRunFinished: failed to normalize working file:`,
-              writeErr
-            );
-          }
-        }
-
-        const finalSummary: WorkflowSummary = {
-          ...entry.summary,
-          executionState: finalState as WorkflowSummary["executionState"],
-          currentStep:
-            workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
-          totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
-          externalOwner: undefined, // no longer externally managed
-          tokenTotals: workingFile._runtime?.tokenTotals,
-        };
-
-        // This — not the working-file watcher — is what delivers a CLI run's
-        // *final* step layout. `handleExternalRunFinished` runs first on the
-        // lock-deleted path and has already removed the session, so the last
-        // `handleWorkingFileChange` finds no entry and its onUpdate returns
-        // early. Without a push here the dashboard keeps whatever per-step
-        // statuses it last had while executionState flips to ERROR, which is
-        // exactly how the error badge ends up on a never-executed step.
-        // Sent before the summary so the terminal state never lands on a stale
-        // step layout.
-        this.broadcastExternalRunStepStatuses(
-          workflowId,
-          entry,
-          workingFile.steps ?? [],
-          finalSummary
-        );
-
-        // Update the dashboard: send final state then dismiss from Running section
-        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(finalSummary);
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-
-        void this.saveState();
-      })
-      .catch((err) => {
-        Log.warn(
-          `[WorkflowOrchestrator] handleExternalRunFinished: failed to read working file:`,
-          err
-        );
-        // Still dismiss from the dashboard
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-      });
-  }
-
-  private async restartExternalRunWatchSession(
-    workspaceFolderPath: string,
-    workflowKey: WorkflowKey
-  ): Promise<void> {
-    const lockInspection = await readWorkflowLockOwnershipInspection(
-      workspaceFolderPath,
-      workflowKey,
-      this.runnerHostIdentity
-    );
-    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
-      this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowKey);
-      return;
-    }
-    const lock = lockInspection.lock;
-    const workingFilePath = WorkflowPaths.runFilePath(
-      workspaceFolderPath,
-      workflowKey,
-      lock.runRef
-    );
-    const started = await this.startExternalRunWatchSessionIfExternal(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (!started) {
-      this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowKey);
-    }
+    return this.externalRunWatchCoordinator.discoverWorktreesOnActivation();
   }
 }
