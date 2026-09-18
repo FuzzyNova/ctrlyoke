@@ -434,10 +434,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // row (name is the only shrinkable one), that mismatch let a freshly running
   // workflow's execution badge get visually clipped the moment the terminal
   // icon appeared, even though `executionState` was already correctly RUNNING.
-  // The threshold approximates the row's own fixed-width budget (icons +
-  // badge + gaps + button padding) so hiding the icons reliably leaves enough
-  // room for the badge before real overflow can happen.
-  const [narrowRef, isNarrow] = useElementNarrow<HTMLButtonElement>(220);
+  // 380 (the next breakpoint up from the row-budget-derived 220 this used to
+  // be, matching this hook's own DEFAULT_THRESHOLD) so the full-text badge
+  // only appears on genuinely wide headers; narrower ones show icon-only
+  // sooner. isNarrow also feeds the sibling RunIdentityBadge's abbreviated
+  // label below — shrinking that label at the same instant hands this button
+  // back the width it just lost, which used to flip isNarrow back and forth
+  // every animation frame right at the threshold. useElementNarrow's built-in
+  // hysteresis (see its doc comment) is what stops that loop; do not
+  // route this measurement through a bare threshold comparison of your own.
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLButtonElement>(380);
   const [dropdownTierRef, dropdownRowTier] = useElementTier<
     WorkflowRowTier,
     HTMLDivElement

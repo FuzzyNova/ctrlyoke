@@ -13,6 +13,11 @@ import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameR
  */
 const DEFAULT_THRESHOLD = 380;
 const RESIZE_ACTIVITY_WINDOW_MS = 150;
+/**
+ * Extra px `useElementNarrow` requires above `threshold` before flipping back
+ * from narrow to wide. See that hook's doc comment for why this exists.
+ */
+const DEFAULT_NARROW_HYSTERESIS_PX = 24;
 
 /**
  * Single source of truth for "how wide is this element".
@@ -242,18 +247,43 @@ export function useElementResizeActivity<
  * Two-tier {@link useElementTier}: tracks whether an element's width is below
  * a single threshold.
  *
+ * Applies hysteresis on the wide-ward transition only: once narrow, the width
+ * must clear `threshold + hysteresis` (not just `threshold`) to flip back to
+ * wide. A bare threshold is exact for the narrow-ward direction, but the
+ * wide-ward one is where a self-sustaining loop can form: going narrow often
+ * hides content in a *sibling* of the measured element within the same flex
+ * row (e.g. an abbreviated label elsewhere in a split button), which hands
+ * the measured element back exactly the width the sibling gave up — enough,
+ * with a bare threshold, to flip back to wide immediately, regrow the
+ * sibling, and re-narrow next frame. This is a distinct bug from the
+ * measurement-mismatch loop already fixed in {@link measureWidth} (see
+ * `webview-react-hooks.instructions.md`): here both measurements agree, the
+ * value itself is oscillating because two elements' widths are coupled
+ * through their shared container.
+ *
  * @param threshold   Width in pixels below which the element is "narrow".
  *                    Defaults to {@link DEFAULT_THRESHOLD}.
  * @param deferWhile  See {@link useElementTier}.
+ * @param hysteresis  Extra px the width must clear above `threshold` to leave
+ *                    the narrow tier. Defaults to
+ *                    {@link DEFAULT_NARROW_HYSTERESIS_PX}.
  * @returns           A tuple of `[callbackRef, isNarrow]`.
  */
 export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
   threshold: number = DEFAULT_THRESHOLD,
-  deferWhile: boolean = false
+  deferWhile: boolean = false,
+  hysteresis: number = DEFAULT_NARROW_HYSTERESIS_PX
 ): [RefCallback<T>, boolean] {
+  const isNarrowRef = useRef(false);
   const resolveNarrow = useCallback(
-    (width: number) => width < threshold,
-    [threshold]
+    (width: number) => {
+      const next = isNarrowRef.current
+        ? width < threshold + hysteresis
+        : width < threshold;
+      isNarrowRef.current = next;
+      return next;
+    },
+    [threshold, hysteresis]
   );
   return useElementTier<boolean, T>(resolveNarrow, false, deferWhile);
 }

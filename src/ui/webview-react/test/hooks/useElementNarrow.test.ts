@@ -123,6 +123,29 @@ function triggerResizeWithStaleContentRect(contentRectWidth: number) {
   );
 }
 
+/**
+ * Simulates a subsequent resize by detaching and reattaching the ref, rather
+ * than a second `triggerResize`. The mock `requestAnimationFrame` above runs
+ * its callback synchronously *inside* the scheduling call, so the assignment
+ * `frameId = requestAnimationFrame(...)` overwrites the `null` the callback
+ * just wrote back to a truthy id — permanently arming
+ * `createAnimationFrameResizeObserver`'s "already scheduled" guard after the
+ * first resize and silently dropping every one after it. A real browser's
+ * `requestAnimationFrame` is asynchronous, so this never happens outside the
+ * test; reattaching (as "holds its tier across repeated ref re-attachment"
+ * above already does) re-measures synchronously through the ref-attach path
+ * instead, sidestepping the mock's scheduling quirk entirely.
+ */
+function reattachAndResize(
+  refCallback: (node: HTMLDivElement | null) => void,
+  node: HTMLDivElement,
+  width: number
+) {
+  setNodeWidth(node, width);
+  refCallback(null);
+  refCallback(node);
+}
+
 const resolveHundreds = (width: number) => Math.floor(width / 100);
 
 // ---------------------------------------------------------------------------
@@ -326,6 +349,82 @@ describe("useElementNarrow", () => {
       });
       expect(result.current[1]).toBe(false);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: coupled-sibling-width flapping
+  // -------------------------------------------------------------------------
+
+  it("does not flip back to wide on a small rebound right at the threshold", () => {
+    // Reproduces WorkflowStatus's header badge: going narrow hides content in
+    // a *sibling* of the measured element (an abbreviated run-identity label),
+    // which hands the measured element back a few px — with a bare threshold
+    // that's enough to immediately flip back to wide, reshrink the sibling,
+    // and repeat every animation frame. Both measurements agree here (unlike
+    // the padded-element case above); the value itself is oscillating.
+    const { result } = renderHook(() => useElementNarrow(100));
+    const node = makeNode(105);
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(false); // 105 >= 100 → wide
+
+    act(() => {
+      reattachAndResize(result.current[0], node, 95); // crosses narrow
+    });
+    expect(result.current[1]).toBe(true);
+
+    // The sibling's label just shrank, handing this element back ~10px. A
+    // bare threshold would flip this back to wide and restart the loop.
+    act(() => {
+      reattachAndResize(result.current[0], node, 105);
+    });
+    expect(result.current[1]).toBe(true);
+
+    // Only clearing threshold + hysteresis (100 + 24 = 124) escapes narrow.
+    act(() => {
+      reattachAndResize(result.current[0], node, 125);
+    });
+    expect(result.current[1]).toBe(false);
+  });
+
+  it("supports a custom hysteresis band", () => {
+    const { result } = renderHook(() => useElementNarrow(100, false, 10));
+    const node = makeNode(95);
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(true);
+
+    // Within the custom 10px band — stays narrow.
+    act(() => {
+      reattachAndResize(result.current[0], node, 108);
+    });
+    expect(result.current[1]).toBe(true);
+
+    // Clears threshold + hysteresis (110) — flips to wide.
+    act(() => {
+      reattachAndResize(result.current[0], node, 111);
+    });
+    expect(result.current[1]).toBe(false);
+  });
+
+  it("applies no hysteresis on the narrow-ward transition", () => {
+    const { result } = renderHook(() => useElementNarrow(100));
+    const node = makeNode(150);
+
+    act(() => {
+      result.current[0](node);
+    });
+    expect(result.current[1]).toBe(false);
+
+    // Narrowing needs no rebound guard — it flips at the bare threshold.
+    act(() => {
+      reattachAndResize(result.current[0], node, 99);
+    });
+    expect(result.current[1]).toBe(true);
   });
 
   it("defers tier changes until deferWhile is released", () => {
