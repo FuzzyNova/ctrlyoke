@@ -37,9 +37,11 @@ export type ParallelGroupStatus =
  * Single-sourced so the "running" tag used for flow control (below) isn't a
  * bare string-literal comparison — `find-hardcoded-strings.mjs` flags
  * repeated flow-control literals, and other files reuse the spelling
- * "running" for unrelated concepts (step ids, token-total variants).
+ * "running" for unrelated concepts (step ids, token-total variants). Exported
+ * so `PromptChipRail` can compare against the same derived status when it
+ * draws its own whole-group highlight for the compact rail.
  */
-const PARALLEL_GROUP_RUNNING_STATUS: ParallelGroupStatus = "running";
+export const PARALLEL_GROUP_RUNNING_STATUS: ParallelGroupStatus = "running";
 
 type GroupMemberStatus = {
   status: StepStatus;

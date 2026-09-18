@@ -8,8 +8,9 @@
  * Width is determined by the parent container. Internal layout adapts to the
  * available space — no fixed width is applied here.
  */
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -63,7 +64,11 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
-import { isStepExecutionLocked } from "./ParallelGroupPanel";
+import {
+  deriveParallelGroupStatus,
+  isStepExecutionLocked,
+  PARALLEL_GROUP_RUNNING_STATUS,
+} from "./ParallelGroupPanel";
 import { Icon } from "../shared/Icon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -84,6 +89,56 @@ function getChipBorderClass(status: StepStatus): string {
     : getStepAccentClass(status);
 }
 
+export type ChipSegment =
+  | { kind: "step"; index: number }
+  | { kind: "group"; group: ParallelGroupDefinition; indices: number[] };
+
+/**
+ * Walks every step 0..stepCount in order, folding each parallel group's
+ * members into one "group" segment (in `group.startIndex` order, same as the
+ * step list itself) and leaving every other step as its own "step" segment.
+ *
+ * Deliberately independent of `currentStep`/done-vs-pending: a group whose
+ * anchor already settled but whose tail is still pending (the same
+ * straddling case `WorkflowStepsPanel.straddlingParallelGroup` names) still
+ * has to render as a single bordered group here, and every member chip
+ * already derives its own status/props from its absolute index — so there is
+ * nothing a done/pending split would add.
+ */
+export function buildChipSegments(
+  stepCount: number,
+  parallelGroups: readonly ParallelGroupDefinition[]
+): ChipSegment[] {
+  const groupsByStart = new Map(
+    parallelGroups.map((group) => [group.startIndex, group])
+  );
+  const groupedIndices = new Set(
+    parallelGroups.flatMap((group) =>
+      Array.from(
+        { length: group.endIndex - group.startIndex + 1 },
+        (_, offset) => group.startIndex + offset
+      )
+    )
+  );
+  const segments: ChipSegment[] = [];
+  for (let index = 0; index < stepCount; index++) {
+    const group = groupsByStart.get(index);
+    if (group) {
+      segments.push({
+        kind: "group",
+        group,
+        indices: Array.from(
+          { length: group.endIndex - group.startIndex + 1 },
+          (_, offset) => group.startIndex + offset
+        ),
+      });
+    } else if (!groupedIndices.has(index)) {
+      segments.push({ kind: "step", index });
+    }
+  }
+  return segments;
+}
+
 // ─── ChipContent ─────────────────────────────────────────────────────────────
 
 type ChipProps = {
@@ -94,6 +149,13 @@ type ChipProps = {
   status: ReturnType<ReturnType<typeof usePromptStatus>>;
   contextPct: number | undefined;
   isExecuting: boolean;
+  /**
+   * Suppresses this chip's own running outline. Set for every chip rendered
+   * inside a parallel group wrapper — a running group draws one outline
+   * around the whole group instead of one per member, matching
+   * `hideExecutingHighlight` on `WorkflowStepRowFrame`/`ParallelGroupPanel`.
+   */
+  hideExecutingHighlight?: boolean;
   showPauseBoundaryBefore: boolean;
   isScript: boolean;
   stepColor?: string;
@@ -108,6 +170,7 @@ function ChipContent({
   status,
   contextPct,
   isExecuting,
+  hideExecutingHighlight = false,
   showPauseBoundaryBefore,
   isScript,
   stepColor,
@@ -132,7 +195,7 @@ function ChipContent({
       aria-label={`${isScript ? "Script" : "Prompt"} ${slotNumber}`}
     >
       {showPauseBoundaryBefore && <PauseBoundary />}
-      {isExecuting && (
+      {isExecuting && !hideExecutingHighlight && (
         <ExecutingStepHighlight
           borderClassName="border"
           testId="executing-chip-highlight"
@@ -431,6 +494,116 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
     });
   };
 
+  const chipSegments = useMemo(
+    () => buildChipSegments(prompts.length, parallelGroups),
+    [prompts.length, parallelGroups]
+  );
+
+  // Single per-chip renderer shared by standalone chips and parallel-group
+  // members — every prop below is already a pure function of the step's
+  // absolute index vs. `currentStep`, so folding the once-separate done/
+  // pending loops into one pass over `chipSegments` changes nothing about
+  // what renders (a done index never equals `currentStep`, so the
+  // pending-only conditionals below just evaluate to their old defaults).
+  const renderPromptChip = (index: number, hideExecutingHighlight = false) => {
+    const prompt = prompts[index];
+    const status = getPromptStatus(prompt, index);
+    const contextPct = getContextPct(index);
+    const isCurrentStep = index === currentStep;
+    // Not `isCurrentStep`: every live member of a parallel group is
+    // executing, and only the anchor sits at `currentStep`.
+    const isExecuting = isStepExecuting(
+      executionState,
+      index,
+      currentStep,
+      activeStepIndices
+    );
+    // Only an in-flight step is locked; PAUSED stops at a step boundary, so
+    // the current chip is the next PENDING step.
+    const isExecutionTargetLocked =
+      isStepExecutionLocked(prompt, index, currentStep, executionState) ||
+      (isExecutionBusy(executionState) && isCurrentStep);
+    return (
+      <ChipContent
+        key={index}
+        stepIndex={index}
+        slotNumber={index + 1}
+        status={status}
+        contextPct={contextPct}
+        stepColor={getChipStepColor(prompt, index, status)}
+        isExecuting={isExecuting}
+        hideExecutingHighlight={hideExecutingHighlight}
+        showPauseBoundaryBefore={
+          isPaused && currentStep > 0 && index === currentStep
+        }
+        isScript={isScriptStep(prompt)}
+        tooltip={buildChipTooltip(prompt, index, status, isExecuting)}
+        onChipClick={() => handleStepClick(index)}
+        onOpenContextMenu={(x, y) =>
+          openContextMenu(x, y, {
+            step: prompt,
+            setPositionTarget: index,
+            deleteIndex: index,
+            isCurrentStep,
+            isExecutionTargetLocked,
+            direction: index < currentStep ? "rewind" : "forward",
+            outputText: getLatestOutput(index)?.response as
+              string | undefined,
+            latestOutput: getLatestOutput(index),
+            runtimeMeta: !isScriptWorkflowStep(prompt)
+              ? prompt._runtime
+              : undefined,
+            liveContextWindow: liveContextWindow?.[index],
+          })
+        }
+      />
+    );
+  };
+
+  // A parallel group's chips get one thin bordered wrapper with a
+  // worktree-compact header, in place of the individual indication a
+  // standalone chip's identity bar already gives — mirroring
+  // `ParallelGroupPanel`'s treatment in the full panel. Its running
+  // highlight surrounds the whole wrapper instead of any one member (each
+  // member chip is rendered with `hideExecutingHighlight`), via the same
+  // `deriveParallelGroupStatus`/`PARALLEL_GROUP_RUNNING_STATUS` single
+  // source `ParallelGroupPanel` uses.
+  const renderParallelGroupChips = (
+    group: ParallelGroupDefinition,
+    indices: number[]
+  ) => {
+    const groupStatus = deriveParallelGroupStatus(
+      indices.map((index) => {
+        const step = prompts[index];
+        return {
+          status: getPromptStatus(step, index),
+          enabled: step.enabled !== false,
+        };
+      })
+    );
+    return (
+      <div
+        key={`group-${group.id}`}
+        className="relative mx-0.5 my-0.5 overflow-hidden rounded-sm border border-panel-border"
+        data-testid={`chip-parallel-group-${group.id}`}
+      >
+        {groupStatus === PARALLEL_GROUP_RUNNING_STATUS && (
+          <ExecutingStepHighlight testId="parallel-group-chip-executing-highlight" />
+        )}
+        <div
+          className="flex items-center justify-center border-b border-panel-border py-0.5"
+          title={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
+        >
+          <Icon
+            name="worktree-compact"
+            className="text-xxs text-description-fg"
+          />
+        </div>
+        {indices.map((index) => renderPromptChip(index, true))}
+      </div>
+    );
+  };
+
   // Final step derived state
   const hasFinalStep = !!finalStep;
   const finalStepIsReadOnly =
@@ -543,116 +716,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           </div>
         ) : (
           <div className="relative">
-            {/* Done chips — static */}
-            {prompts.slice(0, currentStep).map((prompt, i) => {
-              const status = getPromptStatus(prompt, i);
-              const contextPct = getContextPct(i);
-              const isExecuting = isStepExecuting(
-                executionState,
-                i,
-                currentStep,
-                activeStepIndices
-              );
-              return (
-                <ChipContent
-                  key={i}
-                  stepIndex={i}
-                  slotNumber={i + 1}
-                  status={status}
-                  contextPct={contextPct}
-                  stepColor={getChipStepColor(prompt, i, status)}
-                  isExecuting={isExecuting}
-                  showPauseBoundaryBefore={false}
-                  isScript={isScriptStep(prompt)}
-                  tooltip={buildChipTooltip(prompt, i, status, isExecuting)}
-                  onChipClick={() => handleStepClick(i)}
-                  onOpenContextMenu={(x, y) =>
-                    openContextMenu(x, y, {
-                      step: prompt,
-                      setPositionTarget: i,
-                      deleteIndex: i,
-                      isCurrentStep: false,
-                      isExecutionTargetLocked: isStepExecutionLocked(
-                        prompt,
-                        i,
-                        currentStep,
-                        executionState
-                      ),
-                      direction: "rewind",
-                      outputText: getLatestOutput(i)?.response as
-                        string | undefined,
-                      latestOutput: getLatestOutput(i),
-                      runtimeMeta: !isScriptWorkflowStep(prompt)
-                        ? prompt._runtime
-                        : undefined,
-                      liveContextWindow: liveContextWindow?.[i],
-                    })
-                  }
-                />
-              );
-            })}
-
-            {/* Pending chips — static; reorder via Move Up/Down in the
-                context menu, or expand to the full panel to drag. */}
-            {prompts.slice(currentStep).map((prompt, visualIdx) => {
-              const index = currentStep + visualIdx;
-              const isCurrentStep = visualIdx === 0;
-              const status = getPromptStatus(prompt, index);
-              const contextPct = getContextPct(index);
-              const slotNumber = index + 1;
-              // Not `isCurrentStep`: every live member of a parallel group is
-              // executing, and only the anchor sits at `currentStep`.
-              const isExecuting = isStepExecuting(
-                executionState,
-                index,
-                currentStep,
-                activeStepIndices
-              );
-              // Only an in-flight step is locked; PAUSED stops at a step
-              // boundary, so the current chip is the next PENDING step.
-              const isExecutionTargetLocked =
-                isStepExecutionLocked(
-                  prompt,
-                  index,
-                  currentStep,
-                  executionState
-                ) ||
-                (isExecutionBusy(executionState) && isCurrentStep);
-              return (
-                <ChipContent
-                  key={index}
-                  stepIndex={index}
-                  slotNumber={slotNumber}
-                  status={status}
-                  contextPct={contextPct}
-                  stepColor={getChipStepColor(prompt, index, status)}
-                  isExecuting={isExecuting}
-                  showPauseBoundaryBefore={
-                    isPaused && currentStep > 0 && visualIdx === 0
-                  }
-                  isScript={isScriptStep(prompt)}
-                  tooltip={buildChipTooltip(prompt, index, status, isExecuting)}
-                  onChipClick={() => handleStepClick(index)}
-                  onOpenContextMenu={(x, y) =>
-                    openContextMenu(x, y, {
-                      step: prompt,
-                      setPositionTarget: index,
-                      deleteIndex: index,
-                      isCurrentStep,
-                      isExecutionTargetLocked,
-                      direction: "forward",
-                      outputText: getLatestOutput(index)?.response as
-                        string | undefined,
-                      latestOutput: getLatestOutput(index),
-                      runtimeMeta: !isScriptWorkflowStep(prompt)
-                        ? prompt._runtime
-                        : undefined,
-                      liveContextWindow: liveContextWindow?.[index],
-                    })
-                  }
-                />
-              );
-            })}
+            {/* One chip per standalone step; parallel-group members render
+                inside their group's bordered wrapper instead. Segments cover
+                the full step list in order, so this single pass replaces
+                what used to be a done-slice loop and a pending-slice loop. */}
+            {chipSegments.map((segment) =>
+              segment.kind === "group"
+                ? renderParallelGroupChips(segment.group, segment.indices)
+                : renderPromptChip(segment.index)
+            )}
           </div>
         )}
       </div>

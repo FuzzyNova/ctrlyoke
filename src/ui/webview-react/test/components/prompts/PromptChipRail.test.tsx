@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PromptChipRail } from "@components/prompts/PromptChipRail";
@@ -244,5 +244,70 @@ describe("PromptChipRail", () => {
       (statusIcon?.compareDocumentPosition(contextFillBar!) ?? 0) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it("wraps a parallel group's chips in a bordered header with the worktree icon", () => {
+    const group = {
+      id: "group-1",
+      startIndex: 0,
+      endIndex: 1,
+      failFast: true,
+    };
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "first" }, { prompt: "second" }, { prompt: "after" }],
+      parallelGroups: [group],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
+    expect(
+      groupWrapper.querySelector(".codicon-worktree-compact")
+    ).not.toBeNull();
+    expect(
+      within(groupWrapper).getByRole("button", { name: "Prompt 1" })
+    ).toBeInTheDocument();
+    expect(
+      within(groupWrapper).getByRole("button", { name: "Prompt 2" })
+    ).toBeInTheDocument();
+
+    // The step after the group renders as its own chip, outside the wrapper.
+    const afterChip = screen.getByRole("button", { name: "Prompt 3" });
+    expect(groupWrapper.contains(afterChip)).toBe(false);
+  });
+
+  it("outlines the whole running group's chips, not an individual chip", () => {
+    const group = {
+      id: "group-2",
+      startIndex: 0,
+      endIndex: 1,
+      failFast: true,
+    };
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "still running" }, { prompt: "settled first" }],
+      parallelGroups: [group],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      activeStepIndices: [0],
+      results: [
+        { status: STEP_STATUS.RUNNING },
+        { status: STEP_STATUS.COMPLETED },
+      ],
+    });
+
+    render(<PromptChipRail onExpand={vi.fn()} />);
+
+    const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
+    expect(
+      within(groupWrapper).getByTestId(
+        "parallel-group-chip-executing-highlight"
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(groupWrapper).queryByTestId("executing-chip-highlight")
+    ).not.toBeInTheDocument();
   });
 });
