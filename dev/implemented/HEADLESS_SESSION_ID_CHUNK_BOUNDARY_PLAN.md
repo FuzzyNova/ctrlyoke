@@ -11,7 +11,7 @@ for the remaining log-tail exposure.
 ## The problem
 
 `HeadlessLogTail.captureSessionId` (`src/core/harness/shared/HeadlessLogTail.ts`)
-runs the provider's `extractSessionIdFromStdout` against **one raw stdout chunk
+ran the provider's `extractSessionIdFromStdout` against **one raw stdout chunk
 at a time**:
 
 ```ts
@@ -21,11 +21,11 @@ const sessionId = this.options.extractSessionIdFromStdout?.(chunk);
 This is the LOG-mode sibling of issue 2 in the parent plan. That issue was fixed
 by giving `CliTransportCoordinator` a per-spawn `splitCompleteLines`
 accumulator, so the STDOUT-mode providers now only ever see whole records. The
-log-tail path has no such accumulator, so a record split across a chunk boundary
-is simply not matched — and when the split record is the init record carrying the
-session ID, it is never matched at all.
+log-tail path had no such accumulator, so a record split across a chunk boundary
+was simply not matched — and when the split record was the init record carrying
+the session ID, it was never matched at all.
 
-Two providers' doc comments state the wrong remedy, in the same shape
+Two providers' doc comments stated the wrong remedy, in the same shape
 `CopilotLogParser`'s "partial write mid-flush" comment did —
 `AntigravityCliProvider.extractSessionIdFromStdout` and, word for word,
 `CodexCliProvider.extractSessionIdFromStdout`:
@@ -34,9 +34,10 @@ Two providers' doc comments state the wrong remedy, in the same shape
 > the next chunk retries it.
 
 The next chunk does not retry it. It carries the record's _second half_ plus
-whatever followed; the first half is gone. **Both** comments should be corrected
-as part of the fix. `QwenCliProvider`'s comment ("from any complete JSON object
-in stdout") is already accurate and needs no change.
+whatever followed; the first half was gone. **Both** comments were corrected as
+part of this fix, as was the `ICliProvider.extractSessionIdFromStdout` contract
+they implement. `QwenCliProvider`'s comment ("from any complete JSON object in
+stdout") was already accurate and was left unchanged.
 
 ## Why it is only P3
 
@@ -64,11 +65,11 @@ independent; `splitCompleteLines` is the shared boundary helper.
 
 `HeadlessLogTail` holds the `splitCompleteLines` remainder and runs
 `extractSessionIdFromStdout` over `carry + chunk` as one string. Feeding records
-individually would be a regression for
-`QwenCliProvider`, whose extractor is brace-balanced
-(`CliParseUtils.extractJsonObjectsFromStream`) rather than line-delimited: an
-object spanning several lines inside a single chunk matches today and must keep
-matching, so the joined text preserves the existing behaviour.
+individually would be a regression for `QwenCliProvider`, whose extractor is
+brace-balanced (`CliParseUtils.extractJsonObjectsFromStream`) rather than
+line-delimited: an object spanning several lines inside a single chunk matched
+before this change and had to keep matching, so the joined text preserves that
+behaviour.
 
 After a failed match, only the new remainder is retained, keeping the buffer
 bounded to one incomplete record; a resolved ID clears it.
