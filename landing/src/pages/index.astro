@@ -8,15 +8,6 @@ import { LAUNCHED, MARKETPLACE_URL } from "../config";
 import heroGif from "../../../images/screenshots/hero-gif-1350x900.gif";
 import takeControlVideo from "../../../images/screenshots/ctrlyoke-take-control-1080p.mp4";
 
-const harnesses = [
-  { name: "Copilot CLI", icon: "/icons/harnesses/copilot-cli.svg" },
-  { name: "Claude Code", icon: "/icons/harnesses/claude.svg" },
-  { name: "Codex CLI", icon: "/icons/harnesses/codex.svg" },
-  { name: "OpenCode", icon: "/icons/harnesses/opencode.svg" },
-  { name: "Qwen Code", icon: "/icons/harnesses/qwen.svg" },
-  { name: "Antigravity CLI", icon: "/icons/harnesses/antigravity.svg" },
-];
-
 const features = [
   {
     title: "Point at the context you mean",
@@ -150,9 +141,10 @@ const steps = [
   <!-- One dashboard, six harnesses -->
   <section class="border-b border-white/5 px-6 py-20">
     <div class="mx-auto max-w-4xl">
-      <p class="mb-10 text-center text-sm font-medium uppercase tracking-widest text-slate-500">
-        One dashboard, six harnesses
-      </p>
+      <div class="mb-10 text-center">
+        <h2 class="text-3xl font-bold text-white md:text-4xl">One dashboard, six harnesses</h2>
+        <p class="mt-3 text-slate-400">Change harnesses, not habits</p>
+      </div>
       <HarnessDeck />
     </div>
   </section>
@@ -185,23 +177,6 @@ const steps = [
       <span class="text-slate-400">and token refresh. Aim for 90% branch coverage.</span>
     <span class="text-sky-400">endCondition</span><span class="text-slate-500">:</span>
       <span class="text-sky-400">script</span><span class="text-slate-500">:</span> npm test -- --coverage --branches 90</code></pre>
-      </div>
-    </div>
-  </section>
-
-  <!-- Harness grid -->
-  <section class="border-b border-white/5 px-6 py-20">
-    <div class="mx-auto max-w-4xl text-center">
-      <p class="mb-10 text-sm font-medium uppercase tracking-widest text-slate-500">
-        One consistent interface across supported harnesses
-      </p>
-      <div class="flex flex-wrap items-center justify-center gap-4">
-        {harnesses.map((h) => (
-          <div class="flex items-center gap-2.5 rounded-full border border-white/8 bg-brand-900/60 px-4 py-2">
-            <img src={h.icon} alt={h.name} class="h-5 w-5 object-contain" />
-            <span class="text-sm font-medium text-slate-300">{h.name}</span>
-          </div>
-        ))}
       </div>
     </div>
   </section>

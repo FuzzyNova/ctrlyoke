@@ -14,12 +14,12 @@ const CARD_H = 800;
 const STEP = 32;
 
 const harnesses = [
-  { id: "claude", name: "Claude Code", img: claudeImg },
-  { id: "codex", name: "Codex CLI", img: codexImg },
-  { id: "copilot", name: "Copilot CLI", img: copilotImg },
-  { id: "opencode", name: "opencode", img: opencodeImg },
-  { id: "qwen", name: "Qwen Code", img: qwenImg },
-  { id: "agy", name: "Antigravity", img: agyImg },
+  { id: "claude", name: "Claude Code", img: claudeImg, icon: "/icons/harnesses/claude.svg" },
+  { id: "codex", name: "Codex CLI", img: codexImg, icon: "/icons/harnesses/codex.svg" },
+  { id: "copilot", name: "Copilot CLI", img: copilotImg, icon: "/icons/harnesses/copilot-cli.svg" },
+  { id: "opencode", name: "opencode", img: opencodeImg, icon: "/icons/harnesses/opencode.svg" },
+  { id: "qwen", name: "Qwen Code", img: qwenImg, icon: "/icons/harnesses/qwen.svg" },
+  { id: "agy", name: "Antigravity", img: agyImg, icon: "/icons/harnesses/antigravity.svg" },
 ];
 const N = harnesses.length;
 const CANVAS_W = CARD_W + (N - 1) * STEP;
@@ -28,6 +28,16 @@ const order = harnesses.map((h) => h.id);
 ---
 
 <div class="harness-deck">
+  <div class="harness-deck__chips">
+    {
+      harnesses.map((h) => (
+        <div class="harness-deck__chip" data-deck-chip={h.id}>
+          <img src={h.icon} alt="" class="h-5 w-5 object-contain" />
+          <span>{h.name}</span>
+        </div>
+      ))
+    }
+  </div>
   <div class="harness-deck__stage" style={`aspect-ratio:${CANVAS_W}/${CANVAS_H}`}>
     <div
       class="harness-deck__stack"
@@ -55,7 +65,41 @@ const order = harnesses.map((h) => h.id);
 <style>
   .harness-deck {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .harness-deck__chips {
+    position: relative;
+    display: flex;
+    align-items: center;
     justify-content: center;
+    height: 2.75rem;
+    width: 100%;
+    margin-bottom: 1.5rem;
+  }
+  .harness-deck__chip {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.6);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(203, 213, 225);
+    opacity: 0;
+    transition: opacity 500ms ease;
+    pointer-events: none;
+  }
+  .harness-deck__chip.is-active {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .harness-deck__chip {
+      transition: none;
+    }
   }
   .harness-deck__stage {
     position: relative;
@@ -104,8 +148,16 @@ const order = harnesses.map((h) => h.id);
     if (!stage || !stack) return;
 
     const els = {};
+    const chips = {};
     for (const id of order) {
       els[id] = root.querySelector(`[data-deck-card="${id}"]`);
+      chips[id] = root.querySelector(`[data-deck-chip="${id}"]`);
+    }
+
+    function setActiveChip(id) {
+      for (const key of order) {
+        chips[key]?.classList.toggle("is-active", key === id);
+      }
     }
 
     function slot(i) {
@@ -140,6 +192,7 @@ const order = harnesses.map((h) => h.id);
 
     let current = order.slice();
     current.forEach((id, i) => applySlot(els[id], i, false));
+    setActiveChip(current[0]);
     fit();
     window.addEventListener("resize", fit);
 
@@ -177,6 +230,7 @@ const order = harnesses.map((h) => h.id);
       }, 650);
 
       current = next;
+      setActiveChip(current[0]);
     }
 
     setInterval(tick, 5000);
