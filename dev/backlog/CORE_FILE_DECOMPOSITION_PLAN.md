@@ -507,8 +507,8 @@ one line — deviations, deferrals, or a reassessment outcome.
 | ------------------------------------ | ----------- | ------ | ----- |
 | Decoupling plan, Phase 1             | ✅ Done     | (prior) | Verified 2026-09-17: options-object ctor, no `vscode` imports in either file. |
 | §4.1 `ExternalRunWatchCoordinator`   | ✅ Done     | 7cbcc7d6 | Added `fileWatcherFactory` to the narrow host port because the coordinator owns watcher setup; updated affected object-create harnesses. |
-| §5.2 `SessionActivityRecorder`       | Not started | —      | |
-| §5.3 `RunnerLockCoordinator`         | Not started | —      | |
+| §5.2 `SessionActivityRecorder`       | ✅ Done     | ce340986 | Extracted resumed-session activity state and persistence with a narrow port; carried the parent assertions into its own suite. |
+| §5.3 `RunnerLockCoordinator`         | ✅ Done     | 4f5b2825 | Extracted lock acquire/heartbeat/stop polling/release state and added stale-runner-lock recovery coverage. |
 | §4.2 `WorkflowInstanceRegistry`      | Not started | —      | |
 | §4.3 `RunViewPublisher`              | Not started | —      | |
 | Test-double retirement               | Not started | —      | Retire `Object.create` doubles; delete the three defensive accessors. |
