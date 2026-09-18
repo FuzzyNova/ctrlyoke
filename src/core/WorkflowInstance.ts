@@ -4819,13 +4819,24 @@ export class WorkflowInstance {
     return new Set(this.activeTargetResources.keys());
   }
 
+  /**
+   * Queue-step attempts report their own zero-based `stepIndex`. A final-step
+   * attempt has no single canonical index — its live PTY's `stepIndex` field
+   * is stamped as `steps.length` when spawned via the AI-harness path
+   * (CliTransportCoordinator, from `workflowContext.promptIndex`) but as
+   * `-(loopIndex+1)` when spawned via the interactive-script path
+   * (WorkflowExecutor's `spawnScriptPty`, from `getSignedStepIndex`). Emit
+   * both so terminal-session "is this actively running" gating matches
+   * whichever convention produced the session, regardless of step type.
+   */
   private getActiveStepIndices(): number[] {
+    const totalSteps = this.promptQueue.getState().steps.length;
     return this.workflowRuntime
       .getActiveAttempts()
       .flatMap((attempt) =>
         attempt.target.kind === FINAL_STEP_PHASES.QUEUE
           ? [attempt.target.stepIndex]
-          : []
+          : [totalSteps, -(attempt.target.loopIndex + 1)]
       )
       .sort((left, right) => left - right);
   }

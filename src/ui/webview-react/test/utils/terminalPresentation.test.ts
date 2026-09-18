@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { SHELL_KINDS, TERMINAL_SESSION_STATUS } from "@/types/messages";
+import {
+  SESSION_KINDS,
+  SHELL_KINDS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
 import {
   getShellCodiconName,
   getShellCompactLabel,
@@ -49,7 +53,11 @@ describe("isTerminalSessionInUseByActiveStep", () => {
   it("is in use when the running session's stepIndex is currently active", () => {
     expect(
       isTerminalSessionInUseByActiveStep(
-        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: 2 },
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: 2,
+          kind: SESSION_KINDS.AI_CLI,
+        },
         [2, 5]
       )
     ).toBe(true);
@@ -58,7 +66,11 @@ describe("isTerminalSessionInUseByActiveStep", () => {
   it("is not in use when the session's stepIndex is not among the active steps", () => {
     expect(
       isTerminalSessionInUseByActiveStep(
-        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: 1 },
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: 1,
+          kind: SESSION_KINDS.AI_CLI,
+        },
         [2, 5]
       )
     ).toBe(false);
@@ -67,17 +79,12 @@ describe("isTerminalSessionInUseByActiveStep", () => {
   it("is not in use once the session has ended, even if its stepIndex is still active", () => {
     expect(
       isTerminalSessionInUseByActiveStep(
-        { status: TERMINAL_SESSION_STATUS.COMPLETED, stepIndex: 2 },
+        {
+          status: TERMINAL_SESSION_STATUS.COMPLETED,
+          stepIndex: 2,
+          kind: SESSION_KINDS.AI_CLI,
+        },
         [2]
-      )
-    ).toBe(false);
-  });
-
-  it("is never in use for a standalone shell session (stepIndex -1)", () => {
-    expect(
-      isTerminalSessionInUseByActiveStep(
-        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: -1 },
-        [-1]
       )
     ).toBe(false);
   });
@@ -85,8 +92,56 @@ describe("isTerminalSessionInUseByActiveStep", () => {
   it("is not in use when stepIndex is undefined", () => {
     expect(
       isTerminalSessionInUseByActiveStep(
-        { status: TERMINAL_SESSION_STATUS.RUNNING, stepIndex: undefined },
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: undefined,
+          kind: SESSION_KINDS.AI_CLI,
+        },
         [0]
+      )
+    ).toBe(false);
+  });
+
+  it("is in use for a running final-step AI-harness session (stepIndex === totalSteps)", () => {
+    // WorkflowInstance.getActiveStepIndices() reports `steps.length` for an
+    // active final-step attempt spawned via the AI-harness path.
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: 3,
+          kind: SESSION_KINDS.AI_CLI,
+        },
+        [3]
+      )
+    ).toBe(true);
+  });
+
+  it("is in use for a running final-step interactive-script session at loop 0 (stepIndex -1)", () => {
+    // The interactive-script spawn path encodes the final step's first loop
+    // as -(0+1) === -1, the same raw number a standalone shell carries — the
+    // `kind` check is what keeps this correctly gated.
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: -1,
+          kind: SESSION_KINDS.AI_CLI,
+        },
+        [-1]
+      )
+    ).toBe(true);
+  });
+
+  it("is never in use for a standalone shell session, even if -1 is active for a final-step loop", () => {
+    expect(
+      isTerminalSessionInUseByActiveStep(
+        {
+          status: TERMINAL_SESSION_STATUS.RUNNING,
+          stepIndex: -1,
+          kind: SESSION_KINDS.SHELL,
+        },
+        [-1]
       )
     ).toBe(false);
   });
