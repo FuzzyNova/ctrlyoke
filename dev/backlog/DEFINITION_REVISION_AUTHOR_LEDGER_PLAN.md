@@ -1,7 +1,7 @@
 # Definition-revision conflicts — make "my own edit can't conflict with me" structural
 
-> **Status:** Steps 1–2 implemented; step 3 remains. Design finalized 2026-09-18; staged as the three steps in
-> **Implementation plan** below.
+> **Status:** Implemented 2026-09-18. The retry shim is retired and the stale-write/Re-run sequence regression
+> test proves the author ledger preserves the single-dashboard invariant while foreign writers still conflict.
 >
 > **Prerequisites already landed** (bug-fix branch, Sept 2026): no-op writes no longer bump
 > `definitionRevision` (`applyWorkflowPropertyWrites`, and the no-op short-circuits in both
@@ -172,7 +172,7 @@ file directly, as a CLI/MCP writer would) and assert the client's stale revision
    `discardContinuationAtRun`. Definition-address entries use
    `RunLifecycleService.describeViewAddress`; descriptor entries use `WorkflowKey`.
    Deep check sites remain unchanged.
-3. **Retire `retryWithRefreshedRevisions`** and prove the invariant with the sequence regression
+3. **Done — retire `retryWithRefreshedRevisions`** and prove the invariant with the sequence regression
    test above.
 
 Each step keeps this document current and commits its own work.

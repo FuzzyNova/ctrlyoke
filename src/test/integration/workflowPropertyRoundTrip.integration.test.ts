@@ -6,6 +6,7 @@ import * as path from "path";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import {
   createPromotedRun,
@@ -71,6 +72,58 @@ suite("Workflow property round trip (panel -> working file)", () => {
     await h.routeWorkflowPropertyUpdate("model", "claude-sonnet-5");
     const after = (await h.readRunDefinition()).definitionRevision ?? 1;
     assert.strictEqual(after, before + 1);
+  });
+
+  test("one client can burst stale property writes and re-run without a conflict", async () => {
+    const { h } = await harness();
+    const stale = await h.currentMutationContext();
+    if (stale.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
+      throw new Error("round-trip harness must address a promoted run");
+    }
+
+    // Prime the author ledger with a Re-run. The client has not drained the
+    // resulting identity, so every message below deliberately carries the pair
+    // it held before this burst began. The first Re-run also advances the
+    // lineage descriptor through allocateRun, exercising that token as well.
+    await h.routeSeedNewRun({
+      type: MESSAGE_TYPES.SEED_NEW_RUN,
+      address: stale.address,
+      expectedDefinitionRevision: stale.expectedDefinitionRevision,
+      expectedDescriptorRevision: stale.expectedDescriptorRevision,
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      await h.routeWorkflowPropertyUpdateThroughHandlers(
+        { ...stale },
+        "model",
+        `burst-model-${index}`
+      );
+    }
+
+    await h.routeSeedNewRun({
+      type: MESSAGE_TYPES.SEED_NEW_RUN,
+      address: stale.address,
+      expectedDefinitionRevision: stale.expectedDefinitionRevision,
+      expectedDescriptorRevision: stale.expectedDescriptorRevision,
+    });
+
+    assert.deepStrictEqual(
+      h.sentMessages.filter(
+        (message) => message.type === MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+      ),
+      [],
+      "the acting client's own in-flight writes must not report a conflict"
+    );
+    const finalContext = await h.currentMutationContext();
+    assert.strictEqual(
+      finalContext.expectedDefinitionRevision,
+      stale.expectedDefinitionRevision + 3
+    );
+    assert.ok(
+      finalContext.expectedDescriptorRevision >
+        stale.expectedDescriptorRevision,
+      "the Re-runs must advance the lineage descriptor"
+    );
   });
 
   test("agent explicit-None ('') persists as schema-valid null", async () => {
@@ -259,7 +312,7 @@ suite("Workflow property round trip (panel -> working file)", () => {
     );
   });
 
-  test("a stale definition revision is rejected and the file is unchanged", async () => {
+  test("a foreign definition-revision advance is rejected and the file is unchanged", async () => {
     const { h } = await harness();
     await h.routeWorkflowPropertyUpdate("model", "claude-opus-4-8");
     const stale = await h.staleMutationContext();
