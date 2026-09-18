@@ -71,7 +71,8 @@ connectivity gaps.
 Use this flow when the development machine cannot reach the internet:
 
 1. On a connected device, open the [ctrlyoke offline license file generator](https://ctrlyoke.dev/license/offline/)
-   and enter the Keygen license key from your purchase email.
+   and enter the Keygen license key from your purchase email. For an Enterprise deployment, you can
+   instead obtain the signed license file from your organization's Keygen administrator.
 2. Transfer the file to the air-gapped machine using your approved removable
    media process.
 3. In VS Code, open the Command Palette and run

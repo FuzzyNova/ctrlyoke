@@ -1,8 +1,10 @@
 # Self-Serve Offline License File Download
 
 **Created:** September 17, 2026
-**Status:** Implemented — Option B shipped 2026-09-17 (design verified 2026-09-17, see
-[Verified design](#verified-design-for-option-b)). Option C remains backlog.
+**Status:** Option B implemented and shipped 2026-09-17 (design verified 2026-09-17, see
+[Verified design](#verified-design-for-option-b)). Option C is deliberately deferred and out of
+scope for this work; Option A is declined. This document remains in `dev/backlog/` so the deferred
+Option C work stays visible in its existing design record.
 **Found via:** live air-gapped-activation test on 2026-09-17 (see
 [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 12). Nathan, as the
 Keygen account admin, generated the signed license file himself from the Keygen dashboard and
@@ -23,11 +25,11 @@ re-exports from `LicenseService.ts`. The landing site imports that dependency-fr
 directly; no generated landing-local copy was needed because the cross-project import works in
 the static landing build. Option C remains intentionally untouched.
 
-## The gap
+## The gap (resolved by Option B)
 
-[`docs/pro/index.md`](../../docs/pro/index.md) tells air-gapped customers to "obtain the signed
-license file from the Keygen customer portal or from your organization's Keygen administrator."
-Neither half of that sentence is actually true for a normal Pro buyer right now:
+Before Option B shipped, [`docs/pro/index.md`](../../docs/pro/index.md) told air-gapped customers
+to "obtain the signed license file from the Keygen customer portal or from your organization's
+Keygen administrator." Neither half of that sentence was actually true for a normal Pro buyer:
 
 - There is no configured Keygen customer portal — only the admin dashboard exists
   ([`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 4 has no such item).
@@ -150,7 +152,9 @@ for passing build-time constants into browser code. The page must offer both a f
 copy-to-clipboard view of the certificate, because the extension accepts a picked file _or_ pasted
 text.
 
-## Option A — Keygen-hosted customer portal
+## Option A — Keygen-hosted customer portal (declined)
+
+**Decision: Declined.**
 
 Keygen may offer (tier-dependent) a hosted self-service portal product. Not evaluated here in
 detail because it's the weakest fit even if available: it lives on Keygen's domain, not
@@ -169,7 +173,7 @@ A page (e.g. `ctrlyoke.dev/license/offline` or similar) that:
 3. Downloads the resulting `.lic` blob (or shows it for copy/paste, matching the extension's
    existing "paste it in here" affordance).
 
-This is the actual fulfillment of what `docs/pro/index.md` already promises ("customer portal"),
+This delivers the self-serve outcome the old `docs/pro/index.md` wording was intended to promise,
 works from any browser on any connected device (a work laptop, a phone, a kiosk — nothing to
 install), and is the only option that helps a customer who wants to prep a license file _before_
 they've put ctrlyoke on any machine at all. It also matches the existing pattern of `ctrlyoke.dev`
@@ -181,7 +185,7 @@ browser, abuse is bounded by Keygen's own per-key/per-IP rate limits on the chec
 anything ctrlyoke needs to build — another point in favor of not putting a Netlify function in the
 path.
 
-## Option C — a section in `LicenseSection.tsx` (fast follow, not a substitute)
+## Option C — a section in `LicenseSection.tsx` (deliberately deferred; out of scope)
 
 Once Option B's client-side Keygen call is proven out, add a small "Generate a license file for
 another machine" action next to the existing "Activate with license key" section in
@@ -194,10 +198,9 @@ does nothing for a customer with no connected ctrlyoke install anywhere.
 
 ## Recommendation
 
-Build **B**, ship it, update `docs/pro/index.md`'s air-gapped section to link to it instead of the
-vague "customer portal or your org's Keygen administrator" line. Add **C** afterward as a
-convenience for existing Pro users, reusing the same Keygen call. Skip **A** unless the Keygen
-pricing check turns up a white-label portal already included at the current tier.
+Option **B** is implemented and shipped, including the `docs/pro/index.md` link. Option **C** is
+deferred as a future convenience for existing Pro users and is out of scope for this work. Option
+**A** remains declined.
 
 ## Out of scope for this plan
 
