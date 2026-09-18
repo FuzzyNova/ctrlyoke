@@ -345,6 +345,48 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
     }
   });
 
+  test("a release issued while an acquire is spinning hands the lock over", async function () {
+    // Regression: `acquireLock` used to hold the `runner.json` file mutex for
+    // its entire retry window, so the outgoing owner's `releaseLock` — which
+    // takes that same mutex — could not run until the acquire had already
+    // thrown. Every legitimate hand-off (a Re-run while the previous run is
+    // still tearing down its retained PTY) therefore failed with "held by a
+    // live owner", with the release landing milliseconds after the rejection.
+    this.timeout(15_000);
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-handover-")
+    );
+    try {
+      const outgoing = makeLock();
+      await WorkflowLockManager.acquireLock(
+        workspaceRoot,
+        workflowKey,
+        outgoing
+      );
+
+      const incoming = makeLock();
+      const acquire = WorkflowLockManager.acquireLock(
+        workspaceRoot,
+        workflowKey,
+        incoming
+      );
+      // Well inside the acquire's 5s retry window, and long enough that the
+      // spin is definitely under way.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        workflowKey,
+        outgoing.ownerToken
+      );
+
+      await acquire;
+      const owner = await readWorkflowLock(workspaceRoot, workflowKey);
+      assert.strictEqual(owner?.ownerToken, incoming.ownerToken);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("a stale owner cannot heartbeat or release a successor's lock", async () => {
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-ownertoken-")
