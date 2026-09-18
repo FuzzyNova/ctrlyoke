@@ -612,6 +612,7 @@ Not a Marketplace-release blocker. `package.json#bin.ctrlyoke` → `./out/cli.js
 - [x] Trial expiry falls back to localhost-only without breaking workflows — verified by code-path review of the bind gate and free local workflow paths.
 - [x] Pro activation (online key) unlocks remote dashboard + other Pro features immediately, no restart — live-tested by Nathan against a real Keygen key.
 - [x] Air-gapped license file import unlocks Pro with zero network calls — Nathan generated a signed license file from Keygen for one of the `dev/test_keys.md` licenses and imported it via `LicenseSection.tsx`'s "Import offline license file" flow; activation succeeded.
+- [ ] Self-serve offline license generator works end-to-end with a real Pro license key, and the resulting file imports successfully on an air-gapped machine.
 - [ ] Lemon Squeezy **test-mode** order → exactly one Keygen license created, webhook retry doesn't duplicate it.
 - [ ] Refund (test mode) → Keygen license suspended/revoked.
 - [ ] Pricing page checkout link points at the real, published, live-mode LS product.

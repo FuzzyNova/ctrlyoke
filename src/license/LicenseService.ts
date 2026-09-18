@@ -1,7 +1,32 @@
 import { createHash, randomUUID, webcrypto } from "node:crypto";
+import {
+  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
+  KEYGEN_API_BASE_URL,
+  KEYGEN_ENTERPRISE_POLICY_ID,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_VALID_POLICY_IDS,
+  LICENSE_CERTIFICATE_BEGIN,
+  LICENSE_CERTIFICATE_END,
+  LICENSE_FILE_TTL_MS,
+  LICENSE_VALIDATION_CODES,
+} from "./KeygenConstants";
 import type { SecretStore } from "../platform/SecretStore";
 import { PRO_FEATURES } from "../types/DashboardConstants";
 import { TypedEmitter } from "../utils/TypedEmitter";
+
+export {
+  CHECKOUT_ELIGIBLE_VALIDATION_CODES,
+  KEYGEN_ACCOUNT_ID,
+  KEYGEN_API_BASE_URL,
+  KEYGEN_ENTERPRISE_POLICY_ID,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_PRO_POLICY_ID,
+  KEYGEN_VALID_POLICY_IDS,
+  LICENSE_CERTIFICATE_BEGIN,
+  LICENSE_CERTIFICATE_END,
+  LICENSE_FILE_TTL_MS,
+  LICENSE_VALIDATION_CODES,
+} from "./KeygenConstants";
 
 /** The source determines whether a license file's TTL is enforced locally. */
 export const LICENSE_SOURCES = {
@@ -21,23 +46,10 @@ export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
 export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
   "ctrlyoke.pro.machine-fingerprint";
 
-export const KEYGEN_ACCOUNT_ID = "6ed6209c-6633-4444-9d43-ab4a473e2f28";
-export const KEYGEN_PRODUCT_ID = "f4af3c3b-4350-4a6e-af09-744797abb4b0";
-export const KEYGEN_PRO_POLICY_ID = "da0764ce-6577-419a-862d-128efdbfc329";
-export const KEYGEN_ENTERPRISE_POLICY_ID =
-  "1700d3bb-06b7-4087-96ce-e08aa6c6a817";
-/** Both policies live on the same product and share the account's Ed25519 key. */
-export const KEYGEN_VALID_POLICY_IDS = [
-  KEYGEN_PRO_POLICY_ID,
-  KEYGEN_ENTERPRISE_POLICY_ID,
-] as const;
-export const KEYGEN_API_BASE_URL = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
-
 /** The Keygen account verification key. This is public and safe to ship. */
 export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
   "4cf46fe061bf97080094f14430fa2a1563f1b245cd600ccb99039bfff43836fa";
 
-export const LICENSE_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
 export const REMOTE_ACCESS_TRIAL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -64,13 +76,6 @@ const LICENSE_FILE_HEADER = "LICENSE";
 export const LICENSE_TIERS = {
   FREE: "free",
   PRO: "pro",
-} as const;
-
-const LICENSE_VALIDATION_CODES = {
-  NO_MACHINES: "NO_MACHINES",
-  FINGERPRINT_SCOPE_MISMATCH: "FINGERPRINT_SCOPE_MISMATCH",
-  TOO_MANY_MACHINES: "TOO_MANY_MACHINES",
-  MACHINE_LIMIT_EXCEEDED: "MACHINE_LIMIT_EXCEEDED",
 } as const;
 
 type LicenseTier = (typeof LICENSE_TIERS)[keyof typeof LICENSE_TIERS];
@@ -218,10 +223,13 @@ export class LicenseService implements LicenseService {
   private readonly publicKeyHex: string;
   private readonly request: typeof fetch;
   private readonly machineFingerprintOption:
-    string | (() => Promise<string>) | undefined;
+    | string
+    | (() => Promise<string>)
+    | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
   private cachedEntitlement:
-    { readonly value: Entitlement; readonly expiresAt: number } | undefined;
+    | { readonly value: Entitlement; readonly expiresAt: number }
+    | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
@@ -630,9 +638,10 @@ export class LicenseService implements LicenseService {
     const validationCode = readOptionalString(meta?.code);
     const canActivate =
       meta?.valid === true ||
-      validationCode === LICENSE_VALIDATION_CODES.NO_MACHINES ||
-      validationCode === LICENSE_VALIDATION_CODES.FINGERPRINT_SCOPE_MISMATCH ||
-      validationCode === LICENSE_VALIDATION_CODES.TOO_MANY_MACHINES;
+      (validationCode !== undefined &&
+        CHECKOUT_ELIGIBLE_VALIDATION_CODES.some(
+          (code) => code === validationCode
+        ));
     if (!canActivate) {
       throw new UserFacingLicenseError(
         "That Pro license key was rejected. It may be invalid, expired, suspended, or at its machine limit."
@@ -918,16 +927,23 @@ function parseLicenseSource(value: unknown): LicenseSource | undefined {
     : undefined;
 }
 
+/**
+ * Built from the shared envelope constants so the extension and the
+ * self-serve page in `landing/` can never disagree about what a signed
+ * license file looks like.
+ */
+const LICENSE_CERTIFICATE_PATTERN = new RegExp(
+  String.raw`^${LICENSE_CERTIFICATE_BEGIN}\n([\s\S]*?)\n${LICENSE_CERTIFICATE_END}$`
+);
+
 function parseCertificate(blob: string): LicenseCertificate {
   const normalized = blob.replace(/\r\n/g, "\n").trim();
-  const match = normalized.match(
-    /^-----BEGIN (LICENSE) FILE-----\n([\s\S]*?)\n-----END \1 FILE-----$/
-  );
+  const match = normalized.match(LICENSE_CERTIFICATE_PATTERN);
   if (!match) {
     throw new Error("Invalid license certificate");
   }
 
-  const payload = parseJson(decodeBase64(match[2].replace(/\s/g, "")));
+  const payload = parseJson(decodeBase64(match[1].replace(/\s/g, "")));
   if (
     !isRecord(payload) ||
     typeof payload.enc !== "string" ||
