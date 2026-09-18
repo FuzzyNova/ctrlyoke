@@ -38,7 +38,6 @@ import {
   type WorktreeRunProjection,
   type WorkspaceWorktreeOwnership,
   projectWorktreeRuntime,
-  workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
@@ -48,7 +47,6 @@ import {
   PANEL_CLIENT_ID,
   RUNNER_IDS,
   STEP_TYPES,
-  TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
   WORKTREE_EDIT_KINDS,
   WORKTREE_BRANCH_STATES,
@@ -118,6 +116,13 @@ import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import {
+  WorkflowInstanceRegistry,
+  type LineageExecutionClaim,
+  isExecutionOwnerState,
+  isSpentExecutionOwnerState,
+  lineageAddressOf,
+} from "./orchestration/WorkflowInstanceRegistry";
+import {
   WorktreeManager,
   type WorktreeInfo,
   type WorktreeSyncResult,
@@ -172,55 +177,6 @@ function sameWorkingFilePath(
   return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
 }
 
-/**
- * Whether a resident instance still owns an execution for its lineage.
- *
- * Instances can remain resident while idle (for example, after startup
- * restoration), so registry membership alone must not be interpreted as a
- * running workflow.
- */
-function isExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.RUNNING ||
-    status === EXECUTION_STATES.PAUSING ||
-    status === EXECUTION_STATES.PAUSED ||
-    status === EXECUTION_STATES.CANCELLING
-  );
-}
-
-/**
- * Whether an instance has finished the execution it was prepared for. Used to
- * expire a `lineageExecutionOwners` entry on read: nothing deletes those
- * entries, so a spent one must not keep outranking the lineage's other
- * residents. A status-less instance (lightweight test double) is not finished.
- */
-function isSpentExecutionOwnerState(status: QueueState["status"]): boolean {
-  return (
-    status === EXECUTION_STATES.COMPLETED ||
-    status === EXECUTION_STATES.ERROR ||
-    status === EXECUTION_STATES.STOPPED
-  );
-}
-
-/**
- * A `lineageExecutionOwners` entry. `promoted` is false from the moment a run
- * action parks its incoming instance until that instance's own state
- * transitions into an execution-owner state at least once — only then can a
- * later terminal status mean "this claim's run is over" rather than "this
- * instance's *previous* run left it terminal, and the one it was just
- * prepared for has not started yet". Continuing an already-completed run
- * reuses that same retired instance, so at claim time its status is still
- * whatever the prior run left it at (typically COMPLETED) — unlike a Re-run's
- * freshly built instance, which starts IDLE. Without the `promoted` gate,
- * `isSpentExecutionOwnerState` cannot tell those two apart and discards the
- * still-valid claim, letting some other resident of the lineage (e.g. a live
- * idle instance browsing another run) win the tie-break instead.
- */
-interface LineageExecutionClaim {
-  instanceId: string;
-  promoted: boolean;
-}
-
 interface DefinitionRollbackInvalidation {
   fromRevision: number;
   restoredRevision: number;
@@ -272,22 +228,6 @@ function sameViewAddress(
     a.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
     (b.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && a.runRef === b.runRef)
   );
-}
-
-function lineageAddressOf(
-  state: QueueState | undefined
-): WorkflowViewAddress | null {
-  if (!state?.workflowKey) return null;
-  return state.runRef
-    ? {
-        workflowKey: state.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef: state.runRef,
-      }
-    : {
-        workflowKey: state.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-      };
 }
 
 interface WorkflowReplayOptions {
@@ -345,9 +285,91 @@ export class WorkflowOrchestrator {
   // Instance registry
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Instance registry — running/paused instances plus idle instances loaded via browser client.
-   * Keyed by WorkflowInstance.id (UUID). */
-  private readonly instances: Map<string, WorkflowInstance> = new Map();
+  private workflowInstanceRegistryInstance?: WorkflowInstanceRegistry;
+  private get workflowInstanceRegistry(): WorkflowInstanceRegistry {
+    return (this.workflowInstanceRegistryInstance ??=
+      new WorkflowInstanceRegistry());
+  }
+  private set workflowInstanceRegistry(value: WorkflowInstanceRegistry) {
+    this.workflowInstanceRegistryInstance = value;
+  }
+
+  // These accessors keep prototype-based legacy unit fixtures wired to the
+  // real registry while the remaining façade tests are migrated.
+  private get instances(): Map<string, WorkflowInstance> {
+    return this.workflowInstanceRegistry.getInstances();
+  }
+  private set instances(value: Map<string, WorkflowInstance>) {
+    const target = this.workflowInstanceRegistry.getInstances();
+    target.clear();
+    for (const [id, instance] of value) target.set(id, instance);
+  }
+  private get retiredInstances(): Map<string, WorkflowInstance> {
+    return this.workflowInstanceRegistry.getRetiredInstances();
+  }
+  private set retiredInstances(value: Map<string, WorkflowInstance>) {
+    const target = this.workflowInstanceRegistry.getRetiredInstances();
+    target.clear();
+    for (const [id, instance] of value) target.set(id, instance);
+  }
+  private get viewerRegistry(): Map<string, string | null> {
+    return this.workflowInstanceRegistry.getViewerRegistry();
+  }
+  private set viewerRegistry(value: Map<string, string | null>) {
+    const target = this.workflowInstanceRegistry.getViewerRegistry();
+    target.clear();
+    for (const [id, instanceId] of value) target.set(id, instanceId);
+  }
+  public get viewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
+    return this.workflowInstanceRegistry.getViewAddressRegistry();
+  }
+  public set viewAddressRegistry(value: Map<string, WorkflowViewAddress | null>) {
+    const target = this.workflowInstanceRegistry.getViewAddressRegistry();
+    target.clear();
+    for (const [id, address] of value) target.set(id, address);
+  }
+  public get viewMessageSinks(): Map<string, (message: unknown) => void> {
+    return this.workflowInstanceRegistry.getViewMessageSinks();
+  }
+  public set viewMessageSinks(value: Map<string, (message: unknown) => void>) {
+    const target = this.workflowInstanceRegistry.getViewMessageSinks();
+    target.clear();
+    for (const [id, send] of value) target.set(id, send);
+  }
+  public get lineageBindingClients(): Set<string> {
+    return this.workflowInstanceRegistry.getLineageBindingClients();
+  }
+  public set lineageBindingClients(value: Set<string>) {
+    const target = this.workflowInstanceRegistry.getLineageBindingClients();
+    target.clear();
+    for (const clientId of value) target.add(clientId);
+  }
+  public get lineageExecutionOwners(): Map<WorkflowKey, LineageExecutionClaim> {
+    return this.workflowInstanceRegistry.getLineageExecutionOwners();
+  }
+  public set lineageExecutionOwners(
+    value: Map<WorkflowKey, LineageExecutionClaim>
+  ) {
+    const target = this.workflowInstanceRegistry.getLineageExecutionOwners();
+    target.clear();
+    for (const [key, claim] of value) target.set(key, claim);
+  }
+  public get externallyCreatedInstanceIds(): Set<string> {
+    return this.workflowInstanceRegistry.getExternallyCreatedInstanceIds();
+  }
+  public set externallyCreatedInstanceIds(value: Set<string>) {
+    const target = this.workflowInstanceRegistry.getExternallyCreatedInstanceIds();
+    target.clear();
+    for (const id of value) target.add(id);
+  }
+  public get announcedExternalWorkflowIds(): Set<string> {
+    return this.workflowInstanceRegistry.getAnnouncedExternalWorkflowIds();
+  }
+  public set announcedExternalWorkflowIds(value: Set<string>) {
+    const target = this.workflowInstanceRegistry.getAnnouncedExternalWorkflowIds();
+    target.clear();
+    for (const id of value) target.add(id);
+  }
   private readonly lineageRepository = new WorkflowLineageRepository();
 
   private readonly externalRunWatchCoordinator: ExternalRunWatchCoordinator;
@@ -374,46 +396,8 @@ export class WorkflowOrchestrator {
   /** True once startupAutoLoadSettled has been resolved (set in triggerAutoLoad finally). */
   private _autoLoadHasSettled: boolean = false;
 
-  /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
-  private viewerRegistry = new Map<string, string | null>();
-
-  /** Client-local displayed address. This is intentionally separate from the
-   * instance registry: changing it must never rebind a shared PromptQueue. */
-  private readonly viewAddressRegistry = new Map<
-    string,
-    WorkflowViewAddress | null
-  >();
-  /** Per-client addressed-view transport, used for targeted invalidation. */
-  private readonly viewMessageSinks = new Map<
-    string,
-    (message: unknown) => void
-  >();
-  /** Clients mid-rebind, so the replay's own run-view load cannot re-enter. */
-  private readonly lineageBindingClients = new Set<string>();
-  /** Lineage → instance most recently prepared to execute it (see
-   * {@link getLineageExecutionOwners}); disambiguates retired duplicates. */
-  private readonly lineageExecutionOwners = new Map<
-    WorkflowKey,
-    LineageExecutionClaim
-  >();
-
   /** Emits the queue state of the instance currently viewed by the panel. */
   private activeQueueStateChangedEmitter?: TypedEmitter<QueueState | undefined>;
-
-  /** Retired instances keyed by workflowId — held until no client views them. */
-  private retiredInstances = new Map<string, WorkflowInstance>();
-
-  /**
-   * Instances created via `createExternalWorkflowInstance` (e.g. commit-message
-   * generation) — pre-registered in `instances` before their prompt loads, so
-   * they must never be auto-adopted as a client's viewed workflow and must be
-   * announced to the dashboard (`notifyWorkflowAdded`) despite already being
-   * `inRegistry` by the time they reach RUNNING/PAUSED. See
-   * `announcedExternalWorkflowIds` for the one-shot announce guard.
-   */
-  private readonly externallyCreatedInstanceIds = new Set<string>();
-  /** One-shot guard so an externally-created instance's `notifyWorkflowAdded` fires exactly once. */
-  private readonly announcedExternalWorkflowIds = new Set<string>();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
@@ -511,8 +495,6 @@ export class WorkflowOrchestrator {
       this.resolveStartupAutoLoad = resolve;
     });
 
-    this.viewerRegistry.set(this.PANEL_CLIENT_ID, null);
-
     if (dependencies.dashboardProvider) {
       this.dashboardBroadcastHub.addClient(dependencies.dashboardProvider);
     }
@@ -583,6 +565,66 @@ export class WorkflowOrchestrator {
     this.workflowCommandHandler = new WorkflowCommandHandler(
       this.userFeedbackSink
     );
+
+    this.workflowInstanceRegistry = new WorkflowInstanceRegistry({
+      platform: this.platform,
+      dashboardSink: this.dashboardBroadcastHub as IDashboardSink,
+      dashboardBroadcast: this.dashboardBroadcastHub,
+      integrationFactory: this.integrationFactory,
+      resolveDetectorIntegration: (harnessOverride) =>
+        this.resolveDetectorIntegration(harnessOverride),
+      propagateWorkflowNameToIntegrations: (name) =>
+        this.propagateWorkflowNameToIntegrations(name),
+      updateStatusBar: () => this.updateStatusBar(),
+      currentWorkspaceFolderPath: this.currentWorkspaceFolderPath,
+      compatibilityRegistry: this.compatibilityRegistry,
+      userFeedbackSink: this.userFeedbackSink,
+      getHarnessUsageSnapshots: () =>
+        this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
+      refreshHarnessUsage: async (harnessId) => {
+        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
+      },
+      approveSecretGrantsForWorkflow: (workflow, workspaceRoot) =>
+        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
+      runnerHostIdentity: this.runnerHostIdentity,
+      panelClientId: this.PANEL_CLIENT_ID,
+      getStoredPanelSend: () => this.storedPanelSend,
+      replayWorkflowStateTo: (workflowId, send, clientId) =>
+        this.replayWorkflowStateTo(workflowId, send, clientId),
+      approvePendingWorkflowExternalRootsForClient: (
+        clientId,
+        send,
+        port,
+        promptUser
+      ) =>
+        this.approvePendingWorkflowExternalRootsForClient(
+          clientId,
+          send,
+          port,
+          promptUser
+        ),
+      emitWorkflowExternalRootsApprovalState: (
+        clientId,
+        workflowId,
+        pendingRoots,
+        send
+      ) =>
+        this.emitWorkflowExternalRootsApprovalState(
+          clientId,
+          workflowId,
+          pendingRoots,
+          send
+        ),
+      saveState: () => this.saveState(),
+      ensureCoordinationWatchSession: (executionRoot) =>
+        this.ensureCoordinationWatchSession(executionRoot),
+      getActiveWorkflowId: () => this.getActiveWorkflowId(),
+      fireActiveQueueStateChanged: (state) =>
+        this.getActiveQueueStateChangedEmitter().fire(state),
+      getActiveQueueState: () => this.getActiveQueueState(),
+      getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
+      syncExecutingRunViews: (instance) => this.syncExecutingRunViews(instance),
+    });
 
     // Wire harness status subscriptions
     const defaultIntegration = this.getDefaultIntegration();
@@ -696,10 +738,13 @@ export class WorkflowOrchestrator {
    * idle instance to dispose here the way the normal "make active" path does.
    */
   public createExternalWorkflowInstance(): WorkflowInstance {
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.externallyCreatedInstanceIds.add(instance.id);
-    return instance;
+    if (!this.workflowInstanceRegistry.hasHost()) {
+      const instance = this.buildWorkflowInstance();
+      this.instances.set(instance.id, instance);
+      this.externallyCreatedInstanceIds.add(instance.id);
+      return instance;
+    }
+    return this.workflowInstanceRegistry.createExternalWorkflowInstance();
   }
 
   /**
@@ -709,6 +754,29 @@ export class WorkflowOrchestrator {
   private async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
+    const registry = this.workflowInstanceRegistry;
+    if (!registry.hasHost() && _filePath) {
+      const existing = [...this.instances.values()].find(
+        (workflow) => workflow.filePath === _filePath
+      );
+      const existingStatus = existing?.getQueueState().status;
+      if (
+        existing &&
+        (existingStatus === EXECUTION_STATES.RUNNING ||
+          existingStatus === EXECUTION_STATES.PAUSING ||
+          existingStatus === EXECUTION_STATES.PAUSED)
+      ) {
+        const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+        await this.replayWorkflowStateTo(
+          existing.id,
+          panelSend,
+          this.PANEL_CLIENT_ID
+        );
+        return existing;
+      }
+    }
+    return this.workflowInstanceRegistry.createWorkflow(_filePath);
+    /*
     const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     Log.debug(
       `[WorkflowOrchestrator] createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
@@ -810,6 +878,7 @@ export class WorkflowOrchestrator {
     }
 
     return instance;
+    */
   }
 
   /**
@@ -829,12 +898,17 @@ export class WorkflowOrchestrator {
    *
    * @returns true if a stale retired entry was removed.
    */
-  private promoteInstanceToLive(instance: WorkflowInstance): boolean {
+  public promoteInstanceToLive(instance: WorkflowInstance): boolean {
+    return this.workflowInstanceRegistry.promoteInstanceToLive(instance);
+    /*
     this.instances.set(instance.id, instance);
     return this.retiredInstances.delete(instance.id);
+    */
   }
 
   private retireWorkflow(workflowId: string): void {
+    this.workflowInstanceRegistry.retireWorkflow(workflowId);
+    /*
     const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.debug(
@@ -876,25 +950,20 @@ export class WorkflowOrchestrator {
     this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
 
     void this.saveState();
+    */
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
-    return this.findInstance(workflowId);
+    return this.workflowInstanceRegistry.getWorkflow(workflowId);
   }
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getAllWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()];
+    return this.workflowInstanceRegistry.getAllWorkflows();
   }
 
   getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()].filter((w) => {
-      const status = w.getQueueState().status;
-      return (
-        status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING
-      );
-    });
+    return this.workflowInstanceRegistry.getRunningWorkflows();
   }
 
   getUserFeedbackSink(): UserFeedbackSink {
@@ -903,18 +972,12 @@ export class WorkflowOrchestrator {
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflow(): WorkflowInstance | undefined {
-    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    if (id) {
-      return (
-        this.instances.get(id) ?? this.retiredInstances.get(id) ?? undefined
-      );
-    }
-    return undefined;
+    return this.workflowInstanceRegistry.getActiveWorkflow();
   }
 
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getActiveWorkflowId(): string | null {
-    return this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    return this.workflowInstanceRegistry.getActiveWorkflowId();
   }
 
   /**
@@ -2296,10 +2359,13 @@ export class WorkflowOrchestrator {
 
   /** Build a fresh workflow instance, register it, and make it the client's viewed workflow. */
   private registerNewInstance(clientId: string): WorkflowInstance {
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.setViewedWorkflowId(clientId, instance.id);
-    return instance;
+    if (!this.workflowInstanceRegistry.hasHost()) {
+      const instance = this.buildWorkflowInstance();
+      this.instances.set(instance.id, instance);
+      this.setViewedWorkflowId(clientId, instance.id);
+      return instance;
+    }
+    return this.workflowInstanceRegistry.registerNewInstance(clientId);
   }
 
   /**
@@ -2931,31 +2997,16 @@ export class WorkflowOrchestrator {
 
   /** Defensive for lightweight unit-test instances created without constructors. */
   private getViewAddressRegistry(): Map<string, WorkflowViewAddress | null> {
-    const initialized = this.viewAddressRegistry;
-    if (initialized) {
-      return initialized;
-    }
-    const partial = this as unknown as {
-      viewAddressRegistry?: Map<string, WorkflowViewAddress | null>;
-    };
-    return (partial.viewAddressRegistry ??= new Map());
+    return this.workflowInstanceRegistry.getViewAddressRegistry();
   }
 
   private getViewMessageSinks(): Map<string, (message: unknown) => void> {
-    const initialized = this.viewMessageSinks;
-    if (initialized) return initialized;
-    const partial = this as unknown as {
-      viewMessageSinks?: Map<string, (message: unknown) => void>;
-    };
-    return (partial.viewMessageSinks ??= new Map());
+    return this.workflowInstanceRegistry.getViewMessageSinks();
   }
 
   /** Defensive for lightweight unit-test instances created without constructors. */
   private getLineageBindingClients(): Set<string> {
-    const initialized = this.lineageBindingClients;
-    if (initialized) return initialized;
-    const partial = this as unknown as { lineageBindingClients?: Set<string> };
-    return (partial.lineageBindingClients ??= new Set());
+    return this.workflowInstanceRegistry.getLineageBindingClients();
   }
 
   /**
@@ -2967,12 +3018,7 @@ export class WorkflowOrchestrator {
    * Defensive for lightweight unit-test instances created without constructors.
    */
   private getLineageExecutionOwners(): Map<WorkflowKey, LineageExecutionClaim> {
-    const initialized = this.lineageExecutionOwners;
-    if (initialized) return initialized;
-    const partial = this as unknown as {
-      lineageExecutionOwners?: Map<WorkflowKey, LineageExecutionClaim>;
-    };
-    return (partial.lineageExecutionOwners ??= new Map());
+    return this.workflowInstanceRegistry.getLineageExecutionOwners();
   }
 
   /**
@@ -3007,6 +3053,9 @@ export class WorkflowOrchestrator {
   private findInstanceForLineage(
     workflowKey: WorkflowKey
   ): WorkflowInstance | undefined {
+    if (this.workflowInstanceRegistry.hasHost()) {
+      return this.workflowInstanceRegistry.findInstanceForLineage(workflowKey);
+    }
     const matches = (instance: WorkflowInstance) =>
       instance.getQueueState().workflowKey === workflowKey;
     // Live first so it wins every "first match" below. The maps are normally
@@ -3077,6 +3126,7 @@ export class WorkflowOrchestrator {
    * a different run. Only a lineage with no resident instance at all
    * materializes a fresh one.
    */
+
   private async bindClientToAddressedLineage(
     address: WorkflowViewAddress,
     send: (message: unknown) => void,
@@ -5823,9 +5873,7 @@ export class WorkflowOrchestrator {
    * stays explicit.
    */
   private findInstance(workflowId: string): WorkflowInstance | undefined {
-    return (
-      this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId)
-    );
+    return this.workflowInstanceRegistry.findInstance(workflowId);
   }
 
   /**
@@ -5834,17 +5882,7 @@ export class WorkflowOrchestrator {
    * specific clientId is available (e.g. from a browser message handler).
    */
   private getActiveInstance(): WorkflowInstance {
-    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    if (id) {
-      const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
-      if (inst) return inst;
-    }
-
-    // Lazily create the initial viewed instance
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    return instance;
+    return this.workflowInstanceRegistry.getActiveInstance();
   }
 
   /**
@@ -5854,12 +5892,7 @@ export class WorkflowOrchestrator {
    * last resort but logs a warning so bugs are surfaced immediately.
    */
   private getInstanceForClient(clientId: string): WorkflowInstance {
-    if (!this.viewerRegistry.has(clientId)) {
-      Log.warn(
-        `[WorkflowOrchestrator] getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
-      );
-    }
-    return this.getBoundInstance(clientId) ?? this.getActiveInstance();
+    return this.workflowInstanceRegistry.getInstanceForClient(clientId);
   }
 
   /**
@@ -5871,9 +5904,7 @@ export class WorkflowOrchestrator {
    * reconnect because `unregisterClient` clears their viewed id.
    */
   private getBoundInstance(clientId: string): WorkflowInstance | null {
-    const id = this.getViewedWorkflowId(clientId);
-    if (!id) return null;
-    return this.instances.get(id) ?? this.retiredInstances.get(id) ?? null;
+    return this.workflowInstanceRegistry.getBoundInstance(clientId);
   }
 
   /** Return the execution-root coordination projection for one dashboard view. */
@@ -5919,13 +5950,20 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   private getViewedWorkflowId(clientId: string): string | null {
-    return this.viewerRegistry.get(clientId) ?? null;
+    return this.workflowInstanceRegistry.getViewedWorkflowId(clientId);
   }
 
   private setViewedWorkflowId(
     clientId: string,
     workflowId: string | null
   ): void {
+    const registry = this.workflowInstanceRegistry;
+    const wasUnwired = !registry.hasHost();
+    registry.setViewedWorkflowId(clientId, workflowId);
+    if (wasUnwired && clientId === this.PANEL_CLIENT_ID) {
+      this.getActiveQueueStateChangedEmitter().fire(this.getActiveQueueState());
+    }
+    /*
     const prev = this.viewerRegistry.get(clientId);
     this.viewerRegistry.set(clientId, workflowId);
     if (prev !== workflowId) {
@@ -5958,6 +5996,9 @@ export class WorkflowOrchestrator {
     }
   }
 
+    */
+  }
+
   private getActiveQueueStateChangedEmitter(): TypedEmitter<
     QueueState | undefined
   > {
@@ -5972,11 +6013,16 @@ export class WorkflowOrchestrator {
     );
   }
 
-  private isWorkflowViewedByAnyClient(workflowId: string): boolean {
+  public isWorkflowViewedByAnyClient(workflowId: string): boolean {
+    return this.workflowInstanceRegistry.isWorkflowViewedByAnyClient(workflowId);
+    /*
     for (const viewed of this.viewerRegistry.values()) {
       if (viewed === workflowId) return true;
     }
     return false;
+  }
+
+    */
   }
 
   /**
@@ -5988,6 +6034,8 @@ export class WorkflowOrchestrator {
    * would keep offering "Run draft" for a run that has already finished.
    */
   registerClient(clientId: string, send?: (message: unknown) => void): void {
+    this.workflowInstanceRegistry.registerClient(clientId, send);
+    /*
     if (!this.viewerRegistry.has(clientId)) {
       this.viewerRegistry.set(clientId, null);
     }
@@ -6000,7 +6048,12 @@ export class WorkflowOrchestrator {
     }
   }
 
+    */
+  }
+
   unregisterClient(clientId: string): void {
+    this.workflowInstanceRegistry.unregisterClient(clientId);
+    /*
     const workflowId = this.getViewedWorkflowId(clientId);
     const ptyManager = getPtyProcessManager();
     const ptyCount =
@@ -6057,6 +6110,9 @@ export class WorkflowOrchestrator {
     }
   }
 
+    */
+  }
+
   /**
    * Gate secret-grant approval on VS Code's own workspace-trust concept
    * before delegating to the (vscode-free) shared prompt helper — an
@@ -6081,6 +6137,73 @@ export class WorkflowOrchestrator {
    * Construct a new WorkflowInstance wired to this orchestrator's integrations.
    */
   private buildWorkflowInstance(): WorkflowInstance {
+    const registry = this.workflowInstanceRegistry;
+    if (registry.hasHost()) {
+      return registry.buildWorkflowInstanceForHost();
+    }
+    const instance = new WorkflowInstance(
+      this.platform,
+      this.dashboardBroadcastHub as IDashboardSink,
+      this.integrationFactory,
+      (harnessOverride?: HarnessId) =>
+        this.resolveDetectorIntegration(harnessOverride),
+      (name: string | undefined) =>
+        this.propagateWorkflowNameToIntegrations(name),
+      () => this.updateStatusBar(),
+      this.currentWorkspaceFolderPath,
+      true,
+      true,
+      this.compatibilityRegistry,
+      this.userFeedbackSink,
+      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
+      async (harnessId) => {
+        await this.harnessUsageService?.refreshHarnessUsage(harnessId);
+      },
+      (workflow, workspaceRoot) =>
+        this.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
+      this.runnerHostIdentity
+    );
+    instance.promptQueue.onDidChangeState((state) => {
+      const summary = instance.getSummary();
+      const inRegistry = this.instances.has(instance.id);
+      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
+        instance.id
+      );
+      const needsExternalAnnounce =
+        isExternallyCreated &&
+        !this.announcedExternalWorkflowIds.has(instance.id);
+      if (
+        (state.status === EXECUTION_STATES.RUNNING ||
+          state.status === EXECUTION_STATES.PAUSING ||
+          state.status === EXECUTION_STATES.PAUSED) &&
+        (!inRegistry || needsExternalAnnounce)
+      ) {
+        if (needsExternalAnnounce) {
+          this.announcedExternalWorkflowIds.add(instance.id);
+        }
+        this.promoteInstanceToLive(instance);
+        this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
+      }
+      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
+      if (
+        state.status === EXECUTION_STATES.RUNNING ||
+        state.status === EXECUTION_STATES.ERROR ||
+        state.status === EXECUTION_STATES.STOPPED ||
+        state.status === EXECUTION_STATES.COMPLETED
+      ) {
+        this.syncExecutingRunViews(instance);
+      }
+      if (
+        inRegistry &&
+        (state.status === EXECUTION_STATES.COMPLETED ||
+          state.status === EXECUTION_STATES.ERROR ||
+          state.status === EXECUTION_STATES.STOPPED)
+      ) {
+        this.retireWorkflow(instance.id);
+      }
+    });
+    return instance;
+    /*
     const instance = new WorkflowInstance(
       this.platform,
       this.dashboardBroadcastHub as IDashboardSink,
@@ -6253,6 +6376,7 @@ export class WorkflowOrchestrator {
     });
 
     return instance;
+    */
   }
 
   /**
@@ -6280,10 +6404,11 @@ export class WorkflowOrchestrator {
    * never been told about, so its next edit or run action was rejected against
    * an address it was not displaying.
    */
-  private adoptInstanceLineageAddress(
+  public adoptInstanceLineageAddress(
     instance: WorkflowInstance,
     state: QueueState
   ): void {
+    this.workflowInstanceRegistry.adoptInstanceLineageAddress(instance, state);
     const address = lineageAddressOf(state);
 
     for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
@@ -6315,6 +6440,7 @@ export class WorkflowOrchestrator {
    * holds the definition the draft used to, and the header's Resume/Run gives
    * them a one-click retry there.
    */
+
   private syncExecutingRunViews(instance: WorkflowInstance): void {
     const state = instance.getQueueState();
     if (!state.workflowKey || !state.runRef) {
