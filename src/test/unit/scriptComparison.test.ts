@@ -360,6 +360,14 @@ suite("ScriptComparison", () => {
         "stdout is empty",
         "a valueless operator prints no value"
       );
+      assert.strictEqual(
+        formatComparison({
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.CONTAINS,
+        }),
+        "exit code == 0",
+        "without `expected` the exit-code fallback runs, so that is what prints"
+      );
     });
   });
 

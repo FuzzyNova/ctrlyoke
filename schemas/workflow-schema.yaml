@@ -351,8 +351,6 @@ definitions:
       - type
       - script
     additionalProperties: false
-    allOf:
-      - $ref: '#/definitions/scriptComparisonConstraint'
   workflowRunAddress:
     type: object
     additionalProperties: false
@@ -852,8 +850,6 @@ definitions:
       - type
       - script
     additionalProperties: false
-    allOf:
-      - $ref: '#/definitions/scriptComparisonConstraint'
   endCondition:
     type: object
     description: >-
@@ -991,6 +987,9 @@ definitions:
         description: >-
           Value the compare source is compared against. Omit it to pass when the script exits 0 —
           there is no boolean form, and 'true'/'false' are not accepted as exit-code values.
+          Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores
+          that comparison and still falls back to exit code 0; the dashboard flags this as a warning
+          rather than refusing the workflow.
       ignoreCase:
         type: boolean
         description: >-
@@ -998,8 +997,6 @@ definitions:
           false.
     required:
       - script
-    allOf:
-      - $ref: '#/definitions/scriptComparisonConstraint'
   preCondition:
     type: object
     description: >-
@@ -1459,24 +1456,3 @@ definitions:
     required:
       - id
     additionalProperties: false
-  scriptComparisonConstraint:
-    description: >-
-      Requires `expected` whenever a comparison is stated, except for isEmpty/isNotEmpty which take
-      no value.
-    if:
-      type: object
-      required:
-        - operator
-      properties:
-        operator:
-          enum:
-            - isEmpty
-            - isNotEmpty
-    then: {}
-    else:
-      type: object
-      dependencies:
-        compareSource:
-          - expected
-        operator:
-          - expected

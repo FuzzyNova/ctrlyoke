@@ -122,6 +122,10 @@ half-configured states from meaning something surprising, enforce in schema:
 > If `compareSource` or `operator` is present, `expected` is required
 > (except for `isEmpty` / `isNotEmpty`, which take no value).
 
+**Superseded — see "Reversed after testing" at the bottom of this file.** This
+rule shipped and was then removed: the dashboard can write the half-configured
+state, and a schema failure blocks the workflow from loading at all.
+
 Draft-07 spells this `dependencies: { compareSource: ["expected"], operator: ["expected"] }`
 — **not** `dependentRequired`, which is draft 2019-09 and would be silently ignored by both
 the editor's JSON language service and the schema as declared
@@ -483,6 +487,33 @@ cross-layer field change:
 - **`rootScriptStep`** is a third schema definition carrying the script
   comparison fields, alongside `scriptStep` and `scriptProperties`. Recorded in
   `core.instructions.md` along with the YAML operator-token constraint.
+
+### Reversed after testing: the `expected`-is-required schema rule
+
+The "If `compareSource` or `operator` is present, `expected` is required" rule
+above (and the `scriptComparisonConstraint` definition that implemented it) has
+been **removed**. Its premise — "the UI cannot produce the invalid state
+anyway" — was wrong: `ScriptConditionEditor` serializes the compare source as
+soon as it is selected, so picking `Stdout` and leaving the value blank wrote a
+file that `PromptFileParser` then refused to load at all (Ajv failure →
+`parsePromptFile` returns `null` → "Failed to parse" toast). A schema rule is a
+hard gate on opening the workflow, not a squiggle, so it is the wrong tier for
+an authoring-completeness hint.
+
+The half-configured state is instead:
+
+- **legal** — the schema accepts it, and the file reloads unchanged;
+- **deterministic** — `compareScriptOutput` already treats an absent `expected`
+  as "the script exited 0" regardless of the stated source/operator;
+- **visible** — `ScriptConditionEditor` renders a non-blocking `FieldDiagnostic`
+  warning (`No value to compare against, so "stdout contains" is ignored — the
+step passes when the script exits with code 0.`) with the shared
+  `border-warning-fg` treatment and `aria-describedby`, following
+  `DROPDOWN_VALIDATION_STYLING_PLAN.md` and the warning-does-not-block severity
+  model in `HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`.
+
+The `"returns": { "not": {} }` stub stays fatal — naming a removed field is a
+real parse error, not an incomplete edit.
 
 Two follow-ups were deliberately left out of scope and remain open:
 

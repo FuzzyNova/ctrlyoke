@@ -832,6 +832,48 @@ describe("ScriptConditionEditor", () => {
       ).toBeInTheDocument();
     });
 
+    it.each([
+      ["exitCode", "^0$"],
+      ["stdout", "^\\d+ passing, 0 failing$"],
+    ])(
+      "placeholders a regex for %s when the operator is matches",
+      (compareSource, placeholder) => {
+        render(
+          <ScriptConditionEditor
+            variant="scriptStep"
+            value={{ script: "npm test", compareSource, operator: "matches" }}
+            onChange={vi.fn()}
+            idPrefix="test-condition"
+          />
+        );
+
+        expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+          "placeholder",
+          placeholder
+        );
+      }
+    );
+
+    it("placeholders a number for a numeric operator on stdout", () => {
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{
+            script: "npm test",
+            compareSource: "stdout",
+            operator: "gte",
+          }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+        "placeholder",
+        "0"
+      );
+    });
+
     it("describes a stdout comparison with the configured operator", () => {
       render(
         <ScriptConditionEditor
@@ -850,6 +892,54 @@ describe("ScriptConditionEditor", () => {
       expect(
         screen.getByText('Passes when stdout contains "0 failing".')
       ).toBeInTheDocument();
+    });
+
+    it("warns that a stated comparison with no value falls back to exit code 0", () => {
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={{ script: "npm test", compareSource: "stdout" }}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      const input = screen.getByLabelText("Expected value");
+      expect(input).toHaveAttribute(
+        "aria-describedby",
+        "test-condition-expected-diagnostic"
+      );
+      expect(input.className).toContain("border-warning-fg");
+      expect(
+        screen.getByText(
+          'No value to compare against, so "stdout ==" is ignored — the step passes when the script exits with code 0.'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it.each([
+      ["the unconfigured default", { script: "npm test" }],
+      [
+        "a completed comparison",
+        { script: "npm test", compareSource: "stdout", expected: "0 failing" },
+      ],
+      [
+        "an operator that takes no value",
+        { script: "npm test", compareSource: "stdout", operator: "isEmpty" },
+      ],
+    ])("does not warn for %s", (_label, value) => {
+      render(
+        <ScriptConditionEditor
+          variant="endCondition"
+          value={value}
+          onChange={vi.fn()}
+          idPrefix="test-condition"
+        />
+      );
+
+      expect(
+        screen.queryByText(/No value to compare against/)
+      ).not.toBeInTheDocument();
     });
 
     it("commits an operator and omits the default instead of writing it", () => {

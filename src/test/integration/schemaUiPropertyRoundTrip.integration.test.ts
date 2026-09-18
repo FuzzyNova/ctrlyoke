@@ -183,10 +183,12 @@ const SAMPLES: Record<string, unknown> = {
 };
 
 /**
- * Properties the schema requires alongside a sample. `compareSource` and
- * `operator` are only meaningful with an `expected` value, and the schema
- * enforces that (see `scriptComparisonConstraint`), so validating either one in
- * isolation is invalid by design rather than a gap in the schema.
+ * Properties seeded alongside a sample. `compareSource`, `operator`, and
+ * `ignoreCase` do nothing without an `expected` value — the runtime falls back
+ * to "the script exited 0" and never applies them — so seeding one alone would
+ * round-trip a comparison the UI deliberately reports as incomplete rather
+ * than the real control it is meant to exercise. The schema permits the
+ * half-configured state; the dashboard warns about it.
  */
 const SAMPLE_COMPANIONS: Record<string, readonly string[]> = {
   compareSource: ["expected"],

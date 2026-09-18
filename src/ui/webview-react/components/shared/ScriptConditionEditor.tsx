@@ -17,9 +17,16 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   describeComparison,
+  formatComparisonSubject,
+  operatorIsNumeric,
   operatorTakesNoValue,
   operatorUsesCase,
 } from "@root/utils/ScriptComparison";
+import { FieldDiagnostic } from "./FieldDiagnostic";
+import {
+  fieldValidationBorderClass,
+  type FieldDiagnostic as FieldDiagnosticItem,
+} from "@utils/fieldValidation";
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { ScriptCommandEditor } from "./ScriptCommandEditor";
@@ -428,12 +435,18 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // One generated sentence, shared with the execution preview and the CLI
   // verdict, so all three describe a condition the same way.
   // The unset value renders its own default as a placeholder, so the author
-  // sees what will run without the workflow file carrying the field.
+  // sees what will run without the workflow file carrying the field. The
+  // operator decides the *shape* of the value (a regex, a number, a literal),
+  // so it outranks the source: `exitCode matches` still takes a pattern, and a
+  // placeholder of `0` there would read as a literal exit code.
   const expectedPlaceholder =
-    compareSource === COMPARE_SOURCES.EXIT_CODE
-      ? "0"
-      : operator === SCRIPT_OPERATORS.MATCHES
-        ? "^\d+ passing, 0 failing$"
+    operator === SCRIPT_OPERATORS.MATCHES
+      ? compareSource === COMPARE_SOURCES.EXIT_CODE
+        ? "^0$"
+        : "^\\d+ passing, 0 failing$"
+      : operatorIsNumeric(operator) ||
+          compareSource === COMPARE_SOURCES.EXIT_CODE
+        ? "0"
         : "0 failing";
 
   const comparisonHint = describeComparison({
@@ -442,6 +455,29 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     expected: showExpected ? (v.expected ?? undefined) : undefined,
     ignoreCase: v.ignoreCase,
   });
+
+  /**
+   * A stated comparison with no value to compare against is authored, saved,
+   * and run — the runtime falls back to "the script exited 0" and the stated
+   * source/operator is simply never applied. That is silent enough to be worth
+   * flagging, but it is not an error: the schema accepts it, the workflow
+   * loads, and the run proceeds, consistent with how every other
+   * environment-dependent mismatch is surfaced.
+   */
+  const comparisonDiagnostics: FieldDiagnosticItem[] =
+    showExpected &&
+    v.expected === undefined &&
+    (compareSource !== DEFAULT_COMPARE_SOURCE ||
+      operator !== DEFAULT_SCRIPT_OPERATOR)
+      ? [
+          {
+            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+            message: `No value to compare against, so "${formatComparisonSubject(
+              { compareSource, operator }
+            )}" is ignored — the step passes when the script exits with code 0.`,
+          },
+        ]
+      : [];
 
   return (
     <div className="space-y-3">
@@ -534,13 +570,24 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               }}
               placeholder={expectedPlaceholder}
               disabled={disabled}
-              className={`px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 ${
+              aria-describedby={
+                comparisonDiagnostics.length > 0
+                  ? `${idPrefix}-expected-diagnostic`
+                  : undefined
+              }
+              className={`px-2 py-1 text-sm bg-input-bg text-input-fg border ${fieldValidationBorderClass(
+                comparisonDiagnostics
+              )} rounded focus:outline-none focus:border-focus-border disabled:opacity-50 ${
                 narrow ? "w-full" : "flex-1 min-w-0"
               }`}
             />
           )}
         </div>
         <span className="text-xxs text-description-fg">{comparisonHint}</span>
+        <FieldDiagnostic
+          id={`${idPrefix}-expected-diagnostic`}
+          diagnostics={comparisonDiagnostics}
+        />
         {showIgnoreCase && (
           <div className="flex items-center gap-2 pt-1">
             <input

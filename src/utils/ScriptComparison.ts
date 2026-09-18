@@ -279,7 +279,14 @@ export function formatComparisonSubject(
 export function formatComparison(config: ScriptComparisonConfig): string {
   const { operator, expected } = resolveScriptComparison(config);
   const subject = formatComparisonSubject(config);
-  return operatorTakesNoValue(operator)
-    ? subject
-    : `${subject} ${expected ?? "0"}`;
+  if (operatorTakesNoValue(operator)) {
+    return subject;
+  }
+  if (expected === undefined) {
+    // No `expected` means `compareScriptOutput` fell back to "the script exited
+    // 0" whatever source and operator were configured, so print the rule that
+    // actually ran — `stdout contains 0` would describe a comparison nobody made.
+    return `exit code ${SCRIPT_OPERATOR_LABELS[DEFAULT_SCRIPT_OPERATOR]} 0`;
+  }
+  return `${subject} ${expected}`;
 }
