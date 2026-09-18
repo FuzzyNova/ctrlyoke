@@ -24,6 +24,7 @@ import type {
   RunRef,
   WorkflowKey,
   WorkflowStep,
+  WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import {
   queueTargetKey,
@@ -69,6 +70,13 @@ export interface CliValidationJsonResult {
   strict: CliValidateStrictPolicy | null;
   consumerCount: number;
   diagnostics: CompatibilityDiagnostic[];
+  /**
+   * Non-blocking workflow findings. Separate from `diagnostics` because those
+   * are per-harness compatibility results, while these hold for the workflow
+   * whatever it runs on — and because `--strict` is defined over compatibility
+   * codes only, these never affect `success`.
+   */
+  warnings: WorkflowValidationWarning[];
   error: string | null;
 }
 
@@ -80,6 +88,7 @@ export interface CliValidationJsonResultInput {
   strict?: CliValidateStrictPolicy;
   consumerCount?: number;
   diagnostics?: readonly CompatibilityDiagnostic[];
+  warnings?: readonly WorkflowValidationWarning[];
   error?: string;
 }
 
@@ -95,6 +104,7 @@ export function buildCliValidationJsonResult(
     strict: input.strict ?? null,
     consumerCount: input.consumerCount ?? 0,
     diagnostics: [...(input.diagnostics ?? [])],
+    warnings: [...(input.warnings ?? [])],
     error: input.error ?? null,
   };
 }

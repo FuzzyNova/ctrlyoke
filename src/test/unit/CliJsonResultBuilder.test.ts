@@ -14,6 +14,7 @@ import {
   FINAL_STEP_PHASES,
   STEP_STATUS,
   STEP_TYPES,
+  WORKFLOW_VALIDATION_WARNING_CODES,
 } from "../../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
@@ -52,6 +53,13 @@ suite("CliJsonResultBuilder", () => {
       strict: "lossy",
       consumerCount: 2,
       diagnostics: [],
+      warnings: [
+        {
+          code: WORKFLOW_VALIDATION_WARNING_CODES.SCRIPT_COMPARISON_INCOMPLETE,
+          message: "Step 1: no value to compare against",
+          propertyPointer: "/steps/0/endCondition/expected",
+        },
+      ],
     });
 
     assert.deepStrictEqual(output, {
@@ -68,6 +76,13 @@ suite("CliJsonResultBuilder", () => {
       strict: "lossy",
       consumerCount: 2,
       diagnostics: [],
+      warnings: [
+        {
+          code: WORKFLOW_VALIDATION_WARNING_CODES.SCRIPT_COMPARISON_INCOMPLETE,
+          message: "Step 1: no value to compare against",
+          propertyPointer: "/steps/0/endCondition/expected",
+        },
+      ],
       error: null,
     });
     assert.strictEqual(JSON.stringify(output).split("\n").length, 1);

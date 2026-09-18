@@ -17,7 +17,8 @@ import {
 } from "@root/types/DashboardConstants";
 import {
   describeComparison,
-  formatComparisonSubject,
+  describeIncompleteComparison,
+  isComparisonIncomplete,
   operatorIsNumeric,
   operatorTakesNoValue,
   operatorUsesCase,
@@ -464,20 +465,18 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
    * loads, and the run proceeds, consistent with how every other
    * environment-dependent mismatch is surfaced.
    */
-  const comparisonDiagnostics: FieldDiagnosticItem[] =
-    showExpected &&
-    v.expected === undefined &&
-    (compareSource !== DEFAULT_COMPARE_SOURCE ||
-      operator !== DEFAULT_SCRIPT_OPERATOR)
-      ? [
-          {
-            severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
-            message: `No value to compare against, so "${formatComparisonSubject(
-              { compareSource, operator }
-            )}" is ignored — the step passes when the script exits with code 0.`,
-          },
-        ]
-      : [];
+  const comparisonDiagnostics: FieldDiagnosticItem[] = isComparisonIncomplete({
+    compareSource,
+    operator,
+    expected: v.expected,
+  })
+    ? [
+        {
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          message: describeIncompleteComparison({ compareSource, operator }),
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-3">

@@ -13,6 +13,9 @@ import {
   EXECUTION_PROPERTY_KEYS,
   isScriptStep,
   hasExecutableSteps,
+  type ScriptProperties,
+  type WorkflowValidationResult,
+  type WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -21,8 +24,13 @@ import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   STEP_TYPES,
   WORKFLOW_PROPERTY_KEYS,
+  WORKFLOW_VALIDATION_WARNING_CODES,
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
+import {
+  describeIncompleteComparison,
+  isComparisonIncomplete,
+} from "../utils/ScriptComparison";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
@@ -713,11 +721,58 @@ export class PromptFileParser {
   }
 
   /**
+   * Every script comparison a step can carry, with the RFC 6901 pointer prefix
+   * that locates it. `preCondition` is nullable (explicitly disabled), so the
+   * object check is load-bearing rather than defensive.
+   */
+  private static scriptComparisonSites(
+    step: WorkflowStep,
+    stepPointer: string
+  ): { config: ScriptProperties; pointer: string }[] {
+    // A script step *is* the comparison; only a prompt step wraps one in a
+    // pre/end condition, and the two shapes are disjoint.
+    if (isScriptStep(step)) {
+      return [{ config: step, pointer: stepPointer }];
+    }
+
+    const sites: { config: ScriptProperties; pointer: string }[] = [];
+    if (step.endCondition) {
+      sites.push({
+        config: step.endCondition,
+        pointer: `${stepPointer}/endCondition`,
+      });
+    }
+    if (step.preCondition) {
+      sites.push({
+        config: step.preCondition,
+        pointer: `${stepPointer}/preCondition`,
+      });
+    }
+    return sites;
+  }
+
+  /** Non-blocking findings for one step's script comparisons. */
+  private static scriptComparisonWarnings(
+    step: WorkflowStep,
+    stepPointer: string,
+    stepLabel: string
+  ): WorkflowValidationWarning[] {
+    return PromptFileParser.scriptComparisonSites(step, stepPointer)
+      .filter(({ config }) => isComparisonIncomplete(config))
+      .map(({ config, pointer }) => ({
+        code: WORKFLOW_VALIDATION_WARNING_CODES.SCRIPT_COMPARISON_INCOMPLETE,
+        message: `${stepLabel}: ${describeIncompleteComparison(config)}`,
+        propertyPointer: `${pointer}/expected`,
+      }));
+  }
+
+  /**
    * Validate workflow steps for execution.
    *
    * `finalStep` participates in the emptiness check only: a final-step-only
    * workflow has no queued steps by design (its final step appends them at
-   * runtime), so passing it keeps that shape valid.
+   * runtime), so passing it keeps that shape valid. It is still scanned for
+   * warnings, which describe what will happen rather than whether it can run.
    */
   validateWorkflowSteps(
     items: WorkflowStep[],
@@ -726,11 +781,9 @@ export class PromptFileParser {
       parallelGroups?: ParallelGroupDefinition[];
       workflowProperties?: ParallelValidationProperties;
     }
-  ): {
-    valid: boolean;
-    errors: string[];
-  } {
+  ): WorkflowValidationResult {
     const errors: string[] = [];
+    const warnings: WorkflowValidationWarning[] = [];
 
     if (!hasExecutableSteps({ steps: items, finalStep: options?.finalStep })) {
       errors.push("No steps found");
@@ -755,6 +808,14 @@ export class PromptFileParser {
     }
 
     (items ?? []).forEach((item, index) => {
+      warnings.push(
+        ...PromptFileParser.scriptComparisonWarnings(
+          item,
+          `/steps/${index}`,
+          `Step ${index + 1}`
+        )
+      );
+
       // Script steps only require a non-empty script field
       if (isScriptStep(item)) {
         if (!item.script || item.script.trim().length === 0) {
@@ -782,9 +843,20 @@ export class PromptFileParser {
       }
     });
 
+    if (options?.finalStep) {
+      warnings.push(
+        ...PromptFileParser.scriptComparisonWarnings(
+          options.finalStep,
+          "/finalStep",
+          "Final step"
+        )
+      );
+    }
+
     return {
       valid: errors.length === 0,
       errors,
+      warnings,
     };
   }
 }

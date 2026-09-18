@@ -912,7 +912,7 @@ describe("ScriptConditionEditor", () => {
       expect(input.className).toContain("border-warning-fg");
       expect(
         screen.getByText(
-          'No value to compare against, so "stdout ==" is ignored — the step passes when the script exits with code 0.'
+          'No value to compare against, so "stdout ==" is ignored — this check passes when the script exits with code 0.'
         )
       ).toBeInTheDocument();
     });

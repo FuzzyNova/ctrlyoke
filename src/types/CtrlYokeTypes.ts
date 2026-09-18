@@ -39,6 +39,7 @@ import {
   SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_VIEW_ADDRESS_KIND,
   type ParallelGroupAdmission,
+  type WorkflowValidationWarningCode,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -980,6 +981,29 @@ export type PreConditionAction = Exclude<ConditionAction, "retry">;
 
 /** Action options for scriptStep onPass/onFail */
 export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
+
+/**
+ * A non-blocking finding from `PromptFileParser.validateWorkflowSteps`: the
+ * workflow parses, loads, and runs, but something it states will not take
+ * effect. Unlike `errors`, which are prose a human reads once before the load
+ * is abandoned, a warning survives into CI output and dashboards, so it carries
+ * a stable `code` and an RFC 6901 `propertyPointer` and consumers identify it
+ * by those rather than by parsing `message`.
+ */
+export interface WorkflowValidationWarning {
+  code: WorkflowValidationWarningCode;
+  message: string;
+  /** RFC 6901 pointer to the authored value, e.g. `/steps/2/endCondition/expected`. */
+  propertyPointer: string;
+}
+
+/** The result of `PromptFileParser.validateWorkflowSteps`. */
+export interface WorkflowValidationResult {
+  /** False only when `errors` is non-empty — warnings never invalidate a workflow. */
+  valid: boolean;
+  errors: string[];
+  warnings: WorkflowValidationWarning[];
+}
 
 /**
  * Shared script execution properties used by endCondition, preCondition, and scriptStep.

@@ -42,6 +42,7 @@ import {
   type WorkflowStep,
   type WorkingFile,
   type ParallelGroupDefinition,
+  type WorkflowValidationWarning,
 } from "./types/CtrlYokeTypes";
 import { configService } from "./config/CtrlYokeConfigService";
 import {
@@ -1863,6 +1864,43 @@ async function validateCommand(
       return;
     }
 
+    // Ajv proves the file's shape; this is the semantic pass the dashboard runs
+    // on load, so the CLI reports the same errors instead of calling a workflow
+    // valid that the extension would refuse. Its warnings never fail the run —
+    // the workflow loads and executes, something in it just will not take
+    // effect — so they are reported whether or not compatibility was requested.
+    const stepValidation = parser.validateWorkflowSteps(result.steps ?? [], {
+      finalStep: result.finalStep,
+      parallelGroups: result.parallelGroups,
+      workflowProperties: result,
+    });
+
+    if (!stepValidation.valid) {
+      const message = stepValidation.errors.join("; ");
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: false,
+              parsed: true,
+              workflowFile: resolvedFile,
+              warnings: stepValidation.warnings,
+              error: message,
+            })
+          ) + "\n"
+        );
+      } else {
+        console.error(
+          chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+        );
+        for (const error of stepValidation.errors) {
+          console.error(chalk.red(`  ${error}`));
+        }
+      }
+      process.exit(2);
+      return;
+    }
+
     if (!compatibilityRequested) {
       if (options.json) {
         process.stdout.write(
@@ -1872,12 +1910,14 @@ async function validateCommand(
               parsed: true,
               workflowFile: resolvedFile,
               consumerCount: 0,
+              warnings: stepValidation.warnings,
             })
           ) + "\n"
         );
       } else {
         console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
         console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
+        renderCliValidationWarnings(stepValidation.warnings);
       }
       process.exit(0);
       return;
@@ -1941,6 +1981,7 @@ async function validateCommand(
               strict: strictPolicy,
               consumerCount: analysis.consumerCount,
               diagnostics: analysis.diagnostics,
+              warnings: stepValidation.warnings,
             })
           ) + "\n"
         );
@@ -1955,6 +1996,7 @@ async function validateCommand(
           analysis.consumerCount,
           analysis.diagnostics
         );
+        renderCliValidationWarnings(stepValidation.warnings);
       }
       process.exit(failed ? 1 : 0);
     } finally {
@@ -1977,6 +2019,28 @@ async function validateCommand(
       console.error(chalk.red("Error: " + message));
     }
     process.exit(2);
+  }
+}
+
+/**
+ * Workflow warnings, printed under whichever validation summary ran. They never
+ * change the exit code: `--strict` is a compatibility policy keyed on
+ * compatibility diagnostic codes, and these findings are harness-independent.
+ */
+function renderCliValidationWarnings(
+  warnings: readonly WorkflowValidationWarning[]
+): void {
+  if (warnings.length === 0) {
+    return;
+  }
+  console.log(
+    chalk.yellow(
+      `  ${warnings.length} warning${warnings.length === 1 ? "" : "s"}`
+    )
+  );
+  for (const warning of warnings) {
+    console.log(chalk.yellow(`  ⚠ ${warning.message}`));
+    console.log(chalk.dim(`    ${warning.propertyPointer} (${warning.code})`));
   }
 }
 

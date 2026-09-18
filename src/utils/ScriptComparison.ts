@@ -262,6 +262,39 @@ export function describeComparison(config: ScriptComparisonConfig): string {
 }
 
 /**
+ * Whether a comparison names a source or operator but has no value to compare
+ * against. `compareScriptOutput` resolves that state deterministically — it
+ * falls back to "the script exited 0" and never applies the stated comparison —
+ * so it is legal and runnable, just almost certainly not what was authored.
+ * Every surface that reports it (the drawer, `validateWorkflowSteps`, and
+ * through it `ctrlyoke validate`) asks this one function so they cannot drift
+ * on which configurations count.
+ */
+export function isComparisonIncomplete(
+  config: ScriptComparisonConfig
+): boolean {
+  const { compareSource, operator, expected } = resolveScriptComparison(config);
+  if (expected !== undefined || operatorTakesNoValue(operator)) {
+    return false;
+  }
+  // The untouched default already means "exits 0" and says so in its own hint,
+  // so only a comparison the author actually stated is worth flagging.
+  return (
+    compareSource !== DEFAULT_COMPARE_SOURCE ||
+    operator !== DEFAULT_SCRIPT_OPERATOR
+  );
+}
+
+/** The one sentence every surface uses for `isComparisonIncomplete`. */
+export function describeIncompleteComparison(
+  config: ScriptComparisonConfig
+): string {
+  return `No value to compare against, so "${formatComparisonSubject(
+    config
+  )}" is ignored — this check passes when the script exits with code 0.`;
+}
+
+/**
  * The `stdout contains` half of a comparison, without the value. Verdict rows
  * that highlight the expected value separately (find-in-output) render this and
  * then the value themselves.

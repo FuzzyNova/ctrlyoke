@@ -54,10 +54,16 @@ suite("Workflow template schema", () => {
         parallelGroups: parsed.parallelGroups,
         workflowProperties: parsed,
       });
+      // Bundled templates are the examples users copy, so they must be free of
+      // warnings as well as errors — a shipped template that quietly falls back
+      // to "exits 0" teaches the wrong thing.
       assert.deepStrictEqual(
         validation,
-        { valid: true, errors: [] },
-        `${fileName}: ${validation.errors.join("; ")}`
+        { valid: true, errors: [], warnings: [] },
+        `${fileName}: ${[
+          ...validation.errors,
+          ...validation.warnings.map((warning) => warning.message),
+        ].join("; ")}`
       );
     }
   });

@@ -3,7 +3,8 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { PromptFileParser } from "../core/PromptFileParser";
-import type { PromptStep } from "../types/CtrlYokeTypes";
+import type { PromptStep, WorkflowStep } from "../types/CtrlYokeTypes";
+import { WORKFLOW_VALIDATION_WARNING_CODES } from "../types/DashboardConstants";
 
 suite("PromptFileParser Tests", () => {
   let parser: PromptFileParser;
@@ -647,6 +648,46 @@ suite("PromptFileParser Tests", () => {
       const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.errors.length, 0);
+    });
+
+    test("warns without invalidating when a comparison has no value to apply", () => {
+      const result = parser.validateWorkflowSteps(
+        [
+          {
+            prompt: "Test",
+            endCondition: { script: "check.js", compareSource: "stdout" },
+          },
+          { type: "script", script: "npm test", operator: "contains" },
+          { prompt: "Fine", endCondition: { script: "check.js" } },
+        ] as WorkflowStep[],
+        {
+          finalStep: {
+            prompt: "Wrap up",
+            preCondition: { script: "gate.js", operator: "gte" },
+          } as WorkflowStep,
+        }
+      );
+
+      assert.strictEqual(result.valid, true, "a warning never blocks the load");
+      assert.strictEqual(result.errors.length, 0);
+      assert.deepStrictEqual(
+        result.warnings.map((warning) => warning.propertyPointer),
+        [
+          "/steps/0/endCondition/expected",
+          "/steps/1/expected",
+          "/finalStep/preCondition/expected",
+        ],
+        "the third step's bare endCondition is the documented default, not a warning"
+      );
+      assert.ok(
+        result.warnings.every(
+          (warning) =>
+            warning.code ===
+            WORKFLOW_VALIDATION_WARNING_CODES.SCRIPT_COMPARISON_INCOMPLETE
+        )
+      );
+      assert.match(result.warnings[0].message, /^Step 1: /u);
+      assert.match(result.warnings[2].message, /^Final step: /u);
     });
 
     test("should reject empty prompts array", () => {

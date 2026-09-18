@@ -152,4 +152,77 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(missingFile.stderr, "");
     assert.match(missingFile.stdout, /File not found/u);
   });
+
+  test("reports a half-configured comparison as a warning without failing", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "incomplete.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      [
+        "steps:",
+        "  - prompt: Do the work",
+        "    endCondition:",
+        "      script: npm test",
+        "      compareSource: stdout",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const human = await runCli(["validate", workflow], root);
+    assert.strictEqual(human.code, 0, human.stderr);
+    assert.match(human.stdout, /incomplete\.ctrlyoke\.yaml is valid/u);
+    assert.match(human.stdout, /"stdout ==" is ignored/u);
+    assert.match(human.stdout, /\/steps\/0\/endCondition\/expected/u);
+
+    const json = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(json.code, 0, json.stderr);
+    const result = JSON.parse(json.stdout) as {
+      success: boolean;
+      warnings: Array<{
+        code: string;
+        message: string;
+        propertyPointer: string;
+      }>;
+    };
+    assert.strictEqual(
+      result.success,
+      true,
+      "a workflow warning never fails validation"
+    );
+    assert.strictEqual(result.warnings.length, 1);
+    assert.strictEqual(result.warnings[0].code, "script-comparison-incomplete");
+    assert.strictEqual(
+      result.warnings[0].propertyPointer,
+      "/steps/0/endCondition/expected"
+    );
+  });
+
+  test("fails on a semantic error the schema cannot catch", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "empty-prompt.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      ["steps:", '  - prompt: "   "'].join("\n"),
+      "utf8"
+    );
+
+    const human = await runCli(["validate", workflow], root);
+    assert.strictEqual(human.code, 2);
+    assert.match(human.stderr, /Empty prompt text/u);
+
+    const json = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(json.code, 2);
+    const result = JSON.parse(json.stdout) as {
+      success: boolean;
+      parsed: boolean;
+      error: string;
+    };
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.parsed, true);
+    assert.match(result.error, /Empty prompt text/u);
+  });
 });

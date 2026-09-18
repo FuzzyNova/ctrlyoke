@@ -104,7 +104,10 @@ Validate a workflow file without starting a harness or executing a workflow:
 ctrlyoke validate my-workflow.ctrlyoke.yaml
 ```
 
-The command remains parse-only by default. Compatibility analysis is opt-in:
+This checks the file against the workflow schema and then runs the same
+semantic pass the dashboard runs when it loads a workflow, so a file the
+extension would refuse is not reported as valid here. Compatibility analysis is
+opt-in:
 
 ```bash
 ctrlyoke validate my-workflow.ctrlyoke.yaml --harness claude-cli
@@ -122,6 +125,22 @@ warnings with `--strict lossy`, `--strict unverified`, or `--strict all`.
 Lossy findings include unsupported and partial translations; unverified findings
 mean the installed version is outside the compatibility evidence. Invalid
 harness IDs, strict policies, or conflicting target options are usage errors.
+
+### Workflow warnings
+
+Separately from compatibility, validation reports workflow findings that hold
+whatever harness runs the file: the workflow is valid and will run, but
+something it states will not take effect. These print under the result and
+appear in `--json` as a `warnings` array of `{ code, message, propertyPointer }`,
+where `propertyPointer` is an RFC 6901 pointer to the authored value. Identify a
+finding by its `code`, not by its message.
+
+| Code                           | Meaning                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`. |
+
+Workflow warnings never change the exit code — `--strict` is a compatibility
+policy and does not apply to them.
 
 ## `ctrlyoke history prune`
 

@@ -2863,6 +2863,21 @@ export const SCRIPT_VALUELESS_OPERATORS: readonly string[] = [
 ];
 
 // ============================================================================
+// WORKFLOW VALIDATION WARNINGS - non-blocking findings from
+// `PromptFileParser.validateWorkflowSteps`. A workflow that produces only
+// warnings still parses, loads, and runs; the codes exist so CLI/JSON consumers
+// can identify a finding without parsing its prose.
+// ============================================================================
+export const WORKFLOW_VALIDATION_WARNING_CODES = {
+  /**
+   * A script comparison states a `compareSource`/`operator` but gives no
+   * `expected` value, so the stated comparison never runs and the check falls
+   * back to "the script exited 0".
+   */
+  SCRIPT_COMPARISON_INCOMPLETE: "script-comparison-incomplete",
+} as const;
+
+// ============================================================================
 // SCRIPT OUTPUT SOURCES - Origin values for unified script execution output
 // ============================================================================
 export const SCRIPT_OUTPUT_SOURCES = {
@@ -4006,6 +4021,8 @@ export type CompareSource =
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];
 export type ScriptOperator =
   (typeof SCRIPT_OPERATORS)[keyof typeof SCRIPT_OPERATORS];
+export type WorkflowValidationWarningCode =
+  (typeof WORKFLOW_VALIDATION_WARNING_CODES)[keyof typeof WORKFLOW_VALIDATION_WARNING_CODES];
 export type ScriptOutputSource =
   (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES];
 export type ExecutionPhase =

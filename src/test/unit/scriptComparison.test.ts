@@ -4,8 +4,10 @@ import {
   MAX_REGEX_INPUT_LENGTH,
   compareScriptOutput,
   describeComparison,
+  describeIncompleteComparison,
   formatComparison,
   formatComparisonSubject,
+  isComparisonIncomplete,
   resolveReportedScriptProperties,
   resolveScriptComparison,
 } from "../../utils/ScriptComparison";
@@ -367,6 +369,62 @@ suite("ScriptComparison", () => {
         }),
         "exit code == 0",
         "without `expected` the exit-code fallback runs, so that is what prints"
+      );
+    });
+  });
+
+  suite("isComparisonIncomplete", () => {
+    test("flags a stated comparison that has no value to apply", () => {
+      assert.strictEqual(
+        isComparisonIncomplete({ compareSource: COMPARE_SOURCES.STDOUT }),
+        true
+      );
+      assert.strictEqual(
+        isComparisonIncomplete({ operator: SCRIPT_OPERATORS.CONTAINS }),
+        true
+      );
+      assert.match(
+        describeIncompleteComparison({
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.CONTAINS,
+        }),
+        /"stdout contains" is ignored/
+      );
+    });
+
+    test("leaves the untouched default alone — it already means exit code 0", () => {
+      assert.strictEqual(isComparisonIncomplete({}), false);
+      assert.strictEqual(
+        isComparisonIncomplete({
+          compareSource: DEFAULT_COMPARE_SOURCE,
+          operator: DEFAULT_SCRIPT_OPERATOR,
+        }),
+        false
+      );
+    });
+
+    test("a value, or an operator that needs none, completes the comparison", () => {
+      assert.strictEqual(
+        isComparisonIncomplete({
+          compareSource: COMPARE_SOURCES.STDOUT,
+          expected: "0 failing",
+        }),
+        false
+      );
+      assert.strictEqual(
+        isComparisonIncomplete({
+          compareSource: COMPARE_SOURCES.STDOUT,
+          expected: 0,
+        }),
+        false,
+        "a numeric 0 is a value, not an absent one"
+      );
+      assert.strictEqual(
+        isComparisonIncomplete({
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.IS_EMPTY,
+        }),
+        false
       );
     });
   });
