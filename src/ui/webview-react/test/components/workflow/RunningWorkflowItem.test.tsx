@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
@@ -23,6 +24,60 @@ describe("RunningWorkflowItem", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
   });
+
+  it("shows Final step in the count and accessible name while the final step runs", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "final-step",
+          workflowName: "Final-step workflow",
+          filePath: "final-step.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 2,
+          totalSteps: 2,
+          finalStepRunning: true,
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    const row = screen.getByRole("listitem");
+    expect(within(row).getByText("Final step")).toBeInTheDocument();
+    expect(row).toHaveAccessibleName(/Final step/);
+    expect(row).not.toHaveAccessibleName(/2\/2/);
+  });
+
+  it.each([
+    { label: "false", finalStepRunning: false },
+    { label: "absent", finalStepRunning: undefined },
+  ])(
+    "shows clamped numeric progress in the count and accessible name when finalStepRunning is $label",
+    ({ finalStepRunning }) => {
+      render(
+        <RunningWorkflowItem
+          workflow={{
+            id: `queue-${finalStepRunning ?? "absent"}`,
+            workflowName: "Queued workflow",
+            filePath: "queued.prompt.md",
+            executionState: EXECUTION_STATES.RUNNING,
+            currentStep: 3,
+            totalSteps: 2,
+            finalStepRunning,
+          }}
+          isCurrent
+          hasActiveTerminal={false}
+          {...callbacks}
+        />
+      );
+
+      const row = screen.getByRole("listitem");
+      expect(within(row).getByText("2/2")).toBeInTheDocument();
+      expect(row).toHaveAccessibleName(/2\/2/);
+      expect(row).not.toHaveAccessibleName(/Final step/);
+    }
+  );
 
   it("freezes pause-aware elapsed time and offers Continue plus Stop", () => {
     vi.useFakeTimers();

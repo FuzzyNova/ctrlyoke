@@ -1266,6 +1266,16 @@ export const workflowDisplayStep = (
 ): number => Math.max(0, Math.min(s.currentStep + 1, s.totalSteps));
 
 /**
+ * Returns the running row's step-progress label, including its final-step state.
+ */
+export const workflowStepProgressLabel = (
+  s: Pick<WorkflowSummary, "currentStep" | "totalSteps" | "finalStepRunning">
+): string =>
+  s.finalStepRunning
+    ? "Final step"
+    : `${workflowDisplayStep(s)}/${s.totalSteps}`;
+
+/**
  * Process lock file written at the lineage root while one of its runs is executing.
  * Enables the VS Code extension and CLI to coexist without stomping on each other's state.
  * Lock file path: `.runs/<workflowKey>/runner.json` in run storage.

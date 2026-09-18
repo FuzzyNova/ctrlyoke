@@ -1,7 +1,6 @@
 # Final-Step Notation Unification + Running-Row Display Plan
 
-**Status:** Phase 1 complete — Option A implemented 2026-09-18; Phase 2 data implemented
-2026-09-18; the display half of Phase 2 remains planned.
+**Status:** Complete — Phase 1 and Phase 2 implemented 2026-09-18.
 
 ## Goal
 
@@ -134,7 +133,7 @@ the already-computed `getSignedStepIndex(target)` value only for terminal metada
 
 ---
 
-## Phase 2 — final-step awareness on the running-workflow row
+## Phase 2 — final-step awareness on the running-workflow row (complete)
 
 ### Data: extend `WorkflowSummary`
 
@@ -218,4 +217,4 @@ step"` is precisely step progress, and nothing has to be dropped, widened, or pr
 
 Manual check the automated tests cannot fully cover: run a workflow with an enabled final step, watch
 the running-workflows dropdown row as it transitions from the last queued step to the final step, and
-confirm the row's label updates instead of staying frozen at `N/N`.
+confirm the row's label updates to `Final step` instead of staying frozen at `N/N`.

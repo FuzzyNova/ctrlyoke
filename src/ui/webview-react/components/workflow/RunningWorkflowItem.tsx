@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   EXECUTION_STATES,
   HARNESS_INFO,
-  workflowDisplayStep,
+  workflowStepProgressLabel,
 } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import { HarnessIcon } from "../shared/HarnessIcon";
@@ -119,7 +119,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
     workflow.workflowName,
     workflow.executionState,
     workflow.totalSteps > 0 &&
-      `step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`,
+      `step ${workflowStepProgressLabel(workflow)}`,
     workflowTokenTotalsAccessibleLabel(workflow.tokenTotals),
     hasActiveTerminal && "terminal session is still running",
   ]);
@@ -241,7 +241,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         label={<span className="text-sm">{workflow.workflowName}</span>}
         count={
           workflow.totalSteps > 0
-            ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
+            ? workflowStepProgressLabel(workflow)
             : undefined
         }
         // The live instance's own projection only — never the lineage's

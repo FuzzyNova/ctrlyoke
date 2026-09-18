@@ -243,7 +243,10 @@ export type {
   PreCondition,
   ToolPermissionMode,
 } from "@root/types/CtrlYokeTypes";
-export { workflowDisplayStep } from "@root/types/CtrlYokeTypes";
+export {
+  workflowDisplayStep,
+  workflowStepProgressLabel,
+} from "@root/types/CtrlYokeTypes";
 export type {
   HistorySearchIndexState,
   HistorySearchQuery,
