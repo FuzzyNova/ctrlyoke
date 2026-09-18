@@ -27,7 +27,8 @@ import type { IDashboardSink } from "../../types/IDashboardSink";
 class FakeInstance implements RunViewPublisherInstance {
   constructor(
     public readonly id: string,
-    private readonly workingFilePath: string
+    private readonly workingFilePath: string,
+    private readonly activeStepIndices: number[] = []
   ) {}
 
   getSummary(): WorkflowSummary {
@@ -43,6 +44,10 @@ class FakeInstance implements RunViewPublisherInstance {
   }
 
   replayBufferedOutputTo(_sink: IDashboardSink): void {}
+
+  getActiveStepIndices(): number[] {
+    return this.activeStepIndices;
+  }
 }
 
 class FakeRegistry implements RunViewPublisherRegistryPort {
@@ -197,6 +202,43 @@ suite("RunViewPublisher", () => {
         (sent.at(-1) as { type: string }).type,
         MESSAGE_TYPES.RUN_VIEW_LOADED
       );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // activeStepIndices has no persisted `_runtime` counterpart (see
+  // WorkflowInstance.getActiveStepIndices) — this is the only place a switch
+  // to a running workflow's addressed view learns which step(s) are actually
+  // executing, so terminal-deletion gating on the just-switched-to workflow
+  // doesn't fall back to `[]` and wrongly treat a live step's terminal as
+  // idle.
+  test("addressed switch snapshot carries the bound instance's live activeStepIndices", async () => {
+    const { root, publisher, registry } = await createPublisher();
+    try {
+      const workflowKey = "lineage-running" as WorkflowKey;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
+      await writeAddressedFile(root, address, 1);
+      registry.addInstance(
+        workflowKey,
+        new FakeInstance("instance-running", "draft", [1])
+      );
+
+      const sent: unknown[] = [];
+      await publisher.loadRunViewForClient(
+        address,
+        (message) => sent.push(message),
+        "client-a"
+      );
+
+      const snapshot = sent.find(
+        (message) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      ) as { activeStepIndices?: number[] } | undefined;
+      assert.deepStrictEqual(snapshot?.activeStepIndices, [1]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

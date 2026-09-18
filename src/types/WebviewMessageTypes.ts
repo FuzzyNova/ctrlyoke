@@ -1784,6 +1784,14 @@ export interface RunViewLoadedMessage {
   workflowProperties: Record<string, unknown>;
   /** The exact run currently bound to execution, if the lineage is active. */
   executionRunRef?: import("./CtrlYokeTypes").RunRef;
+  /**
+   * Step index(es) currently executing, sourced live from the bound
+   * `WorkflowInstance` — never persisted, so absent when the address has no
+   * live instance bound (a completed/idle run has none). Omitted rather than
+   * `[]` in that case so the client's own default stays the single source of
+   * "nothing is running" instead of two representations meaning the same thing.
+   */
+  activeStepIndices?: number[];
   /** Durable continuation marker for the addressed run, if it is being rewound. */
   pendingRewind?: {
     fromStepIndex: number;

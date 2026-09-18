@@ -52,6 +52,7 @@ export interface RunViewPublisherInstance {
   readonly id: string;
   getSummary(): WorkflowSummary;
   replayBufferedOutputTo(sink: IDashboardSink): void;
+  getActiveStepIndices(): number[];
 }
 
 export interface RunViewPublisherExternalRunWatchPort {
@@ -405,6 +406,26 @@ export class RunViewPublisher {
     const workspaceRoot = this.host.workspaceRoot;
     this.host.registry.getViewAddressRegistry().set(clientId, address);
     this.host.registry.getViewMessageSinks().set(clientId, send);
+
+    // Only a live view can hold in-memory output the timeline read above could
+    // have missed: the run that is actually executing, or a draft, which has no
+    // persisted timeline of its own. Every other addressed run is *fully*
+    // described by the history snapshot, so replaying the bound instance's
+    // buffer there re-sends an earlier execution's output on top of it. This
+    // must be evaluated independently of `boundWorkflowId` — that is non-null on
+    // every lineage switch, so folding the check into the `??` fallback below
+    // left it unreachable in exactly the case that matters.
+    const isLiveAddress =
+      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+      (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        address.runRef === executionRunRef);
+    const runtimeWorkflowId =
+      boundWorkflowId ??
+      (isLiveAddress ? this.host.registry.getViewedWorkflowId(clientId) : null);
+    const boundInstance = runtimeWorkflowId
+      ? this.host.registry.findInstance(runtimeWorkflowId)
+      : undefined;
+
     const snapshot: RunViewLoadedMessage = {
       type: MESSAGE_TYPES.RUN_VIEW_LOADED,
       requestId,
@@ -417,6 +438,15 @@ export class RunViewPublisher {
       runSummaries: view.runSummaries,
       workflowProperties: view.workflowProperties,
       executionRunRef,
+      // Never persisted (see WorkflowInstance.getActiveStepIndices), so this
+      // is the only place a switch to a running workflow's addressed view can
+      // learn which step(s) are actually executing right now — without it,
+      // the client falls back to `[]` and terminal-deletion gating on the
+      // just-switched-to workflow can't tell a live step's terminal from an
+      // idle one.
+      ...(boundInstance
+        ? { activeStepIndices: boundInstance.getActiveStepIndices() }
+        : {}),
       pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: view.descriptorRevision,
       isSystemGenerated: view.isSystemGenerated,
@@ -432,16 +462,6 @@ export class RunViewPublisher {
         : {}),
     };
 
-    const isLiveAddress =
-      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
-      (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        address.runRef === executionRunRef);
-    const runtimeWorkflowId =
-      boundWorkflowId ??
-      (isLiveAddress ? this.host.registry.getViewedWorkflowId(clientId) : null);
-    const boundInstance = runtimeWorkflowId
-      ? this.host.registry.findInstance(runtimeWorkflowId)
-      : undefined;
     const announcedWorkflowId =
       boundWorkflowId ??
       (announceReplayBoundary

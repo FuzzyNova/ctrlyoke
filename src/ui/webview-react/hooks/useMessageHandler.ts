@@ -2640,6 +2640,11 @@ export function createMessageHandlers(
       parallelGroups: workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,
       currentStep: runtime?.currentIndex,
+      // Live-only — never persisted to `_runtime`, so absent whenever this
+      // snapshot has no bound instance (see RunViewLoadedMessage.activeStepIndices).
+      // Falls back to `[]` like every other loadWorkflow caller: a run with no
+      // live instance genuinely has no step actively executing.
+      activeStepIndices: message.activeStepIndices ?? [],
       results,
       finalStep: workingFile.finalStep ?? null,
       finalStepStatus: runtime?.finalStep?.status ?? null,

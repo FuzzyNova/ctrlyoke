@@ -1,4 +1,5 @@
 import {
+  SESSION_KINDS,
   SHELL_KINDS,
   SHELL_TYPES,
   TERMINAL_SESSION_STATUS,
@@ -88,20 +89,22 @@ export function getShellCompactLabel(
  * ai-cli sessions alive beyond the step that spawned them so a later step can
  * inject into them, so "workflow is executing" is not the right gate — only
  * *this* session's own `stepIndex` matching one of the steps currently running
- * means closing it would kill work in progress. Shell sessions always carry
- * stepIndex -1 (`PtyProcessManager.spawnShell`), so they must never match here
- * and stay closeable regardless of execution state — checked explicitly since
- * finalStep targets also encode as negative indices and could otherwise land
- * in activeStepIndices.
+ * means closing it would kill work in progress. `activeStepIndices`
+ * (WorkflowInstance.getActiveStepIndices()) includes a final-step attempt's
+ * index too, encoded as either `steps.length` (AI-harness spawn path) or
+ * `-(loopIndex+1)` (interactive-script spawn path) — the latter collides with
+ * the -1 every standalone shell session carries (`PtyProcessManager.spawnShell`),
+ * so the `kind` check is required: only ai-cli sessions are ever step-owned,
+ * shell sessions stay closeable regardless of stepIndex or execution state.
  */
 export function isTerminalSessionInUseByActiveStep(
-  session: Pick<TerminalSession, "status" | "stepIndex">,
+  session: Pick<TerminalSession, "status" | "stepIndex" | "kind">,
   activeStepIndices: readonly number[]
 ): boolean {
   return (
+    session.kind === SESSION_KINDS.AI_CLI &&
     session.status === TERMINAL_SESSION_STATUS.RUNNING &&
     session.stepIndex !== undefined &&
-    session.stepIndex !== -1 &&
     activeStepIndices.includes(session.stepIndex)
   );
 }

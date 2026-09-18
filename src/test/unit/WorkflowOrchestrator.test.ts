@@ -1070,6 +1070,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       }),
       getExecutionRunRef: () => runRef,
       replayBufferedOutputTo: () => undefined,
+      getActiveStepIndices: () => [],
     };
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
