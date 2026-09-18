@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { StringDecoder } from "string_decoder";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
@@ -21,7 +22,7 @@ import {
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
-import { splitLines } from "../../../utils/TextLines";
+import { splitCompleteLines, splitLines } from "../../../utils/TextLines";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   COPILOT_EVENT_TYPES,
@@ -236,6 +237,10 @@ export class CopilotLogParser extends BaseLogParser {
 
   /** Byte offset into the OTel export file, independent of the main log's lastReadPosition. */
   private otelReadPosition = 0;
+  /** Incomplete trailing JSONL text retained until a later append completes it. */
+  private otelPendingLine = "";
+  /** Preserves UTF-8 characters whose bytes straddle incremental reads. */
+  private otelDecoder = new StringDecoder("utf8");
   /** Path set by CopilotCliProvider once it generates a per-invocation OTel export path. */
   private otelFilePath: string | undefined;
   /** Running total of input tokens across all chat spans seen this invocation. */
@@ -262,6 +267,7 @@ export class CopilotLogParser extends BaseLogParser {
   setOtelFilePath(filePath: string | undefined): void {
     this.otelFilePath = filePath;
     this.otelReadPosition = 0;
+    this.resetOtelIncrementalLineState();
     this.otelCumulativeInputTokens = 0;
     this.otelCumulativeOutputTokens = 0;
     this.otelCumulativeCacheReadTokens = 0;
@@ -281,6 +287,7 @@ export class CopilotLogParser extends BaseLogParser {
     const currentSize = stats.size;
     if (currentSize < this.otelReadPosition) {
       this.otelReadPosition = 0; // file truncated/rotated
+      this.resetOtelIncrementalLineState();
     }
     if (currentSize === this.otelReadPosition) {
       return [];
@@ -295,17 +302,41 @@ export class CopilotLogParser extends BaseLogParser {
     }
     this.otelReadPosition = currentSize;
 
+    const content = this.otelPendingLine + this.otelDecoder.write(buffer);
+    const { lines, remainder } = splitCompleteLines(content);
+    this.otelPendingLine = remainder;
+
     const entries: Record<string, any>[] = [];
-    for (const line of splitLines(buffer.toString("utf8"))) {
+    const parseLine = (line: string): void => {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) return;
       try {
         entries.push(JSON.parse(trimmed));
       } catch {
-        // Skip malformed lines (partial write mid-flush)
+        // Skip malformed complete lines.
+      }
+    };
+    for (const line of lines) {
+      parseLine(line);
+    }
+
+    // A complete JSON record does not require a newline. This is the OTel
+    // reader's flush policy; an incomplete tail remains pending for the next
+    // poll instead.
+    if (remainder.trim()) {
+      try {
+        entries.push(JSON.parse(remainder.trim()));
+        this.otelPendingLine = "";
+      } catch {
+        // Retain an incomplete final record until the next append.
       }
     }
     return entries;
+  }
+
+  private resetOtelIncrementalLineState(): void {
+    this.otelPendingLine = "";
+    this.otelDecoder = new StringDecoder("utf8");
   }
 
   /**

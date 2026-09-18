@@ -69,7 +69,11 @@ export interface HeadlessProcessResult {
 export interface HeadlessStreamingSource {
   parser: ILogParser;
   mode: HeadlessSourceMode;
-  parseStdout?: (chunk: string) => BaseCliEvent[];
+  /**
+   * Parse one complete stdout record. CliTransportCoordinator owns buffering
+   * transport chunks before invoking this pure provider hook.
+   */
+  parseStdout?: (record: string) => BaseCliEvent[];
   logTail?: HeadlessLogTail;
   model?: string;
 }

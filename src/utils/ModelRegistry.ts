@@ -30,6 +30,7 @@ import {
 } from "./ModelConstants";
 import { Log } from "./Log";
 import { retryWithBackoff } from "./RetryUtils";
+import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
 
 const execAsync = promisify(exec);
@@ -356,14 +357,24 @@ function execWithClosedStdin(
       );
     }, timeoutMs);
 
-    child.stdout?.on("data", (chunk) => (stdout += chunk));
-    child.stderr?.on("data", (chunk) => (stderr += chunk));
+    const flushStdout = child.stdout
+      ? attachStreamTextDecoder(child.stdout, (chunk) => {
+          stdout += chunk;
+        })
+      : () => "";
+    const flushStderr = child.stderr
+      ? attachStreamTextDecoder(child.stderr, (chunk) => {
+          stderr += chunk;
+        })
+      : () => "";
     child.on("error", (err) => {
       clearTimeout(timer);
       reject(err);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      stdout += flushStdout();
+      stderr += flushStderr();
       if (code === 0) {
         resolve(stdout);
       } else {

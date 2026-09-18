@@ -3,8 +3,12 @@ import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import {
   HARNESS_IDS,
+  HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
 } from "../../types/DashboardConstants";
@@ -62,10 +66,97 @@ function createHeadlessHostCallbacks() {
   };
 }
 
+async function runStdoutSpawns(
+  provider: ICliProvider,
+  spawnChunks: readonly (readonly string[])[]
+): Promise<{ streamedIds: string[]; countsAfterChunks: number[] }> {
+  const streamedIds: string[] = [];
+  const countsAfterChunks: number[] = [];
+  const parser = provider.logParser;
+  if (!parser || !provider.parseHeadlessStdout) {
+    throw new Error("stdout provider fixture is missing its parser");
+  }
+
+  parser.extractStructuredEventsFromEvent = (event) => [
+    { type: "text", data: { text: String(event.id) } },
+  ];
+  parser.trackBackgroundWorkState = () => {};
+  parser.extractLiveContextWindow = undefined;
+
+  const source: HeadlessStreamingSource = {
+    parser,
+    mode: HEADLESS_SOURCE_MODES.STDOUT,
+    parseStdout: provider.parseHeadlessStdout.bind(provider),
+  };
+  let spawnIndex = 0;
+
+  const coordinator = new CliTransportCoordinator({
+    provider,
+    processManager: {
+      spawn: async (
+        _command: string,
+        _args: string[],
+        options?: { onStdout?: (chunk: string) => void }
+      ) => {
+        for (const chunk of spawnChunks[spawnIndex++] ?? []) {
+          options?.onStdout?.(chunk);
+          countsAfterChunks.push(streamedIds.length);
+        }
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      isActive: () => false,
+    } as any,
+    resolveCliCommand: resolveCommand,
+    runtimeState: {
+      getWorkspaceRoot: () => process.cwd(),
+      isCancelling: () => false,
+    },
+    hostCallbacks: {
+      onBeforeInteractiveStart: () => {},
+      onCommandPrepared: () => {},
+      onStreamingChunk: () => {},
+      onStreamingEvents: (events) => {
+        streamedIds.push(
+          ...events.map((event) => (event.data as { text: string }).text)
+        );
+      },
+      onResponseComplete: () => {},
+      onPtyExit: () => {},
+      cleanupTempFiles: async () => {},
+    },
+  });
+
+  for (let index = 0; index < spawnChunks.length; index++) {
+    assert.strictEqual(
+      await coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true,
+        undefined,
+        source
+      ),
+      true
+    );
+  }
+
+  return { streamedIds, countsAfterChunks };
+}
+
+const stdoutProviderFactories: ReadonlyArray<{
+  name: string;
+  create: () => ICliProvider;
+}> = [
+  { name: "Copilot", create: () => new CopilotCliProvider() },
+  { name: "Claude", create: () => new ClaudeCliProvider() },
+  { name: "OpenCode", create: () => new OpenCodeCliProvider() },
+];
+
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
-      { promptArgument: string; cliCommand: string } | undefined;
+      | { promptArgument: string; cliCommand: string }
+      | undefined;
     const streamedChunks: string[] = [];
     const cleanedTempPaths: string[][] = [];
 
@@ -254,9 +345,59 @@ line two`,
     assert.deepStrictEqual(streamedEvents, ["log-event"]);
   });
 
+  for (const providerFactory of stdoutProviderFactories) {
+    suite(`${providerFactory.name} stdout record boundaries`, () => {
+      test("emits one event when a record spans two chunks", async () => {
+        const record = JSON.stringify({ type: "event", id: "split" });
+        const splitAt = Math.floor(record.length / 2);
+        const result = await runStdoutSpawns(providerFactory.create(), [
+          [record.slice(0, splitAt), `${record.slice(splitAt)}\n`],
+        ]);
+
+        assert.deepStrictEqual(result.streamedIds, ["split"]);
+        assert.deepStrictEqual(result.countsAfterChunks, [0, 1]);
+      });
+
+      test("holds a partial tail while emitting complete records", async () => {
+        const first = JSON.stringify({ type: "event", id: "first" });
+        const second = JSON.stringify({ type: "event", id: "second" });
+        const tail = JSON.stringify({ type: "event", id: "tail" });
+        const result = await runStdoutSpawns(providerFactory.create(), [
+          [`${first}\n${second}\n${tail.slice(0, 8)}`, `${tail.slice(8)}\n`],
+        ]);
+
+        assert.deepStrictEqual(result.streamedIds, ["first", "second", "tail"]);
+        assert.deepStrictEqual(result.countsAfterChunks, [2, 3]);
+      });
+
+      test("flushes an unterminated final record exactly once", async () => {
+        const finalRecord = JSON.stringify({ type: "event", id: "final" });
+        const result = await runStdoutSpawns(providerFactory.create(), [
+          [finalRecord],
+        ]);
+
+        assert.deepStrictEqual(result.streamedIds, ["final"]);
+        assert.deepStrictEqual(result.countsAfterChunks, [0]);
+      });
+
+      test("does not carry the accumulator into a second spawn", async () => {
+        const first = JSON.stringify({ type: "event", id: "first" });
+        const second = JSON.stringify({ type: "event", id: "second" });
+        const result = await runStdoutSpawns(providerFactory.create(), [
+          [first],
+          [`${second}\n`],
+        ]);
+
+        assert.deepStrictEqual(result.streamedIds, ["first", "second"]);
+        assert.deepStrictEqual(result.countsAfterChunks, [0, 2]);
+      });
+    });
+  }
+
   test("should parse partial headless output when cancellation is requested", async () => {
     let callbackResult:
-      { stdout: string; stderr: string; exitCode: number } | undefined;
+      | { stdout: string; stderr: string; exitCode: number }
+      | undefined;
     const cleanedTempPaths: string[][] = [];
     let cancelling = false;
 

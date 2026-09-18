@@ -49,6 +49,28 @@ export function splitLines(content: string): string[] {
 }
 
 /**
+ * Complete lines plus the unterminated tail, for an incremental reader.
+ * The caller owns the flush: a stream that ends without a trailing newline
+ * still has one real record sitting in `remainder`.
+ */
+export function splitCompleteLines(content: string): {
+  lines: string[];
+  remainder: string;
+} {
+  // A trailing CR may be either a complete lone-CR break or the first half of
+  // a CRLF pair, so leave it in the remainder until the next chunk arrives.
+  const endsWithCarriageReturn = content.endsWith(CARRIAGE_RETURN);
+  const searchable = endsWithCarriageReturn ? content.slice(0, -1) : content;
+  const parts = searchable.split(LINE_BREAK_PATTERN);
+  const remainder = parts.pop() ?? "";
+
+  return {
+    lines: parts,
+    remainder: remainder + (endsWithCarriageReturn ? CARRIAGE_RETURN : ""),
+  };
+}
+
+/**
  * Streams a file line by line without materializing it. A final line with no
  * trailing break is yielded as-is, so callers keep the option of tolerating a
  * partially written last record.

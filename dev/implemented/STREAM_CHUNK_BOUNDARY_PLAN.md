@@ -1,0 +1,274 @@
+# Stream Chunk Boundary Plan
+
+**Status:** Implemented 2026-09-17 — all three issues resolved and all four
+incremental readers converged on the shared boundary helper. One related
+exposure was deliberately left open and carried forward to
+`dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
+**Priority:** P2 (P1 for issue 1, which was silent data corruption)
+**Related:** commit `8e5a09d7` (`fix: stop readline from splitting JSONL records
+on U+2028`) introduced `src/utils/TextLines.ts` and single-sourced _where a line
+ends_. This doc covers the other half of that survey: what happens at a **read
+boundary**, which that commit deliberately did not touch.
+`.github/instructions/utils.instructions.md` carries the durable rule from both
+halves; `harness-shared.instructions.md` carries the `parseHeadlessStdout`
+whole-records contract that came out of issue 2.
+
+## The problem in one sentence
+
+Four independent places decoded a byte stream incrementally, and three of them
+got the boundary wrong in a different way — a UTF-8 character split across a
+chunk was corrupted permanently, and a JSONL record split across a chunk was
+dropped from the live stream — because each one re-derived the "carry the
+partial tail to the next read" logic instead of sharing it.
+
+## How this was found
+
+A survey of every line-delimited-JSON site in `src/` (excluding tests), run
+while fixing the U+2028 bug. It turned up **13 independent line→`JSON.parse`
+implementations**. The splitting rule was already shared at that point; the
+buffering was not, and this plan is what shared it.
+
+There is no JSONL package dependency in this repo — every one of these is
+hand-rolled.
+
+## The three issues
+
+### 1. `CliProcessManager` decoded each stdout chunk independently — corrupted multi-byte characters
+
+**Resolved.** Added `src/utils/StreamTextDecoder.ts` (`attachStreamTextDecoder`)
+and converted both streams in `CliProcessManager.spawn()`, `ModelRegistry`'s
+`execWithClosedStdin()`, and `DevCommands`' build runner onto it. The helper
+owns one `StringDecoder` per stream and returns an explicit flush, which each
+call site invokes on `close` — not on the error/timeout paths, which reject.
+`CliProcessManager` and `DevCommands` forward a non-empty stdout flush onward so
+the live stream and the accumulated text stay identical. Coverage:
+`src/test/unit/StreamTextDecoder.test.ts`.
+
+The code as found:
+
+```ts
+child.stdout?.on("data", (data: Buffer) => {
+  const chunk = data.toString(); // <- no StringDecoder, no setEncoding
+  stdout += chunk;
+  if (options.onStdout) options.onStdout(chunk);
+});
+
+child.stderr?.on("data", (data: Buffer) => {
+  stderr += data.toString(); // <- same bug, same spawn
+});
+```
+
+**stderr has the identical defect** and the original survey missed it. It
+matters less than stdout (it feeds failure messages, not stored responses) but
+it is the same two-line fix in the same function, so it is not worth splitting
+out.
+
+The same per-chunk `Buffer.toString()` pattern appears at two more spawn sites —
+`src/utils/ModelRegistry.ts:359-360` (`stdout += chunk` over a raw `Buffer`,
+model-list output) and `src/dev/DevCommands.ts:146,157` (dev build output
+streamed to the webview). Neither is P1, but both are the same three lines, and
+fixing them together is what makes a shared decode helper worth having instead
+of a third hand-rolled copy.
+
+`spawn()` is called with no `encoding` option and the stream is never given
+`setEncoding`, so `data` is a raw `Buffer` and each chunk is decoded in
+isolation. A UTF-8 sequence whose bytes straddle a chunk boundary decodes to the
+replacement character on both sides.
+
+This is the most severe of the three, because unlike issue 2 it is **not
+recoverable downstream**: `stdout` is accumulated from the already-corrupted
+strings, so the final response stored in `events.jsonl` carries the replacement
+characters too. Every harness is affected (this is the shared headless
+transport), and it needs no exotic input — em dashes, curly quotes, box-drawing
+characters, emoji and CJK are ordinary in AI output. A ~1 MB response crosses
+~16 chunk boundaries.
+
+The fix was one `StringDecoder` per spawn, which is exactly what `BaseLogParser`
+already did for file reads. The accumulated `stdout` had to be built from the
+decoded chunks (it already was), and the decoder needed an `end()` at process
+exit to flush a trailing partial sequence.
+
+### 2. `CliTransportCoordinator` handed raw chunks to stateless NDJSON parsers
+
+**Resolved.** See the sequencing note below for what shipped. The code as
+found, at `CliTransportCoordinator.ts:468`:
+
+```ts
+const events = source.parseStdout?.(chunk) ?? [];
+```
+
+Called per raw stdout chunk with no accumulator. The three
+`HEADLESS_SOURCE_MODES.STDOUT` providers all lose a record that straddles a
+boundary:
+
+| Provider | `parseHeadlessStdout` uses                   | What happens to a straddling record |
+| -------- | -------------------------------------------- | ----------------------------------- |
+| Copilot  | `CliParseUtils.parseJsonLines`               | Both halves fail to parse, skipped  |
+| OpenCode | `CliParseUtils.parseJsonLines`               | Both halves fail to parse, skipped  |
+| Claude   | `CliParseUtils.extractJsonObjectsFromStream` | `remainder` is destructured away    |
+
+`extractJsonObjectsFromStream` is the sharpest evidence that this is a bug and
+not a design: it returns `{ objects, remainder }` and its own doc comment says
+"_Parsed objects and remainder for next chunk_" — the API was built to be used
+statefully, and **every** call site (`ClaudeCliProvider.ts:176` and `:194`,
+`QwenCliProvider.ts:167`) destructures only `{ objects }`.
+
+**Severity is lower than it first looks, but the failure mode is nastier.**
+`CliResponseCollector.ts:190` re-parses the _complete_ accumulated stdout at the
+end, so the final response is intact (modulo issue 1). What is lost is the
+**live** event. Per the `CLI_OUTPUT_EVENTS_APPENDED` rule in
+`.github/instructions/orchestration.instructions.md`, the webview renders an
+attempt from its activity entries whenever any exist and _drops_ the
+`cliOutputRecorded` aggregate they stand in for. So a dropped live event
+plausibly means: correct while streaming minus that event, and then on reload
+the aggregate that did contain it is discarded in favour of the incomplete
+activity entries. That is the same silent-vanish shape
+`handleSessionActivityResumed` produced.
+
+**That consequence is inferred from the documented rendering rule, not
+observed.** Confirm it against a real capture before sizing the fix — if the
+live pump and the final parse both feed the same timeline event, the impact may
+be limited to the streaming view only.
+
+**Investigation (2026-09-17):** The run storage resolved to the
+`stream-chunk-boundary-plan-2026-09-17T19-54-45-109` lineage and its
+`run-2026-09-17T19-55-08-812Z` run under the configured runs root. Its
+`manifest.json` and `events.jsonl` contain both
+the per-attempt `cliOutputRecorded` aggregates and the
+`cliOutputEventsAppended` activity batches. The webview projection does exactly
+what the rule says: once activity entries exist, it renders those and drops the
+aggregate they replace. The capture has no raw stdout or independent expected
+event sequence, so it does **not** prove that a particular live event was
+dropped and then vanished on reload. It therefore narrows the original claim
+from an observed consequence to an unobserved but confirmed failure mechanism:
+an incomplete activity stream would still mask the intact aggregate on reload.
+The live loss is wrong either way, so issue 2 remains necessary.
+
+Claude's available real project capture is newline-delimited JSON, consistent
+with the `--output-format stream-json` records consumed here; the parser also
+handles concatenated objects and balanced braces. Whole records therefore work
+without threading its `remainder` through the provider, and no change to
+`ClaudeCliProvider` is needed.
+
+### 3. `CopilotLogParser`'s OTel reader had neither a decoder nor a pending-line buffer
+
+**Resolved.** Added `splitCompleteLines`, a per-file pending-line buffer, and a
+`StringDecoder` to the OTel reader. The new state resets on every
+`setOtelFilePath()` and on truncation/rotation, so records split across polls
+are completed exactly once without leaking between prompts. The reader keeps
+`BaseLogParser`'s trailing-record policy: try to parse the unterminated tail,
+retain it as pending only when parsing proves the writer has not finished.
+
+The code as found, at `CopilotLogParser.ts:282-303`:
+
+A byte-offset tail read (`otelReadPosition`) that advances to `currentSize`
+unconditionally and then does `splitLines(buffer.toString("utf8"))`. A record
+straddling a poll boundary is permanently lost (the read position has already
+moved past it), and a multi-byte character on the boundary is corrupted the same
+way as issue 1.
+
+Its own comment calls the skipped line a "partial write mid-flush" — the right
+diagnosis and the wrong remedy: the partial line should be retained and
+completed, not discarded. Per
+`.github/instructions/harness-cli-providers.instructions.md`, this OTel export is
+"the only genuinely live, per-turn context signal left" for Copilot since CLI
+1.0.x removed the others, so losing records here degrades context-window
+tracking with no error.
+
+## The shape of the fix
+
+One primitive was added to `src/utils/TextLines.ts` alongside `splitLines` /
+`streamFileLines`:
+
+```ts
+/** Complete lines plus the unterminated tail, for an incremental reader. */
+export function splitCompleteLines(content: string): {
+  lines: string[];
+  remainder: string;
+};
+```
+
+That is the single missing piece. Four call sites collapse onto it:
+
+| Site                                                        | Current shape                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `BaseLogParser.readNewEntries` (`BaseLogParser.ts:416-447`) | `splitCompleteLines` + `pendingLogText` + `StringDecoder`      |
+| `AntigravityTranscriptReader` (`:186-204`)                  | `splitCompleteLines` + `pendingText` + per-state decoder       |
+| `AntigravityStreamJsonUsage` (`:133-147`)                   | `splitCompleteLines` + `incompleteLine` + explicit `flush()`   |
+| `CopilotLogParser` OTel (`:299-320`)                        | `splitCompleteLines` + pending tail + per-file `StringDecoder` |
+
+Before convergence, the two correct readers were the reference implementations.
+`AntigravityStreamJsonUsage.flush()` is the affordance the other two lack an
+explicit equivalent of, and any shared helper has to keep it: a stream that ends
+without a trailing newline still has one real record pending.
+
+Issues 1 and 2 are _not_ solved by that helper alone:
+
+- **Issue 1** is a `StringDecoder` at the spawn, independent of line semantics.
+  Do it first and separately — smallest change, largest correctness win, and
+  testable without touching any harness parser.
+- **Issue 2** needs the _coordinator_ to own a per-run accumulator, because the
+  provider hooks (`parseHeadlessStdout`) are pure functions by design and should
+  stay that way. Two candidate shapes: give `CliTransportCoordinator` a
+  `splitCompleteLines` accumulator and pass only complete lines to
+  `parseStdout`; or give the `stdoutEventPump` the accumulator. Prefer the
+  former — `parseStdout`'s contract then becomes "you are given whole records",
+  which is what all three providers already assume. Claude's brace-balanced
+  parser was the exception to check — being newline-agnostic, it might have
+  wanted the `remainder` threaded instead — but its real output is
+  newline-delimited and it accepts whole records unchanged, so no
+  `ClaudeCliProvider` change was needed.
+
+## Sequencing
+
+Staged as four steps, each independently committable:
+
+1. **Done — issue 1 alone.** One `StringDecoder` per stream in
+   `CliProcessManager.spawn` (stdout _and_ stderr), plus an explicit flush on
+   `close` so a trailing partial sequence reaches the accumulated text. The
+   pattern is single-sourced in `attachStreamTextDecoder`, with `ModelRegistry`
+   and `DevCommands` converted onto it. No harness parser changes.
+2. **Done — `splitCompleteLines` + issue 3.** Added the helper to
+   `TextLines.ts` and converted the Copilot OTel reader — the broken one — to
+   it, giving it both the pending-line buffer and the `StringDecoder` it lacked.
+   `setOtelFilePath` and truncation/rotation reset the new state too.
+3. **Done — converge the correct readers** (`BaseLogParser.readNewEntries`,
+   `AntigravityTranscriptReader`, `AntigravityStreamJsonUsageAccumulator`) onto
+   `splitCompleteLines`. Pure refactor, no behaviour change — safe but not
+   urgent, hence after the bug fixes. `BaseLogParser`'s trailing-line policy
+   (try to parse the tail, retain it only if parsing proves it incomplete) is a
+   real behavioural difference from the other two and must survive the
+   conversion. All four incremental readers now share the boundary helper;
+   their buffering and malformed-line policies remain local. Because the
+   helper follows `LINE_BREAK_PATTERN`, the conversion also makes a lone CR a
+   line boundary in these three readers; this is the one observable difference
+   from their former `/\r?\n/` splitting and is covered by the stream-usage
+   regression test.
+4. **Done — issue 2.** `CliTransportCoordinator` owns one
+   `splitCompleteLines` accumulator per spawn, passes only complete records to
+   the pure stdout parsers, and flushes an unterminated tail before the
+   completion callback. `CliLogEventPump.processEvent` does no de-duplication,
+   so the flushed record is emitted exactly once. The provider tests cover
+   Copilot, Claude, and OpenCode across split records, multi-record chunks,
+   unterminated tails, and consecutive spawns.
+
+## Carried forward
+
+The LOG-mode sibling path has the same boundary exposure for session-ID capture:
+`HeadlessLogTail.captureSessionId` runs `extractSessionIdFromStdout` against one
+raw chunk at a time. It is recoverable (`CliResponseCollector` re-runs the
+extractor over full stdout after exit) and fixing it needs a second accumulator
+in the log-tail path, so it was left out of this plan and written up separately
+in `dev/backlog/HEADLESS_SESSION_ID_CHUNK_BOUNDARY_PLAN.md`.
+
+## Deliberately not in scope
+
+- `CodexAppServerClient.ts:126` uses `readline` + `JSON.parse` over the Codex
+  app-server's stdio, which the `TextLines` doc comment warns against. It is
+  confined to quota probing (`initialize`, `account/read`,
+  `account/rateLimits/read`) whose payloads are account metadata, never model
+  output or web content, and an unparseable line is silently ignored rather than
+  throwing. Low value, non-zero risk; leave it unless the app-server surface
+  grows.
+- The per-caller bad-line policies (throw / skip+log / stash) are genuinely
+  different requirements, not duplication. Do not try to unify them.

@@ -3,7 +3,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { splitLines, streamFileLines } from "../../utils/TextLines";
+import {
+  splitCompleteLines,
+  splitLines,
+  streamFileLines,
+} from "../../utils/TextLines";
 
 /**
  * U+2028 LINE SEPARATOR / U+2029 PARAGRAPH SEPARATOR, spelled by code point
@@ -47,6 +51,53 @@ suite("TextLines", () => {
     assert.strictEqual(lines.length, 2);
     assert.strictEqual(lines[0], record);
     assert.deepStrictEqual(splitLines(record), [record]);
+  });
+
+  test("splits complete LF, CRLF, and lone-CR lines", () => {
+    assert.deepStrictEqual(splitCompleteLines("lf\ncrlf\r\ncr\rlast"), {
+      lines: ["lf", "crlf", "cr"],
+      remainder: "last",
+    });
+  });
+
+  test("returns no lines for empty input", () => {
+    assert.deepStrictEqual(splitCompleteLines(""), {
+      lines: [],
+      remainder: "",
+    });
+  });
+
+  test("keeps input with no break in the remainder", () => {
+    assert.deepStrictEqual(splitCompleteLines("unterminated"), {
+      lines: [],
+      remainder: "unterminated",
+    });
+  });
+
+  test("holds a trailing CR until the next chunk completes it", () => {
+    const first = splitCompleteLines("first\r");
+    assert.deepStrictEqual(first, { lines: [], remainder: "first\r" });
+
+    assert.deepStrictEqual(splitCompleteLines(first.remainder + "\nsecond\n"), {
+      lines: ["first", "second"],
+      remainder: "",
+    });
+
+    assert.deepStrictEqual(splitCompleteLines(first.remainder + "second\n"), {
+      lines: ["first", "second"],
+      remainder: "",
+    });
+  });
+
+  test("distinguishes terminated and unterminated final records", () => {
+    assert.deepStrictEqual(splitCompleteLines("one\ntwo\n"), {
+      lines: ["one", "two"],
+      remainder: "",
+    });
+    assert.deepStrictEqual(splitCompleteLines("one\ntwo"), {
+      lines: ["one"],
+      remainder: "two",
+    });
   });
 
   test("breaks on LF, CRLF, and a lone CR alike", async () => {

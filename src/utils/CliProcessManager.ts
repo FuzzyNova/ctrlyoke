@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import kill from "tree-kill";
 import { canonicalizeDriveLetter } from "./PathCasing";
+import { attachStreamTextDecoder } from "./StreamTextDecoder";
 
 /**
  * Options for spawning a CLI process
@@ -122,18 +123,36 @@ export class CliProcessManager {
       this.currentProcess = child;
 
       // Handle stdout with streaming support
-      child.stdout?.on("data", (data: Buffer) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        if (options.onStdout) {
-          options.onStdout(chunk);
-        }
-      });
+      const flushStdout = child.stdout
+        ? attachStreamTextDecoder(child.stdout, (chunk) => {
+            stdout += chunk;
+            if (options.onStdout) {
+              options.onStdout(chunk);
+            }
+          })
+        : () => "";
 
       // Handle stderr
-      child.stderr?.on("data", (data: Buffer) => {
-        stderr += data.toString();
-      });
+      const flushStderr = child.stderr
+        ? attachStreamTextDecoder(child.stderr, (chunk) => {
+            stderr += chunk;
+          })
+        : () => "";
+
+      /*
+       * StringDecoder buffers an incomplete UTF-8 sequence until the next
+       * chunk, so the close handler must explicitly flush both streams.
+       */
+      const appendStdoutTail = () => {
+        const tail = flushStdout();
+        if (tail.length > 0) {
+          stdout += tail;
+          options.onStdout?.(tail);
+        }
+      };
+      const appendStderrTail = () => {
+        stderr += flushStderr();
+      };
 
       // Cleanup (currentProcess/timers) must run whenever the child actually
       // exits, even if a timeout already flipped `settled` and sent a kill
@@ -173,6 +192,9 @@ export class CliProcessManager {
             `✅ Process exited with code: ${code}` +
               (signal ? ` (terminated by ${signal})` : "")
           );
+
+          appendStdoutTail();
+          appendStderrTail();
 
           resolve({
             stdout,

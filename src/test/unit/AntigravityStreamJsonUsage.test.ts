@@ -60,6 +60,20 @@ suite("AntigravityStreamJsonUsage", () => {
     });
   });
 
+  test("uses the shared lone-CR boundary across chunks", () => {
+    const accumulator = new AntigravityStreamJsonUsageAccumulator();
+    const checkpoint =
+      '{"event":"step_update","step_update":{"step_type":"checkpoint","usage":{"input_tokens":1}}}';
+    const result =
+      '{"event":"result","result":{"usage":{"output_tokens":2}}}';
+
+    accumulator.ingest(`${checkpoint}\r`);
+    accumulator.ingest(`${result}\n`);
+
+    assert.strictEqual(accumulator.getLatestStepUsage()?.inputTokens, 1);
+    assert.strictEqual(accumulator.getTerminalUsage()?.outputTokens, 2);
+  });
+
   test("reads terminal usage from the nested result payload", () => {
     // Regression: the terminal cumulative usage lives at `result.usage`, not
     // at the top level. Reading `event.usage` silently captured nothing.
