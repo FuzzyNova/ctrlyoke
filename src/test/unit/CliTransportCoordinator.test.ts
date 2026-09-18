@@ -831,20 +831,21 @@ line two`,
     postedMessages.length = 0;
     const refreshed = coordinator.updateCurrentPtySessionMetadata({
       promptIndex: 1,
+      terminalStepIndex: -1,
       allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
       instanceId: "workflow-1",
     } as any);
 
     assert.strictEqual(refreshed, true);
     assert.strictEqual(spawnedSession.stepName, "second");
-    assert.strictEqual(spawnedSession.stepIndex, 1);
+    assert.strictEqual(spawnedSession.stepIndex, -1);
     assert.strictEqual(spawnedSession.promptNumber, 2);
     assert.strictEqual(postedMessages.length, 1);
     assert.strictEqual(postedMessages[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
     assert.strictEqual(postedMessages[0].workflowId, "workflow-1");
     assert.strictEqual(postedMessages[0].sessionId, spawnedSession.id);
     assert.strictEqual(postedMessages[0].stepName, "second");
-    assert.strictEqual(postedMessages[0].stepIndex, 1);
+    assert.strictEqual(postedMessages[0].stepIndex, -1);
     assert.strictEqual(postedMessages[0].promptNumber, 2);
     assert.strictEqual(postedMessages[0].kind, SESSION_KINDS.AI_CLI);
   });

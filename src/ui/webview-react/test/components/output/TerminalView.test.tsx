@@ -6,7 +6,11 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { terminalRegistry } from "@/terminalRegistry";
-import { MESSAGE_TYPES } from "@/types/messages";
+import {
+  MESSAGE_TYPES,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
 
 const { sendMessageMock } = vi.hoisted(() => ({
   sendMessageMock: vi.fn(),
@@ -37,7 +41,26 @@ vi.mock("@hooks/useTerminalContextMenu", () => ({
   }),
 }));
 
-import { TerminalView } from "@components/output/TerminalView";
+import {
+  getTerminalStepLabel,
+  TerminalView,
+} from "@components/output/TerminalView";
+
+describe("TerminalView terminal labels", () => {
+  it("uses the final-step name instead of numbering a signed final step", () => {
+    expect(
+      getTerminalStepLabel({
+        id: "final-step-session",
+        workflowId: "workflow-final-step",
+        stepName: "Final review",
+        stepIndex: -1,
+        kind: SESSION_KINDS.AI_CLI,
+        status: TERMINAL_SESSION_STATUS.RUNNING,
+        isController: true,
+      })
+    ).toBe("Final review");
+  });
+});
 
 describe("TerminalView empty-pane viewport hint", () => {
   const measureViewportSpy = vi.spyOn(

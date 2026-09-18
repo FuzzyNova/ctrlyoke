@@ -42,7 +42,7 @@ import { Icon } from "../shared/Icon";
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
 
-function getTerminalStepLabel(session: TerminalSession): string {
+export function getTerminalStepLabel(session: TerminalSession): string {
   if (session.stepIndex === undefined || session.stepIndex < 0) {
     return session.stepName;
   }
@@ -435,7 +435,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
             >
               <div className="flex flex-col h-full bg-sidebar-bg overflow-y-auto">
                 {/* AI CLI sessions */}
-                {aiCliSessions.map((session, idx) =>
+                {aiCliSessions.map((session) =>
                   railCollapsed ? (
                     <CompactRailEntry
                       key={session.id}
@@ -444,7 +444,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                         session.stepIndex !== undefined &&
                         session.stepIndex >= 0
                           ? String(session.stepIndex + 1)
-                          : String(session.promptNumber ?? idx + 1)
+                          : session.stepName
                       }
                       isActive={session.id === activeSessionId}
                       onClick={() => setActiveSession(workflowId, session.id)}

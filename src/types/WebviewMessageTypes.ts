@@ -805,9 +805,9 @@ export interface ContextWindowUpdateMessage {
 /**
  * PTY session metadata (extension -> webview).
  *
- * `stepIndex` is zero-based for queue steps and -1 for standalone shell
- * sessions. A parallel group id keeps same-harness sibling sessions distinct
- * during webview reconciliation.
+ * `stepIndex` is zero-based for queue steps, signed negative for final-step
+ * attempts, and -1 for standalone shell sessions. A parallel group id keeps
+ * same-harness sibling sessions distinct during webview reconciliation.
  */
 export interface TerminalStartedMessage {
   type: typeof MESSAGE_TYPES.TERMINAL_STARTED;

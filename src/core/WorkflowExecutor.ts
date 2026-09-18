@@ -2180,6 +2180,7 @@ export class WorkflowExecutor {
         attemptIndex,
         {
           promptIndex: sendPromptIndex,
+          terminalStepIndex: signedStepIndex,
           allPrompts: state.steps,
           filePath: context.currentPromptFilePath,
           workflowName: this.promptQueue.getState().workflowName,

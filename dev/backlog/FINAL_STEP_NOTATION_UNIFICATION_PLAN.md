@@ -1,6 +1,6 @@
 # Final-Step Notation Unification + Running-Row Display Plan
 
-**Status:** Planned — open questions resolved 2026-09-18; ready to implement.
+**Status:** Phase 1 complete — Option A implemented 2026-09-18; Phase 2 remains planned.
 
 ## Goal
 
@@ -26,9 +26,9 @@ problem `CLAUDE.md`'s DRY/single-source principle calls out. The row-display gap
 bug in a different layer: nothing in `WorkflowSummary` distinguishes "on queue step 10 of 10" from "now
 running the final step", because nothing upstream computes that distinction once and hands it down.
 
-## Background — the two notations as they exist today
+## Background — the two notations before Phase 1
 
-**AI-harness spawn path** (`CliTransportCoordinator.getWorkflowStepMetadata`,
+**AI-harness spawn path before Phase 1** (`CliTransportCoordinator.getWorkflowStepMetadata`,
 `src/core/harness/shared/CliTransportCoordinator.ts:751-776`, consumed at `:243` for a fresh PTY spawn
 and at `:363` by `updateCurrentPtySessionMetadata` when a live PTY is reused): the terminal's
 `stepIndex` is `workflowContext.promptIndex`, which is `steps.length` for the final step
@@ -69,7 +69,7 @@ causing the next version of this bug somewhere else that keys off raw `stepIndex
 
 ---
 
-## Phase 1 — pick and adopt one final-step terminal-identity notation
+## Phase 1 — pick and adopt one final-step terminal-identity notation (complete)
 
 ### The decision, and the check that settles it
 
@@ -97,22 +97,17 @@ signed integer. Cleaner long-term — no arithmetic decoding, no possible collis
 sentinel ever again, self-documenting at every call site — but touches `PtyProcessManager`, both spawn
 paths, the `TerminalStartedMessage` wire shape, and `TerminalSession` in the webview store.
 
-**Blocking check — does one AI-harness PTY span multiple final-step loops?** This decides A vs. B and
-must be answered from the code before either is implemented. `promptIndex` is loop-invariant
-(`steps.length` on every loop); `-(loopIndex + 1)` is not. If a single retained PTY serves final-step
-loops 0, 1, 2 and its `stepIndex` is only stamped at spawn, Option A would _reintroduce_ the very bug
-this plan exists to close: `getActiveStepIndices()` would report `-3` on loop 2 while the session still
-carries `-1`, and the terminal would again look closeable mid-run.
-`CliTransportCoordinator.updateCurrentPtySessionMetadata` (`:363`, called from
-`CliExecutionRunner.ts:212`) re-stamps a reused session's metadata, so the question is specifically
-whether that refresh fires on _every_ final-step loop, not just on inject-mode re-entry. Trace
-`WorkflowExecutor`'s final-step loop → `CliExecutionRunner` → transport coordinator and confirm.
-
-- Refresh covers every loop, or a fresh PTY is spawned per loop → **take Option A.**
-- A stamped-once PTY can outlive its loop index → **take Option B**, whose explicit flag is
-  loop-invariant by construction.
-
-Record which option was taken, and the evidence for it, in this document.
+**Resolved blocking check — Option A.** A final-step loop always re-enters
+`WorkflowExecutor.executeWithSnapshot`, which sends the prompt through the normal CLI integration
+path. If the AI-harness execution starts a fresh interactive process,
+`CliTransportCoordinator.startInteractiveProcess` stamps the new PTY with the current workflow
+metadata. If inject mode reuses the existing PTY, `CliExecutionRunner.executeInteractiveInject`
+calls `updateCurrentPtySessionMetadata` on every injected prompt before monitoring it; that method
+updates both the retained PTY and its `TERMINAL_STARTED` metadata message. Therefore a retained
+AI-harness PTY cannot span final-step loops with a stale loop index, and the terminal can safely use
+the signed-index convention. `WorkflowContext.promptIndex` remains the array index (`steps.length`
+for the final step) for prompt numbering and diagnostics; the new `terminalStepIndex` field carries
+the already-computed `getSignedStepIndex(target)` value only for terminal metadata.
 
 ### Once a notation is chosen
 
@@ -128,9 +123,9 @@ Record which option was taken, and the evidence for it, in this document.
   actually-correct discriminator ("shell sessions are never step-owned"), not merely a workaround for
   the collision.
 - Audit the other raw `stepIndex` consumers on `TerminalSession`. There are two, both in
-  `TerminalView.tsx`, and both currently render a **wrong number** for an AI-harness final step:
+  `TerminalView.tsx`, and both rendered a **wrong number** for an AI-harness final step before Phase 1:
   `getTerminalStepLabel` (`:45-53`) and the tab badge (`:440-448`) each treat `stepIndex < 0` as "not a
-  real step" and fall back to `stepName`, but today's AI-harness final step arrives as `steps.length`
+  real step" and fall back to `stepName`, but before Phase 1 the AI-harness final step arrived as `steps.length`
   — a positive value — so a 10-step workflow's final-step terminal labels itself "Step 11". Option A
   fixes this for free (negative ⇒ already handled); Option B must update both sites to check the new
   explicit flag rather than the sign. Either way, pin the final-step terminal's label with a test:

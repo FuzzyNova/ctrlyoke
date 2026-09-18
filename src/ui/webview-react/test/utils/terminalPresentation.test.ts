@@ -102,25 +102,9 @@ describe("isTerminalSessionInUseByActiveStep", () => {
     ).toBe(false);
   });
 
-  it("is in use for a running final-step AI-harness session (stepIndex === totalSteps)", () => {
-    // WorkflowInstance.getActiveStepIndices() reports `steps.length` for an
-    // active final-step attempt spawned via the AI-harness path.
-    expect(
-      isTerminalSessionInUseByActiveStep(
-        {
-          status: TERMINAL_SESSION_STATUS.RUNNING,
-          stepIndex: 3,
-          kind: SESSION_KINDS.AI_CLI,
-        },
-        [3]
-      )
-    ).toBe(true);
-  });
-
-  it("is in use for a running final-step interactive-script session at loop 0 (stepIndex -1)", () => {
-    // The interactive-script spawn path encodes the final step's first loop
-    // as -(0+1) === -1, the same raw number a standalone shell carries — the
-    // `kind` check is what keeps this correctly gated.
+  it("is in use for a running final-step AI session using the signed index", () => {
+    // Final-step attempts use -(loopIndex + 1) for terminal identity,
+    // including -1 on the first loop.
     expect(
       isTerminalSessionInUseByActiveStep(
         {

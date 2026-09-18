@@ -14,7 +14,7 @@ export interface TerminalSession {
   id: string;
   workflowId: string;
   stepName: string;
-  /** Zero-based queue step index; -1 is used for standalone shell sessions. */
+  /** Zero-based queue index; signed negative final-step index; -1 for shell sessions. */
   stepIndex?: number;
   kind: SessionKind;
   promptNumber?: number;

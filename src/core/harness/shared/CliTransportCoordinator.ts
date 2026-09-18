@@ -770,7 +770,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       stepName:
         workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
         `Step ${promptNumber}`,
-      stepIndex: workflowContext.promptIndex,
+      stepIndex:
+        workflowContext.terminalStepIndex ?? workflowContext.promptIndex,
       promptNumber,
       parallelGroupId,
     };
