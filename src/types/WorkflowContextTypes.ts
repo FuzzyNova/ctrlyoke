@@ -114,6 +114,8 @@ export interface McpToolSkillRunContext {
  */
 export interface WorkflowContext {
   promptIndex: number;
+  /** Signed step identity for terminal metadata; falls back to promptIndex when absent. */
+  terminalStepIndex?: number;
   allPrompts: WorkflowStep[];
   filePath?: string;
   /** Human-readable workflow name (derived from file basename or first prompt text).

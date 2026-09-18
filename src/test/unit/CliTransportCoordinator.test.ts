@@ -155,7 +155,8 @@ const stdoutProviderFactories: ReadonlyArray<{
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
-      { promptArgument: string; cliCommand: string } | undefined;
+      | { promptArgument: string; cliCommand: string }
+      | undefined;
     const streamedChunks: string[] = [];
     const cleanedTempPaths: string[][] = [];
 
@@ -395,7 +396,8 @@ line two`,
 
   test("should parse partial headless output when cancellation is requested", async () => {
     let callbackResult:
-      { stdout: string; stderr: string; exitCode: number } | undefined;
+      | { stdout: string; stderr: string; exitCode: number }
+      | undefined;
     const cleanedTempPaths: string[][] = [];
     let cancelling = false;
 
@@ -831,22 +833,37 @@ line two`,
     postedMessages.length = 0;
     const refreshed = coordinator.updateCurrentPtySessionMetadata({
       promptIndex: 1,
+      terminalStepIndex: -1,
       allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
       instanceId: "workflow-1",
     } as any);
 
     assert.strictEqual(refreshed, true);
     assert.strictEqual(spawnedSession.stepName, "second");
-    assert.strictEqual(spawnedSession.stepIndex, 1);
+    assert.strictEqual(spawnedSession.stepIndex, -1);
     assert.strictEqual(spawnedSession.promptNumber, 2);
     assert.strictEqual(postedMessages.length, 1);
     assert.strictEqual(postedMessages[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
     assert.strictEqual(postedMessages[0].workflowId, "workflow-1");
     assert.strictEqual(postedMessages[0].sessionId, spawnedSession.id);
     assert.strictEqual(postedMessages[0].stepName, "second");
-    assert.strictEqual(postedMessages[0].stepIndex, 1);
+    assert.strictEqual(postedMessages[0].stepIndex, -1);
     assert.strictEqual(postedMessages[0].promptNumber, 2);
     assert.strictEqual(postedMessages[0].kind, SESSION_KINDS.AI_CLI);
+
+    // A context that omits terminalStepIndex falls back to promptIndex, which
+    // is what keeps ordinary queue steps numbered. That fallback is only safe
+    // while every final-step context sets terminalStepIndex — a final-step
+    // context that forgets it would stamp a positive index that
+    // getActiveStepIndices() no longer reports, un-gating a live terminal.
+    postedMessages.length = 0;
+    coordinator.updateCurrentPtySessionMetadata({
+      promptIndex: 1,
+      allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
+      instanceId: "workflow-1",
+    } as any);
+    assert.strictEqual(spawnedSession.stepIndex, 1);
+    assert.strictEqual(postedMessages[0].stepIndex, 1);
   });
 
   test("should terminate the active PTY session through the PTY manager", async () => {

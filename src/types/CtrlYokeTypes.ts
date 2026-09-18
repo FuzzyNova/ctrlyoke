@@ -1,6 +1,7 @@
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
@@ -1223,9 +1224,29 @@ export interface WorkflowSummary {
   harness?: HarnessId;
   /** Resolved worktree identity for the currently executing run, when applicable. */
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
+  /** Present when the workflow definition has an enabled final step. */
+  hasFinalStep?: boolean;
+  /** Set only while the final step is the attempt actually executing right now. */
+  finalStepRunning?: boolean;
   /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;
+}
+
+/**
+ * Derive the final-step state carried by lightweight workflow summaries.
+ * Keep this definition/runtime pairing single-sourced across local and external runs.
+ */
+export function deriveWorkflowFinalStepSummary(
+  finalStep: PromptFile["finalStep"],
+  finalStepRuntime: FinalStepRuntimeState | undefined
+): Pick<WorkflowSummary, "hasFinalStep" | "finalStepRunning"> {
+  return {
+    hasFinalStep: !!finalStep && finalStep.enabled !== false,
+    finalStepRunning:
+      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepRuntime.status === STEP_STATUS.RUNNING,
+  };
 }
 
 /** Read-only ownership identity discovered when a window opens on a managed worktree. */
@@ -1243,6 +1264,32 @@ export interface WorkspaceWorktreeOwnership {
 export const workflowDisplayStep = (
   s: Pick<WorkflowSummary, "currentStep" | "totalSteps">
 ): number => Math.max(0, Math.min(s.currentStep + 1, s.totalSteps));
+
+/** Visible row text for a lineage executing its final step. */
+export const FINAL_STEP_PROGRESS_LABEL = "Final step";
+
+/**
+ * Returns the running row's step-progress label, including its final-step state.
+ */
+export const workflowStepProgressLabel = (
+  s: Pick<WorkflowSummary, "currentStep" | "totalSteps" | "finalStepRunning">
+): string =>
+  s.finalStepRunning
+    ? FINAL_STEP_PROGRESS_LABEL
+    : `${workflowDisplayStep(s)}/${s.totalSteps}`;
+
+/**
+ * The spoken form of `workflowStepProgressLabel`, branching on the same field so
+ * the visible text and the accessible name can never disagree about *which*
+ * state the row is in. They are phrased differently on purpose: a screen reader
+ * reads "2/2" as "two slash two", so the numeric branch stays spelled out.
+ */
+export const workflowStepProgressAccessibleLabel = (
+  s: Pick<WorkflowSummary, "currentStep" | "totalSteps" | "finalStepRunning">
+): string =>
+  s.finalStepRunning
+    ? FINAL_STEP_PROGRESS_LABEL.toLowerCase()
+    : `step ${workflowDisplayStep(s)} of ${s.totalSteps}`;
 
 /**
  * Process lock file written at the lineage root while one of its runs is executing.

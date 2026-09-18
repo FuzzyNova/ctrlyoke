@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
@@ -23,6 +24,63 @@ describe("RunningWorkflowItem", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
   });
+
+  it("shows Final step in the count and accessible name while the final step runs", () => {
+    render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "final-step",
+          workflowName: "Final-step workflow",
+          filePath: "final-step.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 2,
+          totalSteps: 2,
+          finalStepRunning: true,
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        {...callbacks}
+      />
+    );
+
+    const row = screen.getByRole("listitem");
+    expect(within(row).getByText("Final step")).toBeInTheDocument();
+    // The spoken form is phrased for a screen reader rather than mirroring the
+    // visible string verbatim; what must never differ is which state it names.
+    expect(row).toHaveAccessibleName(/final step/i);
+    expect(row).not.toHaveAccessibleName(/step 2 of 2/);
+  });
+
+  it.each([
+    { label: "false", finalStepRunning: false },
+    { label: "absent", finalStepRunning: undefined },
+  ])(
+    "shows clamped numeric progress in the count and accessible name when finalStepRunning is $label",
+    ({ finalStepRunning }) => {
+      render(
+        <RunningWorkflowItem
+          workflow={{
+            id: `queue-${finalStepRunning ?? "absent"}`,
+            workflowName: "Queued workflow",
+            filePath: "queued.prompt.md",
+            executionState: EXECUTION_STATES.RUNNING,
+            currentStep: 3,
+            totalSteps: 2,
+            finalStepRunning,
+          }}
+          isCurrent
+          hasActiveTerminal={false}
+          {...callbacks}
+        />
+      );
+
+      const row = screen.getByRole("listitem");
+      expect(within(row).getByText("2/2")).toBeInTheDocument();
+      // Spelled out so a screen reader does not read "2/2" as "two slash two".
+      expect(row).toHaveAccessibleName(/step 2 of 2/);
+      expect(row).not.toHaveAccessibleName(/final step/i);
+    }
+  );
 
   it("freezes pause-aware elapsed time and offers Continue plus Stop", () => {
     vi.useFakeTimers();

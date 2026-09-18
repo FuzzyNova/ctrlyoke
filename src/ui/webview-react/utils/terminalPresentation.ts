@@ -49,6 +49,21 @@ export function inferShellKind(
   return undefined;
 }
 
+/**
+ * Compact-rail label for an ai-cli session: the 1-based queue step number, or a
+ * short marker for a final-step attempt, whose signed `stepIndex` is not a step
+ * number. The collapsed rail is a narrow strip sized for the 1-4 character
+ * labels `getShellCompactLabel` produces, so an arbitrary-length `stepName`
+ * cannot go here — the entry's tooltip already carries the full name.
+ */
+export function getAiCliCompactLabel(
+  session: Pick<TerminalSession, "stepIndex">
+): string {
+  return session.stepIndex !== undefined && session.stepIndex >= 0
+    ? String(session.stepIndex + 1)
+    : "fin";
+}
+
 export function getShellCompactLabel(
   shellKind: ShellKind | undefined,
   stepName: string | undefined
@@ -90,12 +105,10 @@ export function getShellCompactLabel(
  * inject into them, so "workflow is executing" is not the right gate — only
  * *this* session's own `stepIndex` matching one of the steps currently running
  * means closing it would kill work in progress. `activeStepIndices`
- * (WorkflowInstance.getActiveStepIndices()) includes a final-step attempt's
- * index too, encoded as either `steps.length` (AI-harness spawn path) or
- * `-(loopIndex+1)` (interactive-script spawn path) — the latter collides with
- * the -1 every standalone shell session carries (`PtyProcessManager.spawnShell`),
- * so the `kind` check is required: only ai-cli sessions are ever step-owned,
- * shell sessions stay closeable regardless of stepIndex or execution state.
+ * (WorkflowInstance.getActiveStepIndices()) uses the signed convention for
+ * final-step attempts: `-(loopIndex + 1)`. The `kind` check remains required
+ * because only ai-cli sessions are ever step-owned; shell sessions stay
+ * closeable regardless of stepIndex or execution state.
  */
 export function isTerminalSessionInUseByActiveStep(
   session: Pick<TerminalSession, "status" | "stepIndex" | "kind">,

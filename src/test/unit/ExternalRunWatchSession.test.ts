@@ -11,7 +11,12 @@ import type {
   WorkflowKey,
   WorkflowRunnerLock,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  RUNNER_IDS,
+  STEP_STATUS,
+} from "../../types/DashboardConstants";
 import type { ActiveExternalLockInspection } from "../../core/orchestration/ExternalExecutionResolver";
 
 function makeInspection(
@@ -144,6 +149,57 @@ suite("ExternalRunWatchSession", () => {
       // The steps ride along so the orchestrator can re-derive per-step
       // statuses on every change without a second read of the working file.
       assert.deepStrictEqual(updateSteps, [{ prompt: "step" }]);
+    } finally {
+      await fs.rm(workspaceFolderPath, { recursive: true, force: true });
+    }
+  });
+
+  test("forwards final-step definition and runtime state through updates", async () => {
+    const workspaceFolderPath = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-watch-final-step-")
+    );
+    try {
+      const workflowKey = "watch-final-step" as WorkflowKey;
+      const runRef = "run-2026-08-30T10-30-00-000Z" as RunRef;
+      const workingFilePath = path.join(workspaceFolderPath, "workflow.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          finalStep: { prompt: "final" },
+          steps: [{ prompt: "step" }],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.RUNNING,
+            finalStep: {
+              phase: FINAL_STEP_PHASES.FINAL_STEP,
+              loopCount: 0,
+              status: STEP_STATUS.RUNNING,
+            },
+          },
+        }),
+        "utf8"
+      );
+
+      let update: Record<string, unknown> | undefined;
+      const session = new ExternalRunWatchSession(
+        workingFilePath,
+        workflowKey,
+        runRef,
+        workspaceFolderPath,
+        makeInspection(workflowKey, runRef),
+        observer,
+        (summary) => {
+          update = summary as Record<string, unknown>;
+        },
+        () => {},
+        () => {}
+      );
+      await (
+        session as unknown as { handleWorkingFileChange: () => Promise<void> }
+      ).handleWorkingFileChange();
+
+      assert.strictEqual(update?.hasFinalStep, true);
+      assert.strictEqual(update?.finalStepRunning, true);
     } finally {
       await fs.rm(workspaceFolderPath, { recursive: true, force: true });
     }

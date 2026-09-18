@@ -35,6 +35,7 @@ import {
   WorkflowSummary,
   type WorktreeRunProjection,
   DynamicQueueConfig,
+  deriveWorkflowFinalStepSummary,
   type RunRef,
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
@@ -1275,6 +1276,10 @@ export class WorkflowInstance {
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
     const executionTimeUpdatedAt = Date.now();
+    const finalStepSummary = deriveWorkflowFinalStepSummary(
+      this.promptQueue.getWorkflowFile().finalStep,
+      this.promptQueue.getFinalStepRuntime()
+    );
     const workflowHarness =
       this.currentPromptFile?.promptFile?.harness ??
       this.promptQueue.getWorkflowFile().harness;
@@ -1296,6 +1301,7 @@ export class WorkflowInstance {
       executionTimeMs: this.workflowRuntime.getActiveExecutionTime(),
       executionTimeUpdatedAt,
       harness,
+      ...finalStepSummary,
       worktree: this.activeWorktree
         ? ({
             branchName: this.activeWorktree.branchName,
@@ -3766,14 +3772,10 @@ export class WorkflowInstance {
   }
 
   /**
-   * Queue-step attempts report their own zero-based `stepIndex`. A final-step
-   * attempt has no single canonical index — its live PTY's `stepIndex` field
-   * is stamped as `steps.length` when spawned via the AI-harness path
-   * (CliTransportCoordinator, from `workflowContext.promptIndex`) but as
-   * `-(loopIndex+1)` when spawned via the interactive-script path
-   * (WorkflowExecutor's `spawnScriptPty`, from `getSignedStepIndex`). Emit
-   * both so terminal-session "is this actively running" gating matches
-   * whichever convention produced the session, regardless of step type.
+   * Queue-step attempts report their zero-based `stepIndex`; final-step attempts
+   * report the signed index `-(loopIndex + 1)` used by terminal metadata and the
+   * dashboard execution system. The signed convention is the single terminal
+   * step-identity notation, so emit one value per active attempt.
    *
    * Public because `WorkflowOrchestrator.deliverRunView` also needs it: the
    * addressed run-view snapshot it sends on a workflow switch is otherwise
@@ -3781,13 +3783,12 @@ export class WorkflowInstance {
    * has no persisted `_runtime` counterpart — it only ever exists in memory.
    */
   getActiveStepIndices(): number[] {
-    const totalSteps = this.promptQueue.getState().steps.length;
     return this.workflowRuntime
       .getActiveAttempts()
       .flatMap((attempt) =>
         attempt.target.kind === FINAL_STEP_PHASES.QUEUE
           ? [attempt.target.stepIndex]
-          : [totalSteps, -(attempt.target.loopIndex + 1)]
+          : [-(attempt.target.loopIndex + 1)]
       )
       .sort((left, right) => left - right);
   }
