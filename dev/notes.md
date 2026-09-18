@@ -61,7 +61,7 @@ fix tab navigation and keyboard shortcuts
 
 ☑️ we should add codemirror auto complete editors for allowed tools lists, additional args, and maybe convert the variable field to one
 
-- (VARIABLE FIELD NOT DONE YET).
+☑️ (VARIABLE FIELD NOT DONE YET). - variable field is done but it's a straight variable editor not code mirror
 
 hooks don't warn when empty
 
@@ -83,6 +83,12 @@ readAddressedRunView is slow on large histories — measured 4.1s for the summar
 
 ☑️ Script step commands run under a different shell depending on Execution Mode, silently, on Windows: Interactive always resolves and uses PowerShell (WorkflowInstance.ts:3714-3719 → PtyProcessManager.ts's resolveWindowsShell, ~line 59-75), while Headless has no shell-selection logic at all — it sets `viaShell: true` (EndConditionEvaluator.ts:211-221) and falls through to Node's child_process.spawn default (CliProcessManager.ts:87-94), which on Windows means cmd.exe. The same script text (e.g. a PowerShell `for ($i=1; ...)` loop) works in one execution mode and fails with a shell-specific parse error in the other, with no warning to the user about which shell will run it.
 
-fix marketing copy to include "workflow engine" somewhere
+☑️ fix marketing copy to include "workflow engine" somewhere
 
-fix font color on header banners to be more readable
+☑️ fix font color on header banners to be more readable
+
+Undo and redo do not work for a lot of things, this one needs a big pass
+
+workflow status header is hiding the branch and terminal icon at wider views since changing the status badge grows.
+
+switching to a running workflow doesn't show the live context window until the next update.
